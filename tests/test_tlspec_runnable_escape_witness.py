@@ -378,3 +378,40 @@ def test_r10_pruned_param_escape_changed_state_is_unverifiable(tmp_path: Path) -
     # Captured s=3.0 replays 4*7 + 3 = 31; a true live forward with w=7 is 4*7 + 8 = 36.
     assert abs(result.output.item() - 31.0) < 1e-5
     assert abs(result.output.item() - 36.0) > 1e-5
+
+
+# --------------------------------------------------------------------------- #
+# R10-H3: the escape source is mutated IN PLACE after the escape read it. The
+# witness digests the source at a mutation-consistent snapshot (its production
+# point) at BOTH save and run, so the ORIGINAL input stays VERIFIED (no spurious
+# downgrade) while a changed input is still caught as UNVERIFIABLE.
+# --------------------------------------------------------------------------- #
+class InPlaceMutatedEscapeSource(nn.Module):
+    """R10-H3: ``float(y)`` reads y == 6.0, then ``y.add_(1.0)`` mutates y to 7.0."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x * 2.0
+        s = float(y)  # escape reads the pre-mutation value (6.0)
+        y.add_(1.0)  # source mutated in place after the escape
+        return y * s
+
+
+def test_r10_inplace_mutated_source_original_still_verified(tmp_path: Path) -> None:
+    x = torch.tensor(3.0)
+    path = _save(InPlaceMutatedEscapeSource(), x, tmp_path / "m3.tlspec")
+    result = tl.load(path).run(inputs=x.clone())
+    # The original input is value-correct (7 * 6 = 42) and must NOT be spuriously
+    # downgraded by digesting the post-mutation live slot instead of the snapshot.
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not result.report.poisoned
+    assert abs(result.output.item() - 42.0) < 1e-5
+
+
+def test_r10_inplace_mutated_source_changed_is_still_unverifiable(tmp_path: Path) -> None:
+    x = torch.tensor(3.0)
+    path = _save(InPlaceMutatedEscapeSource(), x, tmp_path / "m3.tlspec")
+    result = tl.load(path).run(inputs=torch.tensor(5.0), on_divergence="return_diverged")
+    # Snapshot-based staleness still fires: capture s=6.0, changed production is 10.0.
+    _assert_not_blessed(result.report)
+    live = InPlaceMutatedEscapeSource()(torch.tensor(5.0))
+    assert not torch.allclose(result.output, live)
