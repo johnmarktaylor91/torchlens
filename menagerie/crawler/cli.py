@@ -82,9 +82,10 @@ def build_parser() -> argparse.ArgumentParser:
     _add_target_phase_arguments(plan)
 
     run = subparsers.add_parser("run", help="run or resume the single-writer scheduler")
-    _add_intake_argument(run)
+    _add_intake_argument(run, required=False)
     _add_target_phase_arguments(run)
     _add_driver_config_arguments(run)
+    _add_dry_run_arguments(run)
     run.add_argument("--resume", action="store_true", help="resume durable unsatisfied identities")
     run.add_argument(
         "--sequential-envs",
@@ -128,9 +129,10 @@ def build_parser() -> argparse.ArgumentParser:
     handoff.set_defaults(target="linux-x86_64-cuda", phase=None)
 
     resume = subparsers.add_parser("resume", help="resume a paused campaign")
-    _add_intake_argument(resume)
+    _add_intake_argument(resume, required=False)
     _add_target_phase_arguments(resume)
     _add_driver_config_arguments(resume)
+    _add_dry_run_arguments(resume)
     resume.add_argument(
         "--after-review",
         action="store_true",
@@ -178,10 +180,25 @@ def main(
     return EXIT_USAGE
 
 
-def _add_intake_argument(parser: argparse.ArgumentParser) -> None:
+def _add_intake_argument(parser: argparse.ArgumentParser, *, required: bool = True) -> None:
     """Add the shared required intake snapshot path."""
 
-    parser.add_argument("--intake", type=Path, required=True, help="intake snapshot directory")
+    parser.add_argument("--intake", type=Path, required=required, help="intake snapshot directory")
+
+
+def _add_dry_run_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add the opt-in fixture-corpus acceptance harness arguments."""
+
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="run the test-only tiny-model corpus with fake LLM and environment lanes",
+    )
+    parser.add_argument(
+        "--dry-run-root",
+        type=Path,
+        help="isolated dry-run campaign root (defaults under .crawl-local)",
+    )
 
 
 def _add_target_phase_arguments(parser: argparse.ArgumentParser) -> None:
@@ -289,13 +306,30 @@ def _driver_command(args: argparse.Namespace, factory: DriverFactory) -> int:
     driver = factory(args)
     after_review = bool(getattr(args, "after_review", False))
     result: DriverResult = driver.run(after_review=after_review)
-    print(json.dumps(result.__dict__, sort_keys=True))
+    output: dict[str, object] = dict(result.__dict__)
+    if bool(getattr(args, "dry_run", False)):
+        current = materialize_current(driver.paths.ledgers)
+        output.update({"dry_run": True, "funnel": funnel_counts(current)})
+    print(json.dumps(output, sort_keys=True))
     return EXIT_PAUSED if result.paused_reason is not None else EXIT_OK
 
 
 def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
     """Build production command lanes from explicit flags or supervisor environment."""
 
+    if bool(getattr(args, "dry_run", False)):
+        from menagerie.crawler.tests.dry_run_support import build_dry_run_driver
+
+        dry_run_root = args.dry_run_root or args.repo_root / ".crawl-local" / "dry-run"
+        return build_dry_run_driver(
+            args.repo_root.resolve(),
+            dry_run_root.resolve(),
+            review_checkpoint_at=args.review_checkpoint_at,
+            progress_milestones=tuple(args.progress_milestones),
+            run_id=args.run_id,
+        )
+    if args.intake is None:
+        raise ValueError("run/resume requires --intake unless --dry-run is selected")
     author_command = _required_command(args.author_command, "author")
     checker_command = _required_command(args.checker_command, "checker")
     environment_command = _required_command(args.environment_command, "environment")
