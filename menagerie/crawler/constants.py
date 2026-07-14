@@ -96,6 +96,29 @@ class FidelityVerdict(StrEnum):
     CANNOT_VERIFY = "cannot-verify"
 
 
+class RetrievalStatus(StrEnum):
+    """Closed controlled-fetch retrieval outcomes."""
+
+    FETCHED = "fetched"
+    ALREADY_PRESENT = "already-present"
+
+
+class GateRoute(StrEnum):
+    """Closed deterministic routes after a checker verdict."""
+
+    ACCEPT = "accept"
+    REQUEUE_NEXT_BATCH = "requeue-next-batch"
+    HUMAN_FAIL = "human-fail"
+    BLOCK_FIDELITY = "block-fidelity"
+
+
+class CheckerPauseReason(StrEnum):
+    """Closed checker responses that require a scheduler pause."""
+
+    RATE_LIMIT = "rate-limit"
+    QUOTA_EXHAUSTED = "quota-exhausted"
+
+
 class RunMode(StrEnum):
     """Meaningful model runtime modes."""
 
