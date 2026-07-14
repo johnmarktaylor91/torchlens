@@ -526,6 +526,7 @@ def get_registered_container(container_type: type[Any]) -> RegisteredContainer |
 
 
 __all__ = [
+    "ContainerReconstructionError",
     "ContainerSpec",
     "DataclassField",
     "DictKey",
@@ -537,4 +538,13 @@ __all__ = [
     "get_registered_container",
     "register_container",
     "rebuild_container_from_spec",
+    "resolve_container_type",
 ]
+
+
+# Public alias so other bundle-reachable sinks (e.g. ``Op.multi_output_type`` in
+# ``torchlens.data_classes.op``) route container-type resolution through THIS single
+# default-deny resolver rather than re-deriving a second, drift-prone one. There must be
+# exactly one resolver that decides a container type by name from ``sys.modules`` and NEVER
+# imports an attacker-controlled bundle string.
+resolve_container_type = _resolve_container_type
