@@ -8,6 +8,7 @@ from dataclasses import dataclass, fields, is_dataclass, replace
 from enum import Enum
 from hashlib import sha256
 import json
+import math
 import platform
 from typing import Any, cast
 
@@ -2230,7 +2231,13 @@ def _encode_literal(value: Any) -> NonTensorLiteral:
         # the stored literal round-trips through JSON / the safe unpickler.
         return LiteralAtom(LiteralAtomKind.INT, int(value))
     if isinstance(value, float):
-        if not torch.isfinite(torch.tensor(value)).item():
+        # Finiteness is a pure host check on a Python float; use ``math.isfinite`` rather
+        # than ``torch.isfinite(torch.tensor(value)).item()`` so encoding a float literal
+        # key/leaf during capture emits NO ``aten._local_scalar_dense`` dispatch. That
+        # internal read would otherwise be recorded by the host-escape witness as a
+        # spurious (bool) user escape and falsely downgrade an exotic-key model (e.g. a
+        # ``dict[float, int]`` branch) to UNVERIFIABLE on the unchanged input.
+        if not math.isfinite(value):
             raise _UnsupportedLiteralError("Non-finite floating-point literals are unsupported.")
         # Normalize float subclasses (e.g. ``numpy.float64``) to a plain
         # ``float`` so the recorded literal round-trips to a grammar-native value
