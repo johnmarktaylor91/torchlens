@@ -362,6 +362,7 @@ class ControlWitnessKind(str, Enum):
     CONDITIONAL_ARM_ENTRY = "conditional_arm_entry"
     LOOP_PREDICATE = "loop_predicate"
     SHAPE_STRUCTURE_FACT = "shape_structure_fact"
+    TENSOR_DERIVED_SCALAR_LITERAL = "tensor_derived_scalar_literal"
 
 
 @dataclass(frozen=True, slots=True)

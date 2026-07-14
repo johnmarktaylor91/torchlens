@@ -229,14 +229,25 @@ shape/dtype and share one allocation.
 
 ### Control witness
 
-`ControlWitnessKind` values are `scalar_bool`, `conditional_arm_entry`, `loop_predicate`, and
-`shape_structure_fact`. A witness has exactly `witness_id: str`, `kind: ControlWitnessKind`,
-`order: int`, `call_id: str | None`, `site_label: str`, and
-`observed_value: NonTensorLiteral`.
+`ControlWitnessKind` values are `scalar_bool`, `conditional_arm_entry`, `loop_predicate`,
+`shape_structure_fact`, and `tensor_derived_scalar_literal`. A witness has exactly
+`witness_id: str`, `kind: ControlWitnessKind`, `order: int`, `call_id: str | None`,
+`site_label: str`, and `observed_value: NonTensorLiteral`.
 
 IDs are unique and order is dense zero-based. Scalar/loop predicates use boolean `LiteralAtom`;
 arm entry uses a stable arm identity; shape/structure uses the literal grammar. Missing/opaque facts
 use completeness plus diagnostics, never an opaque payload.
+
+A `tensor_derived_scalar_literal` witness records a tensor->Python-scalar escape
+(`.item()`/`int()`/`float()`/`aten._local_scalar_dense`) whose derived scalar was baked into a
+downstream op as a literal constant. `site_label` is the runtime slot of the scalar-shaped internal
+sink that produced the escaped scalar, `call_id` is that sink's recomputing call, and
+`observed_value` is the scalar's capture-time value. At run time the executor recomputes the sink
+slot: if its value differs from the witnessed capture-time value the baked literal may be stale, so
+the run reports `path_faithfulness=unverifiable` and `numeric_attestation=not_applicable` instead of a
+false `verified`/`attested`. The ORIGINAL/unchanged input recomputes the same scalar and still
+reports `verified` + `attested`; `witness_completeness` stays `complete` because the downgrade is
+input-conditional at run time, not a static descriptor flag.
 
 ## 5. Producer preflight and no-payload invariant
 
