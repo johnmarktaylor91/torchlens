@@ -351,14 +351,19 @@ class CanonicalReducer:
             gate, item = found
             if gate["gate_kind"] != "metadata_batch":
                 raise ReductionError("authored metadata must reference a metadata_batch gate")
+            rung_check = item.get("rung_check")
             if (
                 item["vet_identity"] != accuracy.get("vet_identity")
                 or item["verdict"] != "accurate"
                 or item["integrity"]["verdict"] != "accurate"
+                or not isinstance(rung_check, Mapping)
+                or rung_check.get("verdict") != "accurate"
                 or accuracy.get("verdict") != "accurate"
                 or not accuracy.get("current")
             ):
-                raise ReductionError("authored metadata gate is missing, stale, or not accurate")
+                raise ReductionError(
+                    "authored metadata gate is missing, stale, inaccurate, or has a blocked rung check"
+                )
         fidelity = model.get("fidelity", {})
         rung = model.get("source_resolution", {}).get("rung")
         required = bool(fidelity.get("required")) or rung in {"R3_PORT", "R4_REIMPLEMENT"}
@@ -369,13 +374,18 @@ class CanonicalReducer:
             gate, item = found
             if gate["gate_kind"] != "fidelity":
                 raise ReductionError("fidelity must reference a per-model fidelity gate")
+            rung_check = item.get("rung_check")
             if (
                 item.get("fidelity_identity") != fidelity.get("fidelity_identity")
                 or item["fidelity"]["verdict"] != fidelity.get("verdict")
                 or fidelity.get("verdict") not in {"match", "minor-drift"}
+                or not isinstance(rung_check, Mapping)
+                or rung_check.get("verdict") != "accurate"
                 or not fidelity.get("current")
             ):
-                raise ReductionError("required fidelity gate is stale or not acceptable")
+                raise ReductionError(
+                    "required fidelity gate is stale, unacceptable, or has a blocked rung check"
+                )
 
     def _validate_execution(self, model: Mapping[str, Any]) -> None:
         """Enforce attempt/receipt and meaningful-mode rules for run awards.

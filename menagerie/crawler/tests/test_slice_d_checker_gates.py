@@ -16,13 +16,25 @@ from menagerie.crawler.checker_dispatch import (
     compute_result_envelope_sha256,
     validate_checker_result,
 )
-from menagerie.crawler.constants import CheckerPauseReason, FidelityVerdict, GateRoute
+from menagerie.crawler.constants import (
+    AccuracyVerdict,
+    CheckerPauseReason,
+    FidelityVerdict,
+    GateRoute,
+)
 from menagerie.crawler.gates import (
     next_metadata_batch_ids,
     route_fidelity_gate,
     route_metadata_gate,
 )
-from menagerie.crawler.tests.conftest import HASH, make_author_proposal, make_gate
+from menagerie.crawler.models import LedgerPaths
+from menagerie.crawler.reducer import CanonicalReducer, ReductionError
+from menagerie.crawler.tests.conftest import (
+    HASH,
+    make_author_proposal,
+    make_gate,
+    make_model,
+)
 
 
 def _checker_item_pack(item: dict[str, Any]) -> dict[str, Any]:
@@ -141,6 +153,55 @@ def _inaccurate_metadata_gate() -> dict[str, Any]:
     return gate
 
 
+def _rung_checked_fidelity_gate(verdict: AccuracyVerdict) -> dict[str, Any]:
+    """Return a matching fidelity gate with an independently checked source rung.
+
+    Parameters
+    ----------
+    verdict:
+        Independent source-ladder accuracy verdict.
+
+    Returns
+    -------
+    dict[str, Any]
+        Complete one-model fidelity gate.
+    """
+
+    gate = make_gate(["m_example"], gate_kind="fidelity", fidelity_identity=HASH)
+    gate["items"][0]["rung_check"] = {
+        "selected_rung": "R4_REIMPLEMENT",
+        "highest_applicable": "R2_VENDOR",
+        "verdict": verdict.value,
+        "findings": (
+            ["usable upstream implementation exists"]
+            if verdict is AccuracyVerdict.INACCURATE
+            else []
+        ),
+    }
+    return gate
+
+
+def _ledger_paths(tmp_path: Path) -> LedgerPaths:
+    """Return isolated reducer ledger paths for a gate regression.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+
+    Returns
+    -------
+    LedgerPaths
+        Three isolated canonical ledger paths.
+    """
+
+    return LedgerPaths(
+        models=tmp_path / "models.jsonl",
+        attempts=tmp_path / "attempts.jsonl",
+        gates=tmp_path / "gates.jsonl",
+    )
+
+
 def test_metadata_gate_blocks_write_requeues_then_human_fails() -> None:
     """An inaccurate item never writes and exhausts a bounded next-batch loop."""
 
@@ -184,3 +245,82 @@ def test_five_way_fidelity_routes_without_proposal_mutation(
         verdict in {FidelityVerdict.MATCH, FidelityVerdict.MINOR_DRIFT}
     )
     assert proposal == before
+
+
+def test_inaccurate_rung_check_blocks_matching_fidelity_gate() -> None:
+    """R4 reimplementation is refused when the checker finds usable R2 source."""
+
+    gate = _rung_checked_fidelity_gate(AccuracyVerdict.INACCURATE)
+    decision = route_fidelity_gate(gate, make_author_proposal())
+    metadata_gate = make_gate()
+    metadata_gate["items"][0]["rung_check"] = deepcopy(gate["items"][0]["rung_check"])
+    metadata_decision = route_metadata_gate(metadata_gate, {}, max_repairs=2)[0]
+    assert decision.verdict is FidelityVerdict.MATCH
+    assert decision.accepted_for_fidelity is False
+    assert decision.canonical_write_allowed is False
+    assert decision.route is GateRoute.BLOCK_FIDELITY
+    assert metadata_decision.canonical_write_allowed is False
+    assert metadata_decision.route is GateRoute.REQUEUE_NEXT_BATCH
+
+
+def test_accurate_rung_check_allows_matching_fidelity_gate() -> None:
+    """A matching fidelity result remains accepted when its rung check is accurate."""
+
+    gate = _rung_checked_fidelity_gate(AccuracyVerdict.ACCURATE)
+    decision = route_fidelity_gate(gate, make_author_proposal())
+    metadata_gate = make_gate()
+    metadata_gate["items"][0]["rung_check"] = deepcopy(gate["items"][0]["rung_check"])
+    metadata_decision = route_metadata_gate(metadata_gate, {}, max_repairs=2)[0]
+    assert decision.accepted_for_fidelity is True
+    assert decision.canonical_write_allowed is True
+    assert decision.route is GateRoute.ACCEPT
+    assert metadata_decision.canonical_write_allowed is True
+    assert metadata_decision.route is GateRoute.ACCEPT
+
+
+def test_cannot_verify_rung_check_does_not_silently_accept() -> None:
+    """An unresolved source-ladder check fails closed into fidelity repair."""
+
+    gate = _rung_checked_fidelity_gate(AccuracyVerdict.CANNOT_VERIFY)
+    decision = route_fidelity_gate(gate, make_author_proposal())
+    metadata_gate = make_gate()
+    metadata_gate["items"][0]["rung_check"] = deepcopy(gate["items"][0]["rung_check"])
+    metadata_decision = route_metadata_gate(metadata_gate, {}, max_repairs=2)[0]
+    assert decision.accepted_for_fidelity is False
+    assert decision.canonical_write_allowed is False
+    assert decision.route is GateRoute.BLOCK_FIDELITY
+    assert metadata_decision.canonical_write_allowed is False
+    assert metadata_decision.route is GateRoute.REQUEUE_NEXT_BATCH
+
+
+def test_reducer_refuses_run_award_with_inaccurate_rung_check(tmp_path: Path) -> None:
+    """The canonical writer rejects a run governed by an inaccurate rung check.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
+    metadata_gate = make_gate(stable_ids)
+    fidelity_gate = _rung_checked_fidelity_gate(AccuracyVerdict.INACCURATE)
+    fidelity_gate["gate_id"] = "gate-fidelity"
+    fidelity_gate["ledger_seq"] = 2
+    model = make_model(accepted=True)
+    model["source_resolution"]["rung"] = "R4_REIMPLEMENT"
+    model["fidelity"].update(
+        {
+            "required": True,
+            "reason": "independent fidelity required",
+            "verdict": "match",
+            "fidelity_identity": HASH,
+            "gate_id": "gate-fidelity",
+        }
+    )
+
+    with CanonicalReducer(_ledger_paths(tmp_path), stable_ids) as reducer:
+        reducer.append_gate(metadata_gate)
+        reducer.append_gate(fidelity_gate)
+        with pytest.raises(ReductionError, match="rung check"):
+            reducer.append_model(model)

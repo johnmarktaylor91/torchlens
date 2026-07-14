@@ -67,6 +67,8 @@ class FidelityRouteDecision:
         Accept for match/minor drift; block otherwise.
     accepted_for_fidelity:
         Whether fidelity permits later driver consideration.
+    canonical_write_allowed:
+        True only when both fidelity and source-rung checks permit a canonical write.
     permanent_scar:
         True only for slop or a checker-preserved prior scar.
     failure_reason_code:
@@ -77,6 +79,7 @@ class FidelityRouteDecision:
     verdict: FidelityVerdict
     route: GateRoute
     accepted_for_fidelity: bool
+    canonical_write_allowed: bool
     permanent_scar: bool
     failure_reason_code: str | None
 
@@ -122,8 +125,12 @@ def route_metadata_gate(
         if prior < 0:
             raise GateRoutingError(f"negative repair count for {stable_id}")
         verdict = AccuracyVerdict(str(item["verdict"]))
+        rung_check = item.get("rung_check")
+        if not isinstance(rung_check, Mapping):
+            raise GateRoutingError("metadata gate item must require a rung check")
+        rung_verdict = AccuracyVerdict(str(rung_check.get("verdict")))
         repairs = tuple(str(value) for value in item.get("required_repairs", []))
-        if verdict is AccuracyVerdict.ACCURATE:
+        if verdict is AccuracyVerdict.ACCURATE and rung_verdict is AccuracyVerdict.ACCURATE:
             route = GateRoute.ACCEPT
             count = prior
             allowed = True
@@ -199,21 +206,34 @@ def route_fidelity_gate(
     fidelity = item.get("fidelity")
     if not isinstance(fidelity, Mapping) or fidelity.get("required") is not True:
         raise GateRoutingError("fidelity gate item must require fidelity")
+    rung_check = item.get("rung_check")
+    if not isinstance(rung_check, Mapping):
+        raise GateRoutingError("fidelity gate item must require a rung check")
     verdict = FidelityVerdict(str(fidelity.get("verdict")))
-    accepted = verdict in {FidelityVerdict.MATCH, FidelityVerdict.MINOR_DRIFT}
+    rung_verdict = AccuracyVerdict(str(rung_check.get("verdict")))
+    fidelity_accepted = verdict in {FidelityVerdict.MATCH, FidelityVerdict.MINOR_DRIFT}
+    accepted = fidelity_accepted and rung_verdict is AccuracyVerdict.ACCURATE
     reason_codes = {
         FidelityVerdict.MAJOR_DRIFT: "major-drift-cap-exhausted",
         FidelityVerdict.SLOP: "slop-cap-exhausted",
         FidelityVerdict.CANNOT_VERIFY: "cannot-verify-cap-exhausted",
     }
+    failure_reason_code: str | None = None
+    if not fidelity_accepted:
+        failure_reason_code = reason_codes[verdict]
+    elif rung_verdict is AccuracyVerdict.INACCURATE:
+        failure_reason_code = "slop-cap-exhausted"
+    elif rung_verdict is AccuracyVerdict.CANNOT_VERIFY:
+        failure_reason_code = "cannot-verify-cap-exhausted"
     permanent_scar = bool(fidelity.get("permanent_scar")) or verdict is FidelityVerdict.SLOP
     decision = FidelityRouteDecision(
         stable_id=str(item["stable_id"]),
         verdict=verdict,
         route=GateRoute.ACCEPT if accepted else GateRoute.BLOCK_FIDELITY,
         accepted_for_fidelity=accepted,
+        canonical_write_allowed=accepted,
         permanent_scar=permanent_scar,
-        failure_reason_code=None if accepted else reason_codes[verdict],
+        failure_reason_code=failure_reason_code,
     )
     if stable_hash(proposal) != before:
         raise GateRoutingError("fidelity routing mutated the staged proposal")
