@@ -46,6 +46,29 @@ def test_partition_counts_each_terminal_bucket() -> None:
     assert report.buckets["deferred:needs-cuda"] == frozenset({"m_cuda"})
 
 
+def test_partition_keeps_all_skip_reasons_as_distinct_terminal_buckets() -> None:
+    """Every ruled R5 skip reason remains a distinct valid partition member.
+
+    Returns
+    -------
+    None
+        The assertion validates all terminal skip buckets.
+    """
+
+    skip_codes = (
+        "skipped:insufficient-description",
+        "skipped:no-description",
+        "skipped:not-a-real-NN",
+    )
+    records = [
+        _complete_record(f"m_skip_{index}", code) for index, code in enumerate(skip_codes, start=1)
+    ]
+    report = partition_report([record["stable_id"] for record in records], records)
+    assert report.valid
+    for index, code in enumerate(skip_codes, start=1):
+        assert report.buckets[code] == frozenset({f"m_skip_{index}"})
+
+
 def test_completeness_reports_pending_metadata_and_workflow() -> None:
     """Partition can pass while completion remains false and queryable."""
 

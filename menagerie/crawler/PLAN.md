@@ -343,6 +343,8 @@ guessed from names.
 - `source_resolution.rung: "R1_LIBRARY"|"R2_VENDOR"|"R3_PORT"|
   "R4_REIMPLEMENT"|"R5_SKIP"`.
 - `source_resolution.decision`; `source_resolution.rung_evidence`;
+  `source_resolution.sufficiency_gap|null`, which is a non-empty statement of the missing material
+  implementation detail exactly when `status.code="skipped:insufficient-description"`;
   `source_resolution.searched_at`; `source_resolution.attempted_rungs[]`, each with
   `{rung, result, reason_code, evidence_ids[]}`.
 - `source_resolution.search_report: {queries[], places_checked[], links_checked[], languages_checked[],
@@ -362,7 +364,10 @@ URL; R5 stores the primary evidence URL plus the complete negative search report
 #### Literal evidence and grounding
 
 - `evidence.excerpts[]`, each with
-  `{evidence_id, source_id, locator, text, text_sha256, supports[], family_level, license_disposition}`.
+  `{evidence_id, source_id, locator, text, text_sha256, supports[], family_level, disposition,
+  license_disposition}`. `disposition="insufficient-for-faithful-reimpl"` is required on at least one
+  verbatim vague excerpt for `skipped:insufficient-description`; ordinary supporting excerpts use
+  `disposition="supporting"`.
 - `evidence.coverage: {all_agent_fields_have_support, missing_support[], family_grounding_complete}`.
 - `evidence.evidence_identity`; `evidence.family_grounding_path|null`.
 
@@ -576,7 +581,8 @@ The only public current terminal status codes are:
 runs
 deferred:needs-cuda
 deferred:needs-x86
-skipped:no-usable-description
+skipped:insufficient-description
+skipped:no-description
 skipped:not-a-real-NN
 failed:<stage>
 ```
@@ -634,16 +640,19 @@ proves the arm64 path unavailable. Memory, checkpoint need, checker trouble, and
 failure are failures, not deferrals. The designated detectron2/mmcv heavy-build policy in section 11 is
 the ruled bounded path into `deferred:needs-x86` after two recorded arm64 CPU source-build failures.
 
-Skips are epistemic only. Operational failure never becomes a skip. Both skip records contain the
-primary source URL, literal evidence, and search report.
+Skips are epistemic only. Operational failure never becomes a skip. All three skip records contain the
+primary source URL and search report. `skipped:insufficient-description` additionally retains the vague
+source text verbatim with the insufficient excerpt disposition and a non-empty sufficiency gap;
+`skipped:no-description` retains the negative search report only; `skipped:not-a-real-NN` retains evidence
+that the item is outside the trainable-neural-network scope.
 
 ### 6.3 Partition and completion
 
-For intake stable-ID set `I`, let the current status sets be `R`, `D_cuda`, `D_x86`, `S_desc`, `S_nn`,
-and `F_stage`. The reducer must assert:
+For intake stable-ID set `I`, let the current status sets be `R`, `D_cuda`, `D_x86`, `S_insufficient`,
+`S_none`, `S_nn`, and `F_stage`. The reducer must assert:
 
 ```text
-I = R ∪ D_cuda ∪ D_x86 ∪ S_desc ∪ S_nn ∪ (∪ F_stage)
+I = R ∪ D_cuda ∪ D_x86 ∪ S_insufficient ∪ S_none ∪ S_nn ∪ (∪ F_stage)
 all sets are pairwise disjoint
 no current stable ID appears more than once
 no current terminal record points to a stale parent or identity
@@ -728,12 +737,16 @@ locators are mandatory. Fidelity has the same acceptance rule as R3.
 
 ### R5 — `R5_SKIP`
 
-- `skipped:no-usable-description`: no usable code exists and the best primary evidence cannot specify the
-  forward without material invention.
+- `skipped:insufficient-description`: some descriptive source text exists, but it cannot specify the
+  forward without material invention. Store that vague text verbatim in `evidence.excerpts[]` with
+  `disposition="insufficient-for-faithful-reimpl"`, and record the missing material detail in the required
+  non-empty `source_resolution.sufficiency_gap`.
+- `skipped:no-description`: no usable descriptive text is found after the bounded source search. Retain the
+  mandatory primary source link and the negative search report; no vague text is fabricated or implied.
 - `skipped:not-a-real-NN`: the item is not a trainable neural architecture—for example a dataset, loss,
   optimizer, preprocessing algorithm, or conceptual label.
 
-Both require source/search evidence and an accurate Codex-vetted skip justification. A source identity
+All three require source/search evidence and an accurate Codex-vetted skip justification. A source identity
 that cannot be established is `failed:source`, not a source-free skip.
 
 ### Anti-slop gates
@@ -1323,7 +1336,8 @@ R2_VENDOR: the exact runnable upstream repository implementation at a pinned rev
 R3_PORT: a faithful translation of real code only when R1/R2 cannot reasonably run on either planned target.
 R4_REIMPLEMENT: only when a documented search finds no usable code in any framework and detailed primary
 material specifies every material forward choice.
-R5_SKIP: no usable description, or not a real trainable neural architecture.
+R5_SKIP: insufficient descriptive text (retained verbatim with a sufficiency gap), no descriptive text after
+bounded search, or not a real trainable neural architecture.
 
 Apple CUDA/x86 incompatibility is a deferral, not permission to port or reimplement. A gist, abstract,
 blog summary, architecture name, or generic diagram is never sufficient. A CUDA performance kernel may be
@@ -1381,7 +1395,8 @@ R4 is allowed only if literal primary evidence determines layer inventory and or
 connectivity, branches, skips, recurrence, attention, and aggregation; operators, equations, and axes;
 activations, normalization, padding, stride, dilation, groups, and heads; state, masks, control, and
 stochastic behavior; material initialization; input semantics; and output contract. There is no word-count
-shortcut. One unspecified material choice means skipped:no-usable-description.
+shortcut. One unspecified material choice means `skipped:insufficient-description` when vague descriptive
+text exists, otherwise `skipped:no-description`.
 
 PROCESS
 1. Inspect intake hints and prior failures, but trust only newly verified exact sources.

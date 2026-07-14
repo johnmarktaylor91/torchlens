@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from typing import Any, Iterable, Mapping, Sequence
 
-from menagerie.crawler.constants import TERMINAL_STATUS_CODES, WORKFLOW_STATES
+from menagerie.crawler.constants import SKIPPED_STATUS_CODES, TERMINAL_STATUS_CODES, WORKFLOW_STATES
 from menagerie.crawler.models import (
     CompletenessReport,
     FunnelQuery,
@@ -68,7 +68,9 @@ def partition_report(
         occurrences[stable_id] += 1
         if stable_id not in intake:
             extra.add(stable_id)
-        if code not in TERMINAL_STATUS_CODES:
+        if code in SKIPPED_STATUS_CODES:
+            buckets_mutable[str(code)].add(stable_id)
+        elif code not in TERMINAL_STATUS_CODES:
             buckets_mutable[f"invalid:{code}"].add(stable_id)
         else:
             buckets_mutable[str(code)].add(stable_id)

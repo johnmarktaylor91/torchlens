@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
+from pathlib import Path
 from typing import Any
 
 import pytest
 
+from menagerie.crawler.constants import TERMINAL_STATUS_CODES
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
 from menagerie.crawler.tests.conftest import (
     make_attempt,
@@ -108,3 +111,98 @@ def test_forward_attempt_requires_mode() -> None:
     malformed = make_attempt(mode=None)
     with pytest.raises(PayloadValidationError):
         validate_payload(malformed)
+
+
+def test_schema_properties_have_nonempty_descriptions() -> None:
+    """Every declared schema property carries a non-empty self-documenting description.
+
+    Returns
+    -------
+    None
+        The assertion validates all crawler schemas.
+    """
+
+    def assert_descriptions(node: object, path: str = "$") -> None:
+        """Recursively assert descriptions for every JSON Schema property.
+
+        Parameters
+        ----------
+        node:
+            JSON-compatible schema node.
+        path:
+            Human-readable node location for assertion failures.
+
+        Returns
+        -------
+        None
+            Raises when a property is undocumented.
+        """
+
+        if isinstance(node, dict):
+            properties = node.get("properties")
+            if isinstance(properties, dict):
+                for name, property_schema in properties.items():
+                    assert isinstance(property_schema, dict)
+                    assert property_schema.get("description", "").strip(), f"{path}.{name}"
+                    assert_descriptions(property_schema, f"{path}.{name}")
+            for key, value in node.items():
+                if key not in {"properties", "description"}:
+                    assert_descriptions(value, f"{path}.{key}")
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                assert_descriptions(value, f"{path}[{index}]")
+
+    schema_root = Path(__file__).parents[1] / "schemas"
+    for schema_path in schema_root.glob("*.json"):
+        assert_descriptions(json.loads(schema_path.read_text()), schema_path.name)
+
+
+def test_split_skip_reasons_require_vague_text_and_sufficiency_gap(
+    valid_model: dict[str, Any],
+) -> None:
+    """The three skip terminals retain the ruled evidence distinctions.
+
+    Parameters
+    ----------
+    valid_model:
+        Complete accepted model fixture.
+
+    Returns
+    -------
+    None
+        The assertion validates all three terminal skip paths.
+    """
+
+    skip_codes = {
+        "skipped:insufficient-description",
+        "skipped:no-description",
+        "skipped:not-a-real-NN",
+    }
+    assert skip_codes.issubset(TERMINAL_STATUS_CODES)
+
+    for code in skip_codes - {"skipped:insufficient-description"}:
+        record = deepcopy(valid_model)
+        record["status"]["kind"] = "skipped"
+        record["status"]["code"] = code
+        validate_payload(record)
+
+    insufficient = deepcopy(valid_model)
+    insufficient["status"]["kind"] = "skipped"
+    insufficient["status"]["code"] = "skipped:insufficient-description"
+    insufficient["source_resolution"]["rung"] = "R5_SKIP"
+    insufficient["source_resolution"]["sufficiency_gap"] = (
+        "concept described but no layer configs/dims/connectivity"
+    )
+    insufficient["evidence"]["excerpts"][0]["text"] = "A novel neural architecture for vision."
+    insufficient["evidence"]["excerpts"][0]["disposition"] = "insufficient-for-faithful-reimpl"
+    validate_payload(insufficient)
+
+    missing_gap = deepcopy(insufficient)
+    missing_gap["source_resolution"]["sufficiency_gap"] = None
+    with pytest.raises(PayloadValidationError):
+        validate_payload(missing_gap)
+
+    missing_vague_excerpt = deepcopy(insufficient)
+    missing_vague_excerpt["evidence"]["excerpts"][0]["disposition"] = "supporting"
+    with pytest.raises(PayloadValidationError):
+        validate_payload(missing_vague_excerpt)

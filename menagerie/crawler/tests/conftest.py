@@ -469,6 +469,7 @@ def make_model(
             "rung": "R1_LIBRARY",
             "decision": "official implementation",
             "rung_evidence": "source-1",
+            "sufficiency_gap": None,
             "searched_at": NOW,
             "attempted_rungs": [
                 {
@@ -502,6 +503,7 @@ def make_model(
                     "text_sha256": HASH,
                     "supports": ["identity.canonical_name"],
                     "family_level": True,
+                    "disposition": "supporting",
                     "license_disposition": "short-excerpt-committed",
                 }
             ],

@@ -111,13 +111,20 @@ class AttemptResult(StrEnum):
     OBSERVED = "observed"
 
 
+SKIPPED_STATUS_CODES = frozenset(
+    {
+        "skipped:insufficient-description",
+        "skipped:no-description",
+        "skipped:not-a-real-NN",
+    }
+)
+
 TERMINAL_STATUS_CODES = frozenset(
     {
         "runs",
         "deferred:needs-cuda",
         "deferred:needs-x86",
-        "skipped:no-usable-description",
-        "skipped:not-a-real-NN",
+        *SKIPPED_STATUS_CODES,
         *(f"failed:{stage.value}" for stage in FailureStage),
     }
 )
