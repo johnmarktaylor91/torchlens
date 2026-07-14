@@ -240,27 +240,21 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     witnesses, completeness = _build_control_witnesses(trace, ops, diagnostics)
     literal_witnesses, saw_opaque_leaf = _input_literal_witnesses(trace, start_order=len(witnesses))
     witnesses.extend(literal_witnesses)
-    escape_witnesses, escape_incomplete = _tensor_source_escape_witnesses(
-        trace, ops, calls, start_order=len(witnesses)
+    escape_witnesses, escape_incomplete = _escape_witnesses(
+        trace, ops, calls, slot_drafts, start_order=len(witnesses)
     )
     witnesses.extend(escape_witnesses)
-    unbound_state_witnesses, unbound_state_incomplete = _unbound_state_escape_witnesses(
-        trace, calls, slot_drafts, start_order=len(witnesses)
-    )
-    witnesses.extend(unbound_state_witnesses)
     if saw_opaque_leaf and completeness is WitnessCompleteness.COMPLETE:
         # An opaque non-tensor input leaf cannot be re-verified, so its control
         # dependency is unobserved: downgrade to keep the run honest
         # (UNVERIFIABLE + NOT_APPLICABLE), never a false VERIFIED/ATTESTED.
         completeness = WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
     if escape_incomplete and completeness is WitnessCompleteness.COMPLETE:
-        # A tensor->host escape whose source activation cannot be re-verified leaves
-        # the escape unobservable at run time: keep the run honestly UNVERIFIABLE.
+        # A tensor->host escape (of ANY source class or mechanism) whose source cannot
+        # be witnessed leaves the escape unobservable at run time: keep the run honestly
+        # UNVERIFIABLE. The unified pass folds the former tensor-op and unbound-state
+        # incomplete signals into this single fail-closed downgrade.
         completeness = WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
-    if unbound_state_incomplete and completeness is WitnessCompleteness.COMPLETE:
-        # An unbound state slot whose capture value cannot be re-verified leaves a
-        # state-derived escape unobservable: keep the run honestly UNVERIFIABLE.
-        completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
     if _has_pruned_rng_control_flow(trace) and completeness is WitnessCompleteness.COMPLETE:
         # A torch-RNG draw steered pure-Python control flow, so its predicate chain
         # is input-disconnected and was orphaned out of the visible graph. The
@@ -1452,14 +1446,15 @@ def _has_pruned_rng_control_flow(trace: Any) -> bool:
     return bool(pruned_rng_control_source_labels(trace))
 
 
-def _tensor_source_escape_witnesses(
+def _escape_witnesses(
     trace: Any,
     ops: Sequence[Any],
     calls: Sequence[RunnableCallDescriptor],
+    slot_drafts: Mapping[str, _SlotDraft],
     *,
     start_order: int,
 ) -> tuple[list[ControlWitness], bool]:
-    """Witness the source slot of every tensor->host escape, keyed on the escape.
+    """Witness the SOURCE of every tensor->host escape in one exhaustive fail-closed pass.
 
     A tensor->Python escape (``.item()`` / ``int()`` / ``float()`` / ``__index__``
     / ``.tolist()`` / ``.numpy()`` / ``aten._local_scalar_dense``) reads a captured
@@ -1470,258 +1465,112 @@ def _tensor_source_escape_witnesses(
     baked literal / taken branch is STALE while the run would otherwise falsely
     report VERIFIED (+ATTESTED). This is the honesty tripwire.
 
-    The redesign keys on the ESCAPE EVENT via its SOURCE SLOT, NOT on correlating
-    a baked literal by value-equality (the r8 heuristic, which any arithmetic on
-    the escaped scalar defeats). Two complementary detectors identify a source
-    slot; both emit the SAME digest-based witness so run time is uniform:
+    This single pass closes the whole (SOURCE class x ESCAPE mechanism x USE) matrix
+    so no per-net seam can leave a recognized escape un-witnessed-and-not-flagged:
 
-    * Structural, value-free (primary): every non-bool op whose output terminated
-      inside the model (``is_internal_sink``) -- its tensor left the traced graph
-      because its only consumers were host escapes. This covers a Python-arithmetic
-      transformed scalar, a multi-element ``.tolist()`` sequence bake, and a
-      non-bool scalar steering pure-Python control flow, regardless of any baked
-      value.
-    * Value-equality (secondary): a DUAL-USE op whose output ALSO feeds the graph
-      (so it is not an internal sink) but whose exact value was baked verbatim into
-      a downstream literal. This recovers the r8 verbatim-bake shape that the
-      internal-sink filter would otherwise miss.
+    * SOURCE class -- model INPUT, INTERNAL op output, BOUND param, BOUND buffer, and
+      UNBOUND param/buffer are ALL witnessed. A bound state slot that also feeds a
+      graph op still gets an ESCAPE witness (its capture-time state digest): bound-ness
+      only exempts the UNBOUND-state net, never the escape witness.
+    * ESCAPE mechanism -- census-VISIBLE ``.item()`` / ``int()`` / ``float()`` /
+      ``__index__`` / ``bool()`` (``aten._local_scalar_dense``) AND census-INVISIBLE
+      ``.tolist()`` / ``.numpy()`` / ``__array__`` (observed at the torch-function
+      layer, recorded into the SAME source tables). The witness keys on the SOURCE
+      tensor's digest, so host ARITHMETIC on the escaped value (``s*2+1`` /
+      ``sum(...)`` / ``.sum()``) is irrelevant -- the source is what changes.
+    * USE -- verbatim literal, host-arithmetic literal, and pure-Python control flow
+      are all covered by witnessing the SOURCE rather than correlating a baked value.
 
-    Each witnessed source slot carries the SHA-256 byte digest of its capture-time
-    output tensor. At run time the executor recomputes the slot and re-digests it;
-    a differing digest (a CHANGED input) means the escaped value -- and any literal
-    or branch derived from it -- may be stale, so the run reports UNVERIFIABLE +
-    NOT_APPLICABLE rather than a false VERIFIED. The ORIGINAL/unchanged input
-    recomputes a byte-identical slot, so the run still reports VERIFIED (+ATTESTED
-    where eligible): the witness is input-conditional and never downgrades a
-    faithful original run. Scalar-*bool* escapes are handled by the control-witness
-    path and excluded here.
+    PASS A witnesses state slots by their capture-time state digest: every UNBOUND
+    state slot (the host-only-read net) PLUS every state slot that is an escape source
+    by name (bound or unbound) PLUS a state slot whose scalar value equals an
+    unattributable (unlabelled-source) escaped value. PASS B witnesses non-state
+    tensor-op escape sources (input / internal) by their retained-output digest, plus
+    the value-equality OPTIMIZATION for a dual-use verbatim bake.
+
+    At run time each witnessed slot is re-digested; a differing digest (a CHANGED input
+    or CHANGED staged state) means the escaped value / branch may be stale -> the run
+    reports UNVERIFIABLE + NOT_APPLICABLE rather than a false VERIFIED. Capture-equivalent
+    input+state re-digests byte-identically -> still VERIFIED (+ATTESTED where eligible).
+    A source that genuinely cannot be witnessed (an orphan-pruned census label, an
+    unattributable bool control predicate, an unattributable census-invisible escape,
+    or an unattributable value matching no sink/state) makes the witness set INCOMPLETE
+    (fail closed), never a silent pass. Scalar-*bool* escapes with a resolvable source
+    are the control-witness net's domain and excluded from the tensor-op gate here.
     """
 
-    call_id_by_slot: dict[str, str] = {}
-    for call in calls:
-        for slot_id in call.output_slot_ids:
-            call_id_by_slot.setdefault(slot_id, call.call_id)
+    from ..backends.torch.completeness_witness import (
+        host_escape_has_unattributable_bool,
+        host_escape_has_unattributable_opaque,
+        host_escape_state_source_names,
+        host_escape_unattributable_values,
+    )
 
-    from ..backends.torch.completeness_witness import host_escape_unattributable_values
+    witnesses: list[ControlWitness] = []
+    escaped_labels, unresolvable_escape = _host_escape_source_labels(trace)
+    state_names = host_escape_state_source_names(trace)
+    # Fail closed for the three genuinely-unwitnessable escape shapes: an orphan-pruned
+    # census tensor-op source (:_host_escape_source_labels), an unattributable (``.data``
+    # alias) bool control predicate covered by no net, and an unattributable census-
+    # invisible (``.tolist``/``.numpy``) escape with no source slot.
+    incomplete = unresolvable_escape
+    if host_escape_has_unattributable_bool(trace):
+        incomplete = True
+    if host_escape_has_unattributable_opaque(trace):
+        incomplete = True
 
     ints, floats, sequences = _collect_baked_literal_values(calls)
-    # An UNLABELLED-source escape (a ``.data`` alias) leaves a scalar value but no
-    # source-op label. Treat those values exactly like baked literals so the
-    # internal-sink net witnesses the sink that produced them value-free (C1). This
-    # keeps the ORIGINAL input VERIFIED (byte-identical slot) while a changed input
-    # recomputes a different digest -> UNVERIFIABLE.
-    for escaped in host_escape_unattributable_values(trace):
-        if isinstance(escaped, bool):
-            continue
+    # An UNLABELLED-source non-bool escape (a ``.data`` alias) leaves a scalar value but
+    # no source-op label. Treat those values as baked-literal candidates (internal sink)
+    # AND as capture-state candidates (PASS A). A value matching NEITHER -> INCOMPLETE.
+    unattr_values: set[Any] = {
+        value for value in host_escape_unattributable_values(trace) if not isinstance(value, bool)
+    }
+    unmatched_unattr: set[Any] = set(unattr_values)
+    for escaped in unattr_values:
         if isinstance(escaped, int):
             ints.add(escaped)
         elif isinstance(escaped, float):
             floats.add(escaped)
     sequence_lengths = {len(item) for item in sequences}
-    escaped_labels, unresolvable_escape = _host_escape_source_labels(trace)
 
-    witnesses: list[ControlWitness] = []
-    seen_slots: set[str] = set()
-    # Fail honest for an orphan-PRUNED census escape source (its raw tensor-op label
-    # never resolves to a final op): no witnessable slot -> INCOMPLETE (-> UNVERIFIABLE)
-    # instead of the pre-R10 silent drop that read false VERIFIED.
-    incomplete = unresolvable_escape
-    for op in ops:
-        is_input = bool(getattr(op, "is_input", False))
-        is_output = bool(getattr(op, "is_output", False))
-        # Net 1 (census escape event, value-free): the dispatch census recorded a
-        # tensor->host scalar escape (``.item()`` / ``int()`` / ``float()`` /
-        # ``__index__`` / ``bool()`` -> ``aten._local_scalar_dense``) reading THIS
-        # op's output. This is the robust, arithmetic-proof signal and covers a
-        # transformed scalar, a dual-use escape, and a scalar steering control flow.
-        is_escape = str(op.label) in escaped_labels
-        # An input/output BOUNDARY op is witnessed ONLY when the census recorded a
-        # host escape reading it (``x * float(x)`` / ``if x:`` reads the RAW input;
-        # the input is exactly what changes on a changed-input run). A non-escape
-        # boundary op must be skipped -- digest-witnessing the always-present output
-        # op (or any un-escaped input) would falsely downgrade every changed run.
-        if (is_input or is_output) and not is_escape:
-            continue
-        if bool(getattr(op, "is_scalar_bool", False)) or bool(
-            getattr(op, "is_terminal_bool", False)
-        ):
-            continue
-        slot_id = f"slot:{op.label}"
-        if slot_id in seen_slots:
-            continue
-        # An interior escape source is a call output; a boundary escape source
-        # (input / buffer) is a SOURCE slot with no producing call. Witness both:
-        # the run-side staleness check keys on the slot id, not the call id, and
-        # ``ControlWitness.call_id`` is nullable for source-slot witnesses.
-        call_id = call_id_by_slot.get(slot_id)
-        if call_id is None and not (is_input or is_output):
-            continue
-        is_sink = bool(getattr(op, "is_internal_sink", False))
-        # Only candidate escape sources / internal sinks are inspected; a plain op
-        # (including a selectively-unsaved one) is never read for its activation.
-        if not is_escape and not is_sink:
-            continue
-        value = _op_retained_tensor(trace, op)
-        if value is None:
-            # A genuine census escape whose source activation was not retained cannot
-            # be digest-witnessed: fail honest (mark the witness set INCOMPLETE so
-            # every run is UNVERIFIABLE) rather than let a stale literal read VERIFIED.
-            # A dead/unmatched internal sink with no value is simply not witnessed.
-            if is_escape:
-                incomplete = True
-            continue
-        matched = is_escape
-        # Net 2 (value-equality, for census-invisible ``.tolist()`` / ``.numpy()``):
-        # an internal sink whose exact value was baked verbatim into a downstream
-        # literal. Scoped to internal sinks so a genuinely dead sink (value discarded
-        # and never baked) is never over-triggered.
-        if not matched and is_sink:
-            matched = _value_matches_baked_literal(value, ints, floats, sequences, sequence_lengths)
-        if not matched:
-            continue
-        try:
-            digest = runnable_tensor_byte_digest(value)
-        except (RuntimeError, ValueError, TypeError):
-            if is_escape:
-                incomplete = True
-            continue
-        try:
-            observed = _encode_literal(digest)
-        except _UnsupportedLiteralError:
-            if is_escape:
-                incomplete = True
-            continue
-        order = start_order + len(witnesses)
-        witnesses.append(
-            ControlWitness(
-                witness_id=f"witness:{order + 1}",
-                kind=ControlWitnessKind.TENSOR_DERIVED_SCALAR_LITERAL,
-                order=order,
-                call_id=call_id,
-                site_label=slot_id,
-                observed_value=observed,
-            )
-        )
-        seen_slots.add(slot_id)
-    return witnesses, incomplete
-
-
-def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], bool]:
-    """Return final escape-source labels and whether any census label is unresolvable.
-
-    The dispatch census records, for each ``aten._local_scalar_dense`` escape, the
-    RAW capture label of the source tensor's producing op (see
-    ``completeness_witness._record_host_escape_source``). This resolves those raw
-    labels to their final cooked op labels via the trace's raw->final map so the
-    descriptor can witness the escape's source slot.
-
-    A census raw label that does NOT resolve to a final op is a real escape whose
-    source chain was orphan-PRUNED -- a host-only chain that reached neither an
-    input nor an output (e.g. a param-rooted ``float((w + 1).sum())``). Such a slot
-    can never be digest-witnessed, so the second return value flags it and the
-    caller must fail honest (mark the witness set INCOMPLETE). Silently dropping it
-    (the pre-R10 behavior) left completeness COMPLETE -> false VERIFIED on changed
-    state. The value-equality net and the unbound-state net remain independent
-    safety nets for the resolvable cases.
-    """
-
-    from ..backends.torch.completeness_witness import (
-        host_escape_bool_source_labels,
-        host_escape_source_labels,
-        host_escape_state_source_labels,
-    )
-
-    raw_labels = host_escape_source_labels(trace)
-    if not raw_labels:
-        return frozenset(), False
-    state_labels = host_escape_state_source_labels(trace)
-    bool_labels = host_escape_bool_source_labels(trace)
-    raw_to_final = getattr(trace, "_raw_to_final_op_labels", {}) or {}
-    final_labels: set[str] = set()
-    unresolvable = False
-    for raw_label in raw_labels:
-        if not isinstance(raw_label, str):
-            unresolvable = True
-            continue
-        final = raw_to_final.get(raw_label)
-        if isinstance(final, str):
-            final_labels.add(final)
-        elif raw_label not in state_labels and raw_label not in bool_labels:
-            # An unresolved TENSOR-OP source is an orphan-pruned host-only chain with
-            # no witnessable slot -> fail honest. An unresolved STATE source (a
-            # buffer/param read only on the host) is covered by the unbound-state
-            # net, and an unresolved BOOL predicate by the control-witness / pruned-RNG
-            # nets, so neither closes as a pruned tensor-op chain here.
-            unresolvable = True
-    return frozenset(final_labels), unresolvable
-
-
-UNBOUND_STATE_ESCAPE_SITE_PREFIX = "unbound_state_escape:"
-"""``site_label`` prefix marking a witnessed unbound state (buffer/param) escape."""
-
-UNBOUND_STATE_ESCAPE_FACT_KEY = "unbound_state_escape"
-"""Discriminator key present in every unbound-state escape fact."""
-
-
-def _unbound_state_escape_witnesses(
-    trace: Any,
-    calls: Sequence[RunnableCallDescriptor],
-    slot_drafts: Mapping[str, _SlotDraft],
-    *,
-    start_order: int,
-) -> tuple[list[ControlWitness], bool]:
-    """Witness every state slot read only through an untraced host path.
-
-    A registered buffer or parameter can steer the forward pass WITHOUT ever
-    becoming a traced tensor op: a module ``bool(self.gate)`` truth-test, an
-    ``self.threshold.item()`` comparison, or any pure-Python control flow reads the
-    state's value on the host, leaving no graph footprint. The sparse DAG never
-    consumes such a slot, so a CHANGED staged value (a differing ``load_state_dict``
-    entry) can silently flip a branch or restale a baked literal while the recorded
-    taken path replays unchanged -- a false VERIFIED over a possibly-wrong result.
-
-    This detector treats a state-derived escape exactly like an input-derived one.
-    A state slot whose ``slot_id`` is consumed by NO call's tensor arguments is
-    "unbound": its capture-time value influenced the forward only through an
-    untraced host path. Each unbound state slot is witnessed with the SHA-256 byte
-    digest of its capture-time value. At run time the executor re-digests the
-    effective (staged/embedded) value; a differing digest means the untraced state
-    dependency changed, so the run reports UNVERIFIABLE + NOT_APPLICABLE. State
-    that is byte-identical to capture (the original/embedded state) recomputes the
-    same digest, so the run still reports VERIFIED: the witness is state-conditional
-    and never downgrades a faithful capture-equivalent run. A model whose every
-    buffer/param feeds a traced op has no unbound slot and is UNCHANGED.
-
-    When an unbound state slot's capture-time value is unavailable (no captured
-    ``state_dict`` snapshot), its dependency cannot be re-verified, so the function
-    signals ``incomplete=True`` and the caller downgrades ``witness_completeness``
-    to keep the run honestly UNVERIFIABLE rather than falsely VERIFIED.
-    """
-
+    call_id_by_slot: dict[str, str] = {}
+    for call in calls:
+        for slot_id in call.output_slot_ids:
+            call_id_by_slot.setdefault(slot_id, call.call_id)
     bound_slot_ids: set[str] = set()
     for call in calls:
         for argument in call.tensor_arguments:
             bound_slot_ids.add(argument.slot_id)
-
     capture_state = trace.__dict__.get("_runnable_capture_state")
-    witnesses: list[ControlWitness] = []
-    incomplete = False
+
+    # ---- PASS A: state-slot escape/host-path witnesses (bound-or-unbound) ----
     for slot_id, draft in slot_drafts.items():
         binding = draft.state_binding
-        if binding is None or slot_id in bound_slot_ids:
+        if binding is None:
             continue
         name = binding.state_dict_name
-        digest: str | None = None
-        if isinstance(capture_state, Mapping):
-            captured = capture_state.get(name)
-            if isinstance(captured, torch.Tensor):
-                try:
-                    digest = runnable_tensor_byte_digest(captured)
-                except (RuntimeError, ValueError, TypeError):
-                    digest = None
-        if digest is None:
-            # An unbound state slot whose capture value cannot be re-verified is a
-            # genuine coverage gap: fail honest (UNVERIFIABLE), never false VERIFIED.
+        captured = capture_state.get(name) if isinstance(capture_state, Mapping) else None
+        matched_value: Any = None
+        if isinstance(captured, torch.Tensor) and unmatched_unattr and int(captured.numel()) == 1:
+            try:
+                scalar = captured.detach().item()
+            except (RuntimeError, ValueError, TypeError):
+                scalar = None
+            if not isinstance(scalar, bool) and scalar in unmatched_unattr:
+                matched_value = scalar
+        is_named_escape = name in state_names
+        is_unbound = slot_id not in bound_slot_ids
+        if not (is_named_escape or is_unbound or matched_value is not None):
+            continue
+        if not isinstance(captured, torch.Tensor):
+            # A state slot that must be witnessed but whose capture value is not
+            # available cannot be re-verified: fail closed (UNVERIFIABLE).
+            incomplete = True
+            continue
+        try:
+            digest = runnable_tensor_byte_digest(captured)
+        except (RuntimeError, ValueError, TypeError):
             incomplete = True
             continue
         fact = {
@@ -1746,7 +1595,179 @@ def _unbound_state_escape_witnesses(
                 observed_value=observed,
             )
         )
+        if matched_value is not None:
+            unmatched_unattr.discard(matched_value)
+
+    # ---- PASS B: non-state tensor-op escape sources (input / internal) ----
+    seen_slots: set[str] = set()
+    covered_labels: set[str] = set()
+    for op in ops:
+        is_input = bool(getattr(op, "is_input", False))
+        is_output = bool(getattr(op, "is_output", False))
+        is_escape = str(op.label) in escaped_labels
+        # A bound param/buffer escape source (state address recorded) is witnessed by
+        # PASS A's state digest; do NOT re-witness it as a tensor-op slot, and never
+        # treat it as INCOMPLETE here (its state digest already covers the escape).
+        address = getattr(op, "address", None)
+        if address is not None and str(address) in state_names:
+            if is_escape:
+                covered_labels.add(str(op.label))
+            continue
+        # An input/output BOUNDARY op is witnessed ONLY when the census recorded a host
+        # escape reading it; a non-escape boundary op is skipped (witnessing the always-
+        # present output/un-escaped input would falsely downgrade every changed run).
+        if (is_input or is_output) and not is_escape:
+            continue
+        if bool(getattr(op, "is_scalar_bool", False)) or bool(
+            getattr(op, "is_terminal_bool", False)
+        ):
+            continue
+        slot_id = f"slot:{op.label}"
+        if slot_id in seen_slots:
+            continue
+        call_id = call_id_by_slot.get(slot_id)
+        if call_id is None and not (is_input or is_output):
+            continue
+        is_sink = bool(getattr(op, "is_internal_sink", False))
+        if not is_escape and not is_sink:
+            continue
+        value = _op_retained_tensor(trace, op)
+        if value is None:
+            if is_escape:
+                incomplete = True
+            continue
+        matched = is_escape
+        # Value-equality OPTIMIZATION (secondary): a dual-use internal sink whose exact
+        # value was baked verbatim into a downstream literal (or equals an unattributable
+        # escaped value). Never the ONLY net -- the source-digest witness above is primary.
+        if not matched and is_sink:
+            matched = _value_matches_baked_literal(value, ints, floats, sequences, sequence_lengths)
+        if not matched:
+            continue
+        matched_value_here: Any = None
+        if unmatched_unattr and int(value.numel()) == 1:
+            try:
+                sink_scalar = value.item()
+            except (RuntimeError, ValueError):
+                sink_scalar = None
+            if not isinstance(sink_scalar, bool) and sink_scalar in unmatched_unattr:
+                matched_value_here = sink_scalar
+        try:
+            digest = runnable_tensor_byte_digest(value)
+        except (RuntimeError, ValueError, TypeError):
+            if is_escape:
+                incomplete = True
+            continue
+        try:
+            observed = _encode_literal(digest)
+        except _UnsupportedLiteralError:
+            if is_escape:
+                incomplete = True
+            continue
+        order = start_order + len(witnesses)
+        witnesses.append(
+            ControlWitness(
+                witness_id=f"witness:{order + 1}",
+                kind=ControlWitnessKind.TENSOR_DERIVED_SCALAR_LITERAL,
+                order=order,
+                call_id=call_id,
+                site_label=slot_id,
+                observed_value=observed,
+            )
+        )
+        seen_slots.add(slot_id)
+        if is_escape:
+            covered_labels.add(str(op.label))
+        if matched_value_here is not None:
+            unmatched_unattr.discard(matched_value_here)
+
+    # ---- Structural invariant: every recorded escape fact is witnessed OR INCOMPLETE ----
+    # No net-exclusion may silently drop a recognized escape.
+    if unmatched_unattr:
+        # An unattributable non-bool escape value matched neither a witnessed internal
+        # sink nor a capture-state slot: its source cannot be witnessed -> fail closed.
+        incomplete = True
+    if not incomplete:
+        from ..backends.torch.completeness_witness import host_escape_bool_source_labels
+
+        raw_bool = host_escape_bool_source_labels(trace)
+        raw_to_final = getattr(trace, "_raw_to_final_op_labels", {}) or {}
+        bool_final_labels = {
+            raw_to_final[raw] for raw in raw_bool if isinstance(raw_to_final.get(raw), str)
+        }
+        for label in escaped_labels:
+            if label in covered_labels or label in bool_final_labels:
+                continue
+            # A resolvable non-bool escape source that PASS A/B did not witness would
+            # otherwise slip through a net seam: fail closed instead.
+            incomplete = True
+            break
     return witnesses, incomplete
+
+
+def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], bool]:
+    """Return final escape-source labels and whether any census label is unresolvable.
+
+    The dispatch census records, for each ``aten._local_scalar_dense`` escape, the
+    RAW capture label of the source tensor's producing op (see
+    ``completeness_witness._record_host_escape_source``). This resolves those raw
+    labels to their final cooked op labels via the trace's raw->final map so the
+    descriptor can witness the escape's source slot.
+
+    A census raw label that does NOT resolve to a final op is a real escape whose
+    source chain was orphan-PRUNED -- a host-only chain that reached neither an
+    input nor an output (e.g. a param-rooted ``float((w + 1).sum())``). Such a slot
+    can never be digest-witnessed, so the second return value flags it and the
+    caller must fail honest (mark the witness set INCOMPLETE). Silently dropping it
+    (the pre-R10 behavior) left completeness COMPLETE -> false VERIFIED on changed
+    state. The value-equality net and the unbound-state net remain independent
+    safety nets for the resolvable cases.
+    """
+
+    from ..backends.torch.completeness_witness import (
+        host_escape_source_labels,
+        host_escape_state_source_labels,
+    )
+
+    raw_labels = host_escape_source_labels(trace)
+    if not raw_labels:
+        return frozenset(), False
+    state_labels = host_escape_state_source_labels(trace)
+    raw_to_final = getattr(trace, "_raw_to_final_op_labels", {}) or {}
+    final_labels: set[str] = set()
+    unresolvable = False
+    for raw_label in raw_labels:
+        if not isinstance(raw_label, str):
+            unresolvable = True
+            continue
+        final = raw_to_final.get(raw_label)
+        if isinstance(final, str):
+            final_labels.add(final)
+        elif raw_label not in state_labels:
+            # An unresolved source has no witnessable slot -> fail honest. This covers an
+            # orphan-pruned TENSOR-OP host-only chain (``float((w + 1).sum())``) AND a
+            # PRUNED BOOL control predicate (``bool(self.gate.data > 0.5)`` -- the ``.data``
+            # alias severs the graph link so the gt is orphan-pruned and NO control-witness
+            # net can see it; spec point 3). A RESOLVED bool predicate is a real captured
+            # conditional and the control-witness net covers it, so it is not flagged here.
+            # An unresolved STATE source (a buffer/param read only on the host) is covered
+            # by the state net, so it does not close as a pruned chain here.
+            unresolvable = True
+    return frozenset(final_labels), unresolvable
+
+
+UNBOUND_STATE_ESCAPE_SITE_PREFIX = "unbound_state_escape:"
+"""``site_label`` prefix marking a witnessed unbound state (buffer/param) escape."""
+
+UNBOUND_STATE_ESCAPE_FACT_KEY = "unbound_state_escape"
+"""Discriminator key present in every unbound-state escape fact.
+
+The site prefix and fact key are shared by the unified ``_escape_witnesses`` PASS A,
+which witnesses UNBOUND state slots (host-only reads) AND bound state slots that are
+escape sources (a ``self.gate.item()`` on a buffer that also feeds a graph op), both by
+their capture-time state digest. bound-ness exempts a state slot from the unbound net
+only, never from the escape witness.
+"""
 
 
 def _container_structure_witnesses(trace: Any, *, start_order: int) -> list[ControlWitness]:
