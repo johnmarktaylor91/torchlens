@@ -1655,6 +1655,7 @@ def _escape_witnesses(
 
     from ..backends.torch.completeness_witness import (
         host_escape_has_mutable_writeback,
+        host_escape_has_raw_pointer,
         host_escape_has_unattributable_bool,
         host_escape_has_unattributable_opaque,
         host_escape_state_source_names,
@@ -1670,13 +1671,19 @@ def _escape_witnesses(
     # (``.tolist``/``.numpy``) escape with no source slot, and a detected host WRITE-BACK through
     # a mutable zero-copy alias (``.numpy()[0] = 99``) -- the write mutates the source bytes with
     # no dispatch and no version bump, so the sparse replay recomputes the pre-write value and the
-    # source digest cannot witness it; keep the run honestly UNVERIFIABLE.
+    # source digest cannot witness it; keep the run honestly UNVERIFIABLE. A raw ``data_ptr()``
+    # pointer escape is likewise unobservable (r15-H1) and fails closed here too.
     incomplete = unresolvable_escape
     if host_escape_has_unattributable_bool(trace):
         incomplete = True
     if host_escape_has_unattributable_opaque(trace):
         incomplete = True
     if host_escape_has_mutable_writeback(trace):
+        incomplete = True
+    # A raw ``Tensor.data_ptr()`` pointer escape (r15-H1) leaves the source tensor's subsequent
+    # value unobservable (a raw ctypes read/write bypasses every dispatch and byte watch), so the
+    # run must fail closed to UNVERIFIABLE rather than a false VERIFIED.
+    if host_escape_has_raw_pointer(trace):
         incomplete = True
 
     ints, floats, sequences = _collect_baked_literal_values(calls)
@@ -1702,6 +1709,17 @@ def _escape_witnesses(
     for call in calls:
         for argument in call.tensor_arguments:
             bound_slot_ids.add(argument.slot_id)
+    # State NAMES that feed at least one traced call as a tensor argument. A registered buffer
+    # whose value is consumed by a traced op (BatchNorm ``running_mean`` / ``running_var`` /
+    # ``num_batches_tracked``, read by the ``batch_norm`` call) is graph-connected: its in-place
+    # running-stat update is a TRACKED side effect the replay reproduces natively, so its extra
+    # post-update orphan buffer VERSION must NOT be treated as an untraced host-path escape
+    # (r15-C3). The unbound-state-escape net is for buffers/params consumed by NO traced call.
+    bound_state_names: set[str] = set()
+    for slot_id, draft in slot_drafts.items():
+        binding = draft.state_binding
+        if binding is not None and slot_id in bound_slot_ids:
+            bound_state_names.add(binding.state_dict_name)
     capture_state = trace.__dict__.get("_runnable_capture_state")
 
     # ---- PASS A: state-slot escape/host-path witnesses (bound-or-unbound) ----
@@ -1720,7 +1738,11 @@ def _escape_witnesses(
             if not isinstance(scalar, bool) and scalar in unmatched_unattr:
                 matched_value = scalar
         is_named_escape = name in state_names
-        is_unbound = slot_id not in bound_slot_ids
+        # Name-level, not slot-level: a buffer with ANY slot consumed by a traced call is
+        # graph-connected (r15-C3), so a normal tracked in-place running-stat update is
+        # replayable and stays VERIFIED. A buffer/param read only on an untraced host path has
+        # NO bound slot for its name and is still witnessed here (fails closed on changed state).
+        is_unbound = slot_id not in bound_slot_ids and name not in bound_state_names
         if not (is_named_escape or is_unbound or matched_value is not None):
             continue
         if not isinstance(captured, torch.Tensor):

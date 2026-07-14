@@ -369,11 +369,14 @@ hands out the raw data pointer that ``ctypes`` / a foreign kernel writes through
 ``.numpy()`` / ``.data`` these bypass the dispatcher entirely, so a write-back leaves the sparse
 replay recomputing the pre-write value and would falsely VERIFY. They are therefore bracketed with
 the SAME before/after byte snapshot as the mutable numpy alias (see ``_observe_invisible_host_escapes``
--> ``_check_writeback_watch``): a source whose bytes changed after exposure -> opaque host
-write-back -> UNVERIFIABLE. Unlike ``.numpy()`` these are WATCH-ONLY -- they are NOT recorded as
-value-escape sources, because a read-only ``data_ptr()`` identity / contiguity check exposes NO
-scalar value and must stay VERIFIED (no over-trigger). A read-only exposure leaves the bytes
-unchanged and stays honestly VERIFIED.
+-> ``_check_writeback_watch``): a source whose WHOLE-STORAGE bytes changed after exposure -> opaque
+host write-back -> UNVERIFIABLE. ``untyped_storage()`` / ``storage()`` are WATCH-ONLY -- they are
+NOT recorded as value-escape sources, because a read-only storage identity / contiguity check
+exposes NO scalar value and must stay VERIFIED (no over-trigger); a read-only exposure leaves the
+bytes unchanged and stays honestly VERIFIED. ``data_ptr()`` is the exception (r15-H1): it hands out
+a RAW pointer that a foreign READ (baking a stale literal) or a post-snapshot WRITE can use with no
+observable trace at all, so a genuine user ``data_ptr()`` call fails closed to UNVERIFIABLE (see
+``_HOST_ESCAPE_RAW_POINTER``), never relying on the byte watch alone.
 """
 
 INVISIBLE_HOST_ESCAPE_PROPERTIES = frozenset({"__cuda_array_interface__"})
@@ -587,6 +590,31 @@ def host_escape_has_mutable_writeback(trace: Any) -> bool:
     """Return whether a host write-back through a mutable zero-copy alias was detected."""
 
     return trace in _HOST_ESCAPE_MUTABLE_WRITEBACK
+
+
+_HOST_ESCAPE_RAW_POINTER: "weakref.WeakSet[Any]" = weakref.WeakSet()
+"""Traces where a raw ``Tensor.data_ptr()`` pointer escaped to the host (r15-H1).
+
+``tensor.data_ptr()`` hands out the raw integer data pointer that ``ctypes`` / a foreign kernel
+reads or writes through DIRECTLY, with no aten dispatch, no version bump, and -- unlike a
+``.numpy()`` alias or an ``untyped_storage()`` handle -- NO Python object whose bytes the
+forward-end write-back watch can re-inspect. A raw READ through the pointer bakes a stale literal
+or steers control flow (unwitnessable), and a raw WRITE may land after the watch snapshot; the
+pointer is fundamentally UNOBSERVABLE. So a genuine (non-internal) user ``data_ptr()`` call on a
+value-bearing tensor fails closed: the tensor's subsequent value cannot be witnessed, so the run
+is honestly UNVERIFIABLE rather than a false VERIFIED. This is scoped to ``data_ptr()`` ONLY --
+``untyped_storage()`` / ``storage()`` value reads are already UNVERIFIABLE by the storage-bridge
+watch, and read-only ``untyped_storage().nbytes()`` / ``.size()`` metadata (no value, no pointer)
+never trips it. ``data_ptr()`` is a rare low-level accessor in real models, so the fail-closed
+over-triggers at ~zero cost. TorchLens's own capture-internal ``data_ptr`` reads run under the
+``internal_scalar_read`` marker and are excluded. Presence-only.
+"""
+
+
+def host_escape_has_raw_pointer(trace: Any) -> bool:
+    """Return whether a raw ``Tensor.data_ptr()`` pointer escaped to the host (r15-H1)."""
+
+    return trace in _HOST_ESCAPE_RAW_POINTER
 
 
 _COMPLETENESS_WITNESS_FILE = Path(__file__).resolve()
@@ -1037,19 +1065,38 @@ class _CompletenessDispatchMode(TorchDispatchMode):
         return result
 
 
+def _whole_storage_uint8(source: torch.Tensor) -> torch.Tensor:
+    """Return a ``uint8`` tensor viewing ``source``'s ENTIRE untyped storage (all bytes).
+
+    A zero-copy alias (``source.numpy()`` / ``source.untyped_storage()`` / a raw ``data_ptr``)
+    shares the WHOLE storage, not just ``source``'s element extent: ``np.as_strided`` and a
+    storage ``__setitem__`` can write bytes OUTSIDE ``source``'s view window (r15-H2). Comparing
+    the whole aliased storage -- not ``source.detach().clone()`` (its own extent only) -- makes ANY
+    host write anywhere in the shared storage detectable at forward end.
+    """
+
+    untyped = source.untyped_storage()
+    view = torch.empty(0, dtype=torch.uint8, device=source.device)
+    view.set_(untyped, 0, (untyped.nbytes(),), (1,))
+    return view
+
+
 def _snapshot_writeback_source(state: _WitnessState, source: torch.Tensor) -> None:
     """Record a before-image of a mutable zero-copy alias source for later write-back detection.
 
-    Snapshots ``source``'s version and a detached byte clone under ``pause_logging`` (so the clone
-    is not itself captured or censused) and holds a strong ref to ``source`` so the shared storage
-    stays alive until the forward-end comparison. A source that cannot be snapshotted (e.g. a meta
-    tensor with no storage) fails closed immediately.
+    Snapshots ``source``'s version and a detached byte clone of its WHOLE untyped storage under
+    ``pause_logging`` (so the clone is not itself captured or censused) and holds a strong ref to
+    ``source`` so the shared storage stays alive until the forward-end comparison. Snapshotting the
+    full aliased storage (not just ``source``'s element extent) closes the r15-H2 out-of-extent
+    gap: a host write through the alias's storage handle to bytes OUTSIDE ``source``'s view window
+    (storage ``__setitem__`` / ``np.as_strided``) is still caught. A source that cannot be
+    snapshotted (e.g. a meta tensor with no storage) fails closed immediately.
     """
 
     try:
         with _state.pause_logging():
             version = getattr(source, "_version", None)
-            before = source.detach().clone()
+            before = _whole_storage_uint8(source).clone()
     except (RuntimeError, TypeError, NotImplementedError):
         _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
         return
@@ -1074,6 +1121,10 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
     is_storage_bridge = name in STORAGE_BRIDGE_ESCAPE_FUNCS
     watch_writeback = name in MUTABLE_ALIAS_ESCAPE_FUNCS or is_storage_bridge
     record_source = not is_storage_bridge
+    # ``data_ptr()`` alone leaks a RAW pointer no forward-end byte watch can re-inspect (r15-H1);
+    # a genuine user call fails closed to UNVERIFIABLE. ``untyped_storage()`` / ``storage()`` keep
+    # the watch-only write-back treatment (their value reads are already UNVERIFIABLE).
+    is_raw_pointer = name == "data_ptr"
 
     def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
         if (
@@ -1084,6 +1135,11 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
         ):
             if record_source:
                 _record_escape_source_tensor(state.trace, self, invisible=True)
+            # A raw ``data_ptr()`` pointer is unobservable; only a genuine USER call (internal
+            # marker inactive -- TorchLens's own bookkeeping ``data_ptr`` reads run under it) fails
+            # closed so the tensor's subsequent value cannot be silently VERIFIED.
+            if is_raw_pointer and not _internal_read_active():
+                _HOST_ESCAPE_RAW_POINTER.add(state.trace)
             # TorchLens's OWN capture-internal aliasing / version bookkeeping reads storage
             # pointers (``aliasing._tensors_alias`` -> ``untyped_storage().data_ptr()``) under the
             # explicit ``internal_scalar_read`` marker. Those are NOT user exposures: snapshotting
@@ -1227,10 +1283,12 @@ def _MODULE_ESCAPE_TARGETS() -> tuple[tuple[Any, str], ...]:
 def _check_writeback_watch(state: _WitnessState) -> None:
     """Detect a host write-back through any watched mutable zero-copy alias at forward end.
 
-    The honest rule is keyed on BYTES, never on the version counter (r14-H1). A watched source
-    whose bytes are UNCHANGED since the mutable-alias exposure was only read: it stays VERIFIED (a
-    pure read-only ``.numpy().sum()`` / storage-pointer identity check is not over-triggered). A
-    watched source whose bytes CHANGED is UNVERIFIABLE, in BOTH sub-cases:
+    The honest rule is keyed on the WHOLE aliased storage's BYTES, never on the version counter
+    (r14-H1) and never on only the view's element extent (r15-H2). A watched source whose whole
+    storage is UNCHANGED since the mutable-alias exposure was only read: it stays VERIFIED (a pure
+    read-only ``.numpy().sum()`` / storage-pointer identity check is not over-triggered). A watched
+    source whose storage bytes CHANGED anywhere -- INCLUDING outside the view's own window (a
+    storage ``__setitem__`` / ``np.as_strided`` write) -- is UNVERIFIABLE, in BOTH sub-cases:
 
     * version UNCHANGED -> no tracked op touched it, so the byte diff can only be an opaque host
       write-back through the alias (no aten dispatch, no version bump) -> host write-back;
@@ -1250,7 +1308,7 @@ def _check_writeback_watch(state: _WitnessState) -> None:
         with _state.pause_logging():
             for source, _version, before in state.writeback_watch:
                 try:
-                    if not torch.equal(source, before):
+                    if not torch.equal(_whole_storage_uint8(source), before):
                         _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
                         break
                 except (RuntimeError, TypeError, NotImplementedError):

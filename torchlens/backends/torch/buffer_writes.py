@@ -221,7 +221,16 @@ class BufferWriteTracker:
                 )
 
     def reconcile(self) -> None:
-        """Raise on unjournaled registered-buffer changes after forward capture."""
+        """Reconcile registered-buffer changes after forward capture.
+
+        A journalled write is already accounted; an object/storage reassignment is recorded here.
+        A zero-copy HOST write-back into a buffer's existing storage (r15-C2) leaves object and
+        storage identity unchanged with the value changed and no journal entry: it is flagged as
+        an opaque host write-back so the run reports UNVERIFIABLE, never crashing capture.
+        """
+
+        # Imported lazily to avoid an import cycle with the completeness-witness dispatcher.
+        from .completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
 
         model = self.model_ref()
         if model is None:
@@ -247,11 +256,17 @@ class BufferWriteTracker:
                 if not object_changed and storage_changed:
                     self._record_write(address, tensor, "data_reassign", None, value_changed, None)
                     continue
-                raise RuntimeError(
-                    "TorchLens detected an unjournaled registered-buffer change for "
-                    f"'{address}'. Reassigning a buffer through '.data = tensor' is unsupported; "
-                    "use 'self.buffer = tensor' or an in-place method such as copy_()."
-                )
+                # Same object, same storage, changed value, no journal entry (r15-C2): a zero-copy
+                # HOST write-back into the buffer's existing storage -- ``self.b.detach().numpy()[0]
+                # = 99`` / a raw ``data_ptr`` / storage ``__setitem__`` write. The mutation bypassed
+                # every aten dispatch and version bump, so the sparse DAG cannot model it and the
+                # replay recomputes the pre-write value. This is an opaque host write-back exactly
+                # like the activation-alias case: flag it so the run reports UNVERIFIABLE, and do
+                # NOT crash capture. Recording it as ``data_reassign`` keeps the buffer journal's
+                # expected-final snapshot consistent for any downstream buffer.
+                _HOST_ESCAPE_MUTABLE_WRITEBACK.add(self.trace)
+                self._record_write(address, tensor, "data_reassign", None, value_changed, None)
+                continue
 
     def snapshot_buffer_args(self, tensors: list[torch.Tensor]) -> list[BufferSnapshot]:
         """Return pre-call snapshots for tensor args backed by registered buffers."""
