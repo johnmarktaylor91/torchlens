@@ -35,6 +35,46 @@ from .tensor_utils import _is_cuda_available
 _AUTOCAST_DEVICES = ("cpu", "cuda")
 _T = TypeVar("_T")
 
+_SEEDED_RNG_NAMESPACES = frozenset({"torch", "torch.Tensor", "torch.nn.functional"})
+
+
+def aten_qualname_is_seeded_rng(namespace: str | None, qualname: str | None) -> bool:
+    """Return whether a captured callable maps to a seeded ATen RNG operator.
+
+    A "seeded" RNG operator is any ATen overload PyTorch itself tags with
+    ``torch.Tag.nondeterministic_seeded`` (``rand``/``randn``/``randint``/
+    ``bernoulli``/``multinomial``/``dropout`` families and their in-place
+    ``*_`` spellings). Feature-detecting the maintained tag -- rather than
+    hard-coding a name list -- keeps this robust across torch versions.
+
+    Parameters
+    ----------
+    namespace:
+        Captured callable namespace (e.g. ``"torch"``, ``"torch.Tensor"``).
+    qualname:
+        Captured callable qualified name (e.g. ``"rand"``, ``"Tensor.bernoulli_"``).
+
+    Returns
+    -------
+    bool
+        Whether any matching ATen overload carries ``nondeterministic_seeded``.
+    """
+
+    if namespace not in _SEEDED_RNG_NAMESPACES or not qualname:
+        return False
+    name = qualname.rsplit(".", 1)[-1]
+    candidate_names = (name, name[:-1]) if name.endswith("_") else (name,)
+    for candidate_name in candidate_names:
+        packet = getattr(torch.ops.aten, candidate_name, None)
+        overloads = getattr(packet, "overloads", None)
+        if not callable(overloads):
+            continue
+        for overload_name in overloads():
+            overload = getattr(packet, overload_name)
+            if torch.Tag.nondeterministic_seeded in getattr(overload, "tags", ()):
+                return True
+    return False
+
 
 def set_random_seed(seed: int) -> None:
     """Set the random seed for all RNG engines simultaneously.

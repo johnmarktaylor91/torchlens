@@ -248,6 +248,39 @@ def host_escape_source_labels(trace: Any) -> frozenset[str]:
     return frozenset(labels) if labels else frozenset()
 
 
+_PRUNED_RNG_CONTROL_LABELS: "weakref.WeakKeyDictionary[Any, set[str]]" = weakref.WeakKeyDictionary()
+"""Per-trace raw labels of pruned torch-RNG ops that DROVE control flow.
+
+A torch-RNG op (``torch.rand``/``randn``/... -- any ATen ``nondeterministic_seeded``
+overload) whose result steered pure-Python control flow (``if torch.rand(()) > 0.5``)
+is INPUT-DISCONNECTED: the ``rand -> gt`` predicate chain reaches neither an input nor
+an output, so orphan removal drops it entirely and the runnable descriptor never sees
+it. The recorded taken branch is then nondeterministic (a fresh seeded forward may take
+the other arm) yet unwitnessed. Kept in a weak-keyed side table (like the escape-source
+labels above, and out of the Trace field schema) so the runnable producer can downgrade
+witness completeness to keep such a model honestly UNVERIFIABLE + NOT_APPLICABLE instead
+of falsely VERIFIED + ATTESTED. A genuinely-dead RNG draw (result influences nothing) is
+NOT recorded here, so a deterministic model stays VERIFIED.
+"""
+
+
+def pruned_rng_control_source_labels(trace: Any) -> frozenset[str]:
+    """Return raw labels of pruned torch-RNG ops that steered control flow."""
+
+    labels = _PRUNED_RNG_CONTROL_LABELS.get(trace)
+    return frozenset(labels) if labels else frozenset()
+
+
+def record_pruned_rng_control_source(trace: Any, label: str) -> None:
+    """Record one pruned torch-RNG op whose result drove a control decision."""
+
+    labels = _PRUNED_RNG_CONTROL_LABELS.get(trace)
+    if labels is None:
+        labels = set()
+        _PRUNED_RNG_CONTROL_LABELS[trace] = labels
+    labels.add(label)
+
+
 def _record_host_escape_source(trace: Any, func: Any, args: tuple[Any, ...]) -> None:
     """Record the raw producing-op label of one tensor->host escape source.
 

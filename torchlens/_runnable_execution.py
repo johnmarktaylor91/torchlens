@@ -29,7 +29,12 @@ from .errors import (
 )
 from .intervention.replay import _CallConeNode, _walk_call_cone
 from .ir.container import ContainerSpec, rebuild_container_from_spec
-from .utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
+from .utils.rng import (
+    aten_qualname_is_seeded_rng,
+    restore_host_rng,
+    set_random_seed,
+    snapshot_host_rng,
+)
 from .runnable import (
     ActivationPayloadLayerDescriptor,
     ActivationPayloadMember,
@@ -2256,20 +2261,7 @@ def _registry_entry_has_seeded_rng_tag(entry: CallableRegistryEntry) -> bool:
         ``nondeterministic_seeded`` tag.
     """
 
-    if entry.key.namespace not in {"torch", "torch.Tensor", "torch.nn.functional"}:
-        return False
-    name = entry.key.qualname.rsplit(".", 1)[-1]
-    candidate_names = (name, name[:-1]) if name.endswith("_") else (name,)
-    for candidate_name in candidate_names:
-        packet = getattr(torch.ops.aten, candidate_name, None)
-        overloads = getattr(packet, "overloads", None)
-        if not callable(overloads):
-            continue
-        for overload_name in overloads():
-            overload = getattr(packet, overload_name)
-            if torch.Tag.nondeterministic_seeded in getattr(overload, "tags", ()):
-                return True
-    return False
+    return aten_qualname_is_seeded_rng(entry.key.namespace, entry.key.qualname)
 
 
 def _attestation_inputs_match(
