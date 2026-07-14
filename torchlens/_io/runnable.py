@@ -15,6 +15,7 @@ import numpy as np
 import torch
 
 from .. import __version__ as TORCHLENS_VERSION
+from .._runnable_state import runnable_tensor_byte_digest
 from ..data_classes._state_adapter import state_items
 from ..errors import RunnablePreflightError
 from ..intervention.types import (
@@ -239,14 +240,27 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     witnesses, completeness = _build_control_witnesses(trace, ops, diagnostics)
     literal_witnesses, saw_opaque_leaf = _input_literal_witnesses(trace, start_order=len(witnesses))
     witnesses.extend(literal_witnesses)
-    witnesses.extend(
-        _tensor_derived_scalar_witnesses(trace, ops, calls, start_order=len(witnesses))
+    escape_witnesses, escape_incomplete = _tensor_source_escape_witnesses(
+        trace, ops, calls, start_order=len(witnesses)
     )
+    witnesses.extend(escape_witnesses)
+    unbound_state_witnesses, unbound_state_incomplete = _unbound_state_escape_witnesses(
+        trace, calls, slot_drafts, start_order=len(witnesses)
+    )
+    witnesses.extend(unbound_state_witnesses)
     if saw_opaque_leaf and completeness is WitnessCompleteness.COMPLETE:
         # An opaque non-tensor input leaf cannot be re-verified, so its control
         # dependency is unobserved: downgrade to keep the run honest
         # (UNVERIFIABLE + NOT_APPLICABLE), never a false VERIFIED/ATTESTED.
         completeness = WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
+    if escape_incomplete and completeness is WitnessCompleteness.COMPLETE:
+        # A tensor->host escape whose source activation cannot be re-verified leaves
+        # the escape unobservable at run time: keep the run honestly UNVERIFIABLE.
+        completeness = WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
+    if unbound_state_incomplete and completeness is WitnessCompleteness.COMPLETE:
+        # An unbound state slot whose capture value cannot be re-verified leaves a
+        # state-derived escape unobservable: keep the run honestly UNVERIFIABLE.
+        completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
     diagnostics.extend(_preflight_output_contracts(trace, ops))
     diagnostics = _deduplicate_diagnostics(diagnostics)
     preflight = ProducerPreflight(passed=not diagnostics, diagnostics=tuple(diagnostics))
@@ -1304,14 +1318,13 @@ def _build_control_witnesses(
     return witnesses, completeness
 
 
-def _sink_scalar_value(trace: Any, op: Any) -> int | float | bool | None:
-    """Return one internal-sink op's captured Python scalar value, or ``None``.
+def _op_retained_tensor(trace: Any, op: Any) -> torch.Tensor | None:
+    """Return one op's retained capture-time output tensor, or ``None``.
 
-    Reads the retained capture-time output activation; a scalar escape reduces to
-    a single element, so only a ``numel() == 1`` tensor output qualifies. A
-    missing or non-scalar activation yields ``None`` (no witness), so an unsaved
-    sink is treated conservatively as un-correlatable rather than being forced to
-    an unverifiable run.
+    Reads the retained capture-time output activation for any shape/dtype. A
+    missing or non-tensor activation yields ``None`` so an unsaved slot is treated
+    conservatively as un-witnessable rather than being forced to an unverifiable
+    run.
     """
 
     label = getattr(op, "label", None)
@@ -1319,100 +1332,208 @@ def _sink_scalar_value(trace: Any, op: Any) -> int | float | bool | None:
         return None
     try:
         value = trace[label].out
-    except (KeyError, AttributeError, RuntimeError, TypeError, IndexError):
+    except (KeyError, AttributeError, RuntimeError, TypeError, IndexError, ValueError):
+        # A selectively-captured op whose activation was not retained raises when
+        # its ``out`` is read; treat it as un-witnessable rather than failing build.
         return None
-    if not isinstance(value, torch.Tensor) or value.numel() != 1:
-        return None
-    try:
-        return value.item()
-    except (RuntimeError, ValueError):
-        return None
+    return value if isinstance(value, torch.Tensor) else None
 
 
-def _tensor_derived_scalar_witnesses(
+_TENSOR_SOURCE_ESCAPE_MAX_SEQUENCE_NUMEL = 4096
+"""Upper bound on element count scanned for a value-equality sequence bake match."""
+
+
+def _collect_baked_literal_values(
+    calls: Sequence[RunnableCallDescriptor],
+) -> tuple[set[int], set[float], set[tuple[Any, ...]]]:
+    """Collect baked non-bool scalar and flat-numeric sequence literal values.
+
+    Returns the set of int literals, float literals, and flat numeric sequence
+    tuples that appear anywhere in a downstream call's literal arguments -- the
+    exact host-side footprints a tensor->Python escape leaves when its value is
+    baked verbatim into a later op.
+    """
+
+    ints: set[int] = set()
+    floats: set[float] = set()
+    sequences: set[tuple[Any, ...]] = set()
+
+    def visit(node: Any) -> None:
+        if isinstance(node, LiteralAtom):
+            if node.kind is LiteralAtomKind.INT and isinstance(node.value, int):
+                ints.add(int(node.value))
+            elif node.kind is LiteralAtomKind.FLOAT and isinstance(node.value, float):
+                floats.add(float(node.value))
+            return
+        if isinstance(node, LiteralSequence):
+            flat: list[Any] = []
+            numeric = True
+            for item in node.items:
+                if (
+                    isinstance(item, LiteralAtom)
+                    and item.kind in {LiteralAtomKind.INT, LiteralAtomKind.FLOAT}
+                    and not isinstance(item.value, bool)
+                ):
+                    flat.append(item.value)
+                else:
+                    numeric = False
+                visit(item)
+            if numeric and flat:
+                sequences.add(tuple(flat))
+
+    for call in calls:
+        for literal in call.literal_arguments:
+            visit(literal.value)
+    return ints, floats, sequences
+
+
+def _value_matches_baked_literal(
+    value: torch.Tensor,
+    ints: set[int],
+    floats: set[float],
+    sequences: set[tuple[Any, ...]],
+    sequence_lengths: set[int],
+) -> bool:
+    """Return whether a tensor's exact value was baked verbatim into a literal.
+
+    This is the value-equality net for a DUAL-USE escape: an op whose output also
+    feeds the traced graph (so it is not an internal sink) but whose Python-escaped
+    value was baked verbatim into a downstream op. Matches a scalar against baked
+    int/float atoms and a small tensor against a baked flat-numeric sequence.
+    """
+
+    numel = int(value.numel())
+    if numel == 1:
+        try:
+            scalar = value.item()
+        except (RuntimeError, ValueError):
+            return False
+        if isinstance(scalar, bool):
+            return False
+        if isinstance(scalar, int):
+            return scalar in ints
+        if isinstance(scalar, float):
+            return scalar in floats
+        return False
+    if 1 < numel <= _TENSOR_SOURCE_ESCAPE_MAX_SEQUENCE_NUMEL and numel in sequence_lengths:
+        try:
+            flat = tuple(value.detach().flatten().tolist())
+        except (RuntimeError, ValueError):
+            return False
+        return flat in sequences
+    return False
+
+
+def _tensor_source_escape_witnesses(
     trace: Any,
     ops: Sequence[Any],
     calls: Sequence[RunnableCallDescriptor],
     *,
     start_order: int,
-) -> list[ControlWitness]:
-    """Witness scalar sink slots whose value was baked into a downstream literal.
+) -> tuple[list[ControlWitness], bool]:
+    """Witness the source slot of every tensor->host escape, keyed on the escape.
 
-    A tensor->Python-scalar escape (``.item()`` / ``int()`` / ``float()`` /
-    ``aten._local_scalar_dense``) used AS A VALUE bakes the derived scalar into a
-    later op as a literal constant. The escape breaks the tensor graph, so the
-    sparse DAG never recomputes that constant: on a CHANGED input the baked
-    literal is STALE while the run would otherwise report VERIFIED + ATTESTED --
-    a silently wrong output and saved activations (the r8 money bug).
+    A tensor->Python escape (``.item()`` / ``int()`` / ``float()`` / ``__index__``
+    / ``.tolist()`` / ``.numpy()`` / ``aten._local_scalar_dense``) reads a captured
+    op's output tensor and hands a host value to Python. That host value is then
+    consumed as a baked op-arg literal (verbatim OR after arbitrary Python
+    arithmetic) or as a pure-Python control-flow predicate. The escape breaks the
+    tensor graph, so the sparse DAG never recomputes it: on a CHANGED input the
+    baked literal / taken branch is STALE while the run would otherwise falsely
+    report VERIFIED (+ATTESTED). This is the honesty tripwire.
 
-    The escape leaves two exact capture-time footprints the descriptor can
-    correlate: (1) the reducing op that produced the escaped scalar survives as a
-    scalar-shaped internal sink -- its tensor value left the traced graph -- and
-    its output slot is still recomputed as a call in the sparse DAG; (2) the
-    escaped scalar value appears as a baked ``LiteralAtom`` argument of a
-    downstream call. When a non-bool scalar sink's captured value equals such a
-    baked literal, a ``TENSOR_DERIVED_SCALAR_LITERAL`` witness ties the sink's
-    runtime slot to its captured scalar value. At run time the executor recomputes
-    the sink slot; if its value differs from the witnessed capture-time value the
-    baked literal may be stale, so the run reports ``UNVERIFIABLE`` +
-    ``NOT_APPLICABLE`` rather than a false ``VERIFIED``. For the ORIGINAL/unchanged
-    input the sink recomputes the same scalar, so the run still reports VERIFIED +
-    ATTESTED: the witness is input-conditional and never downgrades a faithful
-    original run.
+    The redesign keys on the ESCAPE EVENT via its SOURCE SLOT, NOT on correlating
+    a baked literal by value-equality (the r8 heuristic, which any arithmetic on
+    the escaped scalar defeats). Two complementary detectors identify a source
+    slot; both emit the SAME digest-based witness so run time is uniform:
 
-    A genuinely dead scalar sink (a reduction whose value is discarded, never
-    extracted and never baked) matches no downstream literal, so no witness is
-    emitted and a deterministic scalar-free model is UNCHANGED. Scalar-*bool*
-    escapes are handled by the existing control-witness path and excluded here.
+    * Structural, value-free (primary): every non-bool op whose output terminated
+      inside the model (``is_internal_sink``) -- its tensor left the traced graph
+      because its only consumers were host escapes. This covers a Python-arithmetic
+      transformed scalar, a multi-element ``.tolist()`` sequence bake, and a
+      non-bool scalar steering pure-Python control flow, regardless of any baked
+      value.
+    * Value-equality (secondary): a DUAL-USE op whose output ALSO feeds the graph
+      (so it is not an internal sink) but whose exact value was baked verbatim into
+      a downstream literal. This recovers the r8 verbatim-bake shape that the
+      internal-sink filter would otherwise miss.
+
+    Each witnessed source slot carries the SHA-256 byte digest of its capture-time
+    output tensor. At run time the executor recomputes the slot and re-digests it;
+    a differing digest (a CHANGED input) means the escaped value -- and any literal
+    or branch derived from it -- may be stale, so the run reports UNVERIFIABLE +
+    NOT_APPLICABLE rather than a false VERIFIED. The ORIGINAL/unchanged input
+    recomputes a byte-identical slot, so the run still reports VERIFIED (+ATTESTED
+    where eligible): the witness is input-conditional and never downgrades a
+    faithful original run. Scalar-*bool* escapes are handled by the control-witness
+    path and excluded here.
     """
-
-    baked_int_literals: set[int] = set()
-    baked_float_literals: set[float] = set()
-    for call in calls:
-        for literal in call.literal_arguments:
-            atom = literal.value
-            if not isinstance(atom, LiteralAtom):
-                continue
-            if atom.kind is LiteralAtomKind.INT and isinstance(atom.value, int):
-                baked_int_literals.add(int(atom.value))
-            elif atom.kind is LiteralAtomKind.FLOAT and isinstance(atom.value, float):
-                baked_float_literals.add(float(atom.value))
-    if not baked_int_literals and not baked_float_literals:
-        return []
 
     call_id_by_slot: dict[str, str] = {}
     for call in calls:
         for slot_id in call.output_slot_ids:
             call_id_by_slot.setdefault(slot_id, call.call_id)
 
+    ints, floats, sequences = _collect_baked_literal_values(calls)
+    sequence_lengths = {len(item) for item in sequences}
+    escaped_labels = _host_escape_source_labels(trace)
+
     witnesses: list[ControlWitness] = []
+    seen_slots: set[str] = set()
+    incomplete = False
     for op in ops:
-        if not bool(getattr(op, "is_internal_sink", False)):
-            continue
-        if bool(getattr(op, "is_terminal_bool", False)) or bool(
-            getattr(op, "is_scalar_bool", False)
-        ):
-            continue
         if bool(getattr(op, "is_output", False)) or bool(getattr(op, "is_input", False)):
             continue
+        if bool(getattr(op, "is_scalar_bool", False)) or bool(
+            getattr(op, "is_terminal_bool", False)
+        ):
+            continue
         slot_id = f"slot:{op.label}"
+        if slot_id in seen_slots:
+            continue
         call_id = call_id_by_slot.get(slot_id)
         if call_id is None:
             continue
-        scalar = _sink_scalar_value(trace, op)
-        if scalar is None or isinstance(scalar, bool):
+        # Net 1 (census escape event, value-free): the dispatch census recorded a
+        # tensor->host scalar escape (``.item()`` / ``int()`` / ``float()`` /
+        # ``__index__`` / ``bool()`` -> ``aten._local_scalar_dense``) reading THIS
+        # op's output. This is the robust, arithmetic-proof signal and covers a
+        # transformed scalar, a dual-use escape, and a scalar steering control flow.
+        is_escape = str(op.label) in escaped_labels
+        is_sink = bool(getattr(op, "is_internal_sink", False))
+        # Only candidate escape sources / internal sinks are inspected; a plain op
+        # (including a selectively-unsaved one) is never read for its activation.
+        if not is_escape and not is_sink:
             continue
-        if isinstance(scalar, int):
-            matched = scalar in baked_int_literals
-        elif isinstance(scalar, float):
-            matched = scalar in baked_float_literals
-        else:
-            matched = False
+        value = _op_retained_tensor(trace, op)
+        if value is None:
+            # A genuine census escape whose source activation was not retained cannot
+            # be digest-witnessed: fail honest (mark the witness set INCOMPLETE so
+            # every run is UNVERIFIABLE) rather than let a stale literal read VERIFIED.
+            # A dead/unmatched internal sink with no value is simply not witnessed.
+            if is_escape:
+                incomplete = True
+            continue
+        matched = is_escape
+        # Net 2 (value-equality, for census-invisible ``.tolist()`` / ``.numpy()``):
+        # an internal sink whose exact value was baked verbatim into a downstream
+        # literal. Scoped to internal sinks so a genuinely dead sink (value discarded
+        # and never baked) is never over-triggered.
+        if not matched and is_sink:
+            matched = _value_matches_baked_literal(value, ints, floats, sequences, sequence_lengths)
         if not matched:
             continue
         try:
-            observed = _encode_literal(scalar)
+            digest = runnable_tensor_byte_digest(value)
+        except (RuntimeError, ValueError, TypeError):
+            if is_escape:
+                incomplete = True
+            continue
+        try:
+            observed = _encode_literal(digest)
         except _UnsupportedLiteralError:
+            if is_escape:
+                incomplete = True
             continue
         order = start_order + len(witnesses)
         witnesses.append(
@@ -1425,7 +1546,129 @@ def _tensor_derived_scalar_witnesses(
                 observed_value=observed,
             )
         )
-    return witnesses
+        seen_slots.add(slot_id)
+    return witnesses, incomplete
+
+
+def _host_escape_source_labels(trace: Any) -> frozenset[str]:
+    """Return final op labels whose output escaped to the Python host at capture.
+
+    The dispatch census records, for each ``aten._local_scalar_dense`` escape, the
+    RAW capture label of the source tensor's producing op (see
+    ``completeness_witness._record_host_escape_source``). This resolves those raw
+    labels to their final cooked op labels via the trace's raw->final map so the
+    descriptor can witness the escape's source slot. An empty set (no escape, or an
+    unresolvable label) yields no census witness; the value-equality net and the
+    unbound-state net remain independent safety nets.
+    """
+
+    from ..backends.torch.completeness_witness import host_escape_source_labels
+
+    raw_labels = host_escape_source_labels(trace)
+    if not raw_labels:
+        return frozenset()
+    raw_to_final = getattr(trace, "_raw_to_final_op_labels", {}) or {}
+    final_labels: set[str] = set()
+    for raw_label in raw_labels:
+        if not isinstance(raw_label, str):
+            continue
+        final = raw_to_final.get(raw_label)
+        if isinstance(final, str):
+            final_labels.add(final)
+    return frozenset(final_labels)
+
+
+UNBOUND_STATE_ESCAPE_SITE_PREFIX = "unbound_state_escape:"
+"""``site_label`` prefix marking a witnessed unbound state (buffer/param) escape."""
+
+UNBOUND_STATE_ESCAPE_FACT_KEY = "unbound_state_escape"
+"""Discriminator key present in every unbound-state escape fact."""
+
+
+def _unbound_state_escape_witnesses(
+    trace: Any,
+    calls: Sequence[RunnableCallDescriptor],
+    slot_drafts: Mapping[str, _SlotDraft],
+    *,
+    start_order: int,
+) -> tuple[list[ControlWitness], bool]:
+    """Witness every state slot read only through an untraced host path.
+
+    A registered buffer or parameter can steer the forward pass WITHOUT ever
+    becoming a traced tensor op: a module ``bool(self.gate)`` truth-test, an
+    ``self.threshold.item()`` comparison, or any pure-Python control flow reads the
+    state's value on the host, leaving no graph footprint. The sparse DAG never
+    consumes such a slot, so a CHANGED staged value (a differing ``load_state_dict``
+    entry) can silently flip a branch or restale a baked literal while the recorded
+    taken path replays unchanged -- a false VERIFIED over a possibly-wrong result.
+
+    This detector treats a state-derived escape exactly like an input-derived one.
+    A state slot whose ``slot_id`` is consumed by NO call's tensor arguments is
+    "unbound": its capture-time value influenced the forward only through an
+    untraced host path. Each unbound state slot is witnessed with the SHA-256 byte
+    digest of its capture-time value. At run time the executor re-digests the
+    effective (staged/embedded) value; a differing digest means the untraced state
+    dependency changed, so the run reports UNVERIFIABLE + NOT_APPLICABLE. State
+    that is byte-identical to capture (the original/embedded state) recomputes the
+    same digest, so the run still reports VERIFIED: the witness is state-conditional
+    and never downgrades a faithful capture-equivalent run. A model whose every
+    buffer/param feeds a traced op has no unbound slot and is UNCHANGED.
+
+    When an unbound state slot's capture-time value is unavailable (no captured
+    ``state_dict`` snapshot), its dependency cannot be re-verified, so the function
+    signals ``incomplete=True`` and the caller downgrades ``witness_completeness``
+    to keep the run honestly UNVERIFIABLE rather than falsely VERIFIED.
+    """
+
+    bound_slot_ids: set[str] = set()
+    for call in calls:
+        for argument in call.tensor_arguments:
+            bound_slot_ids.add(argument.slot_id)
+
+    capture_state = trace.__dict__.get("_runnable_capture_state")
+    witnesses: list[ControlWitness] = []
+    incomplete = False
+    for slot_id, draft in slot_drafts.items():
+        binding = draft.state_binding
+        if binding is None or slot_id in bound_slot_ids:
+            continue
+        name = binding.state_dict_name
+        digest: str | None = None
+        if isinstance(capture_state, Mapping):
+            captured = capture_state.get(name)
+            if isinstance(captured, torch.Tensor):
+                try:
+                    digest = runnable_tensor_byte_digest(captured)
+                except (RuntimeError, ValueError, TypeError):
+                    digest = None
+        if digest is None:
+            # An unbound state slot whose capture value cannot be re-verified is a
+            # genuine coverage gap: fail honest (UNVERIFIABLE), never false VERIFIED.
+            incomplete = True
+            continue
+        fact = {
+            UNBOUND_STATE_ESCAPE_FACT_KEY: True,
+            "state_dict_name": name,
+            "slot_id": slot_id,
+            "digest": digest,
+        }
+        try:
+            observed = _encode_literal(fact)
+        except _UnsupportedLiteralError:
+            incomplete = True
+            continue
+        order = start_order + len(witnesses)
+        witnesses.append(
+            ControlWitness(
+                witness_id=f"witness:{order + 1}",
+                kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+                order=order,
+                call_id=None,
+                site_label=f"{UNBOUND_STATE_ESCAPE_SITE_PREFIX}{name}",
+                observed_value=observed,
+            )
+        )
+    return witnesses, incomplete
 
 
 def _container_structure_witnesses(trace: Any, *, start_order: int) -> list[ControlWitness]:

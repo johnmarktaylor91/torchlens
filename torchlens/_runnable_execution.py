@@ -257,6 +257,7 @@ def _execute_loaded_sparse_transaction(
         check.passed for check in contract_checks if check.name.startswith("input_literal:")
     )
     tensor_derived_scalar_stale = _tensor_derived_scalar_stale(descriptor, slot_values)
+    unbound_state_escape_stale = _unbound_state_escape_stale(descriptor, slot_values)
     numeric_attestation, attestation_check = _numeric_attestation_check(
         descriptor,
         prepared_state,
@@ -267,6 +268,7 @@ def _execute_loaded_sparse_transaction(
         nontensor_inputs_match=nontensor_inputs_match,
         host_rng_unreproduced=host_rng_unreproduced,
         tensor_derived_scalar_stale=tensor_derived_scalar_stale,
+        unbound_state_escape_stale=unbound_state_escape_stale,
     )
     if attestation_check is not None:
         contract_checks.append(attestation_check)
@@ -277,6 +279,7 @@ def _execute_loaded_sparse_transaction(
         contract_checks,
         host_rng_unreproduced=host_rng_unreproduced,
         tensor_derived_scalar_stale=tensor_derived_scalar_stale,
+        unbound_state_escape_stale=unbound_state_escape_stale,
     )
     path_faithfulness, mismatch = mark_trace_path_status(
         fork,
@@ -1524,6 +1527,10 @@ def _post_execution_contract_checks(
             # Non-tensor input leaves are compared in the input contract before
             # execution; they are not runtime container-structure facts.
             continue
+        if _is_unbound_state_escape_witness(witness):
+            # Unbound state escapes are compared by capture-digest in the dedicated
+            # staleness check, not against runtime container structure.
+            continue
         if witness.kind is ControlWitnessKind.CONDITIONAL_ARM_ENTRY:
             checks.append(_conditional_arm_check(witness, fork))
         elif witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT:
@@ -1832,30 +1839,109 @@ def _tensor_derived_scalar_stale(
     descriptor: SparseRunDescriptor,
     slot_values: Mapping[str, torch.Tensor],
 ) -> bool:
-    """Return whether a tensor-derived baked scalar literal is stale for this run.
+    """Return whether a tensor->host escape source slot is stale for this run.
 
-    A ``TENSOR_DERIVED_SCALAR_LITERAL`` witness records the runtime slot of the
-    scalar-shaped internal sink that produced an escaped scalar, together with the
-    scalar's capture-time value. That escaped scalar was baked into a downstream op
-    as a literal constant the sparse DAG cannot recompute. If the sink slot
-    recomputes to a different value than at capture (a CHANGED input), the baked
-    literal may be stale, so the run must not be blessed VERIFIED/ATTESTED. A slot
-    that recomputes the exact capture-time value (the ORIGINAL input) keeps the run
-    faithful. A missing or non-scalar sink slot is treated as stale: the dependency
-    cannot be re-confirmed, so the honest ceiling is UNVERIFIABLE.
+    A ``TENSOR_DERIVED_SCALAR_LITERAL`` witness records the runtime slot of the op
+    whose output tensor escaped to the Python host (via ``.item()`` / ``int()`` /
+    ``.tolist()`` / ``aten._local_scalar_dense`` / etc.) together with the SHA-256
+    byte digest of that tensor at capture time. The escaped value was baked into a
+    downstream literal or steered pure-Python control flow -- neither of which the
+    sparse DAG can recompute. If the source slot recomputes to a different value
+    than at capture (a CHANGED input), the baked literal / taken branch may be
+    stale, so the run must not be blessed VERIFIED/ATTESTED. A slot that recomputes
+    the exact capture-time bytes (the ORIGINAL input) keeps the run faithful. A
+    missing source slot is treated as stale: the dependency cannot be re-confirmed,
+    so the honest ceiling is UNVERIFIABLE.
+
+    A legacy witness whose ``observed_value`` is a scalar literal (rather than a
+    byte digest) is compared by exact scalar equality for backward compatibility.
     """
 
     for witness in descriptor.control_witnesses:
         if witness.kind is not ControlWitnessKind.TENSOR_DERIVED_SCALAR_LITERAL:
             continue
         recomputed = slot_values.get(witness.site_label)
-        if not isinstance(recomputed, torch.Tensor) or recomputed.numel() != 1:
+        if not isinstance(recomputed, torch.Tensor):
+            return True
+        expected = _decode_literal(witness.observed_value)
+        if isinstance(expected, str):
+            # Digest-based witness (value-free, any shape/dtype): re-digest the
+            # recomputed source slot and require byte-exact equality with capture.
+            try:
+                if runnable_tensor_byte_digest(recomputed) != expected:
+                    return True
+            except (RuntimeError, ValueError, TypeError):
+                return True
+            continue
+        # Legacy scalar-literal witness.
+        if recomputed.numel() != 1:
             return True
         try:
             actual = recomputed.item()
         except (RuntimeError, ValueError):
             return True
-        if not _scalar_literal_equal(actual, _decode_literal(witness.observed_value)):
+        if not _scalar_literal_equal(actual, expected):
+            return True
+    return False
+
+
+_UNBOUND_STATE_ESCAPE_SITE_PREFIX = "unbound_state_escape:"
+"""``site_label`` prefix marking a witnessed unbound state (buffer/param) escape."""
+
+_UNBOUND_STATE_ESCAPE_FACT_KEY = "unbound_state_escape"
+"""Discriminator key present in every unbound-state escape fact."""
+
+
+def _is_unbound_state_escape_witness(witness: ControlWitness) -> bool:
+    """Return whether a structure witness records an unbound state escape."""
+
+    return (
+        witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
+        and witness.site_label.startswith(_UNBOUND_STATE_ESCAPE_SITE_PREFIX)
+    )
+
+
+def _unbound_state_escape_stale(
+    descriptor: SparseRunDescriptor,
+    slot_values: Mapping[str, torch.Tensor],
+) -> bool:
+    """Return whether an unbound state slot differs from its capture-time value.
+
+    An unbound state slot (a registered buffer/param consumed by NO traced call)
+    influenced the forward only through an untraced host path -- a Python
+    truth-test, an ``.item()`` comparison, or other pure-Python control flow. The
+    sparse DAG cannot recompute that dependency, so a staged value that differs
+    from capture may have flipped a branch or restaled a literal. Each unbound
+    state escape witness records the state name, its runtime slot, and the SHA-256
+    byte digest of its capture-time value. This run re-digests the effective staged
+    /embedded value; a differing (or missing) value means the untraced dependency
+    changed, so the honest ceiling is UNVERIFIABLE + NOT_APPLICABLE. State that is
+    byte-identical to capture keeps the run faithful.
+    """
+
+    name_to_slot_id: dict[str, str] = {}
+    for slot in descriptor.tensor_slots:
+        binding = slot.state_binding
+        if binding is not None:
+            name_to_slot_id.setdefault(binding.state_dict_name, slot.slot_id)
+    for witness in descriptor.control_witnesses:
+        if not _is_unbound_state_escape_witness(witness):
+            continue
+        fact = _decode_literal(witness.observed_value)
+        if not isinstance(fact, Mapping) or fact.get(_UNBOUND_STATE_ESCAPE_FACT_KEY) is not True:
+            continue
+        name = fact.get("state_dict_name")
+        expected = fact.get("digest")
+        if not isinstance(name, str) or not isinstance(expected, str):
+            return True
+        slot_id = name_to_slot_id.get(name)
+        value = slot_values.get(slot_id) if isinstance(slot_id, str) else None
+        if not isinstance(value, torch.Tensor):
+            return True
+        try:
+            if runnable_tensor_byte_digest(value) != expected:
+                return True
+        except (RuntimeError, ValueError, TypeError):
             return True
     return False
 
@@ -1866,6 +1952,7 @@ def _path_faithfulness(
     *,
     host_rng_unreproduced: bool = False,
     tensor_derived_scalar_stale: bool = False,
+    unbound_state_escape_stale: bool = False,
 ) -> tuple[PathFaithfulness, RunnableDiagnostic | None]:
     """Classify exact three-state path faithfulness after all honesty checks."""
 
@@ -1880,10 +1967,16 @@ def _path_faithfulness(
         # so the honest ceiling is UNVERIFIABLE, never a false VERIFIED.
         return PathFaithfulness.UNVERIFIABLE, None
     if tensor_derived_scalar_stale:
-        # A tensor->Python-scalar escape baked a derived constant into a downstream
-        # op; the sink slot recomputed a different value, so the baked literal may
-        # be stale for this input. The sparse DAG cannot recompute the constant, so
-        # the honest ceiling is UNVERIFIABLE, never a silently wrong VERIFIED.
+        # A tensor->Python escape baked a derived constant into a downstream op or
+        # steered pure-Python control flow; the source slot recomputed different
+        # bytes, so the baked literal / taken branch may be stale for this input.
+        # The sparse DAG cannot recompute it, so the honest ceiling is UNVERIFIABLE.
+        return PathFaithfulness.UNVERIFIABLE, None
+    if unbound_state_escape_stale:
+        # A registered buffer/param read only through an untraced host path (a
+        # module truth-test or ``.item()`` comparison) was staged with a value that
+        # differs from capture; the untraced branch/literal may be stale, so the
+        # honest ceiling is UNVERIFIABLE, never a silently wrong VERIFIED.
         return PathFaithfulness.UNVERIFIABLE, None
     return PathFaithfulness.VERIFIED, None
 
@@ -1924,6 +2017,7 @@ def _numeric_attestation_check(
     nontensor_inputs_match: bool = True,
     host_rng_unreproduced: bool = False,
     tensor_derived_scalar_stale: bool = False,
+    unbound_state_escape_stale: bool = False,
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
     """Compare recomputed saved slots with the independent activation archive.
 
@@ -1962,9 +2056,14 @@ def _numeric_attestation_check(
         # so recomputed slots must never be attested against the capture archive.
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if tensor_derived_scalar_stale:
-        # A tensor-derived baked scalar literal recomputed differently: the sparse
-        # replay cannot recompute the baked constant, so a byte-exact attestation
-        # would dishonestly bless a possibly-stale result.
+        # A tensor->host escape source slot recomputed differently: the sparse
+        # replay cannot recompute the baked constant / taken branch, so a byte-exact
+        # attestation would dishonestly bless a possibly-stale result.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    if unbound_state_escape_stale:
+        # An unbound state slot (read only through an untraced host path) was staged
+        # with a value differing from capture, so the recorded taken path may not
+        # apply; a byte-exact attestation would dishonestly bless a stale result.
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
         # Incomplete witness coverage (e.g. an opaque non-tensor input leaf that
