@@ -2434,17 +2434,18 @@ class Trace(
         state["_activation_transform_repr"] = (
             repr(self.activation_transform) if self.activation_transform is not None else None
         )
-        # Loaded runnable traces bind these as immutable MappingProxyType views, which
-        # cannot be pickled/deepcopied. The fork path special-cases them; the generic
-        # pickle path must neutralize them to a plain dict so a loaded runnable trace
-        # (embedded weights or staged load_state_dict) survives pickle/deepcopy and its
-        # poison flag round-trips. Run execution only reads these bindings.
+        # Runnable traces bind these as immutable MappingProxyType views, which cannot
+        # be pickled/deepcopied. The fork path special-cases them; the generic pickle
+        # path must neutralize them to a plain dict so capture-time, embedded, and
+        # staged state survives pickle/deepcopy. Run execution only reads these bindings.
         state["_runnable_embedded_state"] = (
             dict(self._runnable_embedded_state)
             if self._runnable_embedded_state is not None
             else None
         )
-        state["_runnable_capture_state"] = None
+        state["_runnable_capture_state"] = (
+            dict(self._runnable_capture_state) if self._runnable_capture_state is not None else None
+        )
         state["_runnable_embedded_nonpersistent_buffers"] = (
             dict(self._runnable_embedded_nonpersistent_buffers)
             if self._runnable_embedded_nonpersistent_buffers is not None
