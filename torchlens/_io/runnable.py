@@ -1702,6 +1702,17 @@ def _escape_witnesses(
     for call in calls:
         for argument in call.tensor_arguments:
             bound_slot_ids.add(argument.slot_id)
+    # State NAMES that feed at least one traced call as a tensor argument. A registered buffer
+    # whose value is consumed by a traced op (BatchNorm ``running_mean`` / ``running_var`` /
+    # ``num_batches_tracked``, read by the ``batch_norm`` call) is graph-connected: its in-place
+    # running-stat update is a TRACKED side effect the replay reproduces natively, so its extra
+    # post-update orphan buffer VERSION must NOT be treated as an untraced host-path escape
+    # (r15-C3). The unbound-state-escape net is for buffers/params consumed by NO traced call.
+    bound_state_names: set[str] = set()
+    for slot_id, draft in slot_drafts.items():
+        binding = draft.state_binding
+        if binding is not None and slot_id in bound_slot_ids:
+            bound_state_names.add(binding.state_dict_name)
     capture_state = trace.__dict__.get("_runnable_capture_state")
 
     # ---- PASS A: state-slot escape/host-path witnesses (bound-or-unbound) ----
@@ -1720,7 +1731,11 @@ def _escape_witnesses(
             if not isinstance(scalar, bool) and scalar in unmatched_unattr:
                 matched_value = scalar
         is_named_escape = name in state_names
-        is_unbound = slot_id not in bound_slot_ids
+        # Name-level, not slot-level: a buffer with ANY slot consumed by a traced call is
+        # graph-connected (r15-C3), so a normal tracked in-place running-stat update is
+        # replayable and stays VERIFIED. A buffer/param read only on an untraced host path has
+        # NO bound slot for its name and is still witnessed here (fails closed on changed state).
+        is_unbound = slot_id not in bound_slot_ids and name not in bound_state_names
         if not (is_named_escape or is_unbound or matched_value is not None):
             continue
         if not isinstance(captured, torch.Tensor):
