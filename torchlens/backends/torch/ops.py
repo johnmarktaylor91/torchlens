@@ -20,6 +20,8 @@ import torch
 
 from ... import _state as _st
 from ..._state import pause_logging
+from torch.utils.weak import WeakIdKeyDictionary
+
 from ._tl import (
     get_buffer_address,
     get_label_list,
@@ -30,6 +32,7 @@ from ._tl import (
     get_tensor_meta,
     set_tensor_label,
 )
+from .completeness_witness import internal_scalar_read
 from .aliasing import (
     detect_torch_alias_contract,
     detect_torch_output_alias_contract,
@@ -170,6 +173,26 @@ from ...capture.salient_args import extract_salient_args
 
 if TYPE_CHECKING:
     from ...data_classes.trace import Trace
+
+
+_SETTER_MUTATION_FUNC_NAMES = frozenset({"__setitem__", "__delitem__"})
+"""Setter-style in-place ops whose names do NOT end in ``_`` (used only as the no-baseline
+is_inplace fallback). They mutate their target but log a reconstructed output tensor, so the
+version-baseline signal is unavailable and the operator name is the honest mutation signature.
+"""
+
+_LABEL_VERSION_SNAPSHOT: WeakIdKeyDictionary = WeakIdKeyDictionary()
+"""Per-tensor ``_version`` at the moment TorchLens last labeled that tensor as an op output.
+
+An in-place op returns the SAME tensor object as one of its inputs, so the output already
+carries a capture label; a NON-mutating identity return (``x.cpu()`` on CPU, ``x.contiguous()``
+on a contiguous tensor) ALSO returns its receiver and so ALSO carries a label. The two are
+distinguished ONLY by whether the aliased tensor's version counter actually bumped. This weak,
+identity-keyed side table records each labeled op output's version so a later op consuming that
+tensor can tell a genuine mutation (version bumped since it was labeled) from an identity return
+(version unchanged). It is capture-transient state, kept off the Trace field schema and dropped
+automatically on tensor GC.
+"""
 
 
 CaptureProducerMode = Literal["exhaustive", "predicate"]
@@ -2423,15 +2446,20 @@ def _emit_predicate_operation_events(
                     if _should_keep_alias_mutation_contract(self)
                     else detect_torch_output_alias_contract
                 )
-                current.facts["backend_semantics"] = detect_backend_semantics(
-                    func_event_input,
-                    backend_grad_handle=grad_fn_handle,
-                    grad_fn_class_name=type(grad_fn_handle).__name__
-                    if grad_fn_handle is not None
-                    else None,
-                    autograd_memory=None,
-                    num_autograd_tensors=None,
-                )
+                # Mutation/alias detection compares input copies via ``tensor_nanequal``
+                # (``torch.equal`` / ``torch.allclose`` -> Python ``bool``); mark it as a
+                # capture-internal read so the completeness witness does not record it as
+                # a user host escape.
+                with internal_scalar_read():
+                    current.facts["backend_semantics"] = detect_backend_semantics(
+                        func_event_input,
+                        backend_grad_handle=grad_fn_handle,
+                        grad_fn_class_name=type(grad_fn_handle).__name__
+                        if grad_fn_handle is not None
+                        else None,
+                        autograd_memory=None,
+                        num_autograd_tensors=None,
+                    )
                 current.facts["function"] = FunctionCallRef(
                     func=func,
                     func_name=func_name,
@@ -2941,6 +2969,13 @@ def _tag_tensor_and_track_variations(
     """
     out_label = fields_dict_onetensor["_label_raw"]
     set_tensor_label(out, out_label)
+    # Record the output's version at label time so a later op consuming this tensor can
+    # distinguish a genuine in-place mutation (version bumped since it was labeled) from a
+    # non-mutating identity return that reuses the same object (see is_inplace at capture).
+    if isinstance(out, torch.Tensor):
+        version = getattr(out, "_version", None)
+        if version is not None:
+            _LABEL_VERSION_SNAPSHOT[out] = version
     _add_tensor_backward_hook(self, out, out_label)
 
     child_event = self.capture_events.live_index.require_event(new_layer_entry._label_raw)
@@ -3028,10 +3063,17 @@ def _get_parent_output_version_snapshot(
         kwarg_copies,
         parent_arg_positions,
     )
-    if should_snapshot_by_contract or not tensor_nanequal(
-        parent_tensor_contents,
-        parent_saved_output,
-    ):
+    # ``tensor_nanequal`` compares captured content via ``torch.equal`` /
+    # ``torch.allclose`` (Python ``bool`` output); mark it as a capture-internal read so
+    # the completeness witness never records it as a user host escape. The
+    # ``should_snapshot_by_contract`` short-circuit is preserved so ``tensor_nanequal`` is
+    # never called with a missing ``parent_saved_output``.
+    with internal_scalar_read():
+        should_snapshot = should_snapshot_by_contract or not tensor_nanequal(
+            parent_tensor_contents,
+            parent_saved_output,
+        )
+    if should_snapshot:
         return parent_tensor_contents
     return None
 
@@ -3149,15 +3191,20 @@ def _emit_exhaustive_operation_events(
             if _should_keep_alias_mutation_contract(self)
             else detect_torch_output_alias_contract
         )
-        fields_dict_onetensor["backend_semantics"] = detect_backend_semantics(
-            shared_func_event_input,
-            backend_grad_handle=fields_dict_onetensor["grad_fn_handle"],
-            grad_fn_class_name=fields_dict_onetensor["grad_fn_class_name"],
-            autograd_memory=fields_dict_onetensor["autograd_memory"],
-            num_autograd_tensors=fields_dict_onetensor["num_autograd_tensors"],
-            bytes_delta_at_call=fields_dict_onetensor["bytes_delta_at_call"],
-            bytes_peak_at_call=fields_dict_onetensor["bytes_peak_at_call"],
-        )
+        # Mutation/alias detection compares pre-call input copies against post-call
+        # values (``tensor_nanequal`` -> ``torch.equal`` / ``torch.allclose``), a
+        # capture-internal read that returns a Python ``bool``; mark it so the
+        # completeness witness does not record it as a user host escape.
+        with internal_scalar_read():
+            fields_dict_onetensor["backend_semantics"] = detect_backend_semantics(
+                shared_func_event_input,
+                backend_grad_handle=fields_dict_onetensor["grad_fn_handle"],
+                grad_fn_class_name=fields_dict_onetensor["grad_fn_class_name"],
+                autograd_memory=fields_dict_onetensor["autograd_memory"],
+                num_autograd_tensors=fields_dict_onetensor["num_autograd_tensors"],
+                bytes_delta_at_call=fields_dict_onetensor["bytes_delta_at_call"],
+                bytes_peak_at_call=fields_dict_onetensor["bytes_peak_at_call"],
+            )
         fire_results = _pop_tensor_live_fire_results(out_tensor)
         if fire_results:
             fields_dict_onetensor["fire_results"] = fire_results
@@ -3760,8 +3807,48 @@ def _log_output_tensor_info(
     self.op_equivalence_classes[base_equivalence_class].add(_label_raw)
     fields_dict["equivalent_ops"] = self.op_equivalence_classes[base_equivalence_class]
 
-    # In-place ops return the same tensor object, which already has a raw label.
-    fields_dict["is_inplace"] = get_tensor_label(t) is not None
+    # In-place ops return the same tensor object, which already has a raw label -- but so
+    # does a NON-mutating identity return (``x.cpu()`` on CPU, ``x.contiguous()`` on a
+    # contiguous tensor). ``is_inplace`` must reflect ACTUAL mutation, not mere label
+    # presence: a false in-place flag makes the runnable descriptor persist a version/alias
+    # relation the replay cannot satisfy on the original input (MUTATION_VERSION_MISMATCH).
+    prior_label = get_tensor_label(t)
+    if prior_label is None:
+        # A fresh op output carries no prior label: never in-place.
+        fields_dict["is_inplace"] = False
+    elif not _should_keep_alias_mutation_contract(self):
+        # Default forward-only capture: preserve the historical label-based flag exactly
+        # (no runnable replay consumes it, so identity returns are harmless and goldens
+        # stay unchanged).
+        fields_dict["is_inplace"] = True
+    else:
+        # Runnable / intervention / backward / validation: require a real version bump on
+        # the aliased tensor. The version baseline is the tensor's version when TorchLens
+        # last labeled it as an op output; a bump since then is a genuine mutation, an
+        # unchanged version is an identity return. When no baseline exists (a raw input /
+        # param / buffer first touched here, or a setter-style op whose logged output is a
+        # reconstructed target), fall back to the operator's mutation signature -- an
+        # in-place-named op (``add_`` / ``mul_`` / ``copy_`` / ``__i*``), a setter dunder
+        # (``__setitem__`` / ``__delitem__``, which mutate but do not end in ``_``), or an
+        # ``out=`` tensor kwarg -- so genuine mutation is still detected while a
+        # non-mutating identity return (``x.cpu()`` / ``x.contiguous()``) is not.
+        baseline = _LABEL_VERSION_SNAPSHOT.get(t)
+        current_version = getattr(t, "_version", None)
+        if baseline is not None and current_version is not None:
+            fields_dict["is_inplace"] = current_version != baseline
+        else:
+            name = fields_dict["func_name"]
+            name_mutating = (
+                name.startswith("__i")
+                or name in _SETTER_MUTATION_FUNC_NAMES
+                or (name.endswith("_") and not name.startswith("__"))
+            )
+            out_kwarg = kwargs.get("out") if isinstance(kwargs, dict) else None
+            has_out_tensor = isinstance(out_kwarg, torch.Tensor) or (
+                isinstance(out_kwarg, (list, tuple))
+                and any(isinstance(item, torch.Tensor) for item in out_kwarg)
+            )
+            fields_dict["is_inplace"] = bool(name_mutating or has_out_tensor)
     grad_fn_cls = type(t.grad_fn) if t.grad_fn is not None else None
     fields_dict["grad_fn_class_name"] = None if grad_fn_cls is None else grad_fn_cls.__name__
     fields_dict["grad_fn_class_qualname"] = (
@@ -3782,7 +3869,11 @@ def _log_output_tensor_info(
     if (t.dtype == torch.bool) and (t.dim()) == 0:
         fields_dict["is_scalar_bool"] = True
         try:
-            fields_dict["bool_value"] = t.item()
+            # TorchLens's own scalar-bool value read is a capture-internal escape:
+            # mark it explicitly so the completeness witness never mistakes it for a
+            # user host escape (allowlist-by-construction; see internal_scalar_read).
+            with internal_scalar_read():
+                fields_dict["bool_value"] = t.item()
         except RuntimeError:
             # .item() forbidden inside torch.vmap context
             fields_dict["bool_value"] = None

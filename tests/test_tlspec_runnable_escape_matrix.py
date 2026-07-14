@@ -27,11 +27,13 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens as _torchlens
 from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness
 
@@ -136,12 +138,51 @@ class _InternalFloatControl(nn.Module):
         return h - 5.0
 
 
+class _InputEqualControl(nn.Module):
+    # aten.equal returns a raw Python bool DIRECTLY (no _local_scalar_dense) -> the general
+    # tensor->non-tensor census rule is what witnesses the input source here.
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if torch.equal(x, x.abs()):
+            return x * 2.0
+        return x + 7.0
+
+
+class _InputEqualValueBake(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x + float(torch.equal(x, x.abs()))
+
+
+class _InputAllcloseControl(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if torch.allclose(x, x.round()):
+            return x * 3.0
+        return x - 4.0
+
+
+class _InputIsNonzeroControl(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if torch.is_nonzero(x.sum()):
+            return x + 1.0
+        return x - 1.0
+
+
+class _InputDlpackArith(nn.Module):
+    # Tensor.__dlpack__ (via np.from_dlpack) is dispatcher-invisible AND bypasses the
+    # method patch unless __dlpack__ is patched: the scoped patch records the source.
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x * float(np.from_dlpack(x.detach())[0])
+
+
 _ONE = torch.tensor([1.0])
 _ONE_CHANGED = torch.tensor([9.0])
 _TWO = torch.tensor([1.0, 2.0])
 _TWO_CHANGED = torch.tensor([10.0, 20.0])
 _VEC_IN = torch.ones(2, 4)
 _VEC_IN_CHANGED = torch.full((2, 4), 3.0)
+_EQ_CAP = torch.tensor([2.0, 2.0])
+_EQ_CHANGED = torch.tensor([-10.0, -10.0])
+_ROUND_CAP = torch.tensor([2.0, 3.0])
+_ROUND_CHANGED = torch.tensor([2.5, 3.5])
 
 # (name, model_factory, capture_input, changed_input)
 _INPUT_CELLS: list[tuple[str, Callable[[], nn.Module], torch.Tensor, torch.Tensor]] = [
@@ -151,6 +192,13 @@ _INPUT_CELLS: list[tuple[str, Callable[[], nn.Module], torch.Tensor, torch.Tenso
     ("input/tolist/arith", _InputTolistArith, _TWO, _TWO_CHANGED),
     ("input/numpy/arith", _InputNumpyArith, _TWO, _TWO_CHANGED),
     ("input/numpy_reconstruct/arith", _InputNumpyReconstruct, _TWO, _TWO_CHANGED),
+    # r12: tensor->non-tensor host escapes that never emit _local_scalar_dense.
+    ("input/equal/control", _InputEqualControl, _EQ_CAP, _EQ_CHANGED),
+    ("input/equal/value_bake", _InputEqualValueBake, _EQ_CAP, _EQ_CHANGED),
+    ("input/allclose/control", _InputAllcloseControl, _ROUND_CAP, _ROUND_CHANGED),
+    ("input/is_nonzero/control", _InputIsNonzeroControl, _TWO, torch.tensor([1.0, -1.0])),
+    # r12: dlpack zero-copy export (__dlpack__ method patch).
+    ("input/dlpack/arith", _InputDlpackArith, _TWO, _TWO_CHANGED),
     ("internal/item/arith", _InternalItemArith, _VEC_IN, _VEC_IN_CHANGED),
     ("internal/tolist/arith", _InternalTolistArith, _VEC_IN, _VEC_IN_CHANGED),
     ("internal/numpy/arith", _InternalNumpyArith, _VEC_IN, _VEC_IN_CHANGED),
@@ -391,6 +439,108 @@ def test_escape_free_model_is_verified_on_any_input(
     tmp_path: Path,
 ) -> None:
     """An escape-free model never over-triggers the escape witness."""
+    original = _save_load(factory(), cap_x, tmp_path).run(inputs=cap_x, seed=0)
+    assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
+    changed = _save_load(factory(), cap_x, tmp_path).run(inputs=changed_x, seed=0)
+    assert changed.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+# --------------------------------------------------------------------------------------
+# r12 F-H2: the internal-vs-user filter is allowlist-BY-CONSTRUCTION (an explicit marker),
+# not a spoofable co_filename stack inference. A user escape helper carrying a torchlens
+# co_filename is STILL a user escape and must be witnessed.
+# --------------------------------------------------------------------------------------
+
+
+def _make_fake_internal_model() -> nn.Module:
+    """Build a model whose escape helper's frame resolves inside the torchlens package."""
+    namespace: dict[str, object] = {}
+    exec(  # noqa: S102 - test-only construction of a spoofed co_filename frame
+        compile(
+            "def sneaky(t):\n    return t.sum().item()\n",
+            _torchlens.__file__,
+            "exec",
+        ),
+        namespace,
+    )
+    sneaky = namespace["sneaky"]
+
+    class _FakeInternalEscape(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            # Transformed bake defeats any value-equality net; only witnessing the SOURCE
+            # keeps this honest, which requires NOT classifying the escape as internal.
+            return x * (sneaky(x) * 3.0 + 1.0)  # type: ignore[operator]
+
+    return _FakeInternalEscape()
+
+
+def test_fake_internal_escape_is_witnessed_not_classified_internal(tmp_path: Path) -> None:
+    """A spoofed-``co_filename`` user escape is recorded, so a changed input is not VERIFIED."""
+    original = _save_load(_make_fake_internal_model(), _TWO, tmp_path).run(inputs=_TWO, seed=0)
+    assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
+    changed = _save_load(_make_fake_internal_model(), _TWO, tmp_path).run(
+        inputs=_TWO_CHANGED, seed=0, on_divergence="return_diverged"
+    )
+    assert changed.report.path_faithfulness is not PathFaithfulness.VERIFIED
+
+
+# --------------------------------------------------------------------------------------
+# r12 F-C2: a non-mutating identity return (x.cpu() on CPU) carries a capture label but is
+# NOT in-place; it must save+run without a false MUTATION_VERSION_MISMATCH, while genuine
+# in-place ops are still detected and replay faithfully.
+# --------------------------------------------------------------------------------------
+
+
+class _IdentityCpu(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x.cpu()
+
+
+class _IdentityContiguous(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x.contiguous() + 1.0
+
+
+class _GenuineInplaceAdd(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x * 1.0
+        y.add_(2.0)
+        return y
+
+
+class _GenuineInplaceCopy(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x * 1.0
+        y.copy_(x + 5.0)
+        return y
+
+
+class _InplaceOnRawInput(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x.mul_(3.0)
+        return x + 1.0
+
+
+_INPLACE_CELLS: list[tuple[str, Callable[[], nn.Module], torch.Tensor, torch.Tensor]] = [
+    ("identity/cpu", _IdentityCpu, _TWO, _TWO_CHANGED),
+    ("identity/contiguous", _IdentityContiguous, _TWO, _TWO_CHANGED),
+    ("inplace/add_", _GenuineInplaceAdd, _TWO, _TWO_CHANGED),
+    ("inplace/copy_", _GenuineInplaceCopy, _TWO, _TWO_CHANGED),
+    ("inplace/raw_input_mul_", _InplaceOnRawInput, _TWO, _TWO_CHANGED),
+]
+
+
+@pytest.mark.parametrize(
+    "name,factory,cap_x,changed_x", _INPLACE_CELLS, ids=[c[0] for c in _INPLACE_CELLS]
+)
+def test_identity_and_inplace_ops_run_without_false_mutation_mismatch(
+    name: str,
+    factory: Callable[[], nn.Module],
+    cap_x: torch.Tensor,
+    changed_x: torch.Tensor,
+    tmp_path: Path,
+) -> None:
+    """Identity returns and genuine in-place ops both save+run and VERIFY (no false crash)."""
     original = _save_load(factory(), cap_x, tmp_path).run(inputs=cap_x, seed=0)
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     changed = _save_load(factory(), cap_x, tmp_path).run(inputs=changed_x, seed=0)

@@ -289,20 +289,40 @@ bool escape whose predicate is NOT covered by any of those nets is recorded in
 ``_HOST_ESCAPE_UNATTRIBUTABLE_BOOL`` below so the runnable producer can fail closed.
 """
 
-INVISIBLE_HOST_ESCAPE_FUNCS = frozenset({"tolist", "numpy", "__array__"})
-"""Torch-function names that hand a captured tensor's value to the Python host WITHOUT
-emitting any aten dispatch.
+INVISIBLE_HOST_ESCAPE_FUNCS = frozenset({"tolist", "numpy", "__array__", "__dlpack__"})
+"""Torch-function / protocol METHOD names that hand a captured tensor's value to the
+Python host WITHOUT emitting any aten dispatch.
 
 ``.tolist()`` / ``.numpy()`` / ``np.asarray(tensor)`` (``__array__``) convert a tensor
-to a Python/NumPy container. They emit NO ``aten._local_scalar_dense`` (they are
+to a Python/NumPy container, and ``tensor.__dlpack__()`` (used by ``np.from_dlpack`` /
+``torch.from_dlpack`` and every array library's zero-copy import) exports the tensor's
+buffer as a DLPack capsule. They emit NO ``aten._local_scalar_dense`` (they are
 dispatcher-invisible), so the aten census cannot see them. A scoped method patch
 (``_observe_invisible_host_escapes``) records the SOURCE tensor of each such call for the
 duration of one runnable forward, so an invisible escape is witnessed by the SAME
 source-digest machinery as a census (``.item()``) escape -- host ARITHMETIC on the escaped
-value (``sum(t.tolist())``) is irrelevant because the SOURCE tensor is what changes on a
-changed-input/changed-state run. A patch is used rather than a ``TorchFunctionMode`` because
-any active function mode flips ``has_torch_function`` globally and breaks TorchLens's own
-function-wrapping capture.
+value (``sum(t.tolist())`` / ``np.from_dlpack(x)[0]``) is irrelevant because the SOURCE
+tensor is what changes on a changed-input/changed-state run. A patch is used rather than a
+``TorchFunctionMode`` because any active function mode flips ``has_torch_function`` globally
+and breaks TorchLens's own function-wrapping capture.
+
+Sibling zero-copy protocols audited: ``__cuda_array_interface__`` (a non-callable buffer
+PROPERTY) is patched separately as a source-recording property (see
+``INVISIBLE_HOST_ESCAPE_PROPERTIES``); ``__dlpack_device__`` returns only device metadata
+(a ``(device_type, device_id)`` pair, no data) and ``__array_interface__`` is absent on
+``torch.Tensor``, so neither is a value escape.
+"""
+
+INVISIBLE_HOST_ESCAPE_PROPERTIES = frozenset({"__cuda_array_interface__"})
+"""Zero-copy buffer PROTOCOL PROPERTIES (not methods) that expose a captured tensor's
+data pointer to the host.
+
+``tensor.__cuda_array_interface__`` is the CUDA Array Interface a foreign array library
+(CuPy / Numba) reads to import the tensor's device buffer zero-copy. It is a non-callable
+getset descriptor, so the method patch cannot wrap it; ``_observe_invisible_host_escapes``
+instead installs a source-recording ``property`` for the duration of one runnable forward.
+If such a property can neither be wrapped nor its source recorded, its use must fail closed
+(INCOMPLETE), never silently VERIFIED.
 """
 
 _HOST_ESCAPE_STATE_SOURCE_NAMES: "weakref.WeakKeyDictionary[Any, set[str]]" = (
@@ -434,66 +454,122 @@ _MAX_ESCAPE_STACK_DEPTH = 60
 """Bounded stack walk when classifying an escape dispatch's origin."""
 
 
-def _escape_source_is_torchlens_internal() -> bool:
-    """Return whether an escape dispatch's TRUE invoker is TorchLens capture internals.
+_internal_read_state = threading.local()
+"""Per-thread depth counter for the explicit TorchLens internal-scalar-read marker."""
 
-    TorchLens itself reads a scalar/bool from a tensor during capture -- extracting
-    ``is_scalar_bool`` from a freshly-produced op output (``ops._log_output_tensor_info``),
-    validating a float literal key with ``torch.isfinite`` (``runnable._encode_literal``),
-    and similar metadata reads -- which lower to ``aten._local_scalar_dense`` and would
-    otherwise be misrecorded as USER escapes and falsely trip the fail-closed INCOMPLETE
-    gates. Every such read is invoked directly from TorchLens code; a genuine user escape is
-    invoked directly from USER forward code. Since a user ``.item()`` lowers through
-    TorchLens's own ``wrapped_func`` plumbing, the TRUE invoker is found by skipping the
-    ``torch`` dispatch frames, this module's frames, and the ``wrappers.py`` wrapper
-    plumbing: the first remaining frame is the real caller. A frame under the ``torchlens``
-    package is an internal read (skip the escape); a user frame is a genuine escape (record).
-    The walk is bounded and inspects only frame code objects, never any tensor.
+
+def _internal_read_active() -> bool:
+    """Return whether an explicit TorchLens internal-scalar-read marker is live.
+
+    The marker is set by construction ONLY around TorchLens's own capture-internal
+    scalar/comparison reads (see :func:`internal_scalar_read`). It is a per-thread depth
+    counter so nested internal reads compose correctly.
     """
 
-    torch_root = Path(torch.__file__).resolve().parent
-    frame: Any = sys._getframe(2)
-    depth = 0
-    while frame is not None and depth < _MAX_ESCAPE_STACK_DEPTH:
-        depth += 1
-        try:
-            resolved = Path(frame.f_code.co_filename).resolve()
-        except (OSError, RuntimeError, ValueError):
-            frame = frame.f_back
-            continue
-        if resolved == _COMPLETENESS_WITNESS_FILE or resolved == _WRAPPERS_FILE:
-            frame = frame.f_back
-            continue
-        try:
-            if resolved.is_relative_to(torch_root):
-                frame = frame.f_back
-                continue
-            # First real (non-torch, non-plumbing) invoker frame: TorchLens => internal.
-            return resolved.is_relative_to(_TORCHLENS_ROOT)
-        except (OSError, RuntimeError, ValueError):
-            return False
+    return getattr(_internal_read_state, "depth", 0) > 0
+
+
+@contextmanager
+def internal_scalar_read() -> Iterator[None]:
+    """Mark a region as a genuine TorchLens capture-internal scalar/comparison read.
+
+    TorchLens itself reads a scalar/bool from a tensor during capture -- extracting a
+    scalar-``bool`` op-output value (``ops._log_output_tensor_info``), comparing a
+    pre-call input copy against its post-call value for mutation/alias detection
+    (``tensor_nanequal`` via ``detect_torch_alias_contract`` and the child-version
+    snapshot), and similar bookkeeping reads. Those reads lower to
+    ``aten._local_scalar_dense`` (or, for content comparisons, ``aten.equal`` /
+    ``aten.allclose`` returning a Python ``bool``) and would otherwise be misrecorded as
+    USER host escapes and falsely trip the fail-closed INCOMPLETE gates. This context
+    manager marks them EXPLICITLY so the internal-vs-user classifier is an
+    allowlist-BY-CONSTRUCTION: an escape is "internal" iff this marker is active, never
+    because a stack frame's filename happens to resolve inside the ``torchlens`` package
+    (which is spoofable by an ``exec``-compiled user helper carrying a torchlens
+    ``co_filename``, and fails for a frameless C-callable). A genuine user escape runs
+    with the marker inactive and is always recorded.
+    """
+
+    depth = getattr(_internal_read_state, "depth", 0)
+    _internal_read_state.depth = depth + 1
+    try:
+        yield
+    finally:
+        _internal_read_state.depth = depth
+
+
+def _escape_source_is_torchlens_internal() -> bool:
+    """Return whether an escape dispatch is a marked TorchLens capture-internal read.
+
+    Classification is allowlist-BY-CONSTRUCTION: it is ``True`` iff an explicit
+    :func:`internal_scalar_read` marker is live on this thread, set only around
+    TorchLens's own genuine internal scalar/comparison reads. It NEVER infers "internal"
+    from a stack frame's ``co_filename`` (spoofable via an ``exec``-compiled user helper
+    given a torchlens filename, and undefined for a frameless C-callable such as
+    ``operator.methodcaller("item")``). A USER escape therefore can never be classified
+    internal, while TorchLens's own reads never trip the fail-closed gates.
+    """
+
+    return _internal_read_active()
+
+
+def _output_is_host_value(result: Any) -> bool:
+    """Return whether a dispatch output is a pure Python host value carrying no tensor.
+
+    A host value is a Python scalar (``bool`` / ``int`` / ``float`` / ``complex``) or a
+    ``list`` / ``tuple`` recursively of host values. A ``torch.Tensor`` output (or any
+    container carrying a tensor) is an ordinary op result, NOT a host escape.
+    """
+
+    if isinstance(result, torch.Tensor):
+        return False
+    if isinstance(result, (bool, int, float, complex)):
+        return True
+    if isinstance(result, (list, tuple)):
+        return len(result) > 0 and all(_output_is_host_value(value) for value in result)
     return False
 
 
-def _record_host_escape_source(trace: Any, func: Any, args: tuple[Any, ...]) -> None:
-    """Record the raw producing-op label of one tensor->host escape source.
+def _iter_tensor_operands(args: tuple[Any, ...]) -> Iterator[torch.Tensor]:
+    """Yield each tensor operand of a dispatch, including tensors nested one list/tuple deep."""
 
-    When a captured tensor's value escapes to the Python host through
-    ``aten._local_scalar_dense`` (``.item()`` / ``int()`` / ``float()`` /
-    ``__index__`` / ``bool()``), the escaped value can be baked into a downstream
-    op literal (verbatim OR after arbitrary Python arithmetic) or steer pure-Python
-    control flow -- neither of which the sparse DAG can recompute. The source
-    tensor is the op whose output was read; its raw capture label is recorded so
-    the runnable descriptor can witness that source slot and, at run time, refuse a
-    false VERIFIED when the slot recomputes different bytes for a changed input.
+    for value in args:
+        if isinstance(value, torch.Tensor):
+            yield value
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                if isinstance(item, torch.Tensor):
+                    yield item
+
+
+def _record_host_escape_source(trace: Any, func: Any, args: tuple[Any, ...], result: Any) -> None:
+    """Record the raw producing-op label of every tensor->host escape SOURCE for one dispatch.
+
+    GENERAL host-escape rule (closes the class by construction, not by an op-name
+    allowlist): ANY aten dispatch whose inputs include a tensor and whose OUTPUT is a
+    NON-TENSOR host value (a Python ``bool`` / ``int`` / ``float`` / ``complex``, or a
+    ``list`` / ``tuple`` thereof) hands a captured tensor's value to the Python host.
+    That host value can be baked into a downstream op literal (verbatim OR after
+    arbitrary Python arithmetic) or steer pure-Python control flow -- neither of which
+    the sparse DAG can recompute. This uniformly catches:
+
+    * ``aten._local_scalar_dense`` -- ``.item()`` / ``int()`` / ``float()`` /
+      ``__index__`` / ``bool()`` (single tensor operand);
+    * ``aten.equal`` / ``aten.allclose`` / ``aten.is_nonzero`` -- pure tensor->``bool``
+      predicates that return a raw Python value directly from the dispatcher and NEVER
+      emit ``aten._local_scalar_dense`` (two/one tensor operands); and
+    * any future op of the same shape.
+
+    Every tensor operand is recorded as an escape source; its raw capture label lets the
+    runnable descriptor witness that source slot and, at run time, refuse a false
+    VERIFIED when the slot recomputes different bytes for a changed input.
     """
 
-    if _operator_name(func) not in HOST_ESCAPE_OPERATORS or not args:
+    if not args or not _is_aten_operator(func):
         return
-    source = args[0]
-    if not isinstance(source, torch.Tensor):
+    if not _output_is_host_value(result):
         return
-    _record_escape_source_tensor(trace, source, invisible=False)
+    for source in _iter_tensor_operands(args):
+        _record_escape_source_tensor(trace, source, invisible=False)
 
 
 def _record_escape_source_tensor(trace: Any, source: torch.Tensor, *, invisible: bool) -> None:
@@ -754,6 +830,7 @@ class _CompletenessDispatchMode(TorchDispatchMode):
 
         del types
         started = time.perf_counter_ns()
+        in_scope = False
         try:
             in_scope = (
                 threading.get_ident() == self.state.owner_thread_id
@@ -761,30 +838,36 @@ class _CompletenessDispatchMode(TorchDispatchMode):
                 and _state._active_trace is self.state.trace
                 and _is_aten_operator(func)
             )
-            if in_scope:
-                if self.state.record_escapes:
-                    _record_host_escape_source(self.state.trace, func, args)
-                if self.state.census:
-                    owner = _active_token()
-                    callsite = (
-                        _dispatch_callsite()
-                        if owner is None or owner.func_call_id is None
-                        else None
+            if in_scope and self.state.census:
+                owner = _active_token()
+                callsite = (
+                    _dispatch_callsite() if owner is None or owner.func_call_id is None else None
+                )
+                in_replacement_hook = _in_replacement_hook_frame()
+                mutates = _is_mutating_operator(func)
+                self.state.events.append(
+                    _DispatchEvent(
+                        _operator_name(func),
+                        owner,
+                        callsite,
+                        in_replacement_hook,
+                        mutates,
                     )
-                    in_replacement_hook = _in_replacement_hook_frame()
-                    mutates = _is_mutating_operator(func)
-                    self.state.events.append(
-                        _DispatchEvent(
-                            _operator_name(func),
-                            owner,
-                            callsite,
-                            in_replacement_hook,
-                            mutates,
-                        )
-                    )
+                )
         finally:
             self.state.callback_ns += time.perf_counter_ns() - started
-        return func(*args, **(kwargs or {}))
+        result = func(*args, **(kwargs or {}))
+        # Escape recording needs the OUTPUT: a tensor->host escape is any aten dispatch
+        # returning a NON-TENSOR host value from a tensor operand (equal/allclose/
+        # is_nonzero/_local_scalar_dense). Recorded after redispatch so the result is
+        # observable; still gated to the owner thread / active trace / logging window.
+        if in_scope and self.state.record_escapes:
+            escape_started = time.perf_counter_ns()
+            try:
+                _record_host_escape_source(self.state.trace, func, args, result)
+            finally:
+                self.state.callback_ns += time.perf_counter_ns() - escape_started
+        return result
 
 
 def _make_invisible_escape_wrapper(original: Any, state: _WitnessState) -> Any:
@@ -810,6 +893,28 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState) -> Any:
     return wrapper
 
 
+def _make_invisible_escape_property(descriptor: Any, state: _WitnessState) -> property:
+    """Wrap a zero-copy buffer PROPERTY to record its SOURCE tensor, then read through.
+
+    Used for ``__cuda_array_interface__`` (a non-callable getset descriptor the method
+    patch cannot wrap). The property getter records the receiver tensor as an escape
+    source under the same active-forward gate, then delegates to the original descriptor
+    so the returned value is byte-identical.
+    """
+
+    def getter(self: torch.Tensor) -> Any:
+        if (
+            isinstance(self, torch.Tensor)
+            and threading.get_ident() == state.owner_thread_id
+            and _state._logging_enabled
+            and _state._active_trace is state.trace
+        ):
+            _record_escape_source_tensor(state.trace, self, invisible=True)
+        return descriptor.__get__(self, torch.Tensor)
+
+    return property(getter)
+
+
 @contextmanager
 def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
     """Scoped-patch ``.tolist()`` / ``.numpy()`` / ``__array__`` to record escape sources.
@@ -833,12 +938,27 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
         except (TypeError, AttributeError):
             continue
         originals[name] = original
+    property_originals: dict[str, Any] = {}
+    for name in INVISIBLE_HOST_ESCAPE_PROPERTIES:
+        descriptor = type(torch.Tensor).__dict__.get(name) or torch.Tensor.__dict__.get(name)
+        if descriptor is None or not hasattr(descriptor, "__get__"):
+            continue
+        try:
+            setattr(torch.Tensor, name, _make_invisible_escape_property(descriptor, state))
+        except (TypeError, AttributeError):
+            continue
+        property_originals[name] = descriptor
     try:
         yield
     finally:
         for name, original in originals.items():
             try:
                 setattr(torch.Tensor, name, original)
+            except (TypeError, AttributeError):
+                pass
+        for name, descriptor in property_originals.items():
+            try:
+                setattr(torch.Tensor, name, descriptor)
             except (TypeError, AttributeError):
                 pass
 
