@@ -8,12 +8,20 @@ from typing import Any, Iterable, Mapping, Optional, Union
 
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION,
+    CHECKER_PROMPT_NAME,
     FAILURE_REASON_CODES,
     GATE_SCHEMA_VERSION,
     MODEL_SCHEMA_VERSION,
     TERMINAL_STATUS_CODES,
 )
 from menagerie.crawler.family_templates import FamilyTemplateError, validate_size_variant
+from menagerie.crawler.identity import hash_bytes
+from menagerie.crawler.metadata import (
+    MetadataValidationError,
+    input_signature_matches_contract,
+    recompute_accepted_identities,
+    validate_authored_facts_for_write,
+)
 from menagerie.crawler.models import AppendResult, JsonObject, LedgerPaths
 from menagerie.crawler.recordio import JsonlLedger, LedgerConflictError
 from menagerie.crawler.state import _select_current
@@ -21,6 +29,40 @@ from menagerie.crawler.state import _select_current
 
 class ReductionError(ValueError):
     """Raised when a proposed canonical fact violates reducer invariants."""
+
+
+_FACT_ROOTS = (
+    "identity",
+    "taxonomy",
+    "external_metadata",
+    "website",
+    "people_and_origin",
+    "dates",
+    "citation",
+    "licenses",
+    "source_resolution",
+    "evidence",
+    "implementation",
+    "input_contract",
+    "modes",
+    "fidelity",
+)
+
+
+def _model_facts(model: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Extract the complete accepted fact tree from a canonical model revision."""
+
+    return {field: model.get(field) for field in _FACT_ROOTS}
+
+
+def _checker_prompt_hash() -> str:
+    """Hash the exact current checker prompt bytes used for freshness."""
+
+    path = Path(__file__).with_name("prompts") / f"{CHECKER_PROMPT_NAME}.txt"
+    try:
+        return hash_bytes(path.read_bytes())
+    except OSError as exc:
+        raise ReductionError(f"checker prompt bytes are unavailable: {exc}") from exc
 
 
 class CanonicalReducer:
@@ -145,6 +187,33 @@ class CanonicalReducer:
                 raise ReductionError("attempt error reason is not allowed for its stage")
         elif error is not None:
             raise ReductionError("non-failed attempt cannot carry an error")
+        environment = attempt.get("environment")
+        identities = attempt.get("identities", {})
+        receipt = attempt.get("worker_receipt", {})
+        observation = attempt.get("supervisor_observation", {})
+        if environment is None:
+            if identities.get("environment") is not None or identities.get("execution") is not None:
+                raise ReductionError(
+                    "an unobserved environment cannot carry environment/execution identities"
+                )
+            if receipt.get("present"):
+                raise ReductionError("a present worker receipt requires observed environment facts")
+            if (
+                observation.get("stdout_sha256") is not None
+                or observation.get("stderr_sha256") is not None
+            ):
+                raise ReductionError("unobserved process streams cannot carry artifact digests")
+        elif not all(
+            environment.get(field)
+            for field in (
+                "lock_sha256",
+                "resolved_export_sha256",
+                "packages_manifest_sha256",
+            )
+        ):
+            raise ReductionError("observed environment facts require exact artifact digests")
+        elif observation.get("stdout_sha256") is None or observation.get("stderr_sha256") is None:
+            raise ReductionError("an observed subprocess requires exact stream-byte digests")
         return self._attempts.append(attempt)
 
     def append_gate(self, gate: Mapping[str, Any]) -> AppendResult:
@@ -167,11 +236,17 @@ class CanonicalReducer:
             raise ReductionError("gate batch_size must equal the number of items")
         if len(stable_ids) != len(set(stable_ids)):
             raise ReductionError("gate items must have unique stable IDs")
+        if gate.get("checker", {}).get("prompt_sha256") != _checker_prompt_hash():
+            raise ReductionError("checker gate does not bind the current prompt bytes")
         for item in items:
             if item.get("stable_id") not in self.intake_ids:
                 raise ReductionError(
                     f"gate item stable_id is outside intake: {item.get('stable_id')}"
                 )
+            if not isinstance(item.get("campaign_root_work_id"), str) or not item.get(
+                "campaign_root_work_id"
+            ):
+                raise ReductionError("gate item has no campaign/root-work lineage identity")
             verdict = item.get("verdict")
             integrity = item.get("integrity", {}).get("verdict")
             field_verdicts = [check.get("verdict") for check in item.get("field_checks", [])]
@@ -349,6 +424,7 @@ class CanonicalReducer:
         accuracy = model.get("accuracy_gate", {})
         rung = model.get("source_resolution", {}).get("rung")
         status_kind = model.get("status", {}).get("kind")
+        identities = None
         rung_gate_current = False
         rung_found = self._gate_item(accuracy.get("gate_id"), stable_id)
         if rung_found is not None:
@@ -363,6 +439,7 @@ class CanonicalReducer:
                 and rung_check.get("verdict") == "accurate"
                 and verified_hashes.get("code")
                 == model.get("implementation", {}).get("code_sha256")
+                and rung_gate.get("checker", {}).get("prompt_sha256") == _checker_prompt_hash()
             )
         if status_kind == "runs" and not rung_gate_current:
             raise ReductionError("runs requires a current identity-tight anti-slop/rung check gate")
@@ -388,6 +465,24 @@ class CanonicalReducer:
                 raise ReductionError(
                     "authored metadata gate is missing, stale, inaccurate, or has a blocked rung check"
                 )
+            facts = _model_facts(model)
+            try:
+                validate_authored_facts_for_write(facts, item)
+                identities = recompute_accepted_identities(
+                    facts,
+                    checker_prompt_hash=_checker_prompt_hash(),
+                    checker_model=str(gate.get("checker", {}).get("model")),
+                    checker_version=str(gate.get("checker", {}).get("version")),
+                )
+            except MetadataValidationError as exc:
+                raise ReductionError(str(exc)) from exc
+            if (
+                model.get("evidence", {}).get("evidence_identity") != identities.evidence
+                or model.get("implementation", {}).get("recipe_revision") != identities.recipe
+                or item.get("vet_identity") != identities.vet
+                or accuracy.get("vet_identity") != identities.vet
+            ):
+                raise ReductionError("accepted source/evidence/recipe/vet identities are stale")
         fidelity = model.get("fidelity", {})
         required = bool(fidelity.get("required")) or rung in {"R3_PORT", "R4_REIMPLEMENT"}
         if required:
@@ -402,6 +497,16 @@ class CanonicalReducer:
                     return
                 raise ReductionError("required fidelity is missing its gate")
             gate, item = found
+            if identities is None:
+                try:
+                    identities = recompute_accepted_identities(
+                        _model_facts(model),
+                        checker_prompt_hash=_checker_prompt_hash(),
+                        checker_model=str(gate.get("checker", {}).get("model")),
+                        checker_version=str(gate.get("checker", {}).get("version")),
+                    )
+                except MetadataValidationError as exc:
+                    raise ReductionError(str(exc)) from exc
             if gate["gate_kind"] != "fidelity":
                 raise ReductionError("fidelity must reference a per-model fidelity gate")
             rung_check = item.get("rung_check")
@@ -420,6 +525,7 @@ class CanonicalReducer:
             )
             if (
                 item.get("fidelity_identity") != fidelity.get("fidelity_identity")
+                or item.get("fidelity_identity") != identities.fidelity
                 or item["fidelity"]["verdict"] != fidelity.get("verdict")
                 or fidelity.get("verdict") not in allowed_verdicts
                 or not rung_accepted
@@ -482,6 +588,16 @@ class CanonicalReducer:
         accepted_work_ids: set[str] = set()
         implementation = model.get("implementation", {})
         evidence = model.get("evidence", {})
+        try:
+            accepted_identities = recompute_accepted_identities(
+                _model_facts(model),
+                checker_prompt_hash=_checker_prompt_hash(),
+                checker_model=str(model.get("accuracy_gate", {}).get("checker_model")),
+                checker_version=str(model.get("accuracy_gate", {}).get("checker_version")),
+            )
+        except MetadataValidationError as exc:
+            raise ReductionError(str(exc)) from exc
+        input_contract = model.get("input_contract", {})
         for attempt_id in accepted:
             attempt = attempts_by_id.get(attempt_id)
             if attempt is None:
@@ -489,9 +605,13 @@ class CanonicalReducer:
             accepted_work_ids.add(str(attempt.get("work_id")))
             identities = attempt.get("identities", {})
             if (
-                identities.get("recipe") != implementation.get("recipe_revision")
+                identities.get("source") != accepted_identities.source
+                or identities.get("recipe") != accepted_identities.recipe
+                or identities.get("recipe") != implementation.get("recipe_revision")
+                or identities.get("evidence") != accepted_identities.evidence
                 or identities.get("evidence") != evidence.get("evidence_identity")
                 or identities.get("environment") != execution.get("env_generation")
+                or identities.get("checker_prompt") != _checker_prompt_hash()
             ):
                 raise ReductionError("accepted attempt identities are stale for the current model")
             mode = str(attempt.get("mode"))
@@ -503,6 +623,14 @@ class CanonicalReducer:
                 or attempt.get("result") != "succeeded"
                 or observation.get("exit_code") != 0
                 or observation.get("signal") is not None
+                or not receipt.get("constructor_started")
+                or not receipt.get("constructor_completed")
+                or not receipt.get("input_completed")
+                or not receipt.get("forward_started")
+                or not receipt.get("forward_completed")
+                or not input_signature_matches_contract(
+                    receipt.get("input_signature"), input_contract
+                )
                 or not isinstance(signature, Mapping)
                 or "tree" not in signature
                 or not isinstance(signature.get("leaves"), list)
@@ -531,7 +659,14 @@ class CanonicalReducer:
                 or reference.get("status") != "succeeded"
                 or attempt["identities"]["execution"] != execution.get("execution_identity")
                 or not receipt["present"]
+                or not receipt["constructor_started"]
+                or not receipt["constructor_completed"]
+                or not receipt["input_completed"]
+                or not receipt["forward_started"]
                 or not receipt["forward_completed"]
+                or not input_signature_matches_contract(
+                    receipt.get("input_signature"), input_contract
+                )
                 or receipt["mode"] != mode
                 or any(
                     policy[key]

@@ -61,6 +61,7 @@ class FailureStage(StrEnum):
     FIDELITY = "fidelity"
     RESOURCE = "resource"
     POLICY = "policy"
+    SANDBOX_UNAVAILABLE = "sandbox-unavailable"
     RUNNER = "runner"
 
 
@@ -289,6 +290,7 @@ FAILURE_REASON_CODES: dict[str, frozenset[str]] = {
             "effort-cap-exhausted",
         }
     ),
+    "sandbox-unavailable": frozenset({"sandbox-unavailable"}),
     "runner": frozenset(
         {
             "native-crash",

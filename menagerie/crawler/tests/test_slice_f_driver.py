@@ -50,8 +50,9 @@ from menagerie.crawler.env_lifecycle import EnvironmentProbeError
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.fetcher import fetch_targets as controlled_fetch_targets
-from menagerie.crawler.metadata import MANDATORY_EXTERNAL_FIELDS
+from menagerie.crawler.metadata import authored_fact_leaves, recompute_accepted_identities
 from menagerie.crawler.models import LedgerPaths
+from menagerie.crawler.policy import SandboxUnavailableError
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import CanonicalReducer
 from menagerie.crawler.status import assert_partition
@@ -75,6 +76,43 @@ class InjectedKill(RuntimeError):
     """Simulate an uncatchable process boundary failure in a deterministic test."""
 
 
+def _refresh_proposal_identities(
+    proposal: dict[str, Any],
+    *,
+    checker_model: str = "codex",
+    checker_version: str = "current",
+) -> None:
+    """Rebind a mutated synthetic proposal to exact facts and current checker bytes."""
+
+    facts = proposal["proposed_facts"]
+    identities = recompute_accepted_identities(
+        facts,
+        checker_prompt_hash=driver_module._checker_prompt_hash(),
+        checker_model=checker_model,
+        checker_version=checker_version,
+    )
+    facts["evidence"]["evidence_identity"] = identities.evidence
+    facts["implementation"]["recipe_revision"] = identities.recipe
+    identities = recompute_accepted_identities(
+        facts,
+        checker_prompt_hash=driver_module._checker_prompt_hash(),
+        checker_model=checker_model,
+        checker_version=checker_version,
+    )
+    proposal.update(
+        {
+            "source_identity": identities.source,
+            "evidence_identity": identities.evidence,
+            "recipe_revision": identities.recipe,
+            "fidelity_identity": identities.fidelity,
+            "vet_identity": identities.vet,
+        }
+    )
+    proposal["proposal_sha256"] = stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+
+
 class FakeAuthor(AuthorLane):
     """Return complete synthetic proposals without a live author session."""
 
@@ -93,6 +131,7 @@ class FakeAuthor(AuthorLane):
         facts = proposal["proposed_facts"]
         facts["modes"]["meaningful_modes"] = ["train", "eval"]
         facts["external_metadata"]["modes"]["meaningful_modes"] = ["train", "eval"]
+        _refresh_proposal_identities(proposal)
         model_dir = work_root / item.stable_id / "fake-model"
         model_dir.mkdir(parents=True, exist_ok=True)
         return AuthorArtifact(proposal, {"sources": []}, model_dir)
@@ -144,6 +183,7 @@ class TerminalOutcomeAuthor(FakeAuthor):
                 },
             )
         artifact.proposal["proposed_facts"]["source_resolution"]["rung"] = "R5_SKIP"
+        _refresh_proposal_identities(artifact.proposal)
         return AuthorArtifact(
             artifact.proposal,
             artifact.source_manifest,
@@ -168,7 +208,7 @@ class FakeChecker(CheckerLane):
     ) -> CheckerOutcome:
         """Return one exhaustive accurate metadata gate."""
 
-        del work_root, config
+        del work_root
         self.metadata_calls += 1
         if self.quota:
             return CheckerOutcome(
@@ -189,6 +229,7 @@ class FakeChecker(CheckerLane):
             )
             proposal = artifact.proposal
             item["work_id"] = proposal["work_id"]
+            item["campaign_root_work_id"] = artifact.campaign_root_work_id or proposal["work_id"]
             item["vet_identity"] = proposal["vet_identity"]
             item["fidelity_identity"] = None
             item["verified_hashes"] = {
@@ -200,15 +241,22 @@ class FakeChecker(CheckerLane):
             ]
             item["field_checks"] = [
                 {
-                    "field": f"external_metadata.{field}",
+                    "field": field,
                     "verdict": "accurate",
                     "evidence_ids": ["evidence-1"],
                     "checked_source_ids": ["source-1"],
                     "reason": "supported",
                     "required_repair": None,
                 }
-                for field in MANDATORY_EXTERNAL_FIELDS
+                for field in authored_fact_leaves(proposal["proposed_facts"])
             ]
+        gate["checker"].update(
+            {
+                "model": config.checker_model,
+                "version": config.checker_version,
+                "prompt_sha256": driver_module._checker_prompt_hash(),
+            }
+        )
         return CheckerOutcome(gate=gate)
 
     def check_fidelity(
@@ -216,7 +264,7 @@ class FakeChecker(CheckerLane):
     ) -> CheckerOutcome:
         """Return an accurate match fidelity gate."""
 
-        del work_root, config
+        del work_root
         self.fidelity_calls += 1
         stable_id = str(artifact.proposal["stable_id"])
         gate = make_gate(
@@ -229,6 +277,9 @@ class FakeChecker(CheckerLane):
         gate.pop("payload_sha256", None)
         item = gate["items"][0]
         item["work_id"] = artifact.proposal["work_id"]
+        item["campaign_root_work_id"] = (
+            artifact.campaign_root_work_id or artifact.proposal["work_id"]
+        )
         item["vet_identity"] = artifact.proposal["vet_identity"]
         item["verified_hashes"] = {
             "proposal": artifact.proposal["proposal_sha256"],
@@ -237,6 +288,13 @@ class FakeChecker(CheckerLane):
         item["rung_check"]["selected_rung"] = artifact.proposal["proposed_facts"][
             "source_resolution"
         ]["rung"]
+        gate["checker"].update(
+            {
+                "model": config.checker_model,
+                "version": config.checker_version,
+                "prompt_sha256": driver_module._checker_prompt_hash(),
+            }
+        )
         return CheckerOutcome(gate=gate)
 
 
@@ -288,6 +346,13 @@ class FakeForward(ForwardLane):
                 attempt.pop("ledger_seq", None)
                 attempt.pop("payload_sha256", None)
                 attempt["worker_receipt"]["output_signature"] = output_signature
+                contract_leaf = artifact.proposal["proposed_facts"]["input_contract"]["args"][0]
+                attempt["worker_receipt"]["input_signature"]["leaves"][0].update(
+                    {
+                        "shape": contract_leaf["shape"],
+                        "dtype": contract_leaf["dtype"],
+                    }
+                )
                 attempt["identities"].update(
                     {
                         "source": artifact.proposal["source_identity"],
@@ -373,6 +438,40 @@ class InaccurateChecker(FakeChecker):
         return outcome
 
 
+class LineageInaccurateChecker(InaccurateChecker):
+    """Return distinct rejected root causes until the full repair cap is reached."""
+
+    def check_metadata(
+        self, artifacts: Sequence[AuthorArtifact], work_root: Path, config: DriverConfig
+    ) -> CheckerOutcome:
+        """Vary the finding while retaining each item's durable campaign lineage."""
+
+        outcome = super().check_metadata(artifacts, work_root, config)
+        assert outcome.gate is not None
+        for item in outcome.gate["items"]:
+            repair = f"repair-generation-{self.metadata_calls}"
+            item["required_repairs"] = [repair]
+            item["field_checks"][0]["reason"] = repair
+            item["field_checks"][0]["required_repair"] = repair
+        return outcome
+
+
+class RepairingIdentityAuthor(FakeAuthor):
+    """Issue a new exact proposal/work identity on every bounded repair."""
+
+    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+        """Change authored bytes and proposal identity while preserving the model campaign."""
+
+        artifact = super().author(item, work_root, config)
+        generation = self.calls[item.stable_id]
+        artifact.proposal["work_id"] = f"work-{item.stable_id}-generation-{generation}"
+        artifact.proposal["proposed_facts"]["website"]["description"] += (
+            f" Repair generation {generation}."
+        )
+        _refresh_proposal_identities(artifact.proposal)
+        return artifact
+
+
 class FidelityAuthor(FakeAuthor):
     """Mark every proposal as an R3 port requiring fidelity review."""
 
@@ -394,6 +493,7 @@ class FidelityAuthor(FakeAuthor):
                 "current": False,
             }
         )
+        _refresh_proposal_identities(artifact.proposal)
         return artifact
 
 
@@ -404,14 +504,10 @@ class ChangedInputAuthor(FakeAuthor):
         """Change source, recipe, and dummy-input dependencies together."""
 
         artifact = super().author(item, work_root, config)
-        artifact.proposal["source_identity"] = "sha256:" + "b" * 64
-        artifact.proposal["recipe_revision"] = "sha256:" + "c" * 64
         facts = artifact.proposal["proposed_facts"]
-        facts["implementation"]["recipe_revision"] = artifact.proposal["recipe_revision"]
+        facts["source_resolution"]["sources"][0]["revision"] = "changed-revision"
         facts["input_contract"]["args"][0]["shape"] = [1, 3, 9, 9]
-        artifact.proposal["proposal_sha256"] = stable_hash(
-            {key: value for key, value in artifact.proposal.items() if key != "proposal_sha256"}
-        )
+        _refresh_proposal_identities(artifact.proposal)
         return artifact
 
 
@@ -481,6 +577,22 @@ class FailingEnvironments(FakeEnvironments):
 
         del intent, use
         raise EnvironmentProbeError("synthetic environment probe failure")
+
+
+class SandboxUnavailableForward(FakeForward):
+    """Raise the supervisor's typed fail-closed sandbox signal."""
+
+    def forward(
+        self,
+        artifact: AuthorArtifact,
+        environment: EnvironmentBinding,
+        cold_runs: int,
+        work_root: Path,
+    ) -> Sequence[Mapping[str, Any]]:
+        """Refuse execution because no required OS sandbox exists."""
+
+        del artifact, environment, cold_runs, work_root
+        raise SandboxUnavailableError("failed:sandbox-unavailable")
 
 
 class FakeNotifier(Notifier):
@@ -854,7 +966,41 @@ def test_changed_source_and_input_supersede_run_and_force_reexecution(tmp_path: 
     for item in snapshot.items:
         current = [record for record in revisions if record["stable_id"] == item.stable_id][-1]
         assert current["parent_revision"] == first_models[item.stable_id]["record_revision"]
-        assert current["implementation"]["recipe_revision"] == "sha256:" + "c" * 64
+        assert (
+            current["implementation"]["recipe_revision"]
+            != first_models[item.stable_id]["implementation"]["recipe_revision"]
+        )
+
+
+def test_checker_prompt_bytes_stale_gate_and_execution_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Changing current checker prompt bytes invalidates gates and runtime identity."""
+
+    snapshot = _snapshot(tmp_path)
+    author = FakeAuthor()
+    driver = _driver(tmp_path, snapshot, author=author)
+    item = driver._ordered_work(snapshot, {})[0]
+    artifact = author.author(item, driver.paths.work_root, driver.config)
+    outcome = FakeChecker().check_metadata([artifact], driver.paths.work_root, driver.config)
+    assert outcome.gate is not None
+    environment = _test_environment(tmp_path / "env")
+    first_execution = _execution_identity(artifact.proposal, environment)
+    assert (
+        driver_module._find_gate(
+            [outcome.gate], item.stable_id, "metadata_batch", artifact.proposal
+        )
+        is not None
+    )
+    changed_prompt = "sha256:" + "f" * 64
+    monkeypatch.setattr(driver_module, "_checker_prompt_hash", lambda: changed_prompt)
+    assert (
+        driver_module._find_gate(
+            [outcome.gate], item.stable_id, "metadata_batch", artifact.proposal
+        )
+        is None
+    )
+    assert _execution_identity(artifact.proposal, environment) != first_execution
 
 
 def test_only_driver_awards_runs_after_gate_receipts_and_both_modes(tmp_path: Path) -> None:
@@ -883,6 +1029,20 @@ def test_only_driver_awards_runs_after_gate_receipts_and_both_modes(tmp_path: Pa
     result = _driver(tmp_path, snapshot, author=author, checker=checker).run()
     assert result.status == "complete"
     assert scan_jsonl(paths.ledgers.models)[0]["status"]["code"] == "runs"
+
+
+def test_single_metadata_tail_waits_without_failing_model(tmp_path: Path) -> None:
+    """A sub-minimum end-of-queue batch remains pending and never becomes model failure."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    checker = FakeChecker()
+    result = _driver(tmp_path, snapshot, checker=checker).run()
+    assert result.status == "awaiting-gate"
+    assert result.paused_reason == "metadata-batch-tail"
+    assert checker.metadata_calls == 0
+    paths = _paths(tmp_path, snapshot)
+    assert scan_jsonl(paths.ledgers.models) == []
+    assert scan_jsonl(paths.ledgers.attempts) == []
 
 
 def test_quota_pause_records_event_wakeup_and_no_partial_award(tmp_path: Path) -> None:
@@ -966,7 +1126,7 @@ def test_failed_forward_terminalizes_and_campaign_continues(tmp_path: Path) -> N
         snapshot,
         forward=OneModelForwardFailure(failed_id),
     ).run()
-    assert result.status == "complete"
+    assert result.status == "terminal-partition-complete"
     paths = _paths(tmp_path, snapshot)
     models = {record["stable_id"]: record for record in scan_jsonl(paths.ledgers.models)}
     assert models[failed_id]["status"]["code"] == "failed:forward"
@@ -1001,7 +1161,7 @@ def test_author_failure_terminalizes_one_model_and_later_models_continue(tmp_pat
         snapshot,
         author=OneModelAuthorFailure(failed_id),
     ).run()
-    assert result.status == "complete"
+    assert result.status == "terminal-partition-complete"
     models = {
         record["stable_id"]: record
         for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
@@ -1015,7 +1175,7 @@ def test_checker_contract_failure_terminalizes_batch(tmp_path: Path) -> None:
 
     snapshot = _snapshot(tmp_path)
     result = _driver(tmp_path, snapshot, checker=FailingMetadataChecker()).run()
-    assert result.status == "complete"
+    assert result.status == "terminal-partition-complete"
     models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
     assert {record["status"]["code"] for record in models} == {"failed:accuracy-gate"}
     assert {record["status"]["reason_code"] for record in models} == {"checker-contract-invalid"}
@@ -1030,10 +1190,27 @@ def test_environment_failure_terminalizes_intent(tmp_path: Path) -> None:
         snapshot,
         environments=FailingEnvironments(tmp_path / "fake-envs"),
     ).run()
-    assert result.status == "complete"
+    assert result.status == "terminal-partition-complete"
     models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
     assert {record["status"]["code"] for record in models} == {"failed:environment"}
     assert {record["status"]["reason_code"] for record in models} == {"probe-failed"}
+
+
+def test_sandbox_unavailable_has_honest_terminal_and_null_environment(tmp_path: Path) -> None:
+    """A fail-closed sandbox refusal is not mislabeled or given fabricated env hashes."""
+
+    snapshot = _snapshot(tmp_path)
+    result = _driver(tmp_path, snapshot, forward=SandboxUnavailableForward()).run()
+    assert result.status == "terminal-partition-complete"
+    paths = _paths(tmp_path, snapshot)
+    models = scan_jsonl(paths.ledgers.models)
+    assert {record["status"]["code"] for record in models} == {"failed:sandbox-unavailable"}
+    attempts = scan_jsonl(paths.ledgers.attempts)
+    assert all(attempt["environment"] is None for attempt in attempts)
+    assert all(attempt["identities"]["environment"] is None for attempt in attempts)
+    assert all(attempt["identities"]["execution"] is None for attempt in attempts)
+    assert all(attempt["supervisor_observation"]["stdout_sha256"] is None for attempt in attempts)
+    assert all(attempt["supervisor_observation"]["stderr_sha256"] is None for attempt in attempts)
 
 
 def test_skip_and_evidenced_deferral_use_driver_terminalization(tmp_path: Path) -> None:
@@ -1041,7 +1218,7 @@ def test_skip_and_evidenced_deferral_use_driver_terminalization(tmp_path: Path) 
 
     snapshot = _snapshot(tmp_path, count=2)
     result = _driver(tmp_path, snapshot, author=TerminalOutcomeAuthor()).run()
-    assert result.status == "complete"
+    assert result.status == "terminal-partition-complete"
     paths = _paths(tmp_path, snapshot)
     models = scan_jsonl(paths.ledgers.models)
     assert {record["status"]["code"] for record in models} == {
@@ -1053,6 +1230,30 @@ def test_skip_and_evidenced_deferral_use_driver_terminalization(tmp_path: Path) 
     )
     assert deferral_attempt["defer_evidence"]["target_status"] == "deferred:needs-cuda"
     assert deferral_attempt["result"] == "observed"
+
+
+def test_cached_terminal_artifacts_follow_same_terminal_branch_on_resume(tmp_path: Path) -> None:
+    """Cached deferral/R5 artifacts never re-enter checker or execution maps."""
+
+    snapshot = _snapshot(tmp_path, count=2)
+    author = TerminalOutcomeAuthor()
+    first = _driver(tmp_path, snapshot, author=author).run()
+    assert first.status == "terminal-partition-complete"
+    paths = _paths(tmp_path, snapshot)
+    first_models = scan_jsonl(paths.ledgers.models)
+    checker = FakeChecker()
+    forward = FakeForward()
+    second = _driver(
+        tmp_path,
+        snapshot,
+        author=author,
+        checker=checker,
+        forward=forward,
+    ).run()
+    assert second.status == "terminal-partition-complete"
+    assert checker.metadata_calls == 0
+    assert forward.calls == {}
+    assert scan_jsonl(paths.ledgers.models) == first_models
 
 
 def test_phase_filtered_run_is_not_global_complete(tmp_path: Path) -> None:
@@ -1072,18 +1273,33 @@ def test_phase_filtered_run_is_not_global_complete(tmp_path: Path) -> None:
 
 
 def test_inaccurate_metadata_gate_repairs_are_bounded(tmp_path: Path) -> None:
-    """A repeated inaccurate root cause stops in human-review terminal failures."""
+    """Changed proposal identities still exhaust two repairs into human review."""
 
     snapshot = _snapshot(tmp_path)
-    checker = InaccurateChecker()
-    result = _driver(tmp_path, snapshot, checker=checker).run()
-    assert result.status == "complete"
-    assert checker.metadata_calls == 2
+    checker = LineageInaccurateChecker()
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=RepairingIdentityAuthor(),
+        checker=checker,
+    ).run()
+    assert result.status == "terminal-partition-complete"
+    assert checker.metadata_calls == 3
     paths = _paths(tmp_path, snapshot)
     models = scan_jsonl(paths.ledgers.models)
     assert {record["status"]["code"] for record in models} == {"failed:accuracy-gate"}
     assert all(record["status"]["human_review"]["required"] for record in models)
-    assert len(scan_jsonl(paths.ledgers.gates)) == 2
+    gates = scan_jsonl(paths.ledgers.gates)
+    assert len(gates) == 3
+    for stable_id in (item.stable_id for item in snapshot.items):
+        lineage_items = [
+            gate_item
+            for gate in gates
+            for gate_item in gate["items"]
+            if gate_item["stable_id"] == stable_id
+        ]
+        assert len({item["work_id"] for item in lineage_items}) == 3
+        assert len({item["campaign_root_work_id"] for item in lineage_items}) == 1
 
 
 def test_fidelity_rejection_terminalizes_without_aborting(tmp_path: Path) -> None:
@@ -1096,7 +1312,7 @@ def test_fidelity_rejection_terminalizes_without_aborting(tmp_path: Path) -> Non
         author=FidelityAuthor(),
         checker=RejectingFidelityChecker(),
     ).run()
-    assert result.status == "complete"
+    assert result.status == "terminal-partition-complete"
     models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
     assert {record["status"]["code"] for record in models} == {"failed:fidelity"}
     assert {record["status"]["reason_code"] for record in models} == {"major-drift-cap-exhausted"}

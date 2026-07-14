@@ -141,3 +141,78 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
     assert receipt["input_completed"] is False
     assert receipt["per_mode"] == {}
     assert receipt["error"]["exception_type"] == "builtins.TypeError"
+
+
+def test_r1_declarative_worker_executes_complete_args_and_kwargs_contract(
+    tmp_path: Path,
+) -> None:
+    """R1 execution preserves every positional tensor and exact non-tensor kwarg."""
+
+    tensor_leaf = {
+        "kind": "tensor",
+        "semantic_role": "attention sequence",
+        "shape": [1, 2, 4],
+        "dtype": "float32",
+        "device_policy": "cpu",
+        "distribution": "normal",
+        "constraints": [],
+        "source_evidence_ids": ["evidence-1"],
+    }
+    contract = {
+        "code_path": None,
+        "builder_symbol": "make_dummy_call",
+        "seed": 0,
+        "semantic_description": "Query, key, and value tensors with no returned weights.",
+        "source_basis": ["evidence-1"],
+        "smallest_valid_probe_rationale": "One batch with two tokens.",
+        "args": [
+            {**tensor_leaf, "path": "args[0]"},
+            {**tensor_leaf, "path": "args[1]"},
+            {**tensor_leaf, "path": "args[2]"},
+        ],
+        "kwargs": [],
+        "non_tensor_values": [
+            {
+                "path": "kwargs.need_weights",
+                "type": "bool",
+                "value": False,
+                "semantic_role": "output control",
+                "constraints": [],
+                "source_evidence_ids": ["evidence-1"],
+            }
+        ],
+        "masks_state_and_control": ["need_weights=False"],
+        "expected_output_semantics": "attention output without weights",
+    }
+    request = WorkerRequest(
+        stable_id="m_r1_multi_call",
+        recipe={
+            "kind": "declarative-library",
+            "recipe": {
+                "distribution": "torch",
+                "version": "test",
+                "artifact_sha256": "sha256:" + "a" * 64,
+                "module": "torch.nn",
+                "symbol": "MultiheadAttention",
+                "kwargs": {"embed_dim": 4, "num_heads": 1, "batch_first": True},
+                "pretrained_disable_fields": [],
+            },
+        },
+        modality=None,
+        input_spec=None,
+        input_contract=contract,
+        scratch_root=tmp_path / "scratch",
+        receipt_path=tmp_path / "result" / "receipt.json",
+        meaningful_modes=(RunMode.EVAL,),
+    )
+
+    receipt = run_worker(request)
+
+    mode_receipt = receipt["per_mode"]["eval"]
+    assert mode_receipt["forward_completed"] is True
+    assert {leaf["path"] for leaf in mode_receipt["input_signature"]["leaves"]} == {
+        "input.args[0]",
+        "input.args[1]",
+        "input.args[2]",
+        "input.kwargs.need_weights",
+    }

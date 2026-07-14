@@ -295,6 +295,7 @@
         "fidelity",
         "resource",
         "policy",
+        "sandbox-unavailable",
         "runner"
       ]
     },
@@ -365,6 +366,7 @@
         "protocol-violation",
         "ledger-corruption",
         "internal-error",
+        "sandbox-unavailable",
         "effort-cap-exhausted"
       ]
     },
@@ -458,6 +460,16 @@
       }
     },
     "environment": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/observed_environment"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "observed_environment": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -823,7 +835,7 @@
           "description": "Mandatory peak rss bytes."
         },
         "stdout_sha256": {
-          "$ref": "#/$defs/hash",
+          "$ref": "#/$defs/nullable_hash",
           "description": "Mandatory stdout sha256."
         },
         "stdout_bytes": {
@@ -837,7 +849,7 @@
           "description": "Mandatory stdout tail."
         },
         "stderr_sha256": {
-          "$ref": "#/$defs/hash",
+          "$ref": "#/$defs/nullable_hash",
           "description": "Mandatory stderr sha256."
         },
         "stderr_bytes": {

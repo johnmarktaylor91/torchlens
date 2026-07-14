@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Optional
 
 import pytest
@@ -14,10 +15,69 @@ from menagerie.crawler.constants import (
     MODEL_SCHEMA_VERSION,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
 )
+from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.metadata import (
+    authored_fact_leaves,
+    recompute_accepted_identities,
+)
 
 HASH = "sha256:" + "a" * 64
 OTHER_HASH = "sha256:" + "b" * 64
 NOW = "2026-07-14T12:00:00Z"
+
+_FACT_KEYS = (
+    "identity",
+    "taxonomy",
+    "external_metadata",
+    "website",
+    "people_and_origin",
+    "dates",
+    "citation",
+    "licenses",
+    "source_resolution",
+    "evidence",
+    "implementation",
+    "input_contract",
+    "modes",
+    "fidelity",
+)
+
+
+def _checker_prompt_hash() -> str:
+    """Return the exact frozen checker prompt byte hash used by fixtures."""
+
+    path = Path(__file__).parents[1] / "prompts" / "codex_accuracy_checker_v2.txt"
+    return hash_bytes(path.read_bytes())
+
+
+def _model_facts(model: dict[str, Any]) -> dict[str, Any]:
+    """Extract proposal fact roots from a synthetic canonical model."""
+
+    return {key: model[key] for key in _FACT_KEYS}
+
+
+def _bind_model_identities(model: dict[str, Any]) -> None:
+    """Populate synthetic model identity claims from its exact accepted facts."""
+
+    identities = recompute_accepted_identities(
+        _model_facts(model),
+        checker_prompt_hash=_checker_prompt_hash(),
+        checker_model="codex",
+        checker_version="test",
+    )
+    model["evidence"]["evidence_identity"] = identities.evidence
+    model["implementation"]["recipe_revision"] = identities.recipe
+    # Recipe includes evidence/implementation fields, so recompute once after embedding
+    # the first-pass derived values.
+    identities = recompute_accepted_identities(
+        _model_facts(model),
+        checker_prompt_hash=_checker_prompt_hash(),
+        checker_model="codex",
+        checker_version="test",
+    )
+    model["implementation"]["recipe_revision"] = identities.recipe
+    model["accuracy_gate"]["vet_identity"] = identities.vet
+    model["accuracy_gate"]["prompt_sha256"] = _checker_prompt_hash()
 
 
 def make_attempt(
@@ -46,7 +106,7 @@ def make_attempt(
         Complete attempt.v2 payload.
     """
 
-    return {
+    model = {
         "schema_version": ATTEMPT_SCHEMA_VERSION,
         "attempt_id": attempt_id,
         "ledger_seq": 1,
@@ -120,7 +180,22 @@ def make_attempt(
             "forward_started": True,
             "forward_completed": True,
             "mode": mode,
-            "input_signature": {"shape": [1, 3, 8, 8]},
+            "input_signature": {
+                "tree": {
+                    "args": {"tuple": [{"leaf": 0}]},
+                    "kwargs": {},
+                },
+                "leaves": [
+                    {
+                        "path": "input.args[0]",
+                        "kind": "tensor",
+                        "shape": [1, 3, 8, 8],
+                        "dtype": "float32",
+                        "device": "cpu",
+                        "python_type": "torch.Tensor",
+                    }
+                ],
+            },
             "output_signature": {
                 "tree": {"leaf": 0},
                 "leaves": [
@@ -171,6 +246,23 @@ def make_attempt(
         "error": None,
         "defer_evidence": None,
     }
+    reference = make_model(stable_id, accepted=True)
+    facts = _model_facts(reference)
+    identities = recompute_accepted_identities(
+        facts,
+        checker_prompt_hash=_checker_prompt_hash(),
+        checker_model="codex",
+        checker_version="test",
+    )
+    model["identities"].update(
+        {
+            "source": identities.source,
+            "evidence": identities.evidence,
+            "recipe": identities.recipe,
+            "checker_prompt": _checker_prompt_hash(),
+        }
+    )
+    return model
 
 
 def make_gate(
@@ -178,7 +270,7 @@ def make_gate(
     *,
     gate_id: str = "gate-1",
     gate_kind: str = "metadata_batch",
-    vet_identity: str = HASH,
+    vet_identity: Optional[str] = None,
     fidelity_identity: Optional[str] = None,
 ) -> dict[str, Any]:
     """Build a complete valid metadata-batch or fidelity gate.
@@ -205,13 +297,16 @@ def make_gate(
     fidelity_required = gate_kind == "fidelity"
     items: list[dict[str, Any]] = []
     for stable_id in stable_ids:
+        model = make_model(stable_id, accepted=True)
+        item_vet_identity = str(vet_identity or model["accuracy_gate"]["vet_identity"])
         items.append(
             {
                 "work_id": f"work-{stable_id}",
+                "campaign_root_work_id": f"work-{stable_id}",
                 "stable_id": stable_id,
                 "family_representative_id": stable_id,
                 "fidelity_identity": fidelity_identity if fidelity_required else None,
-                "vet_identity": vet_identity,
+                "vet_identity": item_vet_identity,
                 "verified_hashes": {
                     "proposal": HASH,
                     "source_manifest": HASH,
@@ -229,13 +324,14 @@ def make_gate(
                 "verdict": "accurate",
                 "field_checks": [
                     {
-                        "field": "description",
+                        "field": field,
                         "verdict": "accurate",
                         "evidence_ids": ["evidence-1"],
                         "checked_source_ids": ["source-1"],
                         "reason": "supported",
                         "required_repair": None,
                     }
+                    for field in authored_fact_leaves(_model_facts(model))
                 ],
                 "fidelity": {
                     "required": fidelity_required,
@@ -257,7 +353,7 @@ def make_gate(
                 "confidence": "high",
             }
         )
-    return {
+    proposal = {
         "schema_version": GATE_SCHEMA_VERSION,
         "gate_id": gate_id,
         "ledger_seq": 1,
@@ -270,13 +366,14 @@ def make_gate(
             "provider": "openai",
             "model": "codex",
             "version": "test",
-            "prompt_sha256": HASH,
+            "prompt_sha256": _checker_prompt_hash(),
             "started_at": NOW,
             "finished_at": NOW,
         },
         "items": items,
         "result_envelope_sha256": HASH,
     }
+    return proposal
 
 
 def _citation() -> dict[str, Any]:
@@ -447,7 +544,7 @@ def make_model(
     kind = status_code.split(":", 1)[0]
     stage = status_code.split(":", 1)[1] if kind == "failed" else None
     reason = "identity-unresolved" if stage == "source" else None
-    return {
+    model = {
         "schema_version": MODEL_SCHEMA_VERSION,
         "stable_id": stable_id,
         "record_seq": 1,
@@ -716,6 +813,9 @@ def make_model(
             "issues": [] if accepted else ["authored-metadata-pending"],
         },
     }
+    if accepted:
+        _bind_model_identities(model)
+    return model
 
 
 def make_author_proposal(stable_id: str = "m_example") -> dict[str, Any]:
@@ -749,7 +849,7 @@ def make_author_proposal(stable_id: str = "m_example") -> dict[str, Any]:
         "modes",
         "fidelity",
     )
-    return {
+    proposal = {
         "schema_version": AUTHOR_PROPOSAL_SCHEMA_VERSION,
         "proposal_id": "proposal-1",
         "proposal_sha256": HASH,
@@ -776,6 +876,25 @@ def make_author_proposal(stable_id: str = "m_example") -> dict[str, Any]:
         },
         "proposed_facts": {key: deepcopy(model[key]) for key in fact_keys},
     }
+    identities = recompute_accepted_identities(
+        proposal["proposed_facts"],
+        checker_prompt_hash=_checker_prompt_hash(),
+        checker_model="codex",
+        checker_version="current",
+    )
+    proposal.update(
+        {
+            "source_identity": identities.source,
+            "evidence_identity": identities.evidence,
+            "recipe_revision": identities.recipe,
+            "fidelity_identity": identities.fidelity,
+            "vet_identity": identities.vet,
+        }
+    )
+    proposal["proposal_sha256"] = stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+    return proposal
 
 
 def make_operational_event() -> dict[str, Any]:

@@ -11,7 +11,14 @@ from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.recordio import SingleWriterError
 from menagerie.crawler.reducer import CanonicalReducer, ReductionError
 from menagerie.crawler.status import PartitionError, assert_partition
-from menagerie.crawler.tests.conftest import make_attempt, make_gate, make_model
+from menagerie.crawler.metadata import authored_fact_leaves
+from menagerie.crawler.tests.conftest import (
+    _bind_model_identities,
+    _model_facts,
+    make_attempt,
+    make_gate,
+    make_model,
+)
 
 
 def _paths(tmp_path: Path) -> LedgerPaths:
@@ -157,10 +164,104 @@ def test_family_template_true_is_verified_against_representative(tmp_path: Path)
             "description": "silently altered family prose",
         }
     )
+    _bind_model_identities(variant)
+    gate = make_gate(stable_ids)
+    variant_gate_item = next(item for item in gate["items"] if item["stable_id"] == "m_variant")
+    variant_gate_item["vet_identity"] = variant["accuracy_gate"]["vet_identity"]
+    variant_gate_item["field_checks"] = [
+        {
+            "field": field,
+            "verdict": "accurate",
+            "evidence_ids": ["evidence-1"],
+            "checked_source_ids": ["source-1"],
+            "reason": "supported",
+            "required_repair": None,
+        }
+        for field in authored_fact_leaves(_model_facts(variant))
+    ]
     with CanonicalReducer(paths, stable_ids) as reducer:
-        reducer.append_gate(make_gate(stable_ids))
+        reducer.append_gate(gate)
         reducer.append_attempt(representative_attempt)
         reducer.append_attempt(variant_attempt)
         reducer.append_model(representative)
         with pytest.raises(ReductionError, match="family template validation failed"):
             reducer.append_model(variant)
+
+
+@pytest.mark.parametrize(
+    "receipt_field",
+    [
+        "constructor_started",
+        "constructor_completed",
+        "input_completed",
+        "forward_started",
+        "forward_completed",
+    ],
+)
+def test_run_award_rejects_incomplete_receipt_flags(tmp_path: Path, receipt_field: str) -> None:
+    """Every constructor/input/forward lifecycle predicate is mandatory for runs."""
+
+    paths = _paths(tmp_path / receipt_field)
+    stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
+    attempt = make_attempt()
+    attempt["worker_receipt"][receipt_field] = False
+    with CanonicalReducer(paths, stable_ids) as reducer:
+        reducer.append_gate(make_gate(stable_ids))
+        reducer.append_attempt(attempt)
+        with pytest.raises(ReductionError, match="complete zero-exit receipt"):
+            reducer.append_model(make_model(accepted=True))
+
+
+def test_run_award_rejects_null_input_signature(tmp_path: Path) -> None:
+    """A succeeded label cannot replace a structurally complete input signature."""
+
+    paths = _paths(tmp_path)
+    stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
+    attempt = make_attempt()
+    attempt["worker_receipt"]["input_signature"] = None
+    with CanonicalReducer(paths, stable_ids) as reducer:
+        reducer.append_gate(make_gate(stable_ids))
+        reducer.append_attempt(attempt)
+        with pytest.raises(ReductionError, match="complete zero-exit receipt"):
+            reducer.append_model(make_model(accepted=True))
+
+
+def test_recursive_authored_gate_blocks_ungated_website_leaf(tmp_path: Path) -> None:
+    """An accurate external-metadata subset cannot authorize the rest of proposed facts."""
+
+    paths = _paths(tmp_path)
+    stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
+    gate = make_gate(stable_ids)
+    item = next(value for value in gate["items"] if value["stable_id"] == "m_example")
+    item["field_checks"] = [
+        check for check in item["field_checks"] if check["field"] != "website.tagline"
+    ]
+    with CanonicalReducer(paths, stable_ids) as reducer:
+        reducer.append_gate(gate)
+        reducer.append_attempt(make_attempt())
+        with pytest.raises(ReductionError, match="ungated authored facts"):
+            reducer.append_model(make_model(accepted=True))
+
+
+def test_reducer_recomputes_source_identity_from_canonical_facts(tmp_path: Path) -> None:
+    """Changing accepted source facts makes inherited gate/attempt identities stale."""
+
+    paths = _paths(tmp_path)
+    stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
+    model = make_model(accepted=True)
+    model["source_resolution"]["sources"][0]["revision"] = "mutated-after-gate"
+    with CanonicalReducer(paths, stable_ids) as reducer:
+        reducer.append_gate(make_gate(stable_ids))
+        reducer.append_attempt(make_attempt())
+        with pytest.raises(ReductionError, match="identities are stale"):
+            reducer.append_model(model)
+
+
+def test_reducer_rejects_gate_from_stale_checker_prompt(tmp_path: Path) -> None:
+    """A syntactically valid gate from old prompt bytes is not current evidence."""
+
+    gate = make_gate([f"m_{index}" for index in range(10)])
+    gate["checker"]["prompt_sha256"] = "sha256:" + "f" * 64
+    with CanonicalReducer(_paths(tmp_path), [f"m_{index}" for index in range(10)]) as reducer:
+        with pytest.raises(ReductionError, match="current prompt bytes"):
+            reducer.append_gate(gate)

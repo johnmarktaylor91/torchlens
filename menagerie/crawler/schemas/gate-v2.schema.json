@@ -480,6 +480,7 @@
       "additionalProperties": false,
       "required": [
         "work_id",
+        "campaign_root_work_id",
         "stable_id",
         "family_representative_id",
         "fidelity_identity",
@@ -498,6 +499,10 @@
         "work_id": {
           "$ref": "#/$defs/nonempty_string",
           "description": "Mandatory deterministic work identifier."
+        },
+        "campaign_root_work_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Stable campaign/root-work lineage across repaired proposals."
         },
         "stable_id": {
           "$ref": "#/$defs/nonempty_string",

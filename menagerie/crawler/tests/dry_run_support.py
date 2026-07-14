@@ -19,7 +19,6 @@ from menagerie.crawler.driver import (
 )
 from menagerie.crawler.identity import (
     canonical_json_bytes,
-    compute_recipe_revision,
     hash_bytes,
     stable_hash,
 )
@@ -31,6 +30,7 @@ from menagerie.crawler.tests.test_slice_f_driver import (
     FakeChecker,
     FakeEnvironments,
     FakeNotifier,
+    _refresh_proposal_identities,
 )
 
 
@@ -221,13 +221,6 @@ class TinyModelAuthor(FakeAuthor):
                 "library_recipe": None,
             }
         )
-        recipe_revision = compute_recipe_revision(
-            {"recipe_type": "typed-adapter", "path": adapter_path.name},
-            str(proposal["source_identity"]),
-            adapter_bytes=adapter_bytes,
-        )
-        proposal["recipe_revision"] = recipe_revision
-        implementation["recipe_revision"] = recipe_revision
         contract = facts["input_contract"]
         contract["code_path"] = "adapter.py"
         contract["args"][0].update(
@@ -253,6 +246,11 @@ class TinyModelAuthor(FakeAuthor):
                     "current": False,
                 }
             )
+        _refresh_proposal_identities(
+            proposal,
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
         return AuthorArtifact(proposal, artifact.source_manifest, artifact.model_dir)
 
 

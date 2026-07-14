@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import random
+import re
 import sys
 import time
 import traceback
@@ -28,7 +29,6 @@ from menagerie.crawler.policy import ExecutionPolicy, PolicyObservation, PolicyV
 from menagerie.crawler.recipe import LoadedRecipe, load_recipe
 from menagerie.crawler.standard_inputs import (
     InputSpec,
-    MaterializedInput,
     materialize_standard_input,
 )
 
@@ -58,15 +58,17 @@ class WorkerRequest:
     stable_id: str
     recipe: Mapping[str, Any]
     modality: Union[str, tuple[str, ...], None]
-    input_spec: InputSpec
+    input_spec: Optional[InputSpec]
     scratch_root: Path
     receipt_path: Path
+    input_contract: Optional[Mapping[str, Any]] = None
     seed: int = 0
     device: str = "cpu"
     framework: str = "pytorch"
     meaningful_modes: Optional[tuple[RunMode, ...]] = None
     source_identity: str = "unbound"
     execution_identity: str = "unbound"
+    recipe_revision: str = "unbound"
 
     @classmethod
     def from_mapping(
@@ -91,8 +93,13 @@ class WorkerRequest:
         if not isinstance(recipe, Mapping):
             raise ValueError("worker recipe must be an object")
         input_value = value.get("input_spec")
-        if not isinstance(input_value, Mapping):
-            raise ValueError("worker input_spec must be an object")
+        input_contract_value = value.get("input_contract")
+        if input_value is not None and not isinstance(input_value, Mapping):
+            raise ValueError("worker input_spec must be an object or null")
+        if input_contract_value is not None and not isinstance(input_contract_value, Mapping):
+            raise ValueError("worker input_contract must be an object or null")
+        if input_value is None and input_contract_value is None:
+            raise ValueError("worker requires input_contract or legacy input_spec")
         modality_value = value.get("modality")
         if isinstance(modality_value, list):
             modality: Union[str, tuple[str, ...], None] = tuple(
@@ -119,7 +126,10 @@ class WorkerRequest:
             stable_id=str(value.get("stable_id", "")),
             recipe=dict(recipe),
             modality=modality,
-            input_spec=InputSpec.from_value(input_value),
+            input_spec=InputSpec.from_value(input_value) if input_value is not None else None,
+            input_contract=(
+                dict(input_contract_value) if isinstance(input_contract_value, Mapping) else None
+            ),
             scratch_root=Path(str(value["scratch_root"])),
             receipt_path=receipt_value,
             seed=int(value.get("seed", 0)),
@@ -128,6 +138,7 @@ class WorkerRequest:
             meaningful_modes=modes,
             source_identity=str(value.get("source_identity", "unbound")),
             execution_identity=str(value.get("execution_identity", "unbound")),
+            recipe_revision=str(value.get("recipe_revision", "unbound")),
         )
 
 
@@ -203,7 +214,165 @@ def _input_signature(args: tuple[object, ...], kwargs: Mapping[str, object]) -> 
         Shape, dtype, device, and complete pytree location.
     """
 
-    return output_signature({"args": args, "kwargs": dict(kwargs)}, path="input")
+    signature = output_signature({"args": args, "kwargs": dict(kwargs)}, path="input")
+    values = _call_leaf_values(args, kwargs)
+    for leaf in signature["leaves"]:
+        path = str(leaf["path"]).removeprefix("input.")
+        value = values.get(path)
+        if leaf["kind"] == "python":
+            leaf["value_sha256"] = stable_hash(value)
+    return signature
+
+
+_PATH_TOKEN = re.compile(r"(?:^|\.)([A-Za-z_][A-Za-z0-9_]*)|\[([0-9]+)\]")
+
+
+def _path_tokens(path: str) -> tuple[Union[str, int], ...]:
+    """Parse one closed args/kwargs path into mapping/list tokens.
+
+    Parameters
+    ----------
+    path:
+        Contract path such as ``args[0]`` or ``kwargs.mask``.
+
+    Returns
+    -------
+    tuple[str | int, ...]
+        Parsed tokens.
+    """
+
+    matches = list(_PATH_TOKEN.finditer(path))
+    if not matches or "".join(match.group(0) for match in matches) != path:
+        raise TypeError(f"invalid dummy-call contract path: {path!r}")
+    tokens: list[Union[str, int]] = []
+    for match in matches:
+        name, index = match.groups()
+        tokens.append(name if name is not None else int(index))
+    if tokens[0] not in {"args", "kwargs"}:
+        raise TypeError(f"dummy-call path must start with args or kwargs: {path!r}")
+    return tuple(tokens)
+
+
+def _assign_path(root: dict[str, Any], path: str, value: object) -> None:
+    """Assign one materialized leaf into a closed dummy-call tree."""
+
+    tokens = _path_tokens(path)
+    current: Any = root
+    for index, token in enumerate(tokens):
+        final = index == len(tokens) - 1
+        next_token = None if final else tokens[index + 1]
+        if isinstance(token, str):
+            if not isinstance(current, dict):
+                raise TypeError(f"dummy-call path collides with a non-object: {path!r}")
+            if final:
+                if token in current:
+                    raise TypeError(f"duplicate dummy-call path: {path!r}")
+                current[token] = value
+            else:
+                expected: object = [] if isinstance(next_token, int) else {}
+                current = current.setdefault(token, expected)
+        else:
+            if not isinstance(current, list):
+                raise TypeError(f"dummy-call path collides with a non-list: {path!r}")
+            while len(current) <= token:
+                current.append(None)
+            if final:
+                if current[token] is not None:
+                    raise TypeError(f"duplicate dummy-call path: {path!r}")
+                current[token] = value
+            else:
+                expected = [] if isinstance(next_token, int) else {}
+                if current[token] is None:
+                    current[token] = expected
+                current = current[token]
+
+
+def _call_leaf_values(args: tuple[object, ...], kwargs: Mapping[str, object]) -> dict[str, object]:
+    """Flatten an exact call to the same paths used by input signatures."""
+
+    values: dict[str, object] = {}
+
+    def visit(value: object, path: str) -> None:
+        """Record scalar/tensor leaves recursively."""
+
+        if isinstance(value, Mapping):
+            for key in sorted(value, key=str):
+                visit(value[key], f"{path}.{key}")
+        elif isinstance(value, (tuple, list)):
+            for index, child in enumerate(value):
+                visit(child, f"{path}[{index}]")
+        else:
+            values[path] = value
+
+    visit(args, "args")
+    visit(dict(kwargs), "kwargs")
+    return values
+
+
+def _materialize_declarative_call(
+    request: WorkerRequest,
+) -> tuple[tuple[object, ...], dict[str, object], str, Optional[str], str]:
+    """Materialize every typed R1 positional, keyword, and non-tensor leaf."""
+
+    contract = request.input_contract
+    if not isinstance(contract, Mapping):
+        if request.input_spec is None:
+            raise TypeError("declarative recipe has no dummy-call contract")
+        materialized = materialize_standard_input(
+            request.modality,
+            request.input_spec,
+            framework=request.framework,
+            device=request.device,
+            seed=request.seed,
+        )
+        return (
+            materialized.args,
+            materialized.kwargs,
+            materialized.input_kind,
+            materialized.input_asset,
+            materialized.input_note,
+        )
+    root: dict[str, Any] = {"args": [], "kwargs": {}}
+    input_kinds: list[str] = []
+    input_assets: list[str] = []
+    notes: list[str] = []
+    tensor_index = 0
+    for collection in ("args", "kwargs"):
+        leaves = contract.get(collection)
+        if not isinstance(leaves, list):
+            raise TypeError(f"input_contract.{collection} must be a list")
+        for leaf in leaves:
+            if not isinstance(leaf, Mapping) or leaf.get("kind") != "tensor":
+                raise TypeError(f"input_contract.{collection} contains a non-tensor leaf")
+            materialized = materialize_standard_input(
+                request.modality,
+                {"shape": leaf.get("shape"), "dtype": leaf.get("dtype")},
+                framework=request.framework,
+                device=request.device,
+                seed=request.seed + tensor_index,
+            )
+            _assign_path(root, str(leaf.get("path")), materialized.value)
+            input_kinds.append(materialized.input_kind)
+            if materialized.input_asset is not None:
+                input_assets.append(materialized.input_asset)
+            notes.append(materialized.input_note)
+            tensor_index += 1
+    non_tensor = contract.get("non_tensor_values")
+    if not isinstance(non_tensor, list):
+        raise TypeError("input_contract.non_tensor_values must be a list")
+    for leaf in non_tensor:
+        if not isinstance(leaf, Mapping):
+            raise TypeError("input_contract.non_tensor_values contains a non-object")
+        _assign_path(root, str(leaf.get("path")), leaf.get("value"))
+    args_value = root["args"]
+    kwargs_value = root["kwargs"]
+    if not isinstance(args_value, list) or any(value is None for value in args_value):
+        raise TypeError("input_contract args paths must be contiguous")
+    if not isinstance(kwargs_value, dict):
+        raise TypeError("input_contract kwargs paths are invalid")
+    kind = input_kinds[0] if len(set(input_kinds)) == 1 else "random-fallback"
+    asset = input_assets[0] if len(input_assets) == 1 else None
+    return tuple(args_value), kwargs_value, kind, asset, "; ".join(notes)
 
 
 def _materialize_dummy_call(
@@ -246,20 +415,7 @@ def _materialize_dummy_call(
             "typed make_dummy_call(seed, device)",
         )
 
-    materialized: MaterializedInput = materialize_standard_input(
-        request.modality,
-        request.input_spec,
-        framework=request.framework,
-        device=request.device,
-        seed=request.seed,
-    )
-    return (
-        materialized.args,
-        materialized.kwargs,
-        materialized.input_kind,
-        materialized.input_asset,
-        materialized.input_note,
-    )
+    return _materialize_declarative_call(request)
 
 
 def _set_mode(model: object, mode: RunMode) -> None:
@@ -481,7 +637,7 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
             loaded: LoadedRecipe = load_recipe(
                 request.recipe, source_identity=request.source_identity
             )
-            base["recipe_revision"] = loaded.recipe_revision
+            base["recipe_revision"] = request.recipe_revision
             base["constructor_started"] = True
             constructor_started = time.monotonic()
             model = loaded.build_model()

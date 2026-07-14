@@ -19,7 +19,7 @@ import sys
 import traceback
 from collections import Counter, defaultdict
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Protocol, Sequence
@@ -37,6 +37,7 @@ from menagerie.crawler.checkpoint import (
 )
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION,
+    CHECKER_PROMPT_NAME,
     DEFAULT_FORWARD_TIMEOUT_SECONDS,
     DEFAULT_NOTIFY_TIMEOUT_SECONDS,
     DEFAULT_NOTIFY_COMMAND,
@@ -71,7 +72,12 @@ from menagerie.crawler.identity import (
     stable_hash,
 )
 from menagerie.crawler.intake import IntakeItem, IntakeSnapshot, load_intake_snapshot
-from menagerie.crawler.metadata import validate_external_metadata_for_write
+from menagerie.crawler.metadata import (
+    MetadataValidationError,
+    input_signature_matches_contract,
+    recompute_accepted_identities,
+    validate_authored_facts_for_write,
+)
 from menagerie.crawler.models import JsonObject, LedgerPaths
 from menagerie.crawler.recordio import JsonlLedger, SingleWriterError, scan_jsonl
 from menagerie.crawler.reducer import CanonicalReducer, default_ledger_paths
@@ -82,7 +88,12 @@ from menagerie.crawler.routing import (
     route_model,
 )
 from menagerie.crawler.state import rebuild_state
-from menagerie.crawler.status import assert_partition, assert_status_completeness, funnel_counts
+from menagerie.crawler.status import (
+    assert_partition,
+    assert_status_completeness,
+    completeness_report,
+    funnel_counts,
+)
 from menagerie.crawler.wakeup import OperationalContext, WakeupManager
 from menagerie.crawler.worker_supervisor import (
     SupervisedResult,
@@ -213,6 +224,7 @@ class AuthorArtifact:
     terminal_reason_code: Optional[str] = None
     terminal_detail: Optional[str] = None
     defer_evidence: Optional[JsonObject] = None
+    campaign_root_work_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -930,6 +942,20 @@ class CrawlerDriver:
                         eligible_work, artifacts, reducer, operational, state
                     )
                     if pause is not None:
+                        if pause == "metadata-batch-tail":
+                            state.update(
+                                {
+                                    "status": "awaiting-gate",
+                                    "last_terminal_count": len(reducer.current_records),
+                                }
+                            )
+                            _write_driver_state(self.paths.driver_state, state)
+                            return DriverResult(
+                                "awaiting-gate",
+                                len(reducer.current_records),
+                                self._reduced,
+                                "metadata-batch-tail",
+                            )
                         return DriverResult(
                             "paused:usage-limit", len(reducer.current_records), 0, pause
                         )
@@ -1045,12 +1071,24 @@ class CrawlerDriver:
             }
             assert_partition(in_scope_ids, scoped_current)
             assert_status_completeness(scoped_current)
-            global_complete = set(current) == set(intake_ids)
-            completion_status = (
-                "complete"
-                if self.config.phase is None or global_complete
-                else f"phase-complete:{self.config.phase}"
+            workflows = _completion_workflows(scoped_current)
+            report = completeness_report(
+                in_scope_ids,
+                scoped_current,
+                workflow_states=workflows,
             )
+            if report.complete:
+                completion_status = (
+                    "complete"
+                    if self.config.phase is None
+                    else f"phase-complete:{self.config.phase}"
+                )
+            else:
+                completion_status = (
+                    "terminal-partition-complete"
+                    if self.config.phase is None
+                    else f"phase-terminal-partition-complete:{self.config.phase}"
+                )
             state.update({"status": completion_status, "last_terminal_count": len(current)})
             _write_driver_state(self.paths.driver_state, state)
             return DriverResult(completion_status, len(current), self._reduced, None)
@@ -1105,11 +1143,31 @@ class CrawlerDriver:
                         if isinstance(value.get("defer_evidence"), Mapping)
                         else None
                     ),
+                    campaign_root_work_id=str(
+                        value.get("campaign_root_work_id") or value["proposal"]["work_id"]
+                    ),
                 )
                 if value.get("artifact_identity") == _artifact_cache_identity(
                     item, cached_artifact
                 ):
-                    artifacts[item.stable_id] = cached_artifact
+                    _validate_artifact_identities(cached_artifact, self.config)
+                    terminal = _artifact_terminal_status(cached_artifact)
+                    if terminal is not None:
+                        current = reducer.current_records.get(item.stable_id)
+                        if current is None or current.get("status", {}).get("code") != terminal[0]:
+                            self._terminalize(
+                                item,
+                                cached_artifact,
+                                terminal[0],
+                                terminal[1],
+                                cached_artifact.terminal_detail,
+                                (),
+                                reducer,
+                                operational,
+                                state,
+                            )
+                    else:
+                        artifacts[item.stable_id] = cached_artifact
                     continue
             try:
                 artifact = self.dependencies.author.author(item, self.paths.work_root, self.config)
@@ -1164,6 +1222,38 @@ class CrawlerDriver:
                     state,
                 )
                 continue
+            artifact = replace(
+                artifact,
+                campaign_root_work_id=(
+                    artifact.campaign_root_work_id or str(artifact.proposal["work_id"])
+                ),
+            )
+            try:
+                _validate_artifact_identities(artifact, self.config)
+            except DriverIntegrationError as exc:
+                attempt = _driver_failure_attempt(
+                    item,
+                    artifact,
+                    "evidence",
+                    "coverage-incomplete",
+                    exc,
+                    self.config,
+                    environment=None,
+                    created_at=self.dependencies.clock(),
+                )
+                persisted = reducer.append_attempt(attempt).record
+                self._terminalize(
+                    item,
+                    artifact,
+                    "failed:evidence",
+                    "coverage-incomplete",
+                    str(exc),
+                    (persisted,),
+                    reducer,
+                    operational,
+                    state,
+                )
+                continue
             cache_value = {
                 "proposal": artifact.proposal,
                 "source_manifest": artifact.source_manifest,
@@ -1172,6 +1262,7 @@ class CrawlerDriver:
                 "terminal_reason_code": artifact.terminal_reason_code,
                 "terminal_detail": artifact.terminal_detail,
                 "defer_evidence": artifact.defer_evidence,
+                "campaign_root_work_id": artifact.campaign_root_work_id,
             }
             cache_value["artifact_identity"] = _artifact_cache_identity(item, artifact)
             _write_json_atomic(cache, cache_value)
@@ -1218,7 +1309,7 @@ class CrawlerDriver:
                 terminal_gate = _terminal_metadata_gate(
                     persisted,
                     stable_id,
-                    artifacts[stable_id].proposal,
+                    _artifact_lineage(artifacts[stable_id]),
                     max_repairs=2,
                 )
                 if terminal_gate is None:
@@ -1237,18 +1328,22 @@ class CrawlerDriver:
 
             repair_counts = {
                 stable_id: _metadata_repair_count(
-                    persisted, stable_id, artifacts[stable_id].proposal
+                    persisted, stable_id, _artifact_lineage(artifacts[stable_id])
                 )
                 for stable_id in pending_ids
             }
             for stable_id, count in repair_counts.items():
-                if count == 0:
+                if count == 0 or not _metadata_gate_history(
+                    persisted, stable_id, artifacts[stable_id].proposal
+                ):
                     continue
                 artifacts[stable_id] = self._repair_author(
                     items_by_id[stable_id], artifacts[stable_id], persisted, count
                 )
 
             pending_artifacts = [artifacts[stable_id] for stable_id in sorted(pending_ids)]
+            if len(pending_artifacts) < 10:
+                return "metadata-batch-tail"
             requeued: set[str] = set()
             for batch in _metadata_batches(pending_artifacts):
                 batch_ids = tuple(str(artifact.proposal["stable_id"]) for artifact in batch)
@@ -1292,7 +1387,7 @@ class CrawlerDriver:
                 route_ready = _prepare_ledger_record(gate, len(persisted) + 1)
                 counts = {
                     stable_id: _metadata_repair_count(
-                        persisted, stable_id, artifacts[stable_id].proposal
+                        persisted, stable_id, _artifact_lineage(artifacts[stable_id])
                     )
                     for stable_id in batch_ids
                 }
@@ -1334,7 +1429,7 @@ class CrawlerDriver:
                         requeued.add(stable_id)
                     self.dependencies.boundary_hook("after-gate", stable_id)
             if pending_ids and not requeued:
-                pending_ids.intersection_update(requeued)
+                raise DriverIntegrationError("metadata gate made no durable routing progress")
 
         for item in work:
             if item.stable_id in reducer.current_records:
@@ -1468,12 +1563,17 @@ class CrawlerDriver:
                         )
                     )
                 except Exception as exc:  # noqa: BLE001 -- supervisor failure is model-local
+                    stage, reason = (
+                        ("sandbox-unavailable", "sandbox-unavailable")
+                        if _is_sandbox_unavailable(exc)
+                        else ("runner", "internal-error")
+                    )
                     generated = (
                         _driver_failure_attempt(
                             item,
                             artifact,
-                            "runner",
-                            "internal-error",
+                            stage,
+                            reason,
                             exc,
                             self.config,
                             environment=environment.family,
@@ -1545,19 +1645,21 @@ class CrawlerDriver:
             self.dependencies.boundary_hook("after-forward", item.stable_id)
         gates = scan_jsonl(self.paths.ledgers.gates)
         model = _assemble_run_model(item, artifact, attempts, gates, self.config)
-        current = reducer.current_records.get(item.stable_id)
-        model["parent_revision"] = current["record_revision"] if current is not None else None
-        if current is not None:
-            model["status"]["supersedes_revision"] = current["record_revision"]
+        current_model = reducer.current_records.get(item.stable_id)
+        model["parent_revision"] = (
+            current_model["record_revision"] if current_model is not None else None
+        )
+        if current_model is not None:
+            model["status"]["supersedes_revision"] = current_model["record_revision"]
         result = reducer.append_model(model)
         if result.appended:
             self._reduced += 1
         self.dependencies.boundary_hook("after-reduce", item.stable_id)
-        current = reducer.current_records
-        self._handle_progress(operational, current, state=state)
-        if self._maybe_pause_for_review(operational, current, state):
+        current_records = reducer.current_records
+        self._handle_progress(operational, current_records, state=state)
+        if self._maybe_pause_for_review(operational, current_records, state):
             raise DriverPaused("review checkpoint reached")
-        state["last_terminal_count"] = len(current)
+        state["last_terminal_count"] = len(current_records)
         state["status"] = "running"
         _write_driver_state(self.paths.driver_state, state)
 
@@ -1589,6 +1691,13 @@ class CrawlerDriver:
         repaired = self.dependencies.author.author(item, self.paths.work_root, self.config)
         if repaired.proposal.get("stable_id") != item.stable_id:
             raise DriverIntegrationError("repaired author proposal stable_id does not match intake")
+        repaired = replace(
+            repaired,
+            campaign_root_work_id=(
+                artifact.campaign_root_work_id or str(artifact.proposal["work_id"])
+            ),
+        )
+        _validate_artifact_identities(repaired, self.config)
         cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
         cache_value = {
             "proposal": repaired.proposal,
@@ -1599,6 +1708,7 @@ class CrawlerDriver:
             "terminal_reason_code": repaired.terminal_reason_code,
             "terminal_detail": repaired.terminal_detail,
             "defer_evidence": repaired.defer_evidence,
+            "campaign_root_work_id": repaired.campaign_root_work_id,
         }
         cache_value["artifact_identity"] = _artifact_cache_identity(item, repaired)
         _write_json_atomic(cache, cache_value)
@@ -1682,19 +1792,21 @@ class CrawlerDriver:
             human_review=human_review,
             root_cause_fingerprint=root_cause_fingerprint,
         )
-        current = reducer.current_records.get(item.stable_id)
-        model["parent_revision"] = current["record_revision"] if current is not None else None
-        if current is not None:
-            model["status"]["supersedes_revision"] = current["record_revision"]
+        current_model = reducer.current_records.get(item.stable_id)
+        model["parent_revision"] = (
+            current_model["record_revision"] if current_model is not None else None
+        )
+        if current_model is not None:
+            model["status"]["supersedes_revision"] = current_model["record_revision"]
         result = reducer.append_model(model)
         if result.appended:
             self._reduced += 1
         self.dependencies.boundary_hook("after-reduce", item.stable_id)
-        current = reducer.current_records
-        self._handle_progress(operational, current, state=state)
-        if self._maybe_pause_for_review(operational, current, state):
+        current_records = reducer.current_records
+        self._handle_progress(operational, current_records, state=state)
+        if self._maybe_pause_for_review(operational, current_records, state):
             raise DriverPaused("review checkpoint reached")
-        state.update({"last_terminal_count": len(current), "status": "running"})
+        state.update({"last_terminal_count": len(current_records), "status": "running"})
         _write_driver_state(self.paths.driver_state, state)
 
     def _pause_for_usage(
@@ -2098,6 +2210,62 @@ def _runner_identity() -> str:
     )
 
 
+def _checker_prompt_hash() -> str:
+    """Hash the exact current frozen checker prompt bytes."""
+
+    path = Path(__file__).with_name("prompts") / f"{CHECKER_PROMPT_NAME}.txt"
+    try:
+        return hash_bytes(path.read_bytes())
+    except OSError as exc:
+        raise DriverIntegrationError(f"checker prompt bytes are unavailable: {exc}") from exc
+
+
+def _validate_artifact_identities(artifact: AuthorArtifact, config: DriverConfig) -> None:
+    """Reject an author artifact whose claimed identities do not match accepted facts."""
+
+    proposal = artifact.proposal
+    facts = proposal.get("proposed_facts")
+    if not isinstance(facts, Mapping):
+        raise DriverIntegrationError("author proposal has no proposed_facts object")
+    try:
+        identities = recompute_accepted_identities(
+            facts,
+            checker_prompt_hash=_checker_prompt_hash(),
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
+    except MetadataValidationError as exc:
+        raise DriverIntegrationError(str(exc)) from exc
+    claimed = {
+        "source_identity": identities.source,
+        "evidence_identity": identities.evidence,
+        "recipe_revision": identities.recipe,
+        "vet_identity": identities.vet,
+        "fidelity_identity": identities.fidelity,
+    }
+    mismatches = {
+        field: {"claimed": proposal.get(field), "computed": value}
+        for field, value in claimed.items()
+        if proposal.get(field) != value
+    }
+    if mismatches:
+        raise DriverIntegrationError(f"author proposal identity mismatch: {mismatches}")
+    implementation = facts.get("implementation")
+    evidence = facts.get("evidence")
+    if (
+        not isinstance(implementation, Mapping)
+        or implementation.get("recipe_revision") != identities.recipe
+        or not isinstance(evidence, Mapping)
+        or evidence.get("evidence_identity") != identities.evidence
+    ):
+        raise DriverIntegrationError("embedded recipe/evidence identities are stale")
+    expected_proposal_hash = stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+    if proposal.get("proposal_sha256") != expected_proposal_hash:
+        raise DriverIntegrationError("proposal_sha256 does not bind the complete proposal")
+
+
 def _execution_identity(proposal: Mapping[str, Any], environment: EnvironmentBinding) -> str:
     """Compute the current execution identity from every runtime dependency."""
 
@@ -2126,6 +2294,9 @@ def _execution_identity(proposal: Mapping[str, Any], environment: EnvironmentBin
                     "modes": facts.get("modes"),
                     "verified_hashes": proposal.get("verified_hashes"),
                     "author_prompt": proposal.get("author", {}).get("prompt_sha256"),
+                    "checker_prompt": _checker_prompt_hash(),
+                    "vet_identity": proposal.get("vet_identity"),
+                    "fidelity_identity": proposal.get("fidelity_identity"),
                 }
             ),
         },
@@ -2261,17 +2432,12 @@ def _worker_request(
         if not code_path.is_absolute():
             code_path = artifact.model_dir / code_path
         recipe = {"kind": "typed-adapter", "path": str(code_path.resolve())}
-    tensor_args = [
-        value for value in facts["input_contract"]["args"] if value.get("kind") == "tensor"
-    ]
-    if not tensor_args:
-        raise DriverIntegrationError("worker request requires at least one tensor input spec")
-    input_value = tensor_args[0]
     return {
         "stable_id": proposal["stable_id"],
         "recipe": recipe,
         "modality": facts["external_metadata"]["modality"],
-        "input_spec": {"shape": input_value["shape"], "dtype": input_value["dtype"]},
+        "input_spec": None,
+        "input_contract": deepcopy(dict(facts["input_contract"])),
         "scratch_root": str(scratch_root),
         "receipt_path": str(receipt_path),
         "seed": cold_index,
@@ -2279,6 +2445,7 @@ def _worker_request(
         "framework": implementation["run_framework"],
         "meaningful_modes": facts["modes"]["meaningful_modes"],
         "source_identity": proposal["source_identity"],
+        "recipe_revision": proposal["recipe_revision"],
         "execution_identity": execution_identity,
     }
 
@@ -2321,9 +2488,14 @@ def _attempts_from_supervised(
             envelope_error is None
             and result.observation.exit_code == 0
             and result.observation.signal_number is None
+            and mode_receipt.get("constructor_started")
             and mode_receipt.get("constructor_completed")
             and mode_receipt.get("input_completed")
+            and mode_receipt.get("forward_started")
             and mode_receipt.get("forward_completed")
+            and input_signature_matches_contract(
+                mode_receipt.get("input_signature"), facts["input_contract"]
+            )
         )
         attempt_id = stable_hash(
             {
@@ -2393,7 +2565,7 @@ def _attempts_from_supervised(
                     "execution": execution_identity,
                     "runner": _runner_identity(),
                     "author_prompt": proposal["author"]["prompt_sha256"],
-                    "checker_prompt": stable_hash("codex_accuracy_checker_v2"),
+                    "checker_prompt": _checker_prompt_hash(),
                 },
                 "environment": {
                     "family": environment.family,
@@ -2546,7 +2718,15 @@ def _receipt_envelope_error(
             or not required_mode <= set(value)
             or value.get("mode") != mode
             or value.get("error") is not None
+            or not value.get("constructor_started")
+            or not value.get("constructor_completed")
+            or not value.get("input_completed")
+            or not value.get("forward_started")
             or not value.get("forward_completed")
+            or not input_signature_matches_contract(
+                value.get("input_signature"),
+                proposal.get("proposed_facts", {}).get("input_contract", {}),
+            )
         ):
             return "invalid-receipt:incomplete-mode"
         signature = value.get("output_signature")
@@ -2626,6 +2806,15 @@ def _supervised_failure(
             details={"signal": observation.signal_number},
         )
     if result.worker_receipt is None:
+        if result.receipt_error == "failed:sandbox-unavailable":
+            return _attempt_error_fields(
+                "sandbox-unavailable",
+                "sandbox-unavailable",
+                None,
+                "required operating-system sandbox is unavailable",
+                native_crash=False,
+                details={"receipt_error": result.receipt_error},
+            )
         reason = (
             "missing-receipt" if result.receipt_error == "missing-receipt" else "protocol-violation"
         )
@@ -2715,6 +2904,7 @@ def _checker_item(artifact: AuthorArtifact) -> JsonObject:
     proposal = artifact.proposal
     return {
         "work_id": proposal["work_id"],
+        "campaign_root_work_id": _artifact_lineage(artifact),
         "stable_id": proposal["stable_id"],
         "family_representative_id": proposal["proposed_facts"]["identity"][
             "family_representative_id"
@@ -2748,7 +2938,11 @@ def _require_gate_bindings(
     for artifact in artifacts:
         stable_id = str(artifact.proposal["stable_id"])
         item = by_id.get(stable_id)
-        if item is None or not _gate_item_matches_proposal(item, artifact.proposal, kind):
+        if (
+            item is None
+            or item.get("campaign_root_work_id") != _artifact_lineage(artifact)
+            or not _gate_item_matches_proposal(item, artifact.proposal, kind)
+        ):
             raise DriverIntegrationError(
                 f"checker gate identities or selected rung are stale for {stable_id}"
             )
@@ -2830,6 +3024,7 @@ def _metadata_gate_history(
     gates: Sequence[Mapping[str, Any]],
     stable_id: str,
     proposal: Optional[Mapping[str, Any]] = None,
+    campaign_root_work_id: Optional[str] = None,
 ) -> tuple[tuple[JsonObject, JsonObject], ...]:
     """Return persisted metadata gates and matching items for one model."""
 
@@ -2839,7 +3034,11 @@ def _metadata_gate_history(
             continue
         for item in gate.get("items", []):
             if item.get("stable_id") == stable_id and (
-                proposal is None or _gate_item_matches_proposal(item, proposal, "metadata_batch")
+                (proposal is None or _gate_item_matches_proposal(item, proposal, "metadata_batch"))
+                and (
+                    campaign_root_work_id is None
+                    or item.get("campaign_root_work_id") == campaign_root_work_id
+                )
             ):
                 history.append((dict(gate), dict(item)))
                 break
@@ -2865,7 +3064,7 @@ def _metadata_gate_accepted(
 def _metadata_repair_count(
     gates: Sequence[Mapping[str, Any]],
     stable_id: str,
-    proposal: Optional[Mapping[str, Any]] = None,
+    campaign_root_work_id: Optional[str] = None,
 ) -> int:
     """Count durable rejected metadata generations for one model."""
 
@@ -2875,14 +3074,16 @@ def _metadata_repair_count(
             and item.get("integrity", {}).get("verdict") == "accurate"
             and item.get("rung_check", {}).get("verdict") == "accurate"
         )
-        for _gate, item in _metadata_gate_history(gates, stable_id, proposal)
+        for _gate, item in _metadata_gate_history(
+            gates, stable_id, campaign_root_work_id=campaign_root_work_id
+        )
     )
 
 
 def _terminal_metadata_gate(
     gates: Sequence[Mapping[str, Any]],
     stable_id: str,
-    proposal: Mapping[str, Any],
+    campaign_root_work_id: str,
     *,
     max_repairs: int,
 ) -> Optional[JsonObject]:
@@ -2890,7 +3091,9 @@ def _terminal_metadata_gate(
 
     rejected = [
         (gate, item)
-        for gate, item in _metadata_gate_history(gates, stable_id, proposal)
+        for gate, item in _metadata_gate_history(
+            gates, stable_id, campaign_root_work_id=campaign_root_work_id
+        )
         if not (
             item.get("verdict") == "accurate"
             and item.get("integrity", {}).get("verdict") == "accurate"
@@ -2914,6 +3117,8 @@ def _metadata_batches(
     if not artifacts:
         return ()
     count = len(artifacts)
+    if count < 10:
+        return ()
     if count <= 20:
         return (tuple(artifacts),)
     sizes: list[int] = []
@@ -2942,6 +3147,8 @@ def _find_gate(
 
     for gate in reversed(gates):
         if gate.get("gate_kind") != kind:
+            continue
+        if gate.get("checker", {}).get("prompt_sha256") != _checker_prompt_hash():
             continue
         if any(
             item.get("stable_id") == stable_id
@@ -2979,6 +3186,12 @@ def _gate_item_matches_proposal(
     return item.get("fidelity_identity") == expected_fidelity
 
 
+def _artifact_lineage(artifact: AuthorArtifact) -> str:
+    """Return the stable campaign/root-work identity across proposal repairs."""
+
+    return str(artifact.campaign_root_work_id or artifact.proposal["work_id"])
+
+
 def _fidelity_required(proposal: Mapping[str, Any]) -> bool:
     """Return whether the proposal's earned rung requires fidelity approval."""
 
@@ -3014,6 +3227,7 @@ def _matching_attempts(
         and record.get("identities", {}).get("runner") == _runner_identity()
         and record.get("identities", {}).get("author_prompt")
         == proposal.get("author", {}).get("prompt_sha256")
+        and record.get("identities", {}).get("checker_prompt") == _checker_prompt_hash()
         and record.get("environment", {}).get("lock_sha256") == environment.lock_sha256
         and record.get("environment", {}).get("resolved_export_sha256")
         == environment.resolved_export_sha256
@@ -3072,10 +3286,18 @@ def _attempt_policy_satisfied(
         if (
             attempt.get("result") == "succeeded"
             and receipt.get("present")
+            and receipt.get("constructor_started")
+            and receipt.get("constructor_completed")
+            and receipt.get("input_completed")
+            and receipt.get("forward_started")
             and receipt.get("forward_completed")
             and observation.get("exit_code") == 0
             and observation.get("signal") is None
             and complete_output
+            and input_signature_matches_contract(
+                receipt.get("input_signature"),
+                proposal.get("proposed_facts", {}).get("input_contract", {}),
+            )
             and clean
             and mode in {"train", "eval"}
         ):
@@ -3152,25 +3374,13 @@ def _driver_failure_attempt(
             "source": source,
             "evidence": evidence,
             "recipe": recipe,
-            "environment": stable_hash(environment or "environment-unavailable"),
-            "execution": stable_hash(
-                {"stable_id": item.stable_id, "stage": stage, "environment": environment}
-            ),
+            "environment": None,
+            "execution": None,
             "runner": stable_hash("menagerie.crawler.driver.v1"),
             "author_prompt": proposal.get("author", {}).get("prompt_sha256"),
-            "checker_prompt": stable_hash("codex_accuracy_checker_v2"),
+            "checker_prompt": _checker_prompt_hash(),
         },
-        "environment": {
-            "family": environment or "not-created",
-            "target": config.target,
-            "env_id": environment or "not-created",
-            "lock_sha256": stable_hash(environment or "not-created"),
-            "resolved_export_sha256": stable_hash(environment or "not-created"),
-            "python": platform.python_version(),
-            "packages_manifest_sha256": stable_hash(environment or "not-created"),
-            "compiler_identity": platform.python_compiler() or "unknown-compiler",
-            "sdk_identity": platform.platform() or "unknown-sdk",
-        },
+        "environment": None,
         "host": {
             "machine_id": config.machine_id,
             "os": platform.system().lower() or "unknown-os",
@@ -3218,10 +3428,10 @@ def _driver_failure_attempt(
             "wall_seconds": 0.0,
             "cpu_seconds": 0.0,
             "peak_rss_bytes": 0,
-            "stdout_sha256": stable_hash(""),
+            "stdout_sha256": None,
             "stdout_bytes": 0,
             "stdout_tail": "",
-            "stderr_sha256": stable_hash(""),
+            "stderr_sha256": None,
             "stderr_bytes": 0,
             "stderr_tail": "",
             "full_log_local_path": "driver-observed",
@@ -3518,7 +3728,7 @@ def _assemble_terminal_model(
             and metadata_item["rung_check"]["verdict"] == "accurate"
         )
     if metadata_accepted and metadata_item is not None:
-        validate_external_metadata_for_write(facts["external_metadata"], metadata_item)
+        validate_authored_facts_for_write(facts, metadata_item)
         metadata_state = "accepted"
     else:
         metadata_state = "failed"
@@ -3571,6 +3781,8 @@ def _assemble_terminal_model(
     kind = status_code.split(":", 1)[0]
     stage = status_code.split(":", 1)[1] if kind == "failed" else None
     attempt_ids = [str(attempt["attempt_id"]) for attempt in attempts]
+    last_environment = attempts[-1].get("environment") if attempts else None
+    environment_facts = last_environment if isinstance(last_environment, Mapping) else {}
     source_rung = str(facts["source_resolution"]["rung"])
     metadata_gate_id = metadata_gate["gate_id"] if metadata_gate is not None else None
     metadata_verdict = metadata_item["verdict"] if metadata_item is not None else None
@@ -3623,22 +3835,18 @@ def _assemble_terminal_model(
             "prompt_sha256": (
                 str(metadata_gate["checker"]["prompt_sha256"])
                 if metadata_gate is not None
-                else stable_hash("codex_accuracy_checker_v2")
+                else _checker_prompt_hash()
             ),
         },
         "execution": {
             "execution_identity": stable_hash(
                 {"stable_id": item.stable_id, "status": status_code, "attempts": attempt_ids}
             ),
-            "environment_id": str(
-                attempts[-1].get("environment", {}).get("env_id", item.route.intent)
-                if attempts
-                else item.route.intent
-            ),
+            "environment_id": str(environment_facts.get("env_id", item.route.intent)),
             "env_generation": (
                 str(attempts[-1]["identities"]["environment"])
-                if attempts
-                else stable_hash(item.route.intent)
+                if attempts and attempts[-1]["identities"]["environment"] is not None
+                else stable_hash({"terminal_without_environment": item.route.intent})
             ),
             "accepted_attempt_ids": [],
             "confirmation_policy": "single-mechanical",
@@ -3702,7 +3910,11 @@ def _assemble_terminal_model(
         "budget": {
             "author_sessions_used": int(artifact is not None),
             "author_sessions_max": 3,
-            "gate_rounds_used": _metadata_repair_count(gates, item.stable_id)
+            "gate_rounds_used": _metadata_repair_count(
+                gates,
+                item.stable_id,
+                _artifact_lineage(artifact) if artifact is not None else None,
+            )
             + int(fidelity_gate is not None),
             "run_revisions_used": 1,
             "explicit_grants": [],
@@ -3744,7 +3956,7 @@ def _assemble_run_model(
     metadata_item = next(
         gate_item for gate_item in metadata_gate["items"] if gate_item["stable_id"] == stable_id
     )
-    validate_external_metadata_for_write(facts["external_metadata"], metadata_item)
+    validate_authored_facts_for_write(facts, metadata_item)
     fidelity_gate = _find_gate(gates, stable_id, "fidelity", proposal)
     required_fidelity = _fidelity_required(proposal)
     if required_fidelity and fidelity_gate is None:
@@ -3938,6 +4150,38 @@ def _funnel_snapshot(current: Mapping[str, Mapping[str, Any]]) -> FunnelSnapshot
     )
 
 
+_AUDIT_FIDELITY_FLAGS = frozenset(
+    {
+        "classic-audit",
+        "legacy-known-slop",
+        "known-slop",
+        "slop-detected-r1-audit",
+        "presumed-slop",
+        "legacy-fidelity-claim",
+        "legacy-faithful-claimer",
+        "faithful-claimer",
+    }
+)
+
+
+def _completion_workflows(current: Mapping[str, Mapping[str, Any]]) -> tuple[str, ...]:
+    """Return pending workflow gates not expressible by terminal partition shape."""
+
+    workflows: list[str] = []
+    for record in current.values():
+        flags = set(record.get("flags", [])) | set(
+            record.get("intake", {}).get("preserved_legacy_flags", [])
+        )
+        fidelity = record.get("fidelity", {})
+        if flags & _AUDIT_FIDELITY_FLAGS and (
+            not fidelity.get("gate_id")
+            or fidelity.get("verdict")
+            not in {"match", "minor-drift", "major-drift", "slop", "cannot-verify"}
+        ):
+            workflows.append("fidelity-pending")
+    return tuple(workflows)
+
+
 def _review_report(current: Mapping[str, JsonObject], threshold: int) -> JsonObject:
     """Build the blocking checkpoint report required for human review."""
 
@@ -4057,6 +4301,8 @@ def _r5_terminal_status(artifact: AuthorArtifact) -> Optional[str]:
 def _environment_failure(exc: Exception) -> tuple[str, str]:
     """Map a typed environment-lifecycle exception to its closed failure reason."""
 
+    if _is_sandbox_unavailable(exc):
+        return "sandbox-unavailable", "sandbox-unavailable"
     if isinstance(exc, EnvironmentProbeError):
         return "environment", "probe-failed"
     if isinstance(exc, EnvironmentSolveError):
@@ -4064,6 +4310,15 @@ def _environment_failure(exc: Exception) -> tuple[str, str]:
     if isinstance(exc, DiskRecoveryError):
         return "resource", "disk-floor"
     return "environment", "build-failed"
+
+
+def _is_sandbox_unavailable(exc: Exception) -> bool:
+    """Recognize the supervisor's typed fail-closed sandbox signal."""
+
+    return (
+        type(exc).__name__ == "SandboxUnavailableError"
+        and type(exc).__module__ == "menagerie.crawler.policy"
+    )
 
 
 def _future_reset(now: str, signal: CheckerBackoffSignal) -> str:
