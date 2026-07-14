@@ -101,8 +101,70 @@ def test_r16_c1_typed_storage_data_ptr_read_is_unverifiable(tmp_path: Path) -> N
 
 
 # --------------------------------------------------------------------------------------
+# H1: consume-then-byte-EXACT-restore TOCTOU is caught at the consuming op, not lost at end.
+# --------------------------------------------------------------------------------------
+
+
+class _ActivationToctouRestore(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.fc(x)
+        arr = y.detach().numpy()  # zero-copy alias of y
+        saved = arr[0, 0].copy()
+        arr[0, 0] = 99.0  # transient write -- LIVE for the next traced op
+        z = y * 2.0  # traced consumer reads the mutated bytes (99 flows into z)
+        arr[0, 0] = saved  # byte-exact restore -> end-of-forward sees before == after
+        return z
+
+
+class _BufferToctouRestore(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("b", torch.ones(4))
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        a = self.b.detach().numpy()
+        saved = a[0].copy()
+        a[0] = 50.0
+        z = self.fc(x) + self.b  # traced consumer reads the mutated buffer bytes
+        a[0] = saved  # byte-exact restore
+        return z
+
+
+def test_r16_h1_activation_toctou_restore_is_unverifiable(tmp_path: Path) -> None:
+    """A transient numpy write consumed by a traced op then restored -> UNVERIFIABLE, not VERIFIED."""
+    torch.manual_seed(0)
+    model = _ActivationToctouRestore().eval()
+    x = torch.randn(2, 4)
+    assert _status(model, x, x, tmp_path) is not PathFaithfulness.VERIFIED
+
+
+def test_r16_h1_buffer_toctou_restore_is_unverifiable(tmp_path: Path) -> None:
+    """A transient buffer numpy write consumed by a traced op then restored -> UNVERIFIABLE."""
+    torch.manual_seed(0)
+    model = _BufferToctouRestore().eval()
+    x = torch.randn(2, 4)
+    assert _status(model, x, x, tmp_path) is not PathFaithfulness.VERIFIED
+
+
+# --------------------------------------------------------------------------------------
 # No over-trigger: a read-only numpy exposure whose source is then consumed stays VERIFIED.
 # --------------------------------------------------------------------------------------
+
+
+class _ReadonlyNumpyThenConsume(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.fc(x)
+        _ = y.detach().numpy().sum()  # read-only: bytes never change at any consumption
+        return y * 2.0  # source consumed by a traced op AFTER the read-only exposure
 
 
 class _StorageNbytesThenConsume(nn.Module):
@@ -114,6 +176,23 @@ class _StorageNbytesThenConsume(nn.Module):
         y = self.fc(x)
         _ = y.detach().untyped_storage().nbytes()  # pure metadata, no pointer, no value
         return y * 2.0
+
+
+def test_r16_no_over_trigger_readonly_numpy_then_consume_stays_verified(tmp_path: Path) -> None:
+    """A read-only ``.numpy().sum()`` whose source is later consumed stays VERIFIED + value-correct.
+
+    The per-consumption byte sample must NOT trip a read-only exposure: the bytes are identical at
+    every consumption. VERIFIED is asserted on the ORIGINAL input (a ``.numpy()`` exposure is
+    witnessed conservatively on a CHANGED input, matching the r15 read-only contract).
+    """
+    torch.manual_seed(0)
+    x = torch.randn(2, 4)
+    model = _ReadonlyNumpyThenConsume().eval()
+    loaded = _save_load(model, x, tmp_path)
+    result = loaded.run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    with torch.no_grad():
+        assert torch.allclose(model(x.clone()), result.output)
 
 
 def test_r16_no_over_trigger_storage_nbytes_then_consume_stays_verified(tmp_path: Path) -> None:
