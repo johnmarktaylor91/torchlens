@@ -458,6 +458,11 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     # input-disconnected and orphaned away, so the runnable descriptor would
     # otherwise never learn the taken branch was nondeterministic + unwitnessed.
     _record_pruned_rng_control_flow(self, orphan_nodes)
+    # Record pruned in-place ops that mutated an UNLABELLED (invisible ``.data`` / foreign)
+    # alias: their write targets storage the sparse DAG cannot model, so dropping the op
+    # silently loses the mutation. Recording it lets the runnable descriptor stay honestly
+    # UNVERIFIABLE instead of VERIFYING a replay that omits the write.
+    _record_pruned_alias_mutation(self, orphan_nodes)
     if getattr(self, "keep_orphans", False):
         for orphan_label in orphan_nodes:
             self._raw_layer_dict[orphan_label].is_orphan = True
@@ -557,6 +562,32 @@ def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> No
             continue
         if _rng_orphan_drove_control_or_output(self, label, escape_sources):
             record_pruned_rng_control_source(self, label)
+
+
+def _record_pruned_alias_mutation(self: "Trace", orphan_nodes: set[str]) -> None:
+    """Flag orphan-pruned in-place ops that mutated an unlabelled alias, for the runnable descriptor.
+
+    Capture records (in a weak-keyed side table) every in-place op whose mutation TARGET carried no
+    resolvable capture label -- an invisible ``.data`` / foreign alias (``y.data.add_(5.0)``). Such
+    an op's output slot feeds nothing in the tensor graph, so orphan removal drops it and the write
+    to the aliased storage is silently lost: a sparse replay recomputes the PRE-mutation value and
+    would falsely report VERIFIED. Recording the raw label of each candidate that is ACTUALLY pruned
+    lets the runnable producer downgrade witness completeness so the model is honestly UNVERIFIABLE +
+    NOT_APPLICABLE. A candidate op that survives pruning is graph-represented (replayed) and never
+    recorded. This only reads orphan metadata and records a side-channel fact; it never alters the
+    visible graph.
+    """
+
+    from ..backends.torch.completeness_witness import (
+        alias_mutation_candidate_labels,
+        record_pruned_alias_mutation_source,
+    )
+
+    candidates = alias_mutation_candidate_labels(self)
+    if not candidates:
+        return
+    for label in candidates & orphan_nodes:
+        record_pruned_alias_mutation_source(self, label)
 
 
 def _expand_seen_nodes_to_complete_func_call_groups(

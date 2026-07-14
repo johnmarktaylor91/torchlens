@@ -32,7 +32,7 @@ from ._tl import (
     get_tensor_meta,
     set_tensor_label,
 )
-from .completeness_witness import internal_scalar_read
+from .completeness_witness import internal_scalar_read, record_alias_mutation_candidate
 from .aliasing import (
     detect_torch_alias_contract,
     detect_torch_output_alias_contract,
@@ -3812,26 +3812,30 @@ def _log_output_tensor_info(
     # contiguous tensor). ``is_inplace`` must reflect ACTUAL mutation, not mere label
     # presence: a false in-place flag makes the runnable descriptor persist a version/alias
     # relation the replay cannot satisfy on the original input (MUTATION_VERSION_MISMATCH).
+    # In-place ops return the same tensor object as one of their inputs, so the output already
+    # carries a capture label; a NON-mutating identity return (``x.cpu()`` on CPU) ALSO returns
+    # its receiver and so ALSO carries a label. ``is_inplace`` must reflect ACTUAL mutation, not
+    # mere label presence. A mutation can ALSO target an UNLABELLED alias (``y.data.add_(5.0)``):
+    # ``y.data`` is a fresh Python tensor object with no TorchLens metadata, yet ``add_`` genuinely
+    # mutates ``y``'s storage. Keying is_inplace on label presence (``prior_label is None -> never
+    # in-place``) misses exactly that case, so the runnable descriptor never learns the write and
+    # would falsely VERIFY -- the version-bump / mutation-signature test below classifies it right.
     prior_label = get_tensor_label(t)
-    if prior_label is None:
-        # A fresh op output carries no prior label: never in-place.
-        fields_dict["is_inplace"] = False
-    elif not _should_keep_alias_mutation_contract(self):
-        # Default forward-only capture: preserve the historical label-based flag exactly
-        # (no runnable replay consumes it, so identity returns are harmless and goldens
-        # stay unchanged).
-        fields_dict["is_inplace"] = True
+    if not _should_keep_alias_mutation_contract(self):
+        # Default forward-only capture: preserve the historical label-based flag exactly (no
+        # runnable replay consumes it, so identity returns are harmless and goldens stay unchanged).
+        fields_dict["is_inplace"] = prior_label is not None
     else:
-        # Runnable / intervention / backward / validation: require a real version bump on
-        # the aliased tensor. The version baseline is the tensor's version when TorchLens
-        # last labeled it as an op output; a bump since then is a genuine mutation, an
-        # unchanged version is an identity return. When no baseline exists (a raw input /
-        # param / buffer first touched here, or a setter-style op whose logged output is a
-        # reconstructed target), fall back to the operator's mutation signature -- an
-        # in-place-named op (``add_`` / ``mul_`` / ``copy_`` / ``__i*``), a setter dunder
-        # (``__setitem__`` / ``__delitem__``, which mutate but do not end in ``_``), or an
-        # ``out=`` tensor kwarg -- so genuine mutation is still detected while a
-        # non-mutating identity return (``x.cpu()`` / ``x.contiguous()``) is not.
+        # Runnable / intervention / backward / validation: require a real version bump on the
+        # aliased tensor. The version baseline is the tensor's version when TorchLens last labeled
+        # it as an op output; a bump since then is a genuine mutation, an unchanged version is an
+        # identity return. When no baseline exists (a raw input / param / buffer first touched here,
+        # a setter-style op whose logged output is a reconstructed target, or an UNLABELLED ``.data``
+        # alias), fall back to the operator's mutation signature -- an in-place-named op (``add_`` /
+        # ``mul_`` / ``copy_`` / ``__i*``), a setter dunder (``__setitem__`` / ``__delitem__``, which
+        # mutate but do not end in ``_``), or an ``out=`` tensor kwarg -- so genuine mutation is
+        # still detected while a non-mutating identity return (``x.cpu()`` / ``x.contiguous()``,
+        # which has no mutation-signature name) is not, and does not crash.
         baseline = _LABEL_VERSION_SNAPSHOT.get(t)
         current_version = getattr(t, "_version", None)
         if baseline is not None and current_version is not None:
@@ -3849,6 +3853,13 @@ def _log_output_tensor_info(
                 and any(isinstance(item, torch.Tensor) for item in out_kwarg)
             )
             fields_dict["is_inplace"] = bool(name_mutating or has_out_tensor)
+        # A genuine mutation whose TARGET carries NO resolvable capture label (an invisible
+        # ``.data`` / foreign alias) cannot be connected into the tensor graph: the op is orphan-
+        # pruned and the write is silently dropped. Record the op so orphan removal can flag it as
+        # a lost mutation -> UNVERIFIABLE, instead of a false VERIFIED with the mutation gone. An
+        # in-place op on a LABELLED alias is graph-connected and replayed, so it is not recorded.
+        if fields_dict["is_inplace"] and prior_label is None:
+            record_alias_mutation_candidate(self, _label_raw)
     grad_fn_cls = type(t.grad_fn) if t.grad_fn is not None else None
     fields_dict["grad_fn_class_name"] = None if grad_fn_cls is None else grad_fn_cls.__name__
     fields_dict["grad_fn_class_qualname"] = (

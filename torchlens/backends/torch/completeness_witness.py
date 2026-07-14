@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import torch
+import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ... import _state
@@ -216,6 +217,12 @@ class _WitnessState:
     callback_ns: int = 0
     census: bool = True
     record_escapes: bool = False
+    # (source_tensor, version_at_escape, byte_snapshot) for each mutable zero-copy alias
+    # (``numpy`` / ``__array__``) handed to the host this forward. Checked for host write-back
+    # at forward end. Strong refs keep the aliased storage alive until the comparison.
+    writeback_watch: list[tuple[torch.Tensor, int | None, torch.Tensor]] = field(
+        default_factory=list
+    )
 
 
 HOST_ESCAPE_OPERATORS = frozenset(
@@ -333,6 +340,22 @@ PROPERTY) is patched separately as a source-recording property (see
 ``INVISIBLE_HOST_ESCAPE_PROPERTIES``); ``__dlpack_device__`` returns only device metadata
 (a ``(device_type, device_id)`` pair, no data) and ``__array_interface__`` is absent on
 ``torch.Tensor``, so neither is a value escape.
+"""
+
+MUTABLE_ALIAS_ESCAPE_FUNCS = frozenset({"numpy", "__array__"})
+"""Census-invisible conversions that hand back a ZERO-COPY, MUTABLE host alias sharing the
+source tensor's storage.
+
+``tensor.numpy()`` (without ``force=True``) and ``np.asarray(tensor)`` / ``tensor.__array__()``
+(without a dtype conversion) return a NumPy array that aliases the tensor's memory. A host WRITE
+through that array (``t.numpy()[0] = 99``) mutates the source tensor's BYTES but emits NO aten
+dispatch and bumps NO torch version counter, so the sparse replay recomputes the pre-write value
+and would falsely VERIFY. These funcs are therefore additionally bracketed with a
+before/after byte+version snapshot (see ``_observe_invisible_host_escapes``): a source whose bytes
+changed with its version UNCHANGED was host-mutated through the alias -> opaque write-back ->
+UNVERIFIABLE. ``.tolist()`` copies into Python lists (writes never reach the source) and
+``__dlpack__`` is handled by source-witnessing, so neither needs the write-back watch. A read-only
+``.numpy().sum()`` leaves the bytes unchanged and stays honestly VERIFIED.
 """
 
 INVISIBLE_HOST_ESCAPE_PROPERTIES = frozenset({"__cuda_array_interface__"})
@@ -461,6 +484,91 @@ def record_pruned_rng_control_source(trace: Any, label: str) -> None:
         labels = set()
         _PRUNED_RNG_CONTROL_LABELS[trace] = labels
     labels.add(label)
+
+
+_ALIAS_MUTATION_CANDIDATE_LABELS: "weakref.WeakKeyDictionary[Any, set[str]]" = (
+    weakref.WeakKeyDictionary()
+)
+"""Per-trace raw labels of genuine in-place ops whose mutation TARGET carries NO resolvable
+capture label (an invisible ``.data`` / foreign alias).
+
+``y.data.add_(5.0)`` dispatches a real ``aten.add_`` that mutates ``y``'s storage, but the
+receiver (``y.data``) is a fresh, UNLABELLED Python tensor object, so TorchLens cannot connect
+the mutation into the tensor graph: the op's output slot feeds nothing and it is orphan-pruned
+away, silently dropping the write. Each such op's raw label is recorded here at capture. Orphan
+removal then intersects these candidates with the pruned set (``_record_pruned_alias_mutation``)
+to record the ones actually dropped, so the runnable producer downgrades to
+UNVERIFIABLE + NOT_APPLICABLE rather than falsely VERIFYING with the mutation lost. An in-place op
+on a LABELLED alias (``y.detach().add_()`` / ``clone()+add_``) has a graph-connected target, is
+NOT recorded here, and is replayed normally.
+"""
+
+
+def alias_mutation_candidate_labels(trace: Any) -> frozenset[str]:
+    """Return raw labels of in-place ops that mutate an unlabelled (invisible-alias) target."""
+
+    labels = _ALIAS_MUTATION_CANDIDATE_LABELS.get(trace)
+    return frozenset(labels) if labels else frozenset()
+
+
+def record_alias_mutation_candidate(trace: Any, label: str) -> None:
+    """Record one in-place op whose mutation target carries no resolvable capture label."""
+
+    labels = _ALIAS_MUTATION_CANDIDATE_LABELS.get(trace)
+    if labels is None:
+        labels = set()
+        _ALIAS_MUTATION_CANDIDATE_LABELS[trace] = labels
+    labels.add(label)
+
+
+_PRUNED_ALIAS_MUTATION_LABELS: "weakref.WeakKeyDictionary[Any, set[str]]" = (
+    weakref.WeakKeyDictionary()
+)
+"""Per-trace raw labels of unlabelled-alias in-place ops that were ORPHAN-PRUNED.
+
+An alias-mutation candidate (see ``_ALIAS_MUTATION_CANDIDATE_LABELS``) whose op is dropped by
+orphan removal mutated storage the sparse DAG does not model. The recorded taken forward would
+replay WITHOUT the mutation (wrong output), yet nothing else witnesses the drop. Kept weak-keyed
+and out of the Trace field schema like the pruned-RNG table, so the runnable producer downgrades
+witness completeness to keep such a model honestly UNVERIFIABLE + NOT_APPLICABLE. A candidate op
+that SURVIVES pruning is graph-represented and never recorded here.
+"""
+
+
+def pruned_alias_mutation_source_labels(trace: Any) -> frozenset[str]:
+    """Return raw labels of unlabelled-alias in-place ops that were orphan-pruned."""
+
+    labels = _PRUNED_ALIAS_MUTATION_LABELS.get(trace)
+    return frozenset(labels) if labels else frozenset()
+
+
+def record_pruned_alias_mutation_source(trace: Any, label: str) -> None:
+    """Record one orphan-pruned in-place op that mutated an unlabelled (invisible) alias."""
+
+    labels = _PRUNED_ALIAS_MUTATION_LABELS.get(trace)
+    if labels is None:
+        labels = set()
+        _PRUNED_ALIAS_MUTATION_LABELS[trace] = labels
+    labels.add(label)
+
+
+_HOST_ESCAPE_MUTABLE_WRITEBACK: "weakref.WeakSet[Any]" = weakref.WeakSet()
+"""Traces where a host WRITE-BACK through a mutable zero-copy alias was detected.
+
+``y.detach().numpy()[0] = 99`` hands the host a NumPy array that shares ``y``'s storage; the write
+mutates ``y``'s bytes with NO aten dispatch and NO version bump, so the sparse replay recomputes
+the pre-write value and would falsely VERIFY. The escape observer brackets each ``numpy`` /
+``__array__`` call with a byte+version snapshot (see ``_observe_invisible_host_escapes``); a source
+whose bytes changed while its version stayed put was host-mutated through the alias and its trace is
+recorded here so the runnable producer fails closed (UNVERIFIABLE). A read-only conversion leaves
+the bytes unchanged and is never recorded, so it stays honestly VERIFIED. Presence-only.
+"""
+
+
+def host_escape_has_mutable_writeback(trace: Any) -> bool:
+    """Return whether a host write-back through a mutable zero-copy alias was detected."""
+
+    return trace in _HOST_ESCAPE_MUTABLE_WRITEBACK
 
 
 _COMPLETENESS_WITNESS_FILE = Path(__file__).resolve()
@@ -911,15 +1019,38 @@ class _CompletenessDispatchMode(TorchDispatchMode):
         return result
 
 
-def _make_invisible_escape_wrapper(original: Any, state: _WitnessState) -> Any:
+def _snapshot_writeback_source(state: _WitnessState, source: torch.Tensor) -> None:
+    """Record a before-image of a mutable zero-copy alias source for later write-back detection.
+
+    Snapshots ``source``'s version and a detached byte clone under ``pause_logging`` (so the clone
+    is not itself captured or censused) and holds a strong ref to ``source`` so the shared storage
+    stays alive until the forward-end comparison. A source that cannot be snapshotted (e.g. a meta
+    tensor with no storage) fails closed immediately.
+    """
+
+    try:
+        with _state.pause_logging():
+            version = getattr(source, "_version", None)
+            before = source.detach().clone()
+    except (RuntimeError, TypeError, NotImplementedError):
+        _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
+        return
+    state.writeback_watch.append((source, version, before))
+
+
+def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: str) -> Any:
     """Wrap a tensor->host conversion method to record its SOURCE, then call through.
 
     The wrapper records the receiver tensor (the escape SOURCE) into the shared escape
     tables, gated to the owner thread / active trace / logging-enabled window so a
     TorchLens-internal conversion (run under ``pause_logging``) is never mistaken for a
-    user escape. It always calls the original method unchanged, so values, goldens, and
+    user escape. For a mutable zero-copy alias conversion (``numpy`` / ``__array__``) it also
+    records a before-image so a subsequent host write-back through the alias is detected at
+    forward end. It always calls the original method unchanged, so values, goldens, and
     outputs are byte-identical.
     """
+
+    watch_writeback = name in MUTABLE_ALIAS_ESCAPE_FUNCS
 
     def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
         if (
@@ -929,7 +1060,32 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState) -> Any:
             and _state._active_trace is state.trace
         ):
             _record_escape_source_tensor(state.trace, self, invisible=True)
+            if watch_writeback:
+                _snapshot_writeback_source(state, self)
         return original(self, *args, **kwargs)
+
+    return wrapper
+
+
+def _make_module_escape_wrapper(original: Any, state: _WitnessState) -> Any:
+    """Wrap a module-level tensor->host export function to record its tensor argument SOURCE.
+
+    Used for ``torch.utils.dlpack.to_dlpack`` (and, if patchable, ``torch._C._to_dlpack``), which
+    are C bindings that NEVER call the Python ``Tensor.__dlpack__`` the method patch covers. The
+    wrapper records every tensor operand as an escape source under the active-forward gate, then
+    calls through unchanged so the exported capsule is byte-identical.
+    """
+
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        if (
+            threading.get_ident() == state.owner_thread_id
+            and _state._logging_enabled
+            and _state._active_trace is state.trace
+        ):
+            for value in (*args, *kwargs.values()):
+                if isinstance(value, torch.Tensor):
+                    _record_escape_source_tensor(state.trace, value, invisible=True)
+        return original(*args, **kwargs)
 
     return wrapper
 
@@ -975,10 +1131,24 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
         if original is None:
             continue
         try:
-            setattr(torch.Tensor, name, _make_invisible_escape_wrapper(original, state))
+            setattr(torch.Tensor, name, _make_invisible_escape_wrapper(original, state, name))
         except (TypeError, AttributeError):
             continue
         originals[name] = original
+    # Module-level zero-copy export C bindings that bypass the Tensor method patch:
+    # ``torch.utils.dlpack.to_dlpack`` == ``torch._C._to_dlpack`` never calls
+    # ``Tensor.__dlpack__``. Patch the Python-level function (and ``torch._C._to_dlpack`` if the
+    # C module permits assignment) to record the exported tensor as an escape source.
+    module_originals: list[tuple[Any, str, Any]] = []
+    for module, func_name in _MODULE_ESCAPE_TARGETS():
+        original_func = getattr(module, func_name, None)
+        if original_func is None:
+            continue
+        try:
+            setattr(module, func_name, _make_module_escape_wrapper(original_func, state))
+        except (TypeError, AttributeError):
+            continue
+        module_originals.append((module, func_name, original_func))
     property_originals: dict[str, Any] = {}
     for name in INVISIBLE_HOST_ESCAPE_PROPERTIES:
         descriptor = type(torch.Tensor).__dict__.get(name) or torch.Tensor.__dict__.get(name)
@@ -997,11 +1167,57 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
                 setattr(torch.Tensor, name, original)
             except (TypeError, AttributeError):
                 pass
+        for module, func_name, original_func in module_originals:
+            try:
+                setattr(module, func_name, original_func)
+            except (TypeError, AttributeError):
+                pass
         for name, descriptor in property_originals.items():
             try:
                 setattr(torch.Tensor, name, descriptor)
             except (TypeError, AttributeError):
                 pass
+        _check_writeback_watch(state)
+
+
+def _MODULE_ESCAPE_TARGETS() -> tuple[tuple[Any, str], ...]:
+    """Return ``(module, attribute)`` pairs for module-level zero-copy export C bindings."""
+
+    targets: list[tuple[Any, str]] = []
+    dlpack_mod = getattr(torch.utils, "dlpack", None)
+    if dlpack_mod is not None:
+        targets.append((dlpack_mod, "to_dlpack"))
+    c_mod = getattr(torch, "_C", None)
+    if c_mod is not None and hasattr(c_mod, "_to_dlpack"):
+        targets.append((c_mod, "_to_dlpack"))
+    return tuple(targets)
+
+
+def _check_writeback_watch(state: _WitnessState) -> None:
+    """Detect a host write-back through any watched mutable zero-copy alias at forward end.
+
+    A watched source whose bytes changed while its version counter is UNCHANGED was mutated by a
+    host write through the alias (no aten dispatch, no version bump); its trace is recorded so the
+    runnable producer fails closed. A source whose version bumped was mutated by a tracked in-place
+    op (replayed or flagged separately) and is not counted here; a source whose bytes are unchanged
+    was only read and stays VERIFIED.
+    """
+
+    if not state.writeback_watch:
+        return
+    try:
+        with _state.pause_logging():
+            for source, version, before in state.writeback_watch:
+                try:
+                    current_version = getattr(source, "_version", None)
+                    if current_version == version and not torch.equal(source, before):
+                        _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
+                        break
+                except (RuntimeError, TypeError, NotImplementedError):
+                    _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
+                    break
+    finally:
+        state.writeback_watch.clear()
 
 
 def _effective_mode() -> CompletenessWitnessMode:

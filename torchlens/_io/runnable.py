@@ -284,6 +284,14 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # draw (result influences nothing) is never recorded, so a deterministic
         # model stays VERIFIED.
         completeness = WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
+    if _has_pruned_alias_mutation(trace) and completeness is WitnessCompleteness.COMPLETE:
+        # An in-place op mutated an UNLABELLED alias (``y.data.add_(5.0)``): the write targets
+        # storage the sparse DAG cannot model, so the op was orphan-pruned and the mutation is
+        # lost. A replay recomputes the PRE-mutation value (wrong output) yet nothing else
+        # witnesses the drop, so keep the run honestly UNVERIFIABLE + NOT_APPLICABLE rather than
+        # a false VERIFIED with the mutation gone. An in-place op on a LABELLED alias is graph-
+        # connected (replayed) and is never recorded, so a normal model stays VERIFIED.
+        completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
     diagnostics.extend(_preflight_output_contracts(trace, ops))
     diagnostics = _deduplicate_diagnostics(diagnostics)
     preflight = ProducerPreflight(passed=not diagnostics, diagnostics=tuple(diagnostics))
@@ -1519,6 +1527,24 @@ def _has_pruned_rng_control_flow(trace: Any) -> bool:
     return bool(pruned_rng_control_source_labels(trace))
 
 
+def _has_pruned_alias_mutation(trace: Any) -> bool:
+    """Return whether an in-place op mutating an unlabelled alias was orphan-pruned.
+
+    Postprocess orphan removal records (in a weak-keyed side table) any in-place op whose
+    mutation target carried no resolvable capture label -- an invisible ``.data`` / foreign
+    alias (``y.data.add_(5.0)``) -- that was actually dropped from the visible graph (see
+    ``graph_traversal._record_pruned_alias_mutation``). The dropped write never reaches the
+    runnable descriptor, so a replay recomputes the pre-mutation value: the producer consults
+    this fact to downgrade witness completeness and keep the model honestly UNVERIFIABLE +
+    NOT_APPLICABLE rather than falsely VERIFIED with the mutation lost. A model whose in-place
+    ops all target graph-connected (labelled) tensors records nothing here.
+    """
+
+    from ..backends.torch.completeness_witness import pruned_alias_mutation_source_labels
+
+    return bool(pruned_alias_mutation_source_labels(trace))
+
+
 def _has_forward_value_override_intervention(trace: Any) -> bool:
     """Return whether the capture applied a forward-modifying value-override.
 
@@ -1602,6 +1628,7 @@ def _escape_witnesses(
     """
 
     from ..backends.torch.completeness_witness import (
+        host_escape_has_mutable_writeback,
         host_escape_has_unattributable_bool,
         host_escape_has_unattributable_opaque,
         host_escape_state_source_names,
@@ -1611,14 +1638,19 @@ def _escape_witnesses(
     witnesses: list[ControlWitness] = []
     escaped_labels, unresolvable_escape = _host_escape_source_labels(trace)
     state_names = host_escape_state_source_names(trace)
-    # Fail closed for the three genuinely-unwitnessable escape shapes: an orphan-pruned
-    # census tensor-op source (:_host_escape_source_labels), an unattributable (``.data``
-    # alias) bool control predicate covered by no net, and an unattributable census-
-    # invisible (``.tolist``/``.numpy``) escape with no source slot.
+    # Fail closed for the genuinely-unwitnessable escape shapes: an orphan-pruned census
+    # tensor-op source (:_host_escape_source_labels), an unattributable (``.data`` alias) bool
+    # control predicate covered by no net, an unattributable census-invisible
+    # (``.tolist``/``.numpy``) escape with no source slot, and a detected host WRITE-BACK through
+    # a mutable zero-copy alias (``.numpy()[0] = 99``) -- the write mutates the source bytes with
+    # no dispatch and no version bump, so the sparse replay recomputes the pre-write value and the
+    # source digest cannot witness it; keep the run honestly UNVERIFIABLE.
     incomplete = unresolvable_escape
     if host_escape_has_unattributable_bool(trace):
         incomplete = True
     if host_escape_has_unattributable_opaque(trace):
+        incomplete = True
+    if host_escape_has_mutable_writeback(trace):
         incomplete = True
 
     ints, floats, sequences = _collect_baked_literal_values(calls)
