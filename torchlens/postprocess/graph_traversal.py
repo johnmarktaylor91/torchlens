@@ -453,6 +453,11 @@ def _remove_orphan_nodes(self: "Trace") -> None:
         for orphan in self._orphan_logs
         if getattr(orphan, "has_saved_activation", False)
     ]
+    # Record pruned torch-RNG ops that DROVE control flow before the orphan
+    # metadata is stripped: an ``if torch.rand(()) > 0.5`` predicate is
+    # input-disconnected and orphaned away, so the runnable descriptor would
+    # otherwise never learn the taken branch was nondeterministic + unwitnessed.
+    _record_pruned_rng_control_flow(self, orphan_nodes)
     if getattr(self, "keep_orphans", False):
         for orphan_label in orphan_nodes:
             self._raw_layer_dict[orphan_label].is_orphan = True
@@ -470,6 +475,73 @@ def _remove_orphan_nodes(self: "Trace") -> None:
             new_layer_list.append(tensor_label)
     self._raw_layer_labels_list = new_layer_list
     self._raw_layer_dict = new_layer_dict
+
+
+def _rng_orphan_drove_control_or_output(
+    self: "Trace", start_label: str, escape_sources: frozenset[str]
+) -> bool:
+    """Return whether an orphaned RNG op's value steered control flow or output.
+
+    Walks the forward (child) chain from ``start_label``. The RNG result
+    "influenced control" when the op itself or any descendant is a recorded
+    tensor->host escape source (its value was read by ``bool()``/``.item()`` to
+    steer pure-Python control flow); it "influenced output" when a descendant is
+    an output node (defensive: an output-reaching op is not normally orphaned).
+    A genuinely-dead RNG draw whose result feeds nothing reaches neither and
+    returns ``False``, so it stays VERIFIED.
+    """
+
+    seen: set[str] = set()
+    stack = [start_label]
+    while stack:
+        label = stack.pop()
+        if label in seen:
+            continue
+        seen.add(label)
+        op = self._raw_layer_dict.get(label)
+        if op is None:
+            continue
+        if label in escape_sources or getattr(op, "is_output", False):
+            return True
+        for child_label in getattr(op, "children", ()) or ():
+            if child_label not in seen:
+                stack.append(child_label)
+    return False
+
+
+def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> None:
+    """Flag pruned torch-RNG ops that drove control flow, for the runnable descriptor.
+
+    An orphaned op is an RNG op when its captured callable maps to an ATen
+    ``nondeterministic_seeded`` overload. When such an op's value reached a
+    control decision (or, defensively, an output), the recorded taken branch is
+    nondeterministic yet fully pruned from the visible graph. Recording its raw
+    label in the weak-keyed side table lets the runnable producer downgrade
+    witness completeness so the model is honestly UNVERIFIABLE + NOT_APPLICABLE
+    instead of falsely VERIFIED + ATTESTED. This only reads orphan metadata and
+    records a side-channel fact; it never alters the visible graph.
+    """
+
+    from ..backends.torch.completeness_witness import (
+        host_escape_source_labels,
+        record_pruned_rng_control_source,
+    )
+    from ..utils.rng import aten_qualname_is_seeded_rng
+
+    escape_sources = host_escape_source_labels(self)
+    for label in orphan_nodes:
+        op = self._raw_layer_dict.get(label)
+        if op is None:
+            continue
+        func_id = getattr(op, "func_id", None)
+        if func_id is None:
+            continue
+        if not aten_qualname_is_seeded_rng(
+            getattr(func_id, "namespace", None), getattr(func_id, "qualname", None)
+        ):
+            continue
+        if _rng_orphan_drove_control_or_output(self, label, escape_sources):
+            record_pruned_rng_control_source(self, label)
 
 
 def _expand_seen_nodes_to_complete_func_call_groups(

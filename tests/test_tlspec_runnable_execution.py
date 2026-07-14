@@ -356,6 +356,143 @@ def test_loaded_sparse_inplace_call_does_not_corrupt_staged_activations(
     assert torch.equal(fork_relu.out, fork_relu_before_output_edit)
 
 
+class SliceAssignModel(nn.Module):
+    """Setter-style in-place mutator: ``__setitem__`` returns ``None``."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Mutate a slice in place and return the mutated tensor."""
+
+        value = value.clone()
+        value[0] = value[0] * 4
+        return value
+
+
+@pytest.mark.smoke
+def test_loaded_sparse_setitem_runs_and_verifies_on_original_input(
+    tmp_path: Path,
+) -> None:
+    """A ``__setitem__`` (None-returning) mutator replays without a false divergence.
+
+    Regression for the setter-style output aliasing gap: ``Tensor.__setitem__``
+    mutates its target in place but returns ``None``, so the recorded tensor
+    output slot must alias the mutation target rather than expecting a tensor
+    return. Before the fix, original-input replay crashed with a spurious
+    PathDivergenceError instead of returning the correct, VERIFIED result.
+    """
+
+    model = SliceAssignModel()
+    inputs = torch.arange(6.0).reshape(2, 3)
+    expected = model(inputs.clone())
+    trace = tl.trace(
+        model,
+        inputs.clone(),
+        capture=CaptureOptions(intervention_ready=True, cache=False),
+    )
+    path = tmp_path / "slice-assign.tlspec"
+    trace.save(path, level="runnable")
+
+    result = tl.load(path).run(inputs=inputs.clone())
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert torch.equal(result.output, expected)
+
+    # A changed input still replays the mutation faithfully (aliasing/mutation
+    # honesty is preserved -- attestation is simply not applicable off-original).
+    changed = torch.arange(10.0, 16.0).reshape(2, 3)
+    changed_result = tl.load(path).run(inputs=changed.clone())
+    assert torch.equal(changed_result.output, model(changed.clone()))
+    assert changed_result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+class TorchRngBranchModel(nn.Module):
+    """A branch predicate driven by a torch-RNG draw (input-disconnected)."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Take a nondeterministic arm based on a pruned ``rand -> gt`` predicate."""
+
+        if torch.rand(()) > 0.5:
+            return x * 2.0
+        return x + 1.0
+
+
+class DeadRngDrawModel(nn.Module):
+    """A deterministic model whose RNG draw's result influences nothing."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Draw an RNG value, discard it, and return a deterministic result."""
+
+        _ = torch.rand(()) * 2.0 + 1.0
+        return x * 2.0
+
+
+@pytest.mark.smoke
+def test_torch_rng_driven_branch_is_unverifiable_never_attested(tmp_path: Path) -> None:
+    """A pruned torch-RNG control predicate must never report VERIFIED + ATTESTED.
+
+    Regression for the orphan-removal honesty gap: ``if torch.rand(()) > 0.5`` is
+    input-disconnected, so the ``rand -> gt`` predicate chain is orphaned out of the
+    visible graph and the runnable descriptor never sees it. Replay always takes the
+    single baked arm while a fresh seeded forward flips ~50% of the time, so the run
+    must be honestly UNVERIFIABLE + NOT_APPLICABLE for every seed -- including the
+    seed of the live forward -- rather than a false VERIFIED + ATTESTED.
+    """
+
+    model = TorchRngBranchModel()
+    inputs = torch.tensor([1.0, 2.0])
+    path = tmp_path / "torch-rng-branch.tlspec"
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+        ),
+    )
+    trace.save(path, level="runnable", include_activations=True)
+
+    # The baked arm is whatever the capture forward took; pick a run seed whose
+    # TRUE live forward takes the OTHER arm, then run at that exact seed.
+    baked = tl.load(path).run(inputs=inputs, seed=0).output
+    flip_seed = 3 if torch.allclose(baked, inputs * 2.0) else 1
+    report = tl.load(path).run(inputs=inputs, seed=flip_seed).report
+    assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+    # Changed input is equally unverifiable (the taken branch is unwitnessed).
+    changed = tl.load(path).run(inputs=torch.tensor([5.0, -1.0]), seed=0).report
+    assert changed.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert changed.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+@pytest.mark.smoke
+def test_dead_torch_rng_draw_stays_verified_and_attested(tmp_path: Path) -> None:
+    """A genuinely-dead torch-RNG draw must not over-trigger the honesty downgrade.
+
+    The RNG value here feeds ops but influences neither output nor control, so the
+    model is deterministic and its original-input replay must stay VERIFIED +
+    ATTESTED. This guards the gate against firing on dead draws.
+    """
+
+    model = DeadRngDrawModel()
+    inputs = torch.tensor([1.0, 2.0])
+    path = tmp_path / "dead-rng-draw.tlspec"
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+        ),
+    )
+    trace.save(path, level="runnable", include_activations=True)
+
+    result = tl.load(path).run(inputs=inputs, seed=0)
+    assert torch.equal(result.output, inputs * 2.0)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
+
+
 @pytest.mark.parametrize(
     ("model", "expected_type"),
     [

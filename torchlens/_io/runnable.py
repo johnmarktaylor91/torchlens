@@ -261,6 +261,16 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # An unbound state slot whose capture value cannot be re-verified leaves a
         # state-derived escape unobservable: keep the run honestly UNVERIFIABLE.
         completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
+    if _has_pruned_rng_control_flow(trace) and completeness is WitnessCompleteness.COMPLETE:
+        # A torch-RNG draw steered pure-Python control flow, so its predicate chain
+        # is input-disconnected and was orphaned out of the visible graph. The
+        # recorded taken branch is nondeterministic (a fresh seeded forward may take
+        # the other arm) yet unwitnessed, so the sparse replay cannot reproduce or
+        # even observe the decision: keep the run honestly UNVERIFIABLE +
+        # NOT_APPLICABLE, never a false VERIFIED + ATTESTED. A genuinely-dead RNG
+        # draw (result influences nothing) is never recorded, so a deterministic
+        # model stays VERIFIED.
+        completeness = WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
     diagnostics.extend(_preflight_output_contracts(trace, ops))
     diagnostics = _deduplicate_diagnostics(diagnostics)
     preflight = ProducerPreflight(passed=not diagnostics, diagnostics=tuple(diagnostics))
@@ -1422,6 +1432,24 @@ def _value_matches_baked_literal(
             return False
         return flat in sequences
     return False
+
+
+def _has_pruned_rng_control_flow(trace: Any) -> bool:
+    """Return whether a torch-RNG op that steered control flow was orphan-pruned.
+
+    Postprocess orphan removal records (in a weak-keyed side table) any
+    ``nondeterministic_seeded`` torch-RNG op whose result drove a pure-Python
+    control decision but was input-disconnected and pruned from the visible
+    graph (see ``graph_traversal._record_pruned_rng_control_flow``). Such an op
+    never reaches the runnable descriptor, so the producer consults this fact to
+    downgrade witness completeness and keep the model honestly UNVERIFIABLE +
+    NOT_APPLICABLE rather than falsely VERIFIED + ATTESTED. A deterministic model
+    (or one with only genuinely-dead RNG draws) records nothing here.
+    """
+
+    from ..backends.torch.completeness_witness import pruned_rng_control_source_labels
+
+    return bool(pruned_rng_control_source_labels(trace))
 
 
 def _tensor_source_escape_witnesses(
