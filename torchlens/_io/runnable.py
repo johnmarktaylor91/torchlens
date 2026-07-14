@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, fields, is_dataclass, replace
 from enum import Enum
 from hashlib import sha256
@@ -255,6 +255,24 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # UNVERIFIABLE. The unified pass folds the former tensor-op and unbound-state
         # incomplete signals into this single fail-closed downgrade.
         completeness = WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
+    if (
+        _has_forward_value_override_intervention(trace)
+        and completeness is WitnessCompleteness.COMPLETE
+    ):
+        # A forward-modifying intervention (e.g. ``zero_ablate``/``replace_with``)
+        # substituted the captured value of an op INSIDE the forward pass. The sparse
+        # DAG records only the ORIGINAL op recipe, so a replay recomputes the
+        # un-intervened value: the captured output/activations reflect the intervened
+        # forward, but the recorded ops do not encode the override. TorchLens cannot
+        # cheaply prove at save time whether the override happens to be byte-identical
+        # to the natural output (an op-representable no-op like ``scale(1.0)``) without
+        # re-executing, so it fails closed here. The single completeness downgrade
+        # drives BOTH honesty layers together -- ``_path_faithfulness`` reports
+        # UNVERIFIABLE and ``_numeric_attestation_check`` reports NOT_APPLICABLE (never
+        # a false VERIFIED, and never a contradicting NumericAttestationError). An
+        # observe-only or backward/grad intervention leaves the forward output
+        # reproducible byte-for-byte and is NOT flagged here, so it still VERIFIES.
+        completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
     if _has_pruned_rng_control_flow(trace) and completeness is WitnessCompleteness.COMPLETE:
         # A torch-RNG draw steered pure-Python control flow, so its predicate chain
         # is input-disconnected and was orphaned out of the visible graph. The
@@ -509,6 +527,53 @@ def sparse_descriptor_to_json(descriptor: SparseRunDescriptor) -> dict[str, Any]
     return value
 
 
+def detach_sparse_core_nested_trace_backrefs(value: Any) -> None:
+    """Detach runtime-only nested-``Trace`` back-references from a scrub product.
+
+    A conditional arm records a private ``_trace`` back-reference to its owning
+    ``Trace`` (bound in postprocess finalization to serve the ``evaluation_ops`` /
+    ``execution_ops`` convenience accessors). ``ConditionalAccessor`` has no
+    ``PORTABLE_STATE_SPEC``, so the bundle scrub returns it verbatim and the arm's
+    ``_trace`` still points at the LIVE trace -- dragging that trace's
+    ``_runnable_capture_state`` (and every other live tensor field) into the value-free
+    sparse core through ``conditionals._list.<i>.arms.<j>._trace``. The top-level
+    capture-state is dropped by ``Trace.PORTABLE_STATE_SPEC`` (``FieldPolicy.DROP``) and
+    routed to the separate ``state_dict_v1`` blob; the arm back-reference must get the
+    SAME treatment. Arm replay is driven entirely by the descriptor's recorded
+    ``conditional_arm_entry_edges`` control witnesses and top-level state, never by this
+    back-reference, so it is dropped (not routed): the sparse core stays value-free.
+
+    This mutates only the passed SCRUB-PRODUCT container (a throwaway dict built by the
+    bundle scrub for pickling) -- it rebuilds the ``conditionals`` entry from detached
+    shallow arm copies and leaves the LIVE ``Trace`` fully intact (its own accessor
+    object is untouched, so ``evaluation_ops`` keeps working after ``save``). It is a
+    no-op for the frozen ``SparseRunDescriptor`` projection (which carries no nested
+    trace back-reference), and it does NOT weaken the tensor-payload tripwire: any
+    OTHER stray tensor still fails :func:`assert_sparse_core_has_no_tensor_payload`.
+    """
+
+    import copy as _copy
+
+    from ..data_classes.trace import Conditional, ConditionalAccessor
+
+    if not isinstance(value, MutableMapping):
+        return
+    accessor = value.get("conditionals")
+    if not isinstance(accessor, ConditionalAccessor):
+        return
+    detached: list[Conditional] = []
+    for conditional in accessor.values():
+        detached_arms = []
+        for arm in conditional.arms:
+            arm_copy = _copy.copy(arm)
+            arm_copy._trace = None
+            detached_arms.append(arm_copy)
+        conditional_copy = _copy.copy(conditional)
+        conditional_copy.arms = detached_arms
+        detached.append(conditional_copy)
+    value["conditionals"] = ConditionalAccessor(detached)
+
+
 def assert_sparse_core_has_no_tensor_payload(value: Any) -> None:
     """Assert that a sparse core contains no tensor or tensor-blob value.
 
@@ -524,6 +589,13 @@ def assert_sparse_core_has_no_tensor_payload(value: Any) -> None:
     """
 
     from . import BlobRef
+
+    # Detach runtime-only nested-Trace back-references (conditional arm ``_trace``)
+    # from the scrub product BEFORE the value-free invariant is enforced. These are
+    # not sparse-core payload; leaving them bound would drag the live trace's
+    # capture-state tensors into the core (mirrors the top-level DROP-and-route). The
+    # tensor-payload walk below is unchanged and still fails on any genuine stray.
+    detach_sparse_core_nested_trace_backrefs(value)
 
     seen: set[int] = set()
 
@@ -1444,6 +1516,35 @@ def _has_pruned_rng_control_flow(trace: Any) -> bool:
     from ..backends.torch.completeness_witness import pruned_rng_control_source_labels
 
     return bool(pruned_rng_control_source_labels(trace))
+
+
+def _has_forward_value_override_intervention(trace: Any) -> bool:
+    """Return whether the capture applied a forward-modifying value-override.
+
+    A forward intervention that REPLACED an op's output value (``zero_ablate``,
+    ``replace_with``, ``scale``, ``mean_ablate``, ...) makes the captured forward
+    diverge from what the recorded sparse DAG ops recompute: the DAG stores only the
+    original op recipe, never the value substitution. Such an artifact cannot
+    faithfully re-run the intervention-captured forward, so the producer downgrades
+    witness completeness to keep the run honestly UNVERIFIABLE + NOT_APPLICABLE
+    rather than falsely VERIFIED (with a contradicting NumericAttestationError when
+    activations are archived).
+
+    Only forward-direction, value-replacing interventions are flagged. An
+    observe-only intervention (``replaced=False``) or a backward/grad intervention
+    (``direction != "forward"``) leaves the forward output reproducible byte-for-byte
+    and is intentionally NOT flagged, so it still saves and VERIFIES. A plain,
+    non-intervened capture records no such op and is unchanged.
+    """
+
+    for op in getattr(trace, "layer_list", ()) or ():
+        if not getattr(op, "intervention_replaced", False):
+            continue
+        for record in getattr(op, "interventions", ()) or ():
+            direction = getattr(record, "direction", None)
+            if bool(getattr(record, "replaced", False)) and direction == "forward":
+                return True
+    return False
 
 
 def _escape_witnesses(
