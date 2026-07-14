@@ -1510,7 +1510,20 @@ def _tensor_source_escape_witnesses(
     seen_slots: set[str] = set()
     incomplete = False
     for op in ops:
-        if bool(getattr(op, "is_output", False)) or bool(getattr(op, "is_input", False)):
+        is_input = bool(getattr(op, "is_input", False))
+        is_output = bool(getattr(op, "is_output", False))
+        # Net 1 (census escape event, value-free): the dispatch census recorded a
+        # tensor->host scalar escape (``.item()`` / ``int()`` / ``float()`` /
+        # ``__index__`` / ``bool()`` -> ``aten._local_scalar_dense``) reading THIS
+        # op's output. This is the robust, arithmetic-proof signal and covers a
+        # transformed scalar, a dual-use escape, and a scalar steering control flow.
+        is_escape = str(op.label) in escaped_labels
+        # An input/output BOUNDARY op is witnessed ONLY when the census recorded a
+        # host escape reading it (``x * float(x)`` / ``if x:`` reads the RAW input;
+        # the input is exactly what changes on a changed-input run). A non-escape
+        # boundary op must be skipped -- digest-witnessing the always-present output
+        # op (or any un-escaped input) would falsely downgrade every changed run.
+        if (is_input or is_output) and not is_escape:
             continue
         if bool(getattr(op, "is_scalar_bool", False)) or bool(
             getattr(op, "is_terminal_bool", False)
@@ -1519,15 +1532,13 @@ def _tensor_source_escape_witnesses(
         slot_id = f"slot:{op.label}"
         if slot_id in seen_slots:
             continue
+        # An interior escape source is a call output; a boundary escape source
+        # (input / buffer) is a SOURCE slot with no producing call. Witness both:
+        # the run-side staleness check keys on the slot id, not the call id, and
+        # ``ControlWitness.call_id`` is nullable for source-slot witnesses.
         call_id = call_id_by_slot.get(slot_id)
-        if call_id is None:
+        if call_id is None and not (is_input or is_output):
             continue
-        # Net 1 (census escape event, value-free): the dispatch census recorded a
-        # tensor->host scalar escape (``.item()`` / ``int()`` / ``float()`` /
-        # ``__index__`` / ``bool()`` -> ``aten._local_scalar_dense``) reading THIS
-        # op's output. This is the robust, arithmetic-proof signal and covers a
-        # transformed scalar, a dual-use escape, and a scalar steering control flow.
-        is_escape = str(op.label) in escaped_labels
         is_sink = bool(getattr(op, "is_internal_sink", False))
         # Only candidate escape sources / internal sinks are inspected; a plain op
         # (including a selectively-unsaved one) is never read for its activation.

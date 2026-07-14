@@ -253,3 +253,67 @@ def test_escape_source_recorded_by_census(tmp_path: Path) -> None:
 
     trace = tl.trace(TransformedScalar(), torch.tensor([2.0, 2.0]), capture=_CAPTURE)
     assert host_escape_source_labels(trace), "census must record the .item() escape source"
+
+
+# --------------------------------------------------------------------------- #
+# R10-H1: a direct MODEL-INPUT escape must be witnessed, not skipped by the
+# is_input/is_output boundary filter. The input is exactly what changes on a
+# changed-input run, so an input-sourced escape is the MOST important to witness.
+# --------------------------------------------------------------------------- #
+class RawInputScalarEscape(nn.Module):
+    """R10-H1: ``float(x)`` reads the RAW input tensor on the host."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x * float(x)
+
+
+class RawInputBoolBranch(nn.Module):
+    """R10-H1: ``if x:`` truth-tests the RAW input on the host."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x:
+            return x * 2.0
+        return x + 7.0
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    ("model_cls", "capture_x", "changed_x"),
+    [
+        (RawInputScalarEscape, torch.tensor(3.0), torch.tensor(5.0)),
+        (RawInputBoolBranch, torch.tensor(1.0), torch.tensor(0.0)),
+    ],
+    ids=["raw_input_scalar", "raw_input_bool"],
+)
+def test_r10_input_escape_changed_is_unverifiable(
+    model_cls: type[nn.Module],
+    capture_x: torch.Tensor,
+    changed_x: torch.Tensor,
+    tmp_path: Path,
+) -> None:
+    path = _save(model_cls(), capture_x, tmp_path / "i.tlspec")
+    result = tl.load(path).run(inputs=changed_x.clone(), on_divergence="return_diverged")
+    _assert_not_blessed(result.report)
+    # The recorded taken path / baked literal is stale for the changed input.
+    assert not torch.allclose(result.output, model_cls()(changed_x.clone()))
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    ("model_cls", "capture_x"),
+    [
+        (RawInputScalarEscape, torch.tensor(3.0)),
+        (RawInputBoolBranch, torch.tensor(1.0)),
+    ],
+    ids=["raw_input_scalar", "raw_input_bool"],
+)
+def test_r10_input_escape_original_still_verified(
+    model_cls: type[nn.Module],
+    capture_x: torch.Tensor,
+    tmp_path: Path,
+) -> None:
+    path = _save(model_cls(), capture_x, tmp_path / "i.tlspec")
+    result = tl.load(path).run(inputs=capture_x.clone())
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not result.report.poisoned
+    assert torch.allclose(result.output, model_cls()(capture_x.clone()))
