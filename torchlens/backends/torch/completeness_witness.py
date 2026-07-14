@@ -18,6 +18,7 @@ model validating its own forward pass cannot trigger it. See docs/LIMITATIONS.md
 
 from __future__ import annotations
 
+import gc
 import sys
 import threading
 import time
@@ -224,6 +225,17 @@ class _WitnessState:
     writeback_watch: list[tuple[torch.Tensor, int | None, torch.Tensor]] = field(
         default_factory=list
     )
+    # Weakrefs to the mutable zero-copy HOST alias OBJECTS (a ``numpy`` / ``__array__`` ndarray
+    # or a ``storage`` TypedStorage handle) handed to the host this forward. At forward end a
+    # single scoped ``gc.collect()`` runs iff this list is non-empty (rare); any weakref STILL
+    # ALIVE afterwards means the alias OUTLIVED the forward (e.g. stashed on ``self``) -> a
+    # post-forward host-writable window the end-of-forward byte compare cannot see -> UNVERIFIABLE
+    # (r17 retention dimension of the write class). A transient LOCAL alias is collected -> the
+    # source stays VERIFIED. ``untyped_storage()`` is deliberately EXCLUDED: torch caches its
+    # Python wrapper ON the tensor, so a weakref to it stays alive whenever the (legitimately
+    # retained / output) source tensor is alive, which would over-trigger the read-only
+    # ``untyped_storage().nbytes()`` / ``.size()`` case.
+    alias_retention_watch: list["weakref.ref[Any]"] = field(default_factory=list)
 
 
 HOST_ESCAPE_OPERATORS = frozenset(
@@ -378,6 +390,29 @@ bytes unchanged and stays honestly VERIFIED. ``data_ptr()`` is the exception (r1
 a RAW pointer that a foreign READ (baking a stale literal) or a post-snapshot WRITE can use with no
 observable trace at all, so a genuine user ``data_ptr()`` call fails closed to UNVERIFIABLE (see
 ``_HOST_ESCAPE_RAW_POINTER``), never relying on the byte watch alone.
+"""
+
+RETAINED_ALIAS_WATCH_FUNCS = frozenset({"numpy", "__array__", "storage"})
+"""Mutable zero-copy host-alias conversions whose RETURNED ALIAS OBJECT is weakref-tracked for
+RETENTION past the forward (r17 retention dimension of the write class).
+
+The write-class guarantee is "no UNOBSERVED host write into captured tensor memory during the
+forward." The end-of-forward byte compare (:func:`_check_writeback_watch`) only witnesses a write
+that lands BEFORE the forward returns. A mutable zero-copy host alias whose OBJECT outlives the
+forward (``self.alias = y.numpy()``) is a host-writable window that stays open AFTER the compare --
+a later ``self.alias[0] = 99`` mutates the captured tensor's bytes invisibly, so the sparse replay
+recomputes the pre-write value and would falsely VERIFY+ATTEST. :func:`_check_alias_retention`
+closes that gap: if the alias object survives a scoped ``gc.collect()`` at forward end it was
+RETAINED -> UNVERIFIABLE; a transient LOCAL alias is collected -> the source stays VERIFIED.
+
+``numpy`` / ``__array__`` (ndarray) and ``storage`` (``TypedStorage``) return INDEPENDENT alias
+objects whose liveness cleanly reflects USER retention -- both are collected the instant the last
+user reference drops, even while the (output) source tensor is still alive. ``untyped_storage`` is
+EXCLUDED because torch CACHES its ``UntypedStorage`` wrapper on the tensor, so its weakref stays
+alive whenever the source tensor is alive (confounding retention with legitimate output/state
+retention and over-triggering the read-only ``untyped_storage().nbytes()`` case). ``data_ptr`` is
+excluded: it returns a raw ``int`` (no persistent window object) and already fails closed via
+``_HOST_ESCAPE_RAW_POINTER`` (r15-H1).
 """
 
 INVISIBLE_HOST_ESCAPE_PROPERTIES = frozenset({"__cuda_array_interface__"})
@@ -1171,6 +1206,23 @@ def _snapshot_writeback_source(state: _WitnessState, source: torch.Tensor) -> No
     state.writeback_watch.append((source, version, before))
 
 
+def _register_retained_alias(state: _WitnessState, alias: Any) -> None:
+    """Weakref-track a mutable zero-copy host alias OBJECT for forward-end retention detection.
+
+    ``alias`` is the object handed to the host (a ``numpy`` / ``__array__`` ndarray or a
+    ``storage`` ``TypedStorage`` handle). A weakref -- never a strong ref -- lets
+    :func:`_check_alias_retention` observe at forward end whether the user KEPT the alias
+    (still alive after a scoped ``gc.collect()`` -> retained host-writable window ->
+    UNVERIFIABLE) or let it die (transient local -> VERIFIED). An alias object that cannot be
+    weakref'd cannot be proven dead, so it fails closed to UNVERIFIABLE.
+    """
+
+    try:
+        state.alias_retention_watch.append(weakref.ref(alias))
+    except TypeError:
+        _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
+
+
 def _iter_dispatch_tensors(
     args: tuple[Any, ...], kwargs: dict[str, Any] | None
 ) -> Iterator[torch.Tensor]:
@@ -1269,8 +1321,13 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
     # a genuine user call fails closed to UNVERIFIABLE. ``untyped_storage()`` / ``storage()`` keep
     # the watch-only write-back treatment (their value reads are already UNVERIFIABLE).
     is_raw_pointer = name == "data_ptr"
+    # A mutable zero-copy host alias whose OBJECT can OUTLIVE the forward (numpy ndarray /
+    # __array__ ndarray / storage() TypedStorage) is weakref-tracked for retention (r17); a
+    # transient local alias is collected at forward end and stays VERIFIED.
+    watch_retention = name in RETAINED_ALIAS_WATCH_FUNCS
 
     def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
+        do_retention = False
         if (
             isinstance(self, torch.Tensor)
             and threading.get_ident() == state.owner_thread_id
@@ -1293,7 +1350,14 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
             # mutable alias is never called internally, so it is always watched, as in r13.)
             if watch_writeback and not (is_storage_bridge and _internal_read_active()):
                 _snapshot_writeback_source(state, self)
-        return original(self, *args, **kwargs)
+                # Only weakref-track a retention-eligible alias when it is a genuine user
+                # exposure (same gate as the byte snapshot), so an internal storage read is
+                # never treated as a retained host window.
+                do_retention = watch_retention
+        result = original(self, *args, **kwargs)
+        if do_retention:
+            _register_retained_alias(state, result)
+        return result
 
     return wrapper
 
@@ -1456,6 +1520,9 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
             except (TypeError, AttributeError):
                 pass
         _check_writeback_watch(state)
+        # r17: after the within-forward byte watch clears its strong source refs, detect any
+        # mutable host alias RETAINED past the forward (a post-forward host-writable window).
+        _check_alias_retention(state)
 
 
 def _STORAGE_RAW_POINTER_TARGETS() -> tuple[Any, ...]:
@@ -1523,6 +1590,41 @@ def _check_writeback_watch(state: _WitnessState) -> None:
                     break
     finally:
         state.writeback_watch.clear()
+
+
+def _check_alias_retention(state: _WitnessState) -> None:
+    """Flag a mutable zero-copy host alias RETAINED past the forward (r17 retention dimension).
+
+    The end-of-forward byte compare (:func:`_check_writeback_watch`) can only witness a host
+    write-back that lands BEFORE the forward returns. A mutable zero-copy host alias whose OBJECT
+    outlives the forward (``self.alias = y.numpy()``) leaves a host-writable window OPEN past the
+    compare: a later ``self.alias[0] = 99`` mutates the captured tensor's bytes with no aten
+    dispatch, no version bump, and no byte the watch can re-inspect, so the sparse replay would
+    recompute the pre-write value and falsely VERIFY+ATTEST.
+
+    Detection is sound and minimal. It runs ONLY when at least one retention-eligible alias was
+    handed out this forward (``alias_retention_watch`` non-empty -- rare), so escape-free captures
+    pay nothing and golden captures stay byte-identical. A single scoped ``gc.collect()`` reclaims
+    every alias whose last user reference has dropped; any weakref STILL ALIVE afterwards means the
+    alias was RETAINED (stashed on ``self`` / a closure / a container) -> a post-forward
+    host-writable window -> UNVERIFIABLE. A transient LOCAL alias (``arr = y.numpy(); arr.sum()``)
+    has already gone out of scope when the forward returned, so ``gc.collect()`` collects it and the
+    source stays VERIFIED. Because the tracked aliases (``numpy`` ndarray, ``storage`` TypedStorage)
+    are INDEPENDENT objects -- not cached on the tensor -- a retained-vs-transient distinction holds
+    even while the (output) source tensor is still alive.
+    """
+
+    watch = state.alias_retention_watch
+    if not watch:
+        return
+    try:
+        gc.collect()
+        for alias_ref in watch:
+            if alias_ref() is not None:
+                _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
+                break
+    finally:
+        watch.clear()
 
 
 def _effective_mode() -> CompletenessWitnessMode:
