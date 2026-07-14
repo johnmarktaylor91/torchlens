@@ -22,6 +22,7 @@ import sys
 import threading
 import time
 import warnings
+import weakref
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -33,6 +34,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from ... import _state
 from ..._errors import TorchLensCaptureGapWarning
+from ._tl import get_tensor_label
 from .escape_detection import ExpectedOriginalToken, _active_token
 
 CompletenessWitnessMode = Literal["off", "shadow"]
@@ -212,6 +214,65 @@ class _WitnessState:
     guard_pass_index: int
     events: list[_DispatchEvent] = field(default_factory=list)
     callback_ns: int = 0
+    census: bool = True
+    record_escapes: bool = False
+
+
+HOST_ESCAPE_OPERATORS = frozenset({"aten._local_scalar_dense.default"})
+"""Aten operators that hand a captured tensor's value to the Python host.
+
+``aten._local_scalar_dense.default`` is the single dispatcher footprint of every
+tensor->Python scalar escape TorchLens can see: ``.item()``, ``int()``,
+``float()``, ``__index__``, and ``bool()`` all lower to it. Recording the SOURCE
+tensor of this escape lets the runnable descriptor witness the escape by its
+producing op (keyed on the ESCAPE EVENT), never by correlating a baked literal by
+value. Multi-element ``.tolist()`` / ``.numpy()`` conversions do NOT emit this op
+(they are dispatcher-invisible) and are handled by the descriptor's complementary
+value-equality net.
+"""
+
+_HOST_ESCAPE_SOURCE_LABELS: "weakref.WeakKeyDictionary[Any, set[str]]" = weakref.WeakKeyDictionary()
+"""Per-trace raw producing-op labels of tensor->host escape sources.
+
+Kept off the Trace ``__dict__`` (and therefore out of portable-state scrub) in a
+weak-keyed side table so the runnable descriptor can read escape sources without
+registering a new serialized Trace field. Entries are dropped automatically when a
+Trace is garbage collected.
+"""
+
+
+def host_escape_source_labels(trace: Any) -> frozenset[str]:
+    """Return the recorded raw escape-source op labels for one trace."""
+
+    labels = _HOST_ESCAPE_SOURCE_LABELS.get(trace)
+    return frozenset(labels) if labels else frozenset()
+
+
+def _record_host_escape_source(trace: Any, func: Any, args: tuple[Any, ...]) -> None:
+    """Record the raw producing-op label of one tensor->host escape source.
+
+    When a captured tensor's value escapes to the Python host through
+    ``aten._local_scalar_dense`` (``.item()`` / ``int()`` / ``float()`` /
+    ``__index__`` / ``bool()``), the escaped value can be baked into a downstream
+    op literal (verbatim OR after arbitrary Python arithmetic) or steer pure-Python
+    control flow -- neither of which the sparse DAG can recompute. The source
+    tensor is the op whose output was read; its raw capture label is recorded so
+    the runnable descriptor can witness that source slot and, at run time, refuse a
+    false VERIFIED when the slot recomputes different bytes for a changed input.
+    """
+
+    if _operator_name(func) not in HOST_ESCAPE_OPERATORS or not args:
+        return
+    source = args[0]
+    if not isinstance(source, torch.Tensor):
+        return
+    label = get_tensor_label(source)
+    if isinstance(label, str):
+        sources = _HOST_ESCAPE_SOURCE_LABELS.get(trace)
+        if sources is None:
+            sources = set()
+            _HOST_ESCAPE_SOURCE_LABELS[trace] = sources
+        sources.add(label)
 
 
 def _operator_name(func: Any) -> str:
@@ -395,21 +456,26 @@ class _CompletenessDispatchMode(TorchDispatchMode):
                 and _is_aten_operator(func)
             )
             if in_scope:
-                owner = _active_token()
-                callsite = (
-                    _dispatch_callsite() if owner is None or owner.func_call_id is None else None
-                )
-                in_replacement_hook = _in_replacement_hook_frame()
-                mutates = _is_mutating_operator(func)
-                self.state.events.append(
-                    _DispatchEvent(
-                        _operator_name(func),
-                        owner,
-                        callsite,
-                        in_replacement_hook,
-                        mutates,
+                if self.state.record_escapes:
+                    _record_host_escape_source(self.state.trace, func, args)
+                if self.state.census:
+                    owner = _active_token()
+                    callsite = (
+                        _dispatch_callsite()
+                        if owner is None or owner.func_call_id is None
+                        else None
                     )
-                )
+                    in_replacement_hook = _in_replacement_hook_frame()
+                    mutates = _is_mutating_operator(func)
+                    self.state.events.append(
+                        _DispatchEvent(
+                            _operator_name(func),
+                            owner,
+                            callsite,
+                            in_replacement_hook,
+                            mutates,
+                        )
+                    )
         finally:
             self.state.callback_ns += time.perf_counter_ns() - started
         return func(*args, **(kwargs or {}))
@@ -602,15 +668,28 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
         "completeness_witness_callback_ns",
     ):
         trace.__dict__.setdefault(counter_field, 0)
-    if mode == "off":
+    # A runnable-eligible (``intervention_ready``) capture always records
+    # tensor->host escape sources so the sparse descriptor can witness the escape
+    # by its producing op, keyed on the ESCAPE EVENT. This is a passive observer:
+    # it records raw op labels only and never alters a captured op, so goldens are
+    # unchanged. The default (non-runnable) capture path installs nothing.
+    record_escapes = bool(getattr(trace, "intervention_ready", False))
+    if mode == "off" and not record_escapes:
         yield
         return
     guard_passes = getattr(trace, "capture_guard_passes", [])
     guard_pass_index = len(guard_passes) if guard_passes else 1
-    state = _WitnessState(trace, threading.get_ident(), guard_pass_index)
+    state = _WitnessState(
+        trace,
+        threading.get_ident(),
+        guard_pass_index,
+        census=(mode == "shadow"),
+        record_escapes=record_escapes,
+    )
     mode_context = _CompletenessDispatchMode(state)
     with mode_context:
         try:
             yield
         finally:
-            _finalize_census(state)
+            if mode == "shadow":
+                _finalize_census(state)
