@@ -3454,7 +3454,11 @@ def _add_autograd_saved_tensor(
     if is_functorch_wrapped_tensor(tensor):
         return 0, 0
     try:
-        data_ptr = tensor.data_ptr()
+        # TorchLens-internal autograd-saved-tensor dedup read: mark it as an internal read so
+        # the r14-H3 storage-bridge host-write watch (which patches ``Tensor.data_ptr``) does not
+        # mistake this bookkeeping pointer read for a user storage-alias exposure.
+        with internal_scalar_read():
+            data_ptr = tensor.data_ptr()
     except Exception:
         return 0, 0
     if data_ptr in seen_data_ptrs:
@@ -3853,12 +3857,16 @@ def _log_output_tensor_info(
                 and any(isinstance(item, torch.Tensor) for item in out_kwarg)
             )
             fields_dict["is_inplace"] = bool(name_mutating or has_out_tensor)
-        # A genuine mutation whose TARGET carries NO resolvable capture label (an invisible
-        # ``.data`` / foreign alias) cannot be connected into the tensor graph: the op is orphan-
-        # pruned and the write is silently dropped. Record the op so orphan removal can flag it as
-        # a lost mutation -> UNVERIFIABLE, instead of a false VERIFIED with the mutation gone. An
-        # in-place op on a LABELLED alias is graph-connected and replayed, so it is not recorded.
-        if fields_dict["is_inplace"] and prior_label is None:
+        # A genuine mutation whose op gets ORPHAN-PRUNED silently drops the write, whether the
+        # TARGET is an invisible ``.data`` / foreign alias (``y.data.add_(5.0)``, unlabelled) OR a
+        # LABELLED VIEW of one (``y.data.view(-1)[0] = 9``, whose ``__setitem__`` targets a labelled
+        # view yet is still input-disconnected and pruned). Keying the flag on ``prior_label is None``
+        # missed the labelled-view family (r14-H2), so record EVERY in-place op as a candidate and let
+        # orphan removal (``_record_pruned_alias_mutation``) keep only the ones ACTUALLY pruned ->
+        # UNVERIFIABLE, instead of a false VERIFIED with the mutation gone. An in-place op that stays
+        # graph-connected (``y.add_(2); return y``) is never in the pruned set, so it is not flagged
+        # and is replayed normally.
+        if fields_dict["is_inplace"]:
             record_alias_mutation_candidate(self, _label_raw)
     grad_fn_cls = type(t.grad_fn) if t.grad_fn is not None else None
     fields_dict["grad_fn_class_name"] = None if grad_fn_cls is None else grad_fn_cls.__name__
