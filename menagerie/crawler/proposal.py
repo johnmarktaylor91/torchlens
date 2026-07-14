@@ -5,31 +5,85 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Any, Iterable, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.constants import AUTHOR_PROPOSAL_SCHEMA_VERSION, SourceRung
 from menagerie.crawler.evidence import EvidenceValidationError, evidence_ids, validate_evidence
 from menagerie.crawler.identity import hash_bytes
+from menagerie.crawler.metadata import MANDATORY_EXTERNAL_FIELDS
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
 
 DEFAULT_GATED_CLAIMS = frozenset(
-    {
+    {f"external_metadata.{field}" for field in MANDATORY_EXTERNAL_FIELDS}
+    | {
         "external_metadata.description",
         "source_resolution.rung",
         "taxonomy",
         "input_contract",
-        "license",
-        "year",
-        "country",
     }
 )
 _FORBIDDEN_CALLS = frozenset({"eval", "exec", "compile"})
-_SLOP_TERMS = frozenset(
+_SLOP_PATTERNS = (
+    r"\bcompact\s+(?:stand[- ]?in|substitute|approximation|version)\b",
+    r"\bgeneric\s+(?:stand[- ]?in|substitute|implementation|version)\b",
+    r"\b(?:knowingly\s+)?simplif(?:ied|ication)\b",
+    r"\b(?:rough(?:ly)?\s+)?approximat(?:e|ed|ion)\b",
+    r"\btoy\s+(?:model|implementation|version|replica|example)\b",
+    r"\b(?:stand[- ]?in|placeholder|mock|surrogate|proxy)\b",
+    r"\b(?:minimal|lightweight|reduced)\s+(?:facsimile|imitation|replica|substitute)\b",
+    r"\brepresentative\s+(?:approximation|substitute|implementation)\b",
+)
+_SUPPORT_ALIASES = {
+    "citation": "external_metadata.citation",
+    "country": "external_metadata.country",
+    "license": "external_metadata.license",
+    "year": "external_metadata.year",
+}
+_GENERIC_MODEL_CALLS = frozenset(
     {
-        "compact stand-in",
-        "generic stand-in",
-        "simplified substitute",
-        "representative approximation",
+        "AdaptiveAvgPool1d",
+        "AdaptiveAvgPool2d",
+        "AvgPool1d",
+        "AvgPool2d",
+        "BatchNorm1d",
+        "BatchNorm2d",
+        "Conv1d",
+        "Conv2d",
+        "Dropout",
+        "Flatten",
+        "GELU",
+        "LayerNorm",
+        "Linear",
+        "MaxPool1d",
+        "MaxPool2d",
+        "ReLU",
+        "Sequential",
+        "Sigmoid",
+        "Softmax",
+        "Tanh",
+    }
+)
+_GENERIC_FAMILY_NAMES = frozenset(
+    {"feedforward", "mlp", "multilayer perceptron", "sequential", "simple neural network"}
+)
+_SUPPORT_STOPWORDS = frozenset(
+    {
+        "about",
+        "after",
+        "also",
+        "architecture",
+        "based",
+        "from",
+        "into",
+        "model",
+        "network",
+        "source",
+        "that",
+        "their",
+        "this",
+        "using",
+        "with",
     }
 )
 _WRITE_METHODS = frozenset(
@@ -113,7 +167,7 @@ def validate_author_proposal(
     evidence = _mapping(facts.get("evidence"), "evidence")
     claims = set(required_claims if required_claims is not None else DEFAULT_GATED_CLAIMS)
     if _citation_is_present(facts):
-        claims.add("citation")
+        claims.add("external_metadata.citation")
     try:
         evidence_report = validate_evidence(
             evidence,
@@ -124,8 +178,10 @@ def validate_author_proposal(
         )
     except EvidenceValidationError as exc:
         raise ProposalValidationError(str(exc)) from exc
+    _validate_claim_support(facts, evidence, claims)
     known_evidence = evidence_ids(evidence)
     _validate_citation(facts, known_evidence)
+    _validate_citation_consistency(facts)
     implementation = _mapping(facts.get("implementation"), "implementation")
     allowed_dir = Path(allowed_model_dir).resolve()
     code_path = _validate_code(implementation, rung, allowed_dir)
@@ -137,6 +193,7 @@ def validate_author_proposal(
         known_evidence,
         source_manifest,
     )
+    _validate_structural_slop(facts, code_path)
     _validate_anti_slop(facts)
     return ProposalValidationReport(
         stable_id=str(proposal["stable_id"]),
@@ -250,6 +307,284 @@ def _validate_citation(facts: Mapping[str, Any], known_evidence: frozenset[str])
     cited_ids = citation.get("source_evidence_ids")
     if not isinstance(cited_ids, list) or not cited_ids or not set(cited_ids) <= known_evidence:
         raise ProposalValidationError("citation references missing or fabricated evidence")
+
+
+def _validate_citation_consistency(facts: Mapping[str, Any]) -> None:
+    """Require the public citation to equal the accuracy-gated metadata citation.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the top-level and external-metadata citation blocks diverge.
+    """
+
+    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
+    external_citation = _mapping(metadata.get("citation"), "external_metadata.citation")
+    citation = _mapping(facts.get("citation"), "citation")
+    if external_citation != citation:
+        raise ProposalValidationError(
+            "top-level citation differs from accuracy-checked external_metadata.citation"
+        )
+
+
+def _validate_claim_support(
+    facts: Mapping[str, Any], evidence: Mapping[str, Any], required_claims: Iterable[str]
+) -> None:
+    """Verify that each evidence label is substantively bound to its proposed value.
+
+    Parameters
+    ----------
+    facts:
+        Complete proposed fact tree.
+    evidence:
+        Literal evidence block already verified against source bytes.
+    required_claims:
+        Claim paths requiring deterministic content support.
+
+    Raises
+    ------
+    ProposalValidationError
+        If a required label has no excerpt whose text supports the proposed value.
+    """
+
+    excerpts = evidence.get("excerpts")
+    if not isinstance(excerpts, list):
+        raise ProposalValidationError("evidence.excerpts must be a list")
+    support_texts: dict[str, list[str]] = {}
+    for excerpt in excerpts:
+        if not isinstance(excerpt, Mapping):
+            continue
+        text = excerpt.get("text")
+        supports = excerpt.get("supports")
+        if not isinstance(text, str) or not isinstance(supports, list):
+            continue
+        for support in supports:
+            if isinstance(support, str):
+                canonical = _SUPPORT_ALIASES.get(support, support)
+                support_texts.setdefault(canonical, []).append(text)
+
+    unsupported: list[str] = []
+    for claim in required_claims:
+        canonical = _SUPPORT_ALIASES.get(claim, claim)
+        texts = support_texts.get(canonical, [])
+        value = _claim_value(facts, canonical)
+        if not texts or not _text_supports_claim(canonical, value, "\n".join(texts)):
+            unsupported.append(canonical)
+    if unsupported:
+        raise ProposalValidationError(
+            "evidence excerpts do not substantively support claimed values: "
+            f"{sorted(set(unsupported))}"
+        )
+
+
+def _claim_value(facts: Mapping[str, Any], claim: str) -> object:
+    """Resolve a supported claim path into the proposed fact tree.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+    claim:
+        Dot-separated claim path or supported aggregate category.
+
+    Returns
+    -------
+    object
+        Proposed value for deterministic excerpt comparison.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the claim does not name a proposed value.
+    """
+
+    value: object = facts
+    for part in claim.split("."):
+        if not isinstance(value, Mapping) or part not in value:
+            raise ProposalValidationError(f"gated evidence claim does not name a fact: {claim}")
+        value = value[part]
+    return value
+
+
+def _text_supports_claim(claim: str, value: object, text: str) -> bool:
+    """Return whether literal excerpt text supports a proposed claim value.
+
+    Parameters
+    ----------
+    claim:
+        Canonical claim path.
+    value:
+        Proposed value at that path.
+    text:
+        Combined literal excerpts explicitly bound to the claim.
+
+    Returns
+    -------
+    bool
+        True when deterministic value-bearing tokens occur in the excerpt text.
+    """
+
+    normalized_text = _normalize_support_text(text)
+    if claim == "source_resolution.rung":
+        rung_terms = {
+            SourceRung.LIBRARY.value: ("library", "package", "registry", "official"),
+            SourceRung.VENDOR.value: ("upstream", "repository", "official", "source code"),
+            SourceRung.PORT.value: ("port", "translation", "source code"),
+            SourceRung.REIMPLEMENT.value: ("layer", "equation", "architecture", "forward"),
+            SourceRung.SKIP.value: ("insufficient", "unavailable", "not found", "search"),
+        }
+        return any(term in normalized_text for term in rung_terms.get(str(value), ()))
+    if value is None or value == []:
+        return True
+    if claim.endswith((".description", ".key_contribution")):
+        expected = _significant_tokens(str(value))
+        overlap = expected & set(normalized_text.split())
+        return len(overlap) >= min(2, len(expected)) if expected else False
+    if claim == "taxonomy":
+        family = value.get("family") if isinstance(value, Mapping) else None
+        if isinstance(family, str) and _normalize_support_text(family) not in normalized_text:
+            return False
+        return _matches_any_scalar(value, normalized_text, excluded={family})
+    if claim == "input_contract":
+        if not isinstance(value, Mapping):
+            return False
+        semantic_values = [
+            value.get("semantic_description"),
+            value.get("expected_output_semantics"),
+            *(
+                item.get("semantic_role")
+                for key in ("args", "kwargs", "non_tensor_values")
+                for item in value.get(key, [])
+                if isinstance(item, Mapping)
+            ),
+        ]
+        return _matches_any_scalar(semantic_values, normalized_text)
+    if claim.endswith(".citation") and isinstance(value, Mapping):
+        title = value.get("title")
+        year = value.get("year")
+        return _scalar_matches(title, normalized_text) and _scalar_matches(year, normalized_text)
+    if claim.endswith(".modes") and isinstance(value, Mapping):
+        return _matches_any_scalar(value.get("meaningful_modes"), normalized_text)
+    scalars = _positive_scalars(value)
+    return all(_scalar_matches(scalar, normalized_text) for scalar in scalars)
+
+
+def _matches_any_scalar(
+    value: object, normalized_text: str, *, excluded: set[object] | None = None
+) -> bool:
+    """Return whether any positive scalar value occurs in normalized excerpt text.
+
+    Parameters
+    ----------
+    value:
+        Nested value whose positive scalar leaves are candidates.
+    normalized_text:
+        Lowercase whitespace-normalized excerpt text.
+    excluded:
+        Optional scalar values not considered for the match.
+
+    Returns
+    -------
+    bool
+        True when at least one candidate scalar is represented.
+    """
+
+    excluded_values = excluded or set()
+    scalars = [scalar for scalar in _positive_scalars(value) if scalar not in excluded_values]
+    return not scalars or any(_scalar_matches(scalar, normalized_text) for scalar in scalars)
+
+
+def _positive_scalars(value: object) -> list[object]:
+    """Flatten positive JSON-like leaves used for evidence comparison.
+
+    Parameters
+    ----------
+    value:
+        Proposed scalar, sequence, or mapping.
+
+    Returns
+    -------
+    list[object]
+        Non-null, non-empty string and numeric leaves.
+    """
+
+    if isinstance(value, Mapping):
+        return [scalar for child in value.values() for scalar in _positive_scalars(child)]
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return [scalar for child in value for scalar in _positive_scalars(child)]
+    if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+        return [value] if str(value).strip() else []
+    return []
+
+
+def _scalar_matches(value: object, normalized_text: str) -> bool:
+    """Return whether one proposed scalar is represented in excerpt text.
+
+    Parameters
+    ----------
+    value:
+        Proposed scalar value.
+    normalized_text:
+        Lowercase whitespace-normalized excerpt text.
+
+    Returns
+    -------
+    bool
+        True when the scalar or its significant tokens occur.
+    """
+
+    if value is None:
+        return True
+    normalized_value = _normalize_support_text(str(value))
+    if not normalized_value:
+        return True
+    if f" {normalized_value} " in f" {normalized_text} ":
+        return True
+    tokens = _significant_tokens(normalized_value)
+    return bool(tokens) and tokens <= set(normalized_text.split())
+
+
+def _significant_tokens(value: str) -> set[str]:
+    """Return distinctive lowercase tokens suitable for evidence matching.
+
+    Parameters
+    ----------
+    value:
+        Proposed or excerpt text.
+
+    Returns
+    -------
+    set[str]
+        Tokens longer than three characters after generic-word removal.
+    """
+
+    return {
+        token
+        for token in _normalize_support_text(value).split()
+        if (len(token) > 3 or token.isdigit()) and token not in _SUPPORT_STOPWORDS
+    }
+
+
+def _normalize_support_text(value: str) -> str:
+    """Normalize text for conservative deterministic token comparison.
+
+    Parameters
+    ----------
+    value:
+        Text to normalize.
+
+    Returns
+    -------
+    str
+        Lowercase alphanumeric tokens separated by single spaces.
+    """
+
+    return " ".join(re.findall(r"[a-z0-9]+", value.lower()))
 
 
 def _validate_code(
@@ -500,7 +835,9 @@ def _validate_source_ladder(
         resolution, source_manifest
     ):
         raise ProposalValidationError("R4_REIMPLEMENT is forbidden when source code is available")
-    if rung in {SourceRung.PORT, SourceRung.REIMPLEMENT}:
+    if rung is SourceRung.VENDOR:
+        _validate_r2_source_binding(implementation, resolution, evidence, source_manifest)
+    if rung in {SourceRung.VENDOR, SourceRung.PORT, SourceRung.REIMPLEMENT}:
         source_map = implementation.get("source_to_code_map")
         if not isinstance(source_map, list) or not source_map:
             raise ProposalValidationError(f"{rung.value} requires a material source-to-code map")
@@ -528,6 +865,140 @@ def _validate_source_ladder(
         }
         if not cited & descriptive_ids:
             raise ProposalValidationError(f"{rung.value} did not cite transcribed descriptive text")
+
+
+def _validate_r2_source_binding(
+    implementation: Mapping[str, Any],
+    resolution: Mapping[str, Any],
+    evidence: Mapping[str, Any],
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+) -> None:
+    """Bind an R2 adapter to exact mirrored upstream bytes and mapped code.
+
+    Parameters
+    ----------
+    implementation:
+        R2 implementation block.
+    resolution:
+        Source-resolution block classifying authoritative implementation sources.
+    evidence:
+        Literal excerpt block already verified against controlled source bytes.
+    source_manifest:
+        Controlled-fetch manifest containing exact source hashes.
+
+    Raises
+    ------
+    ProposalValidationError
+        If upstream files or source-map rows do not bind to exact fetched bytes.
+    """
+
+    sources = _source_manifest_index(source_manifest)
+    declared_sources = resolution.get("sources")
+    if not isinstance(declared_sources, list):
+        raise ProposalValidationError("R2_VENDOR has no declared implementation sources")
+    declared_by_id = {
+        source.get("source_id"): source
+        for source in declared_sources
+        if isinstance(source, Mapping) and isinstance(source.get("source_id"), str)
+    }
+    upstream_files = implementation.get("upstream_files")
+    if not isinstance(upstream_files, list) or not upstream_files:
+        raise ProposalValidationError("R2_VENDOR requires exact mirrored upstream files")
+    upstream_source_ids: set[str] = set()
+    for upstream in upstream_files:
+        if not isinstance(upstream, Mapping):
+            raise ProposalValidationError("R2_VENDOR upstream file binding must be an object")
+        source_id = upstream.get("source_id")
+        source = sources.get(source_id) if isinstance(source_id, str) else None
+        if source is None:
+            raise ProposalValidationError("R2_VENDOR upstream file references an unfetched source")
+        declared = declared_by_id.get(source_id)
+        if not isinstance(declared, Mapping) or declared.get("role") != "implementation":
+            raise ProposalValidationError(
+                "R2_VENDOR upstream bytes are not classified as implementation source"
+            )
+        if upstream.get("sha256") != source.get("content_sha256"):
+            raise ProposalValidationError(
+                "R2_VENDOR upstream file hash does not match exact source bytes"
+            )
+        if declared.get("content_sha256") != source.get("content_sha256"):
+            raise ProposalValidationError(
+                "R2_VENDOR declared source does not match controlled source bytes"
+            )
+        upstream_source_ids.add(str(source_id))
+    source_map = implementation.get("source_to_code_map")
+    if not isinstance(source_map, list) or not source_map:
+        raise ProposalValidationError("R2_VENDOR requires an exact source-to-code map")
+    excerpts = evidence.get("excerpts")
+    if not isinstance(excerpts, list):
+        raise ProposalValidationError("R2_VENDOR source map has no literal evidence")
+    excerpt_bindings = {
+        (excerpt.get("evidence_id"), excerpt.get("source_id"), excerpt.get("locator"))
+        for excerpt in excerpts
+        if isinstance(excerpt, Mapping)
+    }
+    for mapping in source_map:
+        if not isinstance(mapping, Mapping):
+            raise ProposalValidationError("R2_VENDOR source-to-code binding must be an object")
+        source_id = mapping.get("source_id")
+        locator = mapping.get("source_locator")
+        if not isinstance(source_id, str) or source_id not in upstream_source_ids:
+            raise ProposalValidationError(
+                "R2_VENDOR source map does not reference bound upstream bytes"
+            )
+        if not isinstance(locator, str) or not locator.strip():
+            raise ProposalValidationError("R2_VENDOR source map lacks an exact source locator")
+        mapping_evidence = mapping.get("evidence_ids")
+        if not isinstance(mapping_evidence, list) or not any(
+            (evidence_id, source_id, locator) in excerpt_bindings
+            for evidence_id in mapping_evidence
+        ):
+            raise ProposalValidationError(
+                "R2_VENDOR source map locator is not bound to a verified exact excerpt"
+            )
+
+
+def _source_manifest_index(
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+) -> dict[str, Mapping[str, Any]]:
+    """Index exact controlled-fetch rows by source identifier.
+
+    Parameters
+    ----------
+    source_manifest:
+        Manifest wrapper or direct source sequence.
+
+    Returns
+    -------
+    dict[str, Mapping[str, Any]]
+        Exact source rows keyed by source ID.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the manifest is malformed or duplicates an identifier.
+    """
+
+    raw_sources: object
+    if isinstance(source_manifest, Mapping):
+        raw_sources = source_manifest.get("sources")
+        if raw_sources is None and "source_id" in source_manifest:
+            raw_sources = [source_manifest]
+    else:
+        raw_sources = source_manifest
+    if not isinstance(raw_sources, Sequence) or isinstance(raw_sources, (str, bytes)):
+        raise ProposalValidationError("source manifest must contain a source list")
+    indexed: dict[str, Mapping[str, Any]] = {}
+    for source in raw_sources:
+        if not isinstance(source, Mapping):
+            raise ProposalValidationError("every source manifest must be an object")
+        source_id = source.get("source_id")
+        if not isinstance(source_id, str) or not source_id:
+            raise ProposalValidationError("source manifest row has no source_id")
+        if source_id in indexed:
+            raise ProposalValidationError(f"duplicate source_id: {source_id}")
+        indexed[source_id] = source
+    return indexed
 
 
 def _implementation_source_available(
@@ -567,6 +1038,81 @@ def _implementation_source_available(
     )
 
 
+def _validate_structural_slop(facts: Mapping[str, Any], code_path: Optional[Path]) -> None:
+    """Trip on a plain Sequential/MLP staged as a named exotic family.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+    code_path:
+        Validated staged adapter path, if the selected rung uses one.
+
+    Raises
+    ------
+    ProposalValidationError
+        If staged structure is a generic stand-in for an exotic family claim.
+    """
+
+    if code_path is None:
+        return
+    try:
+        tree = ast.parse(code_path.read_text(encoding="utf-8"), filename=str(code_path))
+    except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+        raise ProposalValidationError(f"cannot inspect staged structure: {exc}") from exc
+    defined_classes = {node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)}
+    module_calls = [
+        _call_name(node.func).rsplit(".", 1)[-1]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and (
+            _call_name(node.func).startswith(("nn.", "torch.nn."))
+            or _call_name(node.func).rsplit(".", 1)[-1] in _GENERIC_MODEL_CALLS
+        )
+        and _call_name(node.func).rsplit(".", 1)[-1] not in defined_classes
+    ]
+    if not module_calls:
+        return
+    generic_structure = ("Sequential" in module_calls or module_calls.count("Linear") >= 2) and set(
+        module_calls
+    ) <= _GENERIC_MODEL_CALLS
+    if not generic_structure or not _claims_exotic_family(facts):
+        return
+    raise ProposalValidationError(
+        "structural slop tripwire: generic Sequential/MLP staged as an exotic named family"
+    )
+
+
+def _claims_exotic_family(facts: Mapping[str, Any]) -> bool:
+    """Return whether authored identity claims more than a generic MLP family.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Returns
+    -------
+    bool
+        True when family/name/class claims are not explicitly generic feed-forward terms.
+    """
+
+    identity = _mapping(facts.get("identity"), "identity")
+    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
+    architecture_classes = metadata.get("architecture_class")
+    names = [
+        identity.get("canonical_name"),
+        metadata.get("family"),
+        *(architecture_classes if isinstance(architecture_classes, list) else []),
+    ]
+    normalized = {
+        _normalize_support_text(str(name))
+        for name in names
+        if isinstance(name, str) and name.strip()
+    }
+    return bool(normalized) and not normalized <= _GENERIC_FAMILY_NAMES
+
+
 def _validate_anti_slop(facts: Mapping[str, Any]) -> None:
     """Reject explicit approximation language in authored implementation claims.
 
@@ -581,19 +1127,56 @@ def _validate_anti_slop(facts: Mapping[str, Any]) -> None:
         If authored text admits a generic or simplified stand-in.
     """
 
-    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
-    website = _mapping(facts.get("website"), "website")
-    texts = [
-        str(metadata.get("description", "")),
-        str(website.get("description", "")),
-        str(_mapping(facts.get("source_resolution"), "source_resolution").get("decision", "")),
-    ]
+    texts = _authored_implementation_texts(facts)
     lowered = " ".join(texts).lower()
-    matched = sorted(term for term in _SLOP_TERMS if term in lowered)
+    matched = sorted(
+        {match.group(0) for pattern in _SLOP_PATTERNS if (match := re.search(pattern, lowered))}
+    )
     if matched:
         raise ProposalValidationError(
             f"proposal contains forbidden approximation language: {matched}"
         )
+
+
+def _authored_implementation_texts(facts: Mapping[str, Any]) -> list[str]:
+    """Collect authored prose surfaces that can admit approximation or slop.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Returns
+    -------
+    list[str]
+        Authored descriptions, decisions, rationales, and fidelity notes.
+    """
+
+    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
+    website = _mapping(facts.get("website"), "website")
+    resolution = _mapping(facts.get("source_resolution"), "source_resolution")
+    implementation = _mapping(facts.get("implementation"), "implementation")
+    fidelity = _mapping(facts.get("fidelity"), "fidelity")
+    texts = [
+        metadata.get("description"),
+        metadata.get("key_contribution"),
+        website.get("tagline"),
+        website.get("description"),
+        website.get("key_contribution"),
+        resolution.get("decision"),
+        _mapping(resolution.get("search_report"), "source_resolution.search_report").get(
+            "conclusion"
+        ),
+        fidelity.get("reason"),
+    ]
+    for collection_name in ("patches", "declared_choices"):
+        collection = implementation.get(collection_name)
+        if isinstance(collection, list):
+            texts.extend(item.get("rationale") for item in collection if isinstance(item, Mapping))
+    deviations = fidelity.get("deviations")
+    if isinstance(deviations, list):
+        texts.extend(deviations)
+    return [text for text in texts if isinstance(text, str)]
 
 
 def _mapping(value: object, field: str) -> Mapping[str, Any]:

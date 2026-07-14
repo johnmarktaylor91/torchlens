@@ -5,27 +5,56 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence
 
-from menagerie.crawler.constants import AccuracyVerdict
-
-MANDATORY_EXTERNAL_FIELDS = (
-    "modality",
-    "architecture_class",
-    "domain",
-    "task",
-    "paradigm",
-    "lineage",
-    "tags",
-    "keywords",
-    "venue",
-    "year",
-    "country",
-    "authors",
-    "institution",
-    "citation",
-    "license",
-    "key_contribution",
-    "description",
+from menagerie.crawler.constants import (
+    AUTHOR_PROPOSAL_SCHEMA_VERSION,
+    MODEL_SCHEMA_VERSION,
+    AccuracyVerdict,
 )
+from menagerie.crawler.schema import load_schema
+
+
+def _required_external_fields(schema_version: str) -> tuple[str, ...]:
+    """Return the schema-required authored external-metadata leaves.
+
+    Parameters
+    ----------
+    schema_version:
+        Crawler schema whose ``external_metadata`` fact tree is inspected.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Required top-level external-metadata leaf names in schema order.
+
+    Raises
+    ------
+    RuntimeError
+        If the bundled schema does not expose a well-formed required field list.
+    """
+
+    schema = load_schema(schema_version)
+    definitions = schema.get("$defs")
+    external_metadata = (
+        definitions.get("external_metadata") if isinstance(definitions, Mapping) else None
+    )
+    required = external_metadata.get("required") if isinstance(external_metadata, Mapping) else None
+    if (
+        not isinstance(required, list)
+        or not required
+        or not all(isinstance(field, str) and field for field in required)
+    ):
+        raise RuntimeError(f"{schema_version} does not define required external_metadata fields")
+    if len(required) != len(set(required)):
+        raise RuntimeError(f"{schema_version} duplicates required external_metadata fields")
+    return tuple(required)
+
+
+_MODEL_EXTERNAL_FIELDS = _required_external_fields(MODEL_SCHEMA_VERSION)
+_AUTHOR_EXTERNAL_FIELDS = _required_external_fields(AUTHOR_PROPOSAL_SCHEMA_VERSION)
+if _MODEL_EXTERNAL_FIELDS != _AUTHOR_EXTERNAL_FIELDS:
+    raise RuntimeError("model-v2 and author-proposal-v2 external metadata requirements diverge")
+
+MANDATORY_EXTERNAL_FIELDS = _MODEL_EXTERNAL_FIELDS
 
 TORCHLENS_DERIVABLE_FIELDS = frozenset(
     {
@@ -45,7 +74,10 @@ TORCHLENS_DERIVABLE_FIELDS = frozenset(
 _REQUIRED_NONEMPTY_ARRAYS = frozenset(
     {"modality", "architecture_class", "domain", "task", "paradigm", "authors", "institution"}
 )
-_ARRAY_FIELDS = _REQUIRED_NONEMPTY_ARRAYS | {"lineage", "tags", "keywords"}
+_ARRAY_FIELDS = _REQUIRED_NONEMPTY_ARRAYS | {"lineage", "predecessors", "tags", "keywords"}
+_REQUIRED_NONEMPTY_STRINGS = frozenset(
+    {"family", "era", "key_contribution", "description", "original_framework", "run_framework"}
+)
 
 
 class MetadataValidationError(ValueError):
@@ -108,12 +140,29 @@ def validate_external_metadata(
             raise MetadataValidationError(f"external_metadata.{field} must be a string array")
         if field in _REQUIRED_NONEMPTY_ARRAYS and not value:
             raise MetadataValidationError(f"external_metadata.{field} must be non-empty")
-    for field in ("key_contribution", "description"):
+    for field in _REQUIRED_NONEMPTY_STRINGS:
         value = metadata[field]
         if not isinstance(value, str) or not value.strip():
             raise MetadataValidationError(f"external_metadata.{field} must be non-empty")
     if not isinstance(metadata["citation"], Mapping):
         raise MetadataValidationError("external_metadata.citation must be an object")
+    modes = metadata["modes"]
+    if not isinstance(modes, Mapping):
+        raise MetadataValidationError("external_metadata.modes must be an object")
+    meaningful_modes = modes.get("meaningful_modes")
+    if (
+        not isinstance(meaningful_modes, list)
+        or not meaningful_modes
+        or not all(mode in {"train", "eval"} for mode in meaningful_modes)
+        or len(meaningful_modes) != len(set(meaningful_modes))
+    ):
+        raise MetadataValidationError(
+            "external_metadata.modes.meaningful_modes must contain unique train/eval modes"
+        )
+    if modes.get("train_eval_divergence") not in {"none", "statistical", "structural"}:
+        raise MetadataValidationError(
+            "external_metadata.modes.train_eval_divergence is not canonical"
+        )
     gated = _validate_field_checks(field_checks) if field_checks is not None else frozenset()
     derivable = frozenset(field for field in TORCHLENS_DERIVABLE_FIELDS if field in metadata)
     return MetadataValidationReport(

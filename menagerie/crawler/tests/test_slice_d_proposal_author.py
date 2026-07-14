@@ -14,7 +14,11 @@ from menagerie.crawler.author_dispatch import (
     validate_author_result,
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
-from menagerie.crawler.proposal import ProposalValidationError, validate_author_proposal
+from menagerie.crawler.proposal import (
+    DEFAULT_GATED_CLAIMS,
+    ProposalValidationError,
+    validate_author_proposal,
+)
 from menagerie.crawler.tests.conftest import make_author_proposal
 
 
@@ -33,21 +37,19 @@ def _ground_proposal(tmp_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     """
 
     proposal = make_author_proposal()
-    text = "ExampleNet is a source-grounded architecture introduced in the cited work."
+    text = (
+        "Example Model introduced ExampleNet in TestConf 2020 by A. Author at Example Lab in "
+        "the US. ExampleNet is an official PyTorch library CNN architecture for supervised computer vision "
+        "classification in machine learning. This modern ExampleNet family uses vision modality "
+        "and has the example and cnn keywords. It is a small source-grounded example network "
+        "whose grounded contribution uses the Apache-2.0 license. It runs in PyTorch eval mode "
+        "with no train eval divergence. The input contract is one small RGB image and the output "
+        "is class scores."
+    )
     source_path = tmp_path / "source.txt"
     source_path.write_text(text)
     source_hash = hash_bytes(text.encode())
-    claims = [
-        "external_metadata.description",
-        "source_resolution.rung",
-        "taxonomy",
-        "input_contract",
-        "license",
-        "year",
-        "country",
-        "citation",
-        "implementation.architecture",
-    ]
+    claims = [*sorted(DEFAULT_GATED_CLAIMS), "implementation.architecture"]
     excerpt = proposal["proposed_facts"]["evidence"]["excerpts"][0]
     excerpt.update(
         {
