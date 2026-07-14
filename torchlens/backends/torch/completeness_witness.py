@@ -34,7 +34,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from ... import _state
 from ..._errors import TorchLensCaptureGapWarning
-from ._tl import get_tensor_label
+from ._tl import get_tensor_label, get_tensor_meta
 from .escape_detection import ExpectedOriginalToken, _active_token
 
 CompletenessWitnessMode = Literal["off", "shadow"]
@@ -240,12 +240,50 @@ registering a new serialized Trace field. Entries are dropped automatically when
 Trace is garbage collected.
 """
 
+_HOST_ESCAPE_STATE_SOURCE_LABELS: "weakref.WeakKeyDictionary[Any, set[str]]" = (
+    weakref.WeakKeyDictionary()
+)
+"""Per-trace subset of escape-source labels whose source is a registered param/buffer.
+
+A registered buffer/parameter read on the host (``bool(self.gate)`` /
+``self.threshold.item()``) is the runnable UNBOUND-STATE net's domain: it is
+witnessed by its capture-time state digest, not by a tensor-op source slot. When such
+a state source is read ONLY on the host it is orphan-pruned and its raw label does not
+resolve to a final op -- but that is NOT a coverage gap (the unbound-state net covers
+it), so the runnable producer must NOT close it as a pruned tensor-op chain. This
+side set lets the producer tell an unresolved STATE label (defer to the unbound net)
+from an unresolved TENSOR-OP label (a genuinely unwitnessable pruned host chain).
+"""
+
+_HOST_ESCAPE_UNATTRIBUTABLE: "weakref.WeakKeyDictionary[Any, bool]" = weakref.WeakKeyDictionary()
+"""Per-trace flag: at least one tensor->host escape had an UNATTRIBUTABLE source.
+
+A ``.data`` alias (or any tensor whose capture label cannot be resolved) that escapes
+to the host via ``aten._local_scalar_dense`` leaves no source-op label to witness, so
+the escaped value -- and any literal / branch derived from it -- cannot be proven
+valid on a changed input. The runnable producer reads this flag and fails honest
+(marks the witness set INCOMPLETE -> UNVERIFIABLE) rather than emit a false VERIFIED.
+"""
+
 
 def host_escape_source_labels(trace: Any) -> frozenset[str]:
     """Return the recorded raw escape-source op labels for one trace."""
 
     labels = _HOST_ESCAPE_SOURCE_LABELS.get(trace)
     return frozenset(labels) if labels else frozenset()
+
+
+def host_escape_state_source_labels(trace: Any) -> frozenset[str]:
+    """Return the raw escape-source labels whose source is a registered param/buffer."""
+
+    labels = _HOST_ESCAPE_STATE_SOURCE_LABELS.get(trace)
+    return frozenset(labels) if labels else frozenset()
+
+
+def host_escape_has_unattributable(trace: Any) -> bool:
+    """Return whether any tensor->host escape had an unresolvable (unlabelled) source."""
+
+    return bool(_HOST_ESCAPE_UNATTRIBUTABLE.get(trace))
 
 
 _PRUNED_RNG_CONTROL_LABELS: "weakref.WeakKeyDictionary[Any, set[str]]" = weakref.WeakKeyDictionary()
@@ -300,12 +338,30 @@ def _record_host_escape_source(trace: Any, func: Any, args: tuple[Any, ...]) -> 
     if not isinstance(source, torch.Tensor):
         return
     label = get_tensor_label(source)
-    if isinstance(label, str):
-        sources = _HOST_ESCAPE_SOURCE_LABELS.get(trace)
-        if sources is None:
-            sources = set()
-            _HOST_ESCAPE_SOURCE_LABELS[trace] = sources
-        sources.add(label)
+    if not isinstance(label, str):
+        # An UNATTRIBUTABLE escape: the source is a real captured tensor whose value
+        # left to the host, but it carries no resolvable capture label (a ``.data``
+        # alias, whose fresh Python tensor object has no TorchLens metadata). There
+        # is no source slot to witness, so the escaped value cannot be proven valid
+        # on a changed input: flag it so the runnable producer fails honest
+        # (INCOMPLETE -> UNVERIFIABLE) rather than emit a false VERIFIED.
+        _HOST_ESCAPE_UNATTRIBUTABLE[trace] = True
+        return
+    sources = _HOST_ESCAPE_SOURCE_LABELS.get(trace)
+    if sources is None:
+        sources = set()
+        _HOST_ESCAPE_SOURCE_LABELS[trace] = sources
+    sources.add(label)
+    # A registered buffer/parameter source (identified by a non-None state address)
+    # is the unbound-state net's domain; record it separately so the producer does
+    # not close an unresolved (orphan-pruned) STATE label as a pruned tensor-op chain.
+    meta = get_tensor_meta(source)
+    if meta is not None and getattr(meta, "address", None) is not None:
+        state_sources = _HOST_ESCAPE_STATE_SOURCE_LABELS.get(trace)
+        if state_sources is None:
+            state_sources = set()
+            _HOST_ESCAPE_STATE_SOURCE_LABELS[trace] = state_sources
+        state_sources.add(label)
 
 
 def _operator_name(func: Any) -> str:

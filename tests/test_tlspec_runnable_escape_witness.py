@@ -317,3 +317,64 @@ def test_r10_input_escape_original_still_verified(
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert not result.report.poisoned
     assert torch.allclose(result.output, model_cls()(capture_x.clone()))
+
+
+# --------------------------------------------------------------------------- #
+# R10-C1: a `.data` (unlabelled-alias) escape source cannot be attributed to any
+# source slot, so it cannot be digest-witnessed. The producer must fail honest
+# (INCOMPLETE -> UNVERIFIABLE), never leave completeness COMPLETE -> false VERIFIED.
+# --------------------------------------------------------------------------- #
+class DataAliasScalarEscape(nn.Module):
+    """R10-C1: ``.data.item()`` reads an UNLABELLED alias -> census attributes nothing."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x * (x.mean().data.item() * 3.0 + 1.0)
+
+
+def test_r10_data_alias_escape_is_unverifiable(tmp_path: Path) -> None:
+    # An unattributable escape is fail-closed on BOTH the original and the changed
+    # input: without a source slot the escaped value cannot be proven valid, so the
+    # honest ceiling is UNVERIFIABLE (never a false VERIFIED on the changed input).
+    from torchlens.backends.torch.completeness_witness import host_escape_has_unattributable
+
+    trace = tl.trace(DataAliasScalarEscape(), torch.tensor([2.0, 2.0]), capture=_CAPTURE)
+    assert host_escape_has_unattributable(trace), "census must flag the unlabelled .data escape"
+
+    path = _save(DataAliasScalarEscape(), torch.tensor([2.0, 2.0]), tmp_path / "c.tlspec")
+    changed = tl.load(path).run(inputs=torch.tensor([10.0, 10.0]), on_divergence="return_diverged")
+    _assert_not_blessed(changed.report)
+    assert not torch.allclose(changed.output, DataAliasScalarEscape()(torch.tensor([10.0, 10.0])))
+    original = tl.load(path).run(inputs=torch.tensor([2.0, 2.0]), on_divergence="return_diverged")
+    assert original.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+
+
+# --------------------------------------------------------------------------- #
+# R10-H2: an orphan-PRUNED, param-rooted host escape chain (reaching neither input
+# nor output) has no witnessable slot. Its census raw label never resolves to a
+# final op, so the producer must fail honest instead of silently dropping it (which
+# left completeness COMPLETE -> false VERIFIED even for a BOUND param the unbound
+# net exempts). Both runs are UNVERIFIABLE; the changed one must never be VERIFIED.
+# --------------------------------------------------------------------------- #
+class PrunedParamEscape(nn.Module):
+    """R10-H2: ``float((w + 1).sum())`` on a dual-use (bound) param, host-only + pruned."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.w = nn.Parameter(torch.tensor([2.0]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x * self.w  # w is BOUND (feeds a traced call) -> unbound net exempts it
+        s = float((self.w + 1.0).sum())  # param-rooted host escape, orphan-pruned
+        return y + s
+
+
+def test_r10_pruned_param_escape_changed_state_is_unverifiable(tmp_path: Path) -> None:
+    x = torch.tensor([4.0])
+    path = _save(PrunedParamEscape(), x, tmp_path / "p.tlspec", include_weights=True)
+    loaded = tl.load(path)
+    loaded.load_state_dict({"w": torch.tensor([7.0])})
+    result = loaded.run(inputs=x.clone(), on_divergence="return_diverged")
+    _assert_not_blessed(result.report)
+    # Captured s=3.0 replays 4*7 + 3 = 31; a true live forward with w=7 is 4*7 + 8 = 36.
+    assert abs(result.output.item() - 31.0) < 1e-5
+    assert abs(result.output.item() - 36.0) > 1e-5

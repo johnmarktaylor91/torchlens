@@ -1502,13 +1502,21 @@ def _tensor_source_escape_witnesses(
         for slot_id in call.output_slot_ids:
             call_id_by_slot.setdefault(slot_id, call.call_id)
 
+    from ..backends.torch.completeness_witness import host_escape_has_unattributable
+
     ints, floats, sequences = _collect_baked_literal_values(calls)
     sequence_lengths = {len(item) for item in sequences}
-    escaped_labels = _host_escape_source_labels(trace)
+    escaped_labels, unresolvable_escape = _host_escape_source_labels(trace)
 
     witnesses: list[ControlWitness] = []
     seen_slots: set[str] = set()
-    incomplete = False
+    # Fail honest for any census escape that cannot be turned into a sound witness:
+    #  * unresolvable_escape -- an orphan-PRUNED tensor-op source chain (no slot);
+    #  * host_escape_has_unattributable -- an UNLABELLED source (``.data`` alias)
+    #    that the census could not attribute to any source slot.
+    # Either leaves an escaped value that cannot be proven valid on a changed input,
+    # so mark the witness set INCOMPLETE (-> UNVERIFIABLE) instead of false VERIFIED.
+    incomplete = unresolvable_escape or host_escape_has_unattributable(trace)
     for op in ops:
         is_input = bool(getattr(op, "is_input", False))
         is_output = bool(getattr(op, "is_output", False))
@@ -1589,32 +1597,51 @@ def _tensor_source_escape_witnesses(
     return witnesses, incomplete
 
 
-def _host_escape_source_labels(trace: Any) -> frozenset[str]:
-    """Return final op labels whose output escaped to the Python host at capture.
+def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], bool]:
+    """Return final escape-source labels and whether any census label is unresolvable.
 
     The dispatch census records, for each ``aten._local_scalar_dense`` escape, the
     RAW capture label of the source tensor's producing op (see
     ``completeness_witness._record_host_escape_source``). This resolves those raw
     labels to their final cooked op labels via the trace's raw->final map so the
-    descriptor can witness the escape's source slot. An empty set (no escape, or an
-    unresolvable label) yields no census witness; the value-equality net and the
-    unbound-state net remain independent safety nets.
+    descriptor can witness the escape's source slot.
+
+    A census raw label that does NOT resolve to a final op is a real escape whose
+    source chain was orphan-PRUNED -- a host-only chain that reached neither an
+    input nor an output (e.g. a param-rooted ``float((w + 1).sum())``). Such a slot
+    can never be digest-witnessed, so the second return value flags it and the
+    caller must fail honest (mark the witness set INCOMPLETE). Silently dropping it
+    (the pre-R10 behavior) left completeness COMPLETE -> false VERIFIED on changed
+    state. The value-equality net and the unbound-state net remain independent
+    safety nets for the resolvable cases.
     """
 
-    from ..backends.torch.completeness_witness import host_escape_source_labels
+    from ..backends.torch.completeness_witness import (
+        host_escape_source_labels,
+        host_escape_state_source_labels,
+    )
 
     raw_labels = host_escape_source_labels(trace)
     if not raw_labels:
-        return frozenset()
+        return frozenset(), False
+    state_labels = host_escape_state_source_labels(trace)
     raw_to_final = getattr(trace, "_raw_to_final_op_labels", {}) or {}
     final_labels: set[str] = set()
+    unresolvable = False
     for raw_label in raw_labels:
         if not isinstance(raw_label, str):
+            unresolvable = True
             continue
         final = raw_to_final.get(raw_label)
         if isinstance(final, str):
             final_labels.add(final)
-    return frozenset(final_labels)
+        elif raw_label not in state_labels:
+            # An unresolved TENSOR-OP source is an orphan-pruned host-only chain with
+            # no witnessable slot -> fail honest. An unresolved STATE source (a
+            # buffer/param read only on the host) is instead covered by the
+            # unbound-state net, so it must NOT close as a pruned tensor-op chain.
+            unresolvable = True
+    return frozenset(final_labels), unresolvable
 
 
 UNBOUND_STATE_ESCAPE_SITE_PREFIX = "unbound_state_escape:"
