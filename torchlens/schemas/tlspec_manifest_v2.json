@@ -122,6 +122,14 @@
                 "schema": {"const": "state_dict_v1"}
               }
             },
+            "nonpersistent_buffers": {
+              "type": "object",
+              "required": ["present", "schema"],
+              "properties": {
+                "present": {"type": "boolean"},
+                "schema": {"const": "runnable_nonpersistent_buffer_v1"}
+              }
+            },
             "activations": {
               "type": "object",
               "required": ["present", "schema"],

@@ -60,6 +60,7 @@ PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
 _BLOB_TENSOR_KEY = "data"
 _RUNNABLE_WEIGHT_KIND = "runnable_weight"
+_RUNNABLE_NONPERSISTENT_BUFFER_KIND = "runnable_nonpersistent_buffer"
 _RUNNABLE_ACTIVATION_KIND = "runnable_activation"
 
 _RENAMED_PICKLE_GLOBALS: dict[tuple[str, str], tuple[str, str]] = {
@@ -248,6 +249,7 @@ def save(
     sparse_run_descriptor = None
     sparse_run_json = None
     weight_blob_specs: list[BlobSpec] = []
+    nonpersistent_buffer_blob_specs: list[BlobSpec] = []
     activation_blob_specs: list[BlobSpec] = []
     if include_weights and save_level != "runnable":
         raise ValueError("include_weights=True requires level='runnable'.")
@@ -262,6 +264,10 @@ def save(
         )
 
         sparse_run_descriptor = require_sparse_run_descriptor(trace)
+        nonpersistent_buffer_blob_specs = _capture_nonpersistent_buffer_blob_specs(
+            trace,
+            sparse_run_descriptor,
+        )
         if include_weights:
             weight_blob_specs = _capture_weight_blob_specs(
                 trace,
@@ -340,6 +346,7 @@ def save(
                 raise TorchLensIOError(
                     "Sparse runnable scrub produced tensor blob specs; refusing runnable label."
                 )
+            blob_specs.extend(nonpersistent_buffer_blob_specs)
             blob_specs.extend(weight_blob_specs)
             blob_specs.extend(activation_blob_specs)
         _apply_visualization_save_policy(
@@ -519,6 +526,56 @@ def _capture_weight_blob_specs(
             logical_backend="torch",
         )
         for index, name in enumerate(sorted(cast(Mapping[str, torch.Tensor], state)))
+    ]
+
+
+def _capture_nonpersistent_buffer_blob_specs(
+    trace: Trace,
+    descriptor: SparseRunDescriptor,
+) -> list[BlobSpec]:
+    """Collect used non-persistent buffers as mandatory runnable payloads.
+
+    Parameters
+    ----------
+    trace:
+        Live capture Trace retaining the captured initial buffer values.
+    descriptor:
+        Sparse descriptor identifying buffer bindings excluded from ``state_dict``.
+
+    Returns
+    -------
+    list[BlobSpec]
+        One separately stored value blob per used non-persistent buffer name.
+
+    Raises
+    ------
+    StateBindingError
+        If a required captured value is missing or violates its slot contract.
+    """
+
+    from .._runnable_state import validate_nonpersistent_buffer_mapping_for_descriptor
+
+    names = sorted(
+        {
+            slot.state_binding.state_dict_name
+            for slot in descriptor.tensor_slots
+            if slot.role.value == "buffer"
+            and slot.state_binding is not None
+            and not slot.state_binding.persistent
+        }
+    )
+    captured_values = getattr(trace, "_buffer_initial_values", {}) or {}
+    values = {name: captured_values[name] for name in names if name in captured_values}
+    validate_nonpersistent_buffer_mapping_for_descriptor(descriptor, values)
+    return [
+        BlobSpec(
+            blob_id=f"runnable_nonpersistent_buffer_{index:05d}",
+            value=cast(torch.Tensor, values[name]).detach().clone(),
+            kind=_RUNNABLE_NONPERSISTENT_BUFFER_KIND,
+            label=name,
+            logical_backend="torch",
+        )
+        for index, name in enumerate(names)
     ]
 
 
@@ -980,6 +1037,12 @@ def _load_trace_payload(
     from .runnable_load import attach_sparse_run_readiness
 
     attach_sparse_run_readiness(trace, sparse_run)
+    _bind_embedded_nonpersistent_buffer_payload(
+        trace,
+        manifest=manifest,
+        bundle_path=bundle_path,
+        map_location=map_location,
+    )
     _bind_embedded_weight_payload(
         trace,
         manifest=manifest,
@@ -993,6 +1056,82 @@ def _load_trace_payload(
         map_location=map_location,
     )
     return trace
+
+
+def _bind_embedded_nonpersistent_buffer_payload(
+    trace: Trace,
+    *,
+    manifest: Manifest,
+    bundle_path: Path,
+    map_location: str | torch.device,
+) -> None:
+    """Decode and bind mandatory captured non-persistent buffer values.
+
+    Parameters
+    ----------
+    trace:
+        Rehydrated Trace with its sparse descriptor and readiness attached.
+    manifest:
+        Parsed tensor manifest containing the dedicated buffer entries.
+    bundle_path:
+        Artifact root used to resolve blob paths safely.
+    map_location:
+        Device selected for loaded buffer tensors.
+
+    Raises
+    ------
+    TorchLensIOError
+        If descriptor declarations, blob membership, or checksums disagree.
+    StateBindingError
+        If decoded values violate the non-persistent buffer slot contract.
+    """
+
+    descriptor = trace.runnable_descriptor
+    entries = tuple(
+        entry for entry in manifest.tensors if entry.kind == _RUNNABLE_NONPERSISTENT_BUFFER_KIND
+    )
+    if descriptor is None:
+        if entries:
+            raise TorchLensIOError(
+                "Non-persistent buffer payloads require a parsed sparse runnable descriptor."
+            )
+        return
+    declared = descriptor.payload_layers.nonpersistent_buffers
+    if not declared.present:
+        if entries:
+            raise TorchLensIOError(
+                "Runnable non-persistent buffer blobs are present while their payload "
+                "declaration is false."
+            )
+        return
+    if declared.schema != "runnable_nonpersistent_buffer_v1":
+        raise TorchLensIOError(
+            f"Unsupported runnable non-persistent buffer payload schema {declared.schema!r}."
+        )
+    embedded: dict[str, torch.Tensor] = {}
+    for entry in entries:
+        if entry.label in embedded:
+            raise TorchLensIOError(
+                f"Runnable non-persistent buffer payload repeats canonical name {entry.label!r}."
+            )
+        blob_path = resolve_bundle_blob_path(bundle_path, entry.relative_path)
+        observed_sha256 = sha256_of_file(blob_path)
+        if observed_sha256 != entry.sha256:
+            raise TorchLensIOError(
+                "Checksum mismatch for embedded non-persistent buffer "
+                f"blob_id={entry.blob_id} at {blob_path}."
+            )
+        tensor_map = _load_safetensors_file(blob_path, map_location)
+        tensor = tensor_map.get(_BLOB_TENSOR_KEY)
+        if tensor is None:
+            raise TorchLensIOError(
+                f"Embedded non-persistent buffer blob {blob_path} lacks {_BLOB_TENSOR_KEY!r}."
+            )
+        embedded[entry.label] = tensor
+
+    from .._runnable_state import bind_embedded_nonpersistent_buffers
+
+    bind_embedded_nonpersistent_buffers(trace, embedded)
 
 
 def _bind_embedded_weight_payload(

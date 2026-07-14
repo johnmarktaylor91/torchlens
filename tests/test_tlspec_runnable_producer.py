@@ -257,6 +257,10 @@ def test_runnable_save_emits_frozen_sparse_descriptor_and_value_free_recipe(
     assert run["unsupported_sites"] == []
     assert run["payload_layers"] == {
         "weights": {"present": False, "schema": "state_dict_v1"},
+        "nonpersistent_buffers": {
+            "present": False,
+            "schema": "runnable_nonpersistent_buffer_v1",
+        },
         "activations": {"present": False, "schema": "selected_activation_v1"},
     }
 

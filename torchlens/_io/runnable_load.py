@@ -153,6 +153,7 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
         initializer_policy_version=cast(Any, _string(value, "initializer_policy_version")),
         payload_layers=PayloadLayersDescriptor(
             weights=_parse_payload_layer(_mapping(payload, "weights")),
+            nonpersistent_buffers=_parse_nonpersistent_buffer_payload_layer(payload),
             activations=_parse_activation_payload_layer(_mapping(payload, "activations")),
         ),
         callable_registry=registry,
@@ -863,6 +864,30 @@ def _descriptor_version_diagnostics(
                 details=(("field", field_name), ("supported", str(expected))),
             )
         )
+    nonpersistent_layer = descriptor.payload_layers.nonpersistent_buffers
+    has_nonpersistent_slots = any(
+        slot.role is TensorSlotRole.BUFFER
+        and slot.state_binding is not None
+        and not slot.state_binding.persistent
+        for slot in descriptor.tensor_slots
+    )
+    if (
+        nonpersistent_layer.schema != "runnable_nonpersistent_buffer_v1"
+        or nonpersistent_layer.present != has_nonpersistent_slots
+    ):
+        diagnostics.append(
+            _diagnostic(
+                RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+                "Non-persistent buffer payload declaration disagrees with its slots.",
+                descriptor=descriptor,
+                detection_stage="descriptor_payload_validation",
+                details=(
+                    ("schema", nonpersistent_layer.schema),
+                    ("declared_present", str(nonpersistent_layer.present)),
+                    ("has_nonpersistent_slots", str(has_nonpersistent_slots)),
+                ),
+            )
+        )
     if descriptor.callable_ref_schema != RUNNABLE_CALLABLE_REF_SCHEMA_VERSION:
         diagnostics.append(
             _diagnostic(
@@ -1140,6 +1165,20 @@ def _parse_payload_layer(value: Mapping[str, Any]) -> PayloadLayerDescriptor:
         present=_boolean(value, "present"),
         schema=_string(value, "schema"),
     )
+
+
+def _parse_nonpersistent_buffer_payload_layer(
+    payload_layers: Mapping[str, Any],
+) -> PayloadLayerDescriptor:
+    """Parse capture-embedded non-persistent buffers with a legacy default."""
+
+    value = payload_layers.get("nonpersistent_buffers")
+    if not isinstance(value, Mapping):
+        return PayloadLayerDescriptor(
+            present=False,
+            schema="runnable_nonpersistent_buffer_v1",
+        )
+    return _parse_payload_layer(value)
 
 
 def _parse_activation_payload_layer(

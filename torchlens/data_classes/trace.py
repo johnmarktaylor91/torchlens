@@ -168,6 +168,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_runnable_readiness": None,
     "_runnable_staged_user_state": None,
     "_runnable_embedded_state": None,
+    "_runnable_embedded_nonpersistent_buffers": None,
     "_runnable_archived_activations": None,
     "_runnable_path_faithfulness": None,
     "_runnable_first_mismatch": None,
@@ -1004,6 +1005,7 @@ class Trace(
     _runnable_readiness: "ReadinessReport | None"
     _runnable_staged_user_state: Mapping[str, torch.Tensor] | None
     _runnable_embedded_state: Mapping[str, torch.Tensor] | None
+    _runnable_embedded_nonpersistent_buffers: Mapping[str, torch.Tensor] | None
     _runnable_archived_activations: Mapping[str, "ArchivedActivation"] | None
     _runnable_path_faithfulness: "PathFaithfulness | None"
     _runnable_first_mismatch: "RunnableDiagnostic | None"
@@ -1051,6 +1053,7 @@ class Trace(
         "_runnable_readiness": FieldPolicy.DROP,
         "_runnable_staged_user_state": FieldPolicy.DROP,
         "_runnable_embedded_state": FieldPolicy.DROP,
+        "_runnable_embedded_nonpersistent_buffers": FieldPolicy.DROP,
         "_runnable_archived_activations": FieldPolicy.DROP,
         "_runnable_path_faithfulness": FieldPolicy.DROP,
         "_runnable_first_mismatch": FieldPolicy.DROP,
@@ -1439,6 +1442,7 @@ class Trace(
         self._runnable_readiness: ReadinessReport | None = None
         self._runnable_staged_user_state: Mapping[str, torch.Tensor] | None = None
         self._runnable_embedded_state: Mapping[str, torch.Tensor] | None = None
+        self._runnable_embedded_nonpersistent_buffers: Mapping[str, torch.Tensor] | None = None
         self._runnable_archived_activations: Mapping[str, ArchivedActivation] | None = None
         self._runnable_path_faithfulness: PathFaithfulness | None = None
         self._runnable_first_mismatch: RunnableDiagnostic | None = None
@@ -2432,6 +2436,11 @@ class Trace(
         state["_runnable_embedded_state"] = (
             dict(self._runnable_embedded_state)
             if self._runnable_embedded_state is not None
+            else None
+        )
+        state["_runnable_embedded_nonpersistent_buffers"] = (
+            dict(self._runnable_embedded_nonpersistent_buffers)
+            if self._runnable_embedded_nonpersistent_buffers is not None
             else None
         )
         state["_runnable_staged_user_state"] = (

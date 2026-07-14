@@ -14,11 +14,14 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import TorchLensIOError
-from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
+from torchlens._io.runnable import (
+    assert_sparse_core_has_no_tensor_payload,
+    build_sparse_run_descriptor,
+)
 from torchlens._runnable_state import runnable_tensor_byte_digest
 from torchlens.errors import StateBindingError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import StateSource
+from torchlens.runnable import PathFaithfulness, StateSource
 
 
 class WeightPayloadModel(nn.Module):
@@ -40,6 +43,22 @@ class WeightPayloadModel(nn.Module):
         """Apply the state-bearing recorded graph."""
 
         return self.linear(value) * self.scale
+
+
+class UsedBufferPersistenceModel(nn.Module):
+    """Use both a non-persistent buffer and ordinary persistent buffer state."""
+
+    def __init__(self) -> None:
+        """Register buffers on opposite sides of the canonical state contract."""
+
+        super().__init__()
+        self.register_buffer("offset", torch.tensor([7.0]), persistent=False)
+        self.register_buffer("persistent_guard", torch.tensor([0.0]))
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Use both buffers so producer bindings must classify each honestly."""
+
+        return value + self.offset + self.persistent_guard
 
 
 def _capture(model: nn.Module) -> tl.Trace:
@@ -99,6 +118,79 @@ def test_runnable_save_normal_model_remains_tensor_payload_free(tmp_path: Path) 
     _capture(WeightPayloadModel().eval()).save(path, level="runnable")
 
     assert path.is_dir()
+
+
+@pytest.mark.smoke
+def test_used_nonpersistent_buffer_is_embedded_without_becoming_canonical_state(
+    tmp_path: Path,
+) -> None:
+    """Reproduce used non-persistent buffers while preserving persistent state rules."""
+
+    model = UsedBufferPersistenceModel().eval()
+    inputs = torch.tensor([2.0])
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+        ),
+    )
+    descriptor = build_sparse_run_descriptor(trace)
+    bindings = {
+        slot.state_binding.state_dict_name: slot.state_binding
+        for slot in descriptor.tensor_slots
+        if slot.state_binding is not None
+    }
+
+    assert descriptor.preflight.passed
+    assert bindings["offset"].persistent is False
+    assert bindings["persistent_guard"].persistent is True
+    assert "offset" not in model.state_dict()
+    assert descriptor.payload_layers.nonpersistent_buffers.present is True
+
+    sparse_path = tmp_path / "nonpersistent.tlspec"
+    weighted_path = tmp_path / "nonpersistent-weighted.tlspec"
+    trace.save(sparse_path, level="runnable")
+    trace.save(weighted_path, level="runnable", include_weights=True)
+
+    sparse_manifest = _manifest(sparse_path)
+    payload = sparse_manifest["run"]["payload_layers"]["nonpersistent_buffers"]
+    assert payload == {
+        "present": True,
+        "schema": "runnable_nonpersistent_buffer_v1",
+    }
+    nonpersistent_entries = [
+        entry
+        for entry in sparse_manifest["tensors"]
+        if entry["kind"] == "runnable_nonpersistent_buffer"
+    ]
+    assert [entry["label"] for entry in nonpersistent_entries] == ["offset"]
+    stored_offset = load_file(str(sparse_path / nonpersistent_entries[0]["relative_path"]))["data"]
+    assert torch.equal(stored_offset, model.offset)
+
+    loaded = tl.load(sparse_path)
+    random_result = loaded.run(inputs=inputs, seed=1)
+    assert torch.equal(random_result.output, model(inputs))
+    assert torch.equal(random_result.output, torch.tensor([9.0]))
+    assert random_result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert all("offset" not in slot_id for slot_id in random_result.report.random_filled_slot_ids)
+
+    loaded.load_state_dict(model.state_dict())
+    staged_result = loaded.run(inputs=inputs, seed=1)
+    assert torch.equal(staged_result.output, model(inputs))
+    assert staged_result.report.state_source is StateSource.USER_STATE_DICT
+
+    weighted_manifest = _manifest(weighted_path)
+    weight_entries = [
+        entry for entry in weighted_manifest["tensors"] if entry["kind"] == "runnable_weight"
+    ]
+    assert [entry["label"] for entry in weight_entries] == ["persistent_guard"]
+    weighted = tl.load(weighted_path)
+    weighted_result = weighted.run(inputs=inputs, seed=1)
+    assert torch.equal(weighted_result.output, model(inputs))
+    assert weighted_result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
 
 
 def test_runnable_tensor_digest_includes_dtype_and_shape() -> None:

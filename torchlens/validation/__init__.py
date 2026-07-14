@@ -355,18 +355,22 @@ def _validate_sparse_run_descriptor(
     payload_layers = value["payload_layers"]
     if not isinstance(payload_layers, dict):
         raise ValueError("Runnable descriptor payload_layers must be an object.")
-    if set(payload_layers) != {"weights", "activations"}:
+    legacy_payload_fields = frozenset({"weights", "activations"})
+    current_payload_fields = frozenset({"weights", "nonpersistent_buffers", "activations"})
+    if frozenset(payload_layers) not in {legacy_payload_fields, current_payload_fields}:
         raise ValueError("Runnable descriptor payload_layers fields mismatch.")
     expected_payload_schemas = {
         "weights": "state_dict_v1",
         "activations": "selected_activation_v1",
     }
+    if "nonpersistent_buffers" in payload_layers:
+        expected_payload_schemas["nonpersistent_buffers"] = "runnable_nonpersistent_buffer_v1"
     for layer_name, expected_schema in expected_payload_schemas.items():
         layer = payload_layers.get(layer_name)
         layer_present = layer.get("present") if isinstance(layer, dict) else None
         required_layer_fields = (
             {"present", "schema"}
-            if layer_name == "weights" or layer_present is False
+            if layer_name in {"weights", "nonpersistent_buffers"} or layer_present is False
             else {
                 "present",
                 "schema",
@@ -416,6 +420,10 @@ def _validate_runnable_payload_entries(manifest: dict[str, Any]) -> None:
 
     run = manifest["run"]
     weights_present = run["payload_layers"]["weights"]["present"]
+    nonpersistent_buffers = run["payload_layers"].get(
+        "nonpersistent_buffers",
+        {"present": False, "schema": "runnable_nonpersistent_buffer_v1"},
+    )
     activations = run["payload_layers"]["activations"]
     tensors = manifest.get("tensors")
     if not isinstance(tensors, list):
@@ -435,6 +443,38 @@ def _validate_runnable_payload_entries(manifest: dict[str, Any]) -> None:
         if label in labels:
             raise ValueError(f"Runnable weight payload repeats canonical state name {label!r}.")
         labels.add(label)
+    nonpersistent_buffer_entries = [
+        entry
+        for entry in tensors
+        if isinstance(entry, dict) and entry.get("kind") == "runnable_nonpersistent_buffer"
+    ]
+    if nonpersistent_buffer_entries and not nonpersistent_buffers["present"]:
+        raise ValueError("Runnable non-persistent buffer blobs require their payload declaration.")
+    nonpersistent_names = {
+        binding.get("state_dict_name")
+        for slot in run.get("tensor_slots", [])
+        if isinstance(slot, dict)
+        and slot.get("role") == "buffer"
+        and isinstance((binding := slot.get("state_binding")), dict)
+        and binding.get("persistent") is False
+        and isinstance(binding.get("state_dict_name"), str)
+    }
+    entry_names: set[str] = set()
+    for index, entry in enumerate(nonpersistent_buffer_entries):
+        label = entry.get("label")
+        if not isinstance(label, str) or label == "":
+            raise ValueError(
+                f"Runnable non-persistent buffer entry {index} requires a canonical label."
+            )
+        if label in entry_names:
+            raise ValueError(
+                f"Runnable non-persistent buffer payload repeats canonical name {label!r}."
+            )
+        entry_names.add(label)
+    if nonpersistent_buffers["present"] != bool(nonpersistent_names):
+        raise ValueError("Runnable non-persistent buffer declaration disagrees with tensor slots.")
+    if entry_names != nonpersistent_names:
+        raise ValueError("Runnable non-persistent buffer entries disagree with tensor slots.")
     activation_entries = [
         entry
         for entry in tensors
@@ -878,6 +918,7 @@ def _validate_body_index(value: Any, *, schema_version: int) -> None:
         "jax_input_leaf",
         "jax_param_leaf",
         "runnable_activation",
+        "runnable_nonpersistent_buffer",
         "runnable_weight",
     }
     allowed_intended_uses = v1_intended_uses if schema_version == 1 else v2_intended_uses

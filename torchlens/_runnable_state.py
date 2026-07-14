@@ -100,6 +100,31 @@ def bind_embedded_trace_state(trace: Any, sd: Mapping[str, Any]) -> None:
     )
 
 
+def bind_embedded_nonpersistent_buffers(trace: Any, buffers: Mapping[str, Any]) -> None:
+    """Validate and bind captured values for used non-persistent buffers.
+
+    Parameters
+    ----------
+    trace:
+        Loaded sparse Trace receiving the mandatory buffer payload.
+    buffers:
+        Registered buffer names mapped to capture-time tensor values.
+
+    Raises
+    ------
+    StateBindingError
+        If names, shapes, dtypes, or roles violate the non-persistent slots.
+    """
+
+    descriptor = _require_descriptor(trace)
+    validate_nonpersistent_buffer_mapping_for_descriptor(descriptor, buffers)
+    trace.__dict__["_runnable_embedded_nonpersistent_buffers"] = {
+        name: value.detach().clone()
+        for name, value in buffers.items()
+        if isinstance(name, str) and isinstance(value, torch.Tensor)
+    }
+
+
 def prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunnableState:
     """Resolve and allocate all parameter/buffer slots without executing the DAG.
 
@@ -122,9 +147,13 @@ def prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunna
     """
 
     descriptor = _require_descriptor(trace)
+    nonpersistent_buffers = _prepared_nonpersistent_buffers(trace, descriptor)
     user_state = trace.__dict__.get("_runnable_staged_user_state")
     if isinstance(user_state, Mapping):
-        return _prepared_bound_state(user_state, StateSource.USER_STATE_DICT, seed)
+        return _with_nonpersistent_buffers(
+            _prepared_bound_state(user_state, StateSource.USER_STATE_DICT, seed),
+            nonpersistent_buffers,
+        )
 
     embedded_state = trace.__dict__.get("_runnable_embedded_state")
     if embedded_state is not None:
@@ -139,7 +168,10 @@ def prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunna
                 )
             )
         validated = _validate_state_mapping(trace, embedded_state)
-        return _prepared_bound_state(validated, StateSource.EMBEDDED_CAPTURE_STATE, seed)
+        return _with_nonpersistent_buffers(
+            _prepared_bound_state(validated, StateSource.EMBEDDED_CAPTURE_STATE, seed),
+            nonpersistent_buffers,
+        )
     if descriptor.payload_layers.weights.present:
         raise _binding_error(
             (
@@ -152,12 +184,15 @@ def prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunna
         )
 
     slot_values, random_slot_ids = _initialize_state_slots(descriptor, seed)
-    return PreparedRunnableState(
-        slot_values=MappingProxyType(slot_values),
-        state_source=StateSource.RANDOM_INITIALIZATION,
-        initializer_policy_version=RUNNABLE_INITIALIZER_POLICY_VERSION,
-        seed=seed,
-        random_filled_slot_ids=random_slot_ids,
+    return _with_nonpersistent_buffers(
+        PreparedRunnableState(
+            slot_values=MappingProxyType(slot_values),
+            state_source=StateSource.RANDOM_INITIALIZATION,
+            initializer_policy_version=RUNNABLE_INITIALIZER_POLICY_VERSION,
+            seed=seed,
+            random_filled_slot_ids=random_slot_ids,
+        ),
+        nonpersistent_buffers,
     )
 
 
@@ -175,6 +210,45 @@ def _prepared_bound_state(
         seed=seed,
         random_filled_slot_ids=(),
     )
+
+
+def _with_nonpersistent_buffers(
+    prepared: PreparedRunnableState,
+    buffers: Mapping[str, torch.Tensor],
+) -> PreparedRunnableState:
+    """Merge capture-embedded non-persistent buffers into prepared run state."""
+
+    values = dict(prepared.slot_values)
+    values.update(buffers)
+    return replace(prepared, slot_values=MappingProxyType(values))
+
+
+def _prepared_nonpersistent_buffers(
+    trace: Any,
+    descriptor: SparseRunDescriptor,
+) -> Mapping[str, torch.Tensor]:
+    """Return validated slot-keyed capture values for non-persistent buffers."""
+
+    slots = _nonpersistent_buffer_slots(descriptor)
+    declared = descriptor.payload_layers.nonpersistent_buffers
+    embedded = trace.__dict__.get("_runnable_embedded_nonpersistent_buffers")
+    if not slots:
+        return MappingProxyType({})
+    if (
+        not declared.present
+        or declared.schema != "runnable_nonpersistent_buffer_v1"
+        or not isinstance(embedded, Mapping)
+    ):
+        raise _binding_error(
+            (
+                _diagnostic(
+                    RunnableErrorCode.STATE_MISSING_KEY,
+                    "Used non-persistent buffers require their capture-embedded payload.",
+                    detection_stage="state_nonpersistent_buffer_hook",
+                ),
+            )
+        )
+    return validate_nonpersistent_buffer_mapping_for_descriptor(descriptor, embedded)
 
 
 def _validate_state_mapping(trace: Any, sd: Mapping[str, Any]) -> Mapping[str, torch.Tensor]:
@@ -208,17 +282,52 @@ def validate_state_mapping_for_descriptor(
         If names, roles, aliases, shapes, or dtypes violate the contract.
     """
 
-    if not isinstance(sd, Mapping):
-        raise TypeError("sd must be a mapping of canonical state_dict names to tensors.")
+    return _validate_named_slot_mapping(_persistent_state_slots(descriptor), sd)
 
-    state_slots = _state_slots(descriptor)
+
+def validate_nonpersistent_buffer_mapping_for_descriptor(
+    descriptor: SparseRunDescriptor,
+    buffers: Mapping[str, Any],
+) -> Mapping[str, torch.Tensor]:
+    """Validate captured non-persistent buffers against their runnable slots.
+
+    Parameters
+    ----------
+    descriptor:
+        Runnable descriptor supplying non-persistent buffer contracts.
+    buffers:
+        Mapping of registered buffer names to captured tensor values.
+
+    Returns
+    -------
+    Mapping[str, torch.Tensor]
+        Detached, slot-keyed buffer values suitable for execution.
+
+    Raises
+    ------
+    StateBindingError
+        If names, roles, aliases, shapes, or dtypes violate the contract.
+    """
+
+    return _validate_named_slot_mapping(_nonpersistent_buffer_slots(descriptor), buffers)
+
+
+def _validate_named_slot_mapping(
+    state_slots: tuple[TensorSlotDescriptor, ...],
+    values: Mapping[str, Any],
+) -> Mapping[str, torch.Tensor]:
+    """Validate one exact canonical-name mapping for a selected slot set."""
+
+    if not isinstance(values, Mapping):
+        raise TypeError("state values must be a mapping of canonical names to tensors.")
+
     slots_by_name: dict[str, list[TensorSlotDescriptor]] = defaultdict(list)
     for slot in state_slots:
         assert slot.state_binding is not None
         slots_by_name[slot.state_binding.state_dict_name].append(slot)
 
     diagnostics: list[RunnableDiagnostic] = []
-    supplied_names = {name for name in sd if isinstance(name, str)}
+    supplied_names = {name for name in values if isinstance(name, str)}
     expected_names = set(slots_by_name)
     for name in sorted(expected_names - supplied_names):
         diagnostics.append(
@@ -229,7 +338,7 @@ def validate_state_mapping_for_descriptor(
                 details=(("state_dict_name", name),),
             )
         )
-    for key in sd:
+    for key in values:
         if not isinstance(key, str) or key not in expected_names:
             diagnostics.append(
                 _diagnostic(
@@ -242,7 +351,7 @@ def validate_state_mapping_for_descriptor(
 
     values_by_name: dict[str, torch.Tensor] = {}
     for name in sorted(expected_names & supplied_names):
-        value = sd[name]
+        value = values[name]
         if not isinstance(value, torch.Tensor):
             diagnostics.append(
                 _diagnostic(
@@ -424,7 +533,7 @@ def _initialize_state_slots(
 ) -> tuple[dict[str, torch.Tensor], tuple[str, ...]]:
     """Allocate every state slot using the frozen role initializer table."""
 
-    state_slots = _state_slots(descriptor)
+    state_slots = _persistent_state_slots(descriptor)
     groups: dict[str, list[TensorSlotDescriptor]] = defaultdict(list)
     for slot in state_slots:
         binding = slot.state_binding
@@ -614,6 +723,32 @@ def _state_slots(descriptor: SparseRunDescriptor) -> tuple[TensorSlotDescriptor,
         slot
         for slot in descriptor.tensor_slots
         if slot.role in state_roles and slot.state_binding is not None
+    )
+
+
+def _persistent_state_slots(
+    descriptor: SparseRunDescriptor,
+) -> tuple[TensorSlotDescriptor, ...]:
+    """Return only slots belonging to the canonical persistent state mapping."""
+
+    return tuple(
+        slot
+        for slot in _state_slots(descriptor)
+        if slot.state_binding is not None and slot.state_binding.persistent
+    )
+
+
+def _nonpersistent_buffer_slots(
+    descriptor: SparseRunDescriptor,
+) -> tuple[TensorSlotDescriptor, ...]:
+    """Return registered buffer slots intentionally excluded from ``state_dict``."""
+
+    return tuple(
+        slot
+        for slot in _state_slots(descriptor)
+        if slot.role is TensorSlotRole.BUFFER
+        and slot.state_binding is not None
+        and not slot.state_binding.persistent
     )
 
 
