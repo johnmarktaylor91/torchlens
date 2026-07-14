@@ -168,6 +168,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_runnable_readiness": None,
     "_runnable_staged_user_state": None,
     "_runnable_embedded_state": None,
+    "_runnable_capture_state": None,
     "_runnable_embedded_nonpersistent_buffers": None,
     "_runnable_archived_activations": None,
     "_runnable_path_faithfulness": None,
@@ -1006,6 +1007,7 @@ class Trace(
     _runnable_readiness: "ReadinessReport | None"
     _runnable_staged_user_state: Mapping[str, torch.Tensor] | None
     _runnable_embedded_state: Mapping[str, torch.Tensor] | None
+    _runnable_capture_state: Mapping[str, torch.Tensor] | None
     _runnable_embedded_nonpersistent_buffers: Mapping[str, torch.Tensor] | None
     _runnable_archived_activations: Mapping[str, "ArchivedActivation"] | None
     _runnable_path_faithfulness: "PathFaithfulness | None"
@@ -1054,6 +1056,7 @@ class Trace(
         "_runnable_readiness": FieldPolicy.DROP,
         "_runnable_staged_user_state": FieldPolicy.DROP,
         "_runnable_embedded_state": FieldPolicy.DROP,
+        "_runnable_capture_state": FieldPolicy.DROP,
         "_runnable_embedded_nonpersistent_buffers": FieldPolicy.DROP,
         "_runnable_archived_activations": FieldPolicy.DROP,
         "_runnable_path_faithfulness": FieldPolicy.DROP,
@@ -1444,6 +1447,7 @@ class Trace(
         self._runnable_readiness: ReadinessReport | None = None
         self._runnable_staged_user_state: Mapping[str, torch.Tensor] | None = None
         self._runnable_embedded_state: Mapping[str, torch.Tensor] | None = None
+        self._runnable_capture_state: Mapping[str, torch.Tensor] | None = None
         self._runnable_embedded_nonpersistent_buffers: Mapping[str, torch.Tensor] | None = None
         self._runnable_archived_activations: Mapping[str, ArchivedActivation] | None = None
         self._runnable_path_faithfulness: PathFaithfulness | None = None
@@ -2430,15 +2434,17 @@ class Trace(
         state["_activation_transform_repr"] = (
             repr(self.activation_transform) if self.activation_transform is not None else None
         )
-        # Loaded runnable traces bind these as immutable MappingProxyType views, which
-        # cannot be pickled/deepcopied. The fork path special-cases them; the generic
-        # pickle path must neutralize them to a plain dict so a loaded runnable trace
-        # (embedded weights or staged load_state_dict) survives pickle/deepcopy and its
-        # poison flag round-trips. Run execution only reads these bindings.
+        # Runnable traces bind these as immutable MappingProxyType views, which cannot
+        # be pickled/deepcopied. The fork path special-cases them; the generic pickle
+        # path must neutralize them to a plain dict so capture-time, embedded, and
+        # staged state survives pickle/deepcopy. Run execution only reads these bindings.
         state["_runnable_embedded_state"] = (
             dict(self._runnable_embedded_state)
             if self._runnable_embedded_state is not None
             else None
+        )
+        state["_runnable_capture_state"] = (
+            dict(self._runnable_capture_state) if self._runnable_capture_state is not None else None
         )
         state["_runnable_embedded_nonpersistent_buffers"] = (
             dict(self._runnable_embedded_nonpersistent_buffers)

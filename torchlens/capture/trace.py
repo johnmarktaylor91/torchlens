@@ -1169,6 +1169,11 @@ def run_and_log_inputs_through_model(
             device_str = ", ".join(sorted(devices)) if devices else "unknown"
             _vprint(self, f"Inputs: {len(input_tensors)} tensor(s) on {device_str}")
 
+        if bool(getattr(self, "intervention_ready", False)):
+            from .._runnable_state import snapshot_capture_state
+
+            self._runnable_capture_state = snapshot_capture_state(model)
+
         # Turn on the logging toggle and run the forward pass.
         # Inside this context, every decorated torch function will log its
         # inputs/outputs.  Source tensors (model inputs) are logged explicitly

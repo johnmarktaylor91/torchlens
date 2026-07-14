@@ -39,6 +39,43 @@ class PreparedRunnableState:
     random_filled_slot_ids: tuple[str, ...]
 
 
+def snapshot_capture_state(model: object) -> Mapping[str, torch.Tensor] | None:
+    """Clone a model's persistent state at the capture execution boundary.
+
+    Parameters
+    ----------
+    model:
+        Live model about to execute the captured forward pass.
+
+    Returns
+    -------
+    Mapping[str, torch.Tensor] | None
+        Detached tensor clones keyed by canonical ``state_dict`` name, or
+        ``None`` when the model cannot provide a tensor-only state mapping.
+
+    Notes
+    -----
+    The clones deliberately retain their original device. Runnable descriptor
+    validation records the capture device contract, while serialization later
+    performs its ordinary device-neutral transport conversion.
+    """
+
+    state_dict_method = getattr(model, "state_dict", None)
+    if not callable(state_dict_method):
+        return None
+    try:
+        state = state_dict_method()
+    except Exception:
+        return None
+    if not isinstance(state, Mapping) or any(
+        not isinstance(name, str) or not isinstance(value, torch.Tensor)
+        for name, value in state.items()
+    ):
+        return None
+    with _state.pause_logging():
+        return MappingProxyType({name: value.detach().clone() for name, value in state.items()})
+
+
 def load_trace_state_dict(trace: Any, sd: Mapping[str, Any]) -> None:
     """Validate and atomically stage a user state mapping on a sparse Trace.
 

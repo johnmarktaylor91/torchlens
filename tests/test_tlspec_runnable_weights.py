@@ -21,7 +21,11 @@ from torchlens._io.runnable import (
 from torchlens._runnable_state import runnable_tensor_byte_digest
 from torchlens.errors import StateBindingError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, StateSource
+from torchlens.runnable import (
+    NumericAttestationStatus,
+    PathFaithfulness,
+    StateSource,
+)
 
 
 class WeightPayloadModel(nn.Module):
@@ -272,6 +276,39 @@ def test_embedded_weights_run_matches_live_and_reports_capture_state(tmp_path: P
     assert loaded.readiness.state_sources_available[0] is StateSource.EMBEDDED_CAPTURE_STATE
 
 
+@pytest.mark.parametrize("drift_target", ("unchanged", "parameter", "buffer"))
+def test_delayed_weight_save_embeds_capture_state_and_attests(
+    tmp_path: Path,
+    drift_target: str,
+) -> None:
+    """Keep delayed saves bound to the state that produced captured activations."""
+
+    model = WeightPayloadModel().eval()
+    inputs = torch.ones(2, 3)
+    expected_output = model(inputs).detach().clone()
+    trace = _capture(model)
+
+    with torch.no_grad():
+        if drift_target == "parameter":
+            model.linear.weight.add_(10.0)
+        elif drift_target == "buffer":
+            model.scale.add_(10.0)
+
+    path = tmp_path / f"{drift_target}.tlspec"
+    trace.save(
+        path,
+        level="runnable",
+        include_weights=True,
+        include_activations=True,
+    )
+    result = tl.load(path).run(inputs=inputs)
+
+    assert torch.equal(result.output, expected_output)
+    assert result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
+
+
 def test_user_state_dict_overrides_embedded_capture_state(tmp_path: Path) -> None:
     """Give an explicitly staged user mapping precedence over embedded weights."""
 
@@ -421,3 +458,22 @@ def test_loaded_runnable_embedded_state_trace_pickles_and_deepcopies(tmp_path: P
         assert revived.__dict__.get("_runnable_poisoned") is True
         with pytest.raises(PoisonedRunError):
             revived.to_pandas()
+
+
+def test_capture_state_trace_pickles_deepcopies_and_forks() -> None:
+    """Preserve the capture-state snapshot across trace copy and fork paths."""
+    import copy
+
+    model = WeightPayloadModel().eval()
+    with torch.no_grad():
+        trace = _capture(model)
+
+    for copied in (pickle.loads(pickle.dumps(trace)), copy.deepcopy(trace)):
+        state = copied.__dict__.get("_runnable_capture_state")
+        assert isinstance(state, dict)
+        assert state is not trace._runnable_capture_state
+        for name, value in model.state_dict().items():
+            assert torch.equal(state[name], value)
+
+    fork = trace.fork()
+    assert fork._runnable_capture_state is trace._runnable_capture_state
