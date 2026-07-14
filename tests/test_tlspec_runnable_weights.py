@@ -21,7 +21,11 @@ from torchlens._io.runnable import (
 from torchlens._runnable_state import runnable_tensor_byte_digest
 from torchlens.errors import StateBindingError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, StateSource
+from torchlens.runnable import (
+    NumericAttestationStatus,
+    PathFaithfulness,
+    StateSource,
+)
 
 
 class WeightPayloadModel(nn.Module):
@@ -270,6 +274,39 @@ def test_embedded_weights_run_matches_live_and_reports_capture_state(tmp_path: P
     assert result.report.random_filled_slot_ids == ()
     assert loaded.readiness is not None
     assert loaded.readiness.state_sources_available[0] is StateSource.EMBEDDED_CAPTURE_STATE
+
+
+@pytest.mark.parametrize("drift_target", ("unchanged", "parameter", "buffer"))
+def test_delayed_weight_save_embeds_capture_state_and_attests(
+    tmp_path: Path,
+    drift_target: str,
+) -> None:
+    """Keep delayed saves bound to the state that produced captured activations."""
+
+    model = WeightPayloadModel().eval()
+    inputs = torch.ones(2, 3)
+    expected_output = model(inputs).detach().clone()
+    trace = _capture(model)
+
+    with torch.no_grad():
+        if drift_target == "parameter":
+            model.linear.weight.add_(10.0)
+        elif drift_target == "buffer":
+            model.scale.add_(10.0)
+
+    path = tmp_path / f"{drift_target}.tlspec"
+    trace.save(
+        path,
+        level="runnable",
+        include_weights=True,
+        include_activations=True,
+    )
+    result = tl.load(path).run(inputs=inputs)
+
+    assert torch.equal(result.output, expected_output)
+    assert result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
 def test_user_state_dict_overrides_embedded_capture_state(tmp_path: Path) -> None:

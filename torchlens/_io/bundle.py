@@ -694,22 +694,22 @@ def _physical_op_payload(op: Any, field_name: str) -> Any:
 
 
 def _capture_source_state(trace: Trace, *, option_name: str) -> Mapping[str, torch.Tensor]:
-    """Return the capture source model's full state mapping for one payload option."""
+    """Return the snapshot of the model state used by the captured forward pass.
 
-    source_ref = getattr(trace, "_source_model_ref", None)
-    model = source_ref() if callable(source_ref) else None
-    state_dict_method = getattr(model, "state_dict", None)
-    if not callable(state_dict_method):
-        raise TorchLensIOError(
-            f"{option_name}=True requires the live source model retained by the capture Trace."
-        )
-    state = state_dict_method()
+    The snapshot is taken at the runnable capture boundary, before user model
+    execution. It must never be replaced with a save-time read of the live
+    model because that could embed a drifted state under the capture-state
+    label.
+    """
+
+    state = getattr(trace, "_runnable_capture_state", None)
     if not isinstance(state, Mapping) or any(
         not isinstance(name, str) or not isinstance(value, torch.Tensor)
         for name, value in state.items()
     ):
         raise TorchLensIOError(
-            "The capture source model did not return a tensor state_dict mapping."
+            f"{option_name}=True requires a tensor-only capture-time state snapshot. "
+            "This Trace cannot embed state as embedded_capture_state."
         )
     return cast(Mapping[str, torch.Tensor], state)
 
