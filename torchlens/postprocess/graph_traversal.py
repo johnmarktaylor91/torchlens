@@ -463,6 +463,21 @@ def _remove_orphan_nodes(self: "Trace") -> None:
             self._raw_layer_dict[orphan_label].is_orphan = True
         return
 
+    # Record the ``func_call_id``s of the ops being INTENTIONALLY orphan-pruned
+    # here (dead computation that never reaches an output). The completeness
+    # backstop uses this so that captured-then-orphan-pruned dispatchable ops are
+    # accounted for on the captured side rather than false-firing as an untraced
+    # dispatch. This is a plain runtime attribute (never serialized / in a
+    # ``*_FIELD_ORDER``) and is only recorded on the removal path -- ``keep_orphans``
+    # leaves the ops in the final trace, so nothing is pruned. Read now, before
+    # removal, while the raw entries still carry their capture-time ``func_call_id``.
+    self._orphan_pruned_func_call_ids = {
+        func_call_id
+        for label in orphan_nodes
+        for func_call_id in (getattr(self._raw_layer_dict[label], "func_call_id", None),)
+        if isinstance(func_call_id, int)
+    }
+
     # Batch-remove orphaned nodes and rebuild the ordered layer dict/list.
     orphan_entries = [self._raw_layer_dict[label] for label in orphan_nodes]
     self._batch_remove_log_entries(orphan_entries, remove_references=True)

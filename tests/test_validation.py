@@ -49,6 +49,7 @@ from torchlens.validation.core import (
     _restore_live_parameter_args_for_replay,
     _op_reduction_depth,
     _deep_numeric_replay_matches_saved,
+    _dispatch_op_count_matches_capture,
     completeness_backstop_counts,
     DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH,
     ValidationDecisionRecorder,
@@ -2064,6 +2065,122 @@ def test_completeness_backstop_mutating_owner_not_captured_fails_the_gate() -> N
         )
     )
     assert dispatch == captured
+
+
+def _dispatch_backstop_probe(
+    *,
+    dispatch: int,
+    captured: int,
+    pruned: int | None,
+) -> SimpleNamespace:
+    """Trace-shaped probe carrying the three completeness-backstop counters."""
+
+    probe = SimpleNamespace(
+        _validation_dispatch_op_count=dispatch,
+        _validation_captured_dispatchable_op_count=captured,
+        num_ops=captured,
+    )
+    if pruned is not None:
+        probe._validation_pruned_dispatchable_op_count = pruned
+    return probe
+
+
+def test_dispatch_backstop_accounts_for_orphan_pruned_dispatchable_ops() -> None:
+    """Captured-then-orphan-pruned dispatchable ops are accounted, not a mismatch.
+
+    Mirrors ``OrphanTensors``: 8 ops dispatch a real aten op (3 reach the output,
+    5 are a dead branch orphan-pruned by ``_remove_orphan_nodes``). The honest
+    invariant is ``dispatched == captured + orphan-pruned``, so the backstop must
+    PASS even though ``dispatched (8) != captured (3)``. This proves the fix does
+    NOT simply relax the check -- it balances the books with the pruned count.
+    """
+
+    # dispatched (8) == captured (3) + orphan-pruned (5) -> match.
+    matched = _dispatch_op_count_matches_capture(
+        _dispatch_backstop_probe(dispatch=8, captured=3, pruned=5)
+    )
+    assert not matched.failed
+    assert matched.reason == "dispatch_op_count_matched"
+
+
+def test_dispatch_backstop_orphan_pruning_does_not_mask_a_genuine_leak() -> None:
+    """TRIPWIRE PROOF: an untraced/leaked dispatch still fails, pruning notwithstanding.
+
+    A genuine leak is a dispatch that reached NEITHER the final graph NOR the
+    intentionally-orphan-pruned set. Even with legitimate orphan pruning present,
+    such a dispatch leaves ``dispatched > captured + pruned`` and MUST trip the
+    backstop -- the exact silent drop the tripwire exists to catch. If the fix had
+    over-credited pruning (e.g. crediting every accounted owner absent from the
+    final trace), this leak would be masked; it must not be.
+    """
+
+    # One extra dispatched op beyond captured + legitimately-pruned -> HARD FAIL.
+    leaked = _dispatch_op_count_matches_capture(
+        _dispatch_backstop_probe(dispatch=9, captured=3, pruned=5)
+    )
+    assert leaked.failed
+    assert leaked.reason == "dispatch_op_count_mismatch"
+
+    # With NO pruning recorded at all, a dispatched-but-uncaptured op still fails
+    # (the pruned counter defaults to 0 and cannot absorb the miss).
+    unpruned_leak = _dispatch_op_count_matches_capture(
+        _dispatch_backstop_probe(dispatch=4, captured=3, pruned=None)
+    )
+    assert unpruned_leak.failed
+    assert unpruned_leak.reason == "dispatch_op_count_mismatch"
+
+
+def test_completeness_backstop_orphan_pruned_count_is_apples_to_apples() -> None:
+    """The pruned counter counts ONLY orphan-pruned DISPATCHABLE (accounted) ops.
+
+    Feed the census three accounted owners (fcids 1, 2, 3) where only fcid 1
+    reaches the final trace, and record fcids {2, 3, 99} as orphan-pruned. fcid 99
+    is a pruned non-dispatch (bookkeeping) node with no accounted owner, so it must
+    NOT be credited. The recorded pruned count is therefore 2 ({2, 3}), keeping the
+    two sides comparable: ``dispatch (3) == captured (1) + pruned (2)``.
+    """
+
+    probe = _backstop_trace(
+        [_backstop_op(1)],
+        [_backstop_dec(1), _backstop_dec(2), _backstop_dec(3)],
+    )
+    probe._orphan_pruned_func_call_ids = {2, 3, 99}
+    dispatch, captured = completeness_backstop_counts(probe)
+    assert (dispatch, captured) == (3, 1)
+    # fcid 99 is not an accounted owner and is excluded from the pruned credit.
+    assert probe._validation_pruned_dispatchable_op_count == 2
+
+    result = _dispatch_op_count_matches_capture(
+        SimpleNamespace(
+            _validation_dispatch_op_count=dispatch,
+            _validation_captured_dispatchable_op_count=captured,
+            _validation_pruned_dispatchable_op_count=probe._validation_pruned_dispatchable_op_count,
+            num_ops=captured,
+        )
+    )
+    assert not result.failed
+
+    # But a genuine drop -- an accounted owner (fcid 3) absent from BOTH the final
+    # trace AND the orphan-pruned set -- is NOT credited, so the backstop fails.
+    genuine_drop = _backstop_trace(
+        [_backstop_op(1)],
+        [_backstop_dec(1), _backstop_dec(2), _backstop_dec(3)],
+    )
+    genuine_drop._orphan_pruned_func_call_ids = {2}
+    drop_dispatch, drop_captured = completeness_backstop_counts(genuine_drop)
+    assert genuine_drop._validation_pruned_dispatchable_op_count == 1
+    drop_result = _dispatch_op_count_matches_capture(
+        SimpleNamespace(
+            _validation_dispatch_op_count=drop_dispatch,
+            _validation_captured_dispatchable_op_count=drop_captured,
+            _validation_pruned_dispatchable_op_count=(
+                genuine_drop._validation_pruned_dispatchable_op_count
+            ),
+            num_ops=drop_captured,
+        )
+    )
+    assert drop_result.failed
+    assert drop_result.reason == "dispatch_op_count_mismatch"
 
 
 def test_replay_validation_checks_every_recurrent_pass() -> None:

@@ -562,6 +562,29 @@ def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
         + unowned_gap_dispatch_count
         + owner_not_captured_mutation_count
     )
+
+    # Dispatchable ops that were CAPTURED and then INTENTIONALLY orphan-pruned
+    # (dead computation that never reaches an output -- see
+    # ``postprocess.graph_traversal._remove_orphan_nodes``). These emitted a real
+    # aten dispatch (so the dispatch census counts them among ``accounted_owner_fcids``)
+    # but were legitimately removed from the final graph, so they are NOT captured
+    # ops. Counting them apples-to-apples with the census: keep ONLY orphan-pruned
+    # ids that are accounted owners (the same "dispatchable" class the census counts),
+    # and exclude replacement-hook orphans already subtracted from the dispatch
+    # census above so they are not double-counted. An accounted owner missing from
+    # the final trace that was NOT recorded as orphan-pruned stays unaccounted and
+    # still trips the backstop -- a genuine silent drop is not masked.
+    orphan_pruned_fcids: Set[int] = {
+        fcid
+        for fcid in getattr(trace, "_orphan_pruned_func_call_ids", ()) or ()
+        if isinstance(fcid, int)
+    }
+    pruned_dispatchable = (orphan_pruned_fcids & accounted_owner_fcids) - excused_orphan_fcids
+    try:
+        trace._validation_pruned_dispatchable_op_count = len(pruned_dispatchable)
+    except (AttributeError, TypeError):
+        pass
+
     return dispatch_census_count, len(captured_census)
 
 
@@ -586,7 +609,14 @@ def _dispatch_op_count_matches_capture(self: "Trace") -> ValidationCheckResult:
     captured_count = int(
         getattr(self, "_validation_captured_dispatchable_op_count", getattr(self, "num_ops", 0))
     )
-    if dispatch_count == captured_count:
+    # Dispatchable ops captured then intentionally orphan-pruned (dead computation)
+    # are accounted for on the captured side: the honest invariant is
+    # ``dispatched == captured + orphan-pruned``. A dispatched op that neither
+    # reached the final graph NOR was recorded as an intentionally-pruned orphan
+    # (a genuine untraced/leaked op) still leaves ``dispatched > captured + pruned``
+    # and trips the backstop.
+    pruned_count = int(getattr(self, "_validation_pruned_dispatchable_op_count", 0))
+    if dispatch_count == captured_count + pruned_count:
         return ValidationCheckResult.validated("dispatch_op_count_matched")
     return ValidationCheckResult.failed_result("dispatch_op_count_mismatch")
 
@@ -731,9 +761,11 @@ def validate_saved_outs(
         captured_count = int(
             getattr(self, "_validation_captured_dispatchable_op_count", getattr(self, "num_ops", 0))
         )
+        pruned_count = int(getattr(self, "_validation_pruned_dispatchable_op_count", 0))
         message = (
             "Validation dispatcher op count does not match captured operation count: "
-            f"{dispatch_count} dispatched vs {captured_count} captured."
+            f"{dispatch_count} dispatched vs {captured_count} captured "
+            f"+ {pruned_count} orphan-pruned."
         )
         print(message)
         record_validation_failure(
@@ -741,7 +773,11 @@ def validate_saved_outs(
             ValidationFailure(
                 check=CHECK_COMPLETENESS,
                 message=message,
-                extra={"dispatch_op_count": dispatch_count, "captured_op_count": captured_count},
+                extra={
+                    "dispatch_op_count": dispatch_count,
+                    "captured_op_count": captured_count,
+                    "orphan_pruned_op_count": pruned_count,
+                },
             ),
         )
         decision_recorder.record(
