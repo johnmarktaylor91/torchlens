@@ -1076,6 +1076,35 @@ def _write_path(root: Any, path: tuple[str | int, ...], value: Any) -> None:
         current = child
 
 
+def _resolve_setter_output(
+    call: RunnableCallDescriptor,
+    output: Any,
+    slot_values: Mapping[str, torch.Tensor],
+) -> Any:
+    """Alias the mutation target for a setter-style in-place call that returns None.
+
+    Ordinary in-place operators (``add_``/``mul_``/``copy_``/``out=``) return the
+    tensor they mutated, so the recorded output slot is bound from the Python
+    return value. Setter-style mutators such as ``Tensor.__setitem__`` mutate
+    their target in place but return ``None``. Their recorded output slot is a
+    version of the mutation target, so bind it from that already-mutated tensor
+    rather than treating the ``None`` return as a structural mismatch (which would
+    otherwise raise a false PathDivergenceError on the original input). Only a
+    genuinely in-place call whose runtime return is ``None`` is remapped; every
+    other call keeps its real return so honest structure/aliasing checks stand.
+    """
+
+    if output is not None or not call.is_inplace:
+        return output
+    target_slot_id = _mutation_target_slot_id(call)
+    if target_slot_id is None:
+        return output
+    target = slot_values.get(target_slot_id)
+    if not isinstance(target, torch.Tensor):
+        return output
+    return target
+
+
 def _bind_call_outputs(
     descriptor: SparseRunDescriptor,
     call: RunnableCallDescriptor,
@@ -1091,6 +1120,7 @@ def _bind_call_outputs(
 
     slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
     checks: list[ContractCheck] = []
+    output = _resolve_setter_output(call, output, slot_values)
     expected_paths = tuple(slots[slot_id].output_path or () for slot_id in call.output_slot_ids)
     actual_paths = _tensor_leaf_paths(output)
     checks.append(

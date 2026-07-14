@@ -356,6 +356,53 @@ def test_loaded_sparse_inplace_call_does_not_corrupt_staged_activations(
     assert torch.equal(fork_relu.out, fork_relu_before_output_edit)
 
 
+class SliceAssignModel(nn.Module):
+    """Setter-style in-place mutator: ``__setitem__`` returns ``None``."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Mutate a slice in place and return the mutated tensor."""
+
+        value = value.clone()
+        value[0] = value[0] * 4
+        return value
+
+
+@pytest.mark.smoke
+def test_loaded_sparse_setitem_runs_and_verifies_on_original_input(
+    tmp_path: Path,
+) -> None:
+    """A ``__setitem__`` (None-returning) mutator replays without a false divergence.
+
+    Regression for the setter-style output aliasing gap: ``Tensor.__setitem__``
+    mutates its target in place but returns ``None``, so the recorded tensor
+    output slot must alias the mutation target rather than expecting a tensor
+    return. Before the fix, original-input replay crashed with a spurious
+    PathDivergenceError instead of returning the correct, VERIFIED result.
+    """
+
+    model = SliceAssignModel()
+    inputs = torch.arange(6.0).reshape(2, 3)
+    expected = model(inputs.clone())
+    trace = tl.trace(
+        model,
+        inputs.clone(),
+        capture=CaptureOptions(intervention_ready=True, cache=False),
+    )
+    path = tmp_path / "slice-assign.tlspec"
+    trace.save(path, level="runnable")
+
+    result = tl.load(path).run(inputs=inputs.clone())
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert torch.equal(result.output, expected)
+
+    # A changed input still replays the mutation faithfully (aliasing/mutation
+    # honesty is preserved -- attestation is simply not applicable off-original).
+    changed = torch.arange(10.0, 16.0).reshape(2, 3)
+    changed_result = tl.load(path).run(inputs=changed.clone())
+    assert torch.equal(changed_result.output, model(changed.clone()))
+    assert changed_result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
 @pytest.mark.parametrize(
     ("model", "expected_type"),
     [
