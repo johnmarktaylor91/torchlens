@@ -142,8 +142,29 @@ def assert_status_completeness(
         If a status is not closed or omits required failure evidence.
     """
 
+    failures = _status_completeness_failures(_records(current_records))
+    if failures:
+        raise StatusCompletenessError(
+            f"terminal status completeness invalid: {', '.join(sorted(failures))}"
+        )
+
+
+def _status_completeness_failures(records: Iterable[Mapping[str, Any]]) -> list[str]:
+    """Return closed-status evidence failures without raising.
+
+    Parameters
+    ----------
+    records:
+        Current terminal model revisions.
+
+    Returns
+    -------
+    list[str]
+        Stable-ID-qualified completeness failures.
+    """
+
     failures: list[str] = []
-    for record in _records(current_records):
+    for record in records:
         stable_id = str(record.get("stable_id"))
         status = record.get("status", {})
         code = status.get("code")
@@ -165,10 +186,7 @@ def assert_status_completeness(
                 failures.append(f"{stable_id}:missing-human-review")
         elif status.get("stage") is not None or status.get("reason_code") is not None:
             failures.append(f"{stable_id}:nonfailure-has-failure-fields")
-    if failures:
-        raise StatusCompletenessError(
-            f"terminal status completeness invalid: {', '.join(sorted(failures))}"
-        )
+    return failures
 
 
 def filter_funnel(
@@ -257,7 +275,7 @@ def completeness_report(
     *,
     workflow_states: Sequence[str] = (),
 ) -> CompletenessReport:
-    """Compute partition and all represented crawl-completion gates.
+    """Compute the final-release partition and crawl-completion gates.
 
     Parameters
     ----------
@@ -276,31 +294,7 @@ def completeness_report(
 
     records = [dict(record) for record in _records(current_records)]
     partition = partition_report(intake_ids, records)
-    issues: dict[str, list[str]] = defaultdict(list)
-    required_true = (
-        "schema_valid",
-        "mandatory_source_present",
-        "source_read_fields_complete",
-        "evidence_coverage_complete",
-        "accuracy_gate_current",
-        "required_fidelity_current",
-        "execution_current",
-        "family_template_valid",
-        "release_eligible",
-    )
-    for record in records:
-        stable_id = str(record["stable_id"])
-        completeness = record.get("completeness", {})
-        for field in required_true:
-            if not completeness.get(field, False):
-                issues[field].append(stable_id)
-        for issue in completeness.get("issues", []):
-            issues[f"record:{issue}"].append(stable_id)
-        if record.get("status", {}).get("kind") == "runs":
-            meaningful = set(record.get("modes", {}).get("meaningful_modes", []))
-            outcomes = set(record.get("modes", {}).get("per_mode_run", {}))
-            if meaningful != outcomes:
-                issues["meaningful_mode_outcomes_incomplete"].append(stable_id)
+    issues = _record_completion_issues(records)
     workflow_counts = Counter(workflow_states)
     unknown_workflows = set(workflow_counts) - WORKFLOW_STATES
     for workflow in unknown_workflows:
@@ -313,3 +307,101 @@ def completeness_report(
         funnel_counts=funnel_counts(records),
         complete=complete,
     )
+
+
+def checkpoint_consistency_report(
+    intake_ids: Iterable[str],
+    current_records: Iterable[Mapping[str, Any]] | Mapping[str, Mapping[str, Any]],
+) -> CompletenessReport:
+    """Validate the represented terminal prefix without requiring crawl completion.
+
+    Missing intake IDs are valid progress at per-environment and daily checkpoint
+    cadence. Represented IDs must still be unique, in intake, terminal, and
+    internally complete for their terminal status.
+
+    Parameters
+    ----------
+    intake_ids:
+        Trusted full intake stable IDs.
+    current_records:
+        Current terminal revisions in the represented prefix.
+
+    Returns
+    -------
+    CompletenessReport
+        Prefix partition diagnostics; ``complete`` means checkpoint-consistent,
+        not final-release complete.
+    """
+
+    records = [dict(record) for record in _records(current_records)]
+    partition = partition_report(intake_ids, records)
+    issues = _record_completion_issues(records)
+    invalid = sorted(code for code in partition.buckets if code.startswith("invalid:"))
+    for code in invalid:
+        issues[f"partition:{code}"].extend(sorted(partition.buckets[code]))
+    consistent = not (
+        partition.extra_ids or partition.duplicate_ids or invalid or any(issues.values())
+    )
+    return CompletenessReport(
+        partition=partition,
+        incomplete_by_issue={key: tuple(sorted(value)) for key, value in sorted(issues.items())},
+        workflow_counts={},
+        funnel_counts=funnel_counts(records),
+        complete=consistent,
+    )
+
+
+def _record_completion_issues(records: Sequence[Mapping[str, Any]]) -> dict[str, list[str]]:
+    """Return status-appropriate completeness issues for represented records.
+
+    ``runs`` records must satisfy every runnable-release gate. Honest terminal
+    failures, skips, and deferrals are complete as terminal outcomes even though
+    they intentionally remain ineligible for the runnable release view.
+
+    Parameters
+    ----------
+    records:
+        Current terminal model revisions.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Issue name to affected stable IDs.
+    """
+
+    issues: dict[str, list[str]] = defaultdict(list)
+    base_required = ("schema_valid", "mandatory_source_present")
+    run_required = (
+        "source_read_fields_complete",
+        "evidence_coverage_complete",
+        "accuracy_gate_current",
+        "required_fidelity_current",
+        "execution_current",
+        "family_template_valid",
+        "release_eligible",
+    )
+    for failure in _status_completeness_failures(records):
+        stable_id, issue = failure.split(":", 1)
+        issues[f"status:{issue}"].append(stable_id)
+    for record in records:
+        stable_id = str(record["stable_id"])
+        status = record.get("status", {})
+        status_code = str(status.get("code"))
+        kind = status.get("kind")
+        completeness = record.get("completeness", {})
+        required_true = (*base_required, *run_required) if kind == "runs" else base_required
+        for field in required_true:
+            if not completeness.get(field, False):
+                issues[field].append(stable_id)
+        expected_terminal_issues = (
+            {status_code} if kind in {"failed", "skipped", "deferred"} else set()
+        )
+        for issue in completeness.get("issues", []):
+            if str(issue) not in expected_terminal_issues:
+                issues[f"record:{issue}"].append(stable_id)
+        if kind == "runs":
+            meaningful = set(record.get("modes", {}).get("meaningful_modes", []))
+            outcomes = set(record.get("modes", {}).get("per_mode_run", {}))
+            if meaningful != outcomes:
+                issues["meaningful_mode_outcomes_incomplete"].append(stable_id)
+    return issues
