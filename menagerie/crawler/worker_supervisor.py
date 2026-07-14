@@ -16,7 +16,13 @@ from typing import Any, Mapping, Optional, Sequence
 
 from menagerie.crawler.constants import DEFAULT_FORWARD_TIMEOUT_SECONDS, STDIO_TAIL_MAX_CHARS
 from menagerie.crawler.identity import hash_bytes, stable_hash
-from menagerie.crawler.policy import build_safe_environment
+from menagerie.crawler.policy import (
+    SandboxUnavailableError,
+    build_safe_environment,
+    detect_os_sandbox,
+    generate_macos_sandbox_profile,
+    wrap_with_os_sandbox,
+)
 
 
 @dataclass(frozen=True)
@@ -198,8 +204,9 @@ def run_isolated_subprocess(
     rss_limit_bytes: int = 12 * 1024**3,
     cwd: Optional[Path] = None,
     base_environment: Optional[Mapping[str, str]] = None,
+    additional_write_roots: Sequence[Path] = (),
 ) -> SupervisorObservation:
-    """Launch a fresh credential-scrubbed subprocess without a shell.
+    """Launch a fresh credential-scrubbed subprocess inside an OS sandbox.
 
     Parameters
     ----------
@@ -215,11 +222,18 @@ def run_isolated_subprocess(
         Read-only source working directory. Defaults to the current directory.
     base_environment:
         Optional environment filtered through the safe allowlist.
+    additional_write_roots:
+        Explicit result roots writable in addition to scratch.
 
     Returns
     -------
     SupervisorObservation
         Parent-only process and resource facts.
+
+    Raises
+    ------
+    SandboxUnavailableError
+        If no complete OS sandbox is working on this host.
     """
 
     if not argv or any(not isinstance(value, str) or "\x00" in value for value in argv):
@@ -227,10 +241,30 @@ def run_isolated_subprocess(
     if timeout_seconds <= 0:
         raise ValueError("timeout_seconds must be positive")
     scratch_root.mkdir(parents=True, exist_ok=True)
+    write_roots = (scratch_root.resolve(), *(path.resolve() for path in additional_write_roots))
+    for root in write_roots:
+        root.mkdir(parents=True, exist_ok=True)
     stdout_path = scratch_root / "stdout.log"
     stderr_path = scratch_root / "stderr.log"
     safe_environment = build_safe_environment(scratch_root, base_environment=base_environment)
     working_directory = (cwd or Path.cwd()).resolve()
+    sandbox = detect_os_sandbox()
+    if sandbox is None:
+        raise SandboxUnavailableError("failed:sandbox-unavailable")
+    profile_path: Optional[Path] = None
+    if sandbox.kind == "sandbox-exec":
+        profile_path = scratch_root / "worker-sandbox.sb"
+        profile_path.write_text(
+            generate_macos_sandbox_profile(write_roots),
+            encoding="utf-8",
+        )
+    sandboxed_argv = wrap_with_os_sandbox(
+        sandbox,
+        argv,
+        working_directory,
+        write_roots,
+        macos_profile_path=profile_path,
+    )
     usage_before = resource.getrusage(resource.RUSAGE_CHILDREN)
     started = time.monotonic()
     timed_out = False
@@ -238,7 +272,7 @@ def run_isolated_subprocess(
     peak_rss = 0
     with stdout_path.open("wb") as stdout_handle, stderr_path.open("wb") as stderr_handle:
         process = subprocess.Popen(
-            list(argv),
+            list(sandboxed_argv),
             cwd=working_directory,
             env=safe_environment,
             stdin=subprocess.DEVNULL,
@@ -273,7 +307,7 @@ def run_isolated_subprocess(
     stdout = stdout_path.read_bytes()
     stderr = stderr_path.read_bytes()
     return SupervisorObservation(
-        argv=tuple(argv),
+        argv=sandboxed_argv,
         cwd=str(working_directory),
         exit_code=exit_code,
         signal_number=signal_number,
@@ -285,6 +319,54 @@ def run_isolated_subprocess(
         stdout_sha256=hash_bytes(stdout),
         stdout_bytes=len(stdout),
         stdout_tail=_tail(stdout),
+        stderr_sha256=hash_bytes(stderr),
+        stderr_bytes=len(stderr),
+        stderr_tail=_tail(stderr),
+        stdout_path=str(stdout_path),
+        stderr_path=str(stderr_path),
+    )
+
+
+def _sandbox_unavailable_observation(
+    argv: Sequence[str], scratch_root: Path, working_directory: Path
+) -> SupervisorObservation:
+    """Create honest parent facts for a worker refused before launch.
+
+    Parameters
+    ----------
+    argv:
+        Worker command that was not launched.
+    scratch_root:
+        Supervisor log root.
+    working_directory:
+        Requested worker working directory.
+
+    Returns
+    -------
+    SupervisorObservation
+        Zero-resource observation with a durable closed failure log.
+    """
+
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    stdout_path = scratch_root / "stdout.log"
+    stderr_path = scratch_root / "stderr.log"
+    stdout = b""
+    stderr = b"failed:sandbox-unavailable\n"
+    stdout_path.write_bytes(stdout)
+    stderr_path.write_bytes(stderr)
+    return SupervisorObservation(
+        argv=tuple(argv),
+        cwd=str(working_directory),
+        exit_code=None,
+        signal_number=None,
+        wall_seconds=0.0,
+        cpu_seconds=0.0,
+        peak_rss_bytes=0,
+        timed_out=False,
+        rss_exceeded=False,
+        stdout_sha256=hash_bytes(stdout),
+        stdout_bytes=0,
+        stdout_tail="",
         stderr_sha256=hash_bytes(stderr),
         stderr_bytes=len(stderr),
         stderr_tail=_tail(stderr),
@@ -360,12 +442,20 @@ def supervise_worker(
         "--receipt",
         str(receipt_path),
     )
-    observation = run_isolated_subprocess(
-        argv,
-        scratch_root,
-        timeout_seconds=timeout_seconds,
-        rss_limit_bytes=rss_limit_bytes,
-        cwd=cwd,
-    )
+    working_directory = (cwd or Path.cwd()).resolve()
+    try:
+        observation = run_isolated_subprocess(
+            argv,
+            scratch_root,
+            timeout_seconds=timeout_seconds,
+            rss_limit_bytes=rss_limit_bytes,
+            cwd=working_directory,
+            additional_write_roots=(receipt_path.parent,),
+        )
+    except SandboxUnavailableError:
+        observation = _sandbox_unavailable_observation(argv, scratch_root, working_directory)
+        return SupervisedResult(observation, None, "failed:sandbox-unavailable")
     receipt, receipt_error = _load_receipt(receipt_path)
+    if observation.exit_code != 0 or observation.signal_number is not None:
+        return SupervisedResult(observation, None, receipt_error or "worker-exit-nonzero")
     return SupervisedResult(observation, receipt, receipt_error)
