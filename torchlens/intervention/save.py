@@ -5,14 +5,13 @@ from __future__ import annotations
 from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import asdict, dataclass
 from enum import Enum
-import importlib
 import json
 import os
 from pathlib import Path
 import shutil
 import uuid
 import warnings
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 import torch
 from safetensors.torch import load_file, save_file
@@ -36,6 +35,7 @@ from .helpers import HELPER_REGISTRY_VERSION, helper_from_serialized
 from .resolver import (
     function_registry_key_from_callable,
     resolve_function_registry_key,
+    resolve_import_ref,
     resolve_sites,
 )
 from .types import (
@@ -96,12 +96,20 @@ class _SerializedState:
 
 @dataclass(frozen=True)
 class LazyImportRef:
-    """Callable import reference that resolves only at execution time."""
+    """Callable import reference that resolves only at execution time.
+
+    The trust context is captured from the load call that materialized this
+    reference and carried until execution, so the deferred resolution enforces the
+    SAME deny-by-default gate as ``resolve_function_registry_key``: a foreign module
+    is never imported under the default ``trust_custom_callables=False`` load.
+    """
 
     import_path: str
+    trust_custom_callables: bool = False
+    allowed_custom_callable_modules: tuple[str, ...] | None = None
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        """Resolve and call the referenced object.
+        """Resolve and call the referenced object under its captured trust gate.
 
         Parameters
         ----------
@@ -116,7 +124,11 @@ class LazyImportRef:
             Return value from the imported callable.
         """
 
-        return _resolve_import_ref(self.import_path)(*args, **kwargs)
+        return _resolve_import_ref(
+            self.import_path,
+            trust_custom_callables=self.trust_custom_callables,
+            allowed_custom_callable_modules=self.allowed_custom_callable_modules,
+        )(*args, **kwargs)
 
     def __repr__(self) -> str:
         """Return a stable representation without importing the target.
@@ -253,7 +265,12 @@ def load_intervention_spec(
     tensor_entries = [TensorEntry.from_dict(entry) for entry in manifest.get("tensor_entries", [])]
     tensors = _load_tensor_refs(spec_path, tensor_entries)
     spec_payload = data["intervention_spec"]
-    spec = _deserialize_intervention_spec(spec_payload, tensors)
+    spec = _deserialize_intervention_spec(
+        spec_payload,
+        tensors,
+        trust_custom_callables=trust_custom_callables,
+        allowed_custom_callable_modules=allowed_custom_callable_modules,
+    )
     metadata = dict(spec.metadata)
     metadata.update(
         {
@@ -1016,7 +1033,11 @@ def _serialize_opaque(value: Any, save_level: SaveLevel) -> dict[str, Any]:
 
 
 def _deserialize_intervention_spec(
-    data: dict[str, Any], tensors: dict[str, torch.Tensor]
+    data: dict[str, Any],
+    tensors: dict[str, torch.Tensor],
+    *,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
 ) -> InterventionSpec:
     """Deserialize JSON-safe spec data.
 
@@ -1026,6 +1047,11 @@ def _deserialize_intervention_spec(
         Spec payload from ``spec.json``.
     tensors:
         Loaded tensor refs.
+    trust_custom_callables:
+        Execution-time trust for foreign import-ref callables, carried into every
+        materialized ``LazyImportRef`` / import-ref helper. Defaults to fail-closed.
+    allowed_custom_callable_modules:
+        Optional foreign-module allowlist carried alongside the trust flag.
 
     Returns
     -------
@@ -1033,22 +1059,32 @@ def _deserialize_intervention_spec(
         Runtime intervention spec.
     """
 
+    def _decode(value: Any) -> Any:
+        """Decode one value under the load's trust context."""
+
+        return _deserialize_value(
+            value,
+            tensors,
+            trust_custom_callables=trust_custom_callables,
+            allowed_custom_callable_modules=allowed_custom_callable_modules,
+        )
+
     spec = InterventionSpec(metadata=dict(data.get("metadata", {})))
     spec.targets = [_target_spec_from_json(item) for item in data.get("targets", [])]
-    spec.helper = _deserialize_value(data.get("helper"), tensors)
-    spec.value = _deserialize_value(data.get("value"), tensors)
-    spec.hook = _deserialize_value(data.get("hook"), tensors)
+    spec.helper = _decode(data.get("helper"))
+    spec.value = _decode(data.get("value"))
+    spec.hook = _decode(data.get("hook"))
     for item in data.get("target_value_specs", []):
         spec.target_value_specs.append(
             TargetValueSpec(
                 site_target=_target_spec_from_json(item["site_target"]),
-                value=_deserialize_value(item.get("value"), tensors),
+                value=_decode(item.get("value")),
                 metadata=dict(item.get("metadata", {})),
             )
         )
     for item in data.get("hook_specs", []):
-        helper = _deserialize_value(item.get("helper"), tensors)
-        hook = _deserialize_value(item.get("hook"), tensors)
+        helper = _decode(item.get("helper"))
+        hook = _decode(item.get("hook"))
         spec.hook_specs.append(
             HookSpec(
                 site_target=_target_spec_from_json(item["site_target"]),
@@ -1058,11 +1094,25 @@ def _deserialize_intervention_spec(
                 metadata=dict(item.get("metadata", {})),
             )
         )
-    spec.records = [_deserialize_fire_record(item, tensors) for item in data.get("records", [])]
+    spec.records = [
+        _deserialize_fire_record(
+            item,
+            tensors,
+            trust_custom_callables=trust_custom_callables,
+            allowed_custom_callable_modules=allowed_custom_callable_modules,
+        )
+        for item in data.get("records", [])
+    ]
     return spec
 
 
-def _deserialize_fire_record(data: dict[str, Any], tensors: dict[str, torch.Tensor]) -> FireRecord:
+def _deserialize_fire_record(
+    data: dict[str, Any],
+    tensors: dict[str, torch.Tensor],
+    *,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
+) -> FireRecord:
     """Deserialize one fire record from JSON-safe data.
 
     Parameters
@@ -1071,6 +1121,10 @@ def _deserialize_fire_record(data: dict[str, Any], tensors: dict[str, torch.Tens
         JSON fire-record payload.
     tensors:
         Loaded tensor refs.
+    trust_custom_callables:
+        Execution-time trust for foreign import-ref callables. Defaults fail-closed.
+    allowed_custom_callable_modules:
+        Optional foreign-module allowlist.
 
     Returns
     -------
@@ -1078,8 +1132,18 @@ def _deserialize_fire_record(data: dict[str, Any], tensors: dict[str, torch.Tens
         Runtime fire record.
     """
 
-    helper = _deserialize_value(data.get("helper"), tensors)
-    container_path = _deserialize_value(data.get("container_path", ()), tensors)
+    helper = _deserialize_value(
+        data.get("helper"),
+        tensors,
+        trust_custom_callables=trust_custom_callables,
+        allowed_custom_callable_modules=allowed_custom_callable_modules,
+    )
+    container_path = _deserialize_value(
+        data.get("container_path", ()),
+        tensors,
+        trust_custom_callables=trust_custom_callables,
+        allowed_custom_callable_modules=allowed_custom_callable_modules,
+    )
     return FireRecord(
         target_label=str(data.get("target_label", "")),
         call_label=data.get("call_label"),
@@ -1102,8 +1166,19 @@ def _deserialize_fire_record(data: dict[str, Any], tensors: dict[str, torch.Tens
     )
 
 
-def _deserialize_value(value: Any, tensors: dict[str, torch.Tensor]) -> Any:
+def _deserialize_value(
+    value: Any,
+    tensors: dict[str, torch.Tensor],
+    *,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
+) -> Any:
     """Deserialize a value from ``spec.json``.
+
+    Any import-ref callable materialized here captures the load's trust context so
+    its deferred resolution enforces the SAME deny-by-default gate as
+    ``resolve_function_registry_key``. Defaults are fail-closed: an unthreaded caller
+    gets an untrusted (no-foreign-import) reference.
 
     Parameters
     ----------
@@ -1111,12 +1186,39 @@ def _deserialize_value(value: Any, tensors: dict[str, torch.Tensor]) -> Any:
         JSON-decoded value.
     tensors:
         Loaded tensor refs.
+    trust_custom_callables:
+        Execution-time trust for foreign import-ref callables.
+    allowed_custom_callable_modules:
+        Optional foreign-module allowlist.
 
     Returns
     -------
     Any
         Runtime value.
     """
+
+    allowed_tuple: tuple[str, ...] | None = (
+        None if allowed_custom_callable_modules is None else tuple(allowed_custom_callable_modules)
+    )
+
+    def _decode(item: Any) -> Any:
+        """Recurse under the same trust context."""
+
+        return _deserialize_value(
+            item,
+            tensors,
+            trust_custom_callables=trust_custom_callables,
+            allowed_custom_callable_modules=allowed_custom_callable_modules,
+        )
+
+    def _trusted_import_resolver(import_path: str) -> Callable[..., Any]:
+        """Resolve an import ref under this load's trust context."""
+
+        return _resolve_import_ref(
+            import_path,
+            trust_custom_callables=trust_custom_callables,
+            allowed_custom_callable_modules=allowed_custom_callable_modules,
+        )
 
     if isinstance(value, dict) and "__tensor_ref__" in value:
         return tensors[str(value["__tensor_ref__"])]
@@ -1125,17 +1227,23 @@ def _deserialize_value(value: Any, tensors: dict[str, torch.Tensor]) -> Any:
         # decoder stays in lockstep with ``_serialize_value``. The narrow
         # ``_decode_jsonish`` fallback only understood ``__tensor_ref__`` and
         # silently returned every other wrapper (``__callable__``/``__opaque_audit__``/
-        # ...) as a raw dict, corrupting callable/opaque helper arguments.
+        # ...) as a raw dict, corrupting callable/opaque helper arguments. The import
+        # resolver is bound to the load's trust context so an import-ref helper cannot
+        # import a foreign module under the default untrusted load.
         return helper_from_serialized(
             value["__helper__"],
             tensor_loader=lambda tensor_id: tensors[tensor_id],
-            import_resolver=_resolve_import_ref,
-            value_decoder=lambda item: _deserialize_value(item, tensors),
+            import_resolver=_trusted_import_resolver,
+            value_decoder=_decode,
         )
     if isinstance(value, dict) and "__callable__" in value:
         callable_payload = value["__callable__"]
         if callable_payload["portability"] == "import_ref":
-            return LazyImportRef(str(callable_payload["import_path"]))
+            return LazyImportRef(
+                str(callable_payload["import_path"]),
+                trust_custom_callables=trust_custom_callables,
+                allowed_custom_callable_modules=allowed_tuple,
+            )
         return HelperSpec(
             helper_name="opaque_audit",
             portability="opaque_audit",
@@ -1149,16 +1257,18 @@ def _deserialize_value(value: Any, tensors: dict[str, torch.Tensor]) -> Any:
             metadata=(("repr", payload.get("repr", "")), ("executable", False)),
         )
     if isinstance(value, dict) and "__output_path_component__" in value:
-        return _deserialize_output_path_component(value, tensors)
+        return _deserialize_output_path_component(
+            value,
+            tensors,
+            trust_custom_callables=trust_custom_callables,
+            allowed_custom_callable_modules=allowed_custom_callable_modules,
+        )
     if isinstance(value, dict) and "__dict_items__" in value:
-        return {
-            _deserialize_dict_key(key): _deserialize_value(item, tensors)
-            for key, item in value["__dict_items__"]
-        }
+        return {_deserialize_dict_key(key): _decode(item) for key, item in value["__dict_items__"]}
     if isinstance(value, list):
-        return [_deserialize_value(item, tensors) for item in value]
+        return [_decode(item) for item in value]
     if isinstance(value, dict):
-        return {key: _deserialize_value(item, tensors) for key, item in value.items()}
+        return {key: _decode(item) for key, item in value.items()}
     return value
 
 
@@ -1182,7 +1292,11 @@ def _deserialize_dict_key(key: Any) -> Any:
 
 
 def _deserialize_output_path_component(
-    value: dict[str, Any], tensors: dict[str, torch.Tensor]
+    value: dict[str, Any],
+    tensors: dict[str, torch.Tensor],
+    *,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
 ) -> TupleIndex | DictKey | HFKey | NamedField | DataclassField:
     """Deserialize a portable output-container path component.
 
@@ -1192,6 +1306,10 @@ def _deserialize_output_path_component(
         JSON-safe component payload.
     tensors:
         Loaded tensor refs.
+    trust_custom_callables:
+        Execution-time trust for foreign import-ref callables. Defaults fail-closed.
+    allowed_custom_callable_modules:
+        Optional foreign-module allowlist.
 
     Returns
     -------
@@ -1199,13 +1317,23 @@ def _deserialize_output_path_component(
         Runtime path component.
     """
 
+    def _decode(item: Any) -> Any:
+        """Decode a nested key under the same trust context."""
+
+        return _deserialize_value(
+            item,
+            tensors,
+            trust_custom_callables=trust_custom_callables,
+            allowed_custom_callable_modules=allowed_custom_callable_modules,
+        )
+
     kind = str(value.get("__output_path_component__"))
     if kind == "tuple_index":
         return TupleIndex(int(value["index"]))
     if kind == "dict_key":
-        return DictKey(_deserialize_value(value.get("key"), tensors))
+        return DictKey(_decode(value.get("key")))
     if kind == "hf_key":
-        return HFKey(_deserialize_value(value.get("key"), tensors))
+        return HFKey(_decode(value.get("key")))
     if kind == "named_field":
         return NamedField(str(value["name"]))
     if kind == "dataclass_field":
@@ -1759,18 +1887,46 @@ def _callable_round_trips(value: Callable[..., Any], import_path: str) -> bool:
     """
 
     try:
-        return _resolve_import_ref(import_path) is value
-    except (AttributeError, ImportError, ValueError, TypeError):
+        # Save time verifies the identity of the user's OWN in-memory callable, whose
+        # module is already imported, so trust is granted here. A callable the shared
+        # gate refuses as impure (e.g. a fixed-namespace side-effecting op) simply does
+        # not round-trip as an import ref and falls back to opaque/audit serialization.
+        return _resolve_import_ref(import_path, trust_custom_callables=True) is value
+    except (
+        AttributeError,
+        ImportError,
+        ValueError,
+        TypeError,
+        UntrustedCallableError,
+        ReplayPreconditionError,
+    ):
         return False
 
 
-def _resolve_import_ref(import_path: str) -> Callable[..., Any]:
-    """Resolve a ``module:qualname`` import reference.
+def _resolve_import_ref(
+    import_path: str,
+    *,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
+) -> Callable[..., Any]:
+    """Resolve a ``module:qualname`` import reference through the shared trust gate.
+
+    Delegates to :func:`torchlens.intervention.resolver.resolve_import_ref` so a
+    bundle-supplied import reference obeys the SAME deny-by-default contract as every
+    other bundle-reachable callable resolution: fixed torch/operator namespaces and
+    TorchLens-owned helpers always resolve (purity-gated), while a genuinely foreign
+    module default-denies with :class:`UntrustedCallableError` and is never imported
+    unless the caller opted into trust. Defaults are fail-closed.
 
     Parameters
     ----------
     import_path:
-        Import reference.
+        Import reference in ``module:qualname`` form.
+    trust_custom_callables:
+        Explicit permission to import a foreign custom callable when no allowlist is
+        supplied.
+    allowed_custom_callable_modules:
+        Optional allowlist of custom callable module names.
 
     Returns
     -------
@@ -1778,16 +1934,11 @@ def _resolve_import_ref(import_path: str) -> Callable[..., Any]:
         Resolved callable.
     """
 
-    module_name, sep, qualname = import_path.partition(":")
-    if not sep:
-        raise ValueError(f"Invalid import path {import_path!r}")
-    module = importlib.import_module(module_name)
-    obj: Any = module
-    for part in qualname.split("."):
-        obj = getattr(obj, part)
-    if not callable(obj):
-        raise TypeError(f"{import_path!r} did not resolve to a callable")
-    return cast(Callable[..., Any], obj)
+    return resolve_import_ref(
+        import_path,
+        trust_custom_callables=trust_custom_callables,
+        allowed_custom_callable_modules=allowed_custom_callable_modules,
+    )
 
 
 def _write_json_file(path: Path, data: dict[str, Any]) -> None:

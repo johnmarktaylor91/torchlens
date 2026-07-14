@@ -380,6 +380,105 @@ def resolve_function_registry_key(
     raise ReplayPreconditionError(f"Unknown function registry namespace {key.namespace!r}")
 
 
+def _import_ref_registry_key(module_name: str, qualname: str) -> FunctionRegistryKey:
+    """Route an ``module:qualname`` import ref onto the shared registry-key model.
+
+    Mirrors ``function_registry_key_from_callable`` namespace selection from the
+    STRING form so a ``torch`` / ``torch.nn.functional`` / ``operator`` /
+    ``torch.Tensor`` import ref lands on the always-available fixed namespaces
+    (still purity-gated inside ``resolve_function_registry_key``), while any other
+    module is treated as a FOREIGN ``custom`` import that default-denies.
+
+    Parameters
+    ----------
+    module_name:
+        Module component of the import reference (left of ``:``).
+    qualname:
+        Qualified-name component of the import reference (right of ``:``).
+
+    Returns
+    -------
+    FunctionRegistryKey
+        Registry key whose namespace decides trust the same way a callable-derived
+        key would.
+    """
+
+    terminal = qualname.rsplit(".", 1)[-1]
+    dispatch_kind: Literal["function", "dunder"] = (
+        "dunder" if terminal.startswith("__") and terminal.endswith("__") else "function"
+    )
+    # Only a bare single-attribute name maps onto a fixed root (which resolves via a
+    # single ``getattr`` + purity gate). A dotted qualname stays ``custom`` so it is
+    # decided by the deny-by-default foreign-import gate, never smuggled onto a fixed
+    # root by attribute-walking.
+    if "." not in qualname:
+        if module_name == "torch":
+            return FunctionRegistryKey("torch", terminal, dispatch_kind)
+        if module_name == "torch.nn.functional":
+            return FunctionRegistryKey("torch.nn.functional", terminal, dispatch_kind)
+        if module_name == "operator":
+            return FunctionRegistryKey("operator", terminal, dispatch_kind)
+    if module_name in {"torch._tensor", "torch.Tensor"} and "." not in qualname:
+        return FunctionRegistryKey("torch.Tensor", terminal, "method")
+    return FunctionRegistryKey(
+        "custom", qualname, dispatch_kind, import_path=f"{module_name}:{qualname}"
+    )
+
+
+def resolve_import_ref(
+    import_path: str,
+    *,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
+) -> Callable[..., Any]:
+    """Resolve a ``module:qualname`` import reference through the SAME trust gate.
+
+    This is the single trust-gated resolution path for bundle-supplied import
+    references. It routes the reference onto ``resolve_function_registry_key`` so it
+    obeys exactly one contract: the fixed ``torch`` / ``torch.Tensor`` /
+    ``torch.nn.functional`` / ``operator`` namespaces (and TorchLens-owned custom
+    helpers) always resolve WITHOUT trust but are purity-gated; a genuinely FOREIGN
+    module import default-denies with a typed :class:`UntrustedCallableError` and is
+    NEVER imported unless the caller opts in via ``trust_custom_callables=True`` or a
+    matching ``allowed_custom_callable_modules`` entry.
+
+    Parameters
+    ----------
+    import_path:
+        Import reference in ``module:qualname`` form.
+    trust_custom_callables:
+        Explicit execution-time permission to import a foreign custom callable when
+        no allowlist is supplied. Enable only for a trusted spec.
+    allowed_custom_callable_modules:
+        Optional allowlist of custom callable module names. When supplied, foreign
+        imports must be listed even if ``trust_custom_callables=True``.
+
+    Returns
+    -------
+    Callable[..., Any]
+        Resolved callable.
+
+    Raises
+    ------
+    ValueError
+        If the import reference is malformed.
+    UntrustedCallableError
+        If resolving a foreign custom callable has not been explicitly trusted.
+    ReplayPreconditionError
+        If the namespace or qualified name cannot be resolved.
+    """
+
+    module_name, separator, qualname = import_path.partition(":")
+    if not separator or not module_name or not qualname:
+        raise ValueError(f"Invalid import path {import_path!r}")
+    key = _import_ref_registry_key(module_name, qualname)
+    return resolve_function_registry_key(
+        key,
+        trust_custom_callables=trust_custom_callables,
+        allowed_custom_callable_modules=allowed_custom_callable_modules,
+    )
+
+
 @dataclass(frozen=True)
 class SiteTable:
     """Result of resolving a selector; ordered, indexable, dataframe-convertible."""
