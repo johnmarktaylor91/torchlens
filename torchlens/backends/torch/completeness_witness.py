@@ -1049,6 +1049,12 @@ class _CompletenessDispatchMode(TorchDispatchMode):
                         mutates,
                     )
                 )
+            # Per-consumption host write-back sample (r16-H1 TOCTOU): if a mutable zero-copy alias
+            # is live and THIS traced op consumes a watched source whose bytes were transiently
+            # written, catch it now -- BEFORE redispatch reads the mutated input -- rather than only
+            # at forward end where a byte-exact restore would have already hidden it.
+            if in_scope and self.state.writeback_watch:
+                _sample_writeback_at_consumption(self.state, args, kwargs)
         finally:
             self.state.callback_ns += time.perf_counter_ns() - started
         result = func(*args, **(kwargs or {}))
@@ -1103,6 +1109,82 @@ def _snapshot_writeback_source(state: _WitnessState, source: torch.Tensor) -> No
     state.writeback_watch.append((source, version, before))
 
 
+def _iter_dispatch_tensors(
+    args: tuple[Any, ...], kwargs: dict[str, Any] | None
+) -> Iterator[torch.Tensor]:
+    """Yield every ``torch.Tensor`` operand of a dispatch, flattening list/tuple containers.
+
+    Aten operands are tensors, scalars, or (for ``cat`` / ``stack`` / ``_foreach_*``) lists/tuples
+    of tensors; this walks those one-deep-or-more without importing a pytree so the per-consumption
+    watch can see every tensor an op reads.
+    """
+
+    stack: list[Any] = list(args)
+    if kwargs:
+        stack.extend(kwargs.values())
+    while stack:
+        item = stack.pop()
+        if isinstance(item, torch.Tensor):
+            yield item
+        elif isinstance(item, (list, tuple)):
+            stack.extend(item)
+
+
+def _sample_writeback_at_consumption(
+    state: _WitnessState, args: tuple[Any, ...], kwargs: dict[str, Any] | None
+) -> None:
+    """Detect a transient host write-back that is LIVE when a traced op CONSUMES a watched source.
+
+    A mutable zero-copy alias (``numpy`` / ``__array__`` / a storage handle) can be written,
+    consumed by a downstream traced op, then byte-exactly RESTORED before forward end -- so the
+    single end-of-forward compare (:func:`_check_writeback_watch`) sees ``before == after`` and
+    would falsely VERIFY (r16-H1 TOCTOU). Sampling the watched source's WHOLE-STORAGE bytes at each
+    CONSUMPTION catches the write while it is live in a traced op's input, then rolls it back.
+
+    Soundness (no over-trigger). Only a byte difference with the source's version UNCHANGED since
+    the exposure is flagged:
+
+    * version UNCHANGED + bytes differ -> NO tracked in-place op touched the storage, so the diff is
+      an opaque host write-back that is LIVE for this traced consumer -> UNVERIFIABLE (the TOCTOU);
+    * version BUMPED -> a TRACKED, replayable in-place op is responsible for the diff, so the
+      per-consumption sample defers to the end-of-forward compare (which conservatively handles a
+      version-bumped byte diff). Flagging it here would falsely trip a legitimate tracked-op
+      sequence that later restores the bytes (e.g. ``arr=y.numpy(); y.add_(1); z=y*2; y.sub_(1)``).
+
+    A read-only ``.numpy().sum()`` never changes the bytes, so it is never flagged. The scan runs
+    only while a mutable alias is live (``writeback_watch`` non-empty) and only compares a watched
+    source when THIS op actually consumes its storage, so a transient write that never reaches a
+    traced consumer of the source (restored before it is read) stays honestly VERIFIED.
+    """
+
+    if not state.writeback_watch:
+        return
+    try:
+        with _state.pause_logging():
+            consumed_ptrs: set[int] = set()
+            for operand in _iter_dispatch_tensors(args, kwargs):
+                try:
+                    consumed_ptrs.add(operand.untyped_storage().data_ptr())
+                except (RuntimeError, TypeError, NotImplementedError):
+                    continue
+            if not consumed_ptrs:
+                return
+            for source, version, before in state.writeback_watch:
+                try:
+                    if source.untyped_storage().data_ptr() not in consumed_ptrs:
+                        continue
+                    if getattr(source, "_version", None) != version:
+                        continue
+                    if not torch.equal(_whole_storage_uint8(source), before):
+                        _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
+                        return
+                except (RuntimeError, TypeError, NotImplementedError):
+                    _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
+                    return
+    except (RuntimeError, TypeError, NotImplementedError):
+        return
+
+
 def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: str) -> Any:
     """Wrap a tensor->host conversion method to record its SOURCE, then call through.
 
@@ -1149,6 +1231,35 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
             # mutable alias is never called internally, so it is always watched, as in r13.)
             if watch_writeback and not (is_storage_bridge and _internal_read_active()):
                 _snapshot_writeback_source(state, self)
+        return original(self, *args, **kwargs)
+
+    return wrapper
+
+
+def _make_storage_raw_pointer_wrapper(original: Any, state: _WitnessState) -> Any:
+    """Wrap ``UntypedStorage.data_ptr`` / ``TypedStorage.data_ptr`` to fail closed, then read through.
+
+    ``tensor.data_ptr()`` is fail-closed by :func:`_make_invisible_escape_wrapper` (r15-H1), but the
+    SAME raw pointer is reachable off the Storage HANDLE: ``tensor.untyped_storage().data_ptr()`` /
+    ``tensor.storage().data_ptr()`` call ``data_ptr`` on the ``UntypedStorage`` / ``TypedStorage``
+    object, NOT on ``torch.Tensor`` -- so the Tensor patch never fires and the raw pointer escapes
+    unobserved (r16-C1). A ``ctypes`` READ through it bakes a stale literal and a WRITE through it
+    mutates the source with no dispatch, no version bump, and no byte the forward-end watch can
+    re-inspect. A genuine USER storage ``data_ptr()`` therefore fails closed to UNVERIFIABLE, exactly
+    like the Tensor path. Scoped to the ``data_ptr()`` ACCESSOR only: read-only
+    ``untyped_storage().nbytes()`` / ``.size()`` (pure metadata, no pointer) never trips it.
+    TorchLens's own capture-internal storage-pointer reads (``aliasing._tensors_alias`` ->
+    ``untyped_storage().data_ptr()``) run under the ``internal_scalar_read`` marker and are excluded.
+    """
+
+    def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        if (
+            threading.get_ident() == state.owner_thread_id
+            and _state._logging_enabled
+            and _state._active_trace is state.trace
+            and not _internal_read_active()
+        ):
+            _HOST_ESCAPE_RAW_POINTER.add(state.trace)
         return original(self, *args, **kwargs)
 
     return wrapper
@@ -1236,6 +1347,19 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
         except (TypeError, AttributeError):
             continue
         module_originals.append((module, func_name, original_func))
+    # Storage-handle raw-pointer accessors (r16-C1): ``UntypedStorage.data_ptr`` /
+    # ``TypedStorage.data_ptr`` reach the SAME raw pointer as ``Tensor.data_ptr`` but off the
+    # storage object, so the Tensor patch never sees them. Fail closed on a genuine user call.
+    storage_originals: list[tuple[Any, Any]] = []
+    for storage_cls in _STORAGE_RAW_POINTER_TARGETS():
+        storage_original = storage_cls.data_ptr
+        try:
+            setattr(
+                storage_cls, "data_ptr", _make_storage_raw_pointer_wrapper(storage_original, state)
+            )
+        except (TypeError, AttributeError):
+            continue
+        storage_originals.append((storage_cls, storage_original))
     property_originals: dict[str, Any] = {}
     for name in INVISIBLE_HOST_ESCAPE_PROPERTIES:
         descriptor = type(torch.Tensor).__dict__.get(name) or torch.Tensor.__dict__.get(name)
@@ -1259,12 +1383,33 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
                 setattr(module, func_name, original_func)
             except (TypeError, AttributeError):
                 pass
+        for storage_cls, storage_original in storage_originals:
+            try:
+                setattr(storage_cls, "data_ptr", storage_original)
+            except (TypeError, AttributeError):
+                pass
         for name, descriptor in property_originals.items():
             try:
                 setattr(torch.Tensor, name, descriptor)
             except (TypeError, AttributeError):
                 pass
         _check_writeback_watch(state)
+
+
+def _STORAGE_RAW_POINTER_TARGETS() -> tuple[Any, ...]:
+    """Return storage classes whose ``data_ptr`` accessor leaks the raw pointer (r16-C1).
+
+    ``tensor.untyped_storage()`` yields a ``torch.UntypedStorage`` and ``tensor.storage()`` a
+    ``torch.TypedStorage``; ``data_ptr()`` on either hands out the same raw pointer the r15 Tensor
+    patch fails closed on. Both are Python-visible classes whose ``data_ptr`` method is patchable.
+    """
+
+    targets: list[Any] = []
+    for name in ("UntypedStorage", "TypedStorage"):
+        cls = getattr(torch, name, None)
+        if cls is not None and hasattr(cls, "data_ptr"):
+            targets.append(cls)
+    return tuple(targets)
 
 
 def _MODULE_ESCAPE_TARGETS() -> tuple[tuple[Any, str], ...]:
