@@ -23,6 +23,7 @@ from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
 from menagerie.crawler.licenses import (
     LicenseEvidence,
     LicenseEvidenceStatus,
+    LicensedArtifact,
     pre_public_merge_sweep,
     store_licensed_artifact,
 )
@@ -83,14 +84,24 @@ def _snapshot(root: Path, count: int = 1) -> IntakeSnapshot:
     )
 
 
-def _clean_state(root: Path, *, intake_count: int = 1) -> tuple[IntakeSnapshot, MirrorStore]:
+def _clean_state(
+    root: Path, *, intake_count: int = 1, status_code: str = "runs"
+) -> tuple[IntakeSnapshot, MirrorStore]:
     """Materialize a complete canonical mini-campaign and matching derived facts."""
 
     snapshot = _snapshot(root, intake_count)
     crawler = root / "menagerie" / "crawler"
     records = crawler / "records"
+    model = make_model(snapshot.items[0].stable_id, accepted=True, status_code=status_code)
+    if status_code != "runs":
+        model["execution"]["current"] = False
+        model["completeness"]["execution_current"] = False
+        model["completeness"]["release_eligible"] = False
+        model["completeness"]["issues"] = [status_code]
+    if status_code == "failed:forward":
+        model["status"]["reason_code"] = "exception"
     with JsonlLedger(records / "models" / "current-shard.jsonl", MODEL_SCHEMA_VERSION) as ledger:
-        ledger.append(make_model(snapshot.items[0].stable_id, accepted=True))
+        ledger.append(model)
     _write_jsonl(records / "attempts" / "local.jsonl", [])
     _write_jsonl(records / "gates" / "current-shard.jsonl", [])
     rebuild_views(
@@ -99,10 +110,41 @@ def _clean_state(root: Path, *, intake_count: int = 1) -> tuple[IntakeSnapshot, 
         crawler / "views",
         root / ".crawl-local" / "state.sqlite",
     )
-    _write_jsonl(crawler / "mirrors" / "public-manifest.jsonl", [])
-    _write_jsonl(crawler / "mirrors" / "private-manifest.jsonl", [])
     mirrors = _mirrors(root)
-    report = pre_public_merge_sweep([], mirrors)
+    artifacts: list[LicensedArtifact] = []
+    for relative_root in (Path("records"), Path("source_manifests"), Path("evidence")):
+        for path in sorted((crawler / relative_root).rglob("*")):
+            if not path.is_file() or path.stat().st_size == 0:
+                continue
+            artifacts.append(
+                store_licensed_artifact(
+                    mirrors,
+                    path.read_bytes(),
+                    staged_path=path.relative_to(root),
+                    origin=ArtifactOrigin("https://example.test/fixture", "v1"),
+                    evidence=(
+                        LicenseEvidence(
+                            f"license-{len(artifacts)}",
+                            "source-fixture",
+                            "LICENSE:1",
+                            "MIT License",
+                            LicenseEvidenceStatus.DECLARED,
+                            "MIT",
+                        ),
+                    ),
+                )
+            )
+    rows = [
+        {
+            "staged_path": artifact.staged_path.as_posix(),
+            "manifest": artifact.manifest.to_dict(),
+            "decision": artifact.decision.to_dict(),
+        }
+        for artifact in artifacts
+    ]
+    _write_jsonl(crawler / "mirrors" / "public-manifest.jsonl", rows)
+    _write_jsonl(crawler / "mirrors" / "private-manifest.jsonl", [])
+    report = pre_public_merge_sweep(artifacts, mirrors)
     _write_jsonl(crawler / "license_reports" / "current.json", [report.to_dict()])
     return snapshot, mirrors
 
@@ -155,18 +197,18 @@ def test_checkpoint_cli_wrong_branch_is_nonzero_and_never_claims_verified(
     assert all(command[:3] != ("git", "add", "--") for command in git.commands)
 
 
-def test_checkpoint_refuses_incomplete_partition(tmp_path: Path) -> None:
-    """An intake model without a current terminal record blocks the transaction."""
+def test_checkpoint_allows_consistent_incomplete_prefix(tmp_path: Path) -> None:
+    """A valid current terminal prefix checkpoints before the full crawl completes."""
 
     snapshot, mirrors = _clean_state(tmp_path, intake_count=2)
-    with pytest.raises(CheckpointValidationError, match="incomplete"):
-        create_canonical_checkpoint(
-            tmp_path,
-            snapshot.root,
-            mirrors=mirrors,
-            branch="menagerie/crawler-pipeline",
-            git_runner=RecordingGit(),
-        )
+    result = create_canonical_checkpoint(
+        tmp_path,
+        snapshot.root,
+        mirrors=mirrors,
+        branch="menagerie/crawler-pipeline",
+        git_runner=RecordingGit(),
+    )
+    assert result.license_report.passed
 
 
 def test_checkpoint_derives_and_refuses_restricted_public_artifact(tmp_path: Path) -> None:

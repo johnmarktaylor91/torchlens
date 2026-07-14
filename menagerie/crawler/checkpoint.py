@@ -13,7 +13,7 @@ from menagerie.crawler.constants import (
     OperationalEventKind,
     OperationalEventStatus,
 )
-from menagerie.crawler.identity import stable_hash
+from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.intake import load_intake_snapshot
 from menagerie.crawler.licenses import (
     LicenseDecision,
@@ -27,7 +27,7 @@ from menagerie.crawler.mirrors import ArtifactManifest, MirrorStore
 from menagerie.crawler.models import AppendResult, JsonObject
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import default_ledger_paths, materialize_current
-from menagerie.crawler.status import completeness_report
+from menagerie.crawler.status import checkpoint_consistency_report
 from menagerie.crawler.tools.rebuild_views import rebuild_views
 from menagerie.crawler.wakeup import OperationalContext, record_operational_event
 
@@ -125,6 +125,11 @@ _ALLOWLIST_ROOTS = (
     PurePosixPath("menagerie/crawler/evidence"),
     PurePosixPath("menagerie/crawler/views"),
     PurePosixPath("menagerie/crawler/license_reports"),
+)
+_LICENSE_CANDIDATE_ROOTS = (
+    PurePosixPath("menagerie/crawler/records"),
+    PurePosixPath("menagerie/crawler/source_manifests"),
+    PurePosixPath("menagerie/crawler/evidence"),
 )
 _ALLOWLIST_SUFFIXES = frozenset({".json", ".jsonl", ".sha256", ".txt"})
 _SECRET_PATH_PARTS = frozenset(
@@ -388,6 +393,7 @@ def create_checkpoint_set(
     public_artifacts: Iterable[LicensedArtifact],
     mirrors: MirrorStore,
     mirror_manifests: Iterable[ArtifactManifest] = (),
+    license_inventory: Iterable[LicensedArtifact] = (),
     expected_branch: str = CRAWLER_BRANCH,
     branch: Optional[str] = None,
     git_runner: Optional[GitRunner] = None,
@@ -410,6 +416,9 @@ def create_checkpoint_set(
         Separated stores used for public-byte reverification.
     mirror_manifests:
         Complete retention manifests that must remain fetchable by hash.
+    license_inventory:
+        Complete public/private license-decision inventory used to prove candidate
+        coverage and exclude every restricted or unknown digest.
     expected_branch:
         Exact crawler branch.
     branch:
@@ -441,6 +450,8 @@ def create_checkpoint_set(
             f"checkpoint requires branch {expected_branch!r}, got {actual_branch!r}"
         )
     candidates = tuple(sorted({_normalize_path(path) for path in candidate_paths}, key=str))
+    requested_artifacts = tuple(public_artifacts)
+    inventory = tuple(license_inventory) or requested_artifacts
     existing_staged = _staged_paths(repo_root, runner)
     unexpected_staged = tuple(path for path in existing_staged if path not in candidates)
     if unexpected_staged:
@@ -457,7 +468,10 @@ def create_checkpoint_set(
             check()
         for manifest in mirror_manifests:
             mirrors.fetch(manifest)
-        license_report = pre_public_merge_sweep(public_artifacts, mirrors)
+        sweep_artifacts = _validate_candidate_license_coverage(
+            repo_root, candidates, requested_artifacts, inventory
+        )
+        license_report = pre_public_merge_sweep(sweep_artifacts, mirrors)
     except PublicMergeRejected as exc:
         raise RestrictedPublicArtifact(str(exc)) from exc
     except Exception as exc:
@@ -559,15 +573,15 @@ def _create_canonical_checkpoint(
     snapshot = load_intake_snapshot(intake_root.resolve())
     ledgers = default_ledger_paths(canonical_records)
     current = materialize_current(ledgers)
-    completeness = completeness_report((item.stable_id for item in snapshot.items), current)
-    if not completeness.complete:
+    consistency = checkpoint_consistency_report(
+        (item.stable_id for item in snapshot.items), current
+    )
+    if not consistency.complete:
         raise CheckpointValidationError(
-            "crawler checkpoint is incomplete: "
-            f"missing={sorted(completeness.partition.missing_ids)}, "
-            f"extra={sorted(completeness.partition.extra_ids)}, "
-            f"duplicates={sorted(completeness.partition.duplicate_ids)}, "
-            f"issues={dict(completeness.incomplete_by_issue)}, "
-            f"workflows={dict(completeness.workflow_counts)}"
+            "crawler checkpoint prefix is inconsistent: "
+            f"extra={sorted(consistency.partition.extra_ids)}, "
+            f"duplicates={sorted(consistency.partition.duplicate_ids)}, "
+            f"issues={dict(consistency.incomplete_by_issue)}"
         )
 
     views_root = canonical_root / "views"
@@ -578,11 +592,14 @@ def _create_canonical_checkpoint(
         root / ".crawl-local" / "mirrors" / "local",
     )
     manifest_root = canonical_root / "mirrors"
-    public_artifacts, mirror_manifests = _derive_mirror_facts(manifest_root)
-    report = _validate_persisted_license_report(
-        canonical_root / "license_reports", public_artifacts, mirror_store
-    )
+    public_artifacts, license_inventory, mirror_manifests = _derive_mirror_facts(manifest_root)
     candidates = _derive_candidate_paths(root, canonical_root)
+    sweep_artifacts = _validate_candidate_license_coverage(
+        root, candidates, public_artifacts, license_inventory
+    )
+    report = _validate_persisted_license_report(
+        canonical_root / "license_reports", sweep_artifacts, mirror_store
+    )
     if not any(
         path.parts[:3] == ("menagerie", "crawler", "license_reports") for path in candidates
     ):
@@ -593,9 +610,10 @@ def _create_canonical_checkpoint(
         candidates,
         ledger_paths=(ledgers.models, ledgers.attempts, ledgers.gates),
         derived_view_checks=(view_check,),
-        public_artifacts=public_artifacts,
+        public_artifacts=sweep_artifacts,
         mirrors=mirror_store,
         mirror_manifests=mirror_manifests,
+        license_inventory=license_inventory,
         expected_branch=expected_branch,
         branch=actual_branch,
         git_runner=runner,
@@ -676,7 +694,11 @@ def _derived_view_check(
 
 def _derive_mirror_facts(
     manifest_root: Path,
-) -> tuple[tuple[LicensedArtifact, ...], tuple[ArtifactManifest, ...]]:
+) -> tuple[
+    tuple[LicensedArtifact, ...],
+    tuple[LicensedArtifact, ...],
+    tuple[ArtifactManifest, ...],
+]:
     """Parse public license artifacts and all hash-verifiable mirror manifests.
 
     Parameters
@@ -686,11 +708,14 @@ def _derive_mirror_facts(
 
     Returns
     -------
-    tuple[tuple[LicensedArtifact, ...], tuple[ArtifactManifest, ...]]
-        Public sweep inputs and complete public/private mirror manifests.
+    tuple[tuple[LicensedArtifact, ...], tuple[LicensedArtifact, ...],
+    tuple[ArtifactManifest, ...]]
+        Public sweep inputs, complete license inventory, and complete
+        public/private mirror manifests.
     """
 
     public_artifacts: list[LicensedArtifact] = []
+    license_inventory: list[LicensedArtifact] = []
     manifests: list[ArtifactManifest] = []
     for name in _CANONICAL_MANIFEST_NAMES:
         path = manifest_root / name
@@ -698,10 +723,11 @@ def _derive_mirror_facts(
             raise CheckpointValidationError(f"missing canonical mirror manifest: {path}")
         for row in scan_jsonl(path, validate=False):
             artifact = _licensed_artifact(row)
+            license_inventory.append(artifact)
             manifests.append(artifact.manifest)
             if name == "public-manifest.jsonl":
                 public_artifacts.append(artifact)
-    return tuple(public_artifacts), tuple(manifests)
+    return tuple(public_artifacts), tuple(license_inventory), tuple(manifests)
 
 
 def _licensed_artifact(payload: Mapping[str, Any]) -> LicensedArtifact:
@@ -734,6 +760,132 @@ def _licensed_artifact(payload: Mapping[str, Any]) -> LicensedArtifact:
     except (KeyError, TypeError, ValueError) as exc:
         raise CheckpointValidationError(f"invalid licensed mirror artifact: {exc}") from exc
     return LicensedArtifact(staged_path, manifest, decision)
+
+
+def _validate_candidate_license_coverage(
+    repo_root: Path,
+    candidates: Sequence[Path],
+    requested_artifacts: Sequence[LicensedArtifact],
+    inventory: Sequence[LicensedArtifact],
+) -> tuple[LicensedArtifact, ...]:
+    """Bind every candidate code/excerpt file to one hash-bound decision.
+
+    Records, source manifests, and evidence may carry literal third-party code
+    or excerpts. Every non-empty candidate in those roots therefore needs one
+    decision in the complete public/private manifest inventory. Independently,
+    every candidate file is hashed and compared with all restricted or unknown
+    inventory digests so renaming a private artifact cannot make it public.
+
+    Parameters
+    ----------
+    repo_root:
+        Git worktree root containing candidate bytes.
+    candidates:
+        Complete normalized checkpoint set.
+    requested_artifacts:
+        Existing public mirror entries that must always enter the sweep.
+    inventory:
+        Complete public/private license-decision inventory.
+
+    Returns
+    -------
+    tuple[LicensedArtifact, ...]
+        Deduplicated sweep input containing every public entry and every
+        candidate-bound decision.
+
+    Raises
+    ------
+    RestrictedPublicArtifact
+        If coverage, hashes, uniqueness, or restricted-digest exclusion fails.
+    """
+
+    by_path: dict[Path, LicensedArtifact] = {}
+    duplicates: set[Path] = set()
+    for artifact in inventory:
+        staged_path = _normalize_path(artifact.staged_path)
+        if artifact.decision.content_sha256 != artifact.manifest.content_sha256:
+            raise RestrictedPublicArtifact(
+                "license inventory decision hash does not match its mirror manifest: "
+                f"{staged_path.as_posix()}"
+            )
+        if staged_path in by_path:
+            duplicates.add(staged_path)
+        else:
+            by_path[staged_path] = artifact
+    if duplicates:
+        raise RestrictedPublicArtifact(
+            "license inventory must contain exactly one decision per staged path: "
+            f"duplicates={[path.as_posix() for path in sorted(duplicates, key=str)]}"
+        )
+
+    license_candidates = tuple(
+        path
+        for path in candidates
+        if _is_license_candidate(path) and (repo_root / path).stat().st_size > 0
+    )
+    missing = tuple(path for path in license_candidates if path not in by_path)
+    if missing:
+        raise RestrictedPublicArtifact(
+            "checkpoint candidate code/excerpt paths lack a license decision: "
+            f"{[path.as_posix() for path in missing]}"
+        )
+
+    for path in license_candidates:
+        artifact = by_path[path]
+        candidate_digest = hash_bytes((repo_root / path).read_bytes())
+        if (
+            candidate_digest != artifact.decision.content_sha256
+            or candidate_digest != artifact.manifest.content_sha256
+        ):
+            raise RestrictedPublicArtifact(
+                f"checkpoint candidate hash is not bound to its license decision: {path.as_posix()}"
+            )
+
+    restricted_digests = {
+        artifact.decision.content_sha256
+        for artifact in inventory
+        if artifact.decision.redistribution_class
+        in {RedistributionClass.RESTRICTED_PRIVATE, RedistributionClass.UNKNOWN}
+    }
+    restricted_paths = [
+        path
+        for path in candidates
+        if hash_bytes((repo_root / path).read_bytes()) in restricted_digests
+    ]
+    if restricted_paths:
+        raise RestrictedPublicArtifact(
+            "restricted or unknown-license digest appears in checkpoint candidate set: "
+            f"{[path.as_posix() for path in restricted_paths]}"
+        )
+
+    sweep_by_path: dict[Path, LicensedArtifact] = {}
+    for artifact in (*requested_artifacts, *(by_path[path] for path in license_candidates)):
+        path = _normalize_path(artifact.staged_path)
+        previous = sweep_by_path.get(path)
+        if previous is not None and previous != artifact:
+            raise RestrictedPublicArtifact(
+                f"conflicting license decisions enter the checkpoint sweep: {path.as_posix()}"
+            )
+        sweep_by_path[path] = artifact
+    return tuple(sweep_by_path[path] for path in sorted(sweep_by_path, key=str))
+
+
+def _is_license_candidate(path: Path) -> bool:
+    """Return whether a checkpoint path may contain committed code/excerpts.
+
+    Parameters
+    ----------
+    path:
+        Normalized repository-relative checkpoint candidate.
+
+    Returns
+    -------
+    bool
+        True for records, source manifests, and evidence files.
+    """
+
+    pure = PurePosixPath(path.as_posix())
+    return any(pure == root or root in pure.parents for root in _LICENSE_CANDIDATE_ROOTS)
 
 
 def _validate_persisted_license_report(
