@@ -136,6 +136,20 @@ class AttemptResult(StrEnum):
     OBSERVED = "observed"
 
 
+class EnvironmentPhase(StrEnum):
+    """Ordered environment execution phases."""
+
+    PYTORCH = "pytorch"
+    NATIVE_TAIL = "native-tail"
+
+
+class PlatformRequirement(StrEnum):
+    """Platform capabilities that can support an evidenced deferral."""
+
+    CUDA = "cuda"
+    X86 = "x86"
+
+
 SKIPPED_STATUS_CODES = frozenset(
     {
         "skipped:insufficient-description",

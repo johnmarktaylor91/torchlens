@@ -1,0 +1,5 @@
+{
+  "name": "menagerie-graph",
+  "channels": ["pytorch", "pyg", "dglteam", "conda-forge", "nodefaults"],
+  "dependencies": ["python>=3.11,<3.13", "pytorch>=2.3", "torchvision", "pytorch-geometric", "dgl", "ogb", "rdkit", "networkx", "scipy", "scikit-learn", "e3nn"]
+}

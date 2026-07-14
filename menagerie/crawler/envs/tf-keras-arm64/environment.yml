@@ -1,0 +1,5 @@
+{
+  "name": "menagerie-tf-keras-arm64",
+  "channels": ["conda-forge", "nodefaults"],
+  "dependencies": ["python>=3.11,<3.13", "tensorflow>=2.16", "keras>=3", "tensorflow-datasets", "tensorflow-probability", "numpy<2.1", "h5py", "pillow", "scipy"]
+}

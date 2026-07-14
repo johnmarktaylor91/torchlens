@@ -1,0 +1,15 @@
+{
+  "intents": {
+    "core": {"imports": ["torch", "torchvision", "transformers", "timm", "diffusers"], "export_checks": [{"module": "torch", "attribute": "__version__"}, {"module": "transformers", "attribute": "AutoModel"}]},
+    "graph": {"imports": ["torch_geometric", "dgl", "ogb", "rdkit"], "export_checks": [{"module": "torch_geometric", "attribute": "__version__"}, {"module": "dgl", "attribute": "__version__"}]},
+    "audio": {"imports": ["torchaudio", "librosa", "speechbrain", "soundfile"], "export_checks": [{"module": "torchaudio", "attribute": "__version__"}, {"module": "librosa", "attribute": "load"}]},
+    "mmlab": {"imports": ["mmengine", "mmcv", "mmpretrain", "mmseg", "mmdet"], "export_checks": [{"module": "mmcv", "attribute": "__version__"}, {"module": "mmengine", "attribute": "__version__"}]},
+    "tabular-ts": {"imports": ["pytorch_forecasting", "tsai", "pytorch_tabnet", "sktime"], "export_checks": [{"module": "pytorch_forecasting", "attribute": "__version__"}, {"module": "sktime", "attribute": "__version__"}]},
+    "detect-misc": {"imports": ["detectron2", "mmcv", "mmdet"], "export_checks": [{"module": "detectron2", "attribute": "__version__"}, {"module": "mmcv", "attribute": "__version__"}], "source_build": [{"name": "detectron2-mmcv-compiled-ops", "packages": ["detectron2", "mmcv"], "command": ["python", "-c", "import detectron2._C; import mmcv._ext"], "max_attempts": 2}]},
+    "legacy-torch": {"imports": ["torch", "torchvision", "numpy", "timm"], "export_checks": [{"module": "torch", "attribute": "__version__"}, {"module": "numpy", "attribute": "__version__"}]},
+    "oddballs": {"imports": ["torch", "torchvision", "einops", "numpy"], "export_checks": [{"module": "torch", "attribute": "__version__"}, {"module": "einops", "attribute": "rearrange"}]},
+    "tf-keras-arm64": {"imports": ["tensorflow", "keras", "tensorflow_datasets"], "export_checks": [{"module": "tensorflow", "attribute": "__version__"}, {"module": "keras", "attribute": "Model"}]},
+    "jax-flax-arm64": {"imports": ["jax", "flax", "optax", "orbax.checkpoint"], "export_checks": [{"module": "jax", "attribute": "__version__"}, {"module": "flax", "attribute": "__version__"}]},
+    "paddle-arm64": {"imports": ["paddle", "numpy", "cv2"], "export_checks": [{"module": "paddle", "attribute": "__version__"}, {"module": "paddle", "attribute": "nn"}]}
+  }
+}

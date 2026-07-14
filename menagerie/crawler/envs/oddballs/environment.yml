@@ -1,0 +1,5 @@
+{
+  "name": "menagerie-oddballs",
+  "channels": ["pytorch", "conda-forge", "nodefaults"],
+  "dependencies": ["python>=3.11,<3.13", "pytorch>=2.3", "torchvision", "numpy", "scipy", "einops", "timm", "ninja", "cmake", "cxx-compiler"]
+}

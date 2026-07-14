@@ -1,0 +1,19 @@
+{
+  "small_set_target": true,
+  "hard_cap": null,
+  "phase_order": ["pytorch", "native-tail"],
+  "split_guidance": "Split only when an on-target solve proves a real sub-stack incompatibility. Keep splits thick; outliers below 25 models must fit an existing intent or fail:environment.",
+  "intents": {
+    "core": {"phase": "pytorch", "framework": "pytorch", "description": "Current general PyTorch, vision, and Hugging Face stack.", "split_guidance": "Split only for a demonstrated incompatible major ecosystem stack."},
+    "graph": {"phase": "pytorch", "framework": "pytorch", "description": "Graph, molecular, geometric, and scientific PyTorch stack.", "split_guidance": "Separate DGL from PyG only if target solving proves they cannot coexist."},
+    "audio": {"phase": "pytorch", "framework": "pytorch", "description": "Audio, speech, codec, vocoder, and music stack.", "split_guidance": "Split compiled codec stacks only after an evidenced ABI conflict."},
+    "mmlab": {"phase": "pytorch", "framework": "pytorch", "description": "Compatible OpenMMLab training and vision stack.", "split_guidance": "Split by mutually incompatible mmcv generation, never by individual model."},
+    "tabular-ts": {"phase": "pytorch", "framework": "pytorch", "description": "Tabular, recommendation, survival, and time-series stack.", "split_guidance": "Split only on demonstrated NumPy or Lightning major-version conflicts."},
+    "detect-misc": {"phase": "pytorch", "framework": "pytorch", "description": "Detectron2, MMDetection, and specialized compiled CV operations.", "split_guidance": "The designated arm64 build pool has two attempts before evidenced x86 deferral."},
+    "legacy-torch": {"phase": "pytorch", "framework": "pytorch", "description": "Bounded older Python and PyTorch compatibility stack.", "split_guidance": "Split only when a materially different old torch major serves at least 25 models."},
+    "oddballs": {"phase": "pytorch", "framework": "pytorch", "description": "Minimal base for pinned exact research repositories.", "split_guidance": "Add a thick sub-stack only for at least 25 compatible repository models."},
+    "tf-keras-arm64": {"phase": "native-tail", "framework": "tensorflow", "description": "Native TensorFlow and Keras stack for Apple Silicon.", "split_guidance": "Split only across an evidenced incompatible TensorFlow/Keras generation."},
+    "jax-flax-arm64": {"phase": "native-tail", "framework": "jax", "description": "Native CPU JAX, Flax, and Optax stack for Apple Silicon.", "split_guidance": "Split only across an evidenced incompatible JAX/Flax generation."},
+    "paddle-arm64": {"phase": "native-tail", "framework": "paddle", "description": "Native Paddle stack for Apple Silicon where supported.", "split_guidance": "Do not substitute unofficial artifacts; defer only with platform evidence."}
+  }
+}

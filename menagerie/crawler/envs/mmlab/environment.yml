@@ -1,0 +1,5 @@
+{
+  "name": "menagerie-mmlab",
+  "channels": ["pytorch", "conda-forge", "nodefaults"],
+  "dependencies": ["python>=3.10,<3.12", "pytorch>=2.1,<2.2", "torchvision", "mmengine", "mmcv<2.2", "mmpretrain", "mmsegmentation", "mmdet", "opencv", "pycocotools", "timm"]
+}

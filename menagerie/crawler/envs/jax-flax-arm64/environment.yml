@@ -1,0 +1,5 @@
+{
+  "name": "menagerie-jax-flax-arm64",
+  "channels": ["conda-forge", "nodefaults"],
+  "dependencies": ["python>=3.11,<3.13", "jax", "jaxlib", "flax", "optax", "orbax-checkpoint", "chex", "einops", "numpy", "scipy"]
+}
