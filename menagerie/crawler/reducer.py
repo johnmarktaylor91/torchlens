@@ -714,8 +714,8 @@ class CanonicalReducer:
         )
         self._validate_status(candidate)
         self._validate_source(candidate)
-        self._validate_gates(candidate)
         self._validate_family_template(candidate)
+        self._validate_gates(candidate)
         self._validate_deferral(candidate)
         self._validate_execution(candidate)
         try:
@@ -829,9 +829,16 @@ class CanonicalReducer:
         rung = model.get("source_resolution", {}).get("rung")
         status_kind = model.get("status", {}).get("kind")
         metadata_state = model.get("authored_metadata_state")
+        website = model.get("website")
+        family_variant = bool(
+            isinstance(website, Mapping) and website.get("kind") == "size-variant-template"
+        )
+        representative_id = str(model.get("identity", {}).get("family_representative_id", ""))
+        representative = self._current.get(representative_id) if family_variant else None
         identities = None
         rung_gate_current = False
-        rung_found = self._gate_item(accuracy.get("gate_id"), stable_id)
+        gate_stable_id = representative_id if family_variant else stable_id
+        rung_found = self._gate_item(accuracy.get("gate_id"), gate_stable_id)
         if rung_found is not None:
             rung_gate, rung_item = rung_found
             rung_check = rung_item.get("rung_check")
@@ -854,7 +861,7 @@ class CanonicalReducer:
                     "runs requires a current identity-tight anti-slop/rung check gate"
                 )
         if metadata_state == "accepted":
-            found = self._gate_item(accuracy.get("gate_id"), stable_id)
+            found = self._gate_item(accuracy.get("gate_id"), gate_stable_id)
             if found is None:
                 raise ReductionError("accepted authored metadata is missing its gate")
             gate, item = found
@@ -876,23 +883,55 @@ class CanonicalReducer:
                     "authored metadata gate is missing, stale, inaccurate, or has a blocked rung check"
                 )
             facts = _model_facts(model)
-            try:
-                validate_authored_facts_for_write(facts, item)
-                identities = recompute_accepted_identities(
-                    facts,
-                    checker_prompt_hash=_checker_prompt_hash(),
-                    checker_model=str(gate.get("checker", {}).get("model")),
-                    checker_version=str(gate.get("checker", {}).get("version")),
+            if family_variant:
+                representative_accuracy = (
+                    representative.get("accuracy_gate", {})
+                    if isinstance(representative, Mapping)
+                    else {}
                 )
-            except MetadataValidationError as exc:
-                raise ReductionError(str(exc)) from exc
-            if (
-                model.get("evidence", {}).get("evidence_identity") != identities.evidence
-                or model.get("implementation", {}).get("recipe_revision") != identities.recipe
-                or item.get("vet_identity") != identities.vet
-                or accuracy.get("vet_identity") != identities.vet
-            ):
-                raise ReductionError("accepted source/evidence/recipe/vet identities are stale")
+                if (
+                    not isinstance(representative, Mapping)
+                    or representative.get("authored_metadata_state") != "accepted"
+                    or representative_accuracy.get("current") is not True
+                    or accuracy != representative_accuracy
+                ):
+                    raise ReductionError(
+                        "family variant does not inherit its current representative accuracy gate"
+                    )
+                try:
+                    identities = recompute_accepted_identities(
+                        facts,
+                        checker_prompt_hash=_checker_prompt_hash(),
+                        checker_model=str(gate.get("checker", {}).get("model")),
+                        checker_version=str(gate.get("checker", {}).get("version")),
+                    )
+                except MetadataValidationError as exc:
+                    raise ReductionError(str(exc)) from exc
+                if (
+                    model.get("evidence", {}).get("evidence_identity") != identities.evidence
+                    or model.get("implementation", {}).get("recipe_revision") != identities.recipe
+                ):
+                    raise ReductionError(
+                        "family variant source/evidence/recipe identities are stale"
+                    )
+            else:
+                try:
+                    validate_authored_facts_for_write(facts, item)
+                    identities = recompute_accepted_identities(
+                        facts,
+                        checker_prompt_hash=_checker_prompt_hash(),
+                        checker_model=str(gate.get("checker", {}).get("model")),
+                        checker_version=str(gate.get("checker", {}).get("version")),
+                    )
+                except MetadataValidationError as exc:
+                    raise ReductionError(str(exc)) from exc
+                if (
+                    model.get("evidence", {}).get("evidence_identity") != identities.evidence
+                    or model.get("implementation", {}).get("recipe_revision") != identities.recipe
+                    or item.get("vet_identity") != identities.vet
+                    or accuracy.get("vet_identity") != identities.vet
+                ):
+                    raise ReductionError("accepted source/evidence/recipe/vet identities are stale")
         fidelity = model.get("fidelity", {})
         legacy_flags = model.get("intake", {}).get("preserved_legacy_flags", [])
         required = (
@@ -1132,7 +1171,7 @@ class CanonicalReducer:
         return True
 
     def _validate_family_template(self, model: Mapping[str, Any]) -> None:
-        """Mechanically compare a claimed size variant with its representative."""
+        """Mechanically compare a claimed size variant with its exact current representative."""
 
         if not model.get("completeness", {}).get("family_template_valid"):
             return
@@ -1141,16 +1180,27 @@ class CanonicalReducer:
             return
         representative_id = model.get("identity", {}).get("family_representative_id")
         representative = self._current.get(str(representative_id))
-        representative_website = (
-            representative.get("website") if isinstance(representative, Mapping) else None
-        )
-        if not isinstance(representative_website, Mapping):
+        if not isinstance(representative, Mapping):
             raise ReductionError("family variant has no accepted current representative")
+        representative_identity = representative.get("identity")
+        representative_website = representative.get("website")
+        if (
+            representative.get("authored_metadata_state") != "accepted"
+            or representative.get("status", {}).get("kind") != "runs"
+            or representative.get("accuracy_gate", {}).get("current") is not True
+            or not isinstance(representative_identity, Mapping)
+            or representative_identity.get("family_representative_id") != representative_id
+            or not isinstance(representative_website, Mapping)
+            or representative_website.get("kind") != "family-representative"
+        ):
+            raise ReductionError("family variant representative is not a usable accepted record")
         try:
             validate_size_variant(
-                representative_website,
-                website,
+                representative,
+                model,
                 str(representative_id),
+                parameter_count_total=model.get("observed", {}).get("parameter_count_total"),
+                input_contract=model.get("input_contract", {}),
             )
         except FamilyTemplateError as exc:
             raise ReductionError(f"family template validation failed: {exc}") from exc
@@ -1290,11 +1340,29 @@ class CanonicalReducer:
             if str(pending_proposal.get("work_id")) not in accepted_work_ids:
                 raise ReductionError("pending run proposal is stale for the accepted work identity")
         else:
-            rung_gate = self._gate_item(
-                model.get("accuracy_gate", {}).get("gate_id"), str(stable_id)
+            website = model.get("website")
+            family_variant = bool(
+                isinstance(website, Mapping) and website.get("kind") == "size-variant-template"
             )
-            if rung_gate is None or str(rung_gate[1].get("work_id")) not in accepted_work_ids:
-                raise ReductionError("anti-slop/rung gate is stale for the accepted work identity")
+            if family_variant:
+                representative_id = str(
+                    model.get("identity", {}).get("family_representative_id", "")
+                )
+                representative = self._current.get(representative_id)
+                if not isinstance(representative, Mapping) or (
+                    model.get("accuracy_gate") != representative.get("accuracy_gate")
+                ):
+                    raise ReductionError(
+                        "family variant anti-slop authority is not its current representative"
+                    )
+            else:
+                rung_gate = self._gate_item(
+                    model.get("accuracy_gate", {}).get("gate_id"), str(stable_id)
+                )
+                if rung_gate is None or str(rung_gate[1].get("work_id")) not in accepted_work_ids:
+                    raise ReductionError(
+                        "anti-slop/rung gate is stale for the accepted work identity"
+                    )
         for mode in meaningful:
             reference = per_mode[mode]
             attempt_id = reference.get("attempt_id")

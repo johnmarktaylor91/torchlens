@@ -35,6 +35,9 @@ class IntakeItem:
         Hash of the complete untrusted legacy row.
     preserved_legacy_flags:
         Deterministic audit-routing risks derived from the immutable legacy row.
+    variant_scope, family_representative_id:
+        Explicit family membership used for representative-first scheduling. A
+        representative names its own stable ID; a size variant names another row.
     """
 
     stable_id: str
@@ -44,6 +47,8 @@ class IntakeItem:
     discovery_source: str
     legacy_row_sha256: str
     preserved_legacy_flags: tuple[str, ...]
+    variant_scope: str = "family"
+    family_representative_id: Optional[str] = None
 
     @property
     def natural_key(self) -> tuple[str, str, str]:
@@ -74,6 +79,8 @@ class IntakeItem:
             "discovery_source": self.discovery_source,
             "legacy_row_sha256": self.legacy_row_sha256,
             "preserved_legacy_flags": list(self.preserved_legacy_flags),
+            "variant_scope": self.variant_scope,
+            "family_representative_id": self.family_representative_id or self.stable_id,
         }
 
 
@@ -341,6 +348,8 @@ def _build_items(
                 discovery_source=source,
                 legacy_row_sha256=stable_hash(row),
                 preserved_legacy_flags=derive_legacy_risk_flags(row, discovery_source=source),
+                variant_scope=str(row.get("variant_scope", "family")),
+                family_representative_id=str(row.get("family_representative_id") or stable_id),
             )
             existing = by_key.get(key)
             if existing is not None:
@@ -349,6 +358,16 @@ def _build_items(
                 continue
             by_key[key] = item
             by_id[stable_id] = key
+    for item in by_key.values():
+        if item.variant_scope != "family":
+            raise IntakeError(
+                f"unsupported variant scope for {item.stable_id}: {item.variant_scope}"
+            )
+        if item.family_representative_id not in by_id:
+            raise IntakeError(
+                f"family representative {item.family_representative_id!r} for "
+                f"{item.stable_id!r} is not in intake"
+            )
     return tuple(sorted(by_key.values(), key=lambda item: item.stable_id))
 
 
@@ -489,9 +508,22 @@ def load_intake_snapshot(snapshot_root: Path) -> IntakeSnapshot:
             discovery_source=str(row["discovery_source"]),
             legacy_row_sha256=str(row["legacy_row_sha256"]),
             preserved_legacy_flags=loaded_flags(row),
+            variant_scope=str(row.get("variant_scope", "family")),
+            family_representative_id=str(row.get("family_representative_id") or row["stable_id"]),
         )
         for row in rows
     )
+    loaded_ids = {item.stable_id for item in items}
+    for item in items:
+        if item.variant_scope != "family":
+            raise IntakeError(
+                f"unsupported variant scope for {item.stable_id}: {item.variant_scope}"
+            )
+        if item.family_representative_id not in loaded_ids:
+            raise IntakeError(
+                f"family representative {item.family_representative_id!r} for "
+                f"{item.stable_id!r} is not in intake"
+            )
     expected = stable_hash(
         {
             key: value

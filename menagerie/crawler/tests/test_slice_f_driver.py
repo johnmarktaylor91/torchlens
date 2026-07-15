@@ -469,6 +469,32 @@ class FakeForward(ForwardLane):
         return attempts
 
 
+class FamilyCountForward(FakeForward):
+    """Report stable-ID-specific constructed parameter counts for family variants."""
+
+    def __init__(self, counts: Mapping[str, int]) -> None:
+        """Store the real constructed counts returned by the synthetic worker."""
+
+        super().__init__()
+        self.counts = dict(counts)
+
+    def forward(
+        self,
+        artifact: AuthorArtifact,
+        environment: EnvironmentBinding,
+        cold_runs: int,
+        work_root: Path,
+    ) -> Sequence[Mapping[str, Any]]:
+        """Return clean attempts with model-specific observed parameter counts."""
+
+        attempts = list(super().forward(artifact, environment, cold_runs, work_root))
+        count = self.counts[str(artifact.proposal["stable_id"])]
+        for attempt in attempts:
+            attempt["worker_receipt"]["parameter_count_total"] = count
+            attempt["worker_receipt"]["parameter_count_trainable"] = count
+        return attempts
+
+
 class OneModelForwardFailure(FakeForward):
     """Return a real failed mode attempt for exactly one model."""
 
@@ -884,6 +910,46 @@ def _snapshot(tmp_path: Path, count: int = 10) -> IntakeSnapshot:
     )
     _write_jsonl(deferred, [])
     return create_intake_snapshot(master, deferred, tmp_path / "intake")
+
+
+def _family_snapshot(tmp_path: Path) -> tuple[IntakeSnapshot, str, tuple[str, ...]]:
+    """Create one representative and two explicitly designated size variants.
+
+    Returns
+    -------
+    tuple[IntakeSnapshot, str, tuple[str, ...]]
+        Snapshot, representative ID, and ordered variant IDs.
+    """
+
+    def stable_id(variant: str) -> str:
+        """Return the deterministic intake ID for one family variant."""
+
+        digest = stable_hash(
+            {
+                "namespace": "menagerie-crawler-v1",
+                "natural_key": ["FamilyNet", "fixtures", variant],
+            }
+        )
+        return f"m_{digest.removeprefix('sha256:')[:20]}"
+
+    representative_id = stable_id("base")
+    variant_ids = (stable_id("small"), stable_id("large"))
+    master = tmp_path / "family-master.jsonl"
+    deferred = tmp_path / "family-deferred.jsonl"
+    rows = [
+        {
+            "name": "FamilyNet",
+            "zoo": "fixtures",
+            "variant": variant,
+            "variant_scope": "family",
+            "family_representative_id": representative_id,
+        }
+        for variant in ("base", "small", "large")
+    ]
+    _write_jsonl(master, rows)
+    _write_jsonl(deferred, [])
+    snapshot = create_intake_snapshot(master, deferred, tmp_path / "family-intake")
+    return snapshot, representative_id, variant_ids
 
 
 def _mixed_phase_snapshot(tmp_path: Path) -> IntakeSnapshot:
@@ -1719,6 +1785,115 @@ def _driver(
         dependencies,
         registry=load_environment_registry(target="osx-arm64"),
     )
+
+
+def test_family_representative_once_templates_variants_that_still_run(tmp_path: Path) -> None:
+    """Acceptance 18: one metadata session seeds independently executed size variants."""
+
+    snapshot, representative_id, variant_ids = _family_snapshot(tmp_path)
+    author = FakeAuthor()
+    checker = FakeChecker()
+    counts = {representative_id: 10, variant_ids[0]: 20, variant_ids[1]: 30}
+    forward = FamilyCountForward(counts)
+
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=author,
+        checker=checker,
+        forward=forward,
+    ).run()
+
+    assert result.status == "complete"
+    assert author.calls == {representative_id: 1}
+    assert checker.metadata_calls == 1
+    assert checker.fidelity_calls == 0
+    assert forward.calls == {stable_id: 1 for stable_id in counts}
+    paths = _paths(tmp_path, snapshot)
+    assert len(scan_jsonl(paths.ledgers.gates)) == 1
+    current = {model["stable_id"]: model for model in scan_jsonl(paths.ledgers.models)}
+    representative = current[representative_id]
+    assert representative["website"]["kind"] == "family-representative"
+    inherited_fields = (
+        "taxonomy",
+        "external_metadata",
+        "people_and_origin",
+        "dates",
+        "citation",
+        "licenses",
+        "source_resolution",
+        "evidence",
+    )
+    for variant_id in variant_ids:
+        variant = current[variant_id]
+        assert variant["status"]["kind"] == "runs"
+        assert variant["execution"]["accepted_attempt_ids"]
+        assert variant["budget"]["author_sessions_used"] == 0
+        assert variant["budget"]["gate_rounds_used"] == 0
+        assert variant["accuracy_gate"] == representative["accuracy_gate"]
+        assert variant["website"]["kind"] == "size-variant-template"
+        assert variant["website"]["template_source_model_id"] == representative_id
+        assert (
+            variant["implementation"]["library_recipe"]["symbol"] == variant["identity"]["variant"]
+        )
+        assert (
+            variant["implementation"]["recipe_revision"]
+            != representative["implementation"]["recipe_revision"]
+        )
+        assert variant["website"]["variant_parameter_input_line"] == (
+            f"{counts[variant_id]} parameters; input [1, 3, 8, 8]"
+        )
+        for field in inherited_fields:
+            assert canonical_json_bytes(variant[field]) == canonical_json_bytes(
+                representative[field]
+            )
+
+
+def test_family_variant_falls_back_to_full_author_when_representative_fails(
+    tmp_path: Path,
+) -> None:
+    """An unusable representative yields bounded full-author fallbacks, not a wait loop."""
+
+    snapshot, representative_id, variant_ids = _family_snapshot(tmp_path)
+    author = OneModelAuthorFailure(representative_id)
+    checker = FakeChecker()
+    result = _driver(tmp_path, snapshot, author=author, checker=checker).run()
+
+    assert result.status == "complete"
+    assert author.calls == {variant_id: 1 for variant_id in variant_ids}
+    current = {
+        model["stable_id"]: model for model in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    }
+    assert current[representative_id]["status"]["kind"] == "failed"
+    assert all(current[variant_id]["status"]["kind"] == "runs" for variant_id in variant_ids)
+    assert all(
+        current[variant_id]["budget"]["author_sessions_used"] == 1 for variant_id in variant_ids
+    )
+
+
+def test_family_variant_template_failure_terminalizes_its_own_lane(tmp_path: Path) -> None:
+    """A sibling that constructs the representative size fails without aborting the family."""
+
+    snapshot, representative_id, variant_ids = _family_snapshot(tmp_path)
+    author = FakeAuthor()
+    forward = FakeForward()
+    result = _driver(tmp_path, snapshot, author=author, forward=forward).run()
+
+    assert result.status == "complete"
+    assert author.calls == {representative_id: 1}
+    assert forward.calls == {
+        representative_id: 1,
+        variant_ids[0]: 1,
+        variant_ids[1]: 1,
+    }
+    current = {
+        model["stable_id"]: model for model in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    }
+    assert current[representative_id]["status"]["kind"] == "runs"
+    for variant_id in variant_ids:
+        assert current[variant_id]["status"]["code"] == "failed:runner"
+        assert current[variant_id]["status"]["reason_code"] == "protocol-violation"
+        assert "must differ" in current[variant_id]["status"]["detail"]
 
 
 @pytest.mark.parametrize(

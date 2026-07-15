@@ -76,6 +76,12 @@ from menagerie.crawler.env_lifecycle import (
 )
 from menagerie.crawler.effort import EffortTracker, StageCap
 from menagerie.crawler.fetcher import FetchTarget, fetch_targets
+from menagerie.crawler.family_templates import (
+    FamilyTemplateError,
+    instantiate_size_variant,
+    mechanical_variant_parameter_input_line,
+    validate_size_variant,
+)
 from menagerie.crawler.gates import emit_gate_records, route_fidelity_gate, route_metadata_gate
 from menagerie.crawler.identity import (
     canonical_json_bytes,
@@ -193,7 +199,12 @@ _AWARD_CLOSURE_SYMBOLS = {
         "_assemble_run_model",
     ),
     "family_templates.py": (
+        "instantiate_size_variant",
+        "mechanical_variant_parameter_input_line",
         "validate_size_variant",
+        "_template_identity_payload",
+        "_validate_inherited_metadata",
+        "_validate_variant_line",
         "_validate_representative",
     ),
     "gates.py": (
@@ -301,6 +312,10 @@ class DriverLockError(DriverError):
 
 class DriverIntegrationError(DriverError):
     """Raised when an injected lane returns incomplete or contradictory facts."""
+
+
+class VariantRecipeUnsupported(DriverIntegrationError):
+    """Raised when a family recipe has no closed mechanical sibling selector."""
 
 
 class DriverPaused(DriverError):
@@ -419,6 +434,21 @@ class WorkItem:
 
         return self.intake.stable_id
 
+    @property
+    def family_representative_id(self) -> str:
+        """Return the explicitly designated family representative ID."""
+
+        return self.intake.family_representative_id or self.stable_id
+
+    @property
+    def is_family_variant(self) -> bool:
+        """Return whether this item is a non-representative family size variant."""
+
+        return (
+            self.intake.variant_scope == "family"
+            and self.family_representative_id != self.stable_id
+        )
+
 
 @dataclass(frozen=True)
 class AuthorArtifact:
@@ -433,6 +463,7 @@ class AuthorArtifact:
     defer_evidence: Optional[JsonObject] = None
     campaign_root_work_id: Optional[str] = None
     canonical_code_root: Optional[Path] = None
+    template_source_revision: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -1045,6 +1076,7 @@ class CrawlerDriver:
         self.dependencies = dependencies
         self.registry = registry or load_environment_registry(target=config.target)
         self._reduced = 0
+        self._family_artifacts: dict[str, AuthorArtifact] = {}
 
     def run(self, *, after_review: bool = False) -> DriverResult:
         """Acquire authority and resume the first unsatisfied durable work identity."""
@@ -1172,46 +1204,23 @@ class CrawlerDriver:
                     )
                     if not phase_work:
                         continue
-                    artifacts = self._ensure_authors(phase_work, reducer, operational, state)
-                    eligible_work = tuple(
-                        item for item in phase_work if item.stable_id in artifacts
+                    representative_work = tuple(
+                        item for item in phase_work if not item.is_family_variant
                     )
-                    pause = self._ensure_gates(
-                        eligible_work, artifacts, reducer, operational, state
-                    )
-                    eligible_work = tuple(
-                        item
-                        for item in eligible_work
-                        if item.stable_id not in reducer.current_records
-                        or reducer.current_records[item.stable_id]["status"]["kind"] == "runs"
-                        or item.requeue_active
-                        or self.config.only_status is not None
-                    )
-                    if pause is not None:
-                        mechanical_work = tuple(
-                            item
-                            for item in eligible_work
-                            if not _fidelity_required(artifacts[item.stable_id].proposal)
+                    variant_work = tuple(item for item in phase_work if item.is_family_variant)
+                    for scheduled_work in (representative_work, variant_work):
+                        if not scheduled_work:
+                            continue
+                        pause = self._process_scheduled_work(
+                            scheduled_work, reducer, operational, state
                         )
-                        self._run_environment_work(
-                            mechanical_work,
-                            artifacts,
-                            reducer,
-                            operational,
-                            state,
-                            award_run=True,
-                        )
-                        return DriverResult(
-                            "paused:usage-limit", len(reducer.current_records), 0, pause
-                        )
-                    self._run_environment_work(
-                        eligible_work,
-                        artifacts,
-                        reducer,
-                        operational,
-                        state,
-                        award_run=True,
-                    )
+                        if pause is not None:
+                            return DriverResult(
+                                "paused:usage-limit",
+                                len(reducer.current_records),
+                                0,
+                                pause,
+                            )
             except DriverPaused:
                 return DriverResult(
                     "paused:review-checkpoint",
@@ -1256,6 +1265,64 @@ class CrawlerDriver:
             state.update({"status": completion_status, "last_terminal_count": len(current)})
             _write_driver_state(self.paths.driver_state, state)
             return DriverResult(completion_status, len(current), self._reduced, None)
+
+    def _process_scheduled_work(
+        self,
+        work: Sequence[WorkItem],
+        reducer: CanonicalReducer,
+        operational: JsonlLedger,
+        state: JsonObject,
+    ) -> Optional[str]:
+        """Author/template, gate, and execute one representative-ordered work wave.
+
+        Parameters
+        ----------
+        work:
+            Representatives or their later-scheduled family variants.
+        reducer, operational, state:
+            Current locked canonical and driver state.
+
+        Returns
+        -------
+        str | None
+            Usage-pause reason, or ``None`` after the wave finishes.
+        """
+
+        artifacts = self._ensure_authors(work, reducer, operational, state)
+        eligible_work = tuple(item for item in work if item.stable_id in artifacts)
+        pause = self._ensure_gates(eligible_work, artifacts, reducer, operational, state)
+        eligible_work = tuple(
+            item
+            for item in eligible_work
+            if item.stable_id not in reducer.current_records
+            or reducer.current_records[item.stable_id]["status"]["kind"] == "runs"
+            or item.requeue_active
+            or self.config.only_status is not None
+        )
+        if pause is not None:
+            mechanical_work = tuple(
+                item
+                for item in eligible_work
+                if not _fidelity_required(artifacts[item.stable_id].proposal)
+            )
+            self._run_environment_work(
+                mechanical_work,
+                artifacts,
+                reducer,
+                operational,
+                state,
+                award_run=True,
+            )
+            return pause
+        self._run_environment_work(
+            eligible_work,
+            artifacts,
+            reducer,
+            operational,
+            state,
+            award_run=True,
+        )
+        return None
 
     def _ordered_work(
         self,
@@ -1518,10 +1585,40 @@ class CrawlerDriver:
         operational: JsonlLedger,
         state: JsonObject,
     ) -> dict[str, AuthorArtifact]:
-        """Create or reload one durable author result per model."""
+        """Create, reload, or family-template one durable artifact per model.
+
+        Variants template only when their representative is a current accepted run
+        and its recipe exposes a closed mechanical sibling selector. A failed,
+        deferred, skipped, incomplete, or mechanically unsupported representative
+        causes a bounded ordinary per-variant author/gate fallback; no variant waits
+        in a nonterminal scheduler loop.
+        """
 
         artifacts: dict[str, AuthorArtifact] = {}
         for item in work:
+            representative = reducer.current_records.get(item.family_representative_id)
+            representative_artifact = self._family_artifacts.get(item.family_representative_id)
+            if (
+                item.is_family_variant
+                and isinstance(representative, Mapping)
+                and _usable_family_representative(representative, item.family_representative_id)
+                and representative_artifact is not None
+            ):
+                try:
+                    artifact = _instantiate_variant_artifact(
+                        item,
+                        representative_artifact,
+                        representative,
+                        self.config,
+                    )
+                    _validate_artifact_identities(artifact, self.config)
+                except VariantRecipeUnsupported:
+                    # Unsupported family recipe forms take the documented full-author fallback.
+                    pass
+                else:
+                    artifacts[item.stable_id] = artifact
+                    self.dependencies.boundary_hook("after-author", item.stable_id)
+                    continue
             reconstructed = _rehydrate_canonical_artifact(item, self.paths)
             if reconstructed is not None:
                 try:
@@ -1729,6 +1826,7 @@ class CrawlerDriver:
             else:
                 artifacts[item.stable_id] = artifact
             self.dependencies.boundary_hook("after-author", item.stable_id)
+        self._family_artifacts.update(artifacts)
         return artifacts
 
     def _ensure_gates(
@@ -1750,6 +1848,7 @@ class CrawlerDriver:
         pending_ids = {
             item.stable_id
             for item in work
+            if artifacts[item.stable_id].template_source_revision is None
             if not _metadata_gate_accepted(
                 persisted, item.stable_id, artifacts[item.stable_id].proposal
             )
@@ -2485,6 +2584,7 @@ class CrawlerDriver:
                 "terminal_detail": promoted.terminal_detail,
                 "defer_evidence": promoted.defer_evidence,
                 "campaign_root_work_id": promoted.campaign_root_work_id,
+                "template_source_revision": promoted.template_source_revision,
                 "canonical_code_root": (
                     str(promoted.canonical_code_root)
                     if promoted.canonical_code_root is not None
@@ -2546,6 +2646,11 @@ class CrawlerDriver:
                             artifacts[item.stable_id],
                             environment,
                             scan_jsonl(self.paths.ledgers.gates),
+                            representative_model=(
+                                reducer.current_records.get(item.family_representative_id)
+                                if item.is_family_variant
+                                else None
+                            ),
                         )
                     ):
                         continue
@@ -2763,7 +2868,47 @@ class CrawlerDriver:
         if not award_run:
             return
         gates = scan_jsonl(self.paths.ledgers.gates)
-        model = _assemble_run_model(item, artifact, attempts, gates, self.config)
+        representative_model = (
+            reducer.current_records.get(item.family_representative_id)
+            if item.is_family_variant
+            else None
+        )
+        try:
+            model = _assemble_run_model(
+                item,
+                artifact,
+                attempts,
+                gates,
+                self.config,
+                representative_model=representative_model,
+            )
+        except DriverIntegrationError as exc:
+            if artifact.template_source_revision is None:
+                raise
+            failure = reducer.append_attempt(
+                _driver_failure_attempt(
+                    item,
+                    artifact,
+                    "runner",
+                    "protocol-violation",
+                    exc,
+                    self.config,
+                    environment=environment.family,
+                    created_at=self.dependencies.clock(),
+                )
+            ).record
+            self._terminalize(
+                item,
+                artifact,
+                "failed:runner",
+                "protocol-violation",
+                str(exc),
+                (*attempts, failure),
+                reducer,
+                operational,
+                state,
+            )
+            return
         current_model = reducer.current_records.get(item.stable_id)
         model["parent_revision"] = (
             current_model["record_revision"] if current_model is not None else None
@@ -4168,6 +4313,11 @@ def _artifact_from_cache(value: Mapping[str, Any], config: DriverConfig) -> Auth
         canonical_code_root=(
             Path(str(value["canonical_code_root"])) if value.get("canonical_code_root") else None
         ),
+        template_source_revision=(
+            str(value["template_source_revision"])
+            if value.get("template_source_revision")
+            else None
+        ),
     )
     return _normalize_artifact_modes(artifact, config)
 
@@ -4294,8 +4444,23 @@ def _current_run_is_fresh(
     artifact: AuthorArtifact,
     environment: EnvironmentBinding,
     gates: Sequence[Mapping[str, Any]],
+    *,
+    representative_model: Optional[Mapping[str, Any]] = None,
 ) -> bool:
-    """Return whether a current run still binds all independently current inputs."""
+    """Return whether a current run still binds all independently current inputs.
+
+    Parameters
+    ----------
+    model, artifact, environment, gates:
+        Current canonical run and exact live dependencies.
+    representative_model:
+        Current family representative for a templated size variant.
+
+    Returns
+    -------
+    bool
+        Whether no canonical rewrite or execution is required.
+    """
 
     if model.get("status", {}).get("kind") != "runs":
         return False
@@ -4308,6 +4473,62 @@ def _current_run_is_fresh(
     if proposal.get("author", {}).get("prompt_sha256") != live_author_prompt:
         return False
     facts = proposal.get("proposed_facts", {})
+    if artifact.template_source_revision is not None:
+        if (
+            not _usable_family_representative(
+                representative_model,
+                str(model.get("identity", {}).get("family_representative_id")),
+            )
+            or representative_model is None
+            or representative_model.get("record_revision") != artifact.template_source_revision
+        ):
+            return False
+        try:
+            validate_size_variant(
+                representative_model,
+                model,
+                str(model.get("identity", {}).get("family_representative_id")),
+                parameter_count_total=model.get("observed", {}).get("parameter_count_total"),
+                input_contract=model.get("input_contract", {}),
+            )
+        except FamilyTemplateError:
+            return False
+        for field in ("identity", "implementation", "input_contract"):
+            if model.get(field) != facts.get(field):
+                return False
+        accuracy = model.get("accuracy_gate", {})
+        representative_accuracy = representative_model.get("accuracy_gate", {})
+        metadata_gate = next(
+            (
+                gate
+                for gate in gates
+                if gate.get("gate_id") == representative_accuracy.get("gate_id")
+            ),
+            None,
+        )
+        if (
+            metadata_gate is None
+            or accuracy.get("gate_id") != representative_accuracy.get("gate_id")
+            or accuracy.get("vet_identity") != representative_accuracy.get("vet_identity")
+            or metadata_gate.get("checker", {}).get("prompt_sha256") != _checker_prompt_hash()
+        ):
+            return False
+        if _fidelity_required(proposal):
+            fidelity_gate = _find_gate(gates, str(proposal["stable_id"]), "fidelity", proposal)
+            fidelity = model.get("fidelity", {})
+            if (
+                fidelity_gate is None
+                or fidelity.get("gate_id") != fidelity_gate.get("gate_id")
+                or fidelity.get("fidelity_identity") != proposal.get("fidelity_identity")
+            ):
+                return False
+        execution = model.get("execution", {})
+        return bool(
+            execution.get("current")
+            and execution.get("env_generation") == environment.env_generation
+            and execution.get("execution_identity") == _execution_identity(proposal, environment)
+            and model.get("provenance", {}).get("author_prompt_sha256") == live_author_prompt
+        )
     for field in (
         "identity",
         "taxonomy",
@@ -5302,6 +5523,224 @@ def _bind_requeue_artifact(item: WorkItem, artifact: AuthorArtifact) -> AuthorAr
         artifact,
         proposal=proposal,
         campaign_root_work_id=item.requeue_work_id,
+    )
+
+
+def _usable_family_representative(model: Mapping[str, Any] | None, representative_id: str) -> bool:
+    """Return whether a current canonical record can authoritatively seed variants.
+
+    Parameters
+    ----------
+    model:
+        Current canonical representative candidate.
+    representative_id:
+        Stable ID designated by the variant intake row.
+
+    Returns
+    -------
+    bool
+        True only for a fully accepted, executed, self-representative record.
+    """
+
+    if not isinstance(model, Mapping):
+        return False
+    identity = model.get("identity")
+    website = model.get("website")
+    return bool(
+        model.get("stable_id") == representative_id
+        and model.get("authored_metadata_state") == "accepted"
+        and isinstance(identity, Mapping)
+        and identity.get("variant_scope") == "family"
+        and identity.get("family_representative_id") == representative_id
+        and isinstance(website, Mapping)
+        and website.get("kind") == "family-representative"
+        and model.get("accuracy_gate", {}).get("current")
+        and model.get("execution", {}).get("current")
+        and model.get("status", {}).get("kind") == "runs"
+        and model.get("completeness", {}).get("release_eligible")
+    )
+
+
+def _instantiate_variant_artifact(
+    item: WorkItem,
+    representative_artifact: AuthorArtifact,
+    representative_model: Mapping[str, Any],
+    config: DriverConfig,
+) -> AuthorArtifact:
+    """Build a recipe-bearing variant artifact without an author or metadata-vet session.
+
+    The accepted representative contributes its exact source, evidence, implementation,
+    input contract, and family metadata. The variant receives its own work identity and
+    later its own execution receipts. The provisional zero-count line is never written
+    canonically; assembly replaces it from the constructed variant's worker receipt.
+
+    Parameters
+    ----------
+    item:
+        Explicitly designated non-representative family member.
+    representative_artifact:
+        Accepted representative recipe/source artifact.
+    representative_model:
+        Exact current accepted canonical representative revision.
+    config:
+        Current checker identity used to bind derived proposal identities.
+
+    Returns
+    -------
+    AuthorArtifact
+        Deterministic variant execution artifact bound to the representative revision.
+    """
+
+    if not item.is_family_variant:
+        raise DriverIntegrationError("family template artifact requires a size variant")
+    revision = representative_model.get("record_revision")
+    if not isinstance(revision, str) or not revision:
+        raise DriverIntegrationError("family representative has no accepted revision")
+    proposal = deepcopy(representative_artifact.proposal)
+    facts = proposal.get("proposed_facts")
+    if not isinstance(facts, dict):
+        raise DriverIntegrationError("representative proposal facts are incomplete")
+    for field in (
+        "taxonomy",
+        "external_metadata",
+        "people_and_origin",
+        "dates",
+        "citation",
+        "licenses",
+        "source_resolution",
+        "evidence",
+    ):
+        facts[field] = deepcopy(representative_model.get(field))
+    identity = deepcopy(dict(representative_model["identity"]))
+    identity.update(
+        {
+            "canonical_name": item.intake.name,
+            "variant": item.intake.variant,
+            "variant_scope": "family",
+            "family_representative_id": item.family_representative_id,
+            "duplicate_of": None,
+            "alias_of": None,
+        }
+    )
+    facts["identity"] = identity
+    _specialize_variant_recipe(facts, item)
+    try:
+        provisional_line = mechanical_variant_parameter_input_line(0, facts["input_contract"])
+        facts["website"] = instantiate_size_variant(
+            representative_model,
+            representative_model_id=item.family_representative_id,
+            variant_parameter_input_line=provisional_line,
+        )
+    except FamilyTemplateError as exc:
+        raise VariantRecipeUnsupported(str(exc)) from exc
+    work_id = item.requeue_work_id or f"work-{item.stable_id}"
+    proposal.update(
+        {
+            "proposal_id": stable_hash(
+                {
+                    "template_source_revision": revision,
+                    "stable_id": item.stable_id,
+                    "work_id": work_id,
+                }
+            ),
+            "work_id": work_id,
+            "stable_id": item.stable_id,
+        }
+    )
+    verified_hashes = proposal.get("verified_hashes")
+    if not isinstance(verified_hashes, dict):
+        raise DriverIntegrationError("representative verified hashes are incomplete")
+    verified_hashes["family_template"] = facts["website"]["template_hash"]
+    try:
+        identities = recompute_accepted_identities(
+            facts,
+            checker_prompt_hash=_checker_prompt_hash(),
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
+    except MetadataValidationError as exc:
+        raise DriverIntegrationError(str(exc)) from exc
+    implementation = facts.get("implementation")
+    evidence = facts.get("evidence")
+    if not isinstance(implementation, dict) or not isinstance(evidence, dict):
+        raise DriverIntegrationError("representative recipe/evidence facts are incomplete")
+    implementation["recipe_revision"] = identities.recipe
+    evidence["evidence_identity"] = identities.evidence
+    identities = recompute_accepted_identities(
+        facts,
+        checker_prompt_hash=_checker_prompt_hash(),
+        checker_model=config.checker_model,
+        checker_version=config.checker_version,
+    )
+    proposal.update(
+        {
+            "source_identity": identities.source,
+            "evidence_identity": identities.evidence,
+            "recipe_revision": identities.recipe,
+            "fidelity_identity": identities.fidelity,
+            "vet_identity": identities.vet,
+        }
+    )
+    proposal["proposal_sha256"] = stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+    return AuthorArtifact(
+        proposal=proposal,
+        source_manifest=deepcopy(representative_artifact.source_manifest),
+        model_dir=representative_artifact.model_dir,
+        campaign_root_work_id=work_id,
+        canonical_code_root=representative_artifact.canonical_code_root,
+        template_source_revision=revision,
+    )
+
+
+def _specialize_variant_recipe(facts: JsonObject, item: WorkItem) -> None:
+    """Mechanically select a sibling constructor without accepting authored prose.
+
+    Closed declarative family recipes can expose a conventional variant-selector
+    keyword, or use the intake variant as a direct constructor symbol. Any adapter
+    or ambiguous recipe falls back to the ordinary per-variant author/gate path.
+
+    Parameters
+    ----------
+    facts:
+        Mutable representative proposal facts copied for the variant.
+    item:
+        Explicit intake size variant providing the selector token.
+
+    Raises
+    ------
+    VariantRecipeUnsupported
+        If the recipe has no single closed mechanical specialization.
+    """
+
+    implementation = facts.get("implementation")
+    if (
+        not isinstance(implementation, dict)
+        or implementation.get("recipe_type") != "declarative-library"
+    ):
+        raise VariantRecipeUnsupported(
+            "typed family variants require their own full author/gate fallback"
+        )
+    recipe = implementation.get("library_recipe")
+    if not isinstance(recipe, dict):
+        raise VariantRecipeUnsupported("family declarative recipe is incomplete")
+    kwargs = recipe.get("kwargs")
+    if not isinstance(kwargs, dict):
+        raise VariantRecipeUnsupported("family declarative recipe kwargs are incomplete")
+    selector_keys = tuple(
+        key for key in ("variant", "model_name", "arch", "architecture", "size") if key in kwargs
+    )
+    if len(selector_keys) == 1:
+        kwargs[selector_keys[0]] = item.intake.variant
+        return
+    if selector_keys:
+        raise VariantRecipeUnsupported("family recipe has ambiguous variant selector kwargs")
+    if item.intake.variant.isidentifier():
+        recipe["symbol"] = item.intake.variant
+        return
+    raise VariantRecipeUnsupported(
+        "family recipe has no closed variant selector; full author fallback is required"
     )
 
 
@@ -7628,17 +8067,68 @@ def _assemble_run_model(
     attempts: Sequence[Mapping[str, Any]],
     gates: Sequence[Mapping[str, Any]],
     config: DriverConfig,
+    *,
+    representative_model: Optional[Mapping[str, Any]] = None,
 ) -> JsonObject:
-    """Assemble a driver-owned terminal revision from independently durable facts."""
+    """Assemble a driver-owned terminal revision from independently durable facts.
+
+    Parameters
+    ----------
+    item, artifact, attempts, gates, config:
+        Exact scheduled item, proposal, durable execution/gate history, and driver identity.
+    representative_model:
+        Exact current accepted family representative for a templated variant.
+
+    Returns
+    -------
+    dict[str, Any]
+        Schema-complete canonical run candidate.
+    """
 
     artifact = _require_legacy_audit_fidelity(item, artifact, config)
     proposal = artifact.proposal
     facts = deepcopy(dict(proposal["proposed_facts"]))
     stable_id = item.stable_id
-    metadata_gate = _find_gate(gates, stable_id, "metadata_batch", proposal)
+    templated_variant = artifact.template_source_revision is not None
+    if templated_variant:
+        if not item.is_family_variant or not _usable_family_representative(
+            representative_model, item.family_representative_id
+        ):
+            raise DriverIntegrationError("family variant has no usable current representative")
+        if representative_model is None or (
+            representative_model.get("record_revision") != artifact.template_source_revision
+        ):
+            raise DriverIntegrationError("family variant template source revision is stale")
+        for field in (
+            "taxonomy",
+            "external_metadata",
+            "people_and_origin",
+            "dates",
+            "citation",
+            "licenses",
+            "source_resolution",
+            "evidence",
+        ):
+            facts[field] = deepcopy(representative_model.get(field))
+        representative_accuracy = representative_model.get("accuracy_gate", {})
+        metadata_gate = next(
+            (
+                dict(gate)
+                for gate in reversed(gates)
+                if gate.get("gate_id") == representative_accuracy.get("gate_id")
+                and gate.get("gate_kind") == "metadata_batch"
+            ),
+            None,
+        )
+    else:
+        representative_accuracy = {}
+        metadata_gate = _find_gate(gates, stable_id, "metadata_batch", proposal)
+    metadata_stable_id = item.family_representative_id if templated_variant else stable_id
     metadata_item = (
         next(
-            gate_item for gate_item in metadata_gate["items"] if gate_item["stable_id"] == stable_id
+            gate_item
+            for gate_item in metadata_gate["items"]
+            if gate_item["stable_id"] == metadata_stable_id
         )
         if metadata_gate is not None
         else None
@@ -7648,6 +8138,15 @@ def _assemble_run_model(
         and metadata_item.get("verdict") == "accurate"
         and metadata_item.get("integrity", {}).get("verdict") == "accurate"
         and metadata_item.get("rung_check", {}).get("verdict") == "accurate"
+        and (
+            not templated_variant
+            or (
+                metadata_gate is not None
+                and representative_accuracy.get("current") is True
+                and representative_accuracy.get("gate_id") == metadata_gate.get("gate_id")
+                and representative_accuracy.get("vet_identity") == metadata_item.get("vet_identity")
+            )
+        )
     )
     fidelity_gate = _find_gate(gates, stable_id, "fidelity", proposal)
     required_fidelity = _fidelity_required(proposal)
@@ -7656,8 +8155,10 @@ def _assemble_run_model(
         raise DriverIntegrationError(
             f"pending metadata run is not eligible for fidelity-required rung {rung!r}"
         )
-    if metadata_accepted and metadata_item is not None:
+    if metadata_accepted and metadata_item is not None and not templated_variant:
         validate_authored_facts_for_write(facts, metadata_item)
+        metadata_state = "accepted"
+    elif metadata_accepted and templated_variant:
         metadata_state = "accepted"
     else:
         metadata_state = "pending"
@@ -7713,6 +8214,17 @@ def _assemble_run_model(
         )
     first_attempt = selected[meaningful[0]]
     first_receipt = first_attempt["worker_receipt"]
+    if templated_variant:
+        if representative_model is None:
+            raise DriverIntegrationError("family variant lost its representative during assembly")
+        measured_line = mechanical_variant_parameter_input_line(
+            first_receipt.get("parameter_count_total"), facts["input_contract"]
+        )
+        facts["website"] = instantiate_size_variant(
+            representative_model,
+            representative_model_id=item.family_representative_id,
+            variant_parameter_input_line=measured_line,
+        )
     fidelity = deepcopy(dict(facts["fidelity"]))
     if fidelity_gate is not None:
         fidelity_item = next(
@@ -7777,7 +8289,13 @@ def _assemble_run_model(
         },
         "accuracy_gate": {
             "required": True,
-            "vet_identity": proposal["vet_identity"] if metadata_accepted else None,
+            "vet_identity": (
+                representative_accuracy.get("vet_identity")
+                if metadata_accepted and templated_variant
+                else proposal["vet_identity"]
+                if metadata_accepted
+                else None
+            ),
             "gate_id": (
                 metadata_gate["gate_id"]
                 if metadata_accepted and metadata_gate is not None
@@ -7877,13 +8395,17 @@ def _assemble_run_model(
             "machine_id": config.machine_id,
         },
         "budget": {
-            "author_sessions_used": 1,
+            "author_sessions_used": 0 if templated_variant else 1,
             "author_sessions_max": 3,
-            "gate_rounds_used": int(metadata_accepted) + int(required_fidelity),
+            "gate_rounds_used": (
+                int(required_fidelity)
+                if templated_variant
+                else int(metadata_accepted) + int(required_fidelity)
+            ),
             "run_revisions_used": 1,
             "explicit_grants": list(item.explicit_grants),
         },
-        "flags": [],
+        "flags": ["family-template-inherited"] if templated_variant else [],
         "notes": "",
         "scar_history": [],
         "completeness": {
@@ -7907,6 +8429,19 @@ def _assemble_run_model(
             else None
         ),
     }
+    if templated_variant:
+        if representative_model is None:
+            raise DriverIntegrationError("family variant lost its representative before write")
+        try:
+            validate_size_variant(
+                representative_model,
+                model,
+                item.family_representative_id,
+                parameter_count_total=first_receipt.get("parameter_count_total"),
+                input_contract=facts["input_contract"],
+            )
+        except FamilyTemplateError as exc:
+            raise DriverIntegrationError(str(exc)) from exc
     return model
 
 
