@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
+import shutil
 import subprocess
 import sys
 import time
@@ -1573,6 +1574,40 @@ def test_progress_milestones_fire_once_without_pausing(tmp_path: Path) -> None:
     ] == [1, 2]
 
 
+def test_runtime_wipe_preserves_milestone_and_review_one_shots(tmp_path: Path) -> None:
+    """Canonical policy identities prevent milestone replay and review re-blocking."""
+
+    snapshot = _snapshot(tmp_path, count=10)
+    first_notifier = FakeNotifier()
+    first = _driver(
+        tmp_path,
+        snapshot,
+        notifier=first_notifier,
+        review_at=1,
+        milestones=(1,),
+    ).run()
+    assert first.status == "paused:review-checkpoint"
+    resumed = _driver(tmp_path, snapshot, review_at=1, milestones=(1,)).run(after_review=True)
+    assert resumed.status == "complete"
+    paths = _paths(tmp_path, snapshot)
+    canonical_events = scan_jsonl(paths.ledgers.models.parent / "operational" / "events.jsonl")
+    assert [event["event_kind"] for event in canonical_events].count("progress-notification") == 1
+    assert [event["event_kind"] for event in canonical_events].count("checkpoint-review") == 1
+    assert [event["event_kind"] for event in canonical_events].count("review-signoff") == 1
+
+    shutil.rmtree(paths.runtime_root)
+    clean_notifier = FakeNotifier()
+    clean_resume = _driver(
+        tmp_path,
+        snapshot,
+        notifier=clean_notifier,
+        review_at=1,
+        milestones=(1,),
+    ).run()
+    assert clean_resume.status == "complete"
+    assert clean_notifier.messages == []
+
+
 def test_empty_milestones_and_missing_notifier_never_block(tmp_path: Path) -> None:
     """No milestones means no pings; a missing notifier remains a nonfatal fallback."""
 
@@ -1732,6 +1767,24 @@ def test_human_requeue_consumes_grant_and_supersedes_failed_gate(tmp_path: Path)
         )
         == 1
     )
+    canonical_operational = paths.ledgers.models.parent / "operational"
+    assert scan_jsonl(canonical_operational / "requeue-grants.jsonl", validate=False) == [grant]
+    assert (
+        len(
+            [
+                event
+                for event in scan_jsonl(canonical_operational / "events.jsonl")
+                if event["event_kind"] == "requeue-grant-consumed"
+            ]
+        )
+        == 1
+    )
+
+    shutil.rmtree(paths.runtime_root)
+    with CanonicalReducer(
+        paths.ledgers, [intake.stable_id for intake in snapshot.items]
+    ) as rebuilt:
+        assert rebuilt.current_records[stable_id]["budget"]["explicit_grants"] == [grant_id]
 
 
 def test_environment_failure_terminalizes_intent(tmp_path: Path) -> None:

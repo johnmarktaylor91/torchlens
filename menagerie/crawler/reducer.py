@@ -15,7 +15,7 @@ from menagerie.crawler.constants import (
     TERMINAL_STATUS_CODES,
 )
 from menagerie.crawler.family_templates import FamilyTemplateError, validate_size_variant
-from menagerie.crawler.identity import hash_bytes
+from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.metadata import (
     MetadataValidationError,
     input_signature_matches_contract,
@@ -23,8 +23,8 @@ from menagerie.crawler.metadata import (
     validate_authored_facts_for_write,
 )
 from menagerie.crawler.models import AppendResult, JsonObject, LedgerPaths
-from menagerie.crawler.recordio import JsonlLedger, LedgerConflictError
-from menagerie.crawler.state import _select_current
+from menagerie.crawler.recordio import JsonlLedger, LedgerConflictError, scan_jsonl
+from menagerie.crawler.state import _select_current as _select_current_by_parent
 
 
 class ReductionError(ValueError):
@@ -47,6 +47,205 @@ _FACT_ROOTS = (
     "modes",
     "fidelity",
 )
+
+
+def _select_current(records: Iterable[Mapping[str, Any]]) -> dict[str, JsonObject]:
+    """Validate public supersession lineage and select current revisions.
+
+    Parameters
+    ----------
+    records:
+        Canonical model revisions in append order.
+
+    Returns
+    -------
+    dict[str, dict[str, Any]]
+        Current revisions selected after exact public-lineage validation.
+    """
+
+    materialized = tuple(records)
+    for record in materialized:
+        parent = record.get("parent_revision")
+        supersedes = record.get("status", {}).get("supersedes_revision")
+        if parent is None and supersedes is not None:
+            raise ReductionError("a first model revision cannot supersede another revision")
+        if parent is not None and supersedes != parent:
+            raise ReductionError(
+                "persisted status.supersedes_revision does not match parent_revision"
+            )
+    return _select_current_by_parent(materialized)
+
+
+def _records_root(ledgers: LedgerPaths) -> Path:
+    """Return the canonical records root for sibling operational evidence.
+
+    Parameters
+    ----------
+    ledgers:
+        Canonical model/attempt/gate ledger paths.
+
+    Returns
+    -------
+    pathlib.Path
+        Records root containing the durable operational directory.
+    """
+
+    parent = ledgers.models.resolve().parent
+    return parent.parent if parent.name == "models" else parent
+
+
+def _revision_work_ids(
+    revision: Mapping[str, Any],
+    attempts: Iterable[Mapping[str, Any]],
+    gates: Iterable[Mapping[str, Any]],
+) -> frozenset[str]:
+    """Collect durable work identities referenced by one model revision.
+
+    Parameters
+    ----------
+    revision:
+        Candidate or persisted model revision.
+    attempts, gates:
+        Canonical execution and checker evidence.
+
+    Returns
+    -------
+    frozenset[str]
+        Work identities bound by the revision's referenced evidence.
+    """
+
+    stable_id = revision.get("stable_id")
+    attempt_ids = set(revision.get("status", {}).get("attempt_ids", [])) | set(
+        revision.get("execution", {}).get("accepted_attempt_ids", [])
+    )
+    work_ids = {
+        str(attempt.get("work_id"))
+        for attempt in attempts
+        if attempt.get("attempt_id") in attempt_ids and attempt.get("work_id") is not None
+    }
+    gate_ids = {
+        revision.get("accuracy_gate", {}).get("gate_id"),
+        revision.get("fidelity", {}).get("gate_id"),
+    } - {None}
+    for gate in gates:
+        if gate.get("gate_id") not in gate_ids:
+            continue
+        for item in gate.get("items", []):
+            if item.get("stable_id") == stable_id:
+                for field in ("work_id", "campaign_root_work_id"):
+                    if item.get(field) is not None:
+                        work_ids.add(str(item[field]))
+    untrusted = revision.get("untrusted_attempt")
+    if isinstance(untrusted, Mapping):
+        proposal = untrusted.get("proposal")
+        if isinstance(proposal, Mapping) and proposal.get("work_id") is not None:
+            work_ids.add(str(proposal["work_id"]))
+    return frozenset(work_ids)
+
+
+def _validate_persisted_requeue_lineage(
+    records: Iterable[Mapping[str, Any]],
+    ledgers: LedgerPaths,
+    attempts: Iterable[Mapping[str, Any]],
+    gates: Iterable[Mapping[str, Any]],
+) -> None:
+    """Validate every explicit grant introduction against canonical durable proof.
+
+    Parameters
+    ----------
+    records:
+        Persisted revisions plus an optional append candidate.
+    ledgers:
+        Canonical ledger paths used to locate operational evidence.
+    attempts, gates:
+        Canonical evidence carrying new-work identities.
+
+    Raises
+    ------
+    ReductionError
+        If a grant, parent binding, generation, or new-work identity is inconsistent.
+    """
+
+    materialized = tuple(records)
+    if not any(record.get("budget", {}).get("explicit_grants", []) for record in materialized):
+        return
+    operational_root = _records_root(ledgers) / "operational"
+    grant_rows = scan_jsonl(operational_root / "requeue-grants.jsonl", validate=False)
+    event_rows = scan_jsonl(operational_root / "events.jsonl")
+    grants = {str(grant.get("grant_id")): grant for grant in grant_rows}
+    consumptions = {
+        str(event.get("details", {}).get("grant_id")): event
+        for event in event_rows
+        if event.get("event_kind") == "requeue-grant-consumed"
+    }
+    prior_grants: dict[str, set[str]] = {}
+    for revision in materialized:
+        stable_id = str(revision.get("stable_id"))
+        inherited = prior_grants.get(stable_id, set())
+        current_grants = set(revision.get("budget", {}).get("explicit_grants", []))
+        if not inherited <= current_grants:
+            raise ReductionError("explicit requeue grants cannot be removed from a lineage")
+        introduced = current_grants - inherited
+        if len(introduced) > 1:
+            raise ReductionError("one model revision cannot consume multiple requeue grants")
+        for grant_id in introduced:
+            grant = grants.get(grant_id)
+            event = consumptions.get(grant_id)
+            if grant is None or event is None:
+                raise ReductionError("explicit requeue grant lacks canonical durable proof")
+            if "new_work_generation" in grant:
+                expected_grant_id = stable_hash(
+                    {
+                        "generation": grant.get("new_work_generation"),
+                        "stable_id": grant.get("stable_id"),
+                        "stage": grant.get("stage"),
+                        "reason": grant.get("reason"),
+                        "attempts": grant.get("attempts"),
+                        "granted_by": grant.get("granted_by"),
+                    }
+                )
+            else:
+                expected_grant_id = stable_hash(
+                    {
+                        "stable_id": grant.get("stable_id"),
+                        "stage": grant.get("stage"),
+                        "reason": grant.get("reason"),
+                        "grant": grant.get("attempts"),
+                    }
+                )
+            if expected_grant_id != grant_id:
+                raise ReductionError("explicit requeue grant identity is invalid")
+            details = event.get("details", {})
+            if (
+                grant.get("stable_id") != stable_id
+                or details.get("stable_id") != stable_id
+                or any(
+                    details.get(field) != grant.get(field)
+                    for field in ("stage", "reason", "attempts")
+                )
+            ):
+                raise ReductionError("explicit requeue grant facts conflict with consumption")
+            parent_revision = revision.get("parent_revision")
+            if parent_revision is None or details.get("source_record_revision") != parent_revision:
+                raise ReductionError("explicit requeue grant is bound to the wrong parent revision")
+            generation = details.get("new_work_generation")
+            if not isinstance(generation, int) or isinstance(generation, bool) or generation < 1:
+                raise ReductionError("explicit requeue grant generation is invalid")
+            expected_work_id = stable_hash(
+                {
+                    "stable_id": stable_id,
+                    "grant_id": grant_id,
+                    "parent_revision": parent_revision,
+                    "generation": generation,
+                }
+            )
+            if details.get("new_work_id") != expected_work_id:
+                raise ReductionError("explicit requeue grant new-work identity is invalid")
+            if expected_work_id not in _revision_work_ids(revision, attempts, gates):
+                raise ReductionError(
+                    "superseding revision does not bind the granted new-work identity"
+                )
+        prior_grants[stable_id] = current_grants
 
 
 def _model_facts(model: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -102,6 +301,12 @@ class CanonicalReducer:
                 ledger.close()
             raise
         self._current = _select_current(self._models.records)
+        _validate_persisted_requeue_lineage(
+            self._models.records,
+            self.ledger_paths,
+            self._attempts.records,
+            self._gates.records,
+        )
         unknown = set(self._current) - self.intake_ids
         if unknown:
             self.close()
@@ -308,6 +513,11 @@ class CanonicalReducer:
                 f"bad parentage for {stable_id}: expected {expected_parent!r}, "
                 f"received {candidate.get('parent_revision')!r}"
             )
+        supersedes_revision = candidate.get("status", {}).get("supersedes_revision")
+        if previous is None and supersedes_revision is not None:
+            raise ReductionError("a first model revision cannot supersede another revision")
+        if previous is not None and supersedes_revision != expected_parent:
+            raise ReductionError("status.supersedes_revision must exactly match parent_revision")
         if previous is None and candidate.get("record_seq") not in {None, 1}:
             raise ReductionError("a first model revision must start at record_seq 1 or omit it")
         if previous is not None and candidate.get("record_seq") is not None:
@@ -322,6 +532,12 @@ class CanonicalReducer:
                 raise ReductionError(
                     "human-review terminal supersession requires a new explicit grant"
                 )
+        _validate_persisted_requeue_lineage(
+            (*self._models.records, candidate),
+            self.ledger_paths,
+            self._attempts.records,
+            self._gates.records,
+        )
         self._validate_status(candidate)
         self._validate_source(candidate)
         self._validate_gates(candidate)
@@ -811,7 +1027,14 @@ def materialize_current(ledgers: LedgerPaths) -> Mapping[str, JsonObject]:
 
     from menagerie.crawler.recordio import scan_jsonl
 
-    return _select_current(scan_jsonl(ledgers.models))
+    records = scan_jsonl(ledgers.models)
+    _validate_persisted_requeue_lineage(
+        records,
+        ledgers,
+        scan_jsonl(ledgers.attempts),
+        scan_jsonl(ledgers.gates),
+    )
+    return _select_current(records)
 
 
 def default_ledger_paths(root: Union[str, Path]) -> LedgerPaths:

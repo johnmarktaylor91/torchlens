@@ -33,6 +33,7 @@ from menagerie.crawler.driver import (
     _promote_and_publish_accepted_artifact,
     _promote_accepted_code,
     _publish_licensed_paths,
+    _rehydrate_canonical_artifact,
     default_driver_paths,
 )
 from menagerie.crawler.driver import (
@@ -245,6 +246,51 @@ def test_crash_mid_promotion_rolls_back_before_exposure(
     promoted = _promote_and_publish_accepted_artifact(item, artifact, paths)
     assert promoted.canonical_code_root is not None
     assert (crawler / "reconstruction" / prefix / f"{intake.stable_id}.commit.json").is_file()
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    ["marker-transaction", "proposal-digest", "missing-source-byte"],
+)
+def test_reconstruction_tampering_is_refused_by_staging_and_rehydration(
+    tmp_path: Path,
+    tamper: str,
+) -> None:
+    """Checkpoint staging and offline rehydration share exact byte validation."""
+
+    snapshot = _snapshot(tmp_path)
+    paths = default_driver_paths(tmp_path, snapshot.root)
+    intake = snapshot.items[0]
+    item = WorkItem(
+        intake,
+        route_model(ModelRequirements(intake.stable_id, "pytorch")),
+    )
+    config = DriverConfig(review_checkpoint_at=None, progress_milestones=())
+    artifact = _normalize_artifact_modes(
+        CanonicalTypedAuthor().author(item, paths.work_root, config),
+        config,
+    )
+    _promote_and_publish_accepted_artifact(item, artifact, paths)
+    crawler = tmp_path / "menagerie" / "crawler"
+    prefix = intake.stable_id.removeprefix("m_")[:2]
+    reconstruction_path = crawler / "reconstruction" / prefix / f"{intake.stable_id}.json"
+    marker_path = reconstruction_path.with_name(f"{intake.stable_id}.commit.json")
+    reconstruction = json.loads(reconstruction_path.read_text(encoding="utf-8"))
+    if tamper == "marker-transaction":
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+        marker["transaction_id"] = "sha256:" + "f" * 64
+        marker_path.write_bytes(canonical_json_bytes(marker) + b"\n")
+    elif tamper == "proposal-digest":
+        reconstruction["proposal_sha256"] = "sha256:" + "f" * 64
+        reconstruction_path.write_bytes(canonical_json_bytes(reconstruction) + b"\n")
+    else:
+        source_path = tmp_path / reconstruction["source_manifest"]["sources"][0]["cas_path"]
+        source_path.unlink()
+
+    with pytest.raises(checkpoint_module.ReconstructionValidationError):
+        checkpoint_module._derive_candidate_paths(tmp_path, crawler)
+    with pytest.raises(DriverIntegrationError):
+        _rehydrate_canonical_artifact(item, paths)
 
 
 def test_imported_helper_change_stales_cache_and_execution_identity(tmp_path: Path) -> None:

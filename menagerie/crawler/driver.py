@@ -32,8 +32,14 @@ from menagerie.crawler.checker_dispatch import (
 )
 from menagerie.crawler.checkpoint import (
     FunnelSnapshot,
+    ReconstructionValidationError,
+    append_canonical_operational_event,
+    append_canonical_requeue_grant,
+    canonical_operational_ledger_path,
+    canonical_requeue_grants_path,
     record_checkpoint_review,
     record_review_signoff,
+    validate_canonical_reconstruction,
 )
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION,
@@ -1198,24 +1204,80 @@ class CrawlerDriver:
             Stable-ID keyed grant history, work identity, and active-work marker.
         """
 
-        grants = _validated_requeue_grants(self.paths.requeue_grants, intake_ids)
+        canonical_grants_path = canonical_requeue_grants_path(self.paths.ledgers.models)
+        runtime_grants = _validated_requeue_grants(self.paths.requeue_grants, intake_ids)
+        for grant in runtime_grants:
+            append_canonical_requeue_grant(canonical_grants_path, grant)
+        grants = _validated_requeue_grants(canonical_grants_path, intake_ids)
         by_id = {str(grant["grant_id"]): grant for grant in grants}
+        canonical_events_path = canonical_operational_ledger_path(self.paths.ledgers.models)
+        canonical_events = scan_jsonl(canonical_events_path)
         consumed_events = [
             event
-            for event in operational.records
+            for event in (*canonical_events, *operational.records)
             if event.get("event_kind") == OperationalEventKind.REQUEUE_GRANT_CONSUMED.value
         ]
+        model_revisions = scan_jsonl(self.paths.ledgers.models)
         consumed_by_id: dict[str, JsonObject] = {}
         for event in consumed_events:
             details = event.get("details", {})
             grant_id = str(details.get("grant_id", ""))
-            grant = by_id.get(grant_id)
-            if grant is None:
+            bound_grant = by_id.get(grant_id)
+            if bound_grant is None:
                 raise DriverIntegrationError(
                     f"requeue consumption references an unknown grant: {grant_id}"
                 )
-            if details.get("stable_id") != grant.get("stable_id"):
+            if details.get("stable_id") != bound_grant.get("stable_id"):
                 raise DriverIntegrationError("requeue consumption stable_id mismatch")
+            if any(
+                details.get(field) != bound_grant.get(field)
+                for field in ("stage", "reason", "attempts")
+            ):
+                raise DriverIntegrationError("requeue consumption grant facts mismatch")
+            generation = details.get("new_work_generation")
+            source_revision = details.get("source_record_revision")
+            if not isinstance(generation, int) or isinstance(generation, bool) or generation < 1:
+                raise DriverIntegrationError("requeue consumption generation is invalid")
+            expected_work_id = stable_hash(
+                {
+                    "stable_id": bound_grant["stable_id"],
+                    "grant_id": grant_id,
+                    "parent_revision": source_revision,
+                    "generation": generation,
+                }
+            )
+            if details.get("new_work_id") != expected_work_id:
+                raise DriverIntegrationError("requeue consumption new-work identity mismatch")
+            stable_revisions = [
+                revision
+                for revision in model_revisions
+                if revision.get("stable_id") == bound_grant.get("stable_id")
+            ]
+            introducing = next(
+                (
+                    revision
+                    for revision in stable_revisions
+                    if grant_id in revision.get("budget", {}).get("explicit_grants", [])
+                    and (
+                        revision.get("parent_revision") is None
+                        or not any(
+                            parent.get("record_revision") == revision.get("parent_revision")
+                            and grant_id in parent.get("budget", {}).get("explicit_grants", [])
+                            for parent in stable_revisions
+                        )
+                    )
+                ),
+                None,
+            )
+            expected_source = (
+                introducing.get("parent_revision")
+                if introducing is not None
+                else current.get(str(bound_grant["stable_id"]), {}).get("record_revision")
+            )
+            if source_revision != expected_source:
+                raise DriverIntegrationError(
+                    "requeue consumption does not bind the exact superseded parent revision"
+                )
             prior = consumed_by_id.get(grant_id)
             if prior is not None and prior.get("details") != event.get("details"):
                 raise DriverIntegrationError(f"conflicting requeue consumption for {grant_id}")
@@ -1306,6 +1368,7 @@ class CrawlerDriver:
                         "new_work_id": new_work_id,
                     },
                 }
+                append_canonical_operational_event(canonical_events_path, event)
                 operational.append(event)
                 self.dependencies.boundary_hook("after-requeue-consume", stable_id)
                 result[stable_id] = {
@@ -2268,18 +2331,31 @@ class CrawlerDriver:
         """Derive every unrecorded crossed milestone from canonical facts alone."""
 
         completed = len(current)
+        intake_snapshot_id = self.paths.intake_root.name
+        canonical_path = canonical_operational_ledger_path(self.paths.ledgers.models)
+        canonical_events = scan_jsonl(canonical_path)
         existing = {
-            int(event["milestone"])
-            for event in operational.records
+            (
+                str(event.get("details", {}).get("intake_snapshot_id")),
+                int(event["milestone"]),
+            )
+            for event in (*canonical_events, *operational.records)
             if event.get("event_kind") == OperationalEventKind.PROGRESS_NOTIFICATION.value
             and isinstance(event.get("milestone"), int)
         }
         snapshot = _funnel_snapshot(current)
         for milestone in sorted(self.config.progress_milestones):
-            if milestone in existing or milestone > completed:
+            if (intake_snapshot_id, milestone) in existing or milestone > completed:
                 continue
             created_at = self.dependencies.clock()
-            event_id = f"progress-{milestone}-{self.config.run_id}"
+            policy_key = stable_hash(
+                {
+                    "policy": "crawler-progress-milestone-v1",
+                    "intake_snapshot_id": intake_snapshot_id,
+                    "milestone": milestone,
+                }
+            )
+            event_id = f"progress-{policy_key.removeprefix('sha256:')[:24]}"
             event = {
                 "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
                 "event_id": event_id,
@@ -2293,11 +2369,16 @@ class CrawlerDriver:
                 "current_environment": None,
                 "run_id": self.config.run_id,
                 "machine_id": self.config.machine_id,
-                "details": {"identity_only": True},
+                "details": {
+                    "identity_only": True,
+                    "policy_key": policy_key,
+                    "intake_snapshot_id": intake_snapshot_id,
+                },
                 "models_completed": completed,
                 "milestone": milestone,
                 "funnel_snapshot": snapshot.to_dict(),
             }
+            append_canonical_operational_event(canonical_path, event)
             operational.append(event)
             self.dependencies.boundary_hook("after-notification-identity", event_id)
             self._deliver_notification(
@@ -2436,7 +2517,22 @@ class CrawlerDriver:
         threshold = self.config.review_checkpoint_at
         if not threshold or len(current) < threshold:
             return False
-        kinds = [event.get("event_kind") for event in operational.records]
+        intake_snapshot_id = self.paths.intake_root.name
+        policy_key = stable_hash(
+            {
+                "policy": "crawler-review-checkpoint-v1",
+                "intake_snapshot_id": intake_snapshot_id,
+                "review_threshold": threshold,
+            }
+        )
+        canonical_path = canonical_operational_ledger_path(self.paths.ledgers.models)
+        canonical_events = scan_jsonl(canonical_path)
+        policy_events = [
+            event
+            for event in (*canonical_events, *operational.records)
+            if event.get("details", {}).get("policy_key") == policy_key
+        ]
+        kinds = [event.get("event_kind") for event in policy_events]
         if OperationalEventKind.REVIEW_SIGNOFF.value in kinds:
             return False
         if OperationalEventKind.CHECKPOINT_REVIEW.value in kinds:
@@ -2454,6 +2550,12 @@ class CrawlerDriver:
             report_path=str(report_path),
             context=self._context(0, None),
             created_at=self.dependencies.clock(),
+            canonical_ledger_path=canonical_path,
+            policy_identity={
+                "policy_key": policy_key,
+                "intake_snapshot_id": intake_snapshot_id,
+                "review_threshold": threshold,
+            },
         )
         event_id = str(review.record["event_id"])
         self.dependencies.boundary_hook("after-notification-identity", event_id)
@@ -3424,6 +3526,15 @@ def _rehydrate_canonical_artifact(item: WorkItem, paths: DriverPaths) -> Optiona
     manifest_path = canonical_root / "reconstruction" / prefix / f"{item.stable_id}.json"
     if not manifest_path.is_file():
         return None
+    try:
+        validate_canonical_reconstruction(
+            manifest_path,
+            canonical_root,
+            expected_stable_id=item.stable_id,
+            expected_intake_item=item.intake.to_dict(),
+        )
+    except ReconstructionValidationError as exc:
+        raise DriverIntegrationError(str(exc)) from exc
     value = _read_json(manifest_path)
     schema_version = value.get("schema_version")
     if (

@@ -8,7 +8,9 @@ from pathlib import Path
 import pytest
 
 from menagerie.crawler.models import LedgerPaths
-from menagerie.crawler.recordio import SingleWriterError
+from menagerie.crawler.constants import MODEL_SCHEMA_VERSION, OPERATIONAL_EVENT_SCHEMA_VERSION
+from menagerie.crawler.identity import canonical_json_bytes, stable_hash
+from menagerie.crawler.recordio import JsonlLedger, SingleWriterError
 from menagerie.crawler.reducer import CanonicalReducer, ReductionError
 from menagerie.crawler.status import PartitionError, assert_partition
 from menagerie.crawler.metadata import authored_fact_leaves
@@ -74,6 +76,131 @@ def test_bad_parentage_is_rejected(tmp_path: Path) -> None:
         second["record_seq"] = 2
         second["parent_revision"] = "sha256:" + "f" * 64
         with pytest.raises(ReductionError, match="bad parentage"):
+            reducer.append_model(second)
+
+
+def test_first_revision_rejects_public_supersession_lineage(tmp_path: Path) -> None:
+    """A first revision cannot claim to supersede an unrelated public revision."""
+
+    model = make_model(status_code="failed:source")
+    model["status"]["supersedes_revision"] = "sha256:" + "f" * 64
+    with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
+        with pytest.raises(ReductionError, match="first model revision cannot supersede"):
+            reducer.append_model(model)
+
+
+def test_later_revision_binds_public_supersession_to_parent(tmp_path: Path) -> None:
+    """The public supersession field must equal the reducer-authorized parent."""
+
+    paths = _paths(tmp_path)
+    first = make_model(status_code="failed:source")
+    with CanonicalReducer(paths, ["m_example"]) as reducer:
+        persisted = reducer.append_model(first).record
+        second = make_model(status_code="failed:source")
+        second["record_seq"] = 2
+        second["parent_revision"] = persisted["record_revision"]
+        second["status"]["supersedes_revision"] = "sha256:" + "f" * 64
+        with pytest.raises(ReductionError, match="exactly match parent_revision"):
+            reducer.append_model(second)
+
+
+def test_reducer_rebuild_rejects_persisted_false_supersession(tmp_path: Path) -> None:
+    """Reducer startup detects false public lineage already persisted in canonical bytes."""
+
+    paths = _paths(tmp_path)
+    first = make_model(status_code="failed:source")
+    with JsonlLedger(paths.models, MODEL_SCHEMA_VERSION) as ledger:
+        persisted = ledger.append(first).record
+        second = make_model(status_code="failed:source")
+        second["record_seq"] = 2
+        second["parent_revision"] = persisted["record_revision"]
+        second["status"]["supersedes_revision"] = "sha256:" + "f" * 64
+        ledger.append(second)
+    with pytest.raises(ReductionError, match="persisted status.supersedes_revision"):
+        CanonicalReducer(paths, ["m_example"])
+
+
+def test_requeue_grant_rejects_wrong_exact_parent_binding(tmp_path: Path) -> None:
+    """A durable grant cannot authorize a supersession of a different parent revision."""
+
+    paths = _paths(tmp_path)
+    first = make_model(status_code="failed:source")
+    first["status"]["human_review"] = {
+        "required": True,
+        "reason": "manual source review",
+        "queue": "crawler-human-review",
+        "requested_at": first["created_at"],
+    }
+    with CanonicalReducer(paths, ["m_example"]) as reducer:
+        parent = reducer.append_model(first).record["record_revision"]
+        reason = "reviewed corrected source"
+        grant_id = stable_hash(
+            {
+                "stable_id": "m_example",
+                "stage": "source",
+                "reason": reason,
+                "grant": 1,
+            }
+        )
+        grant = {
+            "grant_id": grant_id,
+            "stable_id": "m_example",
+            "stage": "source",
+            "reason": reason,
+            "attempts": 1,
+            "created_at": first["created_at"],
+        }
+        operational = tmp_path / "operational"
+        operational.mkdir(parents=True, exist_ok=True)
+        (operational / "requeue-grants.jsonl").write_bytes(canonical_json_bytes(grant) + b"\n")
+        wrong_parent = "sha256:" + "f" * 64
+        work_id = stable_hash(
+            {
+                "stable_id": "m_example",
+                "grant_id": grant_id,
+                "parent_revision": wrong_parent,
+                "generation": 1,
+            }
+        )
+        event = {
+            "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+            "event_id": f"requeue-consumed-{grant_id[7:31]}",
+            "created_at": first["created_at"],
+            "event_kind": "requeue-grant-consumed",
+            "status": "requeue-grant-consumed",
+            "provider": None,
+            "observed_response": None,
+            "reset_at": None,
+            "queued_work_counts": {"models": 1},
+            "current_environment": None,
+            "run_id": "run-test",
+            "machine_id": "machine-test",
+            "details": {
+                "grant_id": grant_id,
+                "stable_id": "m_example",
+                "stage": "source",
+                "reason": reason,
+                "attempts": 1,
+                "source_record_revision": wrong_parent,
+                "new_work_generation": 1,
+                "new_work_id": work_id,
+            },
+        }
+        with JsonlLedger(operational / "events.jsonl", OPERATIONAL_EVENT_SCHEMA_VERSION) as ledger:
+            ledger.append(event)
+        attempt = make_attempt(attempt_id="attempt-requeue")
+        attempt["work_id"] = work_id
+        reducer.append_attempt(attempt)
+        second = make_model(
+            accepted=False,
+            status_code="failed:source",
+            attempt_id="attempt-requeue",
+        )
+        second["record_seq"] = 2
+        second["parent_revision"] = parent
+        second["status"]["supersedes_revision"] = parent
+        second["budget"]["explicit_grants"] = [grant_id]
+        with pytest.raises(ReductionError, match="wrong parent revision"):
             reducer.append_model(second)
 
 
