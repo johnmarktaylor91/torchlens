@@ -265,3 +265,115 @@ def test_resolver_denies_first_party_import_gadget_but_resolves_helper() -> None
         chain.append(exc)
         exc = exc.__cause__ or exc.__context__
     assert any(isinstance(item, UntrustedCallableError) for item in chain)
+
+
+# --------------------------------------------------------------------------- #
+# Round-22: the positive-allowlist inversion. The pre-r22 gate's PUBLIC-name
+# fallthrough admitted ~60 side-effecting public torchlens.* callables whose verb
+# (fs-mutation / registry-mutation / capability-flip) was not on the denylist. The
+# gate is now default-deny: only marker-stamped facet recipes and a frozen vetted-
+# inert set (identity + the pure intervention helper factories) admit.
+# --------------------------------------------------------------------------- #
+
+
+class _CleanupPartialGadget:
+    """``__reduce__`` -> ``torchlens.fastlog.cleanup.cleanup_partial('<attacker_dir>')``.
+
+    On the pre-r22 tree the PUBLIC-named ``cleanup_partial`` slipped the verb
+    denylist and pickle INVOKED it, ``shutil.rmtree``-ing an attacker-named directory
+    (one bearing a ``PARTIAL`` sentinel) on a plain ``tl.load``.
+    """
+
+    def __init__(self, victim_dir: str) -> None:
+        self._victim = victim_dir
+
+    def __reduce__(self):  # type: ignore[no-untyped-def]
+        from torchlens.fastlog.cleanup import cleanup_partial
+
+        return (cleanup_partial, (self._victim,))
+
+
+@pytest.mark.smoke
+def test_fs_mutation_gadget_denied_through_tl_load(tmp_path: Path) -> None:
+    """A crafted bundle whose REDUCE is cleanup_partial must NOT delete the victim dir."""
+
+    victim = tmp_path / "victim_data"
+    victim.mkdir()
+    (victim / "important.txt").write_text("precious user data\n")
+    (victim / "PARTIAL").write_text("")  # the only precondition cleanup_partial needs
+
+    bundle = tmp_path / "b.tlspec"
+    tl.trace(nn.Linear(4, 4), torch.randn(1, 4), capture=_CAP).save(
+        bundle, level="runnable", include_weights=True
+    )
+    with (bundle / "metadata.pkl").open("wb") as handle:
+        pickle.dump(_CleanupPartialGadget(str(victim)), handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    raised: BaseException | None = None
+    try:
+        tl.load(bundle)
+    except (TorchLensIOError, pickle.UnpicklingError) as exc:
+        raised = exc
+
+    assert raised is not None, "fs-mutation gadget was not blocked"
+    assert _has_unpickling_error(raised), "denial must surface an UnpicklingError"
+    assert victim.exists(), "attacker-named directory was deleted -> gadget executed"
+    assert (victim / "important.txt").exists(), "victim contents destroyed -> rmtree ran"
+
+
+@pytest.mark.smoke
+def test_state_poison_gadget_denied_through_tl_load(tmp_path: Path) -> None:
+    """A REDUCE flipping a global HAS_* capability flag must leave the flag unchanged."""
+
+    import torchlens.utils._torch_compat as tc
+
+    cap = next(iter(tc._CAPABILITY_ATTRS))
+    before = getattr(tc, cap)
+
+    class _StateGadget:
+        def __reduce__(self):  # type: ignore[no-untyped-def]
+            from torchlens.utils._torch_compat import mark_torch_capability_missing
+
+            return (mark_torch_capability_missing, (cap, "poisoned-by-untrusted-bundle"))
+
+    bundle = tmp_path / "b.tlspec"
+    tl.trace(nn.Linear(4, 4), torch.randn(1, 4), capture=_CAP).save(
+        bundle, level="runnable", include_weights=True
+    )
+    with (bundle / "metadata.pkl").open("wb") as handle:
+        pickle.dump(_StateGadget(), handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    try:
+        tl.load(bundle)
+    except (TorchLensIOError, pickle.UnpicklingError):
+        pass
+    assert getattr(tc, cap) == before, "untrusted bundle flipped a global capability flag"
+
+
+@pytest.mark.smoke
+def test_public_side_effecting_first_party_callables_denied() -> None:
+    """The public-name fallthrough is GONE: fs / state mutators fail the gate + door."""
+
+    from torchlens.fastlog.cleanup import cleanup_partial
+    from torchlens.utils._torch_compat import mark_torch_capability_missing
+
+    assert not is_inert_first_party_callable(cleanup_partial)
+    assert not is_inert_first_party_callable(mark_torch_capability_missing)
+    with pytest.raises(pickle.UnpicklingError):
+        _load_ref("torchlens.fastlog.cleanup", "cleanup_partial")
+    with pytest.raises(pickle.UnpicklingError):
+        _load_ref("torchlens.utils._torch_compat", "mark_torch_capability_missing")
+
+
+def test_vetted_inert_helper_set_admitted() -> None:
+    """Every frozen vetted-inert helper factory + identity still admits + resolves."""
+
+    from torchlens.utils.display import identity
+    from torchlens.utils._callable_safety import _VETTED_INERT_FIRST_PARTY
+
+    # identity resolves through the door.
+    assert _load_ref("torchlens.utils.display", "identity") is identity
+    # Every enumerated helper factory is admitted by the gate AND resolves by ref.
+    for module, qualname in _VETTED_INERT_FIRST_PARTY:
+        obj = _load_ref(module, qualname)
+        assert is_inert_first_party_callable(obj), f"{module}:{qualname} not admitted"
