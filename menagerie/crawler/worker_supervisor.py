@@ -24,8 +24,11 @@ from menagerie.crawler.constants import (
 )
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.policy import (
+    _PARENT_ALLOWED_READ_PATHS_ENV,
     SandboxUnavailableError,
-    _linux_minimal_read_mounts,
+    _linux_runtime_code_roots,
+    _linux_runtime_read_paths,
+    _runtime_code_path_allowed,
     build_safe_environment,
     detect_os_sandbox,
     generate_macos_sandbox_profile,
@@ -66,32 +69,7 @@ _WRITE_SYSCALLS = frozenset(
 )
 _SYSCALL_PATTERN = re.compile(r"(?:^|\s)([a-z][a-z0-9_]*)\(")
 _QUOTED_PATH_PATTERN = re.compile(r'"((?:[^"\\]|\\.)*)"')
-_RUNTIME_READ_SUFFIXES = frozenset(
-    {
-        ".a",
-        ".c",
-        ".cc",
-        ".cpp",
-        ".cu",
-        ".cuh",
-        ".dylib",
-        ".h",
-        ".hpp",
-        ".py",
-        ".pyc",
-        ".pyd",
-        ".pyi",
-        ".pyx",
-        ".so",
-    }
-)
 _SPECIAL_READ_ROOTS = (Path("/dev"), Path("/proc"), Path("/sys"))
-_SYSTEM_READ_ROOTS = (
-    Path("/etc/fonts"),
-    Path("/usr/share/fonts"),
-    Path("/usr/share/locale"),
-    Path("/usr/share/zoneinfo"),
-)
 _SYSTEM_READ_FILES = frozenset(
     {
         Path("/etc/group"),
@@ -102,6 +80,7 @@ _SYSTEM_READ_FILES = frozenset(
         Path("/etc/nsswitch.conf"),
         Path("/etc/passwd"),
         Path("/etc/resolv.conf"),
+        Path("/usr/share/locale/locale.alias"),
     }
 )
 _TERMINAL_TRACE_PATTERN = re.compile(r"\+\+\+ (?:exited with|killed by) .+ \+\+\+$")
@@ -427,7 +406,6 @@ def _request_allowed_read_paths(argv: Sequence[str]) -> tuple[Path, ...]:
         executable = Path(argv[0])
         if executable.exists():
             allowed.append(executable)
-    allowed.append(Path(__file__).with_name("assets") / "standard")
     try:
         request_index = argv.index("--request") + 1
         request_path = Path(argv[request_index]).resolve()
@@ -440,6 +418,9 @@ def _request_allowed_read_paths(argv: Sequence[str]) -> tuple[Path, ...]:
         return tuple(dict.fromkeys(allowed))
     if not isinstance(request, Mapping):
         return tuple(dict.fromkeys(allowed))
+    standard_asset = _request_standard_asset(request)
+    if standard_asset is not None:
+        allowed.append(standard_asset)
     recipe = request.get("recipe")
     if isinstance(recipe, Mapping):
         adapter_path = recipe.get("path")
@@ -457,6 +438,40 @@ def _request_allowed_read_paths(argv: Sequence[str]) -> tuple[Path, ...]:
         if isinstance(input_code_path, str) and input_code_path:
             allowed.append(Path(input_code_path))
     return tuple(dict.fromkeys(path.resolve() for path in allowed))
+
+
+def _request_standard_asset(request: Mapping[str, Any]) -> Optional[Path]:
+    """Return the one bundled standard asset selected by a worker request.
+
+    Parameters
+    ----------
+    request:
+        Parsed immutable worker request.
+
+    Returns
+    -------
+    pathlib.Path | None
+        Exact possible standard-input asset, or ``None`` for random-only modalities.
+    """
+
+    modality_value = request.get("modality")
+    modalities: tuple[str, ...]
+    if isinstance(modality_value, str):
+        modalities = (modality_value.strip().lower(),)
+    elif isinstance(modality_value, list):
+        modalities = tuple(str(value).strip().lower() for value in modality_value)
+    else:
+        modalities = ()
+    asset_root = Path(__file__).with_name("assets") / "standard"
+    if any(value in {"vision", "image", "computer-vision", "video"} for value in modalities):
+        return asset_root / "image.ppm"
+    if any(value in {"language", "text", "nlp"} for value in modalities):
+        return asset_root / "text.txt"
+    if any(value in {"audio", "speech"} for value in modalities):
+        return asset_root / "audio.csv"
+    if any(value in {"tabular", "recsys"} for value in modalities):
+        return asset_root / "tabular.csv"
+    return None
 
 
 def _runtime_read_roots(argv: Sequence[str], cwd: Path) -> tuple[Path, ...]:
@@ -619,6 +634,9 @@ def _read_path_is_allowed(
     cwd: Path,
     write_roots: Sequence[Path],
     allowed_read_paths: Sequence[Path],
+    runtime_code_roots: Sequence[Path],
+    *,
+    directory_only: bool = False,
 ) -> bool:
     """Return whether a kernel-level read belongs to the closed runtime allowlist.
 
@@ -632,6 +650,10 @@ def _read_path_is_allowed(
         Fresh scratch/result roots whose contents are parent-authorized runtime state.
     allowed_read_paths:
         Exact source/input paths derived from the immutable worker request.
+    runtime_code_roots:
+        Environment and verified-source roots limited to runtime-code reads.
+    directory_only:
+        Whether the traced open explicitly required a directory descriptor.
 
     Returns
     -------
@@ -639,10 +661,13 @@ def _read_path_is_allowed(
         True only for declared inputs, source/runtime code, or OS runtime support.
     """
 
+    raw_path = Path(path_text)
+    lexical_candidate = (raw_path if raw_path.is_absolute() else cwd / raw_path).absolute()
     candidate = _resolved_trace_path(path_text, cwd)
     roots = tuple(root.resolve() for root in write_roots)
     allowed = tuple(path.resolve() for path in allowed_read_paths)
-    if candidate in _SYSTEM_READ_FILES:
+    runtime_roots = tuple(root.resolve() for root in runtime_code_roots)
+    if lexical_candidate in _SYSTEM_READ_FILES:
         return True
     if path_text in {"self", "self/fd", "self/mountinfo"} or re.fullmatch(
         r"\d+/(?:fd|ns)(?:/.*)?", path_text
@@ -650,33 +675,26 @@ def _read_path_is_allowed(
         return True
     if any(candidate == root or root in candidate.parents for root in _SPECIAL_READ_ROOTS):
         return True
-    if any(candidate == root or root in candidate.parents for root in _SYSTEM_READ_ROOTS):
-        return True
-    if candidate.is_relative_to(Path("/usr/lib/locale")) or "gconv" in candidate.parts:
-        return True
     if any(candidate == root or root in candidate.parents for root in roots):
         return True
     if any(candidate == path or path in candidate.parents for path in allowed):
+        return True
+    if directory_only and any(
+        candidate == root or root in candidate.parents for root in runtime_roots
+    ):
+        return True
+    if candidate.is_relative_to(Path("/usr/lib/locale")) and (
+        candidate.name == "locale-archive" or candidate.name.startswith("LC_")
+    ):
+        return True
+    if candidate.name == "gconv-modules.cache" and "gconv" in candidate.parts:
         return True
     try:
         if candidate.is_dir():
             return True
     except OSError:
         pass
-    if any(part.endswith((".dist-info", ".egg-info")) for part in candidate.parts):
-        return True
-    name = candidate.name.lower()
-    if candidate.suffix.lower() == ".pth" and any(
-        part in {"site-packages", "dist-packages"} for part in candidate.parts
-    ):
-        try:
-            data = candidate.read_bytes()
-            return len(data) <= 1024**2 and b"\x00" not in data
-        except OSError:
-            return False
-    if candidate.suffix.lower() == ".cnf" and "ssl" in candidate.parts:
-        return True
-    return candidate.suffix.lower() in _RUNTIME_READ_SUFFIXES or ".so." in name
+    return _runtime_code_path_allowed(candidate, runtime_code_roots)
 
 
 def _trace_line_is_well_formed(line: str) -> bool:
@@ -709,6 +727,7 @@ def _parse_linux_denial_audit(
     *,
     expected_identity: Optional[tuple[int, int]] = None,
     allowed_read_paths: Sequence[Path] = (),
+    runtime_code_roots: Sequence[Path] = (),
 ) -> SandboxDenialObservation:
     """Parse Linux syscall telemetry into closed worker policy observations.
 
@@ -724,6 +743,8 @@ def _parse_linux_denial_audit(
         Parent-recorded device/inode pair for replacement detection.
     allowed_read_paths:
         Explicit source/input paths authorized for model execution.
+    runtime_code_roots:
+        Environment and verified-source roots limited to runtime-code reads.
 
     Returns
     -------
@@ -775,6 +796,8 @@ def _parse_linux_denial_audit(
                     cwd,
                     write_roots,
                     allowed_read_paths,
+                    runtime_code_roots,
+                    directory_only="O_DIRECTORY" in line,
                 ):
                     checkpoint_paths.append(path_text)
             continue
@@ -1279,11 +1302,17 @@ def run_isolated_subprocess(
     safe_environment = build_safe_environment(scratch_root, base_environment=base_environment)
     working_directory = (cwd or Path.cwd()).resolve()
     allowed_read_paths = _request_allowed_read_paths(argv)
+    safe_environment[_PARENT_ALLOWED_READ_PATHS_ENV] = json.dumps(
+        [str(path) for path in allowed_read_paths],
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
     sandbox = detect_os_sandbox()
     if sandbox is None:
         raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
     profile_path: Optional[Path] = None
-    linux_read_mounts: tuple[Path, ...] = ()
+    linux_runtime_code_roots: tuple[Path, ...] = ()
+    linux_runtime_read_paths: tuple[Path, ...] = ()
     if sandbox.kind == "sandbox-exec":
         profile_path = scratch_root / "worker-sandbox.sb"
         profile_path.write_text(
@@ -1295,11 +1324,8 @@ def run_isolated_subprocess(
             encoding="utf-8",
         )
     elif sandbox.kind == "bubblewrap":
-        linux_read_mounts = _linux_minimal_read_mounts(
-            argv,
-            working_directory,
-            allowed_read_paths,
-        )
+        linux_runtime_code_roots = _linux_runtime_code_roots(argv, working_directory)
+        linux_runtime_read_paths = _linux_runtime_read_paths(argv)
     sandboxed_argv = wrap_with_os_sandbox(
         sandbox,
         argv,
@@ -1382,7 +1408,8 @@ def run_isolated_subprocess(
             working_directory,
             write_roots,
             expected_identity=denial_audit_identity,
-            allowed_read_paths=(*allowed_read_paths, *linux_read_mounts),
+            allowed_read_paths=(*allowed_read_paths, *linux_runtime_read_paths),
+            runtime_code_roots=linux_runtime_code_roots,
         )
     _poison_receipts_in_roots(additional_write_roots, denial)
     return SupervisorObservation(
