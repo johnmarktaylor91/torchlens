@@ -53,6 +53,27 @@ _RUNTIME_SOURCE_SUFFIXES = frozenset(
         ".so",
     }
 )
+_RUNTIME_METADATA_NAMES = frozenset(
+    {
+        "INSTALLER",
+        "METADATA",
+        "RECORD",
+        "WHEEL",
+        "direct_url.json",
+        "entry_points.txt",
+        "namespace_packages.txt",
+        "pybuilddir.txt",
+        "pyvenv.cfg",
+        "top_level.txt",
+    }
+)
+_SYSTEM_RUNTIME_CODE_ROOTS = (
+    Path("/lib"),
+    Path("/lib64"),
+    Path("/usr/lib"),
+    Path("/usr/lib64"),
+)
+_PARENT_ALLOWED_READ_PATHS_ENV = "MENAGERIE_PARENT_ALLOWED_READ_PATHS"
 _SPECIAL_READ_ROOTS = (Path("/dev"), Path("/proc"), Path("/sys"))
 _SYSTEM_READ_FILES = frozenset(
     {
@@ -64,6 +85,7 @@ _SYSTEM_READ_FILES = frozenset(
         Path("/etc/nsswitch.conf"),
         Path("/etc/passwd"),
         Path("/etc/resolv.conf"),
+        Path("/usr/share/locale/locale.alias"),
     }
 )
 _SAFE_INHERITED_KEYS = (
@@ -311,6 +333,115 @@ def _linux_environment_prefix(executable: Path) -> Path:
     if prefix == Path("/"):
         raise SandboxUnavailableError("worker interpreter prefix would expose the host root")
     return prefix
+
+
+def _linux_runtime_code_roots(argv: Sequence[str], cwd: Path) -> tuple[Path, ...]:
+    """Return roots containing interpreter and verified-source runtime code.
+
+    Parameters
+    ----------
+    argv:
+        Original child command whose first entry is the worker interpreter.
+    cwd:
+        Parent-verified source root used by the child.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Environment, verified-source, and system-loader roots whose code files may be read.
+
+    Raises
+    ------
+    SandboxUnavailableError
+        If the worker command does not name an interpreter.
+    """
+
+    if not argv:
+        raise SandboxUnavailableError("worker command is empty")
+    return tuple(
+        dict.fromkeys(
+            (
+                _linux_environment_prefix(Path(argv[0])),
+                cwd.resolve(),
+                *(root.resolve() for root in _SYSTEM_RUNTIME_CODE_ROOTS if root.exists()),
+            )
+        )
+    )
+
+
+def _linux_runtime_read_paths(argv: Sequence[str]) -> tuple[Path, ...]:
+    """Return exact interpreter and ELF runtime files needed by a Linux worker.
+
+    Parameters
+    ----------
+    argv:
+        Original child command whose first entry is the worker interpreter.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Exact executable, loader, and shared-library paths.
+
+    Raises
+    ------
+    SandboxUnavailableError
+        If the worker command is empty or its runtime cannot be inventoried.
+    """
+
+    if not argv:
+        raise SandboxUnavailableError("worker command is empty")
+    executable = Path(argv[0]).resolve()
+    return tuple(dict.fromkeys((executable, *_linux_dynamic_runtime_files(executable))))
+
+
+def _runtime_code_path_allowed(path: Path, runtime_code_roots: Sequence[Path]) -> bool:
+    """Return whether a path is an inventoried kind of runtime code or metadata.
+
+    Parameters
+    ----------
+    path:
+        Resolved candidate path.
+    runtime_code_roots:
+        Environment and verified-source roots containing importable code.
+
+    Returns
+    -------
+    bool
+        True only for code-bearing suffixes or fixed import metadata below a root.
+    """
+
+    roots = tuple(root.resolve() for root in runtime_code_roots)
+    if not any(path == root or root in path.parents for root in roots):
+        return False
+    try:
+        if path.is_dir():
+            return True
+    except OSError:
+        return False
+    name = path.name
+    lowered_name = name.lower()
+    if path.suffix.lower() == ".pth" and any(
+        part in {"site-packages", "dist-packages"} for part in path.parts
+    ):
+        try:
+            data = path.read_bytes()
+        except OSError:
+            return False
+        return len(data) <= 1024**2 and b"\x00" not in data
+    if name in _RUNTIME_METADATA_NAMES and (
+        name in {"pybuilddir.txt", "pyvenv.cfg"}
+        or any(part.endswith((".dist-info", ".egg-info")) for part in path.parts)
+    ):
+        return True
+    if lowered_name.startswith("python") and lowered_name.endswith("._pth"):
+        return True
+    if name == "openssl.cnf" and "ssl" in path.parts:
+        return True
+    if lowered_name.startswith("__editable__.") and lowered_name.endswith(".__path_hook__"):
+        return True
+    if lowered_name.startswith("python") and lowered_name.endswith(".zip") and "lib" in path.parts:
+        return True
+    return path.suffix.lower() in _RUNTIME_SOURCE_SUFFIXES or ".so." in lowered_name
 
 
 def _linux_minimal_read_mounts(
@@ -828,12 +959,33 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
         self.allowed_roots = tuple(
             path.resolve() for path in (scratch_root, *additional_write_roots)
         )
-        self.allowed_read_paths = tuple(path.resolve() for path in allowed_read_paths)
+        parent_allowed_read_paths: list[Path] = []
+        encoded_parent_paths = os.environ.get(_PARENT_ALLOWED_READ_PATHS_ENV)
+        if encoded_parent_paths is not None:
+            try:
+                decoded_parent_paths = json.loads(encoded_parent_paths)
+            except json.JSONDecodeError:
+                decoded_parent_paths = None
+            if isinstance(decoded_parent_paths, list) and all(
+                isinstance(value, str) for value in decoded_parent_paths
+            ):
+                parent_allowed_read_paths.extend(Path(value) for value in decoded_parent_paths)
+        self.allowed_read_paths = tuple(
+            dict.fromkeys(
+                path.resolve() for path in (*allowed_read_paths, *parent_allowed_read_paths)
+            )
+        )
         self.environment_search_paths = frozenset(
             Path(value).resolve() for value in sys.path if isinstance(value, str) and value
         )
-        self.environment_roots = tuple(
-            dict.fromkeys((Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve()))
+        self.runtime_code_roots = tuple(
+            dict.fromkeys(
+                (
+                    *self.environment_search_paths,
+                    Path(sys.prefix).resolve(),
+                    Path(sys.base_prefix).resolve(),
+                )
+            )
         )
         self.observation = PolicyObservation(
             credentials_present=any(_contains_credential_name(name) for name in os.environ)
@@ -920,8 +1072,12 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
             True only for the closed read allowlist.
         """
 
-        candidate = Path(os.fsdecode(value)).resolve()
-        if candidate == Path(os.devnull).resolve() or candidate in _SYSTEM_READ_FILES:
+        raw_candidate = Path(os.fsdecode(value))
+        lexical_candidate = raw_candidate.absolute()
+        candidate = raw_candidate.resolve()
+        if candidate == Path(os.devnull).resolve() or lexical_candidate in _SYSTEM_READ_FILES:
+            return True
+        if candidate.name == "gconv-modules.cache" and "gconv" in candidate.parts:
             return True
         if any(candidate == root or root in candidate.parents for root in _SPECIAL_READ_ROOTS):
             return True
@@ -930,20 +1086,9 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
             for allowed in self.allowed_read_paths
         ):
             return True
-        if candidate in self.environment_search_paths:
-            return True
-        if any(candidate == root or root in candidate.parents for root in self.environment_roots):
-            return True
         if any(candidate == root or root in candidate.parents for root in self.allowed_roots):
             return True
-        if any(part.endswith((".dist-info", ".egg-info")) for part in candidate.parts):
-            return True
-        name = candidate.name.lower()
-        if name.startswith("__editable__.") and name.endswith(".__path_hook__"):
-            return True
-        if name.startswith("python") and name.endswith(".zip") and "lib" in candidate.parts:
-            return True
-        return candidate.suffix.lower() in _RUNTIME_SOURCE_SUFFIXES or ".so." in name
+        return _runtime_code_path_allowed(candidate, self.runtime_code_roots)
 
     def _audit_path(self, value: Any, *, writing: bool) -> None:
         """Audit one Python-level file access.
