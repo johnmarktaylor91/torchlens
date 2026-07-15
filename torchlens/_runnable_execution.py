@@ -1161,17 +1161,23 @@ def _bind_call_outputs(
     output = _resolve_setter_output(call, output, slot_values)
     expected_paths = tuple(slots[slot_id].output_path or () for slot_id in call.output_slot_ids)
     actual_paths = _tensor_leaf_paths(output)
+    expected_structure_paths = _canonicalize_structseq_output_paths(output, expected_paths)
+    actual_structure_paths = _canonicalize_structseq_output_paths(output, actual_paths)
+    output_type_matches = _recorded_structseq_output_type_matches(fork, call, output)
     checks.append(
         _contract_check(
             f"output_structure:{call.call_id}",
             len(call.output_slot_ids) == len(call.op_labels)
-            and tuple(actual_paths) == expected_paths,
+            and output_type_matches
+            and actual_structure_paths == expected_structure_paths,
             RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
             f"Call {call.call_id!r} output tensor paths disagree with the recorded container.",
             affected_op_labels=call.op_labels,
             details=(
                 ("expected_paths", repr(expected_paths)),
                 ("actual_paths", repr(tuple(actual_paths))),
+                ("canonical_expected_paths", repr(expected_structure_paths)),
+                ("canonical_actual_paths", repr(actual_structure_paths)),
             ),
         )
     )
@@ -1772,6 +1778,126 @@ def _tensor_leaf_paths(
             paths.extend(_tensor_leaf_paths(child, (*path, index)))
         return tuple(paths)
     return ()
+
+
+def _canonicalize_structseq_output_paths(
+    output: Any,
+    paths: Sequence[Sequence[str | int]],
+) -> tuple[tuple[str | int, ...], ...]:
+    """Canonicalize only ``torch.return_types`` named/positional path components.
+
+    Parameters
+    ----------
+    output:
+        Runtime output container used to interpret path components.
+    paths:
+        Tensor leaf paths to canonicalize.
+
+    Returns
+    -------
+    tuple[tuple[str | int, ...], ...]
+        Paths where field names and positional indexes are equivalent only while
+        traversing a ``torch.return_types.*`` structseq.
+    """
+
+    return tuple(_canonicalize_structseq_output_path(output, tuple(path)) for path in paths)
+
+
+def _canonicalize_structseq_output_path(
+    output: Any,
+    path: tuple[str | int, ...],
+) -> tuple[str | int, ...]:
+    """Canonicalize one path through runtime ``torch.return_types`` containers.
+
+    Parameters
+    ----------
+    output:
+        Runtime output container used to interpret path components.
+    path:
+        Tensor leaf path to canonicalize.
+
+    Returns
+    -------
+    tuple[str | int, ...]
+        Path with structseq fields represented by their positional index.
+    """
+
+    current = output
+    canonical: list[str | int] = []
+    for component in path:
+        canonical_component = component
+        field_names = _torch_structseq_field_names(current)
+        if field_names:
+            if isinstance(component, str) and component in field_names:
+                canonical_component = field_names.index(component)
+            elif isinstance(component, int) and 0 <= component < len(field_names):
+                canonical_component = component
+        canonical.append(canonical_component)
+        try:
+            current = _value_at_path(current, (canonical_component,))
+        except (AttributeError, KeyError, IndexError, TypeError):
+            break
+    return tuple(canonical)
+
+
+def _recorded_structseq_output_type_matches(
+    trace: Any,
+    call: RunnableCallDescriptor,
+    output: Any,
+) -> bool:
+    """Return whether a recorded torch structseq call produced a torch structseq.
+
+    Parameters
+    ----------
+    trace:
+        Runtime fork containing recorded op metadata.
+    call:
+        Runnable call descriptor being bound.
+    output:
+        Runtime output produced by the resolved callable.
+
+    Returns
+    -------
+    bool
+        False only when the recorded call's output container was a
+        ``torch.return_types.*`` structseq but runtime produced another tuple
+        shape, such as a plain positional tuple.
+    """
+
+    if not _call_has_recorded_torch_structseq_output(trace, call):
+        return True
+    return _torch_structseq_field_names(output) != ()
+
+
+def _call_has_recorded_torch_structseq_output(
+    trace: Any,
+    call: RunnableCallDescriptor,
+) -> bool:
+    """Return whether any call output op recorded a torch structseq container.
+
+    Parameters
+    ----------
+    trace:
+        Runtime fork containing recorded op metadata.
+    call:
+        Runnable call descriptor being inspected.
+
+    Returns
+    -------
+    bool
+        True when any output op for the call has a ``torch.return_types`` root
+        container specification.
+    """
+
+    for op_label in call.op_labels:
+        op = _op_for_label(trace, op_label)
+        container_spec = getattr(op, "container_spec", None)
+        if (
+            isinstance(container_spec, ContainerSpec)
+            and container_spec.type_module == "torch.return_types"
+        ):
+            return True
+    return False
 
 
 def _container_leaf_paths(
