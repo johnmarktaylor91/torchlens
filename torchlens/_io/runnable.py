@@ -2358,11 +2358,7 @@ def _input_literal_witnesses(
     witnesses: list[ControlWitness] = []
     saw_opaque_leaf = False
     for position, path, value in leaves:
-        try:
-            _encode_literal(value)
-            encodable = True
-        except _UnsupportedLiteralError:
-            encodable = False
+        encodable = _is_encodable_model_input_leaf(value)
         if not encodable:
             saw_opaque_leaf = True
         fact = {
@@ -2390,6 +2386,24 @@ def _input_literal_witnesses(
             )
         )
     return witnesses, saw_opaque_leaf
+
+
+def _is_encodable_model_input_leaf(value: Any) -> bool:
+    """Return whether a non-tensor model-input leaf is runtime-comparable.
+
+    Non-finite Python floats are intentionally outside the comparable input-leaf
+    subset even though the literal grammar can serialize them for call recipes.
+    A ``nan``/``inf`` input leaf cannot honestly support value attestation, so it
+    must be recorded as opaque and force incomplete witness coverage.
+    """
+
+    if isinstance(value, float) and not math.isfinite(value):
+        return False
+    try:
+        _encode_literal(value)
+    except _UnsupportedLiteralError:
+        return False
+    return True
 
 
 def _preflight_output_contracts(trace: Any, ops: Sequence[Any]) -> list[RunnableDiagnostic]:
