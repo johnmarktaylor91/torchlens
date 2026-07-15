@@ -388,6 +388,7 @@ class PrunedParamEscape(nn.Module):
         return y + s
 
 
+@pytest.mark.filterwarnings("ignore:Converting a tensor with requires_grad")
 def test_r10_pruned_param_escape_changed_state_is_unverifiable(tmp_path: Path) -> None:
     x = torch.tensor([4.0])
     path = _save(PrunedParamEscape(), x, tmp_path / "p.tlspec", include_weights=True)

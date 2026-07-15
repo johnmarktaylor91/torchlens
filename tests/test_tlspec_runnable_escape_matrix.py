@@ -208,6 +208,10 @@ _INPUT_CELLS: list[tuple[str, Callable[[], nn.Module], torch.Tensor, torch.Tenso
 ]
 
 
+# The internal/float/control cell intentionally does float() on a requires_grad activation to
+# exercise a value escape into control flow; torch's "converting to scalar" UserWarning is expected
+# noise here, not a torchlens signal, so it must not escalate under filterwarnings=error.
+@pytest.mark.filterwarnings("ignore:Converting a tensor with requires_grad")
 @pytest.mark.parametrize(
     "name,factory,cap_x,changed_x", _INPUT_CELLS, ids=[c[0] for c in _INPUT_CELLS]
 )
@@ -224,6 +228,7 @@ def test_input_escape_cell_changed_input_is_never_verified(
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 
+@pytest.mark.filterwarnings("ignore:Converting a tensor with requires_grad")
 @pytest.mark.parametrize(
     "name,factory,cap_x,changed_x", _INPUT_CELLS, ids=[c[0] for c in _INPUT_CELLS]
 )
