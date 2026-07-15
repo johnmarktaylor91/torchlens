@@ -94,6 +94,7 @@ class ContainerSpec:
         "child_specs": FieldPolicy.BLOB_RECURSIVE,
         "literal_value": FieldPolicy.BLOB_RECURSIVE,
         "aux_data": FieldPolicy.BLOB_RECURSIVE,
+        "lossy_reconstruction": FieldPolicy.KEEP,
     }
 
     kind: Literal[
@@ -115,6 +116,7 @@ class ContainerSpec:
     child_specs: tuple[tuple[OutputPathComponent, "ContainerSpec"], ...] = ()
     literal_value: Any = None
     aux_data: Any = None
+    lossy_reconstruction: bool = False
 
 
 def rebuild_container_from_spec(spec: ContainerSpec, leaves: list[Any] | tuple[Any, ...]) -> Any:
@@ -200,7 +202,11 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             for field_name in spec.fields
         }
         container_type = _resolve_container_type(spec)
-        if container_type is not None and _type_has_safe_new(container_type):
+        if (
+            container_type is not None
+            and _type_has_safe_new(container_type)
+            and _fields_are_inert_settable(container_type, spec.fields)
+        ):
             return _construct_dataclass_without_init(container_type, field_values)
         return field_values
     if spec.kind == "hf_model_output":
@@ -212,6 +218,7 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             container_type is not None
             and _type_has_safe_new(container_type)
             and issubclass(container_type, dict)
+            and _fields_are_inert_settable(container_type, spec.keys)
         ):
             return _construct_model_output_without_init(container_type, key_values)
         return key_values
@@ -335,16 +342,145 @@ def _inert_new(container_type: type[Any]) -> Any:
     return new(container_type)
 
 
+def _name_is_data_descriptor(container_type: type[Any], name: Any) -> bool:
+    """Return whether ``name`` resolves to a DATA descriptor in ``container_type``'s MRO.
+
+    A data descriptor (``property`` with a setter, or any class attribute whose type
+    defines ``__set__`` / ``__delete__``) HONORS ``__set__`` even through
+    ``object.__setattr__``. Populating such a name during reconstruction would fire
+    attacker-reachable descriptor code (the SEC1 surface) AND could not be set faithfully
+    (a plain ``obj.__dict__`` write is shadowed by the data descriptor on read). We resolve
+    from the FIRST MRO class that defines the name -- the one that wins attribute lookup.
+
+    Parameters
+    ----------
+    container_type:
+        Resolved container class.
+    name:
+        Captured field / key name to classify.
+
+    Returns
+    -------
+    bool
+        True when ``name`` is a class-defined data descriptor.
+    """
+
+    for klass in getattr(container_type, "__mro__", (container_type,)):
+        class_dict = getattr(klass, "__dict__", {})
+        if name in class_dict:
+            attribute = class_dict[name]
+            attribute_type = type(attribute)
+            return hasattr(attribute_type, "__set__") or hasattr(attribute_type, "__delete__")
+    return False
+
+
+def _type_has_instance_dict(container_type: type[Any]) -> bool:
+    """Return whether instances of ``container_type`` carry a per-instance ``__dict__``.
+
+    Non-invoking field population writes directly to ``obj.__dict__``; a ``__slots__`` type
+    with no instance ``__dict__`` cannot be populated inertly (a plain slot write would go
+    through the slot data descriptor). Such a type is refused so reconstruction stays inert.
+
+    Parameters
+    ----------
+    container_type:
+        Resolved container class.
+
+    Returns
+    -------
+    bool
+        True when instances expose a writable ``__dict__``.
+    """
+
+    return any(
+        "__dict__" in getattr(klass, "__dict__", {})
+        for klass in getattr(container_type, "__mro__", (container_type,))
+    )
+
+
+def _fields_are_inert_settable(container_type: type[Any], names: tuple[Any, ...]) -> bool:
+    """Return whether every captured field/key can be set on ``container_type`` inertly.
+
+    Inert population requires (1) a per-instance ``__dict__`` to write into and (2) no
+    captured name that resolves to a data descriptor (its ``__set__`` would fire attacker
+    code and the write would not be faithful). When either fails, reconstruction falls back
+    to the plain namespace / mapping shape rather than executing any descriptor code.
+
+    Parameters
+    ----------
+    container_type:
+        Resolved container class.
+    names:
+        Captured field / key names to populate.
+
+    Returns
+    -------
+    bool
+        True when all names can be populated via ``obj.__dict__`` without firing code.
+    """
+
+    if not _type_has_instance_dict(container_type):
+        return False
+    return not any(_name_is_data_descriptor(container_type, name) for name in names)
+
+
+def reconstruction_is_lossy(value: Any, captured_names: tuple[Any, ...]) -> bool:
+    """Return whether the non-invoking rebuild would DROP live output instance state.
+
+    The field/key-only rebuild restores exactly ``captured_names`` into ``obj.__dict__``. It
+    is LOSSY -- so the run must be reported UNVERIFIABLE, never a false VERIFIED -- when the
+    live output carries state that rebuild cannot faithfully restore:
+
+    * a ``__slots__`` layout with no instance ``__dict__`` (fields cannot be set inertly), or
+    * a captured name that resolves to a data descriptor (cannot be set faithfully), or
+    * a computed non-field/non-key instance attribute (e.g. a ``__post_init__`` value derived
+      from a tensor) that rebuild neither captured nor can safely recompute.
+
+    A ``None``-valued extra attribute (e.g. a standard HuggingFace ``ModelOutput`` field left
+    unset and excluded from the mapping) is NOT treated as lossy: it carries no derived-from-
+    tensor state that could go stale, keeping pure/standard outputs VERIFIED.
+
+    Parameters
+    ----------
+    value:
+        The live output container instance seen at capture time.
+    captured_names:
+        Field names (dataclass) or mapping keys (``ModelOutput``) the rebuild will restore.
+
+    Returns
+    -------
+    bool
+        True when reconstruction would be lossy for this output.
+    """
+
+    container_type = type(value)
+    instance_dict = getattr(value, "__dict__", None)
+    if instance_dict is None:
+        return True
+    for name in captured_names:
+        if _name_is_data_descriptor(container_type, name):
+            return True
+    captured = set(captured_names)
+    for attribute_name, attribute_value in instance_dict.items():
+        if attribute_name in captured:
+            continue
+        if attribute_value is None:
+            continue
+        return True
+    return False
+
+
 def _construct_dataclass_without_init(
     container_type: type[Any], field_values: dict[str, Any]
 ) -> Any:
     """Rebuild a dataclass output WITHOUT invoking its ``__init__`` / ``__post_init__``.
 
-    Uses ``cls.__new__(cls)`` and sets each CAPTURED field via ``object.__setattr__``. This
-    reproduces the exact captured output (``__post_init__`` could otherwise RE-derive fields
-    that differ from what was traced) and executes NO attacker-chosen constructor code, which
-    closes the output-container construction-gadget surface. ``object.__setattr__`` also
-    bypasses a frozen dataclass's ``__setattr__``, so frozen outputs rebuild faithfully too.
+    Uses ``cls.__new__(cls)`` and writes each CAPTURED field DIRECTLY into ``obj.__dict__``.
+    Writing through ``obj.__dict__`` -- NOT ``object.__setattr__`` -- bypasses ANY data
+    descriptor ``__set__`` (the SEC1 construction-gadget surface) and a frozen dataclass's
+    ``__setattr__``, so no attacker-chosen code runs and frozen outputs rebuild faithfully.
+    The caller has already verified via ``_fields_are_inert_settable`` that the type carries a
+    per-instance ``__dict__`` and that no captured field is a data descriptor.
 
     Parameters
     ----------
@@ -360,8 +496,9 @@ def _construct_dataclass_without_init(
     """
 
     obj = _inert_new(container_type)
+    instance_dict = obj.__dict__
     for field_name, value in field_values.items():
-        object.__setattr__(obj, field_name, value)
+        instance_dict[field_name] = value
     return obj
 
 
@@ -373,15 +510,18 @@ def _construct_model_output_without_init(
     A ``ModelOutput`` is a ``dict`` subclass whose ``__init__``/``__post_init__`` populate its
     mapping view (and HuggingFace-style attribute aliases) from its set fields. We replicate
     that populated state inertly: ``cls.__new__(cls)`` (an empty ``dict``-subclass instance),
-    then for each captured ``(key, value)`` set both the mapping entry (via the builtin
-    ``dict``/``OrderedDict`` ``__setitem__``) and the attribute (via ``object.__setattr__``) --
-    exactly what a faithful ``ModelOutput`` holds -- WITHOUT running the type's own
-    possibly-overridden ``__setitem__`` / ``__setattr__`` / ``__init__`` / ``__post_init__``.
+    then for each captured ``(key, value)`` set the mapping entry via the BASE
+    ``dict``/``OrderedDict`` ``__setitem__`` (never the subclass's possibly-overridden
+    ``__setitem__``) and the attribute alias via a DIRECT ``obj.__dict__`` write (never
+    ``object.__setattr__``, which fires data descriptors) -- WITHOUT running the type's own
+    ``__setitem__`` / ``__setattr__`` / ``__init__`` / ``__post_init__``.
 
     The mapping entry uses ``OrderedDict.__setitem__`` for ``OrderedDict`` subclasses (real
     transformers ``ModelOutput``) and the builtin ``dict.__setitem__`` for plain ``dict``
     subclasses; ``dict.__setitem__`` on an ``OrderedDict`` corrupts its ordering bookkeeping,
-    so the correct inert populator is selected per base.
+    so the correct inert populator is selected per base. The caller has already verified via
+    ``_fields_are_inert_settable`` that the type carries a per-instance ``__dict__`` and that
+    no captured key is a data descriptor.
 
     Parameters
     ----------
@@ -400,9 +540,10 @@ def _construct_model_output_without_init(
         OrderedDict.__setitem__ if issubclass(container_type, OrderedDict) else dict.__setitem__
     )
     obj = _inert_new(container_type)
+    instance_dict = obj.__dict__
     for key, value in key_values.items():
         setitem(obj, key, value)
-        object.__setattr__(obj, key, value)
+        instance_dict[key] = value
     return obj
 
 
@@ -518,11 +659,20 @@ def _container_type_is_admissible(container_type: type[Any], spec: ContainerSpec
 
     kind = spec.kind
     if kind == "namedtuple":
-        # torch structseq classes (``torch.return_types.*``) that torch itself emits,
-        # or any genuine namedtuple class (a ``tuple`` subclass carrying ``_fields``).
-        if spec.type_module == "torch.return_types":
+        # Default-deny STRUCTURALLY regardless of the attacker-supplied ``spec.type_module``
+        # string (SEC2): the resolved type must genuinely be a ``tuple`` subclass, either a
+        # real namedtuple (carries ``_fields``) or a torch structseq (``torch.return_types.*``
+        # exposes ``n_fields`` and whose RESOLVED ``__module__`` -- not the spec string -- is
+        # ``torch.return_types``). A type reached by dotted getattr traversal that is not a
+        # tuple subclass (or a tuple subclass from any other module posing as structseq) is
+        # refused before any construction, so trusting the module name cannot skip the check.
+        if not issubclass(container_type, tuple):
+            return False
+        if hasattr(container_type, "_fields"):
             return True
-        return issubclass(container_type, tuple) and hasattr(container_type, "_fields")
+        return getattr(container_type, "__module__", None) == "torch.return_types" and hasattr(
+            container_type, "n_fields"
+        )
     if kind == "dataclass":
         return dataclasses.is_dataclass(container_type)
     if kind == "hf_model_output":
