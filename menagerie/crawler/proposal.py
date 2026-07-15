@@ -132,7 +132,9 @@ _NON_IMPLEMENTATION_CODE_NAMES = frozenset(
         "version.py",
     }
 )
+_NON_IMPLEMENTATION_SOURCE_STEMS = frozenset({"metric", "metrics", "plot", "plots", "plotting"})
 _NON_IMPLEMENTATION_SOURCE_DIRS = frozenset({".github", "ci", "doc", "docs", "test", "tests"})
+_MODEL_ENTRY_METHODS = frozenset({"__call__", "apply", "call", "forward"})
 _MAX_TEXT_INVENTORY_BYTES = 8 * 1024**2
 
 
@@ -892,12 +894,16 @@ def _validate_source_ladder(
             validate_pretrained_disable_fields(kwargs, disable_fields)
         except RecipeError as exc:
             raise ProposalValidationError(str(exc)) from exc
-    if rung is SourceRung.REIMPLEMENT and _implementation_source_available(
-        source_manifest,
-        cas_root=cas_root,
-        linkage_terms=_model_linkage_terms(facts),
-    ):
-        raise ProposalValidationError("R4_REIMPLEMENT is forbidden when source code is available")
+    if rung is SourceRung.REIMPLEMENT:
+        _validate_r4_negative_proof(resolution, known_evidence)
+        if _implementation_source_available(
+            source_manifest,
+            cas_root=cas_root,
+            linkage_terms=_model_linkage_terms(facts),
+        ):
+            raise ProposalValidationError(
+                "R4_REIMPLEMENT is forbidden when source code is available"
+            )
     if rung is SourceRung.VENDOR:
         _validate_r2_source_binding(implementation, resolution, evidence, source_manifest)
     if rung in {SourceRung.VENDOR, SourceRung.PORT, SourceRung.REIMPLEMENT}:
@@ -928,6 +934,63 @@ def _validate_source_ladder(
         }
         if not cited & descriptive_ids:
             raise ProposalValidationError(f"{rung.value} did not cite transcribed descriptive text")
+
+
+def _validate_r4_negative_proof(
+    resolution: Mapping[str, Any], known_evidence: frozenset[str]
+) -> None:
+    """Require a bounded, evidence-backed negative source search for R4.
+
+    Parameters
+    ----------
+    resolution:
+        Complete source-resolution block.
+    known_evidence:
+        Validated literal evidence identifiers.
+
+    Raises
+    ------
+    ProposalValidationError
+        If higher-rung attempts do not explicitly establish unavailability or
+        the bounded search report is empty.
+    """
+
+    attempted = resolution.get("attempted_rungs")
+    if not isinstance(attempted, list):
+        raise ProposalValidationError("R4 requires explicit negative proof from a bounded search")
+    attempts_by_rung = {item.get("rung"): item for item in attempted if isinstance(item, Mapping)}
+    for higher_rung in ("R1_LIBRARY", "R2_VENDOR", "R3_PORT"):
+        attempt = attempts_by_rung.get(higher_rung)
+        if not isinstance(attempt, Mapping) or attempt.get("result") != "unavailable":
+            raise ProposalValidationError(
+                "R4 requires explicit negative proof that every higher rung is unavailable"
+            )
+        reason_code = attempt.get("reason_code")
+        attempt_evidence = attempt.get("evidence_ids")
+        if (
+            not isinstance(reason_code, str)
+            or "search" not in reason_code.lower()
+            or not isinstance(attempt_evidence, list)
+            or not attempt_evidence
+            or any(
+                not isinstance(evidence_id, str) or evidence_id not in known_evidence
+                for evidence_id in attempt_evidence
+            )
+        ):
+            raise ProposalValidationError(
+                "R4 higher-rung unavailability must be backed by bounded-search evidence"
+            )
+    selected_attempt = attempts_by_rung.get(SourceRung.REIMPLEMENT.value)
+    if not isinstance(selected_attempt, Mapping) or selected_attempt.get("result") != "selected":
+        raise ProposalValidationError("R4 source ladder must explicitly select R4_REIMPLEMENT")
+    search_report = resolution.get("search_report")
+    if not isinstance(search_report, Mapping) or any(
+        not isinstance(search_report.get(field), list) or not search_report[field]
+        for field in ("queries", "places_checked", "links_checked", "languages_checked")
+    ):
+        raise ProposalValidationError(
+            "R4 requires an explicit bounded search report with no usable implementation found"
+        )
 
 
 def _validate_r2_source_binding(
@@ -1236,6 +1299,7 @@ def _inventory_name_is_implementation(value: str) -> bool:
     return (
         bool(name)
         and name not in _NON_IMPLEMENTATION_CODE_NAMES
+        and path.stem.lower() not in _NON_IMPLEMENTATION_SOURCE_STEMS
         and not lowered_parts & _NON_IMPLEMENTATION_SOURCE_DIRS
         and path.suffix.lower() in _IMPLEMENTATION_SOURCE_SUFFIXES
     )
@@ -1280,58 +1344,89 @@ def _model_linkage_terms(facts: Mapping[str, Any]) -> frozenset[str]:
     return frozenset(terms)
 
 
-def _python_has_model_structure(text: str) -> bool:
+def _python_has_model_structure(text: str, linkage_terms: frozenset[str]) -> bool:
     """Return whether Python source contains executable architecture structure.
 
     Parameters
     ----------
     text:
         Decoded candidate source.
+    linkage_terms:
+        Specific normalized model/family symbols.
 
     Returns
     -------
     bool
-        True for a model class/function with forward structure or layer construction.
+        True for a linked callable or a class/function model entry point with
+        internal computation.
     """
 
     try:
         tree = ast.parse(text)
     except SyntaxError:
         return False
-    classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
-    forward_methods = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef))
-        and node.name in {"call", "forward"}
-    ]
-    model_classes = [
-        node
-        for node in classes
+    function_types = (ast.AsyncFunctionDef, ast.FunctionDef)
+    for class_node in (node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)):
         if any(
-            _call_name(base).rsplit(".", 1)[-1]
-            in {"Layer", "Model", "Module", "Network", "Sequential"}
-            for base in node.bases
-        )
-        or node.name.lower().endswith(("model", "net", "network"))
-    ]
-    architecture_calls = [
-        _call_name(node.func).rsplit(".", 1)[-1]
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and _call_name(node.func).rsplit(".", 1)[-1]
-        in (_GENERIC_MODEL_CALLS | {"Embedding", "GRU", "LSTM", "MultiheadAttention"})
-    ]
-    builders = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef))
-        and node.name.lower().startswith(("build", "create", "make"))
-    ]
-    return bool(
-        (model_classes and (forward_methods or architecture_calls))
-        or (forward_methods and architecture_calls)
-        or (builders and architecture_calls)
+            isinstance(member, function_types)
+            and member.name in _MODEL_ENTRY_METHODS
+            and _function_has_internal_computation(member)
+            for member in class_node.body
+        ):
+            return True
+    for node in ast.walk(tree):
+        if not isinstance(node, function_types) or not _function_has_internal_computation(node):
+            continue
+        normalized_name = re.sub(r"[^a-z0-9]+", "", node.name.lower())
+        if node.name in _MODEL_ENTRY_METHODS or any(
+            term in normalized_name or normalized_name in term for term in linkage_terms
+        ):
+            return True
+    return False
+
+
+def _function_has_internal_computation(
+    node: Union[ast.AsyncFunctionDef, ast.FunctionDef],
+) -> bool:
+    """Return whether a callable computes and returns an internal value.
+
+    Parameters
+    ----------
+    node:
+        Parsed Python callable definition.
+
+    Returns
+    -------
+    bool
+        True when the body contains a return/yield and framework-neutral
+        computation or control-flow syntax.
+    """
+
+    body_nodes = [descendant for statement in node.body for descendant in ast.walk(statement)]
+    has_result = any(
+        isinstance(descendant, (ast.Return, ast.Yield, ast.YieldFrom)) for descendant in body_nodes
+    )
+    computation_types = (
+        ast.AugAssign,
+        ast.BinOp,
+        ast.BoolOp,
+        ast.Call,
+        ast.Compare,
+        ast.DictComp,
+        ast.For,
+        ast.GeneratorExp,
+        ast.If,
+        ast.IfExp,
+        ast.ListComp,
+        ast.SetComp,
+        ast.Subscript,
+        ast.Try,
+        ast.UnaryOp,
+        ast.While,
+        ast.With,
+    )
+    return has_result and any(
+        isinstance(descendant, computation_types) for descendant in body_nodes
     )
 
 
@@ -1366,14 +1461,11 @@ def _code_bytes_are_relevant_implementation(
         text = content.decode("utf-8")
     except UnicodeDecodeError:
         return False
-    source_context = " ".join(
-        str(source.get(field) or "") for field in ("url", "revision", "source_id")
-    )
-    normalized_context = re.sub(r"[^a-z0-9]+", "", f"{member_name} {source_context} {text}".lower())
+    normalized_context = re.sub(r"[^a-z0-9]+", "", f"{member_name} {text}".lower())
     if not any(term in normalized_context for term in linkage_terms):
         return False
     if Path(member_name).suffix.lower() in {".py", ".pyx", ""}:
-        return _python_has_model_structure(text)
+        return _python_has_model_structure(text, linkage_terms)
     architecture_tokens = re.search(
         r"\b(?:attention|conv(?:olution)?|embedding|forward|layer|lstm|model|module|network)\b",
         text,
