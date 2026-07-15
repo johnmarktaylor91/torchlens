@@ -48,8 +48,11 @@ class WorkerRequest:
         Source-gated modality and concrete single-tensor call contract.
     scratch_root, receipt_path:
         Writable worker and atomic result locations.
-    seed, device, framework:
+    seed, input_seed, device, framework:
         Deterministic native execution settings.
+    mode:
+        Explicit single mode for this fresh worker process. ``None`` is retained only
+        for compatibility with pre-round-6 requests.
     meaningful_modes:
         Explicit meaningful modes. ``None`` conservatively defaults to both.
     source_identity, execution_identity:
@@ -67,9 +70,11 @@ class WorkerRequest:
     receipt_path: Path
     input_contract: Optional[Mapping[str, Any]] = None
     seed: int = 0
+    input_seed: int = 0
     device: str = "cpu"
     framework: str = "pytorch"
     meaningful_modes: Optional[tuple[RunMode, ...]] = None
+    mode: Optional[RunMode] = None
     source_identity: str = "unbound"
     execution_identity: str = "unbound"
     recipe_revision: str = "unbound"
@@ -120,6 +125,8 @@ class WorkerRequest:
             if not isinstance(modes_value, list) or not modes_value:
                 raise ValueError("meaningful_modes must be a non-empty list when supplied")
             modes = tuple(RunMode(str(mode)) for mode in modes_value)
+        mode_value = value.get("mode")
+        mode = None if mode_value is None else RunMode(str(mode_value))
         if receipt_path is None:
             raw_receipt = value.get("receipt_path")
             if not isinstance(raw_receipt, str) or not raw_receipt:
@@ -138,9 +145,11 @@ class WorkerRequest:
             scratch_root=Path(str(value["scratch_root"])),
             receipt_path=receipt_value,
             seed=int(value.get("seed", 0)),
+            input_seed=int(value.get("input_seed", 0)),
             device=str(value.get("device", "cpu")),
             framework=str(value.get("framework", "pytorch")),
             meaningful_modes=modes,
+            mode=mode,
             source_identity=str(value.get("source_identity", "unbound")),
             execution_identity=str(value.get("execution_identity", "unbound")),
             recipe_revision=str(value.get("recipe_revision", "unbound")),
@@ -396,7 +405,7 @@ def _materialize_declarative_call(
             request.input_spec,
             framework=request.framework,
             device=request.device,
-            seed=request.seed,
+            seed=request.input_seed,
         )
         return (
             materialized.args,
@@ -422,7 +431,7 @@ def _materialize_declarative_call(
                 {"shape": leaf.get("shape"), "dtype": leaf.get("dtype")},
                 framework=request.framework,
                 device=request.device,
-                seed=request.seed + tensor_index,
+                seed=request.input_seed + tensor_index,
             )
             _assign_path(root, str(leaf.get("path")), materialized.value)
             input_kinds.append(materialized.input_kind)
@@ -472,7 +481,7 @@ def _materialize_dummy_call(
     """
 
     if loaded.make_dummy_call is not None:
-        value = loaded.make_dummy_call(request.seed, request.device)
+        value = loaded.make_dummy_call(request.input_seed, request.device)
         if not isinstance(value, tuple) or len(value) != 2:
             raise TypeError("make_dummy_call must return exactly (args, kwargs)")
         args, kwargs = value
@@ -708,6 +717,8 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
         "observed_adapter_sha256": None,
         "execution_identity": request.execution_identity,
         "seed": request.seed,
+        "input_seed": request.input_seed,
+        "mode": request.mode.value if request.mode is not None else None,
         "device": request.device,
         "framework": request.framework,
         "awards_runs": False,
@@ -771,14 +782,28 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
             declared = request.meaningful_modes or ()
             detected = detect_meaningful_modes(model)
             mode_set = set(declared) | set(detected)
-            modes = tuple(mode for mode in (RunMode.TRAIN, RunMode.EVAL) if mode in mode_set)
+            detected_modes = tuple(
+                mode for mode in (RunMode.TRAIN, RunMode.EVAL) if mode in mode_set
+            )
+            if request.mode is not None and request.mode not in mode_set:
+                raise ValueError(
+                    f"requested mode {request.mode.value!r} is not meaningful for this model"
+                )
+            modes = (request.mode,) if request.mode is not None else detected_modes
             base["declared_meaningful_modes"] = [mode.value for mode in declared]
             base["detected_meaningful_modes"] = [mode.value for mode in detected]
-            base["meaningful_modes"] = [mode.value for mode in modes]
+            base["meaningful_modes"] = [mode.value for mode in detected_modes]
             outputs: dict[str, object] = {}
             for mode in modes:
+                mode_model = model
+                mode_constructor_seconds = constructor_seconds
+                if request.mode is None and len(modes) > 1:
+                    _seed_frameworks(request.seed, request.framework)
+                    mode_constructor_started = time.monotonic()
+                    mode_model = loaded.build_model()
+                    mode_constructor_seconds = time.monotonic() - mode_constructor_started
                 receipt, output = _mode_receipt(
-                    model,
+                    mode_model,
                     args,
                     kwargs,
                     input_kind,
@@ -786,16 +811,19 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
                     input_note,
                     mode,
                     request.framework,
-                    constructor_seconds,
+                    mode_constructor_seconds,
                 )
                 base["per_mode"][mode.value] = receipt
                 if output is not None:
                     outputs[mode.value] = output
-            if {RunMode.TRAIN.value, RunMode.EVAL.value}.issubset(outputs):
+            if request.mode is None and {
+                RunMode.TRAIN.value,
+                RunMode.EVAL.value,
+            }.issubset(outputs):
                 divergence = classify_train_eval_divergence(outputs["train"], outputs["eval"])
                 base["train_eval_divergence"] = divergence.classification
                 base["divergence_evidence"] = divergence.evidence
-            elif len(outputs) == 1:
+            elif request.mode is None and len(outputs) == 1:
                 base["train_eval_divergence"] = "none"
                 base["divergence_evidence"] = "only one meaningful mode"
         except Exception as exc:  # noqa: BLE001 -- constructor/input/policy failures are receipts
