@@ -753,6 +753,102 @@ def _record_host_escape_source(trace: Any, func: Any, args: tuple[Any, ...], res
         _record_escape_source_tensor(trace, source, invisible=False)
 
 
+_AUTOGRAD_LEAF_WALK_LIMIT = 256
+"""Bounded step budget for the param-derived autograd ancestry walk (fail safe on overflow)."""
+
+
+def _escape_storage_ptr(source: torch.Tensor) -> int | None:
+    """Return ``source``'s untyped-storage data pointer, read under the internal marker.
+
+    The internal-read marker keeps this OWN resolution read from being mistaken for a user
+    ``data_ptr()`` raw-pointer escape (the storage ``data_ptr`` accessor is patched for the forward).
+    """
+
+    try:
+        with internal_scalar_read():
+            return source.untyped_storage().data_ptr()
+    except (RuntimeError, TypeError, NotImplementedError):
+        return None
+
+
+def _autograd_leaf_storage_ptrs(source: torch.Tensor) -> set[int] | None:
+    """Return the storage pointers of the autograd LEAF tensors feeding ``source``, else ``None``.
+
+    Walks ``source.grad_fn`` back to its ``AccumulateGrad`` leaves. Registered params require grad,
+    so a param-derived reduction/transform (``self.w.sum()`` / ``self.w.max()``) keeps a grad_fn
+    chain that bottoms out at the param leaf tensors. Returns ``None`` (unresolvable -> caller fails
+    safe) for a source with NO grad_fn (a detached or no-grad tensor gives no ancestry) and for a
+    walk that overflows the step budget (cannot prove PURE param derivation).
+    """
+
+    grad_fn = getattr(source, "grad_fn", None)
+    if grad_fn is None:
+        # A leaf with no grad_fn: a requires_grad leaf IS the param itself, already resolved by the
+        # direct storage-alias rung; a non-requires-grad leaf yields no autograd ancestry.
+        return None
+    ptrs: set[int] = set()
+    seen: set[int] = set()
+    stack = [grad_fn]
+    steps = 0
+    while stack:
+        if steps >= _AUTOGRAD_LEAF_WALK_LIMIT:
+            return None
+        steps += 1
+        fn = stack.pop()
+        if fn is None or id(fn) in seen:
+            continue
+        seen.add(id(fn))
+        variable = getattr(fn, "variable", None)
+        if isinstance(variable, torch.Tensor):
+            ptr = _escape_storage_ptr(variable)
+            if ptr is None:
+                return None
+            ptrs.add(ptr)
+            continue
+        for next_fn, _ in getattr(fn, "next_functions", ()):
+            if next_fn is not None:
+                stack.append(next_fn)
+    return ptrs or None
+
+
+def _param_derived_addresses(trace: Any, source: torch.Tensor) -> set[str]:
+    """Return the state addresses of every registered PARAMETER that ``source`` reads from.
+
+    Resolves a host-escape source to param state slot(s) for the READ-ONLY-PARAM escape witness
+    (r18 direct reads + r19-C derived reads). Two rungs, both fail-safe (return empty on any doubt):
+
+    * DIRECT alias -- ``source`` shares a param's storage (``self.w.detach()``, ``self.w[0]``,
+      ``self.w.tolist()``, ``self.w.detach().numpy()``): its storage pointer is in the forward-start
+      param index. Resolves for frozen params too (no autograd needed).
+    * DERIVED read (r19-C) -- ``source`` has its OWN storage (no direct alias) but its autograd
+      ancestry bottoms out ONLY at registered-param leaves (``self.w.sum()``, ``float(self.w.max())``,
+      ``(self.w1 + self.w2).mean()``). Such a chain is a deterministic pure function of param state,
+      so it re-digests identically on replay (VERIFIED on original state, UNVERIFIABLE on changed
+      state). If ANY autograd leaf is NOT a registered param (an INPUT / internal tensor feeds the
+      chain), the source is NOT purely param-derived -> return empty; that chain is graph-connected
+      and witnessed by its own kept op. A host WRITE is caught independently by
+      ``buffer_writes._reconcile_params``, so this read resolution never blesses a mutated param.
+    """
+
+    param_storage_addresses = getattr(trace, "_param_storage_addresses", None)
+    if not param_storage_addresses:
+        return set()
+    direct = _escape_storage_ptr(source)
+    if direct is not None and direct in param_storage_addresses:
+        return {str(param_storage_addresses[direct])}
+    leaf_ptrs = _autograd_leaf_storage_ptrs(source)
+    if not leaf_ptrs:
+        return set()
+    resolved: set[str] = set()
+    for ptr in leaf_ptrs:
+        address = param_storage_addresses.get(ptr)
+        if address is None:
+            # A non-param autograd leaf (input / internal): NOT purely param-derived.
+            return set()
+        resolved.add(str(address))
+    return resolved
+
+
 def _record_escape_source_tensor(trace: Any, source: torch.Tensor, *, invisible: bool) -> None:
     """Record ONE tensor->host escape source, visible or census-invisible, uniformly.
 
@@ -780,6 +876,18 @@ def _record_escape_source_tensor(trace: Any, source: torch.Tensor, *, invisible:
         if is_bool:
             # A pruned, unlabelled bool predicate is covered by NO net -> fail closed.
             _HOST_ESCAPE_UNATTRIBUTABLE_BOOL.add(trace)
+            return
+        # r19-C: an unlabelled non-bool source that is a read of registered-param storage
+        # (``self.w.tolist()`` directly on a param -- a param carries no capture label) is
+        # witnessed by the param state slot, NOT failed closed. Covers direct param reads and
+        # pruned param-derived reads uniformly with the labelled path below.
+        param_addresses = _param_derived_addresses(trace, source)
+        if param_addresses:
+            state_names = _HOST_ESCAPE_STATE_SOURCE_NAMES.get(trace)
+            if state_names is None:
+                state_names = set()
+                _HOST_ESCAPE_STATE_SOURCE_NAMES[trace] = state_names
+            state_names |= param_addresses
             return
         if invisible:
             # A census-invisible conversion of an unlabelled tensor leaves no source
@@ -825,32 +933,25 @@ def _record_escape_source_tensor(trace: Any, source: torch.Tensor, *, invisible:
     # escape witness).
     meta = get_tensor_meta(source)
     address = getattr(meta, "address", None) if meta is not None else None
-    # r18: a PARAMETER host escape resolves by state slot exactly like a buffer. A buffer keeps a
-    # graph SOURCE node, so its ``.detach()`` host read survives orphan-pruning and witnesses by its
-    # kept op; a parameter carries NO source node, so the param-rooted ``.detach()`` op is
-    # orphan-pruned and its raw label resolves to no final op -> the escape would fail closed
-    # (INCOMPLETE_SCALAR_ESCAPE -> a spurious UNVERIFIABLE) even for a purely READ-ONLY stat log
-    # (``self.w.detach().numpy().sum()``). The escape source's storage aliases the param's storage,
-    # so resolve the param address by its forward-start storage-pointer index and record the state
-    # slot: the read-only escape is then witnessed by the param's capture-time digest (value-correct
-    # -- unchanged param re-digests identically -> VERIFIED; changed param -> UNVERIFIABLE), the same
-    # honest read/write distinction the buffer path draws. A genuine host WRITE is caught
-    # independently by the parameter whole-storage byte tripwire (``buffer_writes._reconcile_params``
-    # -> ``_HOST_ESCAPE_MUTABLE_WRITEBACK``), so this resolution never blesses a mutated param.
-    if address is None:
-        param_storage_addresses = getattr(trace, "_param_storage_addresses", None)
-        if param_storage_addresses:
-            # Read the storage pointer under the internal-read marker so this OWN resolution
-            # read is not itself mistaken for a user ``data_ptr()`` raw-pointer escape (the
-            # storage ``data_ptr`` accessor is patched for the duration of the forward).
-            try:
-                with internal_scalar_read():
-                    storage_ptr = source.untyped_storage().data_ptr()
-            except (RuntimeError, TypeError, NotImplementedError):
-                storage_ptr = None
-            if storage_ptr is not None:
-                address = param_storage_addresses.get(storage_ptr)
+    # r18 + r19-C: a PARAMETER host escape resolves by state slot exactly like a buffer. A buffer
+    # keeps a graph SOURCE node, so its ``.detach()`` host read survives orphan-pruning and witnesses
+    # by its kept op; a parameter carries NO source node, so a param-rooted read op is orphan-pruned
+    # and its raw label resolves to no final op -> the escape would fail closed (INCOMPLETE_SCALAR_
+    # ESCAPE -> a spurious UNVERIFIABLE) even for a purely READ-ONLY stat log. Resolve the param
+    # state slot(s) so the read-only escape is witnessed by the param's capture-time digest (value-
+    # correct -- an unchanged param re-digests identically -> VERIFIED; a changed param -> UNVERIFIABLE),
+    # the same honest read/write distinction the buffer path draws. ``_param_derived_addresses`` covers
+    # both a DIRECT param alias (r18: ``self.w.detach()``, ``self.w[0]``) and a DERIVED pruned read
+    # rooted purely in params (r19-C: ``self.w.sum()``, ``float(self.w.max())``). A genuine host WRITE
+    # is caught independently by the parameter whole-storage byte tripwire
+    # (``buffer_writes._reconcile_params`` -> ``_HOST_ESCAPE_MUTABLE_WRITEBACK``), so read resolution
+    # never blesses a mutated param.
+    state_addresses: set[str] = set()
     if address is not None:
+        state_addresses.add(str(address))
+    else:
+        state_addresses |= _param_derived_addresses(trace, source)
+    if state_addresses:
         state_sources = _HOST_ESCAPE_STATE_SOURCE_LABELS.get(trace)
         if state_sources is None:
             state_sources = set()
@@ -860,7 +961,7 @@ def _record_escape_source_tensor(trace: Any, source: torch.Tensor, *, invisible:
         if state_names is None:
             state_names = set()
             _HOST_ESCAPE_STATE_SOURCE_NAMES[trace] = state_names
-        state_names.add(str(address))
+        state_names |= state_addresses
 
 
 def _operator_name(func: Any) -> str:
