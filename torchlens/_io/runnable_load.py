@@ -94,6 +94,7 @@ _ENUMERATED_TORCH_NAMESPACES = frozenset(
     }
 )
 _REMOVED_TORCH_CALLABLES = frozenset({"torch.gesv"})
+_SAFE_TENSOR_PROPERTY_NAMES = frozenset({"T", "mT", "real", "imag"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -609,6 +610,9 @@ def _resolve_exact_key(
 ) -> tuple[Callable[..., Any], str] | None:
     """Resolve one key by getattr on allowlisted roots and namespaces only."""
 
+    property_getter = _safe_tensor_property_getter(key)
+    if property_getter is not None:
+        return property_getter, f"torch.Tensor.{key.qualname}"
     if key.namespace in _ALLOWED_EXACT_ROOTS:
         func = getattr(_ALLOWED_EXACT_ROOTS[key.namespace], key.qualname, None)
         if callable(func):
@@ -622,6 +626,27 @@ def _resolve_exact_key(
     if func is None:
         return None
     return func, f"{namespace}.{qualname}"
+
+
+def _safe_tensor_property_getter(key: FunctionRegistryKey) -> Callable[..., Any] | None:
+    """Return a callable getter for an allowlisted tensor property key."""
+
+    if (
+        key.namespace != "torch.Tensor"
+        or key.dispatch_kind != "method"
+        or key.qualname not in _SAFE_TENSOR_PROPERTY_NAMES
+    ):
+        return None
+
+    def getter(tensor: torch.Tensor) -> torch.Tensor:
+        """Return one safe tensor property value."""
+
+        return cast(torch.Tensor, getattr(tensor, key.qualname))
+
+    getter.__name__ = str(key.qualname)
+    getter.__qualname__ = f"Tensor.{key.qualname}"
+    getter.__module__ = "torch._tensor"
+    return getter
 
 
 def _getattr_allowlisted(namespace: str, qualname: str) -> Callable[..., Any] | None:
