@@ -226,6 +226,32 @@
     "completeness": {
       "$ref": "#/$defs/completeness",
       "description": "Mandatory release-completeness checks."
+    },
+    "untrusted_attempt": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "proposal_sha256",
+            "proposal"
+          ],
+          "properties": {
+            "proposal_sha256": {
+              "$ref": "#/$defs/hash",
+              "description": "Hash of the retained unaccepted author proposal."
+            },
+            "proposal": {
+              "type": "object",
+              "description": "Raw author proposal retained only as untrusted attempt evidence."
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Explicitly untrusted authored attempt facts excluded from authority fields."
     }
   },
   "allOf": [
@@ -1150,6 +1176,48 @@
             "not-applicable"
           ],
           "description": "Mandatory redistribution class."
+        },
+        "source_dispositions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "spdx",
+              "status",
+              "source_id",
+              "locator",
+              "evidence_ids"
+            ],
+            "properties": {
+              "spdx": {
+                "$ref": "#/$defs/nonempty_string",
+                "description": "Exact SPDX or NOASSERTION disposition."
+              },
+              "status": {
+                "enum": [
+                  "declared",
+                  "not-found",
+                  "custom",
+                  "not-applicable"
+                ],
+                "description": "Evidence-backed disposition status."
+              },
+              "source_id": {
+                "$ref": "#/$defs/nonempty_string",
+                "description": "Exactly one source-manifest member identity."
+              },
+              "locator": {
+                "$ref": "#/$defs/nonempty_string",
+                "description": "Exact license locator in the named source."
+              },
+              "evidence_ids": {
+                "$ref": "#/$defs/nonempty_string_array",
+                "description": "Literal license excerpts supporting this source."
+              }
+            }
+          },
+          "description": "Optional per-source dispositions for heterogeneous fetched manifests."
         }
       }
     },
@@ -1581,6 +1649,28 @@
         "code_sha256": {
           "$ref": "#/$defs/nullable_hash",
           "description": "Mandatory code sha256."
+        },
+        "code_manifest": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "properties": {
+              "path": {
+                "$ref": "#/$defs/nonempty_string",
+                "description": "Model-root-relative imported code path."
+              },
+              "sha256": {
+                "$ref": "#/$defs/hash",
+                "description": "Exact imported code member digest."
+              }
+            }
+          },
+          "description": "Closed recursive model-local Python import manifest."
         },
         "builder_symbol": {
           "oneOf": [

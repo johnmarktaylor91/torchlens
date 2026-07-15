@@ -4,27 +4,43 @@ from __future__ import annotations
 
 import json
 import shutil
+import sys
 from pathlib import Path
 from typing import Any, Sequence
 
 import pytest
 
 import menagerie.crawler.checkpoint as checkpoint_module
+import menagerie.crawler.driver as driver_module
 from menagerie.crawler.checkpoint import (
     CheckpointValidationError,
+    GeneratedMetadataDisposition,
     GitCommandResult,
     RestrictedPublicArtifact,
     WrongCheckpointBranch,
+    create_checkpoint_set,
     create_canonical_checkpoint,
 )
 from menagerie.crawler.cli import main
 from menagerie.crawler.constants import MODEL_SCHEMA_VERSION
-from menagerie.crawler.driver import AuthorArtifact, _promote_accepted_code, default_driver_paths
+from menagerie.crawler.driver import (
+    AuthorArtifact,
+    DriverIntegrationError,
+    _artifact_cache_identity,
+    _execution_identity,
+    _gated_path_license_bindings,
+    _normalize_artifact_modes,
+    _promote_and_publish_accepted_artifact,
+    _promote_accepted_code,
+    _publish_licensed_paths,
+    default_driver_paths,
+)
 from menagerie.crawler.driver import (
     AuthorLane,
     CrawlerDriver,
     DriverConfig,
     DriverDependencies,
+    DriverLock,
     EnvironmentBinding,
     WorkItem,
 )
@@ -40,6 +56,7 @@ from menagerie.crawler.licenses import (
 )
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
+from menagerie.crawler.routing import ModelRequirements, route_model
 from menagerie.crawler.tests.conftest import make_author_proposal, make_model
 from menagerie.crawler.tests.test_slice_f_driver import (
     FakeChecker,
@@ -100,6 +117,9 @@ class CanonicalTypedAuthor(AuthorLane):
         proposal = make_author_proposal(item.stable_id)
         proposal["work_id"] = f"work-{item.stable_id}"
         implementation = proposal["proposed_facts"]["implementation"]
+        proposal["proposed_facts"]["source_resolution"]["sources"][0].update(
+            {"url": "https://example.test/repository", "revision": "abc123"}
+        )
         implementation.update(
             {
                 "recipe_type": "typed-adapter",
@@ -163,6 +183,130 @@ class DisabledAuthor(AuthorLane):
 
         del item, work_root, config
         raise AssertionError("author/network lane must remain disabled on clean-clone resume")
+
+
+class DeferredCanonicalTypedAuthor(CanonicalTypedAuthor):
+    """Author reconstructable typed code but defer its first run to Linux."""
+
+    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+        """Return an evidenced CUDA deferral over accepted pre-deferral facts."""
+
+        artifact = super().author(item, work_root, config)
+        return AuthorArtifact(
+            artifact.proposal,
+            artifact.source_manifest,
+            artifact.model_dir,
+            terminal_status="deferred:needs-cuda",
+            terminal_detail="source proves an unavoidable CUDA operator",
+            defer_evidence={
+                "target_status": "deferred:needs-cuda",
+                "source_ids": ["source-1"],
+                "probe_attempt_ids": [],
+                "explanation": "source proves an unavoidable CUDA operator",
+            },
+        )
+
+
+def test_crash_mid_promotion_rolls_back_before_exposure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failure before license publication exposes no incomplete model transaction."""
+
+    snapshot = _snapshot(tmp_path)
+    paths = default_driver_paths(tmp_path, snapshot.root)
+    intake = snapshot.items[0]
+    item = WorkItem(
+        intake,
+        route_model(ModelRequirements(intake.stable_id, "pytorch")),
+    )
+    config = DriverConfig(review_checkpoint_at=None, progress_milestones=())
+    artifact = _normalize_artifact_modes(
+        CanonicalTypedAuthor().author(item, paths.work_root, config),
+        config,
+    )
+    original_publish = driver_module._publish_licensed_paths
+
+    def crash_before_inventory(*args: object, **kwargs: object) -> None:
+        """Simulate a process failure between byte promotion and inventory publication."""
+
+        del args, kwargs
+        raise RuntimeError("injected promotion crash")
+
+    monkeypatch.setattr(driver_module, "_publish_licensed_paths", crash_before_inventory)
+    with pytest.raises(RuntimeError, match="injected promotion crash"):
+        _promote_and_publish_accepted_artifact(item, artifact, paths)
+    prefix = intake.stable_id.removeprefix("m_")[:2]
+    crawler = tmp_path / "menagerie" / "crawler"
+    assert not (crawler / "adapters" / prefix / intake.stable_id).exists()
+    assert not (crawler / "reconstruction" / prefix / f"{intake.stable_id}.json").exists()
+    assert not (paths.runtime_root / "promotion-transactions" / intake.stable_id).exists()
+
+    monkeypatch.setattr(driver_module, "_publish_licensed_paths", original_publish)
+    promoted = _promote_and_publish_accepted_artifact(item, artifact, paths)
+    assert promoted.canonical_code_root is not None
+    assert (crawler / "reconstruction" / prefix / f"{intake.stable_id}.commit.json").is_file()
+
+
+def test_imported_helper_change_stales_cache_and_execution_identity(tmp_path: Path) -> None:
+    """Every imported helper path and byte digest participates in run identity."""
+
+    snapshot = _snapshot(tmp_path)
+    paths = default_driver_paths(tmp_path, snapshot.root)
+    intake = snapshot.items[0]
+    item = WorkItem(
+        intake,
+        route_model(ModelRequirements(intake.stable_id, "pytorch")),
+    )
+    config = DriverConfig(review_checkpoint_at=None, progress_milestones=())
+    artifact = CanonicalTypedAuthor().author(item, paths.work_root, config)
+    adapter = artifact.model_dir / "adapter.py"
+    adapter.write_text(
+        "import helper\n\n"
+        "def build_model() -> object:\n"
+        "    return object()\n\n"
+        "def make_dummy_call(seed: int, device: str) -> "
+        "tuple[tuple[object, ...], dict[str, object]]:\n"
+        "    return (), {}\n",
+        encoding="utf-8",
+    )
+    helper = artifact.model_dir / "helper.py"
+    helper.write_text("def helper_value() -> int:\n    return 1\n", encoding="utf-8")
+    artifact.proposal["proposed_facts"]["implementation"]["code_sha256"] = (
+        checkpoint_module.hash_bytes(adapter.read_bytes())
+    )
+    artifact.proposal["verified_hashes"]["code"] = artifact.proposal["proposed_facts"][
+        "implementation"
+    ]["code_sha256"]
+    _refresh_proposal_identities(
+        artifact.proposal,
+        checker_model=config.checker_model,
+        checker_version=config.checker_version,
+    )
+    first = _normalize_artifact_modes(artifact, config)
+    environment = EnvironmentBinding(
+        prefix=tmp_path / "env",
+        python_executable=Path(sys.executable),
+        family="core",
+        target="test",
+        env_generation="sha256:" + "a" * 64,
+        lock_sha256="sha256:" + "b" * 64,
+        resolved_export_sha256="sha256:" + "c" * 64,
+        packages_manifest_sha256="sha256:" + "d" * 64,
+        python_version="3.11",
+        compiler_identity="test",
+        sdk_identity="test",
+    )
+    first_execution = _execution_identity(first.proposal, environment)
+    first_cache = _artifact_cache_identity(item, first, config)
+
+    helper.write_text("def helper_value() -> int:\n    return 2\n", encoding="utf-8")
+    second = _normalize_artifact_modes(artifact, config)
+    assert (
+        second.proposal["proposed_facts"]["implementation"]["code_manifest"]
+        != (first.proposal["proposed_facts"]["implementation"]["code_manifest"])
+    )
+    assert _execution_identity(second.proposal, environment) != first_execution
+    assert _artifact_cache_identity(item, first, config) != first_cache
 
 
 def _write_jsonl(path: Path, rows: Sequence[dict[str, Any]]) -> None:
@@ -309,6 +453,27 @@ def test_checkpoint_cli_wrong_branch_is_nonzero_and_never_claims_verified(
     assert all(command[:3] != ("git", "add", "--") for command in git.commands)
 
 
+def test_checkpoint_cli_respects_busy_driver_lock(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Checkpoint refuses before deriving candidates while the driver owns its lock."""
+
+    lock = tmp_path / ".crawl-local" / "locks" / "driver.lock"
+    with DriverLock(lock, {"pid": 1, "run_id": "live-driver"}):
+        exit_code = main(
+            [
+                "--repo-root",
+                str(tmp_path),
+                "checkpoint",
+                "--intake",
+                str(tmp_path / "missing-intake"),
+            ]
+        )
+    captured = capsys.readouterr()
+    assert exit_code == 3
+    assert "another driver owns" in captured.err
+
+
 def test_checkpoint_allows_consistent_incomplete_prefix(tmp_path: Path) -> None:
     """A valid current terminal prefix checkpoints before the full crawl completes."""
 
@@ -359,6 +524,53 @@ def test_checkpoint_derives_and_refuses_restricted_public_artifact(tmp_path: Pat
         )
 
 
+def test_checkpoint_refuses_restricted_excerpt_embedded_in_failure_record(
+    tmp_path: Path,
+) -> None:
+    """Whole-file safe-metadata labels cannot hide restricted excerpt bytes."""
+
+    candidate = Path("menagerie/crawler/records/models/failed.jsonl")
+    content = (
+        canonical_json_bytes(
+            {
+                "status": {"code": "failed:forward"},
+                "evidence": {
+                    "excerpts": [
+                        {
+                            "text": "restricted third-party excerpt",
+                            "license_disposition": "restricted-private",
+                        }
+                    ]
+                },
+            }
+        )
+        + b"\n"
+    )
+    path = tmp_path / candidate
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    generated = GeneratedMetadataDisposition(
+        candidate,
+        checkpoint_module.hash_bytes(content),
+        len(content),
+        "safe-generated-metadata-v1",
+        "test",
+        "claimed safe metadata",
+    )
+    with pytest.raises(RestrictedPublicArtifact, match="embedded excerpts"):
+        create_checkpoint_set(
+            tmp_path,
+            [candidate],
+            ledger_paths=[],
+            derived_view_checks=[],
+            public_artifacts=[],
+            mirrors=_mirrors(tmp_path),
+            generated_metadata_inventory=[generated],
+            branch="menagerie/crawler-pipeline",
+            git_runner=RecordingGit(),
+        )
+
+
 def test_checkpoint_refuses_missing_license_report(tmp_path: Path) -> None:
     """A fresh sweep cannot substitute for its required persisted report."""
 
@@ -372,6 +584,84 @@ def test_checkpoint_refuses_missing_license_report(tmp_path: Path) -> None:
             branch="menagerie/crawler-pipeline",
             git_runner=RecordingGit(),
         )
+
+
+def test_promotion_uses_exact_per_source_license_and_origin(tmp_path: Path) -> None:
+    """Heterogeneous source paths cannot inherit the code repository's provenance."""
+
+    proposal = make_author_proposal("m_heterogeneous")
+    facts = proposal["proposed_facts"]
+    facts["source_resolution"]["sources"].append(
+        {
+            **facts["source_resolution"]["sources"][0],
+            "source_id": "paper-2",
+            "url": "https://example.test/paper",
+            "revision": "paper-v2",
+        }
+    )
+    facts["evidence"]["excerpts"].append(
+        {
+            **facts["evidence"]["excerpts"][0],
+            "evidence_id": "paper-license",
+            "source_id": "paper-2",
+            "locator": "LICENSE:1",
+            "text": "Creative Commons Zero",
+        }
+    )
+    facts["licenses"]["source_dispositions"] = [
+        {
+            "spdx": "CC0-1.0",
+            "status": "declared",
+            "source_id": "paper-2",
+            "locator": "LICENSE:1",
+            "evidence_ids": ["paper-license"],
+        }
+    ]
+    source_manifest = {
+        "sources": [
+            {
+                "source_id": "source-1",
+                "url": "https://example.com/model",
+                "revision": "abc123",
+            },
+            {
+                "source_id": "paper-2",
+                "url": "https://example.test/paper",
+                "revision": "paper-v2",
+            },
+        ]
+    }
+    bindings = _gated_path_license_bindings(proposal, source_manifest)
+    code_path = tmp_path / "menagerie" / "crawler" / "adapters" / "code.py"
+    paper_path = tmp_path / "menagerie" / "crawler" / "source_cas" / "paper.source"
+    code_path.parent.mkdir(parents=True)
+    paper_path.parent.mkdir(parents=True)
+    code_path.write_text("licensed code", encoding="utf-8")
+    paper_path.write_text("licensed paper archive", encoding="utf-8")
+    _publish_licensed_paths(
+        tmp_path,
+        tmp_path / "menagerie" / "crawler",
+        (
+            (code_path, *bindings["__code__"]),
+            (paper_path, *bindings["paper-2"]),
+        ),
+    )
+    rows = scan_jsonl(
+        tmp_path / "menagerie" / "crawler" / "mirrors" / "public-manifest.jsonl",
+        validate=False,
+    )
+    origins = {row["staged_path"]: row["manifest"]["origin"] for row in rows}
+    assert origins[code_path.relative_to(tmp_path).as_posix()]["url"] == (
+        "https://example.com/model"
+    )
+    assert origins[paper_path.relative_to(tmp_path).as_posix()]["url"] == (
+        "https://example.test/paper"
+    )
+    facts["licenses"]["source_dispositions"].append(
+        dict(facts["licenses"]["source_dispositions"][0])
+    )
+    with pytest.raises(DriverIntegrationError, match="exactly one gated disposition"):
+        _gated_path_license_bindings(proposal, source_manifest)
 
 
 def test_clean_checkpoint_stages_only_derived_allowlist_and_never_pushes(tmp_path: Path) -> None:
@@ -566,6 +856,71 @@ def test_driver_checkpoint_clean_clone_resume_without_author_or_network(tmp_path
     )
     assert resumed.run().status == "complete"
     assert forward.calls == {}
+
+
+def test_deferred_clean_clone_linux_handoff_never_reauthors(tmp_path: Path) -> None:
+    """A deferred envelope survives checkpoint and executes on Linux without authoring."""
+
+    snapshot = _snapshot(tmp_path)
+    paths = default_driver_paths(tmp_path, snapshot.root)
+    author = DeferredCanonicalTypedAuthor()
+    first = CrawlerDriver(
+        paths,
+        DriverConfig(review_checkpoint_at=None, progress_milestones=()),
+        DriverDependencies(
+            author,
+            FakeChecker(),
+            TypedFakeForward(),
+            FakeEnvironments(tmp_path / "mac-envs"),
+            FakeNotifier(),
+            lambda: "2026-07-14T12:00:00Z",
+        ),
+        registry=load_environment_registry(target="osx-arm64"),
+    )
+    assert first.run().status == "complete"
+    assert author.calls == 1
+    crawler = tmp_path / "menagerie" / "crawler"
+    rebuild_views(
+        snapshot.root / "items.jsonl",
+        crawler / "records",
+        crawler / "views",
+        tmp_path / ".crawl-local" / "checkpoint-state.sqlite",
+    )
+    checkpoint = create_canonical_checkpoint(
+        tmp_path,
+        snapshot.root,
+        mirrors=_mirrors(tmp_path),
+        branch="menagerie/crawler-pipeline",
+        git_runner=RecordingGit(),
+    )
+    clean = tmp_path / "clean-deferred"
+    for relative in checkpoint.paths:
+        destination = clean / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(tmp_path / relative, destination)
+    shutil.rmtree(tmp_path / ".crawl-local")
+    clean_intake = clean / "menagerie" / "crawler" / "records" / "intake" / snapshot.snapshot_id
+    forward = TypedFakeForward()
+    resumed = CrawlerDriver(
+        default_driver_paths(clean, clean_intake),
+        DriverConfig(
+            target="linux-x86_64-cuda",
+            only_status="deferred:*",
+            review_checkpoint_at=None,
+            progress_milestones=(),
+        ),
+        DriverDependencies(
+            DisabledAuthor(),
+            FakeChecker(),
+            forward,
+            FakeEnvironments(clean / "linux-envs"),
+            FakeNotifier(),
+            lambda: "2026-07-14T12:00:00Z",
+        ),
+        registry=load_environment_registry(target="linux-x86_64-cuda"),
+    )
+    assert resumed.run().status == "complete"
+    assert set(forward.calls) == {snapshot.items[0].stable_id}
 
 
 def test_environment_metadata_gets_safe_provenance_and_rejects_private_url(

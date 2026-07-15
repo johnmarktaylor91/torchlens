@@ -50,31 +50,30 @@ def _assert_receipt_observations(campaign_root: Path, stable_id_to_name: Mapping
     """Assert real worker receipts match every tiny model's intended behavior."""
 
     expected = {case.name: case for case in DRY_RUN_CASES}
+    receipt_paths = sorted(
+        (campaign_root / "runtime" / "work").glob("*/forward/cold-*/*/result/receipt.json")
+    )
     receipts = [
-        json.loads(path.read_text(encoding="utf-8"))
-        for path in sorted(
-            (campaign_root / "runtime" / "work").glob("*/forward/*/result/receipt.json")
-        )
+        (path.parts[-3], json.loads(path.read_text(encoding="utf-8"))) for path in receipt_paths
     ]
-    assert len(receipts) == 11
+    assert len(receipts) == 22
     observed_by_name: dict[str, list[dict[str, Any]]] = {}
-    for receipt in receipts:
+    for requested_mode, receipt in receipts:
         name = stable_id_to_name[str(receipt["stable_id"])]
         observed_by_name.setdefault(name, []).append(receipt)
         assert receipt["awards_runs"] is False
-        assert set(receipt["per_mode"]) == {"train", "eval"}
-        assert all(mode["forward_completed"] for mode in receipt["per_mode"].values())
-        assert all(
-            mode["input_kind"] == "standard-typed-dummy-call"
-            for mode in receipt["per_mode"].values()
-        )
-        assert receipt["train_eval_divergence"] == expected[name].divergence
+        assert requested_mode in receipt["per_mode"]
+        assert receipt["per_mode"][requested_mode]["forward_completed"]
+        assert receipt["per_mode"][requested_mode]["input_kind"] == ("standard-typed-dummy-call")
+        if set(receipt["per_mode"]) == {"train", "eval"}:
+            assert receipt["train_eval_divergence"] == expected[name].divergence
     item_counts = {
         name: sum(item_name == name for item_name, _variant in DRY_RUN_ITEMS)
         for name in {item_name for item_name, _variant in DRY_RUN_ITEMS}
     }
     assert {name: len(values) for name, values in observed_by_name.items()} == {
-        case.name: item_counts[case.name] + int(case.fidelity_required) for case in DRY_RUN_CASES
+        case.name: 2 * (item_counts[case.name] + int(case.fidelity_required))
+        for case in DRY_RUN_CASES
     }
 
 

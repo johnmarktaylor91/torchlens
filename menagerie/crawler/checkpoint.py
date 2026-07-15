@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -196,7 +197,16 @@ _SECRET_BYTE_MARKERS = (
 )
 _CANONICAL_MANIFEST_NAMES = ("public-manifest.jsonl", "private-manifest.jsonl")
 _GENERATED_METADATA_MANIFEST = "generated-metadata-manifest.jsonl"
-_SAFE_METADATA_DISPOSITIONS = frozenset({"safe-generated-metadata-v1", "safe-package-metadata-v1"})
+_SAFE_METADATA_DISPOSITIONS = frozenset(
+    {
+        "safe-composite-metadata-v1",
+        "safe-generated-metadata-v1",
+        "safe-package-metadata-v1",
+    }
+)
+_SAFE_EXCERPT_DISPOSITIONS = frozenset(
+    {"public-compatible", "public-domain", "short-excerpt-committed"}
+)
 _PRIVATE_URL_MARKERS = (
     b"git@",
     b"ssh://",
@@ -1137,7 +1147,7 @@ def _publish_generated_metadata_inventory(
         if not _is_generated_metadata(path):
             continue
         content = (repo_root / path).read_bytes()
-        _validate_generated_metadata_bytes(path, content)
+        has_excerpts = _validate_generated_metadata_bytes(path, content)
         pure = PurePosixPath(path.as_posix())
         package_metadata = PurePosixPath("menagerie/crawler/envs") in pure.parents
         dispositions.append(
@@ -1146,7 +1156,11 @@ def _publish_generated_metadata_inventory(
                 content_sha256=hash_bytes(content),
                 byte_count=len(content),
                 disposition=(
-                    "safe-package-metadata-v1" if package_metadata else "safe-generated-metadata-v1"
+                    "safe-package-metadata-v1"
+                    if package_metadata
+                    else "safe-composite-metadata-v1"
+                    if has_excerpts
+                    else "safe-generated-metadata-v1"
                 ),
                 generator="menagerie.crawler.checkpoint.v1",
                 provenance=(
@@ -1173,13 +1187,18 @@ def _publish_generated_metadata_inventory(
     return tuple(dispositions)
 
 
-def _validate_generated_metadata_bytes(path: Path, content: bytes) -> None:
-    """Reject credentials and private fetch URLs in safe metadata candidates.
+def _validate_generated_metadata_bytes(path: Path, content: bytes) -> bool:
+    """Reject secrets and unsafe embedded excerpts in composite metadata.
 
     Parameters
     ----------
     path, content:
         Candidate repository path and exact bytes.
+
+    Returns
+    -------
+    bool
+        Whether the candidate contains safely classified embedded excerpts.
     """
 
     lowered = content.lower()
@@ -1189,6 +1208,71 @@ def _validate_generated_metadata_bytes(path: Path, content: bytes) -> None:
         rb"https?://[^/\s:@]+:[^/\s@]+@", lowered
     ):
         raise SecretBearingPath(f"generated metadata contains a private/credential URL: {path}")
+    excerpts = _embedded_excerpts(path, content)
+    unsafe = sorted(
+        {
+            str(excerpt.get("license_disposition") or "unknown")
+            for excerpt in excerpts
+            if excerpt.get("license_disposition") not in _SAFE_EXCERPT_DISPOSITIONS
+        }
+    )
+    if unsafe:
+        raise RestrictedPublicArtifact(
+            "composite checkpoint metadata contains unknown/restricted embedded excerpts: "
+            f"{path.as_posix()} dispositions={unsafe}"
+        )
+    return bool(excerpts)
+
+
+def _embedded_excerpts(path: Path, content: bytes) -> tuple[Mapping[str, Any], ...]:
+    """Extract every recursively embedded evidence excerpt from JSON metadata.
+
+    Parameters
+    ----------
+    path, content:
+        Candidate metadata path and exact bytes.
+
+    Returns
+    -------
+    tuple[Mapping[str, Any], ...]
+        Recursively discovered excerpt objects across JSON and JSONL rows.
+
+    Raises
+    ------
+    RestrictedPublicArtifact
+        If a generated JSON candidate cannot be parsed conservatively.
+    """
+
+    if path.suffix not in {".json", ".jsonl"}:
+        return ()
+    try:
+        values = (
+            [json.loads(line) for line in content.decode("utf-8").splitlines() if line.strip()]
+            if path.suffix == ".jsonl"
+            else [json.loads(content.decode("utf-8"))]
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RestrictedPublicArtifact(
+            f"composite checkpoint metadata is not valid JSON: {path.as_posix()}"
+        ) from exc
+    found: list[Mapping[str, Any]] = []
+
+    def visit(value: Any) -> None:
+        """Collect excerpt-shaped mappings from one nested JSON value."""
+
+        if isinstance(value, Mapping):
+            excerpts = value.get("excerpts")
+            if isinstance(excerpts, list):
+                found.extend(item for item in excerpts if isinstance(item, Mapping))
+            for nested in value.values():
+                visit(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                visit(nested)
+
+    for value in values:
+        visit(value)
+    return tuple(found)
 
 
 def _atomic_write_bytes(path: Path, data: bytes) -> None:
@@ -1234,6 +1318,24 @@ def _derive_candidate_paths(repo_root: Path, canonical_root: Path) -> tuple[Path
         for path in absolute_root.rglob("*"):
             if path.is_file() and path.suffix in _ALLOWLIST_SUFFIXES:
                 paths.add(path.relative_to(repo_root))
+    reconstruction_root = canonical_root / "reconstruction"
+    for reconstruction in reconstruction_root.rglob("*.json"):
+        if reconstruction.name.endswith(".commit.json"):
+            continue
+        try:
+            payload = json.loads(reconstruction.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise CheckpointValidationError(
+                f"invalid canonical reconstruction: {reconstruction}"
+            ) from exc
+        if isinstance(payload, Mapping) and payload.get("schema_version") == (
+            "menagerie.crawler.reconstruction.v2"
+        ):
+            marker = reconstruction.with_name(f"{str(payload.get('stable_id'))}.commit.json")
+            if not marker.is_file():
+                raise CheckpointValidationError(
+                    f"checkpoint refuses uncommitted promotion: {reconstruction}"
+                )
     if not paths:
         raise CheckpointValidationError(
             f"no canonical checkpoint facts found under {canonical_root}"

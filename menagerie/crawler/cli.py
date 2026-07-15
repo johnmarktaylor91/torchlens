@@ -33,6 +33,7 @@ from menagerie.crawler.driver import (
 from menagerie.crawler.envs import load_environment_registry
 from menagerie.crawler.identity import canonical_json_bytes, stable_hash
 from menagerie.crawler.intake import create_intake_snapshot, load_intake_snapshot
+from menagerie.crawler.recordio import SingleWriterError
 from menagerie.crawler.reducer import materialize_current
 from menagerie.crawler.routing import ModelRequirements, phase_routes, route_model
 from menagerie.crawler.status import funnel_counts, partition_report
@@ -395,11 +396,22 @@ def _checkpoint_command(args: argparse.Namespace) -> int:
     """Run and report one complete fail-closed canonical checkpoint transaction."""
 
     del args.verify_ledgers, args.verify_views
-    result = create_canonical_checkpoint(
-        args.repo_root,
-        args.intake,
-        records_root=args.records_root,
-    )
+    owner = {
+        "pid": os.getpid(),
+        "run_id": "checkpoint",
+        "target": "canonical-checkpoint",
+        "created_at": utc_now(),
+        "command": list(sys.argv),
+    }
+    try:
+        with DriverLock(args.repo_root / ".crawl-local" / "locks" / "driver.lock", owner):
+            result = create_canonical_checkpoint(
+                args.repo_root,
+                args.intake,
+                records_root=args.records_root,
+            )
+    except SingleWriterError as exc:
+        raise DriverLockError(str(exc)) from exc
     print(
         json.dumps(
             {

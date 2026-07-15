@@ -255,7 +255,8 @@ def validate_author_proposal(
         source_manifest,
         cas_root,
     )
-    _validate_structural_slop(facts, code_path)
+    code_paths = resolve_model_code_closure(code_path, allowed_dir) if code_path is not None else ()
+    _validate_structural_slop(facts, code_paths)
     _validate_anti_slop(facts)
     return ProposalValidationReport(
         stable_id=str(proposal["stable_id"]),
@@ -711,13 +712,171 @@ def _validate_code(
     expected_hash = implementation.get("code_sha256")
     if expected_hash != hash_bytes(code):
         raise ProposalValidationError("implementation.code_sha256 does not match staged bytes")
-    try:
-        tree = ast.parse(code.decode("utf-8"), filename=str(resolved))
-    except (UnicodeDecodeError, SyntaxError) as exc:
-        raise ProposalValidationError(f"staged code is not valid UTF-8 Python: {exc}") from exc
-    _validate_typed_functions(tree)
-    _validate_calls_and_writes(tree, allowed_dir)
+    for member in resolve_model_code_closure(resolved, allowed_dir):
+        try:
+            tree = ast.parse(member.read_text(encoding="utf-8"), filename=str(member))
+        except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+            raise ProposalValidationError(
+                f"staged model-code member is not valid UTF-8 Python: {exc}"
+            ) from exc
+        _validate_typed_functions(tree)
+        _validate_calls_and_writes(tree, allowed_dir)
     return resolved
+
+
+def resolve_model_code_closure(code_path: Path, allowed_dir: Path) -> tuple[Path, ...]:
+    """Resolve the closed recursive model-local Python import manifest.
+
+    Parameters
+    ----------
+    code_path:
+        Accepted adapter or port entry point.
+    allowed_dir:
+        Model-local root that every closure member must remain below.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Entry point and recursively imported local Python modules, sorted by
+        repository-relative path.
+
+    Raises
+    ------
+    ProposalValidationError
+        If a member escapes the model root or cannot be parsed.
+    """
+
+    root = allowed_dir.resolve()
+    entry = code_path.resolve()
+    if not entry.is_relative_to(root) or not entry.is_file():
+        raise ProposalValidationError("model-code entry point escapes the model sandbox")
+    pending = [entry]
+    members: set[Path] = set()
+    while pending:
+        member = pending.pop()
+        if member in members:
+            continue
+        try:
+            tree = ast.parse(member.read_text(encoding="utf-8"), filename=str(member))
+        except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+            raise ProposalValidationError(f"cannot resolve model-code imports: {exc}") from exc
+        members.add(member)
+        for imported in _local_import_paths(tree, member, root):
+            if imported not in members:
+                pending.append(imported)
+    return tuple(sorted(members, key=lambda path: path.relative_to(root).as_posix()))
+
+
+def model_code_manifest(code_path: Path, allowed_dir: Path) -> tuple[dict[str, str], ...]:
+    """Return the path-and-digest manifest for a closed model-code import graph.
+
+    Parameters
+    ----------
+    code_path, allowed_dir:
+        Entry point and model-local root accepted by
+        :func:`resolve_model_code_closure`.
+
+    Returns
+    -------
+    tuple[dict[str, str], ...]
+        Canonically ordered relative paths and exact byte digests.
+    """
+
+    root = allowed_dir.resolve()
+    return tuple(
+        {
+            "path": path.relative_to(root).as_posix(),
+            "sha256": hash_bytes(path.read_bytes()),
+        }
+        for path in resolve_model_code_closure(code_path, root)
+    )
+
+
+def _local_import_paths(tree: ast.AST, member: Path, root: Path) -> tuple[Path, ...]:
+    """Resolve statically named imports that refer to model-local Python files.
+
+    Parameters
+    ----------
+    tree:
+        Parsed closure member.
+    member:
+        Absolute path of that member.
+    root:
+        Closed model-local import root.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Existing local modules and package initializers referenced by the AST.
+    """
+
+    resolved: set[Path] = set()
+    for node in ast.walk(tree):
+        candidates: list[tuple[str, int]] = []
+        if isinstance(node, ast.Import):
+            candidates.extend((alias.name, 0) for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            candidates.append((module, node.level))
+            candidates.extend(
+                (
+                    f"{module}.{alias.name}" if module else alias.name,
+                    node.level,
+                )
+                for alias in node.names
+                if alias.name != "*"
+            )
+        for module, level in candidates:
+            resolved.update(_resolve_local_module(module, level, member, root))
+    return tuple(sorted(resolved, key=lambda path: path.relative_to(root).as_posix()))
+
+
+def _resolve_local_module(module: str, level: int, member: Path, root: Path) -> tuple[Path, ...]:
+    """Resolve one import name to local module/package files when present.
+
+    Parameters
+    ----------
+    module, level:
+        Static import name and relative-import level from the AST.
+    member:
+        Importing closure member.
+    root:
+        Closed model-local root.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Package initializer chain plus the imported module, or an empty tuple
+        for an external dependency.
+    """
+
+    if level:
+        base = member.parent
+        for _ in range(level - 1):
+            base = base.parent
+        if not base.is_relative_to(root):
+            raise ProposalValidationError("relative model-code import escapes the model sandbox")
+    else:
+        base = root
+    parts = tuple(part for part in module.split(".") if part)
+    candidate = base.joinpath(*parts) if parts else base
+    target: Optional[Path] = None
+    if candidate.with_suffix(".py").is_file():
+        target = candidate.with_suffix(".py").resolve()
+    elif (candidate / "__init__.py").is_file():
+        target = (candidate / "__init__.py").resolve()
+    if target is None:
+        return ()
+    if not target.is_relative_to(root):
+        raise ProposalValidationError("model-code import escapes the model sandbox")
+    initializers: list[Path] = []
+    current = target.parent
+    while current != root and current.is_relative_to(root):
+        initializer = current / "__init__.py"
+        if initializer.is_file():
+            initializers.append(initializer.resolve())
+        current = current.parent
+    return tuple(dict.fromkeys((*reversed(initializers), target)))
 
 
 def _validate_typed_functions(tree: ast.AST) -> None:
@@ -1683,15 +1842,15 @@ def _code_bytes_are_relevant_implementation(
     return architecture_tokens is not None and definition_tokens is not None
 
 
-def _validate_structural_slop(facts: Mapping[str, Any], code_path: Optional[Path]) -> None:
+def _validate_structural_slop(facts: Mapping[str, Any], code_paths: Sequence[Path]) -> None:
     """Trip on a plain Sequential/MLP staged as a named exotic family.
 
     Parameters
     ----------
     facts:
         Proposed fact tree.
-    code_path:
-        Validated staged adapter path, if the selected rung uses one.
+    code_paths:
+        Closed validated staged model-code manifest.
 
     Raises
     ------
@@ -1699,15 +1858,20 @@ def _validate_structural_slop(facts: Mapping[str, Any], code_path: Optional[Path
         If staged structure is a generic stand-in for an exotic family claim.
     """
 
-    if code_path is None:
+    if not code_paths:
         return
-    try:
-        tree = ast.parse(code_path.read_text(encoding="utf-8"), filename=str(code_path))
-    except (OSError, UnicodeDecodeError, SyntaxError) as exc:
-        raise ProposalValidationError(f"cannot inspect staged structure: {exc}") from exc
-    defined_classes = {node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)}
+    trees: list[ast.AST] = []
+    for code_path in code_paths:
+        try:
+            trees.append(ast.parse(code_path.read_text(encoding="utf-8"), filename=str(code_path)))
+        except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+            raise ProposalValidationError(f"cannot inspect staged structure: {exc}") from exc
+    defined_classes = {
+        node.name for tree in trees for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
+    }
     module_calls = [
         _call_name(node.func).rsplit(".", 1)[-1]
+        for tree in trees
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
         and (

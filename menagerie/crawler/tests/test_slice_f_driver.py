@@ -46,6 +46,7 @@ from menagerie.crawler.driver import (
     _runner_identity,
     _receipt_envelope_error,
     _supervise_environment_worker,
+    _worker_request,
 )
 from menagerie.crawler.envs import (
     EnvironmentIntent,
@@ -162,6 +163,16 @@ class OneModelAuthorFailure(FakeAuthor):
         if item.stable_id == self.failed_id:
             raise RuntimeError("synthetic author command failure")
         return super().author(item, work_root, config)
+
+
+class DisabledAuthor(AuthorLane):
+    """Fail if a reconstruction-capable path re-enters authoring."""
+
+    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+        """Raise because canonical handoff facts must be consumed first."""
+
+        del item, work_root, config
+        raise AssertionError("author lane must remain disabled")
 
 
 class TerminalOutcomeAuthor(FakeAuthor):
@@ -394,7 +405,9 @@ class FakeForward(ForwardLane):
                         "recipe": artifact.proposal["recipe_revision"],
                         "environment": environment.env_generation,
                         "execution": execution_identity,
-                        "runner": _runner_identity(),
+                        "runner": _runner_identity(
+                            artifact.proposal["proposed_facts"]["external_metadata"]["modality"]
+                        ),
                         "author_prompt": artifact.proposal["author"]["prompt_sha256"],
                     }
                 )
@@ -853,8 +866,10 @@ def _test_environment(prefix: Path) -> EnvironmentBinding:
     )
 
 
-def test_runner_execution_manifest_covers_imports_schemas_and_assets() -> None:
-    """The maintained staleness closure fails closed on any local dependency omission."""
+def test_runner_execution_manifest_is_compositional_by_selected_modality(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unselected assets and operational schemas cannot stale unrelated models."""
 
     root = Path(driver_module.__file__).parent
     discovered: set[str] = {"__init__.py"}
@@ -876,14 +891,22 @@ def test_runner_execution_manifest_covers_imports_schemas_and_assets() -> None:
                 pending.append(candidate)
     maintained = set(_RUNNER_EXECUTION_CLOSURE)
     assert discovered <= maintained
-    assert {path.relative_to(root).as_posix() for path in (root / "schemas").glob("*.json")} <= (
-        maintained
-    )
-    assert {
-        path.relative_to(root).as_posix()
-        for path in (root / "assets" / "standard").iterdir()
-        if path.is_file()
-    } <= maintained
+    assert "schemas/operational-event-v1.schema.json" not in maintained
+    assert not any(path.startswith("assets/standard/") for path in maintained)
+
+    original_read_bytes = Path.read_bytes
+
+    def changed_audio(path: Path) -> bytes:
+        """Change only the unselected audio fixture bytes."""
+
+        value = original_read_bytes(path)
+        return value + b"changed" if path.name == "audio.csv" else value
+
+    vision_before = _runner_identity("vision")
+    audio_before = _runner_identity("audio")
+    monkeypatch.setattr(Path, "read_bytes", changed_audio)
+    assert _runner_identity("vision") == vision_before
+    assert _runner_identity("audio") != audio_before
 
 
 def test_parent_read_telemetry_sets_cache_attempt_for_closed_roots() -> None:
@@ -893,6 +916,31 @@ def test_parent_read_telemetry_sets_cache_attempt_for_closed_roots() -> None:
         {"checkpoint_paths": ["/home/test/.cache/huggingface/model.bin"]}
     )
     assert not _parent_cache_read_attempted({"checkpoint_paths": ["/usr/lib/python3.11/site.py"]})
+
+
+def test_mode_requests_reuse_one_accepted_input_seed_and_manifest(tmp_path: Path) -> None:
+    """Cold confirmations vary process identity, never accepted dummy-input bytes."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    driver = _driver(tmp_path, snapshot)
+    item = driver._ordered_work(snapshot, {})[0]
+    artifact = FakeAuthor().author(item, driver.paths.work_root, driver.config)
+    requests = [
+        _worker_request(
+            artifact,
+            tmp_path / f"scratch-{cold}-{mode}",
+            tmp_path / f"receipt-{cold}-{mode}.json",
+            HASH,
+            cold,
+            mode,
+        )
+        for cold in range(2)
+        for mode in ("train", "eval")
+    ]
+    assert {request["mode"] for request in requests} == {"train", "eval"}
+    assert {request["seed"] for request in requests} == {0}
+    assert {request["input_seed"] for request in requests} == {0}
+    assert len({stable_hash(request["input_manifest"]) for request in requests}) == 1
 
 
 def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
@@ -1779,7 +1827,7 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(tmp_path: 
         "deferred:needs-x86",
     }
 
-    linux_author = FakeAuthor()
+    linux_author = DisabledAuthor()
     linux_forward = FakeForward()
     dependencies = DriverDependencies(
         linux_author,
@@ -1804,7 +1852,6 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(tmp_path: 
     )
     result = linux.run()
     assert result.status == "complete"
-    assert set(linux_author.calls) == {item.stable_id for item in snapshot.items}
     assert set(linux_forward.calls) == {item.stable_id for item in snapshot.items}
     revisions = scan_jsonl(paths.ledgers.models)
     assert len(revisions) == 4
@@ -1867,6 +1914,15 @@ def test_inaccurate_metadata_gate_repairs_are_bounded(tmp_path: Path) -> None:
     models = scan_jsonl(paths.ledgers.models)
     assert {record["status"]["code"] for record in models} == {"failed:accuracy-gate"}
     assert all(record["status"]["human_review"]["required"] for record in models)
+    assert all(record["source_resolution"]["rung"] == "R5_SKIP" for record in models)
+    assert all(record["implementation"]["recipe_type"] == "none" for record in models)
+    assert all(
+        record["input_contract"]["semantic_description"] == "Input contract unresolved."
+        for record in models
+    )
+    assert all(record["external_metadata"] is None for record in models)
+    assert all(record["status"]["attempted_rungs"] == ["R1_LIBRARY"] for record in models)
+    assert all(record["untrusted_attempt"]["proposal"]["proposed_facts"] for record in models)
     gates = scan_jsonl(paths.ledgers.gates)
     assert len(gates) == 3
     for stable_id in (item.stable_id for item in snapshot.items):

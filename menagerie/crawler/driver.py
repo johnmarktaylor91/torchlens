@@ -92,6 +92,7 @@ from menagerie.crawler.metadata import (
 )
 from menagerie.crawler.models import JsonObject, LedgerPaths
 from menagerie.crawler.mirrors import ArtifactManifest, ArtifactOrigin, MirrorStore
+from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.recordio import JsonlLedger, SingleWriterError, scan_jsonl
 from menagerie.crawler.reducer import CanonicalReducer, default_ledger_paths
 from menagerie.crawler.routing import (
@@ -115,7 +116,7 @@ from menagerie.crawler.worker_supervisor import (
 
 LOGGER = logging.getLogger(__name__)
 
-_RUNNER_EXECUTION_CLOSURE = (
+_RUNNER_COMMON_EXECUTION_CLOSURE = (
     "__init__.py",
     "constants.py",
     "frameworks.py",
@@ -131,13 +132,22 @@ _RUNNER_EXECUTION_CLOSURE = (
     "schemas/author-proposal-v2.schema.json",
     "schemas/gate-v2.schema.json",
     "schemas/model-v2.schema.json",
-    "schemas/operational-event-v1.schema.json",
-    "assets/standard/LICENSE.md",
-    "assets/standard/audio.csv",
-    "assets/standard/image.ppm",
-    "assets/standard/tabular.csv",
-    "assets/standard/text.txt",
 )
+_MODALITY_EXECUTION_ASSETS = {
+    "audio": "assets/standard/audio.csv",
+    "computer-vision": "assets/standard/image.ppm",
+    "image": "assets/standard/image.ppm",
+    "language": "assets/standard/text.txt",
+    "nlp": "assets/standard/text.txt",
+    "recsys": "assets/standard/tabular.csv",
+    "speech": "assets/standard/audio.csv",
+    "tabular": "assets/standard/tabular.csv",
+    "text": "assets/standard/text.txt",
+    "video": "assets/standard/image.ppm",
+    "vision": "assets/standard/image.ppm",
+}
+# Backward-compatible inspection alias for the common (modality-independent) closure.
+_RUNNER_EXECUTION_CLOSURE = _RUNNER_COMMON_EXECUTION_CLOSURE
 _FORBIDDEN_CACHE_ROOT_NAMES = frozenset(
     {
         ".cache",
@@ -846,38 +856,44 @@ class SupervisedForwardLane:
         stable_id = str(proposal["stable_id"])
         execution_identity = _execution_identity(proposal, environment)
         attempts: list[JsonObject] = []
+        modes = tuple(
+            str(value) for value in proposal["proposed_facts"]["modes"]["meaningful_modes"]
+        )
         for cold_index in range(cold_runs):
-            root = work_root / stable_id / "forward" / f"cold-{cold_index + 1}"
-            request_path = root / "request.json"
-            receipt_path = root / "result" / "receipt.json"
-            request = _worker_request(
-                artifact,
-                root,
-                receipt_path,
-                execution_identity,
-                cold_index,
-            )
-            _write_json_atomic(request_path, request)
-            result = _supervise_environment_worker(
-                request_path,
-                receipt_path,
-                root / "supervisor",
-                environment.python_executable,
-                timeout_seconds=self.timeout_seconds,
-                rss_limit_bytes=self.rss_limit_bytes,
-                cwd=self.cwd,
-            )
-            attempts.extend(
-                _attempts_from_supervised(
+            for mode in modes:
+                root = work_root / stable_id / "forward" / f"cold-{cold_index + 1}" / mode
+                request_path = root / "request.json"
+                receipt_path = root / "result" / "receipt.json"
+                request = _worker_request(
                     artifact,
-                    result,
-                    environment,
+                    root,
+                    receipt_path,
                     execution_identity,
                     cold_index,
-                    self.timeout_seconds,
-                    self.rss_limit_bytes,
+                    mode,
                 )
-            )
+                _write_json_atomic(request_path, request)
+                result = _supervise_environment_worker(
+                    request_path,
+                    receipt_path,
+                    root / "supervisor",
+                    environment.python_executable,
+                    timeout_seconds=self.timeout_seconds,
+                    rss_limit_bytes=self.rss_limit_bytes,
+                    cwd=self.cwd,
+                )
+                attempts.extend(
+                    _attempts_from_supervised(
+                        artifact,
+                        result,
+                        environment,
+                        execution_identity,
+                        cold_index,
+                        self.timeout_seconds,
+                        self.rss_limit_bytes,
+                        requested_mode=mode,
+                    )
+                )
         return tuple(attempts)
 
 
@@ -1366,6 +1382,10 @@ class CrawlerDriver:
                 if cache_current:
                     terminal = _artifact_terminal_status(cached_artifact)
                     if terminal is not None:
+                        if terminal[0].startswith("deferred:"):
+                            cached_artifact = _promote_and_publish_accepted_artifact(
+                                item, cached_artifact, self.paths
+                            )
                         current = reducer.current_records.get(item.stable_id)
                         if current is None or current.get("status", {}).get("code") != terminal[0]:
                             self._terminalize(
@@ -1489,6 +1509,23 @@ class CrawlerDriver:
             terminal = _artifact_terminal_status(artifact)
             if terminal is not None:
                 status_code, reason_code = terminal
+                if status_code.startswith("deferred:"):
+                    artifact = _promote_and_publish_accepted_artifact(item, artifact, self.paths)
+                    cache_value.update(
+                        {
+                            "source_manifest": artifact.source_manifest,
+                            "model_dir": str(artifact.model_dir),
+                            "canonical_code_root": (
+                                str(artifact.canonical_code_root)
+                                if artifact.canonical_code_root is not None
+                                else None
+                            ),
+                        }
+                    )
+                    cache_value["artifact_identity"] = _artifact_cache_identity(
+                        item, artifact, self.config
+                    )
+                    _write_json_atomic(cache, cache_value)
                 self._terminalize(
                     item,
                     artifact,
@@ -2830,15 +2867,37 @@ def _installed_package_manifest_bytes(prefix: Path, *, strict: bool) -> bytes:
     return b"test-packages"
 
 
-def _runner_identity() -> str:
-    """Hash the maintained execution dependency closure and standard assets."""
+def _runner_identity(modality: object = None) -> str:
+    """Hash common runtime code plus only the selected standard-input asset.
+
+    Parameters
+    ----------
+    modality:
+        Accepted modality string or sequence used to select the only bundled
+        asset that can participate in this execution.
+
+    Returns
+    -------
+    str
+        Compositional execution-closure identity.
+    """
 
     root = Path(__file__).parent
+    modalities = (
+        (modality,)
+        if isinstance(modality, str)
+        else tuple(value for value in modality if isinstance(value, str))
+        if isinstance(modality, (list, tuple))
+        else ()
+    )
+    selected_assets = {
+        _MODALITY_EXECUTION_ASSETS[value.strip().lower()]
+        for value in modalities
+        if value.strip().lower() in _MODALITY_EXECUTION_ASSETS
+    }
+    closure = (*_RUNNER_COMMON_EXECUTION_CLOSURE, *sorted(selected_assets))
     return stable_hash(
-        {
-            relative: hash_bytes((root / relative).read_bytes())
-            for relative in _RUNNER_EXECUTION_CLOSURE
-        }
+        {relative: hash_bytes((root / relative).read_bytes()) for relative in closure}
     )
 
 
@@ -2876,6 +2935,7 @@ def _validate_artifact_identities(artifact: AuthorArtifact, config: DriverConfig
             raise DriverIntegrationError(
                 "absolute/invalid patch path requires a fresh repository-relative proposal"
             )
+        _verify_model_code_manifest(implementation, artifact.model_dir, proposal)
     try:
         identities = recompute_accepted_identities(
             facts,
@@ -2915,8 +2975,54 @@ def _validate_artifact_identities(artifact: AuthorArtifact, config: DriverConfig
         raise DriverIntegrationError("proposal_sha256 does not bind the complete proposal")
 
 
+def _verify_model_code_manifest(
+    implementation: Mapping[str, Any], model_dir: Path, proposal: Mapping[str, Any]
+) -> None:
+    """Verify the accepted recursive code manifest against current model bytes.
+
+    Parameters
+    ----------
+    implementation:
+        Accepted implementation facts.
+    model_dir:
+        Current staged or canonical model root.
+    proposal:
+        Complete proposal carrying the gate-facing verified hashes.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If any member, path, digest, or closure edge is stale.
+    """
+
+    code_value = implementation.get("code_path")
+    if not isinstance(code_value, str):
+        if implementation.get("code_manifest") is not None:
+            raise DriverIntegrationError("declarative implementation carries model-code members")
+        return
+    manifest = implementation.get("code_manifest")
+    if not isinstance(manifest, list) or not manifest:
+        raise DriverIntegrationError("typed implementation lacks a closed model-code manifest")
+    code_path = Path(code_value)
+    if code_path.is_absolute():
+        raise DriverIntegrationError("model-code manifest refuses an absolute entry point")
+    try:
+        observed = [dict(row) for row in model_code_manifest(model_dir / code_path, model_dir)]
+    except ProposalValidationError as exc:
+        raise DriverIntegrationError(str(exc)) from exc
+    if observed != manifest:
+        raise DriverIntegrationError("accepted model-code import closure changed")
+    verified = proposal.get("verified_hashes")
+    if (
+        not isinstance(verified, Mapping)
+        or verified.get("code") != implementation.get("code_sha256")
+        or verified.get("code_manifest") != stable_hash(observed)
+    ):
+        raise DriverIntegrationError("verified hashes do not bind the model-code entry and closure")
+
+
 def _normalize_artifact_modes(artifact: AuthorArtifact, config: DriverConfig) -> AuthorArtifact:
-    """Canonicalize declared modes before proposal, recipe, and gate identities exist.
+    """Canonicalize modes and the closed model-code manifest before gating.
 
     Parameters
     ----------
@@ -2953,13 +3059,15 @@ def _normalize_artifact_modes(artifact: AuthorArtifact, config: DriverConfig) ->
         raise DriverIntegrationError(str(exc)) from exc
     if canonical != external_canonical:
         raise DriverIntegrationError("proposal meaningful-mode declarations disagree")
-    if (
-        modes.get("meaningful_modes") == canonical
-        and external_modes.get("meaningful_modes") == canonical
-    ):
-        return artifact
+    changed = bool(
+        modes.get("meaningful_modes") != canonical
+        or external_modes.get("meaningful_modes") != canonical
+    )
     modes["meaningful_modes"] = canonical
     external_modes["meaningful_modes"] = canonical
+    code_changed = _bind_model_code_manifest(proposal, artifact.model_dir)
+    if not changed and not code_changed:
+        return artifact
     try:
         identities = recompute_accepted_identities(
             facts,
@@ -2996,19 +3104,91 @@ def _normalize_artifact_modes(artifact: AuthorArtifact, config: DriverConfig) ->
     return replace(artifact, proposal=proposal)
 
 
+def _bind_model_code_manifest(proposal: JsonObject, model_dir: Path) -> bool:
+    """Bind every recursively imported model-local module into proposal identities.
+
+    Parameters
+    ----------
+    proposal:
+        Mutable author proposal before any checker gate exists.
+    model_dir:
+        Model-local root containing the accepted adapter or port.
+
+    Returns
+    -------
+    bool
+        Whether the proposal changed.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If the declared entry point or its recursive closure is invalid.
+    """
+
+    facts = proposal.get("proposed_facts")
+    implementation = facts.get("implementation") if isinstance(facts, Mapping) else None
+    if not isinstance(implementation, dict):
+        raise DriverIntegrationError("proposal implementation is incomplete")
+    code_value = implementation.get("code_path")
+    if not isinstance(code_value, str):
+        verified_hashes = proposal.get("verified_hashes")
+        verified_has_manifest = isinstance(verified_hashes, dict) and (
+            "code_manifest" in verified_hashes
+        )
+        if "code_manifest" not in implementation and not verified_has_manifest:
+            return False
+        implementation.pop("code_manifest")
+        if isinstance(verified_hashes, dict):
+            verified_hashes.pop("code_manifest", None)
+        return True
+    code_path = Path(code_value)
+    if code_path.is_absolute():
+        raise DriverIntegrationError("model-code manifest refuses an absolute entry point")
+    try:
+        manifest = [dict(row) for row in model_code_manifest(model_dir / code_path, model_dir)]
+    except ProposalValidationError as exc:
+        raise DriverIntegrationError(str(exc)) from exc
+    if not manifest:
+        raise DriverIntegrationError("typed model code has an empty import closure")
+    main_digest = next(
+        (row["sha256"] for row in manifest if row["path"] == code_path.as_posix()), None
+    )
+    if main_digest != implementation.get("code_sha256"):
+        raise DriverIntegrationError("model-code entry digest disagrees with the proposal")
+    manifest_digest = stable_hash(manifest)
+    verified_hashes = proposal.get("verified_hashes")
+    if not isinstance(verified_hashes, dict):
+        raise DriverIntegrationError("proposal verified_hashes is incomplete")
+    changed = bool(
+        implementation.get("code_manifest") != manifest
+        or verified_hashes.get("code") != main_digest
+        or verified_hashes.get("code_manifest") != manifest_digest
+    )
+    implementation["code_manifest"] = manifest
+    verified_hashes["code"] = main_digest
+    verified_hashes["code_manifest"] = manifest_digest
+    return changed
+
+
 def _execution_identity(proposal: Mapping[str, Any], environment: EnvironmentBinding) -> str:
     """Compute the current execution identity from every runtime dependency."""
 
     facts = proposal["proposed_facts"]
     implementation = facts["implementation"]
+    external = facts.get("external_metadata")
+    modality = external.get("modality") if isinstance(external, Mapping) else None
     return compute_execution_identity(
         stable_id=str(proposal["stable_id"]),
         recipe_revision=str(proposal["recipe_revision"]),
         env_generation=environment.env_generation,
-        runner_version=_runner_identity(),
+        runner_version=_runner_identity(modality),
         target=environment.target,
         machine_class=platform.machine(),
-        seed_policy={"cold_seed": "zero-based-index", "version": 1},
+        seed_policy={
+            "input_seed": facts.get("input_contract", {}).get("seed", 0),
+            "cold_seed_reuse": "single-accepted-input-manifest",
+            "version": 2,
+        },
         framework_adapter={
             "framework": implementation["run_framework"],
             "recipe_type": implementation["recipe_type"],
@@ -3120,7 +3300,27 @@ def _artifact_cache_identity(item: WorkItem, artifact: AuthorArtifact, config: D
         code_path = artifact.model_dir / code_path
         if not code_path.is_file():
             return "invalid-code-path"
-        code_digest = hash_bytes(code_path.read_bytes())
+        manifest = implementation.get("code_manifest")
+        if not isinstance(manifest, list) or not manifest:
+            return "invalid-code-manifest"
+        observed_manifest: list[JsonObject] = []
+        for member in manifest:
+            if not isinstance(member, Mapping) or not isinstance(member.get("path"), str):
+                return "invalid-code-manifest"
+            relative = Path(str(member["path"]))
+            if relative.is_absolute():
+                return "invalid-code-manifest"
+            member_path = (artifact.model_dir / relative).resolve()
+            if (
+                not member_path.is_relative_to(artifact.model_dir.resolve())
+                or not member_path.is_file()
+            ):
+                return "invalid-code-manifest"
+            digest = hash_bytes(member_path.read_bytes())
+            if digest != member.get("sha256"):
+                return "invalid-code-manifest"
+            observed_manifest.append({"path": relative.as_posix(), "sha256": digest})
+        code_digest = stable_hash(observed_manifest)
     if isinstance(implementation, Mapping):
         patches = implementation.get("patches", [])
         if not isinstance(patches, list):
@@ -3138,7 +3338,7 @@ def _artifact_cache_identity(item: WorkItem, artifact: AuthorArtifact, config: D
             "proposal": artifact.proposal,
             "source_manifest": artifact.source_manifest,
             "source_bytes": source_bytes,
-            "code_sha256": code_digest,
+            "code_manifest_sha256": code_digest,
             "author_prompt_sha256": prompt_digest,
             "checker": {
                 "prompt_sha256": _checker_prompt_hash(),
@@ -3215,6 +3415,7 @@ def _rehydrate_canonical_artifact(item: WorkItem, paths: DriverPaths) -> Optiona
         Hash-verified canonical artifact, or ``None`` when none was published.
     """
 
+    _recover_incomplete_promotion(paths.runtime_root / "promotion-transactions" / item.stable_id)
     try:
         canonical_root = _canonical_crawler_root(paths)
     except DriverIntegrationError:
@@ -3224,14 +3425,28 @@ def _rehydrate_canonical_artifact(item: WorkItem, paths: DriverPaths) -> Optiona
     if not manifest_path.is_file():
         return None
     value = _read_json(manifest_path)
+    schema_version = value.get("schema_version")
     if (
-        value.get("schema_version") != "menagerie.crawler.reconstruction.v1"
+        schema_version
+        not in {
+            "menagerie.crawler.reconstruction.v1",
+            "menagerie.crawler.reconstruction.v2",
+        }
         or value.get("stable_id") != item.stable_id
         or value.get("intake_item_sha256") != stable_hash(item.intake.to_dict())
     ):
         raise DriverIntegrationError(
             f"canonical reconstruction identity is stale for {item.stable_id}"
         )
+    if schema_version == "menagerie.crawler.reconstruction.v2":
+        marker_path = manifest_path.with_name(f"{item.stable_id}.commit.json")
+        if not marker_path.is_file():
+            raise DriverIntegrationError("canonical reconstruction transaction is uncommitted")
+        marker = _read_json(marker_path)
+        if marker.get("transaction_id") != value.get("transaction_id") or marker.get(
+            "proposal_sha256"
+        ) != value.get("proposal_sha256"):
+            raise DriverIntegrationError("canonical reconstruction commit marker is stale")
     proposal_value = value.get("proposal")
     source_value = value.get("source_manifest")
     if not isinstance(proposal_value, Mapping) or not isinstance(source_value, Mapping):
@@ -3294,7 +3509,7 @@ def _rehydrate_canonical_artifact(item: WorkItem, paths: DriverPaths) -> Optiona
 def _promote_and_publish_accepted_artifact(
     item: WorkItem, artifact: AuthorArtifact, paths: DriverPaths
 ) -> AuthorArtifact:
-    """Publish code, source CAS, reconstruction, and license inventory durably.
+    """Publish one crash-atomic code/source/reconstruction/license transaction.
 
     Parameters
     ----------
@@ -3307,6 +3522,58 @@ def _promote_and_publish_accepted_artifact(
         Canonically rebound artifact safe for worker execution.
     """
 
+    transaction_id = stable_hash(
+        {
+            "stable_id": item.stable_id,
+            "proposal": artifact.proposal.get("proposal_sha256"),
+            "source_manifest": artifact.source_manifest,
+            "intake": stable_hash(item.intake.to_dict()),
+        }
+    )
+    transaction_root = paths.runtime_root / "promotion-transactions" / item.stable_id
+    _recover_incomplete_promotion(transaction_root)
+    destinations, marker_path = _promotion_transaction_destinations(
+        item, artifact, paths, transaction_id
+    )
+    _begin_promotion_transaction(transaction_root, transaction_id, destinations)
+    try:
+        promoted = _promote_and_publish_transaction_body(item, artifact, paths, transaction_id)
+        _validate_complete_promotion(item, promoted, paths)
+        _write_json_atomic(
+            marker_path,
+            {
+                "schema_version": "menagerie.crawler.promotion-commit.v1",
+                "stable_id": item.stable_id,
+                "transaction_id": transaction_id,
+                "proposal_sha256": artifact.proposal.get("proposal_sha256"),
+            },
+        )
+    except BaseException:
+        _rollback_promotion_transaction(transaction_root)
+        raise
+    shutil.rmtree(transaction_root, ignore_errors=True)
+    return promoted
+
+
+def _promote_and_publish_transaction_body(
+    item: WorkItem,
+    artifact: AuthorArtifact,
+    paths: DriverPaths,
+    transaction_id: str,
+) -> AuthorArtifact:
+    """Materialize every member of one prepared promotion transaction.
+
+    Parameters
+    ----------
+    item, artifact, paths, transaction_id:
+        Accepted artifact, canonical roots, and immutable transaction identity.
+
+    Returns
+    -------
+    AuthorArtifact
+        Canonically rebound artifact pending its atomic commit marker.
+    """
+
     canonical_root = _canonical_crawler_root(paths)
     repo_root = _canonical_repo_root(canonical_root)
     proposal = artifact.proposal
@@ -3317,16 +3584,13 @@ def _promote_and_publish_accepted_artifact(
         raise DriverIntegrationError(
             "legacy absolute accepted code path requires a fresh proposal and gate"
         )
-    evidence, origin = _gated_code_license_evidence(proposal)
-    if classify_redistribution(evidence) is not RedistributionClass.PUBLIC_OK:
-        raise DriverIntegrationError(
-            "accepted-code promotion refuses restricted/unknown gated license evidence"
-        )
+    license_bindings = _gated_path_license_bindings(proposal, artifact.source_manifest)
+    code_license = license_bindings["__code__"]
     promoted = _promote_accepted_code(artifact, paths)
     prefix = item.stable_id.removeprefix("m_")[:2] or "__"
 
     canonical_sources: list[JsonObject] = []
-    source_paths: list[Path] = []
+    licensed_paths: list[tuple[Path, tuple[LicenseEvidence, ...], ArtifactOrigin]] = []
     raw_sources = artifact.source_manifest.get("sources", [])
     if not isinstance(raw_sources, list):
         raise DriverIntegrationError("accepted source manifest must contain a source list")
@@ -3345,7 +3609,13 @@ def _promote_and_publish_accepted_artifact(
         _atomic_promote_file(local_cas, destination)
         source["cas_path"] = destination.relative_to(repo_root).as_posix()
         canonical_sources.append(source)
-        source_paths.append(destination)
+        source_id = str(source.get("source_id"))
+        source_license = license_bindings.get(source_id)
+        if source_license is None:
+            raise DriverIntegrationError(
+                f"accepted source CAS has no exact gated license disposition: {source_id}"
+            )
+        licensed_paths.append((destination, *source_license))
     canonical_source_manifest: JsonObject = {
         **{
             key: deepcopy(value)
@@ -3366,8 +3636,9 @@ def _promote_and_publish_accepted_artifact(
         else canonical_root.relative_to(repo_root)
     )
     reconstruction = {
-        "schema_version": "menagerie.crawler.reconstruction.v1",
+        "schema_version": "menagerie.crawler.reconstruction.v2",
         "stable_id": item.stable_id,
+        "transaction_id": transaction_id,
         "proposal": proposal,
         "proposal_sha256": proposal.get("proposal_sha256"),
         "canonical_code_root": code_root_relative.as_posix(),
@@ -3382,26 +3653,226 @@ def _promote_and_publish_accepted_artifact(
     reconstruction_path = canonical_root / "reconstruction" / prefix / f"{item.stable_id}.json"
     _write_json_atomic(reconstruction_path, reconstruction)
 
-    licensed_paths = [*source_paths]
     if promoted.canonical_code_root is not None:
         licensed_paths.extend(
-            path for path in promoted.canonical_code_root.rglob("*") if path.is_file()
+            (path, *code_license)
+            for path in promoted.canonical_code_root.rglob("*")
+            if path.is_file()
         )
         patch_root = canonical_root / "patches" / prefix / item.stable_id
         if patch_root.is_dir():
-            licensed_paths.extend(path for path in patch_root.rglob("*") if path.is_file())
+            licensed_paths.extend(
+                (path, *code_license) for path in patch_root.rglob("*") if path.is_file()
+            )
     _publish_licensed_paths(
         repo_root,
         canonical_root,
-        tuple(sorted(set(licensed_paths), key=str)),
-        evidence,
-        origin,
+        tuple(sorted(licensed_paths, key=lambda value: str(value[0]))),
     )
 
     rebound_source = deepcopy(canonical_source_manifest)
     for source in rebound_source["sources"]:
         source["cas_path"] = str((repo_root / source["cas_path"]).resolve())
     return replace(promoted, source_manifest=rebound_source)
+
+
+def _promotion_transaction_destinations(
+    item: WorkItem,
+    artifact: AuthorArtifact,
+    paths: DriverPaths,
+    transaction_id: str,
+) -> tuple[tuple[Path, ...], Path]:
+    """Enumerate every path that one promotion transaction may expose.
+
+    Parameters
+    ----------
+    item, artifact, paths, transaction_id:
+        Accepted artifact and immutable publication identity.
+
+    Returns
+    -------
+    tuple[tuple[pathlib.Path, ...], pathlib.Path]
+        Rollback inventory and the final atomic commit-marker path.
+    """
+
+    del transaction_id
+    canonical_root = _canonical_crawler_root(paths)
+    prefix = item.stable_id.removeprefix("m_")[:2] or "__"
+    facts = artifact.proposal.get("proposed_facts", {})
+    implementation = facts.get("implementation", {}) if isinstance(facts, Mapping) else {}
+    rung = str(facts.get("source_resolution", {}).get("rung"))
+    root_name = "adapters" if rung in {"R1_LIBRARY", "R2_VENDOR"} else "ports"
+    destinations: list[Path] = [
+        canonical_root / "records" / "intake" / paths.intake_root.name,
+        canonical_root / "source_manifests" / prefix / f"{item.stable_id}.json",
+        canonical_root / "reconstruction" / prefix / f"{item.stable_id}.json",
+        canonical_root / "mirrors" / "public-manifest.jsonl",
+        canonical_root / "mirrors" / "private-manifest.jsonl",
+        canonical_root / "license_reports" / "current.json",
+    ]
+    code_value = implementation.get("code_path") if isinstance(implementation, Mapping) else None
+    if isinstance(code_value, str):
+        destinations.append(canonical_root / root_name / prefix / item.stable_id)
+        destinations.append(canonical_root / "patches" / prefix / item.stable_id)
+    raw_sources = artifact.source_manifest.get("sources", [])
+    if isinstance(raw_sources, list):
+        for source in raw_sources:
+            if isinstance(source, Mapping) and isinstance(source.get("content_sha256"), str):
+                digest = str(source["content_sha256"]).removeprefix("sha256:")
+                destinations.append(canonical_root / "source_cas" / f"{digest}.source")
+    marker = canonical_root / "reconstruction" / prefix / f"{item.stable_id}.commit.json"
+    destinations.append(marker)
+    return tuple(dict.fromkeys(destinations)), marker
+
+
+def _begin_promotion_transaction(
+    transaction_root: Path, transaction_id: str, destinations: Sequence[Path]
+) -> None:
+    """Persist rollback facts before exposing any transaction member.
+
+    Parameters
+    ----------
+    transaction_root, transaction_id, destinations:
+        Private transaction root, immutable identity, and complete output set.
+    """
+
+    transaction_root.mkdir(parents=True, exist_ok=True)
+    backup_root = transaction_root / "backups"
+    entries: list[JsonObject] = []
+    for index, destination in enumerate(destinations):
+        existed = destination.exists()
+        backup: Optional[Path] = None
+        if destination.is_file():
+            backup = backup_root / f"{index}.bin"
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(destination, backup)
+        entries.append(
+            {
+                "path": str(destination),
+                "existed": existed,
+                "was_directory": destination.is_dir(),
+                "backup": str(backup) if backup is not None else None,
+            }
+        )
+    _write_json_atomic(
+        transaction_root / "journal.json",
+        {
+            "schema_version": "menagerie.crawler.promotion-transaction.v1",
+            "transaction_id": transaction_id,
+            "entries": entries,
+        },
+    )
+
+
+def _recover_incomplete_promotion(transaction_root: Path) -> None:
+    """Roll back a transaction left incomplete by a previous process crash.
+
+    Parameters
+    ----------
+    transaction_root:
+        Private stable-ID transaction root.
+    """
+
+    if not transaction_root.exists():
+        return
+    if (transaction_root / "journal.json").is_file():
+        _rollback_promotion_transaction(transaction_root)
+    else:
+        shutil.rmtree(transaction_root, ignore_errors=True)
+
+
+def _rollback_promotion_transaction(transaction_root: Path) -> None:
+    """Restore pre-transaction bytes and remove newly exposed paths.
+
+    Parameters
+    ----------
+    transaction_root:
+        Private transaction root containing its fsynced journal and backups.
+    """
+
+    journal_path = transaction_root / "journal.json"
+    if not journal_path.is_file():
+        shutil.rmtree(transaction_root, ignore_errors=True)
+        return
+    journal = _read_json(journal_path)
+    entries = journal.get("entries", [])
+    if not isinstance(entries, list):
+        raise DriverIntegrationError("promotion transaction journal is malformed")
+    for entry in reversed(entries):
+        if not isinstance(entry, Mapping) or not isinstance(entry.get("path"), str):
+            raise DriverIntegrationError("promotion transaction journal entry is malformed")
+        destination = Path(str(entry["path"]))
+        if not bool(entry.get("existed")):
+            if destination.is_dir():
+                shutil.rmtree(destination)
+            else:
+                destination.unlink(missing_ok=True)
+            continue
+        backup_value = entry.get("backup")
+        if isinstance(backup_value, str):
+            backup = Path(backup_value)
+            if not backup.is_file():
+                raise DriverIntegrationError("promotion rollback backup is missing")
+            _restore_file_atomic(backup, destination)
+    shutil.rmtree(transaction_root, ignore_errors=True)
+
+
+def _restore_file_atomic(source: Path, destination: Path) -> None:
+    """Atomically restore one backed-up file over a partial transaction write.
+
+    Parameters
+    ----------
+    source, destination:
+        Private backup and canonical destination.
+    """
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.rollback.tmp")
+    shutil.copyfile(source, temporary)
+    with temporary.open("rb") as handle:
+        os.fsync(handle.fileno())
+    os.replace(temporary, destination)
+
+
+def _validate_complete_promotion(
+    item: WorkItem, artifact: AuthorArtifact, paths: DriverPaths
+) -> None:
+    """Validate complete reconstruction and per-path license coverage pre-commit.
+
+    Parameters
+    ----------
+    item, artifact, paths:
+        Promoted artifact and canonical roots awaiting the commit marker.
+    """
+
+    canonical_root = _canonical_crawler_root(paths)
+    repo_root = _canonical_repo_root(canonical_root)
+    prefix = item.stable_id.removeprefix("m_")[:2] or "__"
+    reconstruction = canonical_root / "reconstruction" / prefix / f"{item.stable_id}.json"
+    if not reconstruction.is_file():
+        raise DriverIntegrationError("promotion transaction lacks reconstruction facts")
+    rows = scan_jsonl(canonical_root / "mirrors" / "public-manifest.jsonl", validate=False)
+    by_path = [str(row.get("staged_path")) for row in rows]
+    promoted_paths: list[Path] = []
+    if artifact.canonical_code_root is not None:
+        promoted_paths.extend(
+            path for path in artifact.canonical_code_root.rglob("*") if path.is_file()
+        )
+        patch_root = canonical_root / "patches" / prefix / item.stable_id
+        if patch_root.is_dir():
+            promoted_paths.extend(path for path in patch_root.rglob("*") if path.is_file())
+    for source in artifact.source_manifest.get("sources", []):
+        if isinstance(source, Mapping) and isinstance(source.get("cas_path"), str):
+            promoted_paths.append(Path(str(source["cas_path"])))
+    for path in promoted_paths:
+        relative = path.resolve().relative_to(repo_root).as_posix()
+        if by_path.count(relative) != 1:
+            raise DriverIntegrationError(
+                f"promotion transaction lacks exactly one license row: {relative}"
+            )
+    report_rows = scan_jsonl(canonical_root / "license_reports" / "current.json", validate=False)
+    if len(report_rows) != 1 or report_rows[0].get("passed") is not True:
+        raise DriverIntegrationError("promotion transaction lacks a passing license report")
 
 
 def _gated_code_license_evidence(
@@ -3420,6 +3891,33 @@ def _gated_code_license_evidence(
         Literal evidence and exact source origin for promotion.
     """
 
+    return _gated_path_license_bindings(proposal, {"sources": []})["__code__"]
+
+
+def _gated_path_license_bindings(
+    proposal: Mapping[str, Any], source_manifest: Mapping[str, Any]
+) -> dict[str, tuple[tuple[LicenseEvidence, ...], ArtifactOrigin]]:
+    """Map code and each fetched source to one exact gated disposition.
+
+    Parameters
+    ----------
+    proposal:
+        Independently accepted proposal containing license and source facts.
+    source_manifest:
+        Exact fetched-source manifest whose CAS members may be promoted.
+
+    Returns
+    -------
+    dict[str, tuple[tuple[LicenseEvidence, ...], ArtifactOrigin]]
+        ``__code__`` plus one binding per fetched ``source_id``.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If a promoted path is ambiguous, unmatched, unsafe, or disagrees with
+        the exact source origin.
+    """
+
     facts = proposal.get("proposed_facts", {})
     licenses = facts.get("licenses", {}) if isinstance(facts, Mapping) else {}
     if not isinstance(licenses, Mapping) or licenses.get("redistribution_class") != (
@@ -3436,50 +3934,96 @@ def _gated_code_license_evidence(
     by_id = {
         excerpt.get("evidence_id"): excerpt for excerpt in excerpts if isinstance(excerpt, Mapping)
     }
-    findings: list[LicenseEvidence] = []
-    for evidence_id in code.get("evidence_ids", []):
-        excerpt = by_id.get(evidence_id)
-        if not isinstance(excerpt, Mapping):
-            raise DriverIntegrationError("gated code license references missing literal evidence")
-        findings.append(
-            LicenseEvidence(
-                evidence_id=str(evidence_id),
-                source_id=str(code.get("source_id")),
-                locator=str(code.get("locator")),
-                excerpt=str(excerpt.get("text")),
-                status=LicenseEvidenceStatus(str(code.get("status"))),
-                spdx=(str(code.get("spdx")) if code.get("spdx") != "NOASSERTION" else None),
-            )
-        )
-    if not findings:
-        raise DriverIntegrationError("accepted-code promotion requires literal license evidence")
     sources = facts.get("source_resolution", {}).get("sources", [])
-    source = next(
-        (
-            value
-            for value in sources
-            if isinstance(value, Mapping) and value.get("source_id") == code.get("source_id")
-        ),
-        None,
-    )
-    if not isinstance(source, Mapping):
-        raise DriverIntegrationError("gated code license source has no exact origin")
-    return tuple(findings), ArtifactOrigin(str(source["url"]), str(source["revision"]))
+    source_facts = {
+        str(value.get("source_id")): value
+        for value in sources
+        if isinstance(value, Mapping) and isinstance(value.get("source_id"), str)
+    }
+    dispositions = [code]
+    data = licenses.get("data")
+    if isinstance(data, Mapping) and data.get("source_id") is not None:
+        dispositions.append(data)
+    extra = licenses.get("source_dispositions", [])
+    if not isinstance(extra, list) or any(not isinstance(value, Mapping) for value in extra):
+        raise DriverIntegrationError("gated per-source license dispositions are malformed")
+    dispositions.extend(value for value in extra if isinstance(value, Mapping))
+
+    def binding(finding: Mapping[str, Any]) -> tuple[tuple[LicenseEvidence, ...], ArtifactOrigin]:
+        """Build one public-compatible literal-evidence and origin binding."""
+
+        source_id = finding.get("source_id")
+        source = source_facts.get(str(source_id))
+        if not isinstance(source, Mapping):
+            raise DriverIntegrationError("gated license source has no exact origin")
+        findings: list[LicenseEvidence] = []
+        for evidence_id in finding.get("evidence_ids", []):
+            excerpt = by_id.get(evidence_id)
+            if not isinstance(excerpt, Mapping):
+                raise DriverIntegrationError(
+                    "gated license disposition references missing literal evidence"
+                )
+            findings.append(
+                LicenseEvidence(
+                    evidence_id=str(evidence_id),
+                    source_id=str(source_id),
+                    locator=str(finding.get("locator") or excerpt.get("locator")),
+                    excerpt=str(excerpt.get("text")),
+                    status=LicenseEvidenceStatus(str(finding.get("status"))),
+                    spdx=(
+                        str(finding.get("spdx"))
+                        if finding.get("spdx") not in {None, "NOASSERTION"}
+                        else None
+                    ),
+                )
+            )
+        if not findings:
+            raise DriverIntegrationError("promotion requires literal per-path license evidence")
+        evidence = tuple(findings)
+        if classify_redistribution(evidence) is not RedistributionClass.PUBLIC_OK:
+            raise DriverIntegrationError(
+                "promotion refuses restricted/unknown per-path gated license evidence"
+            )
+        return evidence, ArtifactOrigin(str(source["url"]), str(source["revision"]))
+
+    result = {"__code__": binding(code)}
+    raw_sources = source_manifest.get("sources", [])
+    if not isinstance(raw_sources, list):
+        raise DriverIntegrationError("accepted source manifest must contain a source list")
+    for raw_source in raw_sources:
+        if not isinstance(raw_source, Mapping) or not isinstance(raw_source.get("source_id"), str):
+            raise DriverIntegrationError("accepted source manifest row has no source identity")
+        source_id = str(raw_source["source_id"])
+        matches = [value for value in dispositions if value.get("source_id") == source_id]
+        if len(matches) != 1:
+            raise DriverIntegrationError(
+                f"promoted source path requires exactly one gated disposition: {source_id}"
+            )
+        source = source_facts.get(source_id)
+        if not isinstance(source, Mapping):
+            raise DriverIntegrationError(f"source manifest origin is ungrounded: {source_id}")
+        for field in ("url", "revision"):
+            observed = raw_source.get(field)
+            if observed is not None and observed != source.get(field):
+                raise DriverIntegrationError(
+                    f"source manifest {field} disagrees with gated origin: {source_id}"
+                )
+        result[source_id] = binding(matches[0])
+    return result
 
 
 def _publish_licensed_paths(
     repo_root: Path,
     canonical_root: Path,
-    paths: Sequence[Path],
-    evidence: Sequence[LicenseEvidence],
-    origin: ArtifactOrigin,
+    paths: Sequence[tuple[Path, tuple[LicenseEvidence, ...], ArtifactOrigin]],
 ) -> None:
     """Publish per-path license rows and regenerate the canonical sweep report.
 
     Parameters
     ----------
-    repo_root, canonical_root, paths, evidence, origin:
-        Repository roots, promoted files, and current gated license facts.
+    repo_root, canonical_root, paths:
+        Repository roots and promoted files individually bound to current gated
+        license facts and exact origins.
     """
 
     runtime = repo_root / ".crawl-local" / "mirrors"
@@ -3489,8 +4033,12 @@ def _publish_licensed_paths(
     private_path = manifest_root / "private-manifest.jsonl"
     existing_rows = scan_jsonl(public_path, validate=False) if public_path.is_file() else []
     rows_by_path = {str(row.get("staged_path")): dict(row) for row in existing_rows}
-    for path in paths:
+    seen_paths: set[Path] = set()
+    for path, evidence, origin in paths:
         relative = path.relative_to(repo_root)
+        if relative in seen_paths:
+            raise DriverIntegrationError("promotion path has ambiguous license bindings")
+        seen_paths.add(relative)
         artifact = store_licensed_artifact(
             mirrors,
             path.read_bytes(),
@@ -3713,8 +4261,9 @@ def _worker_request(
     receipt_path: Path,
     execution_identity: str,
     cold_index: int,
+    mode: str,
 ) -> JsonObject:
-    """Build one closed worker request from accepted proposal facts."""
+    """Build one mode-specific request over a fixed accepted input manifest."""
 
     proposal = artifact.proposal
     facts = proposal["proposed_facts"]
@@ -3740,7 +4289,21 @@ def _worker_request(
             "kind": "typed-adapter",
             "path": str(code_path),
             "adapter_sha256": implementation["code_sha256"],
+            "code_manifest": [
+                {
+                    "path": str((artifact.model_dir / str(member["path"])).resolve()),
+                    "sha256": member["sha256"],
+                }
+                for member in implementation["code_manifest"]
+            ],
+            "code_manifest_sha256": stable_hash(implementation["code_manifest"]),
         }
+    input_seed = int(facts["input_contract"].get("seed", 0))
+    input_manifest = {
+        "input_seed": input_seed,
+        "modality": deepcopy(facts["external_metadata"]["modality"]),
+        "input_contract_sha256": stable_hash(facts["input_contract"]),
+    }
     return {
         "stable_id": proposal["stable_id"],
         "recipe": recipe,
@@ -3749,10 +4312,13 @@ def _worker_request(
         "input_contract": deepcopy(dict(facts["input_contract"])),
         "scratch_root": str(scratch_root),
         "receipt_path": str(receipt_path),
-        "seed": cold_index,
+        "seed": input_seed,
+        "input_seed": input_seed,
+        "input_manifest": input_manifest,
         "device": implementation["device_policy"],
         "framework": implementation["run_framework"],
-        "meaningful_modes": facts["modes"]["meaningful_modes"],
+        "mode": mode,
+        "meaningful_modes": list(facts["modes"]["meaningful_modes"]),
         "source_identity": proposal["source_identity"],
         "recipe_revision": proposal["recipe_revision"],
         "recipe_identity_payload": {
@@ -3799,6 +4365,8 @@ def _attempts_from_supervised(
     cold_index: int,
     timeout_seconds: float,
     rss_limit_bytes: int,
+    *,
+    requested_mode: Optional[str] = None,
 ) -> tuple[JsonObject, ...]:
     """Convert one parent observation and honest receipt into per-mode attempts."""
 
@@ -3822,16 +4390,22 @@ def _attempts_from_supervised(
     )
     per_mode = receipt.get("per_mode", {})
     receipt_modes = receipt.get("meaningful_modes", [])
-    modes = tuple(
-        dict.fromkeys(
-            [
-                *(str(value) for value in facts["modes"]["meaningful_modes"]),
-                *(str(value) for value in receipt_modes if isinstance(receipt_modes, list)),
-            ]
+    modes = (
+        (requested_mode,)
+        if requested_mode is not None
+        else tuple(
+            dict.fromkeys(
+                [
+                    *(str(value) for value in facts["modes"]["meaningful_modes"]),
+                    *(str(value) for value in receipt_modes if isinstance(receipt_modes, list)),
+                ]
+            )
         )
     )
     attempts: list[JsonObject] = []
-    for mode_index, mode in enumerate(modes):
+    declared_modes = tuple(str(value) for value in facts["modes"]["meaningful_modes"])
+    for mode in modes:
+        mode_index = declared_modes.index(mode) if mode in declared_modes else len(declared_modes)
         mode_receipt = per_mode.get(mode, {}) if isinstance(per_mode, Mapping) else {}
         succeeded = bool(
             envelope_error is None
@@ -3893,7 +4467,7 @@ def _attempts_from_supervised(
                 "attempt_id": attempt_id,
                 "work_id": proposal["work_id"],
                 "stable_id": proposal["stable_id"],
-                "attempt_no": cold_index * len(modes) + mode_index + 1,
+                "attempt_no": cold_index * len(declared_modes) + mode_index + 1,
                 "parent_attempt_id": None,
                 "actor": "worker",
                 "stage": attempt_stage,
@@ -3914,7 +4488,7 @@ def _attempts_from_supervised(
                     "recipe": proposal["recipe_revision"],
                     "environment": environment.env_generation,
                     "execution": execution_identity,
-                    "runner": _runner_identity(),
+                    "runner": _runner_identity(facts["external_metadata"]["modality"]),
                     "author_prompt": proposal["author"]["prompt_sha256"],
                     "checker_prompt": _checker_prompt_hash(),
                 },
@@ -3943,7 +4517,7 @@ def _attempts_from_supervised(
                     "argv": list(observation.argv),
                     "cwd": observation.cwd,
                     "safe_env": {"MENAGERIE_EXECUTION_OFFLINE": "1"},
-                    "seed": cold_index,
+                    "seed": int(facts["input_contract"].get("seed", 0)),
                     "device": facts["implementation"]["device_policy"],
                     "mode": attempt_mode,
                     "network_policy": "offline",
@@ -4602,6 +5176,8 @@ def _matching_attempts(
 
     stable_id = proposal["stable_id"]
     work_id = proposal["work_id"]
+    external = proposal.get("proposed_facts", {}).get("external_metadata")
+    modality = external.get("modality") if isinstance(external, Mapping) else None
     return tuple(
         record
         for record in scan_jsonl(path)
@@ -4613,7 +5189,7 @@ def _matching_attempts(
         and record.get("identities", {}).get("recipe") == proposal.get("recipe_revision")
         and record.get("identities", {}).get("environment") == environment.env_generation
         and record.get("identities", {}).get("execution") == execution_identity
-        and record.get("identities", {}).get("runner") == _runner_identity()
+        and record.get("identities", {}).get("runner") == _runner_identity(modality)
         and record.get("identities", {}).get("author_prompt")
         == proposal.get("author", {}).get("prompt_sha256")
         and record.get("identities", {}).get("checker_prompt") == _checker_prompt_hash()
@@ -5044,7 +5620,7 @@ def _placeholder_facts(item: WorkItem, created_at: str) -> JsonObject:
             "verdict": None,
             "fidelity_identity": None,
             "gate_id": None,
-            "current": True,
+            "current": False,
             "permanent_scar": False,
             "deviations": [],
         },
@@ -5099,11 +5675,12 @@ def _assemble_terminal_model(
     """Assemble one schema-complete driver terminal revision from durable evidence."""
 
     proposal = artifact.proposal if artifact is not None else {}
-    facts = (
+    raw_facts = (
         deepcopy(dict(proposal["proposed_facts"]))
         if artifact is not None
         else _placeholder_facts(item, created_at)
     )
+    facts = deepcopy(raw_facts)
     metadata_gate = _find_gate(
         gates,
         item.stable_id,
@@ -5126,16 +5703,7 @@ def _assemble_terminal_model(
         metadata_state = "accepted"
     else:
         metadata_state = "failed"
-        for field in (
-            "taxonomy",
-            "external_metadata",
-            "website",
-            "people_and_origin",
-            "dates",
-            "citation",
-            "licenses",
-        ):
-            facts[field] = None
+        facts = _placeholder_facts(item, created_at)
 
     fidelity_gate = _find_gate(
         gates,
@@ -5143,7 +5711,7 @@ def _assemble_terminal_model(
         "fidelity",
         proposal if artifact is not None else None,
     )
-    if fidelity_gate is not None:
+    if fidelity_gate is not None and metadata_accepted:
         fidelity_item = next(
             value for value in fidelity_gate["items"] if value["stable_id"] == item.stable_id
         )
@@ -5177,7 +5745,12 @@ def _assemble_terminal_model(
     attempt_ids = [str(attempt["attempt_id"]) for attempt in attempts]
     last_environment = attempts[-1].get("environment") if attempts else None
     environment_facts = last_environment if isinstance(last_environment, Mapping) else {}
-    source_rung = str(facts["source_resolution"]["rung"])
+    raw_resolution = raw_facts.get("source_resolution", {})
+    source_rung = str(
+        raw_resolution.get("rung", facts["source_resolution"]["rung"])
+        if isinstance(raw_resolution, Mapping)
+        else facts["source_resolution"]["rung"]
+    )
     metadata_gate_id = metadata_gate["gate_id"] if metadata_gate is not None else None
     metadata_verdict = metadata_item["verdict"] if metadata_item is not None else None
     model: JsonObject = {
@@ -5328,6 +5901,14 @@ def _assemble_terminal_model(
             "release_eligible": False,
             "issues": [status_code],
         },
+        "untrusted_attempt": (
+            {
+                "proposal_sha256": proposal["proposal_sha256"],
+                "proposal": deepcopy(dict(proposal)),
+            }
+            if artifact is not None and not metadata_accepted
+            else None
+        ),
     }
     return model
 

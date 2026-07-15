@@ -172,6 +172,33 @@ def test_valid_r4_with_cited_descriptive_text_passes(tmp_path: Path) -> None:
     assert report.rung.value == "R4_REIMPLEMENT"
 
 
+def test_recursive_helper_structural_slop_is_rejected(tmp_path: Path) -> None:
+    """A generic stand-in hidden in an imported helper remains statically visible."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    code = (
+        "from helper import build_architecture\n\n"
+        "def build_model() -> object:\n"
+        "    return build_architecture()\n\n"
+        "def make_dummy_call(seed: int, device: str) -> "
+        "tuple[tuple[()], dict[str, object]]:\n"
+        "    return (), {}\n"
+    )
+    (tmp_path / "helper.py").write_text(
+        "import torch.nn as nn\n\n"
+        "def build_architecture() -> object:\n"
+        "    return nn.Sequential(nn.Linear(8, 8), nn.Linear(8, 2))\n",
+        encoding="utf-8",
+    )
+    _make_r4(proposal, manifest, tmp_path, code)
+    with pytest.raises(ProposalValidationError, match="structural slop"):
+        validate_author_proposal(
+            proposal,
+            allowed_model_dir=tmp_path,
+            source_manifest=manifest,
+        )
+
+
 @pytest.mark.parametrize("forbidden", ["eval", "exec", "compile"])
 def test_dynamic_execution_code_is_rejected(tmp_path: Path, forbidden: str) -> None:
     """Every dynamic execution primitive is rejected.

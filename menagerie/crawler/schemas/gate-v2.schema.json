@@ -264,6 +264,10 @@
           "$ref": "#/$defs/nullable_hash",
           "description": "Mandatory closed status code."
         },
+        "code_manifest": {
+          "$ref": "#/$defs/hash",
+          "description": "Closed recursive model-code path-and-byte manifest digest."
+        },
         "source_to_code_map": {
           "$ref": "#/$defs/hash",
           "description": "Mandatory source to code map."
