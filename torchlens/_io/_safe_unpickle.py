@@ -401,6 +401,10 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens.data_classes.op", "TensorLog"),  # locked rename-map alias of Op
         ("torchlens.data_classes.param", "Param"),
         ("torchlens.data_classes.param", "ParamAccessor"),
+        # Prehook-provenance snapshots (frozen dataclasses, inert data).
+        ("torchlens.data_classes.prehook", "TensorInputObservation"),
+        ("torchlens.data_classes.prehook", "ModuleInputSnapshot"),
+        ("torchlens.data_classes.prehook", "PreHookEffect"),
         # Trace + conditional-control-flow data classes.
         ("torchlens.data_classes.trace", "Conditional"),
         ("torchlens.data_classes.trace", "ConditionalAccessor"),
