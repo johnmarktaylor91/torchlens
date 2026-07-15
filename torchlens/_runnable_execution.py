@@ -2201,6 +2201,8 @@ def _numeric_attestation_check(
     archived = trace.__dict__.get("_runnable_archived_activations")
     if not isinstance(archived, Mapping):
         return NumericAttestationStatus.NOT_APPLICABLE, None
+    saw_benign_layout_mismatch = False
+    benign_layout_slot_ids: set[str] = set()
     for member in raw_members:
         archive_key = f"{member.slot_id}:{member.field}"
         archived_record = archived.get(archive_key)
@@ -2235,14 +2237,29 @@ def _numeric_attestation_check(
             # tampered) and the recomputed value is within a tight ULP bound of
             # the archive AND the producing op is a known layout/reduction-order-
             # sensitive BLAS kernel, report this slot ``not_applicable`` rather
-            # than raising. This stays fail-closed: a tampered archive
+            # than raising. Downstream view/shape members directly fed by that
+            # benign slot may carry the same ULP-scale bytes; they are also
+            # skipped only when the archive is intact and the same tight bound
+            # holds. This stays fail-closed: a tampered archive
             # (archived_digest != byte_digest) or any divergence beyond the tight
             # ULP bound STILL raises numeric_attestation_failed -- the byte-exact
             # tripwire is preserved, never widened into a tolerance gate.
             if archived_digest == member.byte_digest and _is_benign_layout_nonreproducible(
                 descriptor, member, recomputed, archived_value
             ):
-                return NumericAttestationStatus.NOT_APPLICABLE, None
+                saw_benign_layout_mismatch = True
+                benign_layout_slot_ids.add(member.slot_id)
+                continue
+            if archived_digest == member.byte_digest and _is_benign_downstream_nonreproducible(
+                descriptor,
+                member,
+                recomputed,
+                archived_value,
+                benign_layout_slot_ids=benign_layout_slot_ids,
+            ):
+                saw_benign_layout_mismatch = True
+                benign_layout_slot_ids.add(member.slot_id)
+                continue
             return (
                 NumericAttestationStatus.NUMERIC_ATTESTATION_FAILED,
                 _contract_check(
@@ -2261,6 +2278,8 @@ def _numeric_attestation_check(
                     ),
                 ),
             )
+    if saw_benign_layout_mismatch:
+        return NumericAttestationStatus.NOT_APPLICABLE, None
     return (
         NumericAttestationStatus.ATTESTED,
         ContractCheck(name="numeric_attestation:selected_slots", passed=True, diagnostic=None),
@@ -2357,9 +2376,28 @@ def _within_layout_reduction_tolerance(recomputed: torch.Tensor, archived: torch
         return False
     recomputed64 = recomputed.detach().to(torch.float64)
     archived64 = archived.detach().to(torch.float64)
-    difference = (recomputed64 - archived64).abs()
-    if not bool(torch.isfinite(difference).all().item()):
+    recomputed_finite = torch.isfinite(recomputed64)
+    archived_finite = torch.isfinite(archived64)
+    if not bool((recomputed_finite == archived_finite).all().item()):
         return False
+    nonfinite_mask = ~archived_finite
+    if bool(nonfinite_mask.any().item()):
+        recomputed_nonfinite = recomputed64[nonfinite_mask]
+        archived_nonfinite = archived64[nonfinite_mask]
+        both_nan = torch.isnan(recomputed_nonfinite) & torch.isnan(archived_nonfinite)
+        both_same_inf = (
+            torch.isinf(recomputed_nonfinite)
+            & torch.isinf(archived_nonfinite)
+            & (torch.signbit(recomputed_nonfinite) == torch.signbit(archived_nonfinite))
+        )
+        if not bool((both_nan | both_same_inf).all().item()):
+            return False
+    finite_mask = archived_finite
+    if not bool(finite_mask.any().item()):
+        return True
+    recomputed64 = recomputed64[finite_mask]
+    archived64 = archived64[finite_mask]
+    difference = (recomputed64 - archived64).abs()
     eps = float(torch.finfo(archived.dtype).eps)
     # 256 ULP relative + absolute floor: comfortably covers reduction-order noise
     # (verified ~5e-7 for float32 == ~4 ULP on eval MHA) while a corruption stays
@@ -2407,6 +2445,57 @@ def _is_benign_layout_nonreproducible(
     if not _member_producer_is_layout_sensitive_blas(descriptor, member):
         return False
     return _within_layout_reduction_tolerance(recomputed, archived_value)
+
+
+def _is_benign_downstream_nonreproducible(
+    descriptor: SparseRunDescriptor,
+    member: ActivationPayloadMember,
+    recomputed: Any,
+    archived_value: Any,
+    *,
+    benign_layout_slot_ids: set[str],
+) -> bool:
+    """Return whether a mismatch is tight-ULP fallout from a benign BLAS slot.
+
+    Parameters
+    ----------
+    descriptor:
+        Sparse descriptor naming slot producers and tensor arguments.
+    member:
+        Archived activation member under attestation.
+    recomputed:
+        Fresh replay value for the slot.
+    archived_value:
+        Capture-time archived value for the slot (byte-verified intact by caller).
+    benign_layout_slot_ids:
+        Slots already proven to be benign layout/reduction-order mismatches.
+
+    Returns
+    -------
+    bool
+        Whether this member is fed by a previously proven benign slot and remains
+        within the same tight ULP band.
+    """
+
+    if not benign_layout_slot_ids:
+        return False
+    if not (isinstance(recomputed, torch.Tensor) and isinstance(archived_value, torch.Tensor)):
+        return False
+    if not _within_layout_reduction_tolerance(recomputed, archived_value):
+        return False
+    if member.slot_id in benign_layout_slot_ids:
+        return True
+    slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
+    slot = slots.get(member.slot_id)
+    if slot is not None and (
+        slot.producer_slot_id in benign_layout_slot_ids or slot.version_of in benign_layout_slot_ids
+    ):
+        return True
+    for call in descriptor.calls:
+        if member.slot_id not in call.output_slot_ids:
+            continue
+        return any(argument.slot_id in benign_layout_slot_ids for argument in call.tensor_arguments)
+    return False
 
 
 def _has_journaled_buffer_activation_member(
@@ -2784,6 +2873,8 @@ def _decode_literal(value: NonTensorLiteral | LiteralTupleKey) -> Any:
         # what disambiguates a real ``None`` index from a ``...`` index at decode time.
         if value.kind is LiteralAtomKind.ELLIPSIS:
             return Ellipsis
+        if value.kind is LiteralAtomKind.NONFINITE_FLOAT:
+            return _decode_nonfinite_float_literal(value.value)
         return value.value
     if isinstance(value, LiteralSlice):
         return slice(
@@ -2801,6 +2892,32 @@ def _decode_literal(value: NonTensorLiteral | LiteralTupleKey) -> Any:
     if isinstance(value, LiteralTorchSymbol):
         return _decode_torch_symbol(value.qualname)
     raise TypeError(f"Unknown sparse literal type {type(value).__name__}.")
+
+
+def _decode_nonfinite_float_literal(value: Any) -> float:
+    """Decode one non-finite float atom payload.
+
+    Parameters
+    ----------
+    value:
+        Serialized non-finite float payload.
+
+    Returns
+    -------
+    float
+        ``nan``, ``inf``, or ``-inf``.
+    """
+
+    if value == "nan":
+        return float("nan")
+    if value == "inf":
+        return float("inf")
+    if value == "-inf":
+        return float("-inf")
+    raise RunPreconditionError(
+        f"Unsupported non-finite float literal payload {value!r}.",
+        code=RunnableErrorCode.UNSUPPORTED_LITERAL.value,
+    )
 
 
 # POSITIVE allowlist of the torch symbolic constant *types* a forward op

@@ -198,6 +198,7 @@ class LiteralAtomKind(str, Enum):
     BOOL = "bool"
     INT = "int"
     FLOAT = "float"
+    NONFINITE_FLOAT = "nonfinite_float"
     STR = "str"
     ELLIPSIS = "ellipsis"
 
