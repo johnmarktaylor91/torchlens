@@ -28,7 +28,11 @@ from .selectors import (
 from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 from ..ir.container_registry import Role
-from ..utils._callable_safety import is_pure_forward_callable, unsafe_callable_reason
+from ..utils._callable_safety import (
+    is_inert_first_party_callable,
+    is_pure_forward_callable,
+    unsafe_callable_reason,
+)
 from ..utils._torch_compat import resolve_runnable_torch_alias
 
 if TYPE_CHECKING:
@@ -364,6 +368,21 @@ def resolve_function_registry_key(
                     # attributes off a torchlens module. Deny by the callable's REAL
                     # module -- the torchlens import path grants it nothing.
                     _enforce_foreign_trust(str(getattr(obj, "__module__", "") or module_name))
+                elif not is_inert_first_party_callable(obj):
+                    # Defense-in-depth (mirrors the r21 bundle-unpickler narrowing):
+                    # a genuinely torchlens-owned callable is auto-trusted ONLY if it
+                    # is a vetted-inert first-party symbol (public facet recipe /
+                    # transform / intervention helper). A PRIVATE torchlens util --
+                    # notably the ``torchlens.utils:_module_is_installed`` import
+                    # gadget -- or any I/O / import / exec / spawn callable is refused
+                    # rather than resolved to a live callable.
+                    raise UntrustedCallableError(
+                        "Refusing to resolve torchlens-owned callable "
+                        f"{module_name}:{qualname}; only public, side-effect-free "
+                        "first-party callables (facet recipes / transforms / "
+                        "intervention helpers) are auto-trusted. Private utilities "
+                        "and I/O / import / exec callables are denied."
+                    )
             else:
                 # Genuinely foreign import path: gate BEFORE importing, because the
                 # import itself executes the untrusted module's top-level code.

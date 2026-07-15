@@ -19,12 +19,19 @@ loader -- raises :class:`pickle.UnpicklingError` and executes nothing.
 Allowlist policy (fail-closed):
 
 * Objects resolved from the ``torchlens`` package are admitted when they are a
-  ``type`` (the metadata dataclasses / enums / accessors), or a callable whose
-  RESOLVED real ``__module__`` is genuinely ``torchlens.*`` (a first-party facet
-  recipe / transform such as ``torchlens.utils.display.identity``). Trust is
+  ``type`` (the metadata dataclasses / enums / accessors -- reconstructed by normal
+  unpickling, never INVOKED with attacker args), or a VETTED-INERT first-party
+  callable: a PUBLIC, side-effect-free ``torchlens.*`` facet recipe / transform /
+  helper (e.g. ``torchlens.utils.display.identity``), decided by
+  ``torchlens.utils._callable_safety.is_inert_first_party_callable``. Trust is
   decided by the resolved object's real module, never the pickled path, so a key
   that walks attributes off a torchlens module to reach ``os.system`` (real module
-  ``posix``) is denied. This admits our own trusted code without admitting a gadget.
+  ``posix``) is denied. Crucially, a pickle ``REDUCE`` INVOKES the admitted callable
+  with attacker args, so the pre-r21 blanket "any torchlens-owned callable" policy
+  was a load-time RCE: it trusted the PRIVATE ``torchlens.utils._module_is_installed``
+  (which ``importlib.import_module``s its argument). The narrowed gate is
+  deterministic (public-name + side-effect-name guard, no live-registry lookup) and
+  admits our vetted first-party code without admitting that gadget.
 * A FOREIGN facet-recipe callable (a user/test ``@tl.facets.register`` recipe
   embedded by identity in a ``FacetRegistrySnapshot``) is handled DETERMINISTICALLY
   by the same trust model the resolver uses. Known-dangerous modules (``os`` /
@@ -639,14 +646,26 @@ class SafeBundleUnpickler(pickle.Unpickler):
                 f"unpickle: {module}.{name}."
             )
 
-        # TorchLens-owned metadata: admit classes always, and any callable whose
-        # RESOLVED real module is genuinely ``torchlens.*`` (a first-party facet
-        # recipe / transform). Importing a torchlens submodule runs only trusted
-        # first-party code, so it is safe to import + inspect the resolved object's
-        # true owner. Trust is decided by the resolved ``__module__``, NEVER by the
-        # pickled path: a key like ``torchlens._io.tlspec`` / ``os.system`` walks
-        # attributes off a torchlens module to reach ``os.system`` (real module
-        # ``posix``), which is NOT torchlens-owned and is therefore denied.
+        # TorchLens-owned metadata: admit classes always, and a NARROW, vetted set
+        # of first-party CALLABLES. Importing a torchlens submodule runs only
+        # trusted first-party code, so it is safe to import + inspect the resolved
+        # object's true owner. Trust is decided by the resolved ``__module__``,
+        # NEVER by the pickled path: a key like ``torchlens._io.tlspec`` /
+        # ``os.system`` walks attributes off a torchlens module to reach
+        # ``os.system`` (real module ``posix``), which is NOT torchlens-owned and is
+        # therefore denied.
+        #
+        # A resolved TYPE is admitted -- it is reconstructed via normal unpickling,
+        # never INVOKED with attacker args. A resolved CALLABLE is admitted only if
+        # it is a vetted-INERT first-party callable (public facet recipe / transform
+        # / helper that cannot import/exec/open/spawn): a pickle ``REDUCE`` INVOKES
+        # the admitted callable with attacker args, and the pre-r21 blanket
+        # ``_is_torchlens_owned`` admission trusted EVERY torchlens-owned callable --
+        # including the private import gadget ``torchlens.utils._module_is_installed``
+        # (``importlib.import_module`` of attacker input == confirmed load-time RCE).
+        # The gate is DETERMINISTIC (public-name + side-effect-name guard), never
+        # keyed off the live facet registry (that ordering-dependent snapshot was a
+        # prior load-failure bug).
         #
         # EXCLUDES the extras-gated appliance packages (``torchlens.neuro`` /
         # ``torchlens.notebook``): importing THOSE runs foreign third-party code,
@@ -658,7 +677,11 @@ class SafeBundleUnpickler(pickle.Unpickler):
             obj = super().find_class(module, name)
             if isinstance(obj, type):
                 return obj
-            if callable(obj) and _is_torchlens_owned(obj):
+            # Imported lazily to keep this early security front door free of
+            # import-order coupling (mirrors ``_safe_getattr`` above).
+            from ..utils._callable_safety import is_inert_first_party_callable
+
+            if callable(obj) and _is_torchlens_owned(obj) and is_inert_first_party_callable(obj):
                 return obj
             raise pickle.UnpicklingError(
                 "Blocked disallowed torchlens global during bundle metadata "

@@ -27,6 +27,7 @@ from ..ir.container import (
     OutputPathComponent,
     TupleIndex,
 )
+from ..utils._callable_safety import FACET_RECIPE_MARKER_ATTR
 
 
 RecordScope = Literal["op", "module", "any"]
@@ -1326,6 +1327,22 @@ def register(
         class_names = _as_tuple(class_name)
         qualnames = _as_tuple(class_qualname)
         declared = facets or _literal_return_keys(func)
+        # Stamp the deterministic facet-registration marker on the recipe function
+        # AND its optional predicate. Both are pickled BY IDENTITY inside a saved
+        # ``FacetRegistrySnapshot``; the restricted bundle unpickler / intervention
+        # resolver admit a first-party callable only if it carries this marker or is
+        # public + inert (see ``utils._callable_safety.is_inert_first_party_callable``).
+        # This lets a genuine but PRIVATE-named predicate (e.g. the built-in residual
+        # ``_is_transformer_block``) round-trip while private import gadgets stay
+        # denied. Best-effort: some callables (e.g. ``functools.partial``) reject
+        # attribute assignment; an unstampable predicate simply falls back to the
+        # public-name gate.
+        for _entry_point in (func, predicate):
+            if _entry_point is not None:
+                try:
+                    setattr(_entry_point, FACET_RECIPE_MARKER_ATTR, True)
+                except (AttributeError, TypeError):
+                    pass
         _REGISTRY.append(
             _RegisteredRecipe(
                 public=FacetRecipe(

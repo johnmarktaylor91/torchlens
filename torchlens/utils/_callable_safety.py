@@ -467,6 +467,84 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     return _matches(module, _ALLOWED_FORWARD_OP_MODULES)
 
 
+# Extras-gated "appliance" subpackages whose ``__init__`` imports FOREIGN
+# third-party dependencies; a callable resolved from one of these ran foreign
+# top-level code on import and must never be treated as inert first-party code.
+# Mirrors ``torchlens._io._safe_unpickle._TORCHLENS_APPLIANCE_MODULES``.
+_APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens.notebook"})
+
+# Attribute stamped on a callable at ``@torchlens.facets.register`` time (on the
+# recipe function AND its optional predicate). It is the DETERMINISTIC, process-
+# state-INDEPENDENT marker that a callable is a genuine, vetted facet-registration
+# entry point -- travels with the function object itself, so it is set whenever the
+# defining module is imported, independent of the LIVE facet registry (keying off
+# that mutable registry was a prior ordering-dependent load-failure bug). It lets a
+# genuine but PRIVATE-named registration callable (e.g. the built-in residual
+# predicate ``_is_transformer_block``) be admitted while a private import gadget
+# (``torchlens.utils._module_is_installed``) -- which is never a registration entry
+# point -- stays denied. Set via ``torchlens.semantic.facets.register``.
+FACET_RECIPE_MARKER_ATTR = "_torchlens_facet_recipe"
+
+
+def is_inert_first_party_callable(func: Callable[..., Any]) -> bool:
+    """Return whether ``func`` is a first-party TorchLens callable that is INERT to
+    INVOKE with attacker-controlled arguments at unpickle / resolve time.
+
+    A pickle ``REDUCE`` (and an intervention ``custom`` import ref) INVOKES the
+    admitted callable with attacker-supplied args. Trusting *every* torchlens-owned
+    callable (the pre-r21 policy) was a confirmed load-time RCE: the private helper
+    ``torchlens.utils._module_is_installed`` performs ``importlib.import_module`` on
+    its argument, so a crafted ``metadata.pkl`` whose ``REDUCE`` named it ran an
+    arbitrary import (attacker top-level code) on a plain ``tl.load(path)`` -- before
+    ``.run()`` and before any downstream callable-safety gate could fire.
+
+    This narrows first-party trust to a DETERMINISTIC, process-state-INDEPENDENT
+    (no live-registry lookup) set of vetted-inert callables:
+
+    * FIRST-PARTY only -- the real, capture-unwrapped ``__module__`` is genuinely
+      ``torchlens.*`` and is NOT an extras-gated appliance package.
+    * SIDE-EFFECT-FREE by name -- the same structural file-I/O / serialization /
+      import / spawn / global-state-mutation guard applied to the torch surface, so
+      a torchlens callable that opens/imports/execs is denied even if it were marked.
+    * Then admitted if EITHER it carries the deterministic facet-registration marker
+      (``FACET_RECIPE_MARKER_ATTR``, stamped on every recipe function AND predicate at
+      ``@torchlens.facets.register`` time -- this covers a genuine but PRIVATE-named
+      registration callable such as the built-in residual predicate
+      ``_is_transformer_block``), OR it is PUBLIC (terminal + qualname leaf not private
+      or dunder). Every torchlens.* arbitrary-import / dynamic-attr gadget is
+      private-or-dunder AND unmarked (``_module_is_installed`` /
+      ``_import_module_attr_or_none`` / ``_user_func`` / ``__getattr__`` / ...), so it
+      falls through both branches; the public facet recipes / transforms / helpers
+      that legitimately appear as pickle globals (``layer_norm`` / ``gpt2_attention``
+      / ``identity`` / ``clamp`` / ``zero_ablate``) are admitted by the PUBLIC branch.
+
+    Everything else torchlens-owned-but-not-vetted fails closed (the caller raises).
+    """
+
+    real = _unwrap_capture_wrapper(func)
+    module = str(getattr(real, "__module__", "") or "")
+    if not (module == "torchlens" or module.startswith("torchlens.")):
+        return False
+    if _matches(module, _APPLIANCE_MODULES):
+        return False
+    # Deny I/O / import / exec / spawn / state-mutation by NAME regardless of marker.
+    if _is_side_effecting_callable_name(real):
+        return False
+    # Genuine facet-registration entry point (recipe func or its predicate), even if
+    # its name is private -- the marker is set by our own trusted registration code.
+    if getattr(real, FACET_RECIPE_MARKER_ATTR, False) is True:
+        return True
+    # Otherwise require a PUBLIC name (blocks the private import gadget class).
+    name = _terminal_callable_name(real)
+    if not name or name.startswith("_"):
+        return False
+    qualname = str(getattr(real, "__qualname__", "") or "")
+    leaf = qualname.rsplit(".", maxsplit=1)[-1] if qualname else name
+    if leaf.startswith("_"):
+        return False
+    return True
+
+
 def unsafe_callable_reason(func: Callable[..., Any]) -> str:
     """Return a short, stable description of a refused callable's real module.
 
