@@ -270,6 +270,27 @@ def make_attempt(
         }
     )
     model["worker_receipt"]["observed_recipe_revision"] = identities.recipe
+    completion_line = (
+        f'MENAGERIE_WORKER_COMPLETION_V1 {{"proof":"{HASH}","receipt_sha256":"{HASH}"}}'
+    )
+    completion_bytes = (completion_line + "\n").encode("utf-8")
+    observation = model["supervisor_observation"]
+    observation["stdout_sha256"] = hash_bytes(completion_bytes)
+    observation["stdout_bytes"] = len(completion_bytes)
+    observation["stdout_tail"] = completion_line
+    model["worker_receipt"]["receipt_sha256"] = stable_hash(
+        {
+            "version": "menagerie.crawler.parent-success-attestation.v1",
+            "completion_line": completion_line,
+            "exit_code": observation["exit_code"],
+            "signal": observation["signal"],
+            "wall_seconds": observation["wall_seconds"],
+            "cpu_seconds": observation["cpu_seconds"],
+            "peak_rss_bytes": observation["peak_rss_bytes"],
+            "stdout_sha256": observation["stdout_sha256"],
+            "stderr_sha256": observation["stderr_sha256"],
+        }
+    )
     return model
 
 

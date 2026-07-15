@@ -1125,7 +1125,8 @@ def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
         rss_limit_bytes=1024,
         cwd=tmp_path,
     )
-    assert result.receipt_error is None
+    assert result.receipt_error == "missing-parent-success-attestation"
+    assert result.success_attestation_sha256 is None
     assert captured[0] == str(prefix / "bin" / "python")
 
 
@@ -1301,7 +1302,7 @@ def test_parent_refuses_observed_adapter_digest_mismatch() -> None:
 
     assert (
         _receipt_envelope_error(SupervisedResult(observation, receipt, None), proposal, HASH)
-        == "invalid-receipt:identity-or-error"
+        == "invalid-receipt:identity"
     )
 
 
@@ -1311,7 +1312,12 @@ def test_parent_accepts_one_requested_mode_from_dual_mode_receipt() -> None:
     proposal = make_author_proposal("m_dual_mode_receipt")
     proposal["proposed_facts"]["modes"]["meaningful_modes"] = ["train", "eval"]
     attempt = make_attempt("m_dual_mode_receipt", mode="train")
-    mode_receipt = {**attempt["worker_receipt"], "error": None}
+    mode_receipt = {
+        **attempt["worker_receipt"],
+        "error": None,
+        "constructor_seconds": 0.25,
+        "forward_seconds": 0.5,
+    }
     receipt = {
         "receipt_version": "menagerie.crawler.worker-receipt.v1",
         "stable_id": proposal["stable_id"],
@@ -1334,6 +1340,10 @@ def test_parent_accepts_one_requested_mode_from_dual_mode_receipt() -> None:
         "error": None,
         "receipt_sha256": HASH,
     }
+    completion_line = (
+        f'MENAGERIE_WORKER_COMPLETION_V1 {{"proof":"{HASH}","receipt_sha256":"{HASH}"}}'
+    )
+    completion_bytes = (completion_line + "\n").encode("utf-8")
     observation = SupervisorObservation(
         argv=("python", "worker.py"),
         cwd="/scratch",
@@ -1344,9 +1354,9 @@ def test_parent_accepts_one_requested_mode_from_dual_mode_receipt() -> None:
         peak_rss_bytes=1,
         timed_out=False,
         rss_exceeded=False,
-        stdout_sha256=HASH,
-        stdout_bytes=0,
-        stdout_tail="",
+        stdout_sha256=hash_bytes(completion_bytes),
+        stdout_bytes=len(completion_bytes),
+        stdout_tail=completion_line,
         stderr_sha256=HASH,
         stderr_bytes=0,
         stderr_tail="",
@@ -1354,7 +1364,20 @@ def test_parent_accepts_one_requested_mode_from_dual_mode_receipt() -> None:
         stderr_path="/logs/stderr",
     )
 
-    train_result = SupervisedResult(observation, receipt, None)
+    parent_attestation = stable_hash(
+        {
+            "version": "menagerie.crawler.parent-success-attestation.v1",
+            "completion_line": completion_line,
+            "exit_code": observation.exit_code,
+            "signal": observation.signal_number,
+            "wall_seconds": observation.wall_seconds,
+            "cpu_seconds": observation.cpu_seconds,
+            "peak_rss_bytes": observation.peak_rss_bytes,
+            "stdout_sha256": observation.stdout_sha256,
+            "stderr_sha256": observation.stderr_sha256,
+        }
+    )
+    train_result = SupervisedResult(observation, receipt, None, parent_attestation)
     assert (
         _receipt_envelope_error(
             train_result,
@@ -1385,7 +1408,7 @@ def test_parent_accepts_one_requested_mode_from_dual_mode_receipt() -> None:
         ),
         *driver_module._attempts_from_supervised(
             artifact,
-            SupervisedResult(observation, eval_receipt, None),
+            SupervisedResult(observation, eval_receipt, None, parent_attestation),
             environment,
             HASH,
             0,
@@ -1394,6 +1417,8 @@ def test_parent_accepts_one_requested_mode_from_dual_mode_receipt() -> None:
             requested_mode="eval",
         ),
     )
+    assert attempts[0]["worker_receipt"]["constructor_seconds"] == 0.25
+    assert attempts[0]["worker_receipt"]["forward_seconds"] == 0.5
     assert driver_module._attempt_policy_satisfied(attempts, proposal, 1)
 
 

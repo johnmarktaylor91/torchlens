@@ -72,10 +72,10 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux minimal-namespace regression")
-def test_linux_undeclared_native_read_is_denied_before_bytes_are_returned(
+def test_linux_author_supplied_absolute_input_grant_is_refused(
     tmp_path: Path,
 ) -> None:
-    """The minimal namespace permits declared runtime data but never returns hidden bytes."""
+    """Raw input_contract paths cannot expand the parent-owned read allowlist."""
 
     declared_input = tmp_path / "declared-input.bin"
     hidden_input = tmp_path / "private-host-weights.bin"
@@ -125,14 +125,15 @@ def test_linux_undeclared_native_read_is_denied_before_bytes_are_returned(
         assert result.worker_receipt is None
         assert result.receipt_error == "failed:sandbox-unavailable"
         return
-    assert result.observation.exit_code == 0
+    assert result.observation.exit_code == 1
     assert result.worker_receipt is not None
-    assert result.worker_receipt["constructor_completed"] is True
-    assert result.worker_receipt["per_mode"]["eval"]["forward_completed"] is True
+    assert result.worker_receipt["constructor_completed"] is False
+    assert result.worker_receipt["per_mode"] == {}
     policy = result.worker_receipt["policy_observation"]
-    assert policy["checkpoint_or_weight_read_attempted"] is False
-    assert str(hidden_input) in result.observation.failed_read_probe_paths
-    assert result.worker_receipt["error"] is None
+    assert policy["checkpoint_or_weight_read_attempted"] is True
+    assert str(declared_input) in result.observation.failed_read_probe_paths
+    assert result.worker_receipt["error"]["reason_code"] == "checkpoint-read"
+    assert result.success_attestation_sha256 is None
 
 
 def _successful_receipt(path: Path) -> None:

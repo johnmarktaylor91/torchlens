@@ -168,6 +168,8 @@ def generate_macos_sandbox_profile(
     """
 
     roots = _normalized_write_roots(write_roots)
+    # Seatbelt is the OS containment layer for the named data/write/network classes.
+    # The allow-default profile is intentionally not a general process-capability boundary.
     lines = [
         "(version 1)",
         "(allow default)",
@@ -867,6 +869,8 @@ def static_source_check(path: Path) -> None:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except (OSError, UnicodeDecodeError, SyntaxError) as exc:
         raise PolicyViolation("opaque-code", f"cannot statically inspect {path}: {exc}") from exc
+    # This is a cheap early tripwire, not an integrity boundary: aliases and dynamic
+    # attribute construction remain contained by the in-child and OS runtime policy.
     for node in ast.walk(tree):
         if isinstance(node, ast.Import) and any(
             alias.name == "torchlens" or alias.name.startswith("torchlens.") for alias in node.names
@@ -996,6 +1000,11 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
         self._original_connect = socket.socket.connect
         self._original_connect_ex = socket.socket.connect_ex
         self._original_create_connection = socket.create_connection
+        self._original_socket_sends = {
+            name: getattr(socket.socket, name)
+            for name in ("send", "sendto", "sendmsg", "sendmmsg")
+            if hasattr(socket.socket, name)
+        }
         self._import_blocker = _TorchLensBlocker(self.observation)
 
         def blocked_connect(socket_instance: socket.socket, address: Any) -> Any:
@@ -1036,6 +1045,43 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
 
         self._blocked_connect_function = blocked_connect
         self._blocked_create_connection_function = blocked_create_connection
+        self._blocked_socket_sends: dict[str, Any] = {}
+        for method_name, original in self._original_socket_sends.items():
+            self._blocked_socket_sends[method_name] = self._socket_send_wrapper(
+                method_name, original
+            )
+
+    def _socket_send_wrapper(self, method_name: str, original: Any) -> Any:
+        """Return an AF_INET/AF_INET6 send tripwire for one socket method.
+
+        Parameters
+        ----------
+        method_name:
+            Socket send API being wrapped.
+        original:
+            Original descriptor used for non-network socket families.
+
+        Returns
+        -------
+        Any
+            Bound-compatible method wrapper.
+        """
+
+        def blocked_send(socket_instance: socket.socket, *args: Any, **kwargs: Any) -> Any:
+            """Reject datagram or stream sends on Internet-family sockets."""
+
+            if socket_instance.family in {socket.AF_INET, socket.AF_INET6}:
+                target = args[-1] if method_name in {"sendto", "sendmsg", "sendmmsg"} else None
+                self.observation.network_attempted = True
+                self.observation.socket_targets.append(
+                    f"{method_name}:{target!r}:family={socket_instance.family}"
+                )
+                raise PolicyViolation(
+                    "network-attempt", f"blocked socket {method_name} on Internet family"
+                )
+            return original(socket_instance, *args, **kwargs)
+
+        return blocked_send
 
     def _path_allowed(self, value: Union[str, bytes, os.PathLike[str], os.PathLike[bytes]]) -> bool:
         """Return whether a path is beneath an allowed write root.
@@ -1224,6 +1270,8 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
         setattr(os, "open", self._os_open)
         setattr(socket.socket, "connect", self._blocked_connect_function)
         setattr(socket.socket, "connect_ex", self._blocked_connect_function)
+        for method_name, blocked in self._blocked_socket_sends.items():
+            setattr(socket.socket, method_name, blocked)
         setattr(socket, "create_connection", self._blocked_create_connection_function)
         sys.meta_path.insert(0, self._import_blocker)
         return self.observation
@@ -1242,6 +1290,8 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
         setattr(os, "open", self._original_os_open)
         setattr(socket.socket, "connect", self._original_connect)
         setattr(socket.socket, "connect_ex", self._original_connect_ex)
+        for method_name, original in self._original_socket_sends.items():
+            setattr(socket.socket, method_name, original)
         setattr(socket, "create_connection", self._original_create_connection)
         if self._import_blocker in sys.meta_path:
             sys.meta_path.remove(self._import_blocker)

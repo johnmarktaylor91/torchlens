@@ -62,6 +62,7 @@ _MODALITY_STANDARD_ASSETS = {
     "video": "image.ppm",
     "vision": "image.ppm",
 }
+_WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V1 "
 
 
 def expected_standard_asset(modality: object) -> Optional[dict[str, str]]:
@@ -98,12 +99,56 @@ def expected_standard_asset(modality: object) -> Optional[dict[str, str]]:
     if selected_name is None:
         return None
     path = ASSET_ROOT / selected_name
-    digest = hash_bytes(path.read_bytes())
+    try:
+        digest = hash_bytes(path.read_bytes())
+    except OSError as exc:
+        raise ReductionError(f"selected standard input asset is unavailable: {path}") from exc
     return {
         "path": str(path.resolve()),
         "sha256": digest,
         "asset_id": f"standard:{selected_name}:{digest}",
     }
+
+
+def _parent_success_attestation_matches(attempt: Mapping[str, Any]) -> bool:
+    """Return whether an attempt carries the recomputable parent success witness.
+
+    Parameters
+    ----------
+    attempt:
+        Persisted worker attempt with projected receipt and supervisor facts.
+
+    Returns
+    -------
+    bool
+        True only when the receipt digest is the domain-separated parent attestation,
+        not the child's forgeable self hash.
+    """
+
+    receipt = attempt.get("worker_receipt", {})
+    observation = attempt.get("supervisor_observation", {})
+    if not isinstance(receipt, Mapping) or not isinstance(observation, Mapping):
+        return False
+    stdout_tail = observation.get("stdout_tail")
+    if not isinstance(stdout_tail, str):
+        return False
+    lines = stdout_tail.splitlines()
+    if not lines or not lines[-1].startswith(_WORKER_COMPLETION_PREFIX):
+        return False
+    expected = stable_hash(
+        {
+            "version": "menagerie.crawler.parent-success-attestation.v1",
+            "completion_line": lines[-1],
+            "exit_code": observation.get("exit_code"),
+            "signal": observation.get("signal"),
+            "wall_seconds": observation.get("wall_seconds"),
+            "cpu_seconds": observation.get("cpu_seconds"),
+            "peak_rss_bytes": observation.get("peak_rss_bytes"),
+            "stdout_sha256": observation.get("stdout_sha256"),
+            "stderr_sha256": observation.get("stderr_sha256"),
+        }
+    )
+    return receipt.get("receipt_sha256") == expected
 
 
 def output_signature_error(signature: object) -> Optional[str]:
@@ -1057,6 +1102,7 @@ class CanonicalReducer:
             else None
         )
         expected_asset_digest = expected_asset["sha256"] if expected_asset is not None else None
+        expected_asset_id = expected_asset["asset_id"] if expected_asset is not None else None
         try:
             accepted_identities = recompute_accepted_identities(
                 _model_facts(model),
@@ -1074,6 +1120,23 @@ class CanonicalReducer:
             accepted_work_ids.add(str(attempt.get("work_id")))
             identities = attempt.get("identities", {})
             receipt = attempt.get("worker_receipt", {})
+            policy = attempt.get("policy_observation", {})
+            if not isinstance(policy, Mapping) or any(
+                policy.get(key)
+                for key in (
+                    "network_attempted",
+                    "checkpoint_or_weight_read_attempted",
+                    "cache_read_attempted",
+                    "write_outside_scratch_attempted",
+                    "credentials_present",
+                    "torchlens_import_attempted",
+                )
+            ):
+                raise ReductionError("accepted attempt lacks a clean successful worker receipt")
+            observed_asset_pair = (
+                receipt.get("observed_input_asset_sha256"),
+                receipt.get("input_asset"),
+            )
             if (
                 identities.get("source") != accepted_identities.source
                 or identities.get("recipe") != accepted_identities.recipe
@@ -1085,9 +1148,8 @@ class CanonicalReducer:
                 or receipt.get("observed_recipe_revision") != accepted_identities.recipe
                 or receipt.get("observed_adapter_sha256") != implementation.get("code_sha256")
                 or receipt.get("observed_code_manifest_sha256") != expected_manifest_digest
-                or receipt.get("observed_input_asset_sha256") != expected_asset_digest
-                or receipt.get("input_asset")
-                != (expected_asset["asset_id"] if expected_asset is not None else None)
+                or observed_asset_pair
+                not in {(None, None), (expected_asset_digest, expected_asset_id)}
             ):
                 raise ReductionError("accepted attempt identities are stale for the current model")
             mode = str(attempt.get("mode"))
@@ -1098,6 +1160,7 @@ class CanonicalReducer:
                 or attempt.get("result") != "succeeded"
                 or observation.get("exit_code") != 0
                 or observation.get("signal") is not None
+                or not _parent_success_attestation_matches(attempt)
                 or not receipt.get("constructor_started")
                 or not receipt.get("constructor_completed")
                 or not receipt.get("input_completed")

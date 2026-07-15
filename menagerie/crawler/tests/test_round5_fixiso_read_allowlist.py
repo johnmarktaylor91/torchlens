@@ -134,6 +134,10 @@ def _supervise_adapter(
     }
     if declared_input is not None:
         request["input_contract"] = {"code_path": str(declared_input)}
+        request["input_manifest"] = {
+            "validated_model_root": str(tmp_path),
+            "validated_input_code_path": str(declared_input),
+        }
     request_path.write_text(json.dumps(request), encoding="utf-8")
     return supervise_worker(
         request_path,

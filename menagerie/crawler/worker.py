@@ -38,6 +38,9 @@ from menagerie.crawler.standard_inputs import (
     materialize_standard_input,
 )
 
+_PARENT_COMPLETION_CHALLENGE_ENV = "MENAGERIE_PARENT_COMPLETION_CHALLENGE"
+_WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V1 "
+
 
 @dataclass(frozen=True)
 class WorkerRequest:
@@ -538,7 +541,12 @@ def _materialize_declarative_call(
     if not isinstance(kwargs_value, dict):
         raise TypeError("input_contract kwargs paths are invalid")
     kind = input_kinds[0] if len(set(input_kinds)) == 1 else "random-fallback"
-    asset = input_assets[0] if len(input_assets) == 1 else None
+    unique_assets = set(input_assets)
+    asset = (
+        next(iter(unique_assets))
+        if len(unique_assets) == 1 and len(input_assets) == tensor_index
+        else None
+    )
     return tuple(args_value), kwargs_value, kind, asset, "; ".join(notes)
 
 
@@ -862,6 +870,24 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
             except RecipeError as exc:
                 if observed_accepted_revision is None or "recipe revision mismatch" not in str(exc):
                     raise
+                identity_payload = request.recipe_identity_payload
+                if not isinstance(identity_payload, Mapping):
+                    raise
+                identity_implementation = identity_payload.get("implementation")
+                identity_recipe = (
+                    identity_implementation.get("library_recipe")
+                    if isinstance(identity_implementation, Mapping)
+                    else None
+                )
+                executed_recipe = effective_recipe.get("recipe")
+                if recipe_kind == "declarative-library" and (
+                    not isinstance(identity_recipe, Mapping)
+                    or not isinstance(executed_recipe, Mapping)
+                    or stable_hash(identity_recipe) != stable_hash(executed_recipe)
+                ):
+                    raise RecipeError(
+                        "declarative recipe bytes do not match the accepted identity payload"
+                    ) from exc
                 loaded = load_recipe(
                     effective_recipe,
                     source_identity=request.source_identity,
@@ -886,9 +912,13 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
                 selected_asset.get("asset_id") if isinstance(selected_asset, Mapping) else None
             )
             if input_asset != expected_asset_id:
-                raise RecipeError(
-                    "materialized input asset does not match the request-bound selected asset"
-                )
+                if input_asset is not None or expected_asset_id is None:
+                    raise RecipeError(
+                        "materialized input asset is outside the request-bound asset outcomes"
+                    )
+            base["observed_input_asset_sha256"] = (
+                observed_asset if input_asset is not None else None
+            )
             base["input_completed"] = True
             declared = request.meaningful_modes or ()
             detected = detect_meaningful_modes(model)
@@ -1001,6 +1031,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         Zero when every requested forward completed; one otherwise.
     """
 
+    completion_challenge = os.environ.pop(_PARENT_COMPLETION_CHALLENGE_ENV, None)
     args = _parse_args(argv)
     request_value = json.loads(args.request.read_text(encoding="utf-8"))
     if not isinstance(request_value, dict):
@@ -1013,7 +1044,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for item in per_mode.values()
         if isinstance(item, Mapping)
     )
-    return 0 if receipt.get("error") is None and succeeded else 1
+    success = receipt.get("error") is None and succeeded
+    if success and completion_challenge:
+        completion = {
+            "receipt_sha256": receipt.get("receipt_sha256"),
+            "proof": stable_hash(
+                {
+                    "version": "menagerie.crawler.worker-completion.v1",
+                    "challenge": completion_challenge,
+                    "receipt_sha256": receipt.get("receipt_sha256"),
+                }
+            ),
+        }
+        os.write(
+            1, _WORKER_COMPLETION_PREFIX.encode("ascii") + canonical_json_bytes(completion) + b"\n"
+        )
+    return 0 if success else 1
 
 
 if __name__ == "__main__":

@@ -256,6 +256,7 @@ def validate_author_proposal(
     _validate_citation_consistency(facts)
     implementation = _mapping(facts.get("implementation"), "implementation")
     allowed_dir = Path(allowed_model_dir).resolve()
+    _validate_author_read_grants(facts, allowed_dir)
     code_path = _validate_code(implementation, rung, allowed_dir)
     _validate_source_ladder(
         rung,
@@ -796,6 +797,74 @@ def _validate_code(
         _validate_typed_functions(tree)
         _validate_calls_and_writes(tree, allowed_dir)
     return resolved
+
+
+def _validate_author_read_grants(facts: Mapping[str, Any], allowed_dir: Path) -> None:
+    """Reject author-controlled filesystem grants before proposal acceptance.
+
+    Parameters
+    ----------
+    facts:
+        Complete authored fact tree.
+    allowed_dir:
+        Resolved model-local staging directory.
+
+    Raises
+    ------
+    ProposalValidationError
+        If an input builder path, symbol, scalar path value, or source CAS locator
+        could grant access outside the model-local regular-file boundary.
+    """
+
+    input_contract = _mapping(facts.get("input_contract"), "input_contract")
+    code_value = input_contract.get("code_path")
+    if code_value is not None:
+        if not isinstance(code_value, str) or not code_value.strip():
+            raise ProposalValidationError("input_contract.code_path must be null or non-empty")
+        candidate = Path(code_value)
+        if candidate.is_absolute():
+            raise ProposalValidationError(
+                "input_contract.code_path must be repository-relative before proposal identity"
+            )
+        resolved = (allowed_dir / candidate).resolve()
+        if not resolved.is_relative_to(allowed_dir):
+            raise ProposalValidationError("input_contract.code_path escapes the model sandbox")
+        if not resolved.is_file():
+            raise ProposalValidationError("input_contract.code_path must name a regular file")
+    builder_symbol = input_contract.get("builder_symbol")
+    if not isinstance(builder_symbol, str) or not re.fullmatch(
+        r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*", builder_symbol
+    ):
+        raise ProposalValidationError("input_contract.builder_symbol must be a dotted symbol")
+    non_tensor_values = input_contract.get("non_tensor_values")
+    if not isinstance(non_tensor_values, list):
+        raise ProposalValidationError("input_contract.non_tensor_values must be a list")
+    for leaf in non_tensor_values:
+        if not isinstance(leaf, Mapping):
+            raise ProposalValidationError("input_contract non-tensor leaf must be an object")
+        value = leaf.get("value")
+        if isinstance(value, str):
+            possible_path = Path(value)
+            if possible_path.is_absolute() or ".." in possible_path.parts:
+                raise ProposalValidationError(
+                    "input_contract.non_tensor_values cannot carry absolute or escaping paths"
+                )
+            value_type = str(leaf.get("type", "")).casefold().replace("_", "-")
+            if value_type in {"file", "file-path", "filepath", "path", "pathlib.path"}:
+                resolved_value = (allowed_dir / possible_path).resolve()
+                if not resolved_value.is_relative_to(allowed_dir) or not resolved_value.is_file():
+                    raise ProposalValidationError(
+                        "path-valued input_contract.non_tensor_values must name a model-local "
+                        "regular file"
+                    )
+    resolution = _mapping(facts.get("source_resolution"), "source_resolution")
+    sources = resolution.get("sources")
+    if not isinstance(sources, list):
+        raise ProposalValidationError("source_resolution.sources must be a list")
+    if any(isinstance(source, Mapping) and "cas_path" in source for source in sources):
+        raise ProposalValidationError(
+            "source_resolution.sources cannot carry author-controlled CAS paths"
+        )
 
 
 def resolve_model_code_closure(code_path: Path, allowed_dir: Path) -> tuple[Path, ...]:

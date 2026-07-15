@@ -13,6 +13,8 @@ import json
 import logging
 import os
 import platform
+import re
+import secrets
 import shlex
 import shutil
 import subprocess
@@ -104,6 +106,7 @@ from menagerie.crawler.proposal import ProposalValidationError, model_code_manif
 from menagerie.crawler.recordio import JsonlLedger, SingleWriterError, scan_jsonl
 from menagerie.crawler.reducer import (
     CanonicalReducer,
+    _parent_success_attestation_matches,
     default_ledger_paths,
     expected_standard_asset,
     output_signature_error,
@@ -3024,6 +3027,7 @@ def _supervise_environment_worker(
         "--receipt",
         str(receipt_path),
     )
+    completion_challenge = secrets.token_hex(32)
     observation = run_isolated_subprocess(
         argv,
         scratch_root,
@@ -3031,11 +3035,22 @@ def _supervise_environment_worker(
         rss_limit_bytes=rss_limit_bytes,
         cwd=cwd,
         additional_write_roots=(receipt_path.parent,),
+        worker_completion_challenge=completion_challenge,
     )
     receipt, receipt_error = _read_verified_worker_receipt(receipt_path)
+    success_attestation = observation.success_attestation_sha256
+    if receipt is not None and observation.attested_receipt_sha256 != receipt.get("receipt_sha256"):
+        success_attestation = None
     if observation.exit_code != 0 or observation.signal_number is not None:
-        return SupervisedResult(observation, None, receipt_error or "worker-exit-nonzero")
-    return SupervisedResult(observation, receipt, receipt_error)
+        return SupervisedResult(
+            observation,
+            receipt,
+            receipt_error or ("worker-exit-nonzero" if receipt is None else None),
+            None,
+        )
+    if receipt is not None and success_attestation is None:
+        return SupervisedResult(observation, receipt, "missing-parent-success-attestation", None)
+    return SupervisedResult(observation, receipt, receipt_error, success_attestation)
 
 
 def _read_verified_worker_receipt(
@@ -4793,6 +4808,47 @@ def _worker_request(
     proposal = artifact.proposal
     facts = proposal["proposed_facts"]
     implementation = facts["implementation"]
+    input_contract = deepcopy(dict(facts["input_contract"]))
+    input_code_value = input_contract.get("code_path")
+    resolved_input_code: Optional[Path] = None
+    if input_code_value is not None:
+        if not isinstance(input_code_value, str) or not input_code_value.strip():
+            raise DriverIntegrationError("worker input_contract.code_path is malformed")
+        input_code_path = Path(input_code_value)
+        if input_code_path.is_absolute():
+            raise DriverIntegrationError(
+                "worker refuses an absolute author-supplied input_contract.code_path"
+            )
+        resolved_input_code = (artifact.model_dir / input_code_path).resolve()
+        if not resolved_input_code.is_relative_to(artifact.model_dir.resolve()):
+            raise DriverIntegrationError("worker input_contract.code_path escapes the model root")
+        if not resolved_input_code.is_file():
+            raise DriverIntegrationError("worker input_contract.code_path is not a regular file")
+    builder_symbol = input_contract.get("builder_symbol")
+    if not isinstance(builder_symbol, str) or not re.fullmatch(
+        r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*", builder_symbol
+    ):
+        raise DriverIntegrationError("worker input_contract.builder_symbol is malformed")
+    non_tensor_values = input_contract.get("non_tensor_values")
+    if not isinstance(non_tensor_values, list):
+        raise DriverIntegrationError("worker input_contract.non_tensor_values is malformed")
+    for leaf in non_tensor_values:
+        value = leaf.get("value") if isinstance(leaf, Mapping) else None
+        if isinstance(value, str):
+            possible_path = Path(value)
+            if possible_path.is_absolute() or ".." in possible_path.parts:
+                raise DriverIntegrationError(
+                    "worker refuses path-like non-tensor values outside the model root"
+                )
+            value_type = str(leaf.get("type", "")).casefold().replace("_", "-")
+            if value_type in {"file", "file-path", "filepath", "path", "pathlib.path"}:
+                resolved_value = (artifact.model_dir / possible_path).resolve()
+                if not resolved_value.is_relative_to(artifact.model_dir.resolve()) or not (
+                    resolved_value.is_file()
+                ):
+                    raise DriverIntegrationError(
+                        "worker path-valued non-tensor input is not a model-local regular file"
+                    )
     if implementation["recipe_type"] == "declarative-library":
         recipe: JsonObject = {
             "kind": "declarative-library",
@@ -4810,29 +4866,60 @@ def _worker_request(
         code_path = (artifact.model_dir / code_path).resolve()
         if not code_path.is_relative_to(canonical_root):
             raise DriverIntegrationError("worker adapter path escapes canonical accepted-code root")
+        manifest_rows: list[JsonObject] = []
+        raw_manifest = implementation.get("code_manifest")
+        if not isinstance(raw_manifest, list) or not raw_manifest:
+            raise DriverIntegrationError("worker adapter code manifest is missing")
+        for member in raw_manifest:
+            if not isinstance(member, Mapping) or not isinstance(member.get("path"), str):
+                raise DriverIntegrationError("worker adapter code manifest path is malformed")
+            member_path = Path(str(member["path"]))
+            if member_path.is_absolute():
+                raise DriverIntegrationError("worker adapter code manifest path must be relative")
+            resolved_member = (artifact.model_dir / member_path).resolve()
+            if not resolved_member.is_relative_to(canonical_root) or not resolved_member.is_file():
+                raise DriverIntegrationError(
+                    "worker adapter code manifest path is not a canonical regular file"
+                )
+            manifest_rows.append(
+                {
+                    "path": str(resolved_member),
+                    "identity_path": member["path"],
+                    "sha256": member["sha256"],
+                }
+            )
         recipe = {
             "kind": "typed-adapter",
             "path": str(code_path),
             "adapter_sha256": implementation["code_sha256"],
-            "code_manifest": [
-                {
-                    "path": str((artifact.model_dir / str(member["path"])).resolve()),
-                    "identity_path": member["path"],
-                    "sha256": member["sha256"],
-                }
-                for member in implementation["code_manifest"]
-            ],
+            "code_manifest": manifest_rows,
             "code_manifest_sha256": stable_hash(implementation["code_manifest"]),
         }
-    input_seed = int(facts["input_contract"].get("seed", 0))
-    input_manifest = {
-        "input_seed": input_seed,
-        "modality": deepcopy(facts["external_metadata"]["modality"]),
-        "input_contract_sha256": stable_hash(facts["input_contract"]),
-        "selected_asset": (
+    input_seed = int(input_contract.get("seed", 0))
+    try:
+        selected_asset = (
             expected_standard_asset(facts["external_metadata"]["modality"])
             if implementation["recipe_type"] == "declarative-library"
             else None
+        )
+    except ValueError as exc:
+        raise DriverIntegrationError(str(exc)) from exc
+    input_manifest = {
+        "input_seed": input_seed,
+        "modality": deepcopy(facts["external_metadata"]["modality"]),
+        "input_contract_sha256": stable_hash(input_contract),
+        "selected_asset": selected_asset,
+        "allowed_asset_outcomes": [
+            {"sha256": None, "asset_id": None},
+            *(
+                [{"sha256": selected_asset["sha256"], "asset_id": selected_asset["asset_id"]}]
+                if selected_asset is not None
+                else []
+            ),
+        ],
+        "validated_model_root": str(artifact.model_dir.resolve()),
+        "validated_input_code_path": (
+            str(resolved_input_code) if resolved_input_code is not None else None
         ),
     }
     return {
@@ -4840,7 +4927,7 @@ def _worker_request(
         "recipe": recipe,
         "modality": facts["external_metadata"]["modality"],
         "input_spec": None,
-        "input_contract": deepcopy(dict(facts["input_contract"])),
+        "input_contract": input_contract,
         "scratch_root": str(scratch_root),
         "receipt_path": str(receipt_path),
         "seed": input_seed,
@@ -4856,7 +4943,7 @@ def _worker_request(
             "implementation": {
                 key: value for key, value in implementation.items() if key != "recipe_revision"
             },
-            "input_contract": deepcopy(dict(facts["input_contract"])),
+            "input_contract": deepcopy(input_contract),
             "modes": {
                 "meaningful_modes": list(facts["modes"]["meaningful_modes"]),
             },
@@ -4982,7 +5069,12 @@ def _attempts_from_supervised(
         _parent_cache_read_attempted(policy)
     )
     receipt["policy_observation"] = policy
-    parent_result = SupervisedResult(result.observation, receipt or None, result.receipt_error)
+    parent_result = SupervisedResult(
+        result.observation,
+        receipt or None,
+        result.receipt_error,
+        result.success_attestation_sha256,
+    )
     envelope_error = _receipt_envelope_error(
         parent_result,
         proposal,
@@ -4994,7 +5086,7 @@ def _attempts_from_supervised(
     effective_result = (
         parent_result
         if envelope_error is None
-        else SupervisedResult(result.observation, None, envelope_error)
+        else SupervisedResult(result.observation, None, envelope_error, None)
     )
     per_mode = receipt.get("per_mode", {})
     receipt_modes = receipt.get("meaningful_modes", [])
@@ -5019,6 +5111,7 @@ def _attempts_from_supervised(
             envelope_error is None
             and result.observation.exit_code == 0
             and result.observation.signal_number is None
+            and result.success_attestation_sha256 is not None
             and mode_receipt.get("constructor_started")
             and mode_receipt.get("constructor_completed")
             and mode_receipt.get("input_completed")
@@ -5050,7 +5143,9 @@ def _attempts_from_supervised(
             }
         worker_receipt = {
             "present": result.worker_receipt is not None,
-            "receipt_sha256": receipt.get("receipt_sha256"),
+            "receipt_sha256": (
+                result.success_attestation_sha256 if succeeded else receipt.get("receipt_sha256")
+            ),
             "observed_recipe_revision": receipt.get("observed_recipe_revision"),
             "observed_adapter_sha256": receipt.get("observed_adapter_sha256"),
             "observed_code_manifest_sha256": receipt.get("observed_code_manifest_sha256"),
@@ -5070,6 +5165,8 @@ def _attempts_from_supervised(
             "parameter_count_trainable": mode_receipt.get("parameter_count_trainable"),
             "native_framework": mode_receipt.get("native_framework"),
             "delegated_method": mode_receipt.get("delegated_method"),
+            "constructor_seconds": mode_receipt.get("constructor_seconds"),
+            "forward_seconds": mode_receipt.get("forward_seconds"),
         }
         attempts.append(
             {
@@ -5226,8 +5323,6 @@ def _receipt_envelope_error(
 
     if result.receipt_error is not None:
         return result.receipt_error
-    if result.observation.exit_code != 0 or result.observation.signal_number is not None:
-        return "worker-exit-nonzero"
     receipt = result.worker_receipt
     if not isinstance(receipt, Mapping):
         return "missing-receipt"
@@ -5255,19 +5350,50 @@ def _receipt_envelope_error(
     }
     if not required_top <= set(receipt):
         return "invalid-receipt:incomplete-envelope"
+    successful_exit = result.observation.exit_code == 0 and result.observation.signal_number is None
+    expected_adapter = _expected_adapter_sha256(proposal)
+    expected_manifest = _expected_code_manifest_sha256(proposal)
+    observed_asset_pair = (
+        receipt.get("observed_input_asset_sha256"),
+        next(
+            (
+                value.get("input_asset")
+                for value in receipt.get("per_mode", {}).values()
+                if isinstance(value, Mapping)
+            ),
+            None,
+        ),
+    )
+    expected_asset_pair = (
+        _expected_input_asset_sha256(proposal),
+        _expected_input_asset_id(proposal),
+    )
     if (
         receipt.get("receipt_version") != "menagerie.crawler.worker-receipt.v1"
         or receipt.get("stable_id") != proposal.get("stable_id")
         or receipt.get("source_identity") != proposal.get("source_identity")
         or receipt.get("recipe_revision") != proposal.get("recipe_revision")
-        or receipt.get("observed_recipe_revision") != proposal.get("recipe_revision")
-        or receipt.get("observed_adapter_sha256") != _expected_adapter_sha256(proposal)
-        or receipt.get("observed_code_manifest_sha256") != _expected_code_manifest_sha256(proposal)
-        or receipt.get("observed_input_asset_sha256") != _expected_input_asset_sha256(proposal)
         or receipt.get("execution_identity") != execution_identity
-        or receipt.get("error") is not None
+        or (
+            receipt.get("observed_recipe_revision") is not None
+            and receipt.get("observed_recipe_revision") != proposal.get("recipe_revision")
+        )
+        or (
+            receipt.get("observed_adapter_sha256") is not None
+            and receipt.get("observed_adapter_sha256") != expected_adapter
+        )
+        or (
+            receipt.get("observed_code_manifest_sha256") is not None
+            and receipt.get("observed_code_manifest_sha256") != expected_manifest
+        )
+        or observed_asset_pair
+        not in {
+            (None, None),
+            expected_asset_pair,
+            (expected_asset_pair[0], None) if not successful_exit else expected_asset_pair,
+        }
     ):
-        return "invalid-receipt:identity-or-error"
+        return "invalid-receipt:identity"
     modes = receipt.get("meaningful_modes")
     detected = receipt.get("detected_meaningful_modes")
     declared = receipt.get("declared_meaningful_modes")
@@ -5283,19 +5409,23 @@ def _receipt_envelope_error(
         for value in proposal.get("proposed_facts", {}).get("modes", {}).get("meaningful_modes", [])
     )
     mode_set = set(modes)
-    if (
-        not modes
-        or len(modes) != len(mode_set)
-        or not mode_set <= {"train", "eval"}
-        or not set(detected) <= mode_set
-        or set(declared) != mode_set
-        or mode_set != proposal_modes
-        or not isinstance(per_mode, Mapping)
-    ):
+    if not isinstance(per_mode, Mapping):
         return "invalid-receipt:mode-envelope"
     receipt_mode = receipt.get("mode")
     validated_modes: tuple[str, ...]
-    if requested_mode is not None:
+    if not successful_exit:
+        if requested_mode is not None and (
+            requested_mode not in proposal_modes
+            or receipt_mode != requested_mode
+            or not set(per_mode) <= {requested_mode}
+        ):
+            return "invalid-receipt:mode-envelope"
+        if requested_mode is None and receipt_mode is not None:
+            return "invalid-receipt:mode-envelope"
+        validated_modes = tuple(str(mode) for mode in per_mode)
+    elif requested_mode is not None:
+        if result.success_attestation_sha256 is None:
+            return "missing-parent-success-attestation"
         if (
             requested_mode not in proposal_modes
             or requested_mode not in mode_set
@@ -5305,6 +5435,8 @@ def _receipt_envelope_error(
             return "invalid-receipt:mode-envelope"
         validated_modes = (requested_mode,)
     else:
+        if result.success_attestation_sha256 is None:
+            return "missing-parent-success-attestation"
         if receipt_mode is not None or set(per_mode) != mode_set:
             return "invalid-receipt:mode-envelope"
         validated_modes = tuple(str(mode) for mode in modes)
@@ -5321,10 +5453,14 @@ def _receipt_envelope_error(
     }
     for mode in validated_modes:
         value = per_mode.get(mode)
+        if not isinstance(value, Mapping) or not required_mode <= set(value):
+            return "invalid-receipt:incomplete-mode"
+        if not successful_exit:
+            if value.get("mode") != mode:
+                return "invalid-receipt:mode-envelope"
+            continue
         if (
-            not isinstance(value, Mapping)
-            or not required_mode <= set(value)
-            or value.get("mode") != mode
+            value.get("mode") != mode
             or value.get("error") is not None
             or not value.get("constructor_started")
             or not value.get("constructor_completed")
@@ -5335,7 +5471,11 @@ def _receipt_envelope_error(
                 value.get("input_signature"),
                 proposal.get("proposed_facts", {}).get("input_contract", {}),
             )
-            or value.get("input_asset") != _expected_input_asset_id(proposal)
+            or (
+                receipt.get("observed_input_asset_sha256"),
+                value.get("input_asset"),
+            )
+            not in {(None, None), expected_asset_pair}
         ):
             return "invalid-receipt:incomplete-mode"
         if output_signature_error(value.get("output_signature")) is not None:
@@ -5354,6 +5494,17 @@ def _receipt_envelope_error(
     }
     if not isinstance(policy, Mapping) or not required_policy <= set(policy):
         return "invalid-receipt:policy-envelope"
+    if successful_exit and receipt.get("error") is not None:
+        return "invalid-receipt:success-with-error"
+    if not successful_exit and not (
+        isinstance(receipt.get("error"), Mapping)
+        or any(
+            isinstance(value, Mapping) and isinstance(value.get("error"), Mapping)
+            for value in per_mode.values()
+        )
+        or any(policy.get(field) for field in required_policy if field.endswith("attempted"))
+    ):
+        return "invalid-receipt:failure-without-error"
     return None
 
 
@@ -6002,6 +6153,14 @@ def _attempt_policy_satisfied(
         observation = attempt.get("supervisor_observation", {})
         output = receipt.get("output_signature")
         complete_output = output_signature_error(output) is None
+        observed_asset_pair = (
+            receipt.get("observed_input_asset_sha256"),
+            receipt.get("input_asset"),
+        )
+        expected_asset_pair = (
+            _expected_input_asset_sha256(proposal),
+            _expected_input_asset_id(proposal),
+        )
         if (
             attempt.get("result") == "succeeded"
             and receipt.get("present")
@@ -6012,6 +6171,7 @@ def _attempt_policy_satisfied(
             and receipt.get("forward_completed")
             and observation.get("exit_code") == 0
             and observation.get("signal") is None
+            and _parent_success_attestation_matches(attempt)
             and complete_output
             and input_signature_matches_contract(
                 receipt.get("input_signature"),
@@ -6023,8 +6183,7 @@ def _attempt_policy_satisfied(
             and receipt.get("observed_adapter_sha256") == _expected_adapter_sha256(proposal)
             and receipt.get("observed_code_manifest_sha256")
             == _expected_code_manifest_sha256(proposal)
-            and receipt.get("observed_input_asset_sha256") == _expected_input_asset_sha256(proposal)
-            and receipt.get("input_asset") == _expected_input_asset_id(proposal)
+            and observed_asset_pair in {(None, None), expected_asset_pair}
         ):
             counts[mode] += 1
             signatures[mode].append(output)
@@ -6696,10 +6855,27 @@ def _assemble_run_model(
     if required_fidelity and fidelity_gate is None:
         raise DriverIntegrationError(f"fidelity gate missing for {stable_id}")
 
+    clean_attempts = tuple(
+        attempt
+        for attempt in attempts
+        if attempt.get("result") == "succeeded"
+        and _parent_success_attestation_matches(attempt)
+        and not any(
+            attempt.get("policy_observation", {}).get(field)
+            for field in (
+                "network_attempted",
+                "checkpoint_or_weight_read_attempted",
+                "cache_read_attempted",
+                "write_outside_scratch_attempted",
+                "credentials_present",
+                "torchlens_import_attempted",
+            )
+        )
+    )
     observed_modes = {
         str(attempt.get("mode"))
-        for attempt in attempts
-        if attempt.get("result") == "succeeded" and attempt.get("mode") in {"train", "eval"}
+        for attempt in clean_attempts
+        if attempt.get("mode") in {"train", "eval"}
     }
     meaningful = canonical_meaningful_modes(
         facts["modes"]["meaningful_modes"], field="modes.meaningful_modes"
@@ -6708,12 +6884,13 @@ def _assemble_run_model(
         raise DriverIntegrationError(
             "worker receipts differ from the proposal-declared meaningful-mode set"
         )
+    required_cold_runs = 2 if required_fidelity else 1
+    if not _attempt_policy_satisfied(clean_attempts, proposal, required_cold_runs):
+        raise DriverIntegrationError("accepted attempts do not satisfy the clean execution policy")
     selected: dict[str, Mapping[str, Any]] = {}
     for mode in meaningful:
         selected[mode] = next(
-            attempt
-            for attempt in reversed(attempts)
-            if attempt.get("mode") == mode and attempt.get("result") == "succeeded"
+            attempt for attempt in reversed(clean_attempts) if attempt.get("mode") == mode
         )
     first_attempt = selected[meaningful[0]]
     first_receipt = first_attempt["worker_receipt"]
@@ -6733,9 +6910,7 @@ def _assemble_run_model(
             }
         )
     facts["fidelity"] = fidelity
-    accepted_ids = [
-        str(attempt["attempt_id"]) for attempt in attempts if attempt.get("result") == "succeeded"
-    ]
+    accepted_ids = [str(attempt["attempt_id"]) for attempt in clean_attempts]
     execution_identity = str(first_attempt["identities"]["execution"])
     now = str(first_attempt.get("finished_at") or utc_now())
     model: JsonObject = {
@@ -6797,8 +6972,16 @@ def _assemble_run_model(
             "env_generation": first_attempt["identities"]["environment"],
             "accepted_attempt_ids": accepted_ids,
             "confirmation_policy": ("two-cold-r3-r4" if required_fidelity else "single-mechanical"),
-            "network_attempted": False,
-            "checkpoint_accessed": False,
+            "network_attempted": any(
+                bool(attempt.get("policy_observation", {}).get("network_attempted"))
+                for attempt in clean_attempts
+            ),
+            "checkpoint_accessed": any(
+                bool(
+                    attempt.get("policy_observation", {}).get("checkpoint_or_weight_read_attempted")
+                )
+                for attempt in clean_attempts
+            ),
             "last_verified_at": now,
             "current": True,
         },

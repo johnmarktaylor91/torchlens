@@ -6,6 +6,7 @@ import json
 import os
 import re
 import resource
+import secrets
 import signal
 import shutil
 import stat
@@ -75,6 +76,7 @@ _RESUMED_TRACE_PATTERN = re.compile(
     r"<\.\.\. (?P<syscall>[a-z][a-z0-9_]*) resumed>(?P<suffix>.*)$"
 )
 _TRACE_PID_PATTERN = re.compile(r"^\s*(?:\[pid\s+)?(?P<pid>\d+)\]?\s+")
+_NON_FILE_DESCRIPTOR_PREFIXES = ("anon_inode:", "memfd:", "pipe:", "socket:")
 _SPECIAL_READ_ROOTS = (Path("/dev"), Path("/proc"), Path("/sys"))
 _SYSTEM_READ_FILES = frozenset(
     {
@@ -91,6 +93,8 @@ _SYSTEM_READ_FILES = frozenset(
 )
 _TERMINAL_TRACE_PATTERN = re.compile(r"\+\+\+ (?:exited with|killed by) .+ \+\+\+$")
 _MACOS_AUDIT_COMPLETION_MARKER = "MENAGERIE_MACOS_SANDBOX_AUDIT_COMPLETE_V1"
+_PARENT_COMPLETION_CHALLENGE_ENV = "MENAGERIE_PARENT_COMPLETION_CHALLENGE"
+_WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V1 "
 
 
 @dataclass(frozen=True)
@@ -111,6 +115,8 @@ class SupervisorObservation:
         Hashes, sizes, bounded tails, and local paths.
     failed_read_probe_paths:
         Undeclared read-only opens that failed before returning a descriptor.
+    success_attestation_sha256, attested_receipt_sha256:
+        Parent-owned success attestation and the exact child receipt it witnessed.
     """
 
     argv: tuple[str, ...]
@@ -131,6 +137,8 @@ class SupervisorObservation:
     stdout_path: str
     stderr_path: str
     failed_read_probe_paths: tuple[str, ...] = ()
+    success_attestation_sha256: Optional[str] = None
+    attested_receipt_sha256: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible parent observation.
@@ -160,6 +168,8 @@ class SupervisorObservation:
             "stdout_path": self.stdout_path,
             "stderr_path": self.stderr_path,
             "failed_read_probe_paths": list(self.failed_read_probe_paths),
+            "success_attestation_sha256": self.success_attestation_sha256,
+            "attested_receipt_sha256": self.attested_receipt_sha256,
         }
 
 
@@ -175,11 +185,14 @@ class SupervisedResult:
         Parsed receipt only when a complete valid atomic file exists.
     receipt_error:
         Parent diagnosis when the receipt is absent or invalid.
+    success_attestation_sha256:
+        Parent-owned proof of a normally completed worker success path.
     """
 
     observation: SupervisorObservation
     worker_receipt: Optional[dict[str, Any]]
     receipt_error: Optional[str]
+    success_attestation_sha256: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -301,6 +314,82 @@ def _tail(data: bytes) -> str:
     return data.decode("utf-8", errors="replace")[-STDIO_TAIL_MAX_CHARS:]
 
 
+def _verified_worker_completion(stdout: bytes, challenge: str) -> Optional[dict[str, str]]:
+    """Verify the final normal-completion line against a parent-only challenge.
+
+    Parameters
+    ----------
+    stdout:
+        Exact worker stdout bytes observed by the parent.
+    challenge:
+        Fresh challenge removed from the worker environment before model code runs.
+
+    Returns
+    -------
+    dict[str, str] | None
+        Bound child receipt digest and proof, or ``None`` when normal completion was
+        not witnessed.
+    """
+
+    try:
+        lines = stdout.decode("utf-8", errors="strict").splitlines()
+    except UnicodeDecodeError:
+        return None
+    if not lines or not lines[-1].startswith(_WORKER_COMPLETION_PREFIX):
+        return None
+    try:
+        value = json.loads(lines[-1][len(_WORKER_COMPLETION_PREFIX) :])
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(value, Mapping):
+        return None
+    receipt_sha256 = value.get("receipt_sha256")
+    proof = value.get("proof")
+    if not isinstance(receipt_sha256, str) or not isinstance(proof, str):
+        return None
+    expected = stable_hash(
+        {
+            "version": "menagerie.crawler.worker-completion.v1",
+            "challenge": challenge,
+            "receipt_sha256": receipt_sha256,
+        }
+    )
+    if proof != expected:
+        return None
+    return {"receipt_sha256": receipt_sha256, "completion_line": lines[-1]}
+
+
+def parent_success_attestation_sha256(completion_line: str, observation: Mapping[str, Any]) -> str:
+    """Hash one parent-owned success attestation from exact process facts.
+
+    Parameters
+    ----------
+    completion_line:
+        Challenge-verified final worker completion line.
+    observation:
+        Exact persisted parent process facts.
+
+    Returns
+    -------
+    str
+        Domain-separated parent attestation digest.
+    """
+
+    return stable_hash(
+        {
+            "version": "menagerie.crawler.parent-success-attestation.v1",
+            "completion_line": completion_line,
+            "exit_code": observation.get("exit_code"),
+            "signal": observation.get("signal"),
+            "wall_seconds": observation.get("wall_seconds"),
+            "cpu_seconds": observation.get("cpu_seconds"),
+            "peak_rss_bytes": observation.get("peak_rss_bytes"),
+            "stdout_sha256": observation.get("stdout_sha256"),
+            "stderr_sha256": observation.get("stderr_sha256"),
+        }
+    )
+
+
 def _rusage_seconds(usage: resource.struct_rusage) -> float:
     """Return combined user and system CPU seconds.
 
@@ -344,7 +433,10 @@ def _linux_audited_argv(
         "-q",
         "-yy",
         "-e",
-        "trace=%network,%file,%process",
+        (
+            "trace=%network,%file,%process,mmap,read,pread64,readv,preadv,preadv2,"
+            "readlinkat,name_to_handle_at,open_by_handle_at"
+        ),
         "-s",
         "4096",
         "-o",
@@ -418,14 +510,15 @@ def _request_allowed_read_paths(argv: Sequence[str]) -> tuple[Path, ...]:
     allowed: list[Path] = []
     if argv:
         executable = Path(argv[0])
-        if executable.exists():
+        if executable.is_file():
             allowed.append(executable)
     try:
         request_index = argv.index("--request") + 1
         request_path = Path(argv[request_index]).resolve()
     except (ValueError, IndexError):
         return tuple(dict.fromkeys(allowed))
-    allowed.append(request_path)
+    if request_path.is_file():
+        allowed.append(request_path)
     try:
         request = json.loads(request_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -433,25 +526,41 @@ def _request_allowed_read_paths(argv: Sequence[str]) -> tuple[Path, ...]:
     if not isinstance(request, Mapping):
         return tuple(dict.fromkeys(allowed))
     standard_asset = _request_standard_asset(request)
-    if standard_asset is not None:
+    if standard_asset is not None and standard_asset.is_file():
         allowed.append(standard_asset)
     recipe = request.get("recipe")
     if isinstance(recipe, Mapping):
         adapter_path = recipe.get("path")
         if isinstance(adapter_path, str) and adapter_path:
             resolved_adapter = Path(adapter_path).resolve()
-            allowed.append(resolved_adapter)
+            if resolved_adapter.is_file():
+                allowed.append(resolved_adapter)
             for directory in (resolved_adapter.parent, *resolved_adapter.parents[:4]):
                 sidecar = directory / "driver-author-artifact.json"
                 if sidecar.is_file():
                     allowed.append(sidecar)
                     break
-    input_contract = request.get("input_contract")
-    if isinstance(input_contract, Mapping):
-        input_code_path = input_contract.get("code_path")
-        if isinstance(input_code_path, str) and input_code_path:
-            allowed.append(Path(input_code_path))
-    return tuple(dict.fromkeys(path.resolve() for path in allowed))
+    input_manifest = request.get("input_manifest")
+    if isinstance(input_manifest, Mapping):
+        model_root_value = input_manifest.get("validated_model_root")
+        input_path_value = input_manifest.get("validated_input_code_path")
+        if isinstance(model_root_value, str) and isinstance(input_path_value, str):
+            model_root = Path(model_root_value)
+            input_path = Path(input_path_value)
+            if (
+                model_root.is_absolute()
+                and model_root.is_dir()
+                and input_path.is_absolute()
+                and input_path.is_file()
+                and input_path.resolve().is_relative_to(model_root.resolve())
+            ):
+                allowed.append(input_path)
+    # input_contract is author-authored. Its code_path and scalar leaves are never
+    # promoted into a parent read grant; accepted adapter closure bytes already cover
+    # every executable model-local helper the worker may load.
+    return tuple(
+        dict.fromkeys(path.resolve() for path in allowed if path.is_absolute() and path.is_file())
+    )
 
 
 def _request_standard_asset(request: Mapping[str, Any]) -> Optional[Path]:
@@ -873,7 +982,7 @@ def _parse_linux_denial_audit(
     failed_read_probe_paths: list[str] = []
     for line in completed_lines:
         syscall = _syscall_name(line)
-        if syscall in {"connect", "sendmsg", "sendto"} and (
+        if syscall in {"connect", "send", "sendmsg", "sendmmsg", "sendto"} and (
             "AF_INET" in line or "AF_INET6" in line
         ):
             socket_targets.append(_network_target(line))
@@ -897,10 +1006,55 @@ def _parse_linux_denial_audit(
                 result = _read_only_open_result(line)
                 if result is None:
                     return _telemetry_failure_observation("unparsable-open-result")
-                if result >= 0:
-                    checkpoint_paths.append(path_text)
-                else:
+                checkpoint_paths.append(path_text)
+                if result < 0:
                     failed_read_probe_paths.append(path_text)
+            continue
+        if syscall in {"readlinkat", "name_to_handle_at"}:
+            paths = _decoded_trace_paths(line)
+            if paths and not _read_path_is_allowed(
+                paths[0],
+                cwd,
+                write_roots,
+                allowed_read_paths,
+                runtime_code_roots,
+            ):
+                checkpoint_paths.append(paths[0])
+            continue
+        if syscall == "open_by_handle_at":
+            checkpoint_paths.append("<open_by_handle_at:undeclared-file-handle>")
+            continue
+        if syscall == "mmap":
+            descriptor_path = re.search(r"\b\d+<([^>]+)>", line)
+            descriptor_path_text = descriptor_path.group(1) if descriptor_path is not None else None
+            if (
+                descriptor_path_text is not None
+                and not descriptor_path_text.startswith(_NON_FILE_DESCRIPTOR_PREFIXES)
+                and not _read_path_is_allowed(
+                    descriptor_path_text,
+                    cwd,
+                    write_roots,
+                    allowed_read_paths,
+                    runtime_code_roots,
+                )
+            ):
+                checkpoint_paths.append(descriptor_path_text)
+            continue
+        if syscall in {"read", "pread64", "readv", "preadv", "preadv2"}:
+            descriptor_path = re.search(r"\b\d+<([^>]+)>", line)
+            descriptor_path_text = descriptor_path.group(1) if descriptor_path is not None else None
+            if (
+                descriptor_path_text is not None
+                and not descriptor_path_text.startswith(_NON_FILE_DESCRIPTOR_PREFIXES)
+                and not _read_path_is_allowed(
+                    descriptor_path_text,
+                    cwd,
+                    write_roots,
+                    allowed_read_paths,
+                    runtime_code_roots,
+                )
+            ):
+                checkpoint_paths.append(descriptor_path_text)
             continue
         if syscall not in _WRITE_SYSCALLS or not any(
             f" {errno} " in line for errno in _DENIED_ERRNOS
@@ -963,13 +1117,47 @@ def _macos_denial_message(line: str) -> Optional[str]:
     return stripped if "deny" in stripped.lower() else None
 
 
-def _macos_denial_audit(telemetry: bytes) -> SandboxDenialObservation:
+def _macos_denial_process_ids(line: str) -> frozenset[int]:
+    """Extract process and parent identifiers from one macOS log record.
+
+    Parameters
+    ----------
+    line:
+        Unified-log NDJSON or legacy Seatbelt text.
+
+    Returns
+    -------
+    frozenset[int]
+        Process identifiers explicitly associated with the record.
+    """
+
+    stripped = line.strip()
+    identifiers: set[int] = set()
+    if stripped.startswith("{"):
+        try:
+            value = json.loads(stripped)
+        except json.JSONDecodeError:
+            value = None
+        if isinstance(value, Mapping):
+            for key in ("processID", "parentProcessID", "pid", "ppid"):
+                candidate = value.get(key)
+                if isinstance(candidate, int):
+                    identifiers.add(candidate)
+    identifiers.update(int(value) for value in re.findall(r"\((\d+)\)\s+deny", line))
+    return frozenset(identifiers)
+
+
+def _macos_denial_audit(
+    telemetry: bytes, *, expected_process_ids: Sequence[int] = ()
+) -> SandboxDenialObservation:
     """Parse completion-marked parent-owned macOS Seatbelt telemetry.
 
     Parameters
     ----------
     telemetry:
         Complete bytes written by the parent-controlled unified-log collector.
+    expected_process_ids:
+        Sandboxed worker process-tree roots. Records outside this scope are noise.
 
     Returns
     -------
@@ -989,8 +1177,17 @@ def _macos_denial_audit(telemetry: bytes) -> SandboxDenialObservation:
     network: list[str] = []
     writes: list[str] = []
     checkpoint_paths: list[str] = []
+    expected_ids = set(expected_process_ids)
     unparseable = False
     for line in records:
+        record_ids = _macos_denial_process_ids(line)
+        if expected_ids:
+            if not expected_ids.intersection(record_ids):
+                continue
+            # A scoped record can identify a direct child as (pid, ppid). Retaining
+            # both identifiers grows the trusted process-tree closure so later
+            # grandchild denials remain in scope without accepting machine-wide noise.
+            expected_ids.update(record_ids)
         message = _macos_denial_message(line)
         if message is None:
             unparseable = True
@@ -1006,8 +1203,9 @@ def _macos_denial_audit(telemetry: bytes) -> SandboxDenialObservation:
         if "file-read-data" in lowered or "file read data" in lowered:
             checkpoint_paths.append(message[-500:])
             recognized = True
-        if not recognized:
-            unparseable = True
+        # Seatbelt also emits unrelated denials such as mach-lookup. They are not
+        # evidence of the network/file policy classes and must not poison this worker.
+        del recognized
     observed = SandboxDenialObservation(
         network_attempted=bool(network),
         socket_targets=tuple(dict.fromkeys(network)),
@@ -1028,6 +1226,7 @@ def _parse_macos_denial_audit(
     audit_path: Path,
     *,
     expected_identity: Optional[tuple[int, int]] = None,
+    expected_process_ids: Sequence[int] = (),
 ) -> SandboxDenialObservation:
     """Verify and parse one parent-owned macOS Seatbelt audit channel.
 
@@ -1037,6 +1236,8 @@ def _parse_macos_denial_audit(
         Parent-controlled unified-log output path.
     expected_identity:
         Parent-recorded device/inode pair for replacement detection.
+    expected_process_ids:
+        Sandboxed process-tree root identifiers used to discard machine-wide noise.
 
     Returns
     -------
@@ -1057,7 +1258,7 @@ def _parse_macos_denial_audit(
         telemetry = audit_path.read_bytes()
     except OSError:
         return _telemetry_failure_observation("missing")
-    return _macos_denial_audit(telemetry)
+    return _macos_denial_audit(telemetry, expected_process_ids=expected_process_ids)
 
 
 @dataclass
@@ -1068,6 +1269,7 @@ class _MacOSAuditChannel:
     expected_identity: tuple[int, int]
     process: subprocess.Popen[Any]
     handle: BinaryIO
+    worker_pid: Optional[int] = None
 
 
 def _start_macos_denial_audit(
@@ -1119,7 +1321,9 @@ def _start_macos_denial_audit(
             start_new_session=True,
             close_fds=True,
         )
-        time.sleep(0.05)
+        # Start before the worker and leave an explicit overlap beyond the first
+        # ~100 ms, where unified-log startup otherwise races very short-lived children.
+        time.sleep(0.2)
         if process.poll() is not None:
             raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
     except (OSError, SandboxUnavailableError):
@@ -1138,10 +1342,26 @@ def _finish_macos_denial_audit(channel: _MacOSAuditChannel) -> None:
     """
 
     completed = False
+    drained = False
     try:
+        drain_started = time.monotonic()
+        deadline = drain_started + 2.5
+        stable_polls = 0
+        previous_size = -1
+        while time.monotonic() < deadline:
+            try:
+                current_size = channel.path.stat().st_size
+            except OSError:
+                break
+            stable_polls = stable_polls + 1 if current_size == previous_size else 0
+            previous_size = current_size
+            if stable_polls >= 5 and time.monotonic() - drain_started >= 2.0:
+                drained = True
+                break
+            time.sleep(0.1)
         channel.process.terminate()
         return_code = channel.process.wait(timeout=5)
-        completed = return_code in {0, -signal.SIGTERM}
+        completed = drained and return_code in {0, -signal.SIGTERM}
     except (OSError, subprocess.TimeoutExpired):
         _kill_process_group(channel.process)
         channel.process.wait()
@@ -1367,6 +1587,7 @@ def run_isolated_subprocess(
     cwd: Optional[Path] = None,
     base_environment: Optional[Mapping[str, str]] = None,
     additional_write_roots: Sequence[Path] = (),
+    worker_completion_challenge: Optional[str] = None,
 ) -> SupervisorObservation:
     """Launch a fresh credential-scrubbed subprocess inside an OS sandbox.
 
@@ -1386,6 +1607,9 @@ def run_isolated_subprocess(
         Optional environment filtered through the safe allowlist.
     additional_write_roots:
         Explicit result roots writable in addition to scratch.
+    worker_completion_challenge:
+        Fresh parent secret used only for the standard worker's normal-completion
+        attestation. Generic isolated subprocesses leave this unset.
 
     Returns
     -------
@@ -1409,6 +1633,8 @@ def run_isolated_subprocess(
     stdout_path = scratch_root / "stdout.log"
     stderr_path = scratch_root / "stderr.log"
     safe_environment = build_safe_environment(scratch_root, base_environment=base_environment)
+    if worker_completion_challenge is not None:
+        safe_environment[_PARENT_COMPLETION_CHALLENGE_ENV] = worker_completion_challenge
     working_directory = (cwd or Path.cwd()).resolve()
     allowed_read_paths = _request_allowed_read_paths(argv)
     safe_environment[_PARENT_ALLOWED_READ_PATHS_ENV] = json.dumps(
@@ -1446,6 +1672,14 @@ def run_isolated_subprocess(
     denial_audit_path: Optional[Path] = None
     denial_audit_identity: Optional[tuple[int, int]] = None
     macos_audit_channel: Optional[_MacOSAuditChannel] = None
+    success_attestation_path: Optional[Path] = None
+    success_attestation_identity: Optional[tuple[int, int]] = None
+    if worker_completion_challenge is not None:
+        success_attestation_path, success_attestation_identity = _parent_owned_audit_path(
+            scratch_root,
+            write_roots,
+            filename="worker-success-attestation.json",
+        )
     if sandbox.kind == "bubblewrap":
         denial_audit_executable = shutil.which("strace")
         if denial_audit_executable is None:
@@ -1479,6 +1713,8 @@ def run_isolated_subprocess(
                 close_fds=True,
                 preexec_fn=partial(_child_limit, rss_limit_bytes),
             )
+            if macos_audit_channel is not None:
+                macos_audit_channel.worker_pid = process.pid
             while process.poll() is None:
                 elapsed = time.monotonic() - started
                 current_rss = _linux_rss(process.pid)
@@ -1510,6 +1746,11 @@ def run_isolated_subprocess(
         denial = _parse_macos_denial_audit(
             macos_audit_channel.path,
             expected_identity=macos_audit_channel.expected_identity,
+            expected_process_ids=(
+                (macos_audit_channel.worker_pid,)
+                if macos_audit_channel.worker_pid is not None
+                else ()
+            ),
         )
     elif denial_audit_path is not None:
         denial = _parse_linux_denial_audit(
@@ -1521,6 +1762,55 @@ def run_isolated_subprocess(
             runtime_code_roots=linux_runtime_code_roots,
         )
     _poison_receipts_in_roots(additional_write_roots, denial)
+    parent_observation = {
+        "exit_code": exit_code,
+        "signal": signal_number,
+        "wall_seconds": wall_seconds,
+        "cpu_seconds": cpu_seconds,
+        "peak_rss_bytes": peak_rss,
+        "stdout_sha256": hash_bytes(stdout),
+        "stderr_sha256": hash_bytes(stderr),
+    }
+    completion = (
+        _verified_worker_completion(stdout, worker_completion_challenge)
+        if worker_completion_challenge is not None
+        and exit_code == 0
+        and signal_number is None
+        and not timed_out
+        and not rss_exceeded
+        else None
+    )
+    success_attestation_sha256: Optional[str] = None
+    attested_receipt_sha256: Optional[str] = None
+    if (
+        completion is not None
+        and success_attestation_path is not None
+        and success_attestation_identity is not None
+    ):
+        success_attestation_sha256 = parent_success_attestation_sha256(
+            completion["completion_line"], parent_observation
+        )
+        attestation = {
+            "version": "menagerie.crawler.parent-success-attestation.v1",
+            "receipt_sha256": completion["receipt_sha256"],
+            "completion_line": completion["completion_line"],
+            "observation": parent_observation,
+            "attestation_sha256": success_attestation_sha256,
+        }
+        try:
+            status = success_attestation_path.stat()
+            if (status.st_dev, status.st_ino) == success_attestation_identity:
+                with success_attestation_path.open("r+b") as handle:
+                    handle.seek(0)
+                    handle.truncate()
+                    handle.write(canonical_json_bytes(attestation) + b"\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                attested_receipt_sha256 = completion["receipt_sha256"]
+            else:
+                success_attestation_sha256 = None
+        except OSError:
+            success_attestation_sha256 = None
     return SupervisorObservation(
         argv=sandboxed_argv,
         cwd=str(working_directory),
@@ -1540,6 +1830,8 @@ def run_isolated_subprocess(
         stdout_path=str(stdout_path),
         stderr_path=str(stderr_path),
         failed_read_probe_paths=denial.failed_read_probe_paths,
+        success_attestation_sha256=success_attestation_sha256,
+        attested_receipt_sha256=attested_receipt_sha256,
     )
 
 
@@ -1660,6 +1952,7 @@ def supervise_worker(
         str(receipt_path),
     )
     working_directory = (cwd or Path.cwd()).resolve()
+    completion_challenge = secrets.token_hex(32)
     try:
         observation = run_isolated_subprocess(
             argv,
@@ -1668,12 +1961,23 @@ def supervise_worker(
             rss_limit_bytes=rss_limit_bytes,
             cwd=working_directory,
             additional_write_roots=(receipt_path.parent,),
+            worker_completion_challenge=completion_challenge,
         )
     except SandboxUnavailableError:
         observation = _sandbox_unavailable_observation(argv, scratch_root, working_directory)
         status = f"failed:{FailureStage.SANDBOX_UNAVAILABLE.value}"
         return SupervisedResult(observation, None, status)
     receipt, receipt_error = _load_receipt(receipt_path)
+    success_attestation = observation.success_attestation_sha256
+    if receipt is not None and observation.attested_receipt_sha256 != receipt.get("receipt_sha256"):
+        success_attestation = None
     if observation.exit_code != 0 or observation.signal_number is not None:
-        return SupervisedResult(observation, None, receipt_error or "worker-exit-nonzero")
-    return SupervisedResult(observation, receipt, receipt_error)
+        return SupervisedResult(
+            observation,
+            receipt,
+            receipt_error or ("worker-exit-nonzero" if receipt is None else None),
+            None,
+        )
+    if receipt is not None and success_attestation is None:
+        return SupervisedResult(observation, receipt, "missing-parent-success-attestation", None)
+    return SupervisedResult(observation, receipt, receipt_error, success_attestation)

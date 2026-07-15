@@ -193,8 +193,8 @@ def test_each_explicit_mode_runs_in_a_fresh_process_without_train_state_leak(
     assert train.worker_receipt is not None
     assert set(train.worker_receipt["per_mode"]) == {"train"}
     assert train.worker_receipt["per_mode"]["train"]["forward_completed"] is True
-    assert eval_result.worker_receipt is None
-    eval_receipt = json.loads(eval_receipt_path.read_text(encoding="utf-8"))
+    assert eval_result.worker_receipt is not None
+    eval_receipt = eval_result.worker_receipt
     assert set(eval_receipt["per_mode"]) == {"eval"}
     assert eval_receipt["per_mode"]["eval"]["forward_completed"] is False
     assert (
@@ -275,10 +275,10 @@ def _successful_receipt(path: Path) -> dict[str, Any]:
     return receipt
 
 
-def test_linux_failed_read_probe_is_telemetry_only_but_successful_open_poisons(
+def test_linux_undeclared_read_attempts_poison_even_when_the_open_fails(
     tmp_path: Path,
 ) -> None:
-    """Only a nonnegative undeclared read-only open descriptor invalidates a receipt."""
+    """Linux aligns with Seatbelt: every undeclared model-data read attempt poisons."""
 
     failed_path = "/etc/optional-model.yaml"
     successful_path = "/etc/undeclared-model-data.yaml"
@@ -300,13 +300,18 @@ def test_linux_failed_read_probe_is_telemetry_only_but_successful_open_poisons(
     failed = _parse_linux_denial_audit(failed_audit, tmp_path, (tmp_path / "scratch",))
     successful = _parse_linux_denial_audit(successful_audit, tmp_path, (tmp_path / "scratch",))
 
-    assert failed.poisoned is False
+    assert failed.poisoned is True
     assert failed.failed_read_probe_paths == (failed_path,)
-    assert failed.checkpoint_paths == ()
+    assert failed.checkpoint_paths == (failed_path,)
     failed_receipt_path = tmp_path / "receipts" / "failed-probe.json"
-    original = _successful_receipt(failed_receipt_path)
-    assert poison_receipt_for_sandbox_denial(failed_receipt_path, failed) is False
-    assert json.loads(failed_receipt_path.read_text(encoding="utf-8")) == original
+    _successful_receipt(failed_receipt_path)
+    assert poison_receipt_for_sandbox_denial(failed_receipt_path, failed) is True
+    assert (
+        json.loads(failed_receipt_path.read_text(encoding="utf-8"))["policy_observation"][
+            "checkpoint_or_weight_read_attempted"
+        ]
+        is True
+    )
 
     assert successful.poisoned is True
     assert successful.checkpoint_paths == (successful_path,)

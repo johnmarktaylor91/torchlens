@@ -668,6 +668,8 @@
         "input_completed",
         "forward_started",
         "forward_completed",
+        "constructor_seconds",
+        "forward_seconds",
         "mode",
         "input_signature",
         "output_signature",
@@ -703,6 +705,14 @@
         "observed_input_asset_sha256": {
           "$ref": "#/$defs/nullable_hash",
           "description": "Worker-observed digest of the materialized standard input asset, or null when no standard asset was selected."
+        },
+        "constructor_seconds": {
+          "type": ["number", "null"],
+          "description": "Worker-observed model-construction wall seconds, or null when the constructor did not complete."
+        },
+        "forward_seconds": {
+          "type": ["number", "null"],
+          "description": "Worker-observed forward wall seconds for this mode, or null when the forward did not run."
         },
         "constructor_started": {
           "type": "boolean",
