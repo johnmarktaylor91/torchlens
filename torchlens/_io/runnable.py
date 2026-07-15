@@ -979,6 +979,18 @@ def _build_call_arguments(
             ):
                 has_unmodelled_host_write = True
                 continue
+        if _should_recover_unattributed_inplace_receiver(op, component, path):
+            if _append_unattributed_inplace_receiver(
+                op,
+                path=path,
+                call_id=call_id,
+                op_by_alias=op_by_alias,
+                slot_for_op=slot_for_op,
+                slot_drafts=slot_drafts,
+                tensor_args=tensor_args,
+            ):
+                has_unmodelled_host_write = True
+                continue
         override = None
         if not _component_contains_tensor(component):
             override = next(non_tensor_positional, _NO_OVERRIDE)
@@ -1051,6 +1063,36 @@ def _should_recover_removed_inplace_receiver(
     )
 
 
+def _should_recover_unattributed_inplace_receiver(
+    op: Any,
+    component: Any,
+    path: tuple[str | int, ...],
+) -> bool:
+    """Return whether an in-place receiver was captured as an unattributed literal.
+
+    Parameters
+    ----------
+    op:
+        Cooked op whose sparse call recipe is being built.
+    component:
+        Captured argument component at ``path``.
+    path:
+        Sparse argument path for ``component``.
+
+    Returns
+    -------
+    bool
+        True when the first argument of an in-place call is an unbound tensor
+        literal, as produced by labelled-RHS ``.data`` writes.
+    """
+
+    return (
+        path == ("args", 0)
+        and bool(getattr(op, "is_inplace", False))
+        and isinstance(component, LiteralTensor)
+    )
+
+
 def _append_first_parent_tensor_argument(
     op: Any,
     *,
@@ -1104,6 +1146,111 @@ def _append_first_parent_tensor_argument(
         slot_drafts=slot_drafts,
     )
     return True
+
+
+def _append_unattributed_inplace_receiver(
+    op: Any,
+    *,
+    path: tuple[str | int, ...],
+    call_id: str,
+    op_by_alias: Mapping[str, Any],
+    slot_for_op: Mapping[int, str],
+    slot_drafts: dict[str, _SlotDraft],
+    tensor_args: list[TensorArgumentRef],
+) -> bool:
+    """Append the unique graph receiver for an unattributed in-place mutation.
+
+    Parameters
+    ----------
+    op:
+        Cooked in-place op.
+    path:
+        Sparse argument path for the receiver.
+    call_id:
+        Sparse call identifier.
+    op_by_alias:
+        Lookup table from raw/final labels to cooked ops.
+    slot_for_op:
+        Lookup table from cooked op identity to tensor slot id.
+    slot_drafts:
+        Mutable tensor slot descriptors.
+    tensor_args:
+        Accumulator receiving tensor arguments.
+
+    Returns
+    -------
+    bool
+        True when exactly one cooked slot can be identified as the missing
+        receiver.
+    """
+
+    matches = _unattributed_inplace_receiver_candidates(op, op_by_alias, slot_for_op)
+    if len(matches) != 1:
+        return False
+    slot_id = matches[0]
+    _append_tensor_argument(
+        tensor_args,
+        path,
+        slot_id,
+        call_id=call_id,
+        slot_drafts=slot_drafts,
+    )
+    return True
+
+
+def _unattributed_inplace_receiver_candidates(
+    op: Any,
+    op_by_alias: Mapping[str, Any],
+    slot_for_op: Mapping[int, str],
+) -> tuple[str, ...]:
+    """Return candidate receiver slots for a labelled-RHS ``.data`` write.
+
+    Parameters
+    ----------
+    op:
+        Cooked in-place op whose receiver lacks graph provenance.
+    op_by_alias:
+        Lookup table from raw/final labels to cooked ops.
+    slot_for_op:
+        Lookup table from cooked op identity to tensor slot id.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Unique slot IDs whose recorded output-version snapshot matches the
+        mutation result.
+    """
+
+    target_digest = _tensor_digest(getattr(op, "out", None))
+    if target_digest is None:
+        return ()
+    parent_labels = {str(parent) for parent in getattr(op, "parents", ()) or ()}
+    candidates: dict[str, str] = {}
+    seen_ops: set[int] = set()
+    for candidate in op_by_alias.values():
+        candidate_id = id(candidate)
+        if candidate_id in seen_ops or candidate_id == id(op):
+            continue
+        seen_ops.add(candidate_id)
+        if str(getattr(candidate, "label", "")) in parent_labels:
+            continue
+        slot_id = slot_for_op.get(candidate_id)
+        if slot_id is None:
+            continue
+        versions = getattr(candidate, "out_versions_by_child", {}) or {}
+        for value in versions.values():
+            if _tensor_digest(value) == target_digest:
+                candidates[slot_id] = slot_id
+                break
+    return tuple(candidates)
+
+
+def _tensor_digest(value: Any) -> str | None:
+    """Return a byte digest for a tensor-like value, if available."""
+
+    if not isinstance(value, torch.Tensor):
+        return None
+    return runnable_tensor_byte_digest(value)
 
 
 _NO_OVERRIDE = object()
@@ -1332,6 +1479,9 @@ def _match_parameter(
     matches = [
         param for param in candidates if tuple(param.shape) == shape and str(param.dtype) == dtype
     ]
+    identity_matches = [param for param in matches if _same_tensor_identity(tensor, param)]
+    if len(identity_matches) == 1:
+        return identity_matches[0]
     argument_names = tuple(getattr(op, "arg_names", ()) or ())
     top_index = path[1] if len(path) > 1 and isinstance(path[1], int) else None
     argument_name = (
@@ -1343,6 +1493,60 @@ def _match_parameter(
     if len(named_matches) == 1:
         return named_matches[0]
     return matches[0] if len(matches) == 1 else None
+
+
+def _same_tensor_identity(tensor: Any, param: Any) -> bool:
+    """Return whether ``tensor`` is the exact captured parameter object/storage."""
+
+    return any(_same_tensor_ref(tensor, param_ref) for param_ref in _parameter_refs(param))
+
+
+def _parameter_refs(param: Any) -> tuple[Any, ...]:
+    """Return live parameter objects associated with one cooked ``Param`` record."""
+
+    refs: list[Any] = []
+    param_ref = getattr(param, "_param_ref", None)
+    if param_ref is not None:
+        refs.append(param_ref)
+    source_trace_ref = getattr(param, "_source_trace_ref", None)
+    trace = source_trace_ref() if callable(source_trace_ref) else None
+    source_model_ref = getattr(trace, "_source_model_ref", None)
+    model = source_model_ref() if callable(source_model_ref) else None
+    named_parameters = getattr(model, "named_parameters", None)
+    if callable(named_parameters):
+        addresses = {str(getattr(param, "address", ""))}
+        addresses.update(str(address) for address in getattr(param, "all_addresses", ()) or ())
+        try:
+            for name, value in named_parameters(remove_duplicate=False):
+                if str(name) in addresses:
+                    refs.append(value)
+        except TypeError:
+            for name, value in named_parameters():
+                if str(name) in addresses:
+                    refs.append(value)
+    return tuple(dict.fromkeys(refs))
+
+
+def _same_tensor_ref(tensor: Any, reference: Any) -> bool:
+    """Return whether two tensors are the same object or share the same data pointer."""
+
+    if tensor is reference or id(tensor) == id(reference):
+        return True
+    tensor_ptr = _tensor_data_ptr(tensor)
+    reference_ptr = _tensor_data_ptr(reference)
+    return tensor_ptr is not None and tensor_ptr == reference_ptr
+
+
+def _tensor_data_ptr(tensor: Any) -> int | None:
+    """Return a tensor data pointer without raising for non-tensors."""
+
+    data_ptr = getattr(tensor, "data_ptr", None)
+    if not callable(data_ptr):
+        return None
+    try:
+        return int(data_ptr())
+    except RuntimeError:
+        return None
 
 
 def _group_computational_ops(ops: Sequence[Any]) -> list[tuple[int, list[Any]]]:

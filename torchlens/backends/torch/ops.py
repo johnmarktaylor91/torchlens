@@ -1336,13 +1336,21 @@ def _walk_output_tensors_with_paths(
     yield from _walk_supported_output_container(out, root_spec=root_spec, path=())
 
 
-def _function_registry_key(func: Callable[..., Any]) -> FunctionRegistryKey:
+_SAFE_TENSOR_PROPERTY_NAMES: frozenset[str] = frozenset({"T", "mT", "real", "imag"})
+
+
+def _function_registry_key(
+    func: Callable[..., Any], func_name: str | None = None
+) -> FunctionRegistryKey:
     """Build a portable registry key for a captured function.
 
     Parameters
     ----------
     func
         Function object being logged.
+    func_name
+        TorchLens-recorded function name for property getter callables whose
+        underlying C descriptor does not preserve the property name.
 
     Returns
     -------
@@ -1352,6 +1360,8 @@ def _function_registry_key(func: Callable[..., Any]) -> FunctionRegistryKey:
 
     from torchlens.intervention.resolver import function_registry_key_from_callable
 
+    if func_name in _SAFE_TENSOR_PROPERTY_NAMES:
+        return FunctionRegistryKey("torch.Tensor", str(func_name), "method")
     return function_registry_key_from_callable(func)
 
 
@@ -1402,6 +1412,8 @@ def _classify_arg_component(
     if isinstance(label, str):
         return ParentRef(label)
     if isinstance(value, torch.Tensor):
+        if isinstance(value, torch.nn.Parameter):
+            return LiteralTensor(value)
         with pause_logging():
             return LiteralTensor(safe_copy(value))
     if _literal_value_supported(value):
@@ -1423,6 +1435,8 @@ def _build_args_template(
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     trace: "Trace | None" = None,
+    *,
+    func_name: str | None = None,
 ) -> CapturedArgTemplate:
     """Build a replay template from original function args and kwargs.
 
@@ -1430,6 +1444,8 @@ def _build_args_template(
     ----------
     func
         Function object being logged.
+    func_name
+        TorchLens-recorded function name.
     args
         Original positional args.
     kwargs
@@ -1451,7 +1467,7 @@ def _build_args_template(
     return CapturedArgTemplate(
         args=arg_components,
         kwargs=kwarg_components,
-        func_id=_function_registry_key(func),
+        func_id=_function_registry_key(func, func_name),
         notes=tuple(notes),
     )
 
@@ -2855,7 +2871,7 @@ def _build_shared_fields_dict(
         getattr(self, "intervention_ready", False) or getattr(self, "save_arg_templates", False)
     )
     if should_capture_template:
-        captured_template = _build_args_template(func, args, kwargs, self)
+        captured_template = _build_args_template(func, args, kwargs, self, func_name=func_name)
         fields_dict["args_template"] = captured_template
         fields_dict["kwargs_template"] = captured_template if kwargs else None
         fields_dict["func_id"] = captured_template.func_id
