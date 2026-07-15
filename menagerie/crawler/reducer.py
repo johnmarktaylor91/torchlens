@@ -214,6 +214,11 @@ class CanonicalReducer:
             raise ReductionError("observed environment facts require exact artifact digests")
         elif observation.get("stdout_sha256") is None or observation.get("stderr_sha256") is None:
             raise ReductionError("an observed subprocess requires exact stream-byte digests")
+        if attempt.get("result") == "succeeded" and (
+            receipt.get("observed_recipe_revision") != identities.get("recipe")
+            or "observed_adapter_sha256" not in receipt
+        ):
+            raise ReductionError("successful worker receipt lacks current observed recipe bindings")
         return self._attempts.append(attempt)
 
     def append_gate(self, gate: Mapping[str, Any]) -> AppendResult:
@@ -671,6 +676,7 @@ class CanonicalReducer:
                 raise ReductionError("accepted execution attempt is missing")
             accepted_work_ids.add(str(attempt.get("work_id")))
             identities = attempt.get("identities", {})
+            receipt = attempt.get("worker_receipt", {})
             if (
                 identities.get("source") != accepted_identities.source
                 or identities.get("recipe") != accepted_identities.recipe
@@ -679,10 +685,11 @@ class CanonicalReducer:
                 or identities.get("evidence") != evidence.get("evidence_identity")
                 or identities.get("environment") != execution.get("env_generation")
                 or identities.get("checker_prompt") != _checker_prompt_hash()
+                or receipt.get("observed_recipe_revision") != accepted_identities.recipe
+                or receipt.get("observed_adapter_sha256") != implementation.get("code_sha256")
             ):
                 raise ReductionError("accepted attempt identities are stale for the current model")
             mode = str(attempt.get("mode"))
-            receipt = attempt.get("worker_receipt", {})
             observation = attempt.get("supervisor_observation", {})
             signature = receipt.get("output_signature")
             if (

@@ -83,6 +83,7 @@ _ARRAY_FIELDS = _REQUIRED_NONEMPTY_ARRAYS | {"lineage", "predecessors", "tags", 
 _REQUIRED_NONEMPTY_STRINGS = frozenset(
     {"family", "era", "key_contribution", "description", "original_framework", "run_framework"}
 )
+_CANONICAL_MODE_ORDER = ("train", "eval")
 
 
 class MetadataValidationError(ValueError):
@@ -117,6 +118,33 @@ class AcceptedIdentities:
     recipe: str
     vet: str
     fidelity: Optional[str]
+
+
+def canonical_meaningful_modes(value: Any, *, field: str) -> list[str]:
+    """Return one validated meaningful-mode set in canonical order.
+
+    Parameters
+    ----------
+    value:
+        Candidate JSON meaningful-mode array.
+    field:
+        Dotted field name used in validation errors.
+
+    Returns
+    -------
+    list[str]
+        Unique declared modes ordered as ``train``, then ``eval``.
+    """
+
+    if (
+        not isinstance(value, list)
+        or not value
+        or not all(mode in _CANONICAL_MODE_ORDER for mode in value)
+        or len(value) != len(set(value))
+    ):
+        raise MetadataValidationError(f"{field} must contain unique train/eval modes")
+    declared = set(value)
+    return [mode for mode in _CANONICAL_MODE_ORDER if mode in declared]
 
 
 def authored_fact_leaves(facts: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -229,12 +257,15 @@ def recompute_accepted_identities(
     evidence = compute_evidence_identity(
         [value for value in excerpts if isinstance(value, Mapping)]
     )
+    meaningful_modes = canonical_meaningful_modes(
+        modes.get("meaningful_modes"), field="modes.meaningful_modes"
+    )
     recipe_facts = {
         "implementation": {
             key: value for key, value in implementation.items() if key != "recipe_revision"
         },
         "input_contract": input_contract,
-        "modes": {"meaningful_modes": modes.get("meaningful_modes")},
+        "modes": {"meaningful_modes": meaningful_modes},
     }
     recipe = compute_recipe_revision(recipe_facts, source)
     authored = authored_fact_leaves(facts)
@@ -301,16 +332,9 @@ def validate_external_metadata(
     modes = metadata["modes"]
     if not isinstance(modes, Mapping):
         raise MetadataValidationError("external_metadata.modes must be an object")
-    meaningful_modes = modes.get("meaningful_modes")
-    if (
-        not isinstance(meaningful_modes, list)
-        or not meaningful_modes
-        or not all(mode in {"train", "eval"} for mode in meaningful_modes)
-        or len(meaningful_modes) != len(set(meaningful_modes))
-    ):
-        raise MetadataValidationError(
-            "external_metadata.modes.meaningful_modes must contain unique train/eval modes"
-        )
+    canonical_meaningful_modes(
+        modes.get("meaningful_modes"), field="external_metadata.modes.meaningful_modes"
+    )
     if modes.get("train_eval_divergence") not in {"none", "statistical", "structural"}:
         raise MetadataValidationError(
             "external_metadata.modes.train_eval_divergence is not canonical"

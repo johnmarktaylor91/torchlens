@@ -660,6 +660,8 @@
       "required": [
         "present",
         "receipt_sha256",
+        "observed_recipe_revision",
+        "observed_adapter_sha256",
         "constructor_started",
         "constructor_completed",
         "input_completed",
@@ -684,6 +686,14 @@
         "receipt_sha256": {
           "$ref": "#/$defs/nullable_hash",
           "description": "Mandatory receipt sha256."
+        },
+        "observed_recipe_revision": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Worker-observed recipe revision, required for parent comparison."
+        },
+        "observed_adapter_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Worker-observed typed-adapter digest, or null for declarative recipes."
         },
         "constructor_started": {
           "type": "boolean",

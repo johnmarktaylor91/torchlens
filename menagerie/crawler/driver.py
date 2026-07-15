@@ -75,6 +75,7 @@ from menagerie.crawler.identity import (
 from menagerie.crawler.intake import IntakeItem, IntakeSnapshot, load_intake_snapshot
 from menagerie.crawler.metadata import (
     MetadataValidationError,
+    canonical_meaningful_modes,
     input_signature_matches_contract,
     recompute_accepted_identities,
     validate_authored_facts_for_write,
@@ -973,10 +974,6 @@ class CrawlerDriver:
                     pause = self._ensure_gates(
                         eligible_work, artifacts, reducer, operational, state
                     )
-                    if pause is not None:
-                        return DriverResult(
-                            "paused:usage-limit", len(reducer.current_records), 0, pause
-                        )
                     eligible_work = tuple(
                         item
                         for item in eligible_work
@@ -984,91 +981,31 @@ class CrawlerDriver:
                         or reducer.current_records[item.stable_id]["status"]["kind"] == "runs"
                         or item.requeue_active
                     )
-                    by_intent: dict[str, list[WorkItem]] = defaultdict(list)
-                    for item in eligible_work:
-                        by_intent[item.route.intent].append(item)
-                    for intent_name in self._ordered_intents(by_intent):
-                        intent = self.registry.intents[intent_name]
-                        use_entered = False
-                        use_completed = False
-
-                        def use(
-                            prefix: Path,
-                            probe_results: tuple[ProbeResult, ...],
-                            *,
-                            items: Sequence[WorkItem] = by_intent[intent_name],
-                        ) -> None:
-                            """Process one intent's models while its sole environment exists."""
-
-                            nonlocal use_entered, use_completed
-                            use_entered = True
-                            environment = _environment_binding(
-                                intent,
-                                prefix,
-                                probe_results,
-                                strict=isinstance(self.dependencies.forward, SupervisedForwardLane)
-                                and isinstance(
-                                    self.dependencies.environments,
-                                    SequentialEnvironmentLifecycle,
-                                ),
-                            )
-                            for item in items:
-                                current = reducer.current_records.get(item.stable_id)
-                                if current is not None and _current_run_is_fresh(
-                                    current,
-                                    artifacts[item.stable_id],
-                                    environment,
-                                    scan_jsonl(self.paths.ledgers.gates),
-                                ):
-                                    continue
-                                self._forward_and_reduce(
-                                    item,
-                                    artifacts[item.stable_id],
-                                    environment,
-                                    reducer,
-                                    operational,
-                                    state,
-                                )
-                            use_completed = True
-
-                        try:
-                            self.dependencies.environments.run(intent, use=use)
-                        except DriverPaused:
-                            raise
-                        except Exception as exc:  # noqa: BLE001 -- classify per-model env failures
-                            if use_entered and not use_completed:
-                                raise
-                            pending = [
-                                item
-                                for item in by_intent[intent_name]
-                                if item.stable_id not in reducer.current_records
-                            ]
-                            if not pending:
-                                raise
-                            stage, reason = _environment_failure(exc)
-                            for item in pending:
-                                attempt = _driver_failure_attempt(
-                                    item,
-                                    artifacts[item.stable_id],
-                                    stage,
-                                    reason,
-                                    exc,
-                                    self.config,
-                                    environment=intent.name,
-                                    created_at=self.dependencies.clock(),
-                                )
-                                persisted = reducer.append_attempt(attempt).record
-                                self._terminalize(
-                                    item,
-                                    artifacts[item.stable_id],
-                                    f"failed:{stage}",
-                                    reason,
-                                    str(exc),
-                                    (persisted,),
-                                    reducer,
-                                    operational,
-                                    state,
-                                )
+                    if pause is not None:
+                        mechanical_work = tuple(
+                            item
+                            for item in eligible_work
+                            if not _fidelity_required(artifacts[item.stable_id].proposal)
+                        )
+                        self._run_environment_work(
+                            mechanical_work,
+                            artifacts,
+                            reducer,
+                            operational,
+                            state,
+                            award_run=False,
+                        )
+                        return DriverResult(
+                            "paused:usage-limit", len(reducer.current_records), 0, pause
+                        )
+                    self._run_environment_work(
+                        eligible_work,
+                        artifacts,
+                        reducer,
+                        operational,
+                        state,
+                        award_run=True,
+                    )
             except DriverPaused:
                 return DriverResult(
                     "paused:review-checkpoint",
@@ -1314,21 +1251,24 @@ class CrawlerDriver:
             cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
             if cache.is_file():
                 value = _read_json(cache)
-                cached_artifact = AuthorArtifact(
-                    proposal=dict(value["proposal"]),
-                    source_manifest=dict(value["source_manifest"]),
-                    model_dir=Path(str(value["model_dir"])),
-                    terminal_status=value.get("terminal_status"),
-                    terminal_reason_code=value.get("terminal_reason_code"),
-                    terminal_detail=value.get("terminal_detail"),
-                    defer_evidence=(
-                        dict(value["defer_evidence"])
-                        if isinstance(value.get("defer_evidence"), Mapping)
-                        else None
+                cached_artifact = _normalize_artifact_modes(
+                    AuthorArtifact(
+                        proposal=dict(value["proposal"]),
+                        source_manifest=dict(value["source_manifest"]),
+                        model_dir=Path(str(value["model_dir"])),
+                        terminal_status=value.get("terminal_status"),
+                        terminal_reason_code=value.get("terminal_reason_code"),
+                        terminal_detail=value.get("terminal_detail"),
+                        defer_evidence=(
+                            dict(value["defer_evidence"])
+                            if isinstance(value.get("defer_evidence"), Mapping)
+                            else None
+                        ),
+                        campaign_root_work_id=str(
+                            value.get("campaign_root_work_id") or value["proposal"]["work_id"]
+                        ),
                     ),
-                    campaign_root_work_id=str(
-                        value.get("campaign_root_work_id") or value["proposal"]["work_id"]
-                    ),
+                    self.config,
                 )
                 cache_current = value.get("artifact_identity") == _artifact_cache_identity(
                     item, cached_artifact, self.config
@@ -1384,6 +1324,7 @@ class CrawlerDriver:
                 )
                 continue
             artifact = _bind_requeue_artifact(item, artifact)
+            artifact = _normalize_artifact_modes(artifact, self.config)
             if artifact.proposal.get("stable_id") != item.stable_id:
                 integration_error = DriverIntegrationError(
                     "author proposal stable_id does not match intake"
@@ -1622,6 +1563,14 @@ class CrawlerDriver:
             if item.stable_id in reducer.current_records and not item.requeue_active:
                 continue
             artifact = artifacts[item.stable_id]
+            rung = artifact.proposal["proposed_facts"]["source_resolution"]["rung"]
+            if rung in {"R1_LIBRARY", "R2_VENDOR"} and not _fidelity_required(artifact.proposal):
+                artifacts[item.stable_id] = self._promote_artifact(item, artifact)
+
+        for item in work:
+            if item.stable_id in reducer.current_records and not item.requeue_active:
+                continue
+            artifact = artifacts[item.stable_id]
             skip_status = _r5_terminal_status(artifact)
             if skip_status is not None:
                 self._terminalize(
@@ -1696,8 +1645,136 @@ class CrawlerDriver:
                     human_review=True,
                 )
                 continue
+            artifacts[item.stable_id] = self._promote_artifact(item, artifact)
             self.dependencies.boundary_hook("after-gate", item.stable_id)
         return None
+
+    def _promote_artifact(self, item: WorkItem, artifact: AuthorArtifact) -> AuthorArtifact:
+        """Promote accepted authored code and persist its canonical model root."""
+
+        promoted = _promote_accepted_code(artifact, self.paths)
+        if promoted.model_dir == artifact.model_dir:
+            return promoted
+        cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
+        value = _read_json(cache) if cache.is_file() else {}
+        value.update(
+            {
+                "proposal": promoted.proposal,
+                "source_manifest": promoted.source_manifest,
+                "model_dir": str(promoted.model_dir),
+                "terminal_status": promoted.terminal_status,
+                "terminal_reason_code": promoted.terminal_reason_code,
+                "terminal_detail": promoted.terminal_detail,
+                "defer_evidence": promoted.defer_evidence,
+                "campaign_root_work_id": promoted.campaign_root_work_id,
+            }
+        )
+        value["artifact_identity"] = _artifact_cache_identity(item, promoted, self.config)
+        _write_json_atomic(cache, value)
+        return promoted
+
+    def _run_environment_work(
+        self,
+        work: Sequence[WorkItem],
+        artifacts: Mapping[str, AuthorArtifact],
+        reducer: CanonicalReducer,
+        operational: JsonlLedger,
+        state: JsonObject,
+        *,
+        award_run: bool,
+    ) -> None:
+        """Run grouped environments, optionally stopping after durable observations."""
+
+        by_intent: dict[str, list[WorkItem]] = defaultdict(list)
+        for item in work:
+            by_intent[item.route.intent].append(item)
+        for intent_name in self._ordered_intents(by_intent):
+            intent = self.registry.intents[intent_name]
+            use_entered = False
+            use_completed = False
+
+            def use(
+                prefix: Path,
+                probe_results: tuple[ProbeResult, ...],
+                *,
+                items: Sequence[WorkItem] = by_intent[intent_name],
+            ) -> None:
+                """Process one intent's models while its sole environment exists."""
+
+                nonlocal use_entered, use_completed
+                use_entered = True
+                environment = _environment_binding(
+                    intent,
+                    prefix,
+                    probe_results,
+                    strict=isinstance(self.dependencies.forward, SupervisedForwardLane)
+                    and isinstance(
+                        self.dependencies.environments,
+                        SequentialEnvironmentLifecycle,
+                    ),
+                )
+                for item in items:
+                    current = reducer.current_records.get(item.stable_id)
+                    if (
+                        award_run
+                        and current is not None
+                        and _current_run_is_fresh(
+                            current,
+                            artifacts[item.stable_id],
+                            environment,
+                            scan_jsonl(self.paths.ledgers.gates),
+                        )
+                    ):
+                        continue
+                    self._forward_and_reduce(
+                        item,
+                        artifacts[item.stable_id],
+                        environment,
+                        reducer,
+                        operational,
+                        state,
+                        award_run=award_run,
+                    )
+                use_completed = True
+
+            try:
+                self.dependencies.environments.run(intent, use=use)
+            except DriverPaused:
+                raise
+            except Exception as exc:  # noqa: BLE001 -- classify per-model env failures
+                if use_entered and not use_completed:
+                    raise
+                pending = [
+                    item
+                    for item in by_intent[intent_name]
+                    if item.stable_id not in reducer.current_records
+                ]
+                if not pending:
+                    raise
+                stage, reason = _environment_failure(exc)
+                for item in pending:
+                    attempt = _driver_failure_attempt(
+                        item,
+                        artifacts[item.stable_id],
+                        stage,
+                        reason,
+                        exc,
+                        self.config,
+                        environment=intent.name,
+                        created_at=self.dependencies.clock(),
+                    )
+                    persisted = reducer.append_attempt(attempt).record
+                    self._terminalize(
+                        item,
+                        artifacts[item.stable_id],
+                        f"failed:{stage}",
+                        reason,
+                        str(exc),
+                        (persisted,),
+                        reducer,
+                        operational,
+                        state,
+                    )
 
     def _forward_and_reduce(
         self,
@@ -1707,6 +1784,8 @@ class CrawlerDriver:
         reducer: CanonicalReducer,
         operational: JsonlLedger,
         state: JsonObject,
+        *,
+        award_run: bool,
     ) -> None:
         """Append honest worker attempts, then let the reducer validate the run award."""
 
@@ -1830,6 +1909,8 @@ class CrawlerDriver:
                 )
                 return
             self.dependencies.boundary_hook("after-forward", item.stable_id)
+        if not award_run:
+            return
         gates = scan_jsonl(self.paths.ledgers.gates)
         model = _assemble_run_model(item, artifact, attempts, gates, self.config)
         current_model = reducer.current_records.get(item.stable_id)
@@ -1877,6 +1958,7 @@ class CrawlerDriver:
             _write_json_atomic(repair_path, request)
         repaired = self.dependencies.author.author(item, self.paths.work_root, self.config)
         repaired = _bind_requeue_artifact(item, repaired)
+        repaired = _normalize_artifact_modes(repaired, self.config)
         if repaired.proposal.get("stable_id") != item.stable_id:
             raise DriverIntegrationError("repaired author proposal stable_id does not match intake")
         repaired = replace(
@@ -2705,6 +2787,87 @@ def _validate_artifact_identities(artifact: AuthorArtifact, config: DriverConfig
         raise DriverIntegrationError("proposal_sha256 does not bind the complete proposal")
 
 
+def _normalize_artifact_modes(artifact: AuthorArtifact, config: DriverConfig) -> AuthorArtifact:
+    """Canonicalize declared modes before proposal, recipe, and gate identities exist.
+
+    Parameters
+    ----------
+    artifact:
+        Validated author artifact whose mutable proposal has not entered a gate.
+    config:
+        Exact checker identity participating in vet and fidelity identities.
+
+    Returns
+    -------
+    AuthorArtifact
+        Copy with both mode declarations ordered identically and all dependent
+        identities rebound to those canonical bytes.
+    """
+
+    proposal = deepcopy(artifact.proposal)
+    facts = proposal.get("proposed_facts")
+    if not isinstance(facts, dict):
+        raise DriverIntegrationError("author proposal has no mutable proposed_facts object")
+    modes = facts.get("modes")
+    external = facts.get("external_metadata")
+    external_modes = external.get("modes") if isinstance(external, dict) else None
+    if not isinstance(modes, dict) or not isinstance(external_modes, dict):
+        raise DriverIntegrationError("proposal meaningful-mode declarations are incomplete")
+    try:
+        canonical = canonical_meaningful_modes(
+            modes.get("meaningful_modes"), field="modes.meaningful_modes"
+        )
+        external_canonical = canonical_meaningful_modes(
+            external_modes.get("meaningful_modes"),
+            field="external_metadata.modes.meaningful_modes",
+        )
+    except MetadataValidationError as exc:
+        raise DriverIntegrationError(str(exc)) from exc
+    if canonical != external_canonical:
+        raise DriverIntegrationError("proposal meaningful-mode declarations disagree")
+    if (
+        modes.get("meaningful_modes") == canonical
+        and external_modes.get("meaningful_modes") == canonical
+    ):
+        return artifact
+    modes["meaningful_modes"] = canonical
+    external_modes["meaningful_modes"] = canonical
+    try:
+        identities = recompute_accepted_identities(
+            facts,
+            checker_prompt_hash=_checker_prompt_hash(),
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
+        implementation = facts.get("implementation")
+        evidence = facts.get("evidence")
+        if not isinstance(implementation, dict) or not isinstance(evidence, dict):
+            raise DriverIntegrationError("proposal implementation/evidence facts are incomplete")
+        implementation["recipe_revision"] = identities.recipe
+        evidence["evidence_identity"] = identities.evidence
+        identities = recompute_accepted_identities(
+            facts,
+            checker_prompt_hash=_checker_prompt_hash(),
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
+    except MetadataValidationError as exc:
+        raise DriverIntegrationError(str(exc)) from exc
+    proposal.update(
+        {
+            "source_identity": identities.source,
+            "evidence_identity": identities.evidence,
+            "recipe_revision": identities.recipe,
+            "vet_identity": identities.vet,
+            "fidelity_identity": identities.fidelity,
+        }
+    )
+    proposal["proposal_sha256"] = stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+    return replace(artifact, proposal=proposal)
+
+
 def _execution_identity(proposal: Mapping[str, Any], environment: EnvironmentBinding) -> str:
     """Compute the current execution identity from every runtime dependency."""
 
@@ -2858,6 +3021,125 @@ def _artifact_cache_identity(item: WorkItem, artifact: AuthorArtifact, config: D
     )
 
 
+def _promote_accepted_code(artifact: AuthorArtifact, paths: DriverPaths) -> AuthorArtifact:
+    """Atomically copy accepted authored code into its canonical repository root.
+
+    Parameters
+    ----------
+    artifact:
+        Independently gated artifact still rooted in disposable author staging.
+    paths:
+        Driver paths used to derive the canonical crawler repository root.
+
+    Returns
+    -------
+    AuthorArtifact
+        Artifact rebound to the canonical accepted-code directory.
+    """
+
+    proposal = artifact.proposal
+    facts = proposal.get("proposed_facts", {})
+    implementation = facts.get("implementation", {}) if isinstance(facts, Mapping) else {}
+    if (
+        not isinstance(implementation, Mapping)
+        or implementation.get("recipe_type") == "declarative-library"
+    ):
+        return artifact
+    code_value = implementation.get("code_path")
+    code_digest = implementation.get("code_sha256")
+    if not isinstance(code_value, str) or not isinstance(code_digest, str):
+        raise DriverIntegrationError("accepted typed adapter lacks a code path/digest")
+    source_root = artifact.model_dir.resolve()
+    source_code = Path(code_value)
+    if not source_code.is_absolute():
+        source_code = source_root / source_code
+    source_code = source_code.resolve()
+    if source_root != source_code and source_root not in source_code.parents:
+        raise DriverIntegrationError("accepted authored code escapes its model staging root")
+    if hash_bytes(source_code.read_bytes()) != code_digest:
+        raise DriverIntegrationError("accepted authored code changed before canonical promotion")
+    stable_id = str(proposal["stable_id"])
+    prefix = stable_id.removeprefix("m_")[:2] or "__"
+    rung = str(facts.get("source_resolution", {}).get("rung"))
+    root_name = "adapters" if rung in {"R1_LIBRARY", "R2_VENDOR"} else "ports"
+    canonical_root = paths.ledgers.models.parent.parent.parent
+    destination = canonical_root / root_name / prefix / stable_id
+    _atomic_promote_tree(source_root, destination)
+    promoted_code = destination / source_code.relative_to(source_root)
+    if hash_bytes(promoted_code.read_bytes()) != code_digest:
+        raise DriverIntegrationError("canonical promoted code digest changed")
+    patches = implementation.get("patches", [])
+    if isinstance(patches, list):
+        patch_root = canonical_root / "patches" / prefix / stable_id
+        for patch in patches:
+            if not isinstance(patch, Mapping) or not isinstance(patch.get("path"), str):
+                continue
+            patch_path = Path(str(patch["path"]))
+            if not patch_path.is_absolute():
+                patch_path = source_root / patch_path
+            patch_path = patch_path.resolve()
+            if source_root != patch_path and source_root not in patch_path.parents:
+                raise DriverIntegrationError("accepted patch escapes its model staging root")
+            expected = patch.get("sha256")
+            if not isinstance(expected, str) or hash_bytes(patch_path.read_bytes()) != expected:
+                raise DriverIntegrationError("accepted patch changed before canonical promotion")
+            _atomic_promote_file(patch_path, patch_root / patch_path.name)
+    return replace(artifact, model_dir=destination)
+
+
+def _atomic_promote_tree(source: Path, destination: Path) -> None:
+    """Promote one authored-code tree without exposing a partial destination."""
+
+    if not source.is_dir() or source.is_symlink():
+        raise DriverIntegrationError("authored model staging root must be a real directory")
+    source_files = tuple(sorted(path for path in source.rglob("*") if path.is_file()))
+    if any(path.is_symlink() for path in source.rglob("*")):
+        raise DriverIntegrationError("authored model staging tree cannot contain symlinks")
+    expected = {
+        path.relative_to(source).as_posix(): hash_bytes(path.read_bytes()) for path in source_files
+    }
+    if destination.is_dir():
+        observed = {
+            path.relative_to(destination).as_posix(): hash_bytes(path.read_bytes())
+            for path in sorted(destination.rglob("*"))
+            if path.is_file()
+        }
+        if observed != expected:
+            raise DriverIntegrationError("canonical accepted-code destination conflicts")
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    if temporary.exists():
+        shutil.rmtree(temporary)
+    shutil.copytree(source, temporary)
+    os.replace(temporary, destination)
+    descriptor = os.open(destination.parent, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _atomic_promote_file(source: Path, destination: Path) -> None:
+    """Promote one accepted patch file with atomic replacement semantics."""
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.is_file():
+        if destination.read_bytes() != source.read_bytes():
+            raise DriverIntegrationError("canonical accepted-patch destination conflicts")
+        return
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    shutil.copyfile(source, temporary)
+    with temporary.open("rb") as handle:
+        os.fsync(handle.fileno())
+    os.replace(temporary, destination)
+    descriptor = os.open(destination.parent, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def _bind_requeue_artifact(item: WorkItem, artifact: AuthorArtifact) -> AuthorArtifact:
     """Bind an explicitly granted work generation into an authored proposal.
 
@@ -2909,7 +3191,11 @@ def _worker_request(
         code_path = Path(str(implementation["code_path"]))
         if not code_path.is_absolute():
             code_path = artifact.model_dir / code_path
-        recipe = {"kind": "typed-adapter", "path": str(code_path.resolve())}
+        recipe = {
+            "kind": "typed-adapter",
+            "path": str(code_path.resolve()),
+            "adapter_sha256": implementation["code_sha256"],
+        }
     return {
         "stable_id": proposal["stable_id"],
         "recipe": recipe,
@@ -2924,8 +3210,40 @@ def _worker_request(
         "meaningful_modes": facts["modes"]["meaningful_modes"],
         "source_identity": proposal["source_identity"],
         "recipe_revision": proposal["recipe_revision"],
+        "recipe_identity_payload": {
+            "implementation": {
+                key: value for key, value in implementation.items() if key != "recipe_revision"
+            },
+            "input_contract": deepcopy(dict(facts["input_contract"])),
+            "modes": {
+                "meaningful_modes": list(facts["modes"]["meaningful_modes"]),
+            },
+        },
         "execution_identity": execution_identity,
     }
+
+
+def _expected_adapter_sha256(proposal: Mapping[str, Any]) -> Optional[str]:
+    """Return the accepted adapter digest, or null for declarative recipes.
+
+    Parameters
+    ----------
+    proposal:
+        Current author proposal bound into a worker request.
+
+    Returns
+    -------
+    str | None
+        Exact accepted code digest for typed adapters.
+    """
+
+    implementation = proposal.get("proposed_facts", {}).get("implementation", {})
+    if not isinstance(implementation, Mapping):
+        return None
+    if implementation.get("recipe_type") == "declarative-library":
+        return None
+    value = implementation.get("code_sha256")
+    return str(value) if isinstance(value, str) else None
 
 
 def _attempts_from_supervised(
@@ -2998,6 +3316,8 @@ def _attempts_from_supervised(
         worker_receipt = {
             "present": result.worker_receipt is not None,
             "receipt_sha256": receipt.get("receipt_sha256"),
+            "observed_recipe_revision": receipt.get("observed_recipe_revision"),
+            "observed_adapter_sha256": receipt.get("observed_adapter_sha256"),
             "constructor_started": bool(mode_receipt.get("constructor_started")),
             "constructor_completed": bool(mode_receipt.get("constructor_completed")),
             "input_completed": bool(mode_receipt.get("input_completed")),
@@ -3135,6 +3455,8 @@ def _receipt_envelope_error(
         "stable_id",
         "source_identity",
         "recipe_revision",
+        "observed_recipe_revision",
+        "observed_adapter_sha256",
         "execution_identity",
         "constructor_started",
         "constructor_completed",
@@ -3154,6 +3476,8 @@ def _receipt_envelope_error(
         or receipt.get("stable_id") != proposal.get("stable_id")
         or receipt.get("source_identity") != proposal.get("source_identity")
         or receipt.get("recipe_revision") != proposal.get("recipe_revision")
+        or receipt.get("observed_recipe_revision") != proposal.get("recipe_revision")
+        or receipt.get("observed_adapter_sha256") != _expected_adapter_sha256(proposal)
         or receipt.get("execution_identity") != execution_identity
         or receipt.get("error") is not None
     ):
@@ -3173,7 +3497,7 @@ def _receipt_envelope_error(
         or len(modes) != len(set(modes))
         or not set(modes) <= {"train", "eval"}
         or not set(detected) <= set(modes)
-        or not set(declared) <= set(modes)
+        or set(declared) != set(modes)
         or not isinstance(per_mode, Mapping)
         or set(per_mode) != set(modes)
     ):
@@ -3380,6 +3704,8 @@ def _checker_item(artifact: AuthorArtifact) -> JsonObject:
     """Build one fully bound checker item pack from an author proposal."""
 
     proposal = artifact.proposal
+    verified_hashes = dict(proposal["verified_hashes"])
+    verified_hashes["proposal"] = proposal["proposal_sha256"]
     return {
         "work_id": proposal["work_id"],
         "campaign_root_work_id": _artifact_lineage(artifact),
@@ -3389,7 +3715,7 @@ def _checker_item(artifact: AuthorArtifact) -> JsonObject:
         ],
         "fidelity_identity": proposal.get("fidelity_identity"),
         "vet_identity": proposal["vet_identity"],
-        "verified_hashes": proposal["verified_hashes"],
+        "verified_hashes": verified_hashes,
         "proposal": proposal,
         "source_manifest": artifact.source_manifest,
         "model_dir": str(artifact.model_dir),
@@ -3648,6 +3974,8 @@ def _gate_item_matches_proposal(
     item_hashes = item.get("verified_hashes")
     if not isinstance(item_hashes, Mapping):
         return False
+    if set(item_hashes) != set(expected_hashes):
+        return False
     if any(item_hashes.get(key) != value for key, value in expected_hashes.items()):
         return False
     rung = facts.get("source_resolution", {}).get("rung")
@@ -3778,12 +4106,14 @@ def _attempt_policy_satisfied(
             )
             and clean
             and mode in {"train", "eval"}
+            and receipt.get("observed_recipe_revision") == proposal.get("recipe_revision")
+            and receipt.get("observed_adapter_sha256") == _expected_adapter_sha256(proposal)
         ):
             counts[mode] += 1
             signatures[mode].append(output)
             inputs.append(receipt.get("input_signature"))
     observed_modes = {mode for mode, count in counts.items() if count}
-    if not set(declared_modes) <= observed_modes:
+    if set(declared_modes) != observed_modes:
         return False
     if not observed_modes or any(counts[mode] < cold_runs for mode in observed_modes):
         return False
@@ -3884,6 +4214,8 @@ def _driver_failure_attempt(
         "worker_receipt": {
             "present": False,
             "receipt_sha256": None,
+            "observed_recipe_revision": None,
+            "observed_adapter_sha256": None,
             "constructor_started": False,
             "constructor_completed": False,
             "input_completed": False,
@@ -4445,9 +4777,13 @@ def _assemble_run_model(
         for attempt in attempts
         if attempt.get("result") == "succeeded" and attempt.get("mode") in {"train", "eval"}
     }
-    meaningful = [mode for mode in ("train", "eval") if mode in observed_modes]
-    if not set(facts["modes"]["meaningful_modes"]) <= observed_modes:
-        raise DriverIntegrationError("worker receipts omit a proposal-declared meaningful mode")
+    meaningful = canonical_meaningful_modes(
+        facts["modes"]["meaningful_modes"], field="modes.meaningful_modes"
+    )
+    if set(meaningful) != observed_modes:
+        raise DriverIntegrationError(
+            "worker receipts differ from the proposal-declared meaningful-mode set"
+        )
     selected: dict[str, Mapping[str, Any]] = {}
     for mode in meaningful:
         selected[mode] = next(

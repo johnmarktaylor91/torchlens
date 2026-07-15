@@ -23,6 +23,16 @@ from menagerie.crawler.models import JsonObject
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
 
 PROMPT_PATH = Path(__file__).with_name("prompts") / f"{CHECKER_PROMPT_NAME}.txt"
+_VERIFIED_HASH_KEYS = frozenset(
+    {
+        "proposal",
+        "source_manifest",
+        "evidence",
+        "code",
+        "source_to_code_map",
+        "family_template",
+    }
+)
 
 
 class CheckerDispatchError(ValueError):
@@ -357,6 +367,11 @@ def _build_envelope(
         )
         if any(field not in item for field in required):
             raise CheckerDispatchError("checker item is missing identity/hash bindings")
+        verified_hashes = item.get("verified_hashes")
+        if not isinstance(verified_hashes, Mapping) or set(verified_hashes) != _VERIFIED_HASH_KEYS:
+            raise CheckerDispatchError(
+                "checker item verified_hashes must bind the exact proposal/artifact pack"
+            )
         stable_id = str(item["stable_id"])
         if not stable_id or stable_id in seen:
             raise CheckerDispatchError("checker envelope stable IDs must be non-empty and unique")

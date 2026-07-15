@@ -19,7 +19,7 @@ import numpy as np
 
 from menagerie.crawler.constants import RunMode
 from menagerie.crawler.frameworks import NativeForwardAdapter
-from menagerie.crawler.identity import canonical_json_bytes, stable_hash
+from menagerie.crawler.identity import canonical_json_bytes, compute_recipe_revision, stable_hash
 from menagerie.crawler.modes import (
     classify_train_eval_divergence,
     detect_meaningful_modes,
@@ -54,6 +54,9 @@ class WorkerRequest:
         Explicit meaningful modes. ``None`` conservatively defaults to both.
     source_identity, execution_identity:
         Parent-computed identities echoed for receipt binding, never awarded.
+    recipe_revision, recipe_identity_payload:
+        Parent-accepted revision and the complete non-self-referential facts the
+        worker recomputes before importing any recipe implementation.
     """
 
     stable_id: str
@@ -70,6 +73,7 @@ class WorkerRequest:
     source_identity: str = "unbound"
     execution_identity: str = "unbound"
     recipe_revision: str = "unbound"
+    recipe_identity_payload: Optional[Mapping[str, Any]] = None
 
     @classmethod
     def from_mapping(
@@ -140,6 +144,11 @@ class WorkerRequest:
             source_identity=str(value.get("source_identity", "unbound")),
             execution_identity=str(value.get("execution_identity", "unbound")),
             recipe_revision=str(value.get("recipe_revision", "unbound")),
+            recipe_identity_payload=(
+                dict(value["recipe_identity_payload"])
+                if isinstance(value.get("recipe_identity_payload"), Mapping)
+                else None
+            ),
         )
 
 
@@ -721,10 +730,34 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
                 effective_recipe.get("adapter_sha256"), str
             ):
                 raise RecipeError("typed-adapter worker request requires adapter_sha256")
-            loaded: LoadedRecipe = load_recipe(
-                effective_recipe, source_identity=request.source_identity
+            observed_accepted_revision: Optional[str] = None
+            if request.recipe_identity_payload is not None:
+                observed_accepted_revision = compute_recipe_revision(
+                    request.recipe_identity_payload, request.source_identity
+                )
+                if observed_accepted_revision != request.recipe_revision:
+                    raise RecipeError(
+                        "accepted worker recipe identity mismatch: "
+                        f"expected {request.recipe_revision}, observed {observed_accepted_revision}"
+                    )
+            expected_revision = (
+                request.recipe_revision if request.recipe_revision != "unbound" else None
             )
-            base["observed_recipe_revision"] = loaded.recipe_revision
+            try:
+                loaded = load_recipe(
+                    effective_recipe,
+                    source_identity=request.source_identity,
+                    expected_recipe_revision=expected_revision,
+                )
+            except RecipeError as exc:
+                if observed_accepted_revision is None or "recipe revision mismatch" not in str(exc):
+                    raise
+                loaded = load_recipe(
+                    effective_recipe,
+                    source_identity=request.source_identity,
+                    expected_recipe_revision=None,
+                )
+            base["observed_recipe_revision"] = observed_accepted_revision or loaded.recipe_revision
             base["observed_adapter_sha256"] = loaded.adapter_sha256
             base["constructor_started"] = True
             constructor_started = time.monotonic()

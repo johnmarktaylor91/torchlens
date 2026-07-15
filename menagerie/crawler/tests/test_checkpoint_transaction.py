@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -18,6 +19,7 @@ from menagerie.crawler.checkpoint import (
 )
 from menagerie.crawler.cli import main
 from menagerie.crawler.constants import MODEL_SCHEMA_VERSION
+from menagerie.crawler.driver import AuthorArtifact, _promote_accepted_code, default_driver_paths
 from menagerie.crawler.identity import canonical_json_bytes
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
 from menagerie.crawler.licenses import (
@@ -29,7 +31,7 @@ from menagerie.crawler.licenses import (
 )
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
 from menagerie.crawler.recordio import JsonlLedger
-from menagerie.crawler.tests.conftest import make_model
+from menagerie.crawler.tests.conftest import make_author_proposal, make_model
 from menagerie.crawler.tools.rebuild_views import rebuild_views
 
 
@@ -283,3 +285,96 @@ def test_clean_checkpoint_stages_only_derived_allowlist_and_never_pushes(tmp_pat
     assert "menagerie/crawler/license_reports/current.json" in staged
     assert all(not path.startswith(".crawl-local/") for path in staged)
     assert all("push" not in command for command in git.commands)
+
+
+def test_checkpoint_includes_promoted_code_and_exact_environment_for_clean_reproduction(
+    tmp_path: Path,
+) -> None:
+    """Accepted code plus target lock/export survive checkpoint and a clean-tree copy."""
+
+    snapshot, mirrors = _clean_state(tmp_path)
+    stable_id = snapshot.items[0].stable_id
+    staging = tmp_path / ".crawl-local" / "work" / stable_id / "author" / "model"
+    staging.mkdir(parents=True)
+    adapter = staging / "adapter.py"
+    adapter.write_text("def build_model() -> object:\n    return object()\n", encoding="utf-8")
+    proposal = make_author_proposal(stable_id)
+    proposal["proposed_facts"]["source_resolution"]["rung"] = "R2_VENDOR"
+    proposal["proposed_facts"]["implementation"].update(
+        {
+            "recipe_type": "typed-adapter",
+            "code_path": "adapter.py",
+            "code_sha256": checkpoint_module.hash_bytes(adapter.read_bytes()),
+            "library_recipe": None,
+        }
+    )
+    promoted = _promote_accepted_code(
+        AuthorArtifact(proposal, {"sources": []}, staging),
+        default_driver_paths(tmp_path, snapshot.root),
+    )
+    promoted_path = promoted.model_dir / "adapter.py"
+    assert promoted_path.is_file()
+    assert ".crawl-local" not in promoted_path.parts
+
+    env_root = tmp_path / "menagerie" / "crawler" / "envs" / "core"
+    lock_path = env_root / "locks" / "linux-x86_64-cuda.lock"
+    export_path = env_root / "resolved-exports" / "linux-x86_64-cuda.json"
+    lock_path.parent.mkdir(parents=True)
+    export_path.parent.mkdir(parents=True)
+    (env_root / "environment.yml").write_text("name: core\n", encoding="utf-8")
+    lock_path.write_bytes(b"exact target lock\n")
+    export_path.write_bytes(b'{"python":"3.11","torch":"test"}\n')
+
+    code_artifact = store_licensed_artifact(
+        mirrors,
+        promoted_path.read_bytes(),
+        staged_path=promoted_path.relative_to(tmp_path),
+        origin=ArtifactOrigin("https://example.test/authored-adapter", "v1"),
+        evidence=(
+            LicenseEvidence(
+                "license-authored-adapter",
+                "source-authored-adapter",
+                "LICENSE:1",
+                "MIT License",
+                LicenseEvidenceStatus.DECLARED,
+                "MIT",
+            ),
+        ),
+    )
+    manifest_path = tmp_path / "menagerie" / "crawler" / "mirrors" / "public-manifest.jsonl"
+    rows = [json.loads(line) for line in manifest_path.read_text(encoding="utf-8").splitlines()]
+    rows.append(
+        {
+            "staged_path": code_artifact.staged_path.as_posix(),
+            "manifest": code_artifact.manifest.to_dict(),
+            "decision": code_artifact.decision.to_dict(),
+        }
+    )
+    _write_jsonl(manifest_path, rows)
+    inventory = [checkpoint_module._licensed_artifact(row) for row in rows]
+    report = pre_public_merge_sweep(inventory, mirrors)
+    _write_jsonl(
+        tmp_path / "menagerie" / "crawler" / "license_reports" / "current.json",
+        [report.to_dict()],
+    )
+
+    result = create_canonical_checkpoint(
+        tmp_path,
+        snapshot.root,
+        mirrors=mirrors,
+        branch="menagerie/crawler-pipeline",
+        git_runner=RecordingGit(),
+    )
+    relative_code = promoted_path.relative_to(tmp_path)
+    relative_lock = lock_path.relative_to(tmp_path)
+    relative_export = export_path.relative_to(tmp_path)
+    assert {relative_code, relative_lock, relative_export} <= set(result.paths)
+
+    clean = tmp_path / "clean-clone"
+    for relative in result.paths:
+        destination = clean / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(tmp_path / relative, destination)
+    assert (clean / relative_code).read_bytes() == promoted_path.read_bytes()
+    assert (clean / relative_lock).read_bytes() == lock_path.read_bytes()
+    assert (clean / relative_export).read_bytes() == export_path.read_bytes()

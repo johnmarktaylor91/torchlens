@@ -125,13 +125,41 @@ _ALLOWLIST_ROOTS = (
     PurePosixPath("menagerie/crawler/evidence"),
     PurePosixPath("menagerie/crawler/views"),
     PurePosixPath("menagerie/crawler/license_reports"),
+    PurePosixPath("menagerie/crawler/envs"),
+    PurePosixPath("menagerie/crawler/adapters"),
+    PurePosixPath("menagerie/crawler/ports"),
+    PurePosixPath("menagerie/crawler/patches"),
 )
 _LICENSE_CANDIDATE_ROOTS = (
     PurePosixPath("menagerie/crawler/records"),
     PurePosixPath("menagerie/crawler/source_manifests"),
     PurePosixPath("menagerie/crawler/evidence"),
+    PurePosixPath("menagerie/crawler/adapters"),
+    PurePosixPath("menagerie/crawler/ports"),
+    PurePosixPath("menagerie/crawler/patches"),
 )
-_ALLOWLIST_SUFFIXES = frozenset({".json", ".jsonl", ".sha256", ".txt"})
+_ALLOWLIST_SUFFIXES = frozenset(
+    {
+        ".c",
+        ".cc",
+        ".cpp",
+        ".diff",
+        ".h",
+        ".hpp",
+        ".json",
+        ".jsonl",
+        ".lock",
+        ".md",
+        ".patch",
+        ".py",
+        ".rs",
+        ".sha256",
+        ".toml",
+        ".txt",
+        ".yaml",
+        ".yml",
+    }
+)
 _SECRET_PATH_PARTS = frozenset(
     {".env", "credential", "credentials", "secret", "secrets", "token", "private_key"}
 )
@@ -770,9 +798,10 @@ def _validate_candidate_license_coverage(
 ) -> tuple[LicensedArtifact, ...]:
     """Bind every candidate code/excerpt file to one hash-bound decision.
 
-    Records, source manifests, and evidence may carry literal third-party code
-    or excerpts. Every non-empty candidate in those roots therefore needs one
-    decision in the complete public/private manifest inventory. Independently,
+    Records, source manifests, evidence, and promoted authored-code roots may
+    carry literal third-party code or excerpts. Every non-empty candidate in
+    those roots therefore needs one decision in the complete public/private
+    manifest inventory. Independently,
     every candidate file is hashed and compared with all restricted or unknown
     inventory digests so renaming a private artifact cannot make it public.
 
@@ -881,7 +910,7 @@ def _is_license_candidate(path: Path) -> bool:
     Returns
     -------
     bool
-        True for records, source manifests, and evidence files.
+        True for records, source manifests, evidence, and accepted-code files.
     """
 
     pure = PurePosixPath(path.as_posix())

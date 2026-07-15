@@ -174,6 +174,8 @@ def make_attempt(
         "worker_receipt": {
             "present": True,
             "receipt_sha256": HASH,
+            "observed_recipe_revision": HASH,
+            "observed_adapter_sha256": None,
             "constructor_started": True,
             "constructor_completed": True,
             "input_completed": True,
@@ -262,6 +264,7 @@ def make_attempt(
             "checker_prompt": _checker_prompt_hash(),
         }
     )
+    model["worker_receipt"]["observed_recipe_revision"] = identities.recipe
     return model
 
 

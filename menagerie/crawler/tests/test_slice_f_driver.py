@@ -24,6 +24,7 @@ from menagerie.crawler.driver import (
     CheckerLane,
     CheckerOutcome,
     CommandAuthorLane,
+    CommandCheckerLane,
     CommandNotifier,
     CrawlerDriver,
     DriverConfig,
@@ -39,6 +40,7 @@ from menagerie.crawler.driver import (
     _execution_identity,
     _environment_binding,
     _runner_identity,
+    _receipt_envelope_error,
     _supervise_environment_worker,
 )
 from menagerie.crawler.envs import (
@@ -70,7 +72,7 @@ from menagerie.crawler.wakeup import (
     WakeupBackend,
     WakeupManager,
 )
-from menagerie.crawler.worker_supervisor import SupervisorObservation
+from menagerie.crawler.worker_supervisor import SupervisedResult, SupervisorObservation
 
 
 class InjectedKill(RuntimeError):
@@ -369,6 +371,10 @@ class FakeForward(ForwardLane):
                         "author_prompt": artifact.proposal["author"]["prompt_sha256"],
                     }
                 )
+                attempt["worker_receipt"]["observed_recipe_revision"] = artifact.proposal[
+                    "recipe_revision"
+                ]
+                attempt["worker_receipt"]["observed_adapter_sha256"] = None
                 attempt["environment"].update(
                     {
                         "family": environment.family,
@@ -423,6 +429,66 @@ class OneModelForwardFailure(FakeForward):
             "details": {"mode": failed["mode"]},
         }
         return attempts
+
+
+class EvalOnlyAuthor(FakeAuthor):
+    """Declare one canonical eval-only recipe for every synthetic model."""
+
+    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+        """Return an eval-only proposal with all dependent identities rebound."""
+
+        artifact = super().author(item, work_root, config)
+        facts = artifact.proposal["proposed_facts"]
+        facts["modes"]["meaningful_modes"] = ["eval"]
+        facts["external_metadata"]["modes"]["meaningful_modes"] = ["eval"]
+        _refresh_proposal_identities(
+            artifact.proposal,
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
+        return artifact
+
+
+class ReverseModeAuthor(FakeAuthor):
+    """Author the complete mode set in noncanonical eval/train order."""
+
+    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+        """Return a reverse-ordered proposal for driver canonicalization."""
+
+        artifact = super().author(item, work_root, config)
+        facts = artifact.proposal["proposed_facts"]
+        facts["modes"]["meaningful_modes"] = ["eval", "train"]
+        facts["external_metadata"]["modes"]["meaningful_modes"] = ["eval", "train"]
+        _refresh_proposal_identities(
+            artifact.proposal,
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
+        return artifact
+
+
+class OneModelModeExpansion(FakeForward):
+    """Expand runtime modes only for one model and honor eval-only for later rows."""
+
+    def __init__(self, expanded_id: str) -> None:
+        """Store the sole model whose runtime discovery expands its recipe."""
+
+        super().__init__()
+        self.expanded_id = expanded_id
+
+    def forward(
+        self,
+        artifact: AuthorArtifact,
+        environment: EnvironmentBinding,
+        cold_runs: int,
+        work_root: Path,
+    ) -> Sequence[Mapping[str, Any]]:
+        """Return train/eval for one model and eval only for every other model."""
+
+        attempts = list(super().forward(artifact, environment, cold_runs, work_root))
+        if artifact.proposal["stable_id"] == self.expanded_id:
+            return attempts
+        return [attempt for attempt in attempts if attempt["mode"] == "eval"]
 
 
 class InaccurateChecker(FakeChecker):
@@ -947,6 +1013,116 @@ def test_author_source_handshake_freezes_nonempty_cas_manifest(
         lane._fetch_author_sources(item, tmp_path / "empty-author")
 
 
+def test_command_checker_lane_validates_real_proposal_digest_binding(tmp_path: Path) -> None:
+    """A schema-valid production checker result echoes the request's exact six-hash pack."""
+
+    stable_id = "m_checker_contract"
+    proposal = make_author_proposal(stable_id)
+    artifact = AuthorArtifact(proposal, {"sources": []}, tmp_path / "model")
+    script = r"""
+import json
+import sys
+from pathlib import Path
+from menagerie.crawler.checker_dispatch import compute_result_envelope_sha256
+from menagerie.crawler.tests.conftest import NOW, make_gate
+
+request = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+expected_keys = {
+    "proposal", "source_manifest", "evidence", "code",
+    "source_to_code_map", "family_template",
+}
+assert set(request["items"][0]["verified_hashes"]) == expected_keys
+stable_ids = [item["stable_id"] for item in request["items"]]
+gate = make_gate(stable_ids, gate_id="gate-command-contract")
+gate["gate_kind"] = request["gate_kind"]
+gate["gate_round"] = request["gate_round"]
+gate["gate_identity"] = request["envelope_sha256"]
+gate["batch_size"] = len(stable_ids)
+gate["checker"] = {
+    **request["checker"], "started_at": NOW, "finished_at": NOW,
+}
+for result_item, request_item in zip(gate["items"], request["items"], strict=True):
+    for field in (
+        "work_id", "campaign_root_work_id", "stable_id",
+        "family_representative_id", "fidelity_identity", "vet_identity",
+    ):
+        result_item[field] = request_item[field]
+    result_item["verified_hashes"] = request_item["verified_hashes"]
+    result_item["rung_check"]["selected_rung"] = request_item["proposal"][
+        "proposed_facts"
+    ]["source_resolution"]["rung"]
+gate["result_envelope_sha256"] = compute_result_envelope_sha256(gate)
+Path(request["required_output_path"]).write_text(json.dumps(gate), encoding="utf-8")
+"""
+    outcome = CommandCheckerLane((sys.executable, "-c", script)).check_metadata(
+        [artifact], tmp_path / "work", DriverConfig()
+    )
+
+    assert outcome.gate is not None
+    assert outcome.gate["items"][0]["verified_hashes"]["proposal"] == proposal["proposal_sha256"]
+
+
+def test_parent_refuses_observed_adapter_digest_mismatch() -> None:
+    """A success-shaped child envelope cannot hide a different observed adapter digest."""
+
+    proposal = make_author_proposal("m_adapter_mismatch")
+    proposal["proposed_facts"]["implementation"].update(
+        {
+            "recipe_type": "typed-adapter",
+            "code_path": "adapter.py",
+            "code_sha256": "sha256:" + "b" * 64,
+        }
+    )
+    attempt = make_attempt("m_adapter_mismatch", mode="eval")
+    mode_receipt = {
+        **attempt["worker_receipt"],
+        "error": None,
+    }
+    receipt = {
+        "receipt_version": "menagerie.crawler.worker-receipt.v1",
+        "stable_id": proposal["stable_id"],
+        "source_identity": proposal["source_identity"],
+        "recipe_revision": proposal["recipe_revision"],
+        "observed_recipe_revision": proposal["recipe_revision"],
+        "observed_adapter_sha256": "sha256:" + "c" * 64,
+        "execution_identity": HASH,
+        "constructor_started": True,
+        "constructor_completed": True,
+        "input_completed": True,
+        "declared_meaningful_modes": ["eval"],
+        "detected_meaningful_modes": [],
+        "meaningful_modes": ["eval"],
+        "per_mode": {"eval": mode_receipt},
+        "policy_observation": attempt["policy_observation"],
+        "error": None,
+        "receipt_sha256": HASH,
+    }
+    observation = SupervisorObservation(
+        argv=("python", "worker.py"),
+        cwd="/scratch",
+        exit_code=0,
+        signal_number=None,
+        wall_seconds=0.1,
+        cpu_seconds=0.1,
+        peak_rss_bytes=1,
+        timed_out=False,
+        rss_exceeded=False,
+        stdout_sha256=HASH,
+        stdout_bytes=0,
+        stdout_tail="",
+        stderr_sha256=HASH,
+        stderr_bytes=0,
+        stderr_tail="",
+        stdout_path="/logs/stdout",
+        stderr_path="/logs/stderr",
+    )
+
+    assert (
+        _receipt_envelope_error(SupervisedResult(observation, receipt, None), proposal, HASH)
+        == "invalid-receipt:identity-or-error"
+    )
+
+
 def _driver(
     tmp_path: Path,
     snapshot: IntakeSnapshot,
@@ -1174,23 +1350,69 @@ def test_entire_seven_item_phase_flushes_as_final_tail(tmp_path: Path) -> None:
     assert len(scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)) == 7
 
 
-def test_quota_pause_records_event_wakeup_and_no_partial_award(tmp_path: Path) -> None:
-    """A checker quota signal visibly pauses, schedules once, and awards no run."""
+def test_quota_pause_runs_mechanical_forwards_without_partial_award(tmp_path: Path) -> None:
+    """A checker quota pause persists R1/R2 forwards but awards no run until recovery."""
 
     snapshot = _snapshot(tmp_path)
     scheduler = FakePauseScheduler(tmp_path / "wakeups")
+    forward = FakeForward()
     result = _driver(
         tmp_path,
         snapshot,
         checker=FakeChecker(quota=True),
+        forward=forward,
         pause_scheduler=scheduler,
     ).run()
     assert result.status == "paused:usage-limit"
     assert scheduler.calls == 1
     paths = _paths(tmp_path, snapshot)
     assert scan_jsonl(paths.ledgers.models) == []
+    attempts = scan_jsonl(paths.ledgers.attempts)
+    assert len(attempts) == 2 * len(snapshot.items)
+    assert set(forward.calls) == {item.stable_id for item in snapshot.items}
     events = scan_jsonl(paths.operational_ledger)
     assert [event["event_kind"] for event in events] == ["usage-pause", "wakeup"]
+
+    resumed_forward = FakeForward()
+    resumed = _driver(tmp_path, snapshot, forward=resumed_forward).run()
+    assert resumed.status == "complete"
+    assert resumed_forward.calls == {}
+
+
+def test_runtime_mode_expansion_is_model_local_and_restart_stable(tmp_path: Path) -> None:
+    """Worker train/eval expansion never mutates eval-only gated recipe facts or aborts the batch."""
+
+    snapshot = _snapshot(tmp_path)
+    expanded_id = snapshot.items[0].stable_id
+    first = _driver(
+        tmp_path,
+        snapshot,
+        author=EvalOnlyAuthor(),
+        forward=OneModelModeExpansion(expanded_id),
+    ).run()
+    paths = _paths(tmp_path, snapshot)
+    models = {record["stable_id"]: record for record in scan_jsonl(paths.ledgers.models)}
+
+    assert first.status in {"complete", "terminal-partition-complete"}
+    assert models[expanded_id]["status"]["code"] == "failed:runner"
+    assert models[expanded_id]["modes"]["meaningful_modes"] == ["eval"]
+    assert sum(model["status"]["code"] == "runs" for model in models.values()) == 9
+    revision_count = len(scan_jsonl(paths.ledgers.models))
+    restarted = _driver(tmp_path, snapshot, author=EvalOnlyAuthor()).run()
+    assert restarted.status == first.status
+    assert len(scan_jsonl(paths.ledgers.models)) == revision_count
+
+
+def test_declared_mode_order_is_canonical_before_gate_and_recipe_identity(tmp_path: Path) -> None:
+    """An eval/train author declaration is gated and stored in canonical train/eval order."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    result = _driver(tmp_path, snapshot, author=ReverseModeAuthor()).run()
+    model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[0]
+
+    assert result.status == "complete"
+    assert model["modes"]["meaningful_modes"] == ["train", "eval"]
+    assert model["external_metadata"]["modes"]["meaningful_modes"] == ["train", "eval"]
 
 
 def test_review_checkpoint_blocks_notifies_and_is_one_shot(tmp_path: Path) -> None:
