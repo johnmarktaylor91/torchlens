@@ -121,6 +121,25 @@ _DENIED_FOREIGN_MODULES: frozenset[str] = frozenset(
         "code",
         "codeop",
         "ctypes",
+        # Exec / spawn / install (r26): stdlib entry points that EXECUTE
+        # arbitrary code strings/callables (debuggers, tracers, profilers,
+        # timeit), spawn processes or browsers (pydoc/webbrowser/antigravity/
+        # platform/asyncio), or install packages (pip/setuptools/venv). Denied
+        # EVEN under trust_custom_callables -- trust never authorizes these.
+        "pdb",
+        "bdb",
+        "timeit",
+        "trace",
+        "cProfile",
+        "profile",
+        "pydoc",
+        "webbrowser",
+        "antigravity",
+        "platform",
+        "asyncio",
+        "pip",
+        "setuptools",
+        "venv",
         # Process / OS / filesystem I/O.
         "os",
         "posix",

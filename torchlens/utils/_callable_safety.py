@@ -173,6 +173,25 @@ _DENIED_MODULES: frozenset[str] = frozenset(
         "code",
         "codeop",
         "ctypes",
+        # Exec / spawn / install (r26): stdlib entry points that EXECUTE
+        # arbitrary code strings/callables (debuggers, tracers, profilers,
+        # timeit), spawn processes or browsers (pydoc/webbrowser/antigravity/
+        # platform/asyncio), or install packages (pip/setuptools/venv). Denied
+        # EVEN under trust_custom_callables -- trust never authorizes these.
+        "pdb",
+        "bdb",
+        "timeit",
+        "trace",
+        "cProfile",
+        "profile",
+        "pydoc",
+        "webbrowser",
+        "antigravity",
+        "platform",
+        "asyncio",
+        "pip",
+        "setuptools",
+        "venv",
         # Process / OS / filesystem I/O.
         "os",
         "posix",
@@ -218,6 +237,15 @@ _DENIED_CALLABLE_NAMES: frozenset[str] = frozenset(
         "_import_dotted_name",
         "_load_global_deps",
         "_preload_cuda_deps",
+        # Arbitrary-code-execution vectors reachable in the allowlisted torch
+        # surface (r26): ``torch.compile`` wraps/compiles an arbitrary callable
+        # (and mutates process-global dynamo state), and the elementwise
+        # Python-callable runners ``Tensor.apply_`` / ``Tensor.map_`` each
+        # INVOKE an attacker-supplied callable per element. Terminal names, per
+        # this set's convention; none collides with a pure forward-op name.
+        "compile",
+        "apply_",
+        "map_",
         # Belt-and-suspenders: the two serialization entry points, in case a torch
         # version ever re-exports them with ``__module__ == "torch"`` (their real
         # module ``torch.serialization`` is already module-denied).
