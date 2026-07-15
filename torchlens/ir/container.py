@@ -7,6 +7,7 @@ from collections.abc import Callable
 import dataclasses
 from dataclasses import dataclass
 import sys
+import types
 from typing import Any, ClassVar, Literal, TypeAlias, cast
 
 from .._io import FieldPolicy
@@ -189,12 +190,22 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
         ]
         container_type = _resolve_container_type(spec)
         if container_type is not None:
-            if spec.type_module == "torch.return_types":
-                # torch structseq classes (``torch.return_types.*``) reject
-                # positional ``*args``; they take a single iterable. Reconstruct
-                # nested structseq the same way at any container depth.
+            if _is_trusted_structseq_type(container_type):
+                # Genuine torch structseq (``torch.return_types.*``): reconstruct through its
+                # own INERT builtin ``__new__`` (a single-iterable C constructor that runs no
+                # arbitrary Python). Admissibility already pinned the RESOLVED ``__module__`` to
+                # ``torch.return_types`` (not the attacker's spec string), so this is a genuine
+                # torch C type, never an attacker-named look-alike.
                 return container_type(values)
-            return container_type(*values)
+            if _is_generated_namedtuple_type(container_type):
+                # Real compiler-generated namedtuple: allocate the tuple INERTLY via the builtin
+                # ``tuple.__new__`` and NEVER invoke ``container_type(*values)`` -- this is the
+                # RCE fix. The old ``container_type(*values)`` ran the resolved type's
+                # ``__new__`` / ``__init__``, so a spec naming a ``tuple``-subclass "namedtuple-
+                # like" type whose ``__new__`` executes code was a load/run construction gadget.
+                # ``tuple.__new__`` bypasses that ``__new__`` entirely, mirroring the inert
+                # non-invoking reconstruction used for the dataclass / HF branches.
+                return tuple.__new__(container_type, values)
         return tuple(values)
     if spec.kind == "dataclass":
         field_values = {
@@ -466,6 +477,142 @@ def reconstruction_is_lossy(value: Any, captured_names: tuple[Any, ...]) -> bool
             continue
         if attribute_value is None:
             continue
+        return True
+    return False
+
+
+def _is_trusted_structseq_type(container_type: type[Any]) -> bool:
+    """Return whether ``container_type`` is a genuine torch structseq (``torch.return_types.*``).
+
+    Structseq classes are ``tuple`` subclasses whose ``__new__`` is an inert builtin (C)
+    single-iterable constructor. We key on the RESOLVED ``__module__`` -- not the attacker's
+    ``spec.type_module`` string -- so only genuine torch structseqs (which cannot be forged
+    into ``sys.modules['torch.return_types']``) reconstruct through their own ``__new__``.
+
+    Parameters
+    ----------
+    container_type:
+        Already-resolved, admissible container class.
+
+    Returns
+    -------
+    bool
+        True when the class is a genuine ``torch.return_types`` structseq.
+    """
+
+    return getattr(container_type, "__module__", None) == "torch.return_types" and hasattr(
+        container_type, "n_fields"
+    )
+
+
+def _is_generated_namedtuple_type(container_type: type[Any]) -> bool:
+    """Return whether ``container_type`` is a genuine compiler-generated ``namedtuple`` class.
+
+    A real ``collections.namedtuple`` is a ``tuple`` subclass carrying a ``_fields`` tuple of
+    identifier strings, a resolved ``__module__``, and a compiler-GENERATED Python ``__new__``
+    (a :class:`types.FunctionType`, unlike the inert C ``tuple.__new__`` or a structseq's
+    builtin ``__new__``).
+
+    This gate does NOT decide safety -- reconstruction ALWAYS goes through the inert builtin
+    ``tuple.__new__`` and NEVER invokes ``container_type.__new__``, so even a weaponized
+    look-alike ``__new__`` cannot run. It decides FAITHFULNESS: a resolved type that looks like
+    a genuine namedtuple reconstructs as its own type, while anything else (a bare ``tuple``
+    subclass with no generated ``__new__``, a structseq, an arbitrary tuple gadget) falls back
+    to a plain ``tuple``.
+
+    Parameters
+    ----------
+    container_type:
+        Already-resolved, admissible container class.
+
+    Returns
+    -------
+    bool
+        True when the class presents the standard generated-namedtuple shape.
+    """
+
+    if not issubclass(container_type, tuple):
+        return False
+    fields = getattr(container_type, "_fields", None)
+    if not isinstance(fields, tuple) or not all(
+        isinstance(name, str) and name.isidentifier() for name in fields
+    ):
+        return False
+    if not isinstance(getattr(container_type, "__module__", None), str):
+        return False
+    return isinstance(getattr(container_type, "__new__", None), types.FunctionType)
+
+
+def _dataclass_defines_post_init(container_type: type[Any]) -> bool:
+    """Return whether a dataclass ``container_type`` defines its own ``__post_init__``.
+
+    A user ``__post_init__`` can compute NON-field instance attributes (e.g. a value derived
+    from a tensor) that the non-invoking rebuild -- which sets only captured fields -- silently
+    drops. Because we never run ``__post_init__`` (that would be the SEC1 construction-gadget
+    surface), its mere presence is the type-structural signal that reconstruction MAY be lossy.
+
+    Parameters
+    ----------
+    container_type:
+        Resolved dataclass container class.
+
+    Returns
+    -------
+    bool
+        True when ``__post_init__`` is defined anywhere in the MRO (excluding ``object``).
+    """
+
+    for klass in getattr(container_type, "__mro__", (container_type,)):
+        if klass is object:
+            continue
+        if "__post_init__" in getattr(klass, "__dict__", {}):
+            return True
+    return False
+
+
+def reconstruction_is_lossy_by_type(
+    container_type: type[Any], captured_names: tuple[Any, ...], kind: str
+) -> bool:
+    """Recompute reconstruction lossiness from the RESOLVED type at LOAD time.
+
+    The persisted :attr:`ContainerSpec.lossy_reconstruction` flag is computed at CAPTURE and
+    is attacker-controlled in an untrusted bundle: a forged ``False`` would force a false
+    ``VERIFIED`` on a genuinely lossy reconstruction. This function re-derives lossiness
+    INDEPENDENTLY from the resolved type (the one trustworthy input at load), mirroring the
+    r25 :func:`reconstruction_is_lossy` criteria that are TYPE-observable:
+
+    * a ``__slots__`` layout with no instance ``__dict__`` (fields cannot be set inertly), or
+    * a captured name that resolves to a data descriptor (cannot be set faithfully), or
+    * (dataclass kind only) a user ``__post_init__`` that may compute dropped non-field state.
+
+    The ``__post_init__`` signal is applied ONLY to the plain-``dataclass`` kind: HuggingFace
+    ``ModelOutput`` dataclasses use ``__post_init__`` solely to populate their mapping from
+    fields (attrs == keys), so applying it to the ``hf_model_output`` kind would over-trigger
+    the standard/real ModelOutput case that must stay VERIFIED. The purely instance-level r25
+    "computed non-None extra attr on a custom (non-dataclass) ModelOutput ``__init__``" case is
+    not type-observable without invoking that ``__init__``; the caller keeps the persisted flag
+    as a supplementary (never sole) signal so genuine such captures still report lossy.
+
+    Parameters
+    ----------
+    container_type:
+        Resolved container class named by the spec.
+    captured_names:
+        Field names (dataclass) or mapping keys (``ModelOutput``) the rebuild will restore.
+    kind:
+        The spec ``kind`` (``"dataclass"`` or ``"hf_model_output"``).
+
+    Returns
+    -------
+    bool
+        True when reconstructing ``container_type`` from ``captured_names`` is lossy.
+    """
+
+    if not _type_has_instance_dict(container_type):
+        return True
+    if any(_name_is_data_descriptor(container_type, name) for name in captured_names):
+        return True
+    if kind == "dataclass" and _dataclass_defines_post_init(container_type):
         return True
     return False
 
@@ -820,6 +967,8 @@ __all__ = [
     "RegisteredContainer",
     "TupleIndex",
     "get_registered_container",
+    "reconstruction_is_lossy",
+    "reconstruction_is_lossy_by_type",
     "register_container",
     "rebuild_container_from_spec",
     "resolve_container_type",
