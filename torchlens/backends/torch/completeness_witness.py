@@ -860,6 +860,31 @@ def _record_escape_source_tensor(trace: Any, source: torch.Tensor, *, invisible:
     # escape witness).
     meta = get_tensor_meta(source)
     address = getattr(meta, "address", None) if meta is not None else None
+    # r18: a PARAMETER host escape resolves by state slot exactly like a buffer. A buffer keeps a
+    # graph SOURCE node, so its ``.detach()`` host read survives orphan-pruning and witnesses by its
+    # kept op; a parameter carries NO source node, so the param-rooted ``.detach()`` op is
+    # orphan-pruned and its raw label resolves to no final op -> the escape would fail closed
+    # (INCOMPLETE_SCALAR_ESCAPE -> a spurious UNVERIFIABLE) even for a purely READ-ONLY stat log
+    # (``self.w.detach().numpy().sum()``). The escape source's storage aliases the param's storage,
+    # so resolve the param address by its forward-start storage-pointer index and record the state
+    # slot: the read-only escape is then witnessed by the param's capture-time digest (value-correct
+    # -- unchanged param re-digests identically -> VERIFIED; changed param -> UNVERIFIABLE), the same
+    # honest read/write distinction the buffer path draws. A genuine host WRITE is caught
+    # independently by the parameter whole-storage byte tripwire (``buffer_writes._reconcile_params``
+    # -> ``_HOST_ESCAPE_MUTABLE_WRITEBACK``), so this resolution never blesses a mutated param.
+    if address is None:
+        param_storage_addresses = getattr(trace, "_param_storage_addresses", None)
+        if param_storage_addresses:
+            # Read the storage pointer under the internal-read marker so this OWN resolution
+            # read is not itself mistaken for a user ``data_ptr()`` raw-pointer escape (the
+            # storage ``data_ptr`` accessor is patched for the duration of the forward).
+            try:
+                with internal_scalar_read():
+                    storage_ptr = source.untyped_storage().data_ptr()
+            except (RuntimeError, TypeError, NotImplementedError):
+                storage_ptr = None
+            if storage_ptr is not None:
+                address = param_storage_addresses.get(storage_ptr)
     if address is not None:
         state_sources = _HOST_ESCAPE_STATE_SOURCE_LABELS.get(trace)
         if state_sources is None:

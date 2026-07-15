@@ -1232,6 +1232,7 @@ class Trace(
         "_buffer_accessor": FieldPolicy.DROP,
         "_buffer_write_events": FieldPolicy.DROP,
         "_buffer_write_tracker": FieldPolicy.DROP,
+        "_param_storage_addresses": FieldPolicy.DROP,
         "_buffer_initial_values": FieldPolicy.BLOB_RECURSIVE,
         "_buffer_persistence": FieldPolicy.KEEP,
         "internal_source_ops": FieldPolicy.KEEP,

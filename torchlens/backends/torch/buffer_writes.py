@@ -83,6 +83,13 @@ class BufferWriteTracker:
         self._storage_key_cache: dict[tuple[int, int | None], tuple[Any, ...] | None] = {}
         self._storage_range_cache: dict[tuple[int, int | None], tuple[int, int]] = {}
         self._installed_classes: set[type[nn.Module]] = set()
+        # r18: named-PARAMETER whole-storage byte + version baselines, snapshotted at
+        # forward START and compared at forward END. Params carry NO graph source node
+        # (unlike buffers), so a host write through a pre-forward-acquired zero-copy alias
+        # (``self.w.detach().numpy()[0] += 1``) is invisible to every op census and to the
+        # embedded pre-forward state snapshot -- the exact buffer host-write-back tripwire,
+        # mirrored onto params. address -> (whole-storage uint8 byte clone, tensor version).
+        self.address_to_param_snapshot: dict[str, tuple[torch.Tensor, int | None]] = {}
 
     def install(self) -> None:
         """Install scoped class ``__setattr__`` patches and seed the buffer index."""
@@ -141,6 +148,39 @@ class BufferWriteTracker:
                 persistence = self.trace.__dict__.setdefault("_buffer_persistence", {})
                 persistence[address] = address in persistent_state_names
                 self._register_address(address, tensor, _copy_tensor_value(tensor))
+        self._refresh_param_index(model)
+
+    def _refresh_param_index(self, model: nn.Module) -> None:
+        """Snapshot named-parameter whole-storage bytes + versions at forward start (r18).
+
+        Mirrors the buffer baseline for parameters so an untracked/invisible host write into
+        a param's storage during the forward is caught at forward end (F2), and builds a
+        storage-pointer -> address index so a READ-ONLY param host escape resolves through the
+        state-digest net exactly like the buffer twin (F3) instead of failing closed. Purely a
+        diagnostic baseline: it logs no graph node, so captured goldens are byte-unchanged.
+        """
+
+        # storage data_ptr -> param address, consumed by the completeness witness to resolve a
+        # read-only param host escape (``self.w.detach().numpy().sum()``) by its state slot.
+        param_storage_addresses: dict[int, str] = {}
+        with _state.pause_logging():
+            for module_address, module in _iter_modules_with_addresses(model):
+                for name, tensor in module.named_parameters(recurse=False):
+                    if tensor is None:
+                        continue
+                    address = f"{module_address}.{name}" if module_address else name
+                    if address in self.address_to_param_snapshot:
+                        continue
+                    try:
+                        before = _whole_storage_uint8(tensor).clone()
+                    except (RuntimeError, TypeError, NotImplementedError):
+                        continue
+                    self.address_to_param_snapshot[address] = (before, _tensor_version(tensor))
+                    try:
+                        param_storage_addresses[tensor.untyped_storage().data_ptr()] = address
+                    except (RuntimeError, TypeError, NotImplementedError):
+                        continue
+        self.trace.__dict__["_param_storage_addresses"] = param_storage_addresses
 
     def record_reassignment(self, module: nn.Module, name: str, value: Any) -> None:
         """Record a registered-buffer reassignment performed via ``__setattr__``.
@@ -235,6 +275,7 @@ class BufferWriteTracker:
         model = self.model_ref()
         if model is None:
             return
+        self._reconcile_params(model)
         for module_address, module in _iter_modules_with_addresses(model):
             for name, tensor in module.named_buffers(recurse=False):
                 if tensor is None or isinstance(tensor, nn.Parameter):
@@ -267,6 +308,51 @@ class BufferWriteTracker:
                 _HOST_ESCAPE_MUTABLE_WRITEBACK.add(self.trace)
                 self._record_write(address, tensor, "data_reassign", None, value_changed, None)
                 continue
+
+    def _reconcile_params(self, model: nn.Module) -> None:
+        """Flag an untracked/invisible host write into a PARAMETER's storage (r18, mirrors buffers).
+
+        Compares each named parameter's whole-storage bytes against its forward-START baseline.
+        A param whose bytes changed while its VERSION stayed put was mutated through an untracked
+        host path (a zero-copy ``.numpy()`` / ``data_ptr`` / storage write with no aten dispatch
+        and no version bump) that the sparse DAG and the embedded pre-forward state snapshot cannot
+        model -- the exact zero-copy host write-back the buffer ``reconcile`` catches (r15-C2).
+        Flagging it makes the run report UNVERIFIABLE instead of a false VERIFIED. A version BUMP
+        means a TRACKED in-place op touched the param and the replay reproduces it natively, so a
+        version-bumped param is NOT flagged here (the buffer journal handles its tracked writes the
+        same way). Params untouched during the forward (the overwhelming norm) never match and stay
+        VERIFIED, so there is ~zero over-trigger on ordinary Linear/Conv/MLP/BatchNorm models.
+        """
+
+        from .completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
+
+        if not self.address_to_param_snapshot:
+            return
+        with _state.pause_logging():
+            for module_address, module in _iter_modules_with_addresses(model):
+                for name, tensor in module.named_parameters(recurse=False):
+                    if tensor is None:
+                        continue
+                    address = f"{module_address}.{name}" if module_address else name
+                    baseline = self.address_to_param_snapshot.get(address)
+                    if baseline is None:
+                        continue
+                    before, before_version = baseline
+                    if _tensor_version(tensor) != before_version:
+                        # A tracked in-place op bumped the version: the write is in the DAG and
+                        # replays natively; the raw byte diff is expected, not an untracked escape.
+                        continue
+                    try:
+                        after = _whole_storage_uint8(tensor)
+                    except (RuntimeError, TypeError, NotImplementedError):
+                        _HOST_ESCAPE_MUTABLE_WRITEBACK.add(self.trace)
+                        continue
+                    try:
+                        unchanged = bool(torch.equal(after, before))
+                    except (RuntimeError, TypeError, NotImplementedError):
+                        unchanged = False
+                    if not unchanged:
+                        _HOST_ESCAPE_MUTABLE_WRITEBACK.add(self.trace)
 
     def snapshot_buffer_args(self, tensors: list[torch.Tensor]) -> list[BufferSnapshot]:
         """Return pre-call snapshots for tensor args backed by registered buffers."""
@@ -639,6 +725,22 @@ def _tensor_version(tensor: torch.Tensor) -> int | None:
     """Return PyTorch's internal tensor version counter when available."""
 
     return getattr(tensor, "_version", None)
+
+
+def _whole_storage_uint8(source: torch.Tensor) -> torch.Tensor:
+    """Return a ``uint8`` view over ``source``'s ENTIRE untyped storage (all bytes).
+
+    A zero-copy host alias (``source.detach().numpy()`` / ``untyped_storage()`` / a raw
+    ``data_ptr``) shares the WHOLE storage, so a host ``__setitem__`` / ``np.as_strided`` write can
+    land on bytes OUTSIDE ``source``'s element extent. Comparing the whole storage (not
+    ``source``'s own extent) makes ANY host write in the shared storage detectable at forward end.
+    Matches ``completeness_witness._whole_storage_uint8`` for the buffer/param write tripwire.
+    """
+
+    untyped = source.untyped_storage()
+    view = torch.empty(0, dtype=torch.uint8, device=source.device)
+    view.set_(untyped, 0, (untyped.nbytes(),), (1,))
+    return view
 
 
 def _resolve_buffer_address(
