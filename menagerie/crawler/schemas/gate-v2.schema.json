@@ -87,13 +87,13 @@
         "properties": {
           "batch_size": {
             "type": "integer",
-            "minimum": 10,
+            "minimum": 1,
             "maximum": 20,
             "description": "Mandatory number of items in this gate."
           },
           "items": {
             "type": "array",
-            "minItems": 10,
+            "minItems": 1,
             "maxItems": 20,
             "items": {
               "allOf": [

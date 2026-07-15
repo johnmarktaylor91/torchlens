@@ -12,6 +12,7 @@ from menagerie.crawler.constants import (
     GATE_SCHEMA_VERSION,
     METADATA_BATCH_MAX,
     METADATA_BATCH_MIN,
+    METADATA_FINAL_TAIL_MIN,
     AccuracyVerdict,
     CheckerPauseReason,
     FidelityVerdict,
@@ -58,8 +59,9 @@ def build_metadata_vet_envelope(
     checker_model: str,
     checker_version: str,
     request_nonce: str,
+    final_tail: bool = False,
 ) -> JsonObject:
-    """Build a fresh 10--20 item metadata-vetting envelope.
+    """Build a fresh metadata-vetting envelope, including an explicit final tail.
 
     Parameters
     ----------
@@ -74,6 +76,8 @@ def build_metadata_vet_envelope(
         Expected independent checker identity.
     request_nonce:
         Caller-created fresh request identity.
+    final_tail:
+        Whether this is the end-of-queue flush that may contain one to nine items.
 
     Returns
     -------
@@ -86,9 +90,10 @@ def build_metadata_vet_envelope(
         If batch cardinality or item identities are invalid.
     """
 
-    if not METADATA_BATCH_MIN <= len(items) <= METADATA_BATCH_MAX:
+    minimum = METADATA_FINAL_TAIL_MIN if final_tail else METADATA_BATCH_MIN
+    if not minimum <= len(items) <= METADATA_BATCH_MAX:
         raise CheckerDispatchError(
-            f"metadata batch must contain {METADATA_BATCH_MIN}--{METADATA_BATCH_MAX} items"
+            f"metadata batch must contain {minimum}--{METADATA_BATCH_MAX} items"
         )
     return _build_envelope(
         GateKind.METADATA_BATCH,
@@ -98,6 +103,7 @@ def build_metadata_vet_envelope(
         checker_model=checker_model,
         checker_version=checker_version,
         request_nonce=request_nonce,
+        final_tail=final_tail,
     )
 
 
@@ -192,6 +198,12 @@ def validate_checker_result(
     expected_items = envelope.get("items")
     if not isinstance(result_items, list) or not isinstance(expected_items, list):
         raise CheckerDispatchError("checker items are incomplete")
+    if (
+        result.get("gate_kind") == GateKind.METADATA_BATCH.value
+        and len(expected_items) < METADATA_BATCH_MIN
+        and envelope.get("final_tail") is not True
+    ):
+        raise CheckerDispatchError("short metadata result is not bound to a final-tail envelope")
     if result.get("batch_size") != len(expected_items) or len(result_items) != len(expected_items):
         raise CheckerDispatchError("checker result is partial or has extra items")
     expected_by_id = {
@@ -298,6 +310,7 @@ def _build_envelope(
     checker_model: str,
     checker_version: str,
     request_nonce: str,
+    final_tail: bool = False,
 ) -> JsonObject:
     """Build the shared metadata/fidelity envelope body.
 
@@ -315,6 +328,8 @@ def _build_envelope(
         Expected checker identity.
     request_nonce:
         Fresh caller-created identity.
+    final_tail:
+        Whether a metadata request is the explicitly authorized final short batch.
 
     Returns
     -------
@@ -368,6 +383,7 @@ def _build_envelope(
         "required_output_path": str(Path(output_path).resolve()),
         "allowed_output_root": str(Path(output_path).resolve().parent),
         "required_result_schema": GATE_SCHEMA_VERSION,
+        "final_tail": final_tail,
     }
     return {**body, "envelope_sha256": stable_hash(body)}
 

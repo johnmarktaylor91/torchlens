@@ -263,10 +263,10 @@ class RecordingNotifier(FakeNotifier):
         super().__init__()
         self.path = path
 
-    def notify(self, summary: str) -> bool:
+    def notify(self, summary: str, *, idempotency_key: str) -> bool:
         """Capture and append one ASCII notification summary."""
 
-        delivered = super().notify(summary)
+        delivered = super().notify(summary, idempotency_key=idempotency_key)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("ab") as handle:
             handle.write(canonical_json_bytes({"summary": summary}) + b"\n")

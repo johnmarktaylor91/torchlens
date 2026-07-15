@@ -58,7 +58,8 @@
         "checkpoint-review",
         "review-signoff",
         "progress-notification",
-        "notification-delivery"
+        "notification-delivery",
+        "requeue-grant-consumed"
       ],
       "description": "Mandatory operational event kind."
     },
@@ -78,7 +79,8 @@
         "progress-notified",
         "progress-recorded",
         "notification-delivered",
-        "notification-failed"
+        "notification-failed",
+        "requeue-grant-consumed"
       ],
       "description": "Mandatory closed current disposition."
     },

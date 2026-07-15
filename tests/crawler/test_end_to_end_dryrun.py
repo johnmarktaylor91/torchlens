@@ -113,7 +113,8 @@ def test_cli_dry_run_real_forward_checkpoint_resume_and_milestone(tmp_path: Path
     prefixes = _ledger_prefixes(ledger_paths)
     assert len(scan_jsonl(paths.ledgers.models)) == 2
     assert [event["event_kind"] for event in scan_jsonl(paths.operational_ledger)] == [
-        "checkpoint-review"
+        "checkpoint-review",
+        "notification-delivery",
     ]
 
     resumed = _run_cli(repo_root, ["resume", *common, "--after-review"])
@@ -182,6 +183,7 @@ def test_cli_dry_run_real_forward_checkpoint_resume_and_milestone(tmp_path: Path
     assert event_kinds.count("checkpoint-review") == 1
     assert event_kinds.count("review-signoff") == 1
     assert event_kinds.count("progress-notification") == 1
+    assert event_kinds.count("notification-delivery") == 2
     progress = next(event for event in events if event["event_kind"] == "progress-notification")
     assert progress["milestone"] == 3
     summaries = read_notification_summaries(campaign_root / "notifications.jsonl")

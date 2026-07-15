@@ -15,6 +15,7 @@ CHECKER_PROMPT_NAME = "codex_accuracy_checker_v2"
 
 METADATA_BATCH_MIN = 10
 METADATA_BATCH_MAX = 20
+METADATA_FINAL_TAIL_MIN = 1
 STDIO_TAIL_MAX_CHARS = 1_500
 STABLE_ID_DIGEST_CHARS = 20
 DEFAULT_FORWARD_TIMEOUT_SECONDS = 300
@@ -343,6 +344,7 @@ class OperationalEventKind(StrEnum):
     REVIEW_SIGNOFF = "review-signoff"
     PROGRESS_NOTIFICATION = "progress-notification"
     NOTIFICATION_DELIVERY = "notification-delivery"
+    REQUEUE_GRANT_CONSUMED = "requeue-grant-consumed"
 
 
 class OperationalEventStatus(StrEnum):
@@ -363,6 +365,7 @@ class OperationalEventStatus(StrEnum):
     PROGRESS_RECORDED = "progress-recorded"
     NOTIFICATION_DELIVERED = "notification-delivered"
     NOTIFICATION_FAILED = "notification-failed"
+    REQUEUE_GRANT_CONSUMED = "requeue-grant-consumed"
 
 
 # Slice-F scheduler configuration defaults.  The earlier names remain the

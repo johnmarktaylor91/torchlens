@@ -43,6 +43,7 @@ from menagerie.crawler.constants import (
     DEFAULT_NOTIFY_COMMAND,
     DEFAULT_PROGRESS_MILESTONES,
     DEFAULT_REVIEW_CHECKPOINT_AT,
+    FAILURE_REASON_CODES,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
     OperationalEventKind,
     OperationalEventStatus,
@@ -169,6 +170,12 @@ class DriverPaths:
 
         return self.runtime_root / "envs"
 
+    @property
+    def requeue_grants(self) -> Path:
+        """Return the append-only human requeue grant ledger path."""
+
+        return self.runtime_root / "requeue-grants.jsonl"
+
 
 @dataclass(frozen=True)
 class DriverConfig:
@@ -205,6 +212,9 @@ class WorkItem:
 
     intake: IntakeItem
     route: IntentRoute
+    explicit_grants: tuple[str, ...] = ()
+    requeue_work_id: Optional[str] = None
+    requeue_active: bool = False
 
     @property
     def stable_id(self) -> str:
@@ -313,7 +323,12 @@ class ForwardLane(Protocol):
 class EnvironmentLane(Protocol):
     """Injectable one-at-a-time exact environment lifecycle boundary."""
 
-    def run(self, intent: EnvironmentIntent, *, use: Callable[[Path], None]) -> object:
+    def run(
+        self,
+        intent: EnvironmentIntent,
+        *,
+        use: Callable[[Path, tuple[ProbeResult, ...]], None],
+    ) -> object:
         """Create, probe, use, and tear down one environment."""
 
         ...
@@ -322,7 +337,7 @@ class EnvironmentLane(Protocol):
 class Notifier(Protocol):
     """Injectable best-effort JMT notification boundary."""
 
-    def notify(self, summary: str) -> bool:
+    def notify(self, summary: str, *, idempotency_key: str) -> bool:
         """Send one ASCII summary, returning whether delivery succeeded."""
 
         ...
@@ -417,7 +432,7 @@ class CommandNotifier:
         self._argv = _resolve_notify_command(command)
         self._timeout_seconds = timeout_seconds
 
-    def notify(self, summary: str) -> bool:
+    def notify(self, summary: str, *, idempotency_key: str) -> bool:
         """Invoke the notifier once, logging and continuing on any failure."""
 
         ascii_summary = _ascii_line(summary)
@@ -431,6 +446,7 @@ class CommandNotifier:
                 capture_output=True,
                 text=True,
                 timeout=self._timeout_seconds,
+                env={**os.environ, "MENAGERIE_NOTIFICATION_IDEMPOTENCY_KEY": idempotency_key},
             )
         except subprocess.TimeoutExpired:
             LOGGER.warning(
@@ -577,6 +593,7 @@ class CommandCheckerLane:
                 checker_model=config.checker_model,
                 checker_version=config.checker_version,
                 request_nonce=batch_id,
+                final_tail=len(items) < 10,
             ),
             root,
         )
@@ -905,6 +922,7 @@ class CrawlerDriver:
                 self.paths.state_database, snapshot.root / "items.jsonl", self.paths.ledgers
             )
             state = _load_driver_state(self.paths.driver_state)
+            self._retry_notification_outbox(operational)
             if self._review_is_pending(operational):
                 if not after_review:
                     _write_driver_state(
@@ -928,10 +946,24 @@ class CrawlerDriver:
                     "paused:review-checkpoint", len(reducer.current_records), 0, "review-checkpoint"
                 )
 
-            work = self._ordered_work(snapshot, reducer.current_records)
+            requeues = self._consume_requeue_grants(
+                operational,
+                reducer.current_records,
+                frozenset(intake_ids),
+            )
+            work = self._ordered_work(snapshot, reducer.current_records, requeues)
             try:
                 for phase in self.registry.phase_order:
-                    phase_work = tuple(item for item in work if item.route.phase is phase)
+                    phase_work = tuple(
+                        item
+                        for item in work
+                        if item.route.phase is phase
+                        and (
+                            item.stable_id not in reducer.current_records
+                            or reducer.current_records[item.stable_id]["status"]["kind"] == "runs"
+                            or item.requeue_active
+                        )
+                    )
                     if not phase_work:
                         continue
                     artifacts = self._ensure_authors(phase_work, reducer, operational, state)
@@ -942,20 +974,6 @@ class CrawlerDriver:
                         eligible_work, artifacts, reducer, operational, state
                     )
                     if pause is not None:
-                        if pause == "metadata-batch-tail":
-                            state.update(
-                                {
-                                    "status": "awaiting-gate",
-                                    "last_terminal_count": len(reducer.current_records),
-                                }
-                            )
-                            _write_driver_state(self.paths.driver_state, state)
-                            return DriverResult(
-                                "awaiting-gate",
-                                len(reducer.current_records),
-                                self._reduced,
-                                "metadata-batch-tail",
-                            )
                         return DriverResult(
                             "paused:usage-limit", len(reducer.current_records), 0, pause
                         )
@@ -964,6 +982,7 @@ class CrawlerDriver:
                         for item in eligible_work
                         if item.stable_id not in reducer.current_records
                         or reducer.current_records[item.stable_id]["status"]["kind"] == "runs"
+                        or item.requeue_active
                     )
                     by_intent: dict[str, list[WorkItem]] = defaultdict(list)
                     for item in eligible_work:
@@ -975,6 +994,7 @@ class CrawlerDriver:
 
                         def use(
                             prefix: Path,
+                            probe_results: tuple[ProbeResult, ...],
                             *,
                             items: Sequence[WorkItem] = by_intent[intent_name],
                         ) -> None:
@@ -985,6 +1005,7 @@ class CrawlerDriver:
                             environment = _environment_binding(
                                 intent,
                                 prefix,
+                                probe_results,
                                 strict=isinstance(self.dependencies.forward, SupervisedForwardLane)
                                 and isinstance(
                                     self.dependencies.environments,
@@ -1094,7 +1115,10 @@ class CrawlerDriver:
             return DriverResult(completion_status, len(current), self._reduced, None)
 
     def _ordered_work(
-        self, snapshot: IntakeSnapshot, current: Mapping[str, JsonObject]
+        self,
+        snapshot: IntakeSnapshot,
+        current: Mapping[str, JsonObject],
+        requeues: Optional[Mapping[str, Mapping[str, Any]]] = None,
     ) -> tuple[WorkItem, ...]:
         """Route incomplete intake rows and enforce global phase order."""
 
@@ -1105,7 +1129,17 @@ class CrawlerDriver:
             routes.append((item, route))
         ordered_routes = phase_routes(route for _item, route in routes)
         by_id = {item.stable_id: item for item, _route in routes}
-        work = tuple(WorkItem(by_id[route.stable_id], route) for route in ordered_routes)
+        bindings = requeues or {}
+        work = tuple(
+            WorkItem(
+                by_id[route.stable_id],
+                route,
+                tuple(bindings.get(route.stable_id, {}).get("grant_ids", ())),
+                bindings.get(route.stable_id, {}).get("work_id"),
+                bool(bindings.get(route.stable_id, {}).get("active")),
+            )
+            for route in ordered_routes
+        )
         if self.config.phase is not None:
             if self.config.phase == "native-tail" and any(
                 item.route.phase.value == "pytorch" and item.stable_id not in current
@@ -1116,6 +1150,155 @@ class CrawlerDriver:
                 )
             work = tuple(item for item in work if item.route.phase.value == self.config.phase)
         return work
+
+    def _consume_requeue_grants(
+        self,
+        operational: JsonlLedger,
+        current: Mapping[str, JsonObject],
+        intake_ids: frozenset[str],
+    ) -> dict[str, JsonObject]:
+        """Validate grants and durably bind at most one active generation per model.
+
+        Parameters
+        ----------
+        operational:
+            Locked append-only operational ledger used for consumption records.
+        current:
+            Current canonical model revisions.
+        intake_ids:
+            Exact trusted intake membership.
+
+        Returns
+        -------
+        dict[str, dict[str, Any]]
+            Stable-ID keyed grant history, work identity, and active-work marker.
+        """
+
+        grants = _validated_requeue_grants(self.paths.requeue_grants, intake_ids)
+        by_id = {str(grant["grant_id"]): grant for grant in grants}
+        consumed_events = [
+            event
+            for event in operational.records
+            if event.get("event_kind") == OperationalEventKind.REQUEUE_GRANT_CONSUMED.value
+        ]
+        consumed_by_id: dict[str, JsonObject] = {}
+        for event in consumed_events:
+            details = event.get("details", {})
+            grant_id = str(details.get("grant_id", ""))
+            grant = by_id.get(grant_id)
+            if grant is None:
+                raise DriverIntegrationError(
+                    f"requeue consumption references an unknown grant: {grant_id}"
+                )
+            if details.get("stable_id") != grant.get("stable_id"):
+                raise DriverIntegrationError("requeue consumption stable_id mismatch")
+            prior = consumed_by_id.get(grant_id)
+            if prior is not None and prior.get("details") != event.get("details"):
+                raise DriverIntegrationError(f"conflicting requeue consumption for {grant_id}")
+            consumed_by_id[grant_id] = event
+
+        result: dict[str, JsonObject] = {}
+        grouped: dict[str, list[JsonObject]] = defaultdict(list)
+        for grant in grants:
+            grouped[str(grant["stable_id"])].append(grant)
+        for stable_id, model_grants in grouped.items():
+            record = current.get(stable_id)
+            recorded_grants = (
+                list(record.get("budget", {}).get("explicit_grants", [])) if record else []
+            )
+            unknown_recorded = set(recorded_grants) - set(by_id)
+            if unknown_recorded:
+                raise DriverIntegrationError(
+                    f"canonical model references unknown requeue grants: {sorted(unknown_recorded)}"
+                )
+            consumed = [
+                consumed_by_id[str(grant["grant_id"])]
+                for grant in model_grants
+                if str(grant["grant_id"]) in consumed_by_id
+            ]
+            active = [
+                event
+                for event in consumed
+                if event.get("details", {}).get("grant_id") not in recorded_grants
+            ]
+            if len(active) > 1:
+                raise DriverIntegrationError(
+                    f"multiple active requeue generations exist for {stable_id}"
+                )
+            if active:
+                details = active[0]["details"]
+                result[stable_id] = {
+                    "grant_ids": [*recorded_grants, str(details["grant_id"])],
+                    "work_id": str(details["new_work_id"]),
+                    "active": True,
+                }
+                continue
+
+            unconsumed = [
+                grant for grant in model_grants if str(grant["grant_id"]) not in consumed_by_id
+            ]
+            if unconsumed:
+                if record is None or not record.get("status", {}).get("human_review", {}).get(
+                    "required"
+                ):
+                    raise DriverIntegrationError(
+                        f"requeue grant for {stable_id} has no reviewed terminal record"
+                    )
+                grant = unconsumed[0]
+                if grant.get("stage") != record.get("status", {}).get("stage"):
+                    raise DriverIntegrationError(
+                        f"requeue grant stage does not match current terminal for {stable_id}"
+                    )
+                generation = len(consumed) + 1
+                new_work_id = stable_hash(
+                    {
+                        "stable_id": stable_id,
+                        "grant_id": grant["grant_id"],
+                        "parent_revision": record["record_revision"],
+                        "generation": generation,
+                    }
+                )
+                event = {
+                    "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+                    "event_id": f"requeue-consumed-{str(grant['grant_id'])[7:31]}",
+                    "created_at": self.dependencies.clock(),
+                    "event_kind": OperationalEventKind.REQUEUE_GRANT_CONSUMED.value,
+                    "status": OperationalEventStatus.REQUEUE_GRANT_CONSUMED.value,
+                    "provider": None,
+                    "observed_response": None,
+                    "reset_at": None,
+                    "queued_work_counts": {"models": 1},
+                    "current_environment": None,
+                    "run_id": self.config.run_id,
+                    "machine_id": self.config.machine_id,
+                    "details": {
+                        "grant_id": grant["grant_id"],
+                        "stable_id": stable_id,
+                        "stage": grant["stage"],
+                        "reason": grant["reason"],
+                        "attempts": grant["attempts"],
+                        "source_record_revision": record["record_revision"],
+                        "new_work_generation": generation,
+                        "new_work_id": new_work_id,
+                    },
+                }
+                operational.append(event)
+                self.dependencies.boundary_hook("after-requeue-consume", stable_id)
+                result[stable_id] = {
+                    "grant_ids": [*recorded_grants, str(grant["grant_id"])],
+                    "work_id": new_work_id,
+                    "active": True,
+                }
+                continue
+
+            if recorded_grants:
+                latest = consumed[-1]["details"] if consumed else None
+                result[stable_id] = {
+                    "grant_ids": recorded_grants,
+                    "work_id": str(latest["new_work_id"]) if latest is not None else None,
+                    "active": False,
+                }
+        return result
 
     def _ensure_authors(
         self,
@@ -1147,10 +1330,15 @@ class CrawlerDriver:
                         value.get("campaign_root_work_id") or value["proposal"]["work_id"]
                     ),
                 )
-                if value.get("artifact_identity") == _artifact_cache_identity(
-                    item, cached_artifact
-                ):
-                    _validate_artifact_identities(cached_artifact, self.config)
+                cache_current = value.get("artifact_identity") == _artifact_cache_identity(
+                    item, cached_artifact, self.config
+                )
+                if cache_current:
+                    try:
+                        _validate_artifact_identities(cached_artifact, self.config)
+                    except DriverIntegrationError:
+                        cache_current = False
+                if cache_current:
                     terminal = _artifact_terminal_status(cached_artifact)
                     if terminal is not None:
                         current = reducer.current_records.get(item.stable_id)
@@ -1195,6 +1383,7 @@ class CrawlerDriver:
                     state,
                 )
                 continue
+            artifact = _bind_requeue_artifact(item, artifact)
             if artifact.proposal.get("stable_id") != item.stable_id:
                 integration_error = DriverIntegrationError(
                     "author proposal stable_id does not match intake"
@@ -1264,7 +1453,7 @@ class CrawlerDriver:
                 "defer_evidence": artifact.defer_evidence,
                 "campaign_root_work_id": artifact.campaign_root_work_id,
             }
-            cache_value["artifact_identity"] = _artifact_cache_identity(item, artifact)
+            cache_value["artifact_identity"] = _artifact_cache_identity(item, artifact, self.config)
             _write_json_atomic(cache, cache_value)
             terminal = _artifact_terminal_status(artifact)
             if terminal is not None:
@@ -1342,8 +1531,6 @@ class CrawlerDriver:
                 )
 
             pending_artifacts = [artifacts[stable_id] for stable_id in sorted(pending_ids)]
-            if len(pending_artifacts) < 10:
-                return "metadata-batch-tail"
             requeued: set[str] = set()
             for batch in _metadata_batches(pending_artifacts):
                 batch_ids = tuple(str(artifact.proposal["stable_id"]) for artifact in batch)
@@ -1432,7 +1619,7 @@ class CrawlerDriver:
                 raise DriverIntegrationError("metadata gate made no durable routing progress")
 
         for item in work:
-            if item.stable_id in reducer.current_records:
+            if item.stable_id in reducer.current_records and not item.requeue_active:
                 continue
             artifact = artifacts[item.stable_id]
             skip_status = _r5_terminal_status(artifact)
@@ -1450,7 +1637,7 @@ class CrawlerDriver:
                 )
 
         for item in work:
-            if item.stable_id in reducer.current_records:
+            if item.stable_id in reducer.current_records and not item.requeue_active:
                 continue
             artifact = artifacts[item.stable_id]
             if not _fidelity_required(artifact.proposal):
@@ -1689,6 +1876,7 @@ class CrawlerDriver:
         if not repair_path.is_file():
             _write_json_atomic(repair_path, request)
         repaired = self.dependencies.author.author(item, self.paths.work_root, self.config)
+        repaired = _bind_requeue_artifact(item, repaired)
         if repaired.proposal.get("stable_id") != item.stable_id:
             raise DriverIntegrationError("repaired author proposal stable_id does not match intake")
         repaired = replace(
@@ -1710,7 +1898,7 @@ class CrawlerDriver:
             "defer_evidence": repaired.defer_evidence,
             "campaign_root_work_id": repaired.campaign_root_work_id,
         }
-        cache_value["artifact_identity"] = _artifact_cache_identity(item, repaired)
+        cache_value["artifact_identity"] = _artifact_cache_identity(item, repaired, self.config)
         _write_json_atomic(cache, cache_value)
         del artifact
         return repaired
@@ -1881,12 +2069,54 @@ class CrawlerDriver:
                 "funnel_snapshot": snapshot.to_dict(),
             }
             operational.append(event)
+            self.dependencies.boundary_hook("after-notification-identity", event_id)
             self._deliver_notification(
                 operational,
                 event_id,
                 _progress_summary(completed, milestone, snapshot),
             )
         state["last_terminal_count"] = completed
+
+    def _retry_notification_outbox(self, operational: JsonlLedger) -> None:
+        """Retry every durable milestone/checkpoint identity lacking delivery completion.
+
+        Parameters
+        ----------
+        operational:
+            Locked append-only operational ledger containing identities and attempts.
+        """
+
+        delivered = {
+            str(event.get("details", {}).get("notification_event_id"))
+            for event in operational.records
+            if event.get("event_kind") == OperationalEventKind.NOTIFICATION_DELIVERY.value
+            and event.get("status") == OperationalEventStatus.NOTIFICATION_DELIVERED.value
+        }
+        for event in tuple(operational.records):
+            event_id = str(event.get("event_id"))
+            if event_id in delivered:
+                continue
+            kind = event.get("event_kind")
+            snapshot_value = event.get("funnel_snapshot", {})
+            if not isinstance(snapshot_value, Mapping):
+                continue
+            snapshot = FunnelSnapshot(
+                runs=int(snapshot_value.get("runs", 0)),
+                deferred=int(snapshot_value.get("deferred", 0)),
+                skipped=int(snapshot_value.get("skipped", 0)),
+                failed=int(snapshot_value.get("failed", 0)),
+            )
+            if kind == OperationalEventKind.PROGRESS_NOTIFICATION.value:
+                summary = _progress_summary(
+                    int(event["models_completed"]), int(event["milestone"]), snapshot
+                )
+            elif kind == OperationalEventKind.CHECKPOINT_REVIEW.value:
+                summary = _review_summary(
+                    int(event["models_completed"]), snapshot, Path(str(event["report_path"]))
+                )
+            else:
+                continue
+            self._deliver_notification(operational, event_id, summary)
 
     def _deliver_notification(
         self,
@@ -1896,8 +2126,34 @@ class CrawlerDriver:
     ) -> bool:
         """Record best-effort delivery separately from its durable notification identity."""
 
+        completed = [
+            event
+            for event in operational.records
+            if event.get("event_kind") == OperationalEventKind.NOTIFICATION_DELIVERY.value
+            and event.get("details", {}).get("notification_event_id") == notification_event_id
+            and event.get("status") == OperationalEventStatus.NOTIFICATION_DELIVERED.value
+        ]
+        if completed:
+            return True
+        prior_attempts = sum(
+            event.get("event_kind") == OperationalEventKind.NOTIFICATION_DELIVERY.value
+            and event.get("details", {}).get("notification_event_id") == notification_event_id
+            for event in operational.records
+        )
+        idempotency_key = stable_hash(
+            {
+                "notification_event_id": notification_event_id,
+                "run_id": self.config.run_id,
+                "machine_id": self.config.machine_id,
+            }
+        )
         try:
-            delivered = bool(self.dependencies.notifier.notify(summary))
+            delivered = bool(
+                self.dependencies.notifier.notify(
+                    summary,
+                    idempotency_key=idempotency_key,
+                )
+            )
             error: Optional[str] = None
         except Exception as exc:  # noqa: BLE001 -- injected notifiers are also best-effort
             delivered = False
@@ -1905,9 +2161,8 @@ class CrawlerDriver:
             LOGGER.warning("crawler notifier failed (%s): %s", error, summary)
         delivery_id = stable_hash(
             {
-                "notification_event_id": notification_event_id,
-                "run_id": self.config.run_id,
-                "machine_id": self.config.machine_id,
+                "idempotency_key": idempotency_key,
+                "attempt": prior_attempts + 1,
             }
         )[7:31]
         operational.append(
@@ -1930,6 +2185,9 @@ class CrawlerDriver:
                 "machine_id": self.config.machine_id,
                 "details": {
                     "notification_event_id": notification_event_id,
+                    "idempotency_key": idempotency_key,
+                    "attempt": prior_attempts + 1,
+                    "completion": delivered,
                     "delivered": delivered,
                     "error": error,
                 },
@@ -1959,7 +2217,7 @@ class CrawlerDriver:
         report = _review_report(current, threshold)
         _write_json_atomic(report_path, report)
         snapshot = _funnel_snapshot(current)
-        record_checkpoint_review(
+        review = record_checkpoint_review(
             operational,
             models_completed=len(current),
             funnel_snapshot=snapshot,
@@ -1967,10 +2225,13 @@ class CrawlerDriver:
             context=self._context(0, None),
             created_at=self.dependencies.clock(),
         )
-        try:
-            self.dependencies.notifier.notify(_review_summary(len(current), snapshot, report_path))
-        except Exception as exc:  # noqa: BLE001 -- review delivery cannot block checkpointing
-            LOGGER.warning("crawler review notifier failed: %s", exc)
+        event_id = str(review.record["event_id"])
+        self.dependencies.boundary_hook("after-notification-identity", event_id)
+        self._deliver_notification(
+            operational,
+            event_id,
+            _review_summary(len(current), snapshot, report_path),
+        )
         state.update(
             {
                 "status": "paused:review-checkpoint",
@@ -2050,6 +2311,101 @@ def default_driver_paths(repo_root: Path, intake_root: Path) -> DriverPaths:
     )
 
 
+def _validated_requeue_grants(path: Path, intake_ids: frozenset[str]) -> tuple[JsonObject, ...]:
+    """Read and integrity-check the append-only human requeue grant ledger.
+
+    Parameters
+    ----------
+    path:
+        Runtime grant ledger written by either supported crawler requeue command.
+    intake_ids:
+        Exact trusted intake membership.
+
+    Returns
+    -------
+    tuple[dict[str, Any], ...]
+        Unique validated grants in append order.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If any grant is malformed, forged, conflicting, or outside intake.
+    """
+
+    rows = scan_jsonl(path, validate=False)
+    validated: list[JsonObject] = []
+    by_id: dict[str, JsonObject] = {}
+    common = {"grant_id", "stable_id", "stage", "reason", "attempts"}
+    optional = {"created_at", "granted_by", "new_work_generation"}
+    for row in rows:
+        if set(row) - common - optional or not common <= set(row):
+            raise DriverIntegrationError("requeue grant has an invalid field contract")
+        grant_id = row.get("grant_id")
+        stable_id = row.get("stable_id")
+        stage = row.get("stage")
+        reason = row.get("reason")
+        attempts = row.get("attempts")
+        if (
+            not isinstance(grant_id, str)
+            or not isinstance(stable_id, str)
+            or stable_id not in intake_ids
+            or not isinstance(stage, str)
+            or stage not in FAILURE_REASON_CODES
+            or not isinstance(reason, str)
+            or not reason.strip()
+            or not isinstance(attempts, int)
+            or isinstance(attempts, bool)
+            or attempts < 1
+        ):
+            raise DriverIntegrationError("requeue grant values are invalid")
+        if "new_work_generation" in row:
+            generation = row.get("new_work_generation")
+            granted_by = row.get("granted_by")
+            if (
+                not isinstance(generation, int)
+                or generation < 1
+                or not isinstance(granted_by, str)
+                or not granted_by
+            ):
+                raise DriverIntegrationError("requeue tool grant generation is invalid")
+            expected = stable_hash(
+                {
+                    "generation": generation,
+                    "stable_id": stable_id,
+                    "stage": stage,
+                    "reason": reason,
+                    "attempts": attempts,
+                    "granted_by": granted_by,
+                }
+            )
+        else:
+            if not isinstance(row.get("created_at"), str):
+                raise DriverIntegrationError("crawler requeue grant has no creation time")
+            expected = stable_hash(
+                {
+                    "stable_id": stable_id,
+                    "stage": stage,
+                    "reason": reason,
+                    "grant": attempts,
+                }
+            )
+        if grant_id != expected:
+            raise DriverIntegrationError(f"requeue grant hash mismatch: {grant_id}")
+        normalized = dict(row)
+        prior = by_id.get(grant_id)
+        if prior is not None:
+            logical_prior = {key: value for key, value in prior.items() if key != "created_at"}
+            logical_current = {
+                key: value for key, value in normalized.items() if key != "created_at"
+            }
+            if logical_prior != logical_current:
+                raise DriverIntegrationError(f"conflicting duplicate requeue grant: {grant_id}")
+            continue
+        by_id[grant_id] = normalized
+        validated.append(normalized)
+    return tuple(validated)
+
+
 def utc_now() -> str:
     """Return an RFC 3339 UTC timestamp."""
 
@@ -2113,9 +2469,13 @@ def _read_verified_worker_receipt(
 
 
 def _environment_binding(
-    intent: EnvironmentIntent, prefix: Path, *, strict: bool
+    intent: EnvironmentIntent,
+    prefix: Path,
+    probe_results: Sequence[ProbeResult],
+    *,
+    strict: bool,
 ) -> EnvironmentBinding:
-    """Bind exact lifecycle and installed-package bytes to one active prefix."""
+    """Bind exact lifecycle, probe, package, and interpreter observations."""
 
     lock_bytes = _required_artifact_bytes(
         intent.lock.lock_path, b"test-lock", strict=strict, label="lock"
@@ -2129,26 +2489,42 @@ def _environment_binding(
         raise DriverIntegrationError(f"environment interpreter is missing: {interpreter}")
     if not interpreter.is_file():
         interpreter = Path(sys.executable)
+    python_version, compiler_identity, sdk_identity, interpreter_facts = (
+        _observed_interpreter_facts(interpreter)
+    )
     lock_sha256 = hash_bytes(lock_bytes)
     export_sha256 = hash_bytes(export_bytes)
     packages_sha256 = hash_bytes(package_bytes)
-    probes = {
+    probe_intent = {
         "imports": list(intent.probes.imports),
         "export_checks": [vars(value) for value in intent.probes.export_checks],
         "source_build": [vars(value) for value in intent.probes.source_build],
     }
+    observed_probes = [
+        {"name": result.name, "passed": result.passed, "detail": result.detail}
+        for result in probe_results
+    ]
     platform_facts = {
         "target": intent.lock.target,
-        "compiler": platform.python_compiler(),
-        "sdk": platform.platform(),
+        "python": python_version,
+        "compiler": compiler_identity,
+        "sdk": sdk_identity,
+        "interpreter_facts_sha256": hash_bytes(interpreter_facts),
         "packages_manifest_sha256": packages_sha256,
     }
     generation = compute_env_generation(
-        {"name": intent.name, "framework": intent.framework, "target": intent.lock.target},
+        {
+            "name": intent.name,
+            "framework": intent.framework,
+            "target": intent.lock.target,
+            "channels": list(intent.channels),
+            "dependencies": list(intent.dependencies),
+            "probe_intent": probe_intent,
+        },
         lock_sha256,
         export_sha256,
         platform_facts,
-        [probes],
+        observed_probes,
     )
     return EnvironmentBinding(
         prefix=prefix.resolve(),
@@ -2159,10 +2535,73 @@ def _environment_binding(
         lock_sha256=lock_sha256,
         resolved_export_sha256=export_sha256,
         packages_manifest_sha256=packages_sha256,
-        python_version=platform.python_version(),
-        compiler_identity=platform.python_compiler(),
-        sdk_identity=platform.platform(),
+        python_version=python_version,
+        compiler_identity=compiler_identity,
+        sdk_identity=sdk_identity,
     )
+
+
+def _observed_interpreter_facts(interpreter: Path) -> tuple[str, str, str, bytes]:
+    """Execute an environment interpreter and return its exact platform facts.
+
+    Parameters
+    ----------
+    interpreter:
+        Exact active-prefix Python executable.
+
+    Returns
+    -------
+    tuple[str, str, str, bytes]
+        Python, compiler, SDK strings and the exact stdout bytes hashed by the generation.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If the interpreter cannot report a complete canonical fact object.
+    """
+
+    program = (
+        "import json, platform, sys, sysconfig; "
+        "print(json.dumps({"
+        "'python_version': sys.version, "
+        "'compiler_identity': platform.python_compiler(), "
+        "'sdk_identity': json.dumps({"
+        "'platform': sysconfig.get_platform(), "
+        "'platform_detail': platform.platform(), "
+        "'sdkroot': sysconfig.get_config_var('SDKROOT'), "
+        "'deployment_target': sysconfig.get_config_var('MACOSX_DEPLOYMENT_TARGET'), "
+        "'cc': sysconfig.get_config_var('CC'), "
+        "'cxx': sysconfig.get_config_var('CXX')}, "
+        "sort_keys=True, separators=(',', ':'))}, "
+        "sort_keys=True, separators=(',', ':')))"
+    )
+    try:
+        completed = subprocess.run(
+            [str(interpreter.absolute()), "-c", program],
+            check=False,
+            capture_output=True,
+        )
+    except OSError as exc:
+        raise DriverIntegrationError(
+            f"environment interpreter facts failed for {interpreter}: {exc}"
+        ) from exc
+    if completed.returncode != 0:
+        raise DriverIntegrationError(
+            "environment interpreter facts failed: "
+            + completed.stderr.decode("utf-8", errors="replace")[-1500:]
+        )
+    try:
+        value = json.loads(completed.stdout)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise DriverIntegrationError("environment interpreter facts are invalid JSON") from exc
+    if not isinstance(value, Mapping):
+        raise DriverIntegrationError("environment interpreter facts must be an object")
+    facts = tuple(
+        value.get(field) for field in ("python_version", "compiler_identity", "sdk_identity")
+    )
+    if not all(isinstance(fact, str) and fact for fact in facts):
+        raise DriverIntegrationError("environment interpreter facts are incomplete")
+    return str(facts[0]), str(facts[1]), str(facts[2]), completed.stdout
 
 
 def _required_artifact_bytes(path: Path, fallback: bytes, *, strict: bool, label: str) -> bytes:
@@ -2359,7 +2798,7 @@ def _current_run_is_fresh(
     )
 
 
-def _artifact_cache_identity(item: WorkItem, artifact: AuthorArtifact) -> str:
+def _artifact_cache_identity(item: WorkItem, artifact: AuthorArtifact, config: DriverConfig) -> str:
     """Recompute a cached author artifact identity from every dependent byte."""
 
     source_bytes: list[JsonObject] = []
@@ -2400,6 +2839,15 @@ def _artifact_cache_identity(item: WorkItem, artifact: AuthorArtifact) -> str:
             "source_bytes": source_bytes,
             "code_sha256": code_digest,
             "author_prompt_sha256": prompt_digest,
+            "checker": {
+                "prompt_sha256": _checker_prompt_hash(),
+                "model": config.checker_model,
+                "version": config.checker_version,
+            },
+            "requeue": {
+                "grant_ids": list(item.explicit_grants),
+                "work_id": item.requeue_work_id,
+            },
             "terminal": {
                 "status": artifact.terminal_status,
                 "reason": artifact.terminal_reason_code,
@@ -2407,6 +2855,36 @@ def _artifact_cache_identity(item: WorkItem, artifact: AuthorArtifact) -> str:
                 "defer_evidence": artifact.defer_evidence,
             },
         }
+    )
+
+
+def _bind_requeue_artifact(item: WorkItem, artifact: AuthorArtifact) -> AuthorArtifact:
+    """Bind an explicitly granted work generation into an authored proposal.
+
+    Parameters
+    ----------
+    item:
+        Routed intake item with its latest durable requeue binding.
+    artifact:
+        Newly authored artifact to bind.
+
+    Returns
+    -------
+    AuthorArtifact
+        Artifact whose work and proposal identities name the granted generation.
+    """
+
+    if item.requeue_work_id is None:
+        return artifact
+    proposal = deepcopy(artifact.proposal)
+    proposal["work_id"] = item.requeue_work_id
+    proposal["proposal_sha256"] = stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+    return replace(
+        artifact,
+        proposal=proposal,
+        campaign_root_work_id=item.requeue_work_id,
     )
 
 
@@ -3112,13 +3590,13 @@ def _terminal_metadata_gate(
 def _metadata_batches(
     artifacts: Sequence[AuthorArtifact],
 ) -> tuple[tuple[AuthorArtifact, ...], ...]:
-    """Partition metadata work into deterministic 10--20 item production batches."""
+    """Partition metadata work, flushing the final one-to-nine item queue tail."""
 
     if not artifacts:
         return ()
     count = len(artifacts)
     if count < 10:
-        return ()
+        return (tuple(artifacts),)
     if count <= 20:
         return (tuple(artifacts),)
     sizes: list[int] = []
@@ -3917,7 +4395,7 @@ def _assemble_terminal_model(
             )
             + int(fidelity_gate is not None),
             "run_revisions_used": 1,
-            "explicit_grants": [],
+            "explicit_grants": list(item.explicit_grants),
         },
         "flags": [],
         "notes": "",
@@ -4115,7 +4593,7 @@ def _assemble_run_model(
             "author_sessions_max": 3,
             "gate_rounds_used": 1 + int(required_fidelity),
             "run_revisions_used": 1,
-            "explicit_grants": [],
+            "explicit_grants": list(item.explicit_grants),
         },
         "flags": [],
         "notes": "",

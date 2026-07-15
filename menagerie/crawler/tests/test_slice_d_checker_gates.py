@@ -86,6 +86,38 @@ def test_metadata_batch_envelope_validates_every_item_result(tmp_path: Path) -> 
     assert validated["batch_size"] == 10
 
 
+def test_metadata_final_tail_requires_explicit_dispatch_flag(tmp_path: Path) -> None:
+    """Only an explicitly final dispatcher request may contain fewer than ten items."""
+
+    gate = make_gate(["m_tail"])
+    items = [_checker_item_pack(gate["items"][0])]
+    with pytest.raises(CheckerDispatchError, match="10--20"):
+        build_metadata_vet_envelope(
+            items,
+            gate_round=1,
+            output_path=tmp_path / "rejected" / "result.json",
+            checker_model="codex",
+            checker_version="test",
+            request_nonce="ordinary-short-batch",
+        )
+    result_path = tmp_path / "accepted" / "result.json"
+    envelope = build_metadata_vet_envelope(
+        items,
+        gate_round=1,
+        output_path=result_path,
+        checker_model="codex",
+        checker_version="test",
+        request_nonce="final-short-batch",
+        final_tail=True,
+    )
+    gate["gate_identity"] = envelope["envelope_sha256"]
+    gate["checker"]["prompt_sha256"] = envelope["prompt"]["sha256"]
+    gate["result_envelope_sha256"] = compute_result_envelope_sha256(gate)
+    result_path.parent.mkdir(parents=True)
+    result_path.write_text(json.dumps(gate), encoding="utf-8")
+    assert validate_checker_result(result_path, envelope)["batch_size"] == 1
+
+
 def test_checker_result_rejects_partial_or_mismatched_item(tmp_path: Path) -> None:
     """One missing or independently mismatched item invalidates the result envelope."""
 

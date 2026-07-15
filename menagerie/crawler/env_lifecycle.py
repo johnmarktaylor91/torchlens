@@ -90,7 +90,7 @@ class EnvironmentBackend(Protocol):
 
 
 DiskFree = Callable[[Path], int]
-UseEnvironment = Callable[[Path], None]
+UseEnvironment = Callable[[Path, tuple[ProbeResult, ...]], None]
 
 
 def disk_free_bytes(path: Path) -> int:
@@ -202,7 +202,7 @@ class SequentialEnvironmentLifecycle:
             if failed:
                 names = ", ".join(result.name for result in failed)
                 raise EnvironmentProbeError(f"environment probes failed: {names}")
-            use(prefix)
+            use(prefix, probe_results)
         finally:
             self._backend.remove(prefix)
             self._active = None

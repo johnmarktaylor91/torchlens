@@ -97,10 +97,11 @@ def test_authored_blocks_are_atomic(valid_model: dict[str, Any]) -> None:
         validate_payload(pending_with_text)
 
 
-def test_metadata_gate_batch_size_is_enforced() -> None:
-    """Metadata gates require 10--20 independently judged items."""
+def test_metadata_gate_final_tail_size_is_enforced() -> None:
+    """Metadata gates permit a final one-item tail but never an empty result."""
 
-    undersized = make_gate([f"m_{index}" for index in range(9)])
+    validate_payload(make_gate(["m_tail"]))
+    undersized = make_gate([])
     with pytest.raises(PayloadValidationError):
         validate_payload(undersized)
 

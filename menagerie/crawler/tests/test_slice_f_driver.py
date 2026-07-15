@@ -12,6 +12,7 @@ from typing import Any, Mapping, Optional, Sequence
 import pytest
 
 import menagerie.crawler.driver as driver_module
+import menagerie.crawler.reducer as reducer_module
 from menagerie.crawler.checker_dispatch import CheckerBackoffSignal
 from menagerie.crawler.constants import (
     CheckerPauseReason,
@@ -46,9 +47,9 @@ from menagerie.crawler.envs import (
     LockArtifacts,
     load_environment_registry,
 )
-from menagerie.crawler.env_lifecycle import EnvironmentProbeError
+from menagerie.crawler.env_lifecycle import EnvironmentProbeError, ProbeResult
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
-from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.fetcher import fetch_targets as controlled_fetch_targets
 from menagerie.crawler.metadata import authored_fact_leaves, recompute_accepted_identities
 from menagerie.crawler.models import LedgerPaths
@@ -124,14 +125,17 @@ class FakeAuthor(AuthorLane):
     def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
         """Return one accepted two-mode proposal."""
 
-        del config
         self.calls[item.stable_id] = self.calls.get(item.stable_id, 0) + 1
         proposal = make_author_proposal(item.stable_id)
         proposal["work_id"] = f"work-{item.stable_id}"
         facts = proposal["proposed_facts"]
         facts["modes"]["meaningful_modes"] = ["train", "eval"]
         facts["external_metadata"]["modes"]["meaningful_modes"] = ["train", "eval"]
-        _refresh_proposal_identities(proposal)
+        _refresh_proposal_identities(
+            proposal,
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
         model_dir = work_root / item.stable_id / "fake-model"
         model_dir.mkdir(parents=True, exist_ok=True)
         return AuthorArtifact(proposal, {"sources": []}, model_dir)
@@ -343,6 +347,7 @@ class FakeForward(ForwardLane):
                     mode=mode,
                 )
                 attempt["attempt_no"] = attempt_no
+                attempt["work_id"] = artifact.proposal["work_id"]
                 attempt.pop("ledger_seq", None)
                 attempt.pop("payload_sha256", None)
                 attempt["worker_receipt"]["output_signature"] = output_signature
@@ -435,6 +440,43 @@ class InaccurateChecker(FakeChecker):
             item["required_repairs"] = ["correct the unsupported metadata claim"]
             item["field_checks"][0]["verdict"] = "inaccurate"
             item["field_checks"][0]["required_repair"] = "correct the claim"
+        return outcome
+
+
+class CannotVerifyChecker(FakeChecker):
+    """Return one repeated cannot-verify metadata finding per item."""
+
+    def check_metadata(
+        self, artifacts: Sequence[AuthorArtifact], work_root: Path, config: DriverConfig
+    ) -> CheckerOutcome:
+        """Return a complete cannot-verify metadata gate."""
+
+        outcome = super().check_metadata(artifacts, work_root, config)
+        assert outcome.gate is not None
+        for item in outcome.gate["items"]:
+            item["verdict"] = "cannot-verify"
+            item["required_repairs"] = ["supply missing primary evidence"]
+            item["field_checks"][0]["verdict"] = "cannot-verify"
+            item["field_checks"][0]["required_repair"] = "supply primary evidence"
+        return outcome
+
+
+class MixedTailChecker(FakeChecker):
+    """Accept all but one initial item, then accept the final repaired tail."""
+
+    def check_metadata(
+        self, artifacts: Sequence[AuthorArtifact], work_root: Path, config: DriverConfig
+    ) -> CheckerOutcome:
+        """Create a mixed first generation and an accurate one-item tail."""
+
+        outcome = super().check_metadata(artifacts, work_root, config)
+        assert outcome.gate is not None
+        if len(artifacts) > 1:
+            item = outcome.gate["items"][-1]
+            item["verdict"] = "inaccurate"
+            item["required_repairs"] = ["repair the final item"]
+            item["field_checks"][0]["verdict"] = "inaccurate"
+            item["field_checks"][0]["required_repair"] = "repair the final item"
         return outcome
 
 
@@ -536,9 +578,10 @@ class FailingNotifier(Notifier):
 
         self.messages: list[str] = []
 
-    def notify(self, summary: str) -> bool:
+    def notify(self, summary: str, *, idempotency_key: str) -> bool:
         """Record one call and report that delivery failed."""
 
+        assert idempotency_key.startswith("sha256:")
         self.messages.append(summary)
         return False
 
@@ -562,7 +605,7 @@ class FakeEnvironments(EnvironmentLane):
         prefix = self.root / intent.name
         prefix.mkdir(parents=True, exist_ok=True)
         try:
-            use(prefix)
+            use(prefix, (ProbeResult("synthetic-canary", True, "ok"),))
         finally:
             self.events.append(f"remove:{intent.name}")
             self.active -= 1
@@ -602,12 +645,14 @@ class FakeNotifier(Notifier):
         """Initialize the delivered message list."""
 
         self.messages: list[str] = []
+        self.idempotency_keys: list[str] = []
 
-    def notify(self, summary: str) -> bool:
+    def notify(self, summary: str, *, idempotency_key: str) -> bool:
         """Capture one summary and report success."""
 
         summary.encode("ascii")
         self.messages.append(summary)
+        self.idempotency_keys.append(idempotency_key)
         return True
 
 
@@ -751,10 +796,45 @@ def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
         ),
         generation=None,
     )
-    binding = _environment_binding(intent, prefix, strict=True)
+    binding = _environment_binding(
+        intent,
+        prefix,
+        (ProbeResult("canary", True, "observed"),),
+        strict=True,
+    )
     assert binding.lock_sha256 == hash_bytes(lock_bytes)
     assert binding.resolved_export_sha256 == hash_bytes(export_bytes)
     assert binding.packages_manifest_sha256 == hash_bytes(package_bytes)
+    changed_probe = _environment_binding(
+        intent,
+        prefix,
+        (ProbeResult("canary", True, "different observed result"),),
+        strict=True,
+    )
+    assert changed_probe.env_generation != binding.env_generation
+
+    interpreter = prefix / "bin" / "python"
+    interpreter.unlink()
+    interpreter.write_text(
+        f"#!{sys.executable}\n"
+        "import json\n"
+        "print(json.dumps({"
+        "'python_version': 'prefix-python-9.9', "
+        "'compiler_identity': 'prefix-compiler', "
+        "'sdk_identity': 'prefix-sdk'}, sort_keys=True, separators=(',', ':')))\n",
+        encoding="utf-8",
+    )
+    interpreter.chmod(0o755)
+    prefix_observed = _environment_binding(
+        intent,
+        prefix,
+        (ProbeResult("canary", True, "observed"),),
+        strict=True,
+    )
+    assert prefix_observed.python_version == "prefix-python-9.9"
+    assert prefix_observed.compiler_identity == "prefix-compiler"
+    assert prefix_observed.sdk_identity == "prefix-sdk"
+    assert prefix_observed.env_generation != binding.env_generation
 
     receipt_path = tmp_path / "result" / "receipt.json"
     captured: list[str] = []
@@ -795,7 +875,7 @@ def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
         tmp_path / "request.json",
         receipt_path,
         tmp_path / "supervisor",
-        binding.python_executable,
+        prefix_observed.python_executable,
         timeout_seconds=1,
         rss_limit_bytes=1024,
         cwd=tmp_path,
@@ -1003,6 +1083,27 @@ def test_checker_prompt_bytes_stale_gate_and_execution_identity(
     assert _execution_identity(artifact.proposal, environment) != first_execution
 
 
+def test_checker_prompt_change_invalidates_author_cache_and_reauthors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cached old-checker artifact is a cache miss, not a fatal resume error."""
+
+    snapshot = _snapshot(tmp_path)
+    assert _driver(tmp_path, snapshot).run().status == "complete"
+    changed_prompt = "sha256:" + "f" * 64
+    monkeypatch.setattr(driver_module, "_checker_prompt_hash", lambda: changed_prompt)
+    monkeypatch.setattr(reducer_module, "_checker_prompt_hash", lambda: changed_prompt)
+    author = FakeAuthor()
+    forward = FakeForward()
+    result = _driver(tmp_path, snapshot, author=author, forward=forward).run()
+    assert result.status == "complete"
+    assert set(author.calls) == {item.stable_id for item in snapshot.items}
+    assert set(forward.calls) == {item.stable_id for item in snapshot.items}
+    paths = _paths(tmp_path, snapshot)
+    assert len(scan_jsonl(paths.ledgers.gates)) == 2
+    assert len(scan_jsonl(paths.ledgers.models)) == 2 * len(snapshot.items)
+
+
 def test_only_driver_awards_runs_after_gate_receipts_and_both_modes(tmp_path: Path) -> None:
     """Gates and worker attempts alone never create a canonical runs record."""
 
@@ -1031,18 +1132,46 @@ def test_only_driver_awards_runs_after_gate_receipts_and_both_modes(tmp_path: Pa
     assert scan_jsonl(paths.ledgers.models)[0]["status"]["code"] == "runs"
 
 
-def test_single_metadata_tail_waits_without_failing_model(tmp_path: Path) -> None:
-    """A sub-minimum end-of-queue batch remains pending and never becomes model failure."""
+def test_final_metadata_tail_drains_after_mixed_verdict_and_restart(tmp_path: Path) -> None:
+    """A persisted mixed batch resumes its one-item tail and reaches terminal records."""
 
-    snapshot = _snapshot(tmp_path, count=1)
+    snapshot = _snapshot(tmp_path)
+    killed = False
+
+    def kill_after_mixed_gate(boundary: str, stable_id: str) -> None:
+        """Crash after the mixed gate is durable but before any model reduction."""
+
+        nonlocal killed
+        del stable_id
+        if boundary == "after-gate" and not killed:
+            killed = True
+            raise InjectedKill("after-gate")
+
+    with pytest.raises(InjectedKill):
+        _driver(
+            tmp_path,
+            snapshot,
+            checker=MixedTailChecker(),
+            boundary=kill_after_mixed_gate,
+        ).run()
+    resumed_checker = MixedTailChecker()
+    result = _driver(tmp_path, snapshot, checker=resumed_checker).run()
+    assert result.status == "complete"
+    assert resumed_checker.metadata_calls == 1
+    paths = _paths(tmp_path, snapshot)
+    assert len(scan_jsonl(paths.ledgers.models)) == len(snapshot.items)
+    assert len(scan_jsonl(paths.ledgers.gates)[-1]["items"]) == 1
+
+
+def test_entire_seven_item_phase_flushes_as_final_tail(tmp_path: Path) -> None:
+    """A phase smaller than the normal batch minimum drains in one final request."""
+
+    snapshot = _snapshot(tmp_path, count=7)
     checker = FakeChecker()
     result = _driver(tmp_path, snapshot, checker=checker).run()
-    assert result.status == "awaiting-gate"
-    assert result.paused_reason == "metadata-batch-tail"
-    assert checker.metadata_calls == 0
-    paths = _paths(tmp_path, snapshot)
-    assert scan_jsonl(paths.ledgers.models) == []
-    assert scan_jsonl(paths.ledgers.attempts) == []
+    assert result.status == "complete"
+    assert checker.metadata_calls == 1
+    assert len(scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)) == 7
 
 
 def test_quota_pause_records_event_wakeup_and_no_partial_award(tmp_path: Path) -> None:
@@ -1113,7 +1242,12 @@ def test_empty_milestones_and_missing_notifier_never_block(tmp_path: Path) -> No
     assert result.status == "complete"
     events = scan_jsonl(_paths(tmp_path, snapshot).operational_ledger)
     assert all(event["event_kind"] != "progress-notification" for event in events)
-    assert CommandNotifier("/definitely/missing/send-to-jmt.sh").notify("milestone 1") is False
+    assert (
+        CommandNotifier("/definitely/missing/send-to-jmt.sh").notify(
+            "milestone 1", idempotency_key=HASH
+        )
+        is False
+    )
 
 
 def test_failed_forward_terminalizes_and_campaign_continues(tmp_path: Path) -> None:
@@ -1183,6 +1317,82 @@ def test_checker_contract_failure_terminalizes_batch(tmp_path: Path) -> None:
     assert {record["status"]["code"] for record in models} == {"failed:accuracy-gate"}
     assert {record["status"]["reason_code"] for record in models} == {"checker-contract-invalid"}
     assert all(record["status"]["human_review"]["required"] for record in models)
+
+
+def test_human_requeue_consumes_grant_and_supersedes_failed_gate(tmp_path: Path) -> None:
+    """A reviewed failed gate is superseded once through its durable explicit grant."""
+
+    snapshot = _snapshot(tmp_path)
+    paths = _paths(tmp_path, snapshot)
+    assert (
+        _driver(tmp_path, snapshot, checker=FailingMetadataChecker()).run().status
+        == "terminal-partition-complete"
+    )
+    stable_id = snapshot.items[0].stable_id
+    reason = "human reviewed corrected evidence"
+    grant_id = stable_hash(
+        {
+            "stable_id": stable_id,
+            "stage": "accuracy-gate",
+            "reason": reason,
+            "grant": 1,
+        }
+    )
+    grant = {
+        "grant_id": grant_id,
+        "stable_id": stable_id,
+        "stage": "accuracy-gate",
+        "reason": reason,
+        "attempts": 1,
+        "created_at": NOW,
+    }
+    paths.requeue_grants.parent.mkdir(parents=True, exist_ok=True)
+    with paths.requeue_grants.open("ab") as handle:
+        handle.write(canonical_json_bytes(grant) + b"\n")
+
+    forward = FakeForward()
+    result = _driver(tmp_path, snapshot, forward=forward).run()
+    assert result.status == "terminal-partition-complete"
+    assert forward.calls == {stable_id: 1}
+    revisions = [
+        record for record in scan_jsonl(paths.ledgers.models) if record["stable_id"] == stable_id
+    ]
+    assert [record["status"]["code"] for record in revisions] == [
+        "failed:accuracy-gate",
+        "runs",
+    ]
+    assert revisions[-1]["budget"]["explicit_grants"] == [grant_id]
+    consumed = [
+        event
+        for event in scan_jsonl(paths.operational_ledger)
+        if event["event_kind"] == "requeue-grant-consumed"
+    ]
+    assert len(consumed) == 1
+    assert consumed[0]["details"]["grant_id"] == grant_id
+
+    replay_forward = FakeForward()
+    _driver(tmp_path, snapshot, forward=replay_forward).run()
+    assert replay_forward.calls == {}
+    assert (
+        len(
+            [
+                record
+                for record in scan_jsonl(paths.ledgers.models)
+                if record["stable_id"] == stable_id
+            ]
+        )
+        == 2
+    )
+    assert (
+        len(
+            [
+                event
+                for event in scan_jsonl(paths.operational_ledger)
+                if event["event_kind"] == "requeue-grant-consumed"
+            ]
+        )
+        == 1
+    )
 
 
 def test_environment_failure_terminalizes_intent(tmp_path: Path) -> None:
@@ -1329,6 +1539,36 @@ def test_fidelity_rejection_terminalizes_without_aborting(tmp_path: Path) -> Non
     assert all(record["status"]["human_review"]["required"] for record in models)
 
 
+@pytest.mark.parametrize(
+    ("checker_type", "reason_code"),
+    [
+        (InaccurateChecker, "inaccurate-cap-exhausted"),
+        (CannotVerifyChecker, "cannot-verify-cap-exhausted"),
+        (FailingMetadataChecker, "checker-contract-invalid"),
+    ],
+)
+def test_r3_metadata_terminal_precedes_fidelity_without_driver_abort(
+    tmp_path: Path,
+    checker_type: type[CheckerLane],
+    reason_code: str,
+) -> None:
+    """R3 metadata rejection terminalizes honestly with no invented fidelity gate."""
+
+    snapshot = _snapshot(tmp_path)
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=FidelityAuthor(),
+        checker=checker_type(),
+    ).run()
+    assert result.status == "terminal-partition-complete"
+    models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    assert {record["status"]["code"] for record in models} == {"failed:accuracy-gate"}
+    assert {record["status"]["reason_code"] for record in models} == {reason_code}
+    assert all(record["fidelity"]["current"] is False for record in models)
+    assert all(record["fidelity"]["gate_id"] is None for record in models)
+
+
 def test_partial_multi_attempt_append_resumes_idempotently(tmp_path: Path) -> None:
     """A kill after attempt one lets the ledger assign sequence two on replay."""
 
@@ -1398,6 +1638,51 @@ def test_failed_notification_is_separate_and_state_wipe_cannot_hide_milestone(
     assert deliveries[0]["details"]["delivered"] is False
 
 
+def test_notification_outbox_retries_identity_after_crash_before_delivery(
+    tmp_path: Path,
+) -> None:
+    """A crash after identity fsync leaves a resumable idempotent delivery outbox item."""
+
+    snapshot = _snapshot(tmp_path)
+    killed = False
+
+    def kill_after_identity(boundary: str, stable_id: str) -> None:
+        """Simulate SIGKILL between the durable identity and notifier call."""
+
+        nonlocal killed
+        del stable_id
+        if boundary == "after-notification-identity" and not killed:
+            killed = True
+            raise InjectedKill("after-notification-identity")
+
+    with pytest.raises(InjectedKill):
+        _driver(
+            tmp_path,
+            snapshot,
+            boundary=kill_after_identity,
+            milestones=(1,),
+        ).run()
+    paths = _paths(tmp_path, snapshot)
+    before = scan_jsonl(paths.operational_ledger)
+    progress = [event for event in before if event["event_kind"] == "progress-notification"]
+    assert len(progress) == 1
+    assert all(event["event_kind"] != "notification-delivery" for event in before)
+
+    notifier = FakeNotifier()
+    result = _driver(tmp_path, snapshot, notifier=notifier, milestones=(1,)).run()
+    assert result.status == "complete"
+    assert len(notifier.messages) == 1
+    assert len(notifier.idempotency_keys) == 1
+    delivery = next(
+        event
+        for event in scan_jsonl(paths.operational_ledger)
+        if event["event_kind"] == "notification-delivery"
+    )
+    assert delivery["status"] == "notification-delivered"
+    assert delivery["details"]["notification_event_id"] == progress[0]["event_id"]
+    assert delivery["details"]["idempotency_key"] == notifier.idempotency_keys[0]
+
+
 def test_command_notifier_timeout_is_short_and_nonblocking(tmp_path: Path) -> None:
     """A hung notifier is killed by its short timeout and returns promptly."""
 
@@ -1406,5 +1691,5 @@ def test_command_notifier_timeout_is_short_and_nonblocking(tmp_path: Path) -> No
         f'{sys.executable} -c "import time; time.sleep(5)"', timeout_seconds=0.05
     )
     started = time.monotonic()
-    assert notifier.notify("milestone 1") is False
+    assert notifier.notify("milestone 1", idempotency_key=HASH) is False
     assert time.monotonic() - started < 1.0

@@ -308,6 +308,15 @@ class CanonicalReducer:
         if previous is not None and candidate.get("record_seq") is not None:
             if int(candidate["record_seq"]) <= int(previous["record_seq"]):
                 raise ReductionError("record_seq must increase over the current revision")
+        if previous is not None and previous.get("status", {}).get("human_review", {}).get(
+            "required"
+        ):
+            previous_grants = set(previous.get("budget", {}).get("explicit_grants", []))
+            candidate_grants = set(candidate.get("budget", {}).get("explicit_grants", []))
+            if not candidate_grants > previous_grants:
+                raise ReductionError(
+                    "human-review terminal supersession requires a new explicit grant"
+                )
         self._validate_status(candidate)
         self._validate_source(candidate)
         self._validate_gates(candidate)
@@ -489,6 +498,8 @@ class CanonicalReducer:
             found = self._gate_item(fidelity.get("gate_id"), stable_id)
             if found is None:
                 status = model.get("status", {})
+                if self._is_pre_fidelity_terminal(model):
+                    return
                 if (
                     status.get("code") == "failed:fidelity"
                     and status.get("reason_code") == "identity-mismatch"
@@ -534,6 +545,62 @@ class CanonicalReducer:
                 raise ReductionError(
                     "required fidelity gate is stale, unacceptable, or has a blocked rung check"
                 )
+
+    def _is_pre_fidelity_terminal(self, model: Mapping[str, Any]) -> bool:
+        """Return whether a terminal record stopped before fidelity or execution.
+
+        Parameters
+        ----------
+        model:
+            Proposed terminal revision with an R3/R4-required fidelity block.
+
+        Returns
+        -------
+        bool
+            Whether durable attempts prove that no fidelity/run stage was reached.
+        """
+
+        status = model.get("status", {})
+        fidelity = model.get("fidelity", {})
+        execution = model.get("execution", {})
+        pre_fidelity_failure_stages = {
+            "intake",
+            "source",
+            "fetch",
+            "evidence",
+            "accuracy-gate",
+            "runner",
+        }
+        if (
+            status.get("kind") == "runs"
+            or status.get("code") == "failed:fidelity"
+            or (
+                status.get("kind") == "failed"
+                and status.get("stage") not in pre_fidelity_failure_stages
+            )
+            or fidelity.get("current")
+            or fidelity.get("gate_id") is not None
+            or fidelity.get("verdict") is not None
+            or execution.get("current")
+            or execution.get("accepted_attempt_ids")
+        ):
+            return False
+        attempts_by_id = {record["attempt_id"]: record for record in self._attempts.records}
+        for attempt_id in status.get("attempt_ids", []):
+            attempt = attempts_by_id.get(attempt_id)
+            if attempt is None:
+                return False
+            identities = attempt.get("identities", {})
+            receipt = attempt.get("worker_receipt", {})
+            if (
+                attempt.get("environment") is not None
+                or identities.get("environment") is not None
+                or identities.get("execution") is not None
+                or receipt.get("present")
+                or receipt.get("forward_started")
+            ):
+                return False
+        return True
 
     def _validate_family_template(self, model: Mapping[str, Any]) -> None:
         """Mechanically compare a claimed size variant with its representative."""

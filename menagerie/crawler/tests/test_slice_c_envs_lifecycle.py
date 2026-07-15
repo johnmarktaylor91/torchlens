@@ -124,10 +124,19 @@ def test_lifecycle_orders_solve_create_probe_use_and_teardown(tmp_path: Path) ->
         disk_free=lambda _path: next(disk_values),
         minimum_free_bytes=0,
     )
-    result = lifecycle.run(intent, use=lambda _prefix: events.append("use"))
+    observed_probes: list[tuple[ProbeResult, ...]] = []
+
+    def use(_prefix: Path, probe_results: tuple[ProbeResult, ...]) -> None:
+        """Record the exact successful canary observations passed to the driver."""
+
+        observed_probes.append(probe_results)
+        events.append("use")
+
+    result = lifecycle.run(intent, use=use)
     assert events == ["solve:osx-arm64", "create", "probe", "use", "remove"]
     assert result.disk_recovery_checked
     assert result.disk_after_teardown == result.disk_before
+    assert observed_probes == [result.probe_results]
     assert intent.lock.lock_path.is_file()
     assert intent.lock.export_hash_path.read_text(encoding="utf-8").startswith("sha256:")
 
@@ -150,7 +159,7 @@ def test_cap_exceeding_solve_is_typed_recorded_and_not_materialized(tmp_path: Pa
         minimum_free_bytes=0,
     )
     with pytest.raises(EffortCapExceeded):
-        lifecycle.run(intent, use=lambda _prefix: events.append("use"))
+        lifecycle.run(intent, use=lambda _prefix, _probes: events.append("use"))
     assert recorded[0].actual_stage == "environment"
     assert recorded[0].metric == "seconds"
     assert events == ["solve:osx-arm64"]
