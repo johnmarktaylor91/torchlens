@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import ast
 import importlib
-import importlib.util
+import importlib.machinery
 import inspect
+import sys
 from dataclasses import dataclass
 from pathlib import Path
-from types import ModuleType
-from typing import Any, Callable, Mapping, Optional, Union
+from types import FunctionType, ModuleType
+from typing import Any, Callable, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.identity import canonical_json_bytes, compute_recipe_revision, hash_bytes
 
@@ -20,6 +21,58 @@ class RecipeError(ValueError):
 
 BuildModel = Callable[[], object]
 MakeDummyCall = Callable[[int, str], tuple[tuple[object, ...], dict[str, object]]]
+
+
+def _is_disabling_pretrained_value(value: Any) -> bool:
+    """Return whether a declarative value explicitly disables pretrained assets.
+
+    Parameters
+    ----------
+    value:
+        JSON-compatible constructor value.
+
+    Returns
+    -------
+    bool
+        True only for conventional explicit opt-out values.
+    """
+
+    return (
+        value is None
+        or value is False
+        or (isinstance(value, str) and value.strip().lower() in {"", "none", "random"})
+    )
+
+
+def validate_pretrained_disable_fields(
+    kwargs: Mapping[str, Any], disable_fields: Sequence[str]
+) -> None:
+    """Validate explicit pretrained opt-outs against constructor keyword values.
+
+    Parameters
+    ----------
+    kwargs:
+        Complete declarative constructor keyword mapping.
+    disable_fields:
+        Fields claimed to disable pretrained assets.
+
+    Raises
+    ------
+    RecipeError
+        If a field is duplicated, absent, or does not carry a disabling value.
+    """
+
+    if len(set(disable_fields)) != len(disable_fields):
+        raise RecipeError("pretrained_disable_fields must not contain duplicates")
+    for field in disable_fields:
+        if field not in kwargs:
+            raise RecipeError(
+                f"pretrained disable field {field!r} is absent from constructor kwargs"
+            )
+        if not _is_disabling_pretrained_value(kwargs[field]):
+            raise RecipeError(
+                f"pretrained disable field {field!r} does not carry a disabling value"
+            )
 
 
 @dataclass(frozen=True)
@@ -100,6 +153,7 @@ class DeclarativeRecipe:
             isinstance(field, str) and field for field in disable_fields
         ):
             raise RecipeError("pretrained_disable_fields must be a string sequence")
+        validate_pretrained_disable_fields(kwargs, disable_fields)
         artifact = value.get("artifact_sha256")
         if artifact is not None and not isinstance(artifact, str):
             raise RecipeError("artifact_sha256 must be a string or null")
@@ -149,6 +203,8 @@ class LoadedRecipe:
         Source-bound recipe hash when a source identity was supplied.
     module:
         Loaded typed module, absent for declarative recipes.
+    adapter_sha256:
+        Digest observed from the one exact adapter byte string executed by the loader.
     """
 
     kind: str
@@ -156,6 +212,7 @@ class LoadedRecipe:
     make_dummy_call: Optional[MakeDummyCall]
     recipe_revision: str
     module: Optional[ModuleType]
+    adapter_sha256: Optional[str] = None
 
 
 def reject_opaque_recipe(value: Mapping[str, Any]) -> None:
@@ -207,6 +264,21 @@ def load_declarative_recipe(
     constructor = getattr(module, recipe.symbol, None)
     if constructor is None or not callable(constructor):
         raise RecipeError(f"{recipe.module}.{recipe.symbol} is not a callable constructor")
+    if recipe.pretrained_disable_fields:
+        try:
+            parameters = inspect.signature(constructor).parameters
+        except (TypeError, ValueError) as exc:
+            raise RecipeError(
+                "cannot verify pretrained disable fields against constructor signature"
+            ) from exc
+        unsupported = [
+            field for field in recipe.pretrained_disable_fields if field not in parameters
+        ]
+        if unsupported:
+            raise RecipeError(
+                "pretrained disable fields are not explicit constructor parameters: "
+                f"{unsupported!r}"
+            )
 
     def build_model() -> object:
         """Invoke the direct library constructor with declarative kwargs.
@@ -286,7 +358,13 @@ def _validate_typed_function(
         raise RecipeError(f"{name} must carry parameter and return type annotations")
 
 
-def load_typed_adapter(path: Path, *, source_identity: str = "unbound") -> LoadedRecipe:
+def load_typed_adapter(
+    path: Path,
+    *,
+    source_identity: str = "unbound",
+    expected_recipe_revision: Optional[str] = None,
+    expected_adapter_sha256: Optional[str] = None,
+) -> LoadedRecipe:
     """Statically check and import a typed R2--R4 adapter module.
 
     Parameters
@@ -295,6 +373,10 @@ def load_typed_adapter(path: Path, *, source_identity: str = "unbound") -> Loade
         Exact adapter Python file.
     source_identity:
         Exact source identity to bind into the recipe revision.
+    expected_recipe_revision:
+        Parent-authorized revision that the observed bytes must reproduce before import.
+    expected_adapter_sha256:
+        Optional direct digest of the parent-authorized adapter bytes.
 
     Returns
     -------
@@ -303,32 +385,61 @@ def load_typed_adapter(path: Path, *, source_identity: str = "unbound") -> Loade
     """
 
     source_bytes = path.read_bytes()
+    observed_adapter_sha256 = hash_bytes(source_bytes)
+    revision = compute_recipe_revision(
+        {"recipe_type": "typed-adapter", "path": path.name},
+        source_identity,
+        adapter_bytes=source_bytes,
+    )
+    if expected_adapter_sha256 is not None and observed_adapter_sha256 != expected_adapter_sha256:
+        raise RecipeError(
+            "typed adapter digest mismatch: "
+            f"expected {expected_adapter_sha256}, observed {observed_adapter_sha256}"
+        )
+    if expected_recipe_revision is not None and revision != expected_recipe_revision:
+        raise RecipeError(
+            "typed adapter recipe revision mismatch: "
+            f"expected {expected_recipe_revision}, observed {revision}"
+        )
     try:
         source = source_bytes.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise RecipeError("typed adapter must be UTF-8 Python source") from exc
     _check_adapter_source(source, path)
-    module_name = f"menagerie_crawler_adapter_{hash_bytes(source_bytes)[7:23]}"
-    spec = importlib.util.spec_from_file_location(module_name, path)
-    if spec is None or spec.loader is None:
-        raise RecipeError(f"cannot load typed adapter at {path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module_name = f"menagerie_crawler_adapter_{observed_adapter_sha256[7:23]}"
+    module = ModuleType(module_name)
+    module.__file__ = str(path)
+    module.__package__ = ""
+    sys.modules[module_name] = module
+    try:
+        loader = importlib.machinery.SourceFileLoader(module_name, str(path))
+        code = loader.source_to_code(source_bytes, str(path))
+        FunctionType(code, module.__dict__)()
+    except Exception:
+        sys.modules.pop(module_name, None)
+        raise
     build_model = getattr(module, "build_model", None)
     make_dummy_call = getattr(module, "make_dummy_call", None)
     if not callable(build_model) or not callable(make_dummy_call):
         raise RecipeError("typed adapter must define build_model and make_dummy_call")
     _validate_typed_function(build_model, "build_model", ())
     _validate_typed_function(make_dummy_call, "make_dummy_call", ("seed", "device"))
-    revision = compute_recipe_revision(
-        {"recipe_type": "typed-adapter", "path": path.name},
-        source_identity,
-        adapter_bytes=source_bytes,
+    return LoadedRecipe(
+        "typed-adapter",
+        build_model,
+        make_dummy_call,
+        revision,
+        module,
+        observed_adapter_sha256,
     )
-    return LoadedRecipe("typed-adapter", build_model, make_dummy_call, revision, module)
 
 
-def load_recipe(value: Mapping[str, Any], *, source_identity: str = "unbound") -> LoadedRecipe:
+def load_recipe(
+    value: Mapping[str, Any],
+    *,
+    source_identity: str = "unbound",
+    expected_recipe_revision: Optional[str] = None,
+) -> LoadedRecipe:
     """Load one explicitly tagged closed recipe form.
 
     Parameters
@@ -337,6 +448,8 @@ def load_recipe(value: Mapping[str, Any], *, source_identity: str = "unbound") -
         Mapping with kind ``declarative-library`` or ``typed-adapter``.
     source_identity:
         Source identity bound into the recipe revision.
+    expected_recipe_revision:
+        Parent-authorized revision required before a typed adapter is imported.
 
     Returns
     -------
@@ -354,10 +467,27 @@ def load_recipe(value: Mapping[str, Any], *, source_identity: str = "unbound") -
             payload = {
                 key: item for key, item in value.items() if key not in {"kind", "recipe_type"}
             }
-        return load_declarative_recipe(payload, source_identity=source_identity)
+        loaded = load_declarative_recipe(payload, source_identity=source_identity)
+        if (
+            expected_recipe_revision is not None
+            and loaded.recipe_revision != expected_recipe_revision
+        ):
+            raise RecipeError(
+                "declarative recipe revision mismatch: "
+                f"expected {expected_recipe_revision}, observed {loaded.recipe_revision}"
+            )
+        return loaded
     if kind == "typed-adapter":
         path_value = value.get("path")
         if not isinstance(path_value, str) or not path_value:
             raise RecipeError("typed-adapter recipe requires a path")
-        return load_typed_adapter(Path(path_value), source_identity=source_identity)
+        digest_value = value.get("adapter_sha256")
+        if digest_value is not None and not isinstance(digest_value, str):
+            raise RecipeError("typed-adapter adapter_sha256 must be a string when supplied")
+        return load_typed_adapter(
+            Path(path_value),
+            source_identity=source_identity,
+            expected_recipe_revision=expected_recipe_revision,
+            expected_adapter_sha256=digest_value,
+        )
     raise RecipeError(f"unsupported recipe kind: {kind!r}")

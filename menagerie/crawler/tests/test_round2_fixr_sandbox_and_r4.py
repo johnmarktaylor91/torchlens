@@ -21,7 +21,7 @@ from menagerie.crawler.driver import (
     _environment_failure,
     _supervise_environment_worker,
 )
-from menagerie.crawler.identity import hash_bytes
+from menagerie.crawler.identity import compute_recipe_revision, hash_bytes
 from menagerie.crawler.policy import SandboxUnavailableError, detect_os_sandbox
 from menagerie.crawler.proposal import ProposalValidationError, validate_author_proposal
 from menagerie.crawler.tests.conftest import HASH, make_author_proposal
@@ -79,18 +79,29 @@ def test_caught_os_sandbox_denial_poisons_successful_forward_receipt(tmp_path: P
     scratch = tmp_path / "scratch"
     receipt_path = scratch / "result" / "receipt.json"
     request_path = tmp_path / "request.json"
+    expected_revision = compute_recipe_revision(
+        {"recipe_type": "typed-adapter", "path": adapter.name},
+        proposal["source_identity"],
+        adapter_bytes=adapter.read_bytes(),
+    )
+    proposal["recipe_revision"] = expected_revision
+    proposal["proposed_facts"]["implementation"]["recipe_revision"] = expected_revision
     request_path.write_text(
         json.dumps(
             {
                 "stable_id": proposal["stable_id"],
-                "recipe": {"kind": "typed-adapter", "path": str(adapter)},
+                "recipe": {
+                    "kind": "typed-adapter",
+                    "path": str(adapter),
+                    "adapter_sha256": hash_bytes(adapter.read_bytes()),
+                },
                 "modality": "vision",
                 "input_spec": {"shape": [1, 3, 8, 8], "dtype": "float32"},
                 "scratch_root": str(scratch),
                 "receipt_path": str(receipt_path),
                 "meaningful_modes": ["eval"],
                 "source_identity": proposal["source_identity"],
-                "recipe_revision": proposal["recipe_revision"],
+                "recipe_revision": expected_revision,
                 "execution_identity": HASH,
             }
         ),
@@ -230,7 +241,17 @@ def test_r4_inventory_uses_fetched_archive_bytes_not_author_labels(tmp_path: Pat
     _add_archive_source(
         manifest,
         tmp_path / "source-code.zip",
-        {"upstream/src/model.py": "class UpstreamModel:\n    pass\n"},
+        {
+            "upstream/src/example_net.py": (
+                "import torch\n\n"
+                "class ExampleNet(torch.nn.Module):\n"
+                "    def __init__(self) -> None:\n"
+                "        super().__init__()\n"
+                "        self.conv = torch.nn.Conv2d(3, 4, 3)\n\n"
+                "    def forward(self, value: torch.Tensor) -> torch.Tensor:\n"
+                "        return self.conv(value)\n"
+            )
+        },
     )
 
     with pytest.raises(ProposalValidationError, match="source code is available"):
@@ -247,7 +268,11 @@ def test_r4_inventory_uses_fetched_archive_bytes_not_author_labels(tmp_path: Pat
     _add_archive_source(
         no_code_manifest,
         no_code_root / "paper-materials.zip",
-        {"README.md": "Architecture equations and prose only.\n"},
+        {
+            "README.md": "Architecture equations and prose only.\n",
+            "supplement/metrics.py": "def accuracy(expected, observed):\n    return 1.0\n",
+            "supplement/plotting.c": "void plot_metrics(void) { return; }\n",
+        },
     )
     report = validate_author_proposal(
         no_code_proposal,

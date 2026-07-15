@@ -6,6 +6,7 @@ import json
 import sys
 from pathlib import Path
 
+from menagerie.crawler.identity import compute_recipe_revision, hash_bytes
 from menagerie.crawler.worker_supervisor import run_isolated_subprocess, supervise_worker
 
 
@@ -63,11 +64,20 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
         json.dumps(
             {
                 "stable_id": "m_supervised",
-                "recipe": {"kind": "typed-adapter", "path": str(adapter)},
+                "recipe": {
+                    "kind": "typed-adapter",
+                    "path": str(adapter),
+                    "adapter_sha256": hash_bytes(adapter.read_bytes()),
+                },
                 "modality": "unknown",
                 "input_spec": {"shape": [1, 4], "dtype": "float32"},
                 "scratch_root": str(scratch),
                 "meaningful_modes": ["train", "eval"],
+                "recipe_revision": compute_recipe_revision(
+                    {"recipe_type": "typed-adapter", "path": adapter.name},
+                    "unbound",
+                    adapter_bytes=adapter.read_bytes(),
+                ),
             }
         ),
         encoding="utf-8",

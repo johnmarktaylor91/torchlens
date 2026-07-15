@@ -641,7 +641,7 @@ def make_model(
                 "artifact_sha256": HASH,
                 "module": "example",
                 "symbol": "ExampleNet",
-                "kwargs": {},
+                "kwargs": {"weights": None},
                 "pretrained_disable_fields": ["weights"],
             },
             "upstream_files": [],
