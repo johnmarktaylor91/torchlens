@@ -13,16 +13,28 @@ from pathlib import Path
 
 import pytest
 
+from menagerie.crawler.checkpoint import _externally_controlled_record_text
 from menagerie.crawler.constants import RunMode
-from menagerie.crawler.driver import _supervised_failure
-from menagerie.crawler.identity import compute_recipe_revision, hash_bytes
+from menagerie.crawler.driver import _redact_attempt_diagnostics, _supervised_failure
+from menagerie.crawler.identity import (
+    canonical_json_bytes,
+    compute_recipe_revision,
+    hash_bytes,
+    stable_hash,
+)
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.policy import ExecutionPolicy, PolicyViolation, detect_os_sandbox
 from menagerie.crawler.proposal import (
     ProposalValidationError,
     _validate_author_read_grants,
 )
-from menagerie.crawler.reducer import CanonicalReducer, ReductionError, expected_standard_asset
+from menagerie.crawler.reducer import (
+    CanonicalReducer,
+    ReductionError,
+    _parent_success_attestation_matches,
+    expected_standard_asset,
+)
+from menagerie.crawler.schema import validate_payload
 from menagerie.crawler.standard_inputs import InputSpec
 from menagerie.crawler.tests.conftest import (
     make_attempt,
@@ -159,13 +171,16 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux real-supervisor regression")
 def test_real_supervisor_retains_and_classifies_constructor_failure(tmp_path: Path) -> None:
-    """A nonzero worker keeps its verified traceback and constructor taxonomy."""
+    """A real failure keeps exact local diagnostics but exposes only redacted records."""
 
     adapter = tmp_path / "failing_adapter.py"
     adapter.write_text(
         """from __future__ import annotations
+import sys
 
 def build_model() -> object:
+    print("round9 model stdout secret")
+    print("round9 model stderr secret", file=sys.stderr)
     raise RuntimeError("round9 constructor exploded")
 
 def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[str, object]]:
@@ -194,6 +209,67 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
     assert failure["reason_code"] == "exception"
     assert "round9 constructor exploded" in failure["message"]
     assert "RuntimeError" in failure["traceback"]
+
+    raw_attempt = make_attempt("m_round9_supervised")
+    raw_attempt["attempt_id"] = stable_hash("c07-real-supervisor-attempt")
+    raw_attempt["result"] = "failed"
+    raw_attempt["stage"] = "constructor"
+    raw_attempt["mode"] = None
+    raw_attempt["supervisor_observation"].update(
+        {
+            "exit_code": result.observation.exit_code,
+            "signal": result.observation.signal_number,
+            "stdout_sha256": result.observation.stdout_sha256,
+            "stdout_bytes": result.observation.stdout_bytes,
+            "stdout_tail": result.observation.stdout_tail,
+            "stdout_completion_line": None,
+            "stderr_sha256": result.observation.stderr_sha256,
+            "stderr_bytes": result.observation.stderr_bytes,
+            "stderr_tail": result.observation.stderr_tail,
+        }
+    )
+    raw_attempt["error"] = {
+        **failure,
+        "root_cause_fingerprint": stable_hash(failure),
+    }
+    redacted = _redact_attempt_diagnostics(
+        raw_attempt,
+        result.observation,
+        tmp_path / ".crawl-local" / "diagnostics",
+    )
+    public_bytes = canonical_json_bytes(redacted)
+    validate_payload(redacted)
+    for forbidden in (
+        b"round9 model stdout secret",
+        b"round9 model stderr secret",
+        b"round9 constructor exploded",
+        b"Traceback",
+    ):
+        assert forbidden not in public_bytes
+    assert redacted["error"]["stage"] == "constructor"
+    assert redacted["error"]["reason_code"] == "exception"
+    assert redacted["supervisor_observation"]["stdout_tail"]["stream_sha256"] == (
+        result.observation.stdout_sha256
+    )
+    sidecar_path = tmp_path / redacted["supervisor_observation"]["stdout_tail"]["local_path"]
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    assert sidecar["stdout"]["tail"] == result.observation.stdout_tail
+    assert sidecar["stderr"]["tail"] == result.observation.stderr_tail
+    assert sidecar["externally_controlled_fields"]["$.error.traceback"] == failure["traceback"]
+    assert redacted["error"]["traceback"]["content_sha256"] == hash_bytes(
+        canonical_json_bytes(sidecar["externally_controlled_fields"]["$.error.traceback"])
+    )
+
+    record_path = Path("menagerie/crawler/records/attempts/c07-regression.jsonl")
+    assert _externally_controlled_record_text(record_path, public_bytes + b"\n") == ()
+    forged = deepcopy(redacted)
+    forged["supervisor_observation"]["stdout_tail"] = "raw model-controlled text"
+    assert "$[0].supervisor_observation.stdout_tail" in _externally_controlled_record_text(
+        record_path, canonical_json_bytes(forged) + b"\n"
+    )
+
+    honest_success = make_attempt("m_honest_success")
+    assert _parent_success_attestation_matches(honest_success)
 
 
 def test_reducer_rejects_dirty_nonreference_accepted_attempt(tmp_path: Path) -> None:

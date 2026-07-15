@@ -84,6 +84,46 @@ def test_external_record_traceback_and_stdio_are_license_sensitive() -> None:
         )
 
 
+def test_checkpoint_accepts_only_explicit_local_diagnostic_redactions() -> None:
+    """A hash-bound local sidecar reference is safe while raw replacement text is not."""
+
+    redaction = {
+        "redaction": "externally-controlled-text-v1",
+        "content_sha256": "sha256:" + "a" * 64,
+        "local_path": ".crawl-local/diagnostics/attempt-c07.json",
+        "diagnostic_key": "$.supervisor_observation.stdout_tail",
+        "stream_sha256": "sha256:" + "b" * 64,
+    }
+    record = {
+        "schema_version": "menagerie.crawler.attempt.v2",
+        "supervisor_observation": {
+            "stdout_tail": redaction,
+            "stderr_tail": "",
+            "stdout_completion_line": (
+                "MENAGERIE_WORKER_COMPLETION_V1 "
+                f'{{"proof":"sha256:{"c" * 64}",'
+                f'"receipt_sha256":"sha256:{"d" * 64}"}}'
+            ),
+        },
+        "error": None,
+    }
+    path = Path("menagerie/crawler/records/attempts/redacted.jsonl")
+    assert not checkpoint_module._validate_generated_metadata_bytes(
+        path, canonical_json_bytes(record) + b"\n"
+    )
+
+    malformed = dict(record)
+    malformed["supervisor_observation"] = dict(record["supervisor_observation"])
+    malformed["supervisor_observation"]["stdout_tail"] = {
+        **redaction,
+        "redaction": "trust-me-redacted",
+    }
+    with pytest.raises(RestrictedPublicArtifact, match="externally controlled text"):
+        checkpoint_module._validate_generated_metadata_bytes(
+            path, canonical_json_bytes(malformed) + b"\n"
+        )
+
+
 def _mirrors(root: Path) -> MirrorStore:
     """Return separated test mirror roots.
 

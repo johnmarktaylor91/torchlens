@@ -2832,7 +2832,14 @@
           "description": "Best-effort human-readable detail."
         },
         "traceback": {
-          "$ref": "#/$defs/nullable_string",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nullable_string"
+            },
+            {
+              "$ref": "attempt-v2.schema.json#/$defs/redacted_text"
+            }
+          ],
           "description": "Best-effort captured traceback."
         },
         "no_traceback_reason": {

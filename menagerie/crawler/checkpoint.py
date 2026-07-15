@@ -224,6 +224,8 @@ _CANONICAL_MANIFEST_NAMES = ("public-manifest.jsonl", "private-manifest.jsonl")
 _GENERATED_METADATA_MANIFEST = "generated-metadata-manifest.jsonl"
 _HASH_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
 _LOCK_HASH_PATTERN = re.compile(r"(?:#|sha256[=:])([0-9a-f]{64})(?:$|[&\s])")
+_DIAGNOSTIC_REDACTION_MARKER = "externally-controlled-text-v1"
+_WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V1 "
 _EXTERNALLY_CONTROLLED_RECORD_FIELDS = frozenset(
     {
         "message",
@@ -1908,20 +1910,49 @@ def _externally_controlled_record_text(path: Path, content: bytes) -> tuple[str,
 
         if value is None or value == "":
             return True
-        if isinstance(value, str):
-            if _HASH_PATTERN.fullmatch(value) is not None:
-                return True
-            return bool(
-                "\n" not in value
-                and re.fullmatch(r"(?:\.crawl-local|menagerie/crawler)/[A-Za-z0-9._/:-]+", value)
-            )
         if isinstance(value, Mapping):
+            if value.get("license_disposition") in _SAFE_EXCERPT_DISPOSITIONS:
+                return bool(
+                    _HASH_PATTERN.fullmatch(str(value.get("text_sha256", "")))
+                    and isinstance(value.get("locator"), str)
+                )
+            required = {"redaction", "content_sha256", "local_path", "diagnostic_key"}
+            allowed = required | {"stream_sha256"}
+            local_path = str(value.get("local_path", ""))
+            pure_local = PurePosixPath(local_path)
+            stream_sha256 = value.get("stream_sha256")
             return bool(
-                _HASH_PATTERN.fullmatch(str(value.get("text_sha256", "")))
-                and value.get("license_disposition") in _SAFE_EXCERPT_DISPOSITIONS
-                and isinstance(value.get("locator"), str)
+                set(value) <= allowed
+                and required <= set(value)
+                and value.get("redaction") == _DIAGNOSTIC_REDACTION_MARKER
+                and _HASH_PATTERN.fullmatch(str(value.get("content_sha256", "")))
+                and pure_local.parts[:2] == (".crawl-local", "diagnostics")
+                and ".." not in pure_local.parts
+                and pure_local.suffix == ".json"
+                and re.fullmatch(r"\$[A-Za-z0-9_.\[\]-]+", str(value.get("diagnostic_key", "")))
+                and (
+                    stream_sha256 is None or _HASH_PATTERN.fullmatch(str(stream_sha256)) is not None
+                )
             )
         return False
+
+    def is_safe_completion_line(value: Any) -> bool:
+        """Return whether a line is the closed TorchLens worker-completion shape."""
+
+        if value is None:
+            return True
+        if not isinstance(value, str) or not value.startswith(_WORKER_COMPLETION_PREFIX):
+            return False
+        try:
+            payload = json.loads(value[len(_WORKER_COMPLETION_PREFIX) :])
+        except json.JSONDecodeError:
+            return False
+        return bool(
+            isinstance(payload, Mapping)
+            and set(payload) == {"proof", "receipt_sha256"}
+            and _HASH_PATTERN.fullmatch(str(payload.get("proof", "")))
+            and _HASH_PATTERN.fullmatch(str(payload.get("receipt_sha256", "")))
+        )
 
     def visit(value: Any, location: str = "$") -> None:
         """Collect unsafe values at externally controlled record fields."""
@@ -1937,6 +1968,8 @@ def _externally_controlled_record_text(path: Path, content: bytes) -> tuple[str,
                 if (
                     key in _EXTERNALLY_CONTROLLED_RECORD_FIELDS or failed_status_detail
                 ) and not is_safe_redaction(nested):
+                    findings.append(nested_location)
+                if key == "stdout_completion_line" and not is_safe_completion_line(nested):
                     findings.append(nested_location)
                 visit(nested, nested_location)
         elif isinstance(value, list):

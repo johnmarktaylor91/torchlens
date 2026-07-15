@@ -501,7 +501,9 @@ def _clean_state(
         model["completeness"]["issues"] = [status_code]
     if status_code == "failed:forward":
         model["status"]["reason_code"] = "exception"
-        model["status"]["detail"] = checkpoint_module.hash_bytes(b"synthetic failure")
+        # A bare digest is not a retrievable diagnostic reference. Public failure
+        # details are empty unless they carry the explicit local-sidecar shape.
+        model["status"]["detail"] = None
     with JsonlLedger(records / "models" / "current-shard.jsonl", MODEL_SCHEMA_VERSION) as ledger:
         ledger.append(model)
     _write_jsonl(records / "attempts" / "local.jsonl", [])

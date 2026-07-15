@@ -274,6 +274,40 @@
         }
       ]
     },
+    "redacted_text": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "redaction",
+        "content_sha256",
+        "local_path",
+        "diagnostic_key"
+      ],
+      "properties": {
+        "redaction": {
+          "const": "externally-controlled-text-v1",
+          "description": "Closed marker for externally controlled text removed from public records."
+        },
+        "content_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Digest of the exact canonical JSON diagnostic value."
+        },
+        "local_path": {
+          "type": "string",
+          "pattern": "^\\.crawl-local/diagnostics/[A-Za-z0-9._/:-]+\\.json$",
+          "description": "Gitignored local diagnostic sidecar locator."
+        },
+        "diagnostic_key": {
+          "type": "string",
+          "pattern": "^\\$[A-Za-z0-9_.\\[\\]-]+$",
+          "description": "JSON-style key locating the exact value inside the sidecar."
+        },
+        "stream_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact parent-observed stream digest when the value is a stdio tail."
+        }
+      }
+    },
     "string_array": {
       "type": "array",
       "items": {
@@ -871,9 +905,20 @@
           "description": "Mandatory stdout bytes."
         },
         "stdout_tail": {
-          "type": "string",
-          "maxLength": 1500,
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 1500
+            },
+            {
+              "$ref": "#/$defs/redacted_text"
+            }
+          ],
           "description": "Mandatory stdout tail."
+        },
+        "stdout_completion_line": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Parent-attested TorchLens-owned completion marker."
         },
         "stderr_sha256": {
           "$ref": "#/$defs/nullable_hash",
@@ -885,8 +930,15 @@
           "description": "Mandatory stderr bytes."
         },
         "stderr_tail": {
-          "type": "string",
-          "maxLength": 1500,
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 1500
+            },
+            {
+              "$ref": "#/$defs/redacted_text"
+            }
+          ],
           "description": "Mandatory stderr tail."
         },
         "full_log_local_path": {
@@ -980,11 +1032,25 @@
           "description": "Mandatory exception type."
         },
         "message": {
-          "type": "string",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/redacted_text"
+            }
+          ],
           "description": "Mandatory message."
         },
         "traceback": {
-          "$ref": "#/$defs/nullable_string",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nullable_string"
+            },
+            {
+              "$ref": "#/$defs/redacted_text"
+            }
+          ],
           "description": "Best-effort captured traceback."
         },
         "no_traceback_reason": {
@@ -1008,8 +1074,15 @@
         {
           "properties": {
             "traceback": {
-              "type": "string",
-              "minLength": 1,
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "$ref": "#/$defs/redacted_text"
+                }
+              ],
               "description": "Best-effort captured traceback."
             },
             "no_traceback_reason": {

@@ -129,16 +129,15 @@ def _parent_success_attestation_matches(attempt: Mapping[str, Any]) -> bool:
     observation = attempt.get("supervisor_observation", {})
     if not isinstance(receipt, Mapping) or not isinstance(observation, Mapping):
         return False
-    stdout_tail = observation.get("stdout_tail")
-    if not isinstance(stdout_tail, str):
-        return False
-    lines = stdout_tail.splitlines()
-    if not lines or not lines[-1].startswith(_WORKER_COMPLETION_PREFIX):
+    completion_line = observation.get("stdout_completion_line")
+    if not isinstance(completion_line, str) or not completion_line.startswith(
+        _WORKER_COMPLETION_PREFIX
+    ):
         return False
     expected = stable_hash(
         {
             "version": "menagerie.crawler.parent-success-attestation.v1",
-            "completion_line": lines[-1],
+            "completion_line": completion_line,
             "exit_code": observation.get("exit_code"),
             "signal": observation.get("signal"),
             "wall_seconds": observation.get("wall_seconds"),

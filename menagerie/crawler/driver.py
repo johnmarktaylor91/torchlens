@@ -128,11 +128,27 @@ from menagerie.crawler.status import (
 )
 from menagerie.crawler.wakeup import OperationalContext, WakeupManager
 from menagerie.crawler.worker_supervisor import (
+    SupervisorObservation,
     SupervisedResult,
     run_isolated_subprocess,
 )
 
 LOGGER = logging.getLogger(__name__)
+
+_WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V1 "
+_EXTERNALLY_CONTROLLED_ATTEMPT_FIELDS = frozenset(
+    {
+        "message",
+        "mode_error",
+        "observed_response",
+        "receipt_error",
+        "response_excerpt",
+        "stderr_tail",
+        "stdout_tail",
+        "traceback",
+    }
+)
+_DIAGNOSTIC_REDACTION_MARKER = "externally-controlled-text-v1"
 
 # Reviewed runtime roots. ``_runner_identity`` discovers their transitive local call
 # graph and hashes semantic AST nodes, not whole modules or operational schemas.
@@ -1000,6 +1016,7 @@ class SupervisedForwardLane:
                         self.timeout_seconds,
                         self.rss_limit_bytes,
                         requested_mode=mode,
+                        diagnostics_root=work_root.parent / "diagnostics",
                     )
                 )
         return tuple(attempts)
@@ -2717,7 +2734,7 @@ class CrawlerDriver:
                     artifact,
                     f"failed:{stage}",
                     str(error["reason_code"]),
-                    str(error["message"]),
+                    None,
                     all_attempts,
                     reducer,
                     operational,
@@ -5532,8 +5549,28 @@ def _attempts_from_supervised(
     rss_limit_bytes: int,
     *,
     requested_mode: Optional[str] = None,
+    diagnostics_root: Optional[Path] = None,
 ) -> tuple[JsonObject, ...]:
-    """Convert one parent observation and honest receipt into per-mode attempts."""
+    """Convert one parent observation and honest receipt into per-mode attempts.
+
+    Parameters
+    ----------
+    artifact, result, environment, execution_identity, cold_index:
+        Bound worker request, parent result, environment, and run identity facts.
+    timeout_seconds, rss_limit_bytes:
+        Parent-enforced resource limits.
+    requested_mode:
+        Single mode isolated in this subprocess, when applicable.
+    diagnostics_root:
+        Gitignored local root for exact external-text diagnostic sidecars. Production
+        callers always provide ``.crawl-local/diagnostics``; tests that only exercise
+        receipt classification may omit it when all controlled fields are empty.
+
+    Returns
+    -------
+    tuple[dict[str, Any], ...]
+        Canonical attempts containing only redacted references to model-controlled text.
+    """
 
     proposal = artifact.proposal
     facts = proposal["proposed_facts"]
@@ -5643,106 +5680,276 @@ def _attempts_from_supervised(
             "constructor_seconds": mode_receipt.get("constructor_seconds"),
             "forward_seconds": mode_receipt.get("forward_seconds"),
         }
-        attempts.append(
-            {
-                "schema_version": ATTEMPT_SCHEMA_VERSION,
-                "attempt_id": attempt_id,
-                "work_id": proposal["work_id"],
-                "stable_id": proposal["stable_id"],
-                "attempt_no": cold_index * len(declared_modes) + mode_index + 1,
-                "parent_attempt_id": None,
-                "actor": "worker",
-                "stage": attempt_stage,
+        attempt: JsonObject = {
+            "schema_version": ATTEMPT_SCHEMA_VERSION,
+            "attempt_id": attempt_id,
+            "work_id": proposal["work_id"],
+            "stable_id": proposal["stable_id"],
+            "attempt_no": cold_index * len(declared_modes) + mode_index + 1,
+            "parent_attempt_id": None,
+            "actor": "worker",
+            "stage": attempt_stage,
+            "mode": attempt_mode,
+            "started_at": proposal["created_at"],
+            "finished_at": utc_now(),
+            "result": "succeeded" if succeeded else "failed",
+            "attempted_rungs": [facts["source_resolution"]["rung"]],
+            "retries": {
+                "stage_attempt": cold_index + 1,
+                "root_cause_repeat": 0,
+                "author_round": 1,
+                "gate_round": 1,
+            },
+            "identities": {
+                "source": proposal["source_identity"],
+                "evidence": proposal["evidence_identity"],
+                "recipe": proposal["recipe_revision"],
+                "environment": environment.env_generation,
+                "execution": execution_identity,
+                "runner": _runner_identity(facts["external_metadata"]["modality"]),
+                "author_prompt": proposal["author"]["prompt_sha256"],
+                "checker_prompt": _checker_prompt_hash(),
+            },
+            "environment": {
+                "family": environment.family,
+                "target": environment.target,
+                "env_id": str(environment.prefix),
+                "lock_sha256": environment.lock_sha256,
+                "resolved_export_sha256": environment.resolved_export_sha256,
+                "python": environment.python_version,
+                "packages_manifest_sha256": environment.packages_manifest_sha256,
+                "compiler_identity": environment.compiler_identity,
+                "sdk_identity": environment.sdk_identity,
+            },
+            "host": {
+                "machine_id": platform.node() or "unknown-machine",
+                "os": platform.system().lower(),
+                "os_build": platform.version(),
+                "architecture": platform.machine(),
+                "cpu": platform.processor() or "unknown-cpu",
+                "ram_bytes": _physical_memory_bytes(),
+                "accelerator": None,
+                "accelerator_runtime": None,
+            },
+            "invocation": {
+                "argv": list(observation.argv),
+                "cwd": observation.cwd,
+                "safe_env": {"MENAGERIE_EXECUTION_OFFLINE": "1"},
+                "seed": int(facts["input_contract"].get("seed", 0)),
+                "device": facts["implementation"]["device_policy"],
                 "mode": attempt_mode,
-                "started_at": proposal["created_at"],
-                "finished_at": utc_now(),
-                "result": "succeeded" if succeeded else "failed",
-                "attempted_rungs": [facts["source_resolution"]["rung"]],
-                "retries": {
-                    "stage_attempt": cold_index + 1,
-                    "root_cause_repeat": 0,
-                    "author_round": 1,
-                    "gate_round": 1,
-                },
-                "identities": {
-                    "source": proposal["source_identity"],
-                    "evidence": proposal["evidence_identity"],
-                    "recipe": proposal["recipe_revision"],
-                    "environment": environment.env_generation,
-                    "execution": execution_identity,
-                    "runner": _runner_identity(facts["external_metadata"]["modality"]),
-                    "author_prompt": proposal["author"]["prompt_sha256"],
-                    "checker_prompt": _checker_prompt_hash(),
-                },
-                "environment": {
-                    "family": environment.family,
-                    "target": environment.target,
-                    "env_id": str(environment.prefix),
-                    "lock_sha256": environment.lock_sha256,
-                    "resolved_export_sha256": environment.resolved_export_sha256,
-                    "python": environment.python_version,
-                    "packages_manifest_sha256": environment.packages_manifest_sha256,
-                    "compiler_identity": environment.compiler_identity,
-                    "sdk_identity": environment.sdk_identity,
-                },
-                "host": {
-                    "machine_id": platform.node() or "unknown-machine",
-                    "os": platform.system().lower(),
-                    "os_build": platform.version(),
-                    "architecture": platform.machine(),
-                    "cpu": platform.processor() or "unknown-cpu",
-                    "ram_bytes": _physical_memory_bytes(),
-                    "accelerator": None,
-                    "accelerator_runtime": None,
-                },
-                "invocation": {
-                    "argv": list(observation.argv),
-                    "cwd": observation.cwd,
-                    "safe_env": {"MENAGERIE_EXECUTION_OFFLINE": "1"},
-                    "seed": int(facts["input_contract"].get("seed", 0)),
-                    "device": facts["implementation"]["device_policy"],
-                    "mode": attempt_mode,
-                    "network_policy": "offline",
-                    "timeout_seconds": timeout_seconds,
-                    "rss_limit_bytes": rss_limit_bytes,
-                    "scratch_limit_bytes": rss_limit_bytes,
-                },
-                "worker_receipt": worker_receipt,
-                "supervisor_observation": {
-                    "exit_code": observation.exit_code,
-                    "signal": observation.signal_number,
-                    "wall_seconds": observation.wall_seconds,
-                    "cpu_seconds": observation.cpu_seconds,
-                    "peak_rss_bytes": observation.peak_rss_bytes,
-                    "stdout_sha256": observation.stdout_sha256,
-                    "stdout_bytes": observation.stdout_bytes,
-                    "stdout_tail": observation.stdout_tail,
-                    "stderr_sha256": observation.stderr_sha256,
-                    "stderr_bytes": observation.stderr_bytes,
-                    "stderr_tail": observation.stderr_tail,
-                    "full_log_local_path": observation.stderr_path,
-                    "full_log_retention": "campaign",
-                },
-                "policy_observation": {
-                    "network_attempted": bool(policy.get("network_attempted")),
-                    "socket_targets": list(policy.get("socket_targets", [])),
-                    "checkpoint_or_weight_read_attempted": bool(
-                        policy.get("checkpoint_or_weight_read_attempted")
-                    ),
-                    "checkpoint_paths": list(policy.get("checkpoint_paths", [])),
-                    "write_outside_scratch_attempted": bool(
-                        policy.get("write_outside_scratch_attempted")
-                    ),
-                    "write_paths": list(policy.get("write_paths", [])),
-                    "credentials_present": bool(policy.get("credentials_present")),
-                    "torchlens_import_attempted": bool(policy.get("torchlens_import_attempted")),
-                    "cache_read_attempted": bool(policy.get("cache_read_attempted")),
-                },
-                "error": error,
-                "defer_evidence": None,
-            }
-        )
+                "network_policy": "offline",
+                "timeout_seconds": timeout_seconds,
+                "rss_limit_bytes": rss_limit_bytes,
+                "scratch_limit_bytes": rss_limit_bytes,
+            },
+            "worker_receipt": worker_receipt,
+            "supervisor_observation": {
+                "exit_code": observation.exit_code,
+                "signal": observation.signal_number,
+                "wall_seconds": observation.wall_seconds,
+                "cpu_seconds": observation.cpu_seconds,
+                "peak_rss_bytes": observation.peak_rss_bytes,
+                "stdout_sha256": observation.stdout_sha256,
+                "stdout_bytes": observation.stdout_bytes,
+                "stdout_tail": observation.stdout_tail,
+                "stdout_completion_line": (
+                    _attested_completion_line(observation.stdout_tail)
+                    if result.success_attestation_sha256 is not None
+                    else None
+                ),
+                "stderr_sha256": observation.stderr_sha256,
+                "stderr_bytes": observation.stderr_bytes,
+                "stderr_tail": observation.stderr_tail,
+                "full_log_local_path": observation.stderr_path,
+                "full_log_retention": "campaign",
+            },
+            "policy_observation": {
+                "network_attempted": bool(policy.get("network_attempted")),
+                "socket_targets": list(policy.get("socket_targets", [])),
+                "checkpoint_or_weight_read_attempted": bool(
+                    policy.get("checkpoint_or_weight_read_attempted")
+                ),
+                "checkpoint_paths": list(policy.get("checkpoint_paths", [])),
+                "write_outside_scratch_attempted": bool(
+                    policy.get("write_outside_scratch_attempted")
+                ),
+                "write_paths": list(policy.get("write_paths", [])),
+                "credentials_present": bool(policy.get("credentials_present")),
+                "torchlens_import_attempted": bool(policy.get("torchlens_import_attempted")),
+                "cache_read_attempted": bool(policy.get("cache_read_attempted")),
+            },
+            "error": error,
+            "defer_evidence": None,
+        }
+        attempts.append(_redact_attempt_diagnostics(attempt, observation, diagnostics_root))
     return tuple(attempts)
+
+
+def _attested_completion_line(stdout_tail: str) -> Optional[str]:
+    """Return the final TorchLens-owned completion marker from a bounded stdout tail.
+
+    Parameters
+    ----------
+    stdout_tail:
+        Live parent-observed stdout tail.
+
+    Returns
+    -------
+    str | None
+        Final completion line, or ``None`` when no marker is present.
+    """
+
+    lines = stdout_tail.splitlines()
+    if not lines or not lines[-1].startswith(_WORKER_COMPLETION_PREFIX):
+        return None
+    return lines[-1]
+
+
+def _diagnostic_relative_path(diagnostics_root: Path, attempt_id: str) -> str:
+    """Return a checkpoint-safe repository-relative diagnostic sidecar locator.
+
+    Parameters
+    ----------
+    diagnostics_root:
+        Local diagnostics root.
+    attempt_id:
+        Stable attempt identifier used as the sidecar filename.
+
+    Returns
+    -------
+    str
+        Relative locator rooted at ``.crawl-local``.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If diagnostics are not rooted below the gitignored runtime directory.
+    """
+
+    resolved = diagnostics_root.resolve()
+    if ".crawl-local" not in resolved.parts:
+        raise DriverIntegrationError("diagnostic sidecars must live below .crawl-local")
+    index = max(index for index, part in enumerate(resolved.parts) if part == ".crawl-local")
+    relative_root = Path(*resolved.parts[index:])
+    return (relative_root / f"{attempt_id}.json").as_posix()
+
+
+def _redact_attempt_diagnostics(
+    attempt: JsonObject,
+    observation: SupervisorObservation,
+    diagnostics_root: Optional[Path],
+) -> JsonObject:
+    """Persist exact local diagnostics and redact their canonical attempt projections.
+
+    Parameters
+    ----------
+    attempt:
+        Newly assembled attempt before canonical persistence.
+    observation:
+        Live :class:`SupervisorObservation` retaining exact bounded stream tails and paths.
+    diagnostics_root:
+        Gitignored local sidecar root. It may be omitted only when every controlled value
+        is empty, as in receipt-contract unit tests.
+
+    Returns
+    -------
+    dict[str, Any]
+        Attempt whose externally controlled values are explicit redaction references.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If nonempty diagnostics would otherwise be lost.
+    """
+
+    attempt_id = str(attempt["attempt_id"])
+    controlled: dict[str, Any] = {}
+    has_nonempty_controlled = False
+
+    def collect(value: Any, location: str = "$") -> None:
+        """Collect every external-text field before replacing it."""
+
+        nonlocal has_nonempty_controlled
+        if isinstance(value, Mapping):
+            for key, nested in value.items():
+                nested_location = f"{location}.{key}"
+                if key in _EXTERNALLY_CONTROLLED_ATTEMPT_FIELDS:
+                    controlled[nested_location] = deepcopy(nested)
+                    if nested is not None and nested != "":
+                        has_nonempty_controlled = True
+                collect(nested, nested_location)
+        elif isinstance(value, list):
+            for index, nested in enumerate(value):
+                collect(nested, f"{location}[{index}]")
+
+    collect(attempt)
+    if diagnostics_root is None:
+        if has_nonempty_controlled:
+            raise DriverIntegrationError(
+                "externally controlled attempt text requires a local diagnostic sidecar"
+            )
+        return attempt
+
+    local_path = _diagnostic_relative_path(diagnostics_root, attempt_id)
+    sidecar_path = diagnostics_root / f"{attempt_id}.json"
+    sidecar: JsonObject = {
+        "schema_version": "menagerie.crawler.local-diagnostics.v1",
+        "attempt_id": attempt_id,
+        "stdout": {
+            "stream_sha256": observation.stdout_sha256,
+            "stream_bytes": observation.stdout_bytes,
+            "tail": observation.stdout_tail,
+            "full_log_path": observation.stdout_path,
+        },
+        "stderr": {
+            "stream_sha256": observation.stderr_sha256,
+            "stream_bytes": observation.stderr_bytes,
+            "tail": observation.stderr_tail,
+            "full_log_path": observation.stderr_path,
+        },
+        "externally_controlled_fields": controlled,
+    }
+    _write_json_atomic(sidecar_path, sidecar)
+    sidecar_path.chmod(0o600)
+
+    def redact(value: Any, location: str = "$") -> Any:
+        """Replace controlled values with hash-bound local references."""
+
+        if isinstance(value, Mapping):
+            redacted: dict[str, Any] = {}
+            for key, nested in value.items():
+                nested_location = f"{location}.{key}"
+                if (
+                    key in _EXTERNALLY_CONTROLLED_ATTEMPT_FIELDS
+                    and nested is not None
+                    and nested != ""
+                ):
+                    reference: dict[str, Any] = {
+                        "redaction": _DIAGNOSTIC_REDACTION_MARKER,
+                        "content_sha256": hash_bytes(canonical_json_bytes(nested)),
+                        "local_path": local_path,
+                        "diagnostic_key": nested_location,
+                    }
+                    if key == "stdout_tail":
+                        reference["stream_sha256"] = observation.stdout_sha256
+                    elif key == "stderr_tail":
+                        reference["stream_sha256"] = observation.stderr_sha256
+                    redacted[key] = reference
+                else:
+                    redacted[key] = redact(nested, nested_location)
+            return redacted
+        if isinstance(value, list):
+            return [redact(nested, f"{location}[{index}]") for index, nested in enumerate(value)]
+        return value
+
+    redacted_attempt = redact(attempt)
+    if not isinstance(redacted_attempt, dict):
+        raise AssertionError("attempt redaction must preserve the top-level object")
+    supervisor = redacted_attempt.get("supervisor_observation")
+    if isinstance(supervisor, dict):
+        supervisor["full_log_local_path"] = local_path
+    return redacted_attempt
 
 
 def _parent_cache_read_attempted(policy: Mapping[str, Any]) -> bool:

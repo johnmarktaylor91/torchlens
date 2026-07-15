@@ -147,6 +147,7 @@ def test_caught_os_sandbox_denial_poisons_successful_forward_receipt(tmp_path: P
         0,
         20,
         12 * 1024**3,
+        diagnostics_root=tmp_path / ".crawl-local" / "diagnostics",
     )
 
     assert len(attempts) == 1

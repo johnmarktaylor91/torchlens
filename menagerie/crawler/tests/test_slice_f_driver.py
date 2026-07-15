@@ -1422,7 +1422,7 @@ def test_parent_refuses_observed_adapter_digest_mismatch() -> None:
     )
 
 
-def test_parent_accepts_one_requested_mode_from_dual_mode_receipt() -> None:
+def test_parent_accepts_one_requested_mode_from_dual_mode_receipt(tmp_path: Path) -> None:
     """A fresh mode subprocess retains full metadata but completes only its request."""
 
     proposal = make_author_proposal("m_dual_mode_receipt")
@@ -1521,6 +1521,7 @@ def test_parent_accepts_one_requested_mode_from_dual_mode_receipt() -> None:
             10.0,
             1024,
             requested_mode="train",
+            diagnostics_root=tmp_path / ".crawl-local" / "diagnostics",
         ),
         *driver_module._attempts_from_supervised(
             artifact,
@@ -1531,6 +1532,7 @@ def test_parent_accepts_one_requested_mode_from_dual_mode_receipt() -> None:
             10.0,
             1024,
             requested_mode="eval",
+            diagnostics_root=tmp_path / ".crawl-local" / "diagnostics",
         ),
     )
     assert attempts[0]["worker_receipt"]["constructor_seconds"] == 0.25

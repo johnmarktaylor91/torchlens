@@ -433,7 +433,7 @@ External metadata is captured and gated now because it requires source reading, 
 | `status.stage` | enum \| null | Mandatory | Mandatory processing or failure stage. |
 | `status.reason_code` | referenced value \| null | Mandatory | Mandatory closed reason code when applicable. |
 | `status.detail` | string \| null | Mandatory | Best-effort human-readable detail. |
-| `status.traceback` | string \| null | Mandatory | Best-effort captured traceback. |
+| `status.traceback` | string \| redacted-text object \| null | Mandatory | Best-effort local diagnostic reference for a captured traceback. |
 | `status.no_traceback_reason` | string \| null | Mandatory | Mandatory no traceback reason. |
 | `status.attempted_rungs` | array<enum> | Mandatory | Mandatory attempted rungs. |
 | `status.retries` | object | Mandatory | Mandatory retries. |
@@ -548,10 +548,11 @@ External metadata is captured and gated now because it requires source reading, 
 | `supervisor_observation.peak_rss_bytes` | integer | Mandatory | Mandatory peak rss bytes. |
 | `supervisor_observation.stdout_sha256` | string | Mandatory | Mandatory stdout sha256. |
 | `supervisor_observation.stdout_bytes` | integer | Mandatory | Mandatory stdout bytes. |
-| `supervisor_observation.stdout_tail` | string | Mandatory | Mandatory stdout tail. |
+| `supervisor_observation.stdout_tail` | string \| redacted-text object | Mandatory | Empty string or hash-bound local diagnostic reference; raw worker stdout is forbidden. |
+| `supervisor_observation.stdout_completion_line` | string \| null | Optional | Parent-attested TorchLens-owned completion marker used for run-award verification. |
 | `supervisor_observation.stderr_sha256` | string | Mandatory | Mandatory stderr sha256. |
 | `supervisor_observation.stderr_bytes` | integer | Mandatory | Mandatory stderr bytes. |
-| `supervisor_observation.stderr_tail` | string | Mandatory | Mandatory stderr tail. |
+| `supervisor_observation.stderr_tail` | string \| redacted-text object | Mandatory | Empty string or hash-bound local diagnostic reference; raw worker stderr is forbidden. |
 | `supervisor_observation.full_log_local_path` | string | Mandatory | Mandatory full log local path. |
 | `supervisor_observation.full_log_retention` | string | Mandatory | Mandatory full log retention. |
 | `policy_observation` | object | Mandatory | Mandatory policy observation. |
@@ -568,8 +569,8 @@ External metadata is captured and gated now because it requires source reading, 
 | `error.stage` | enum | Mandatory | Mandatory processing or failure stage. |
 | `error.reason_code` | enum | Mandatory | Mandatory closed reason code when applicable. |
 | `error.exception_type` | string \| null | Mandatory | Mandatory exception type. |
-| `error.message` | string | Mandatory | Mandatory message. |
-| `error.traceback` | string \| null | Mandatory | Best-effort captured traceback. |
+| `error.message` | string \| redacted-text object | Mandatory | Empty string or a hash-bound local diagnostic reference; raw worker text is forbidden. |
+| `error.traceback` | string \| redacted-text object \| null | Mandatory | Best-effort local diagnostic reference for a captured traceback. |
 | `error.no_traceback_reason` | string \| null | Mandatory | Mandatory no traceback reason. |
 | `error.native_crash` | boolean | Mandatory | Mandatory native crash. |
 | `error.root_cause_fingerprint` | string | Mandatory | Mandatory root cause fingerprint. |

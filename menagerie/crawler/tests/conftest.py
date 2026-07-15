@@ -240,6 +240,7 @@ def make_attempt(
             "stdout_sha256": HASH,
             "stdout_bytes": 0,
             "stdout_tail": "",
+            "stdout_completion_line": None,
             "stderr_sha256": HASH,
             "stderr_bytes": 0,
             "stderr_tail": "",
@@ -284,7 +285,9 @@ def make_attempt(
     observation = model["supervisor_observation"]
     observation["stdout_sha256"] = hash_bytes(completion_bytes)
     observation["stdout_bytes"] = len(completion_bytes)
-    observation["stdout_tail"] = completion_line
+    # The public record keeps only the parent-attested TorchLens marker; arbitrary
+    # worker stdout belongs in the gitignored local diagnostic sidecar.
+    observation["stdout_completion_line"] = completion_line
     model["worker_receipt"]["receipt_sha256"] = stable_hash(
         {
             "version": "menagerie.crawler.parent-success-attestation.v1",
