@@ -830,7 +830,7 @@
         },
         "keywords": {
           "$ref": "#/$defs/string_array",
-          "description": "Mandatory keywords."
+          "description": "Mandatory non-empty English user search terms. These are relevance-checked model/family/task/domain aliases and phrases, not verbatim-source quotations."
         },
         "venue": {
           "$ref": "#/$defs/nullable_string",
@@ -1358,7 +1358,7 @@
         },
         "links_checked": {
           "$ref": "#/$defs/string_array",
-          "description": "Mandatory links checked."
+          "description": "Mandatory exact content URLs checked. For R2/R4 every entry must bind to fetched, hash-inventoried CAS bytes; unfetched candidate repositories are a coverage gap."
         },
         "languages_checked": {
           "$ref": "#/$defs/string_array",
@@ -2156,7 +2156,7 @@
         },
         "dtype": {
           "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory dtype."
+          "description": "Mandatory authored, source-read input dtype. Unlike observed.* dtype/device facts, this input_contract leaf is accuracy-gated and contributes to vet identity."
         },
         "device_policy": {
           "$ref": "#/$defs/nonempty_string",
@@ -2277,11 +2277,11 @@
         },
         "dtype": {
           "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory dtype."
+          "description": "Mandatory mechanically observed output dtype under observed.*; this root-path placement is TorchLens-derivable and excluded from authored metadata gating."
         },
         "device": {
           "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory device."
+          "description": "Mandatory mechanically observed output device under observed.*; this root-path placement is TorchLens-derivable and excluded from authored metadata gating."
         },
         "python_type": {
           "$ref": "#/$defs/nonempty_string",

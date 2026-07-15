@@ -375,7 +375,7 @@
         },
         "keywords": {
           "$ref": "#/$defs/string_array",
-          "description": "Mandatory keywords."
+          "description": "Mandatory non-empty English user search terms. These are relevance-checked model/family/task/domain aliases and phrases, not verbatim-source quotations."
         },
         "venue": {
           "$ref": "#/$defs/nullable_string",

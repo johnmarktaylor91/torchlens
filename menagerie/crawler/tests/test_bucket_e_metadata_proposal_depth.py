@@ -13,6 +13,10 @@ from menagerie.crawler.metadata import (
     MANDATORY_EXTERNAL_FIELDS,
     MetadataValidationError,
     TORCHLENS_DERIVABLE_FIELDS,
+    authored_fact_leaves,
+    recompute_accepted_identities,
+    validate_authored_facts_for_write,
+    validate_external_metadata,
     validate_external_metadata_for_write,
 )
 from menagerie.crawler.proposal import (
@@ -119,6 +123,121 @@ def test_torchlens_derivable_fields_remain_optional_at_write() -> None:
     assert report.derivable_fields_present == frozenset()
 
 
+def _accurate_authored_gate(facts: dict[str, Any]) -> dict[str, Any]:
+    """Return exhaustive per-leaf checks with keyword relevance semantics.
+
+    Parameters
+    ----------
+    facts:
+        Complete proposed fact tree.
+
+    Returns
+    -------
+    dict[str, Any]
+        Accurate gate item suitable for block-at-write validation.
+    """
+
+    return {
+        "verdict": "accurate",
+        "integrity": {"verdict": "accurate"},
+        "field_checks": [
+            {
+                "field": field,
+                "verdict": "accurate",
+                "evidence_ids": []
+                if field.startswith("external_metadata.keywords[")
+                else ["evidence-1"],
+                "checked_source_ids": ["source-1"],
+                "reason": "relevant user search term"
+                if field.startswith("external_metadata.keywords[")
+                else "supported",
+            }
+            for field in authored_fact_leaves(facts)
+        ],
+    }
+
+
+def test_authored_input_dtype_is_gated_and_changes_vet_identity() -> None:
+    """An authored dtype collision cannot bypass write gating or vet staleness."""
+
+    facts = make_author_proposal()["proposed_facts"]
+    dtype_path = "input_contract.args[0].dtype"
+    kwarg = deepcopy(facts["input_contract"]["args"][0])
+    kwarg["path"] = "kwargs.image"
+    facts["input_contract"]["kwargs"].append(kwarg)
+    assert authored_fact_leaves(facts)[dtype_path] == "float32"
+    assert authored_fact_leaves(facts)["input_contract.kwargs[0].dtype"] == "float32"
+
+    gate_item = _accurate_authored_gate(facts)
+    dtype_check = next(check for check in gate_item["field_checks"] if check["field"] == dtype_path)
+    dtype_check["verdict"] = "inaccurate"
+    with pytest.raises(MetadataValidationError, match="non-accurate authored facts"):
+        validate_authored_facts_for_write(facts, gate_item)
+
+    before = recompute_accepted_identities(
+        facts,
+        checker_prompt_hash="sha256:" + "1" * 64,
+        checker_model="codex",
+        checker_version="test",
+    )
+    changed = deepcopy(facts)
+    changed["input_contract"]["args"][0]["dtype"] = "float64"
+    after = recompute_accepted_identities(
+        changed,
+        checker_prompt_hash="sha256:" + "1" * 64,
+        checker_model="codex",
+        checker_version="test",
+    )
+    assert after.vet != before.vet
+
+
+@pytest.mark.parametrize("name", sorted(TORCHLENS_DERIVABLE_FIELDS))
+def test_derivable_name_collision_is_exempt_only_below_observed(name: str) -> None:
+    """Every present or future authored collision remains inside the gate.
+
+    Parameters
+    ----------
+    name:
+        Mechanically derivable leaf name reused below both roots.
+    """
+
+    leaves = authored_fact_leaves(
+        {
+            "authored_future": {name: "source-read claim"},
+            "observed": {name: "mechanical fact"},
+        }
+    )
+    assert leaves == {f"authored_future.{name}": "source-read claim"}
+
+
+def test_keywords_use_nonverbatim_relevance_checks_but_remain_gated() -> None:
+    """Reasonable search terms pass without excerpts; irrelevant terms still block."""
+
+    facts = make_author_proposal()["proposed_facts"]
+    facts["external_metadata"]["keywords"] = ["image feature extractor"]
+    gate_item = _accurate_authored_gate(facts)
+    report = validate_authored_facts_for_write(facts, gate_item)
+    keyword_path = "external_metadata.keywords[0]"
+    assert keyword_path in report.gated_fields
+
+    keyword_check = next(
+        check for check in gate_item["field_checks"] if check["field"] == keyword_path
+    )
+    keyword_check["verdict"] = "inaccurate"
+    keyword_check["reason"] = "unrelated to the verified model"
+    with pytest.raises(MetadataValidationError, match="non-accurate authored facts"):
+        validate_authored_facts_for_write(facts, gate_item)
+
+
+def test_empty_keywords_are_rejected() -> None:
+    """The required user-search vocabulary cannot be an empty array."""
+
+    metadata = _accepted_metadata()
+    metadata["keywords"] = []
+    with pytest.raises(MetadataValidationError, match="keywords.*non-empty"):
+        validate_external_metadata(metadata)
+
+
 def _proposal_source(
     tmp_path: Path, text: str, *, extra_supports: tuple[str, ...] = ()
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -168,7 +287,7 @@ def _proposal_source(
         "sources": [
             {
                 "source_id": "source-1",
-                "url": "https://example.com/paper",
+                "url": "https://example.com/model",
                 "revision": "v1",
                 "content_sha256": source_hash,
                 "cas_path": str(source_path),
@@ -387,6 +506,17 @@ def test_r2_with_exact_source_bytes_and_map_passes(tmp_path: Path) -> None:
 
     proposal, manifest = _r2_proposal(tmp_path, bound=True)
     _validate_focused(proposal, manifest, tmp_path)
+
+
+def test_r2_checked_candidate_withheld_from_fetch_is_rejected(tmp_path: Path) -> None:
+    """R2 search coverage cannot omit a checked implementation candidate."""
+
+    proposal, manifest = _r2_proposal(tmp_path, bound=True)
+    proposal["proposed_facts"]["source_resolution"]["search_report"]["links_checked"].append(
+        "https://code.example.org/alternate-example-net"
+    )
+    with pytest.raises(ProposalValidationError, match="checked-link coverage gap"):
+        _validate_focused(proposal, manifest, tmp_path)
 
 
 @pytest.mark.parametrize(

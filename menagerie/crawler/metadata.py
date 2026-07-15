@@ -59,8 +59,8 @@ if _MODEL_EXTERNAL_FIELDS != _AUTHOR_EXTERNAL_FIELDS:
 
 MANDATORY_EXTERNAL_FIELDS = _MODEL_EXTERNAL_FIELDS
 
-# This is the frozen demarcation from PLAN.md. These are the only model facts excluded
-# from the recursively derived source-read/human-judgment write gate.
+# This is the frozen demarcation from PLAN.md. These names are mechanically derivable
+# only below the ``observed`` root; an authored leaf with the same name remains gated.
 TORCHLENS_DERIVABLE_FIELDS = frozenset(
     {
         "parameter_count_total",
@@ -77,7 +77,16 @@ TORCHLENS_DERIVABLE_FIELDS = frozenset(
 )
 
 _REQUIRED_NONEMPTY_ARRAYS = frozenset(
-    {"modality", "architecture_class", "domain", "task", "paradigm", "authors", "institution"}
+    {
+        "modality",
+        "architecture_class",
+        "domain",
+        "task",
+        "paradigm",
+        "authors",
+        "institution",
+        "keywords",
+    }
 )
 _ARRAY_FIELDS = _REQUIRED_NONEMPTY_ARRAYS | {"lineage", "predecessors", "tags", "keywords"}
 _REQUIRED_NONEMPTY_STRINGS = frozenset(
@@ -151,7 +160,8 @@ def authored_fact_leaves(facts: Mapping[str, Any]) -> Mapping[str, Any]:
     """Return every recursively gated authored leaf in deterministic path order.
 
     Empty arrays and objects are leaves because their emptiness is itself an authored
-    judgment. Only the frozen TorchLens-derivable field names are excluded.
+    judgment. Only fields below the mechanical ``observed`` root are excluded; a field
+    named ``dtype`` or another derivable name below an authored root remains gated.
 
     Parameters
     ----------
@@ -167,11 +177,8 @@ def authored_fact_leaves(facts: Mapping[str, Any]) -> Mapping[str, Any]:
     leaves: dict[str, Any] = {}
 
     def visit(value: Any, path: str) -> None:
-        """Collect one value recursively unless it is mechanically derivable."""
+        """Collect one authored value recursively."""
 
-        final_name = path.rsplit(".", 1)[-1].split("[", 1)[0]
-        if final_name in TORCHLENS_DERIVABLE_FIELDS:
-            return
         if isinstance(value, Mapping):
             if not value:
                 leaves[path] = {}
@@ -190,6 +197,8 @@ def authored_fact_leaves(facts: Mapping[str, Any]) -> Mapping[str, Any]:
         leaves[path] = value
 
     for root in sorted(facts):
+        if root == "observed":
+            continue
         if root == "fidelity":
             continue
         if root == "modes":
@@ -365,7 +374,7 @@ def validate_external_metadata_for_write(
 def validate_authored_facts_for_write(
     facts: Mapping[str, Any], gate_item: Mapping[str, Any]
 ) -> MetadataValidationReport:
-    """Require one unique accurate evidence-backed check for every authored leaf.
+    """Require one unique accurate evidence/relevance check for every authored leaf.
 
     Parameters
     ----------
@@ -397,7 +406,13 @@ def validate_authored_facts_for_write(
             continue
         if field in verdicts:
             raise MetadataValidationError(f"duplicate authored field check: {field}")
-        if not check.get("evidence_ids") or not check.get("checked_source_ids"):
+        checked_source_ids = check.get("checked_source_ids")
+        if not checked_source_ids:
+            raise MetadataValidationError(
+                f"authored field check lacks checked source context: {field}"
+            )
+        evidence_ids = check.get("evidence_ids")
+        if not _is_keyword_leaf(field) and not evidence_ids:
             raise MetadataValidationError(
                 f"authored field check lacks verified evidence support: {field}"
             )
@@ -417,6 +432,23 @@ def validate_authored_facts_for_write(
         gated_fields=frozenset(verdicts),
         derivable_fields_present=frozenset(),
     )
+
+
+def _is_keyword_leaf(field: str) -> bool:
+    """Return whether an authored leaf is a user-search keyword.
+
+    Parameters
+    ----------
+    field:
+        Dotted/indexed authored fact path.
+
+    Returns
+    -------
+    bool
+        True for individual ``external_metadata.keywords`` entries.
+    """
+
+    return field.startswith("external_metadata.keywords[")
 
 
 def input_signature_matches_contract(signature: Any, input_contract: Mapping[str, Any]) -> bool:
