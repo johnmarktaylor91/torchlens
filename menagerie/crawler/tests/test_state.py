@@ -30,6 +30,7 @@ def test_sqlite_rebuild_materializes_current_revision(tmp_path: Path) -> None:
         second = make_model(status_code="failed:source")
         second["record_seq"] = 2
         second["parent_revision"] = persisted["record_revision"]
+        second["status"]["supersedes_revision"] = persisted["record_revision"]
         second["notes"] = "superseding evidence"
         reducer.append_model(second)
     database = tmp_path / "state.sqlite3"

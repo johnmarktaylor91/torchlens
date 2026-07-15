@@ -18,7 +18,7 @@ from menagerie.crawler.constants import (
     OperationalEventStatus,
 )
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
-from menagerie.crawler.intake import load_intake_snapshot
+from menagerie.crawler.intake import IntakeError, load_intake_snapshot
 from menagerie.crawler.licenses import (
     LicenseDecision,
     LicenseSweepReport,
@@ -29,6 +29,7 @@ from menagerie.crawler.licenses import (
 )
 from menagerie.crawler.mirrors import ArtifactManifest, MirrorStore
 from menagerie.crawler.models import AppendResult, JsonObject
+from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import default_ledger_paths, materialize_current
 from menagerie.crawler.status import checkpoint_consistency_report
@@ -60,6 +61,10 @@ class CheckpointValidationError(CheckpointError):
 
 class RestrictedPublicArtifact(CheckpointValidationError):
     """Raised when the public staged set fails the mandatory license sweep."""
+
+
+class ReconstructionValidationError(CheckpointValidationError):
+    """Raised when a canonical reconstruction transaction is not reproducible."""
 
 
 @dataclass(frozen=True)
@@ -128,6 +133,24 @@ class GeneratedMetadataDisposition:
     disposition: str
     generator: str
     provenance: str
+
+
+@dataclass(frozen=True)
+class ValidatedReconstruction:
+    """Side-effect-free result of validating one canonical reconstruction.
+
+    Parameters
+    ----------
+    manifest, proposal, source_manifest:
+        Validated immutable reconstruction facts.
+    model_root:
+        Resolved canonical model-code root.
+    """
+
+    manifest: JsonObject
+    proposal: JsonObject
+    source_manifest: JsonObject
+    model_root: Path
 
 
 GitRunner = Callable[[Sequence[str], Path], GitCommandResult]
@@ -361,6 +384,8 @@ def record_checkpoint_review(
     report_path: str,
     context: OperationalContext,
     created_at: str,
+    canonical_ledger_path: Optional[Path] = None,
+    policy_identity: Optional[Mapping[str, object]] = None,
 ) -> AppendResult:
     """Construct and append one checkpoint-review event.
 
@@ -370,6 +395,10 @@ def record_checkpoint_review(
         Operational-event ledger.
     models_completed, funnel_snapshot, report_path, context, created_at:
         Fields accepted by ``build_checkpoint_review_event``.
+    canonical_ledger_path:
+        Optional canonical append-only operational ledger mirrored before runtime state.
+    policy_identity:
+        Stable intake/campaign identity for one-shot review policy.
 
     Returns
     -------
@@ -384,6 +413,10 @@ def record_checkpoint_review(
         context=context,
         created_at=created_at,
     )
+    if policy_identity is not None:
+        event["details"].update(dict(policy_identity))
+    if canonical_ledger_path is not None:
+        append_canonical_operational_event(canonical_ledger_path, event)
     return record_operational_event(ledger, event)
 
 
@@ -416,6 +449,20 @@ def record_review_signoff(
         context=context,
         created_at=created_at,
     )
+    pending = [
+        record
+        for record in ledger.records
+        if record.get("event_kind") == OperationalEventKind.CHECKPOINT_REVIEW.value
+    ]
+    if pending:
+        policy = pending[-1].get("details", {})
+        if isinstance(policy, Mapping):
+            for key in ("policy_key", "intake_snapshot_id", "review_threshold"):
+                if key in policy:
+                    event["details"][key] = policy[key]
+    canonical_path = _canonical_operational_path_for_runtime(ledger.path)
+    if canonical_path is not None and pending:
+        append_canonical_operational_event(canonical_path, event)
     return record_operational_event(ledger, event)
 
 
@@ -451,6 +498,152 @@ def record_progress_notification(
         created_at=created_at,
     )
     return record_operational_event(ledger, event)
+
+
+def canonical_records_root(models_path: Path) -> Path:
+    """Return the canonical records root containing a model ledger.
+
+    Parameters
+    ----------
+    models_path:
+        Canonical model-ledger path.
+
+    Returns
+    -------
+    pathlib.Path
+        Canonical records root for sibling durable operational ledgers.
+    """
+
+    parent = models_path.resolve().parent
+    return parent.parent if parent.name == "models" else parent
+
+
+def canonical_operational_ledger_path(models_path: Path) -> Path:
+    """Return the canonical append-only operational event ledger path.
+
+    Parameters
+    ----------
+    models_path:
+        Canonical model-ledger path.
+
+    Returns
+    -------
+    pathlib.Path
+        Canonical operational event ledger.
+    """
+
+    return canonical_records_root(models_path) / "operational" / "events.jsonl"
+
+
+def canonical_requeue_grants_path(models_path: Path) -> Path:
+    """Return the canonical append-only requeue grant ledger path.
+
+    Parameters
+    ----------
+    models_path:
+        Canonical model-ledger path.
+
+    Returns
+    -------
+    pathlib.Path
+        Canonical requeue grant ledger.
+    """
+
+    return canonical_records_root(models_path) / "operational" / "requeue-grants.jsonl"
+
+
+def append_canonical_operational_event(path: Path, event: Mapping[str, Any]) -> AppendResult:
+    """Append one logical event to the canonical operational ledger.
+
+    Parameters
+    ----------
+    path:
+        Canonical operational ledger path.
+    event:
+        Logical or persisted operational event.
+
+    Returns
+    -------
+    AppendResult
+        Idempotent canonical append result.
+    """
+
+    logical = {
+        key: value for key, value in event.items() if key not in {"ledger_seq", "payload_sha256"}
+    }
+    with JsonlLedger(path, OPERATIONAL_EVENT_SCHEMA_VERSION) as ledger:
+        return ledger.append(logical)
+
+
+def append_canonical_requeue_grant(path: Path, grant: Mapping[str, Any]) -> bool:
+    """Append one immutable grant to a canonical raw JSONL ledger once.
+
+    Parameters
+    ----------
+    path:
+        Canonical grant ledger path.
+    grant:
+        Already validated grant payload.
+
+    Returns
+    -------
+    bool
+        Whether new bytes were appended.
+
+    Raises
+    ------
+    CheckpointValidationError
+        If an existing grant identity has conflicting bytes.
+    """
+
+    grant_id = grant.get("grant_id")
+    records = scan_jsonl(path, validate=False)
+    for existing in records:
+        if existing.get("grant_id") != grant_id:
+            continue
+        if existing != dict(grant):
+            raise CheckpointValidationError(f"conflicting canonical requeue grant: {grant_id}")
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("ab") as handle:
+        handle.write(canonical_json_bytes(dict(grant)) + b"\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    descriptor = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    return True
+
+
+def _canonical_operational_path_for_runtime(runtime_path: Path) -> Optional[Path]:
+    """Infer the canonical operational ledger paired with a disposable runtime ledger.
+
+    Parameters
+    ----------
+    runtime_path:
+        Runtime ``.crawl-local`` operational event path.
+
+    Returns
+    -------
+    pathlib.Path | None
+        Conventional canonical path, or ``None`` for an unrelated test/custom ledger.
+    """
+
+    resolved = runtime_path.resolve()
+    runtime_root = resolved.parent.parent
+    sibling_records = runtime_root.parent / "records"
+    if sibling_records.is_dir():
+        return sibling_records / "operational" / "events.jsonl"
+    if ".crawl-local" in resolved.parts:
+        index = resolved.parts.index(".crawl-local")
+        if index > 0:
+            repo_root = Path(*resolved.parts[:index])
+            records_root = repo_root / "menagerie" / "crawler" / "records"
+            if records_root.is_dir():
+                return records_root / "operational" / "events.jsonl"
+    return None
 
 
 def create_checkpoint_set(
@@ -1298,6 +1491,263 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
         os.close(descriptor)
 
 
+def _read_json_object(path: Path, label: str) -> JsonObject:
+    """Read one JSON object without modifying its source.
+
+    Parameters
+    ----------
+    path:
+        JSON file to read.
+    label:
+        Diagnostic label used on failure.
+
+    Returns
+    -------
+    dict[str, Any]
+        Parsed JSON object.
+    """
+
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ReconstructionValidationError(f"cannot read {label}: {path}") from exc
+    if not isinstance(value, dict):
+        raise ReconstructionValidationError(f"{label} must be a JSON object: {path}")
+    return value
+
+
+def _resolve_reconstruction_reference(repo_root: Path, value: object, label: str) -> Path:
+    """Resolve one repository-relative reconstruction reference fail-closed.
+
+    Parameters
+    ----------
+    repo_root:
+        Resolved repository root.
+    value:
+        Required repository-relative string.
+    label:
+        Diagnostic field name.
+
+    Returns
+    -------
+    pathlib.Path
+        Resolved path contained by ``repo_root``.
+    """
+
+    if not isinstance(value, str) or not value:
+        raise ReconstructionValidationError(f"reconstruction {label} is missing")
+    relative = Path(value)
+    if relative.is_absolute():
+        raise ReconstructionValidationError(f"reconstruction {label} must be repository-relative")
+    resolved = (repo_root / relative).resolve()
+    if not resolved.is_relative_to(repo_root):
+        raise ReconstructionValidationError(f"reconstruction {label} escapes the repository")
+    return resolved
+
+
+def validate_canonical_reconstruction(
+    reconstruction_path: Path,
+    canonical_root: Path,
+    *,
+    expected_stable_id: Optional[str] = None,
+    expected_intake_item: Optional[Mapping[str, Any]] = None,
+) -> ValidatedReconstruction:
+    """Validate a canonical reconstruction transaction without side effects.
+
+    The validation binds the reconstruction and commit marker identities, embedded
+    proposal, canonical source manifest/CAS bytes, immutable intake snapshot bytes,
+    and the complete recursive model-code import manifest.
+
+    Parameters
+    ----------
+    reconstruction_path:
+        Canonical reconstruction JSON path.
+    canonical_root:
+        Canonical ``menagerie/crawler`` root.
+    expected_stable_id:
+        Optional caller-owned model identity.
+    expected_intake_item:
+        Optional caller-owned immutable intake row.
+
+    Returns
+    -------
+    ValidatedReconstruction
+        Validated facts and resolved model-code root.
+
+    Raises
+    ------
+    ReconstructionValidationError
+        If any identity, path, digest, or referenced byte is missing or stale.
+    """
+
+    root = canonical_root.resolve()
+    repo_root = (
+        root.parents[1] if root.name == "crawler" and root.parent.name == "menagerie" else root
+    )
+    manifest = _read_json_object(reconstruction_path, "canonical reconstruction")
+    schema_version = manifest.get("schema_version")
+    if schema_version not in {
+        "menagerie.crawler.reconstruction.v1",
+        "menagerie.crawler.reconstruction.v2",
+    }:
+        raise ReconstructionValidationError("unsupported canonical reconstruction schema")
+    stable_id = manifest.get("stable_id")
+    if (
+        not isinstance(stable_id, str)
+        or not stable_id
+        or reconstruction_path.stem != stable_id
+        or (expected_stable_id is not None and stable_id != expected_stable_id)
+    ):
+        raise ReconstructionValidationError("canonical reconstruction stable-id binding changed")
+
+    proposal_value = manifest.get("proposal")
+    source_value = manifest.get("source_manifest")
+    if not isinstance(proposal_value, Mapping) or not isinstance(source_value, Mapping):
+        raise ReconstructionValidationError("canonical reconstruction lacks proposal/source facts")
+    proposal = dict(proposal_value)
+    source_manifest = dict(source_value)
+    proposal_digest = stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+    if (
+        proposal.get("stable_id") != stable_id
+        or proposal.get("proposal_sha256") != proposal_digest
+        or manifest.get("proposal_sha256") != proposal_digest
+    ):
+        raise ReconstructionValidationError("canonical reconstruction proposal binding changed")
+
+    if schema_version == "menagerie.crawler.reconstruction.v2":
+        transaction_id = manifest.get("transaction_id")
+        if not isinstance(transaction_id, str) or not re.fullmatch(
+            r"sha256:[0-9a-f]{64}", transaction_id
+        ):
+            raise ReconstructionValidationError(
+                "canonical reconstruction transaction-id is invalid"
+            )
+        marker_path = reconstruction_path.with_name(f"{stable_id}.commit.json")
+        marker = _read_json_object(marker_path, "canonical reconstruction commit marker")
+        if (
+            set(marker)
+            != {
+                "schema_version",
+                "stable_id",
+                "transaction_id",
+                "proposal_sha256",
+            }
+            or marker.get("schema_version") != "menagerie.crawler.promotion-commit.v1"
+        ):
+            raise ReconstructionValidationError("canonical reconstruction marker schema is invalid")
+        if (
+            marker.get("stable_id") != stable_id
+            or marker.get("transaction_id") != transaction_id
+            or marker.get("proposal_sha256") != proposal_digest
+        ):
+            raise ReconstructionValidationError("canonical reconstruction commit marker is stale")
+
+    source_manifest_path = _resolve_reconstruction_reference(
+        repo_root, manifest.get("source_manifest_path"), "source_manifest_path"
+    )
+    if _read_json_object(source_manifest_path, "canonical source manifest") != source_manifest:
+        raise ReconstructionValidationError("canonical source manifest bytes changed")
+    sources = source_manifest.get("sources")
+    if not isinstance(sources, list) or source_manifest.get("manifest_sha256") != stable_hash(
+        sources
+    ):
+        raise ReconstructionValidationError("canonical source manifest digest changed")
+    for source in sources:
+        if not isinstance(source, Mapping):
+            raise ReconstructionValidationError("canonical source manifest row is malformed")
+        source_path = _resolve_reconstruction_reference(
+            repo_root, source.get("cas_path"), "source CAS path"
+        )
+        try:
+            digest = hash_bytes(source_path.read_bytes())
+        except OSError as exc:
+            raise ReconstructionValidationError("canonical source CAS byte is missing") from exc
+        if digest != source.get("content_sha256"):
+            raise ReconstructionValidationError("canonical source CAS digest changed")
+
+    intake_id = manifest.get("intake_snapshot_id")
+    if not isinstance(intake_id, str) or not intake_id:
+        raise ReconstructionValidationError("reconstruction intake snapshot identity is missing")
+    intake_root = root / "records" / "intake" / intake_id
+    try:
+        snapshot = load_intake_snapshot(intake_root)
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError, IntakeError) as exc:
+        raise ReconstructionValidationError(
+            "canonical intake snapshot is not reconstructable"
+        ) from exc
+    intake_manifest = _read_json_object(intake_root / "manifest.json", "canonical intake manifest")
+    snapshot_items = [item.to_dict() for item in snapshot.items]
+    source_digests = intake_manifest.get("sources")
+    if not isinstance(source_digests, Mapping):
+        raise ReconstructionValidationError("canonical intake source inventory is malformed")
+    for name, expected_digest in source_digests.items():
+        if not isinstance(name, str):
+            raise ReconstructionValidationError("canonical intake source name is malformed")
+        source_root = (intake_root / "sources").resolve()
+        source_path = (source_root / name).resolve()
+        if not source_path.is_relative_to(source_root):
+            raise ReconstructionValidationError("canonical intake source path escapes snapshot")
+        try:
+            observed_digest = hash_bytes(source_path.read_bytes())
+        except OSError as exc:
+            raise ReconstructionValidationError("canonical intake source byte is missing") from exc
+        if observed_digest != expected_digest:
+            raise ReconstructionValidationError("canonical intake source digest changed")
+    if (
+        snapshot.snapshot_id != intake_id
+        or snapshot.snapshot_sha256 != manifest.get("intake_snapshot_sha256")
+        or intake_manifest.get("items") != snapshot_items
+        or intake_manifest.get("item_count") != len(snapshot_items)
+    ):
+        raise ReconstructionValidationError("canonical intake snapshot binding changed")
+    matching_items = [item for item in snapshot_items if item.get("stable_id") == stable_id]
+    if (
+        len(matching_items) != 1
+        or manifest.get("intake_item") != matching_items[0]
+        or manifest.get("intake_item_sha256") != stable_hash(matching_items[0])
+        or (expected_intake_item is not None and dict(expected_intake_item) != matching_items[0])
+    ):
+        raise ReconstructionValidationError("canonical reconstruction intake-item binding changed")
+
+    model_root = _resolve_reconstruction_reference(
+        repo_root, manifest.get("canonical_code_root"), "canonical_code_root"
+    )
+    proposed_facts = proposal.get("proposed_facts")
+    implementation = (
+        proposed_facts.get("implementation") if isinstance(proposed_facts, Mapping) else None
+    )
+    if not isinstance(implementation, Mapping):
+        raise ReconstructionValidationError("canonical proposal implementation is malformed")
+    code_value = implementation.get("code_path")
+    if isinstance(code_value, str):
+        if Path(code_value).is_absolute():
+            raise ReconstructionValidationError("canonical model entry point must be relative")
+        declared_manifest = implementation.get("code_manifest")
+        if not isinstance(declared_manifest, list) or not declared_manifest:
+            raise ReconstructionValidationError("canonical recursive code manifest is missing")
+        try:
+            observed_manifest = [
+                dict(row) for row in model_code_manifest(model_root / code_value, model_root)
+            ]
+        except (OSError, ProposalValidationError) as exc:
+            raise ReconstructionValidationError(
+                "canonical model code is not reconstructable"
+            ) from exc
+        verified_hashes = proposal.get("verified_hashes")
+        if (
+            observed_manifest != declared_manifest
+            or not isinstance(verified_hashes, Mapping)
+            or verified_hashes.get("code") != implementation.get("code_sha256")
+            or verified_hashes.get("code_manifest") != stable_hash(observed_manifest)
+        ):
+            raise ReconstructionValidationError("canonical recursive code manifest changed")
+    elif implementation.get("code_manifest") is not None:
+        raise ReconstructionValidationError("declarative reconstruction carries code members")
+    return ValidatedReconstruction(manifest, proposal, source_manifest, model_root)
+
+
 def _derive_candidate_paths(repo_root: Path, canonical_root: Path) -> tuple[Path, ...]:
     """Derive the complete checkpoint set solely from canonical public roots.
 
@@ -1322,20 +1772,7 @@ def _derive_candidate_paths(repo_root: Path, canonical_root: Path) -> tuple[Path
     for reconstruction in reconstruction_root.rglob("*.json"):
         if reconstruction.name.endswith(".commit.json"):
             continue
-        try:
-            payload = json.loads(reconstruction.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            raise CheckpointValidationError(
-                f"invalid canonical reconstruction: {reconstruction}"
-            ) from exc
-        if isinstance(payload, Mapping) and payload.get("schema_version") == (
-            "menagerie.crawler.reconstruction.v2"
-        ):
-            marker = reconstruction.with_name(f"{str(payload.get('stable_id'))}.commit.json")
-            if not marker.is_file():
-                raise CheckpointValidationError(
-                    f"checkpoint refuses uncommitted promotion: {reconstruction}"
-                )
+        validate_canonical_reconstruction(reconstruction, canonical_root)
     if not paths:
         raise CheckpointValidationError(
             f"no canonical checkpoint facts found under {canonical_root}"
