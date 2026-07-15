@@ -276,7 +276,34 @@
           "$ref": "#/$defs/nullable_hash",
           "description": "Mandatory family template."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/hash",
+                "description": "Typed implementation entry-point digest."
+              }
+            },
+            "required": [
+              "code"
+            ]
+          },
+          "then": {
+            "required": [
+              "code_manifest"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "code_manifest"
+              ]
+            }
+          }
+        }
+      ]
     },
     "integrity": {
       "type": "object",

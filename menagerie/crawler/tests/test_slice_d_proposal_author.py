@@ -17,6 +17,7 @@ from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.proposal import (
     DEFAULT_GATED_CLAIMS,
     ProposalValidationError,
+    model_code_manifest,
     validate_author_proposal,
 )
 from menagerie.crawler.tests.conftest import make_author_proposal
@@ -140,9 +141,12 @@ def _make_r4(
             ],
         }
     )
+    code_manifest = [dict(row) for row in model_code_manifest(code_path, model_dir)]
+    implementation["code_manifest"] = code_manifest
     facts["fidelity"].update({"required": True, "reason": "R4 reimplementation", "current": False})
     manifest["sources"][0].pop("role", None)
     proposal["verified_hashes"]["code"] = hash_bytes(code.encode())
+    proposal["verified_hashes"]["code_manifest"] = stable_hash(code_manifest)
 
 
 def test_valid_typed_r1_proposal_passes(tmp_path: Path) -> None:

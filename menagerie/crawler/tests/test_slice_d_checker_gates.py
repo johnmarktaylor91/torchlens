@@ -27,6 +27,7 @@ from menagerie.crawler.gates import (
     route_fidelity_gate,
     route_metadata_gate,
 )
+from menagerie.crawler.identity import stable_hash
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.reducer import CanonicalReducer, ReductionError
 from menagerie.crawler.tests.conftest import (
@@ -58,10 +59,94 @@ def _checker_item_pack(item: dict[str, Any]) -> dict[str, Any]:
         "fidelity_identity": item["fidelity_identity"],
         "vet_identity": item["vet_identity"],
         "verified_hashes": deepcopy(item["verified_hashes"]),
-        "proposal": {"description": "scoped test proposal"},
+        "proposal": {
+            "description": "scoped test proposal",
+            "proposed_facts": {"implementation": {"code_path": None}},
+        },
         "source_manifest": {"sources": []},
         "evidence": {"excerpts": []},
     }
+
+
+@pytest.mark.parametrize("rung", ["R2_VENDOR", "R4_REIMPLEMENT"])
+def test_typed_proposal_code_manifest_reaches_checker_envelope(tmp_path: Path, rung: str) -> None:
+    """Typed R2/R4 recursive manifests enter the checker envelope.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated checker result directory.
+    rung:
+        Typed source rung represented by the proposal.
+    """
+
+    gate = make_gate([f"m_{rung.lower()}"])
+    item = _checker_item_pack(gate["items"][0])
+    manifest = [{"path": "adapter.py", "sha256": HASH}]
+    item["proposal"]["proposed_facts"] = {
+        "source_resolution": {"rung": rung},
+        "implementation": {
+            "code_path": "adapter.py",
+            "code_sha256": HASH,
+            "code_manifest": manifest,
+        },
+    }
+    item["verified_hashes"].update({"code": HASH, "code_manifest": stable_hash(manifest)})
+
+    envelope = build_metadata_vet_envelope(
+        [item],
+        gate_round=1,
+        output_path=tmp_path / "typed" / "result.json",
+        checker_model="codex",
+        checker_version="test",
+        request_nonce=f"typed-{rung}",
+        final_tail=True,
+    )
+
+    assert envelope["items"][0]["verified_hashes"]["code_manifest"] == stable_hash(manifest)
+
+
+def test_declarative_proposal_rejects_stray_code_manifest(tmp_path: Path) -> None:
+    """A no-code R1 proposal cannot claim a recursive code manifest."""
+
+    gate = make_gate(["m_r1_stray_manifest"])
+    item = _checker_item_pack(gate["items"][0])
+    item["proposal"]["proposed_facts"]["source_resolution"] = {"rung": "R1_LIBRARY"}
+    item["verified_hashes"]["code_manifest"] = HASH
+
+    with pytest.raises(CheckerDispatchError, match="exact proposal/artifact pack"):
+        build_metadata_vet_envelope(
+            [item],
+            gate_round=1,
+            output_path=tmp_path / "declarative" / "result.json",
+            checker_model="codex",
+            checker_version="test",
+            request_nonce="declarative-stray-manifest",
+            final_tail=True,
+        )
+
+
+def test_typed_proposal_rejects_missing_code_manifest(tmp_path: Path) -> None:
+    """A typed proposal cannot reach a checker without its closure digest."""
+
+    gate = make_gate(["m_r2_missing_manifest"])
+    item = _checker_item_pack(gate["items"][0])
+    item["proposal"]["proposed_facts"] = {
+        "source_resolution": {"rung": "R2_VENDOR"},
+        "implementation": {"code_path": "adapter.py", "code_sha256": HASH},
+    }
+    item["verified_hashes"]["code"] = HASH
+
+    with pytest.raises(CheckerDispatchError, match="exact proposal/artifact pack"):
+        build_metadata_vet_envelope(
+            [item],
+            gate_round=1,
+            output_path=tmp_path / "typed-missing" / "result.json",
+            checker_model="codex",
+            checker_version="test",
+            request_nonce="typed-missing-manifest",
+            final_tail=True,
+        )
 
 
 def test_metadata_batch_envelope_validates_every_item_result(tmp_path: Path) -> None:

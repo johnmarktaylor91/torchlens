@@ -28,6 +28,17 @@ DEFAULT_GATED_CLAIMS = frozenset(
         "input_contract",
     }
 )
+VERIFIED_HASH_COMMON_KEYS = frozenset(
+    {
+        "source_manifest",
+        "evidence",
+        "code",
+        "source_to_code_map",
+        "family_template",
+    }
+)
+VERIFIED_HASH_CODE_MANIFEST_KEY = "code_manifest"
+VERIFIED_HASH_PROPOSAL_KEY = "proposal"
 _FORBIDDEN_CALLS = frozenset({"eval", "exec", "compile"})
 _SLOP_PATTERNS = (
     r"\bcompact\s+(?:stand[- ]?in|substitute|approximation|version)\b",
@@ -216,6 +227,7 @@ def validate_author_proposal(
         validate_payload(proposal, AUTHOR_PROPOSAL_SCHEMA_VERSION)
     except PayloadValidationError as exc:
         raise ProposalValidationError(str(exc)) from exc
+    _validate_verified_hash_keys(proposal)
     facts = _mapping(proposal.get("proposed_facts"), "proposed_facts")
     resolution = _mapping(facts.get("source_resolution"), "source_resolution")
     try:
@@ -264,6 +276,68 @@ def validate_author_proposal(
         code_path=code_path,
         supported_claims=evidence_report.supported_claims,
     )
+
+
+def required_verified_hash_keys(
+    proposal: Mapping[str, Any], *, include_proposal: bool = False
+) -> frozenset[str]:
+    """Return the exact verified-hash keys required for a proposal type.
+
+    Parameters
+    ----------
+    proposal:
+        Proposal whose implementation determines whether recursive model code
+        must be bound.
+    include_proposal:
+        Whether to include the checker-only digest of the complete proposal.
+
+    Returns
+    -------
+    frozenset[str]
+        Exact key set for a declarative or typed proposal binding.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the proposal does not expose an unambiguous implementation type.
+    """
+
+    facts = proposal.get("proposed_facts")
+    implementation = facts.get("implementation") if isinstance(facts, Mapping) else None
+    if not isinstance(implementation, Mapping):
+        raise ProposalValidationError("proposal implementation is incomplete")
+    code_path = implementation.get("code_path")
+    if code_path is not None and (not isinstance(code_path, str) or not code_path.strip()):
+        raise ProposalValidationError("implementation.code_path must be null or non-empty")
+    keys = set(VERIFIED_HASH_COMMON_KEYS)
+    if isinstance(code_path, str):
+        keys.add(VERIFIED_HASH_CODE_MANIFEST_KEY)
+    if include_proposal:
+        keys.add(VERIFIED_HASH_PROPOSAL_KEY)
+    return frozenset(keys)
+
+
+def _validate_verified_hash_keys(proposal: Mapping[str, Any]) -> None:
+    """Validate the proposal-side exact verified-hash key binding.
+
+    Parameters
+    ----------
+    proposal:
+        Complete author proposal.
+
+    Raises
+    ------
+    ProposalValidationError
+        If typed code lacks a recursive manifest digest or declarative code
+        carries one.
+    """
+
+    verified_hashes = proposal.get("verified_hashes")
+    required_keys = required_verified_hash_keys(proposal)
+    if not isinstance(verified_hashes, Mapping) or set(verified_hashes) != required_keys:
+        raise ProposalValidationError(
+            "verified_hashes must bind the exact declarative or typed proposal artifact pack"
+        )
 
 
 def _validate_mandatory_source_link(resolution: Mapping[str, Any]) -> None:

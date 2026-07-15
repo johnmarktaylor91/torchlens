@@ -8,14 +8,18 @@ from typing import Any
 
 import pytest
 
-from menagerie.crawler.identity import hash_bytes
+from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.metadata import (
     MANDATORY_EXTERNAL_FIELDS,
     MetadataValidationError,
     TORCHLENS_DERIVABLE_FIELDS,
     validate_external_metadata_for_write,
 )
-from menagerie.crawler.proposal import ProposalValidationError, validate_author_proposal
+from menagerie.crawler.proposal import (
+    ProposalValidationError,
+    model_code_manifest,
+    validate_author_proposal,
+)
 from menagerie.crawler.tests.conftest import make_author_proposal, make_model
 
 NEWLY_GATED_EXTERNAL_FIELDS = (
@@ -259,7 +263,10 @@ def _stage_typed_adapter(proposal: dict[str, Any], tmp_path: Path, code: str, *,
             "library_recipe": None,
         }
     )
+    code_manifest = [dict(row) for row in model_code_manifest(code_path, tmp_path)]
+    implementation["code_manifest"] = code_manifest
     proposal["verified_hashes"]["code"] = hash_bytes(code.encode())
+    proposal["verified_hashes"]["code_manifest"] = stable_hash(code_manifest)
 
 
 def _source_map(source_locator: str = "bytes:0-82") -> list[dict[str, Any]]:
