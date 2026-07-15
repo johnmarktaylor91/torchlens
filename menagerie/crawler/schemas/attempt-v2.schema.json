@@ -661,6 +661,8 @@
         "receipt_sha256",
         "observed_recipe_revision",
         "observed_adapter_sha256",
+        "observed_code_manifest_sha256",
+        "observed_input_asset_sha256",
         "constructor_started",
         "constructor_completed",
         "input_completed",
@@ -693,6 +695,14 @@
         "observed_adapter_sha256": {
           "$ref": "#/$defs/nullable_hash",
           "description": "Worker-observed typed-adapter digest, or null for declarative recipes."
+        },
+        "observed_code_manifest_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Worker-observed digest over the recursive code_manifest bytes, or null when the recipe has no code manifest."
+        },
+        "observed_input_asset_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Worker-observed digest of the materialized standard input asset, or null when no standard asset was selected."
         },
         "constructor_started": {
           "type": "boolean",

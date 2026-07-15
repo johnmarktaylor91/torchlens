@@ -45,7 +45,7 @@ from menagerie.crawler.driver import (
     WorkItem,
 )
 from menagerie.crawler.envs import load_environment_registry
-from menagerie.crawler.identity import canonical_json_bytes
+from menagerie.crawler.identity import canonical_json_bytes, stable_hash
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
 from menagerie.crawler.licenses import (
     LicenseEvidence,
@@ -168,10 +168,15 @@ class TypedFakeForward(FakeForward):
         attempts = [
             dict(value) for value in super().forward(artifact, environment, cold_runs, work_root)
         ]
-        digest = artifact.proposal["proposed_facts"]["implementation"]["code_sha256"]
+        implementation = artifact.proposal["proposed_facts"]["implementation"]
+        digest = implementation["code_sha256"]
+        manifest_digest = stable_hash(implementation["code_manifest"])
         for attempt in attempts:
             attempt["worker_receipt"] = dict(attempt["worker_receipt"])
             attempt["worker_receipt"]["observed_adapter_sha256"] = digest
+            attempt["worker_receipt"]["observed_code_manifest_sha256"] = manifest_digest
+            attempt["worker_receipt"]["observed_input_asset_sha256"] = None
+            attempt["worker_receipt"]["input_asset"] = None
         return attempts
 
 

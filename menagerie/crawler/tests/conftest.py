@@ -20,6 +20,7 @@ from menagerie.crawler.metadata import (
     authored_fact_leaves,
     recompute_accepted_identities,
 )
+from menagerie.crawler.standard_inputs import ASSET_ROOT
 
 HASH = "sha256:" + "a" * 64
 OTHER_HASH = "sha256:" + "b" * 64
@@ -176,6 +177,8 @@ def make_attempt(
             "receipt_sha256": HASH,
             "observed_recipe_revision": HASH,
             "observed_adapter_sha256": None,
+            "observed_code_manifest_sha256": None,
+            "observed_input_asset_sha256": hash_bytes((ASSET_ROOT / "image.ppm").read_bytes()),
             "constructor_started": True,
             "constructor_completed": True,
             "input_completed": True,
@@ -212,7 +215,9 @@ def make_attempt(
                 ],
             },
             "input_kind": "standard-image",
-            "input_asset": "asset:test",
+            "input_asset": (
+                f"standard:image.ppm:{hash_bytes((ASSET_ROOT / 'image.ppm').read_bytes())}"
+            ),
             "input_note": "canonical test image",
             "parameter_count_total": 2,
             "parameter_count_trainable": 2,
@@ -691,7 +696,7 @@ def make_model(
             "parameter_count_total": 2,
             "parameter_count_trainable": 2,
             "output_signature": {
-                "tree": "tensor",
+                "tree": {"leaf": 0},
                 "leaves": [
                     {
                         "path": "output",

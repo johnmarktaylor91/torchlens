@@ -165,6 +165,41 @@ class OneModelAuthorFailure(FakeAuthor):
         return super().author(item, work_root, config)
 
 
+class OneModelModeNormalizationFailure(FakeAuthor):
+    """Return a malformed mode declaration for exactly one model."""
+
+    def __init__(self, failed_id: str) -> None:
+        """Store the model whose post-author normalization must fail."""
+
+        super().__init__()
+        self.failed_id = failed_id
+
+    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+        """Corrupt one mode declaration after producing an otherwise complete artifact."""
+
+        artifact = super().author(item, work_root, config)
+        if item.stable_id == self.failed_id:
+            artifact.proposal["proposed_facts"]["modes"]["meaningful_modes"] = ["invalid"]
+        return artifact
+
+
+class OneModelRepairFailure(FakeAuthor):
+    """Raise only when one model enters its first bounded repair generation."""
+
+    def __init__(self, failed_id: str) -> None:
+        """Store the model whose second author invocation fails."""
+
+        super().__init__()
+        self.failed_id = failed_id
+
+    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+        """Fail the selected model's repair while authoring every other generation."""
+
+        if item.stable_id == self.failed_id and self.calls.get(item.stable_id) == 1:
+            raise RuntimeError("synthetic repair author failure")
+        return super().author(item, work_root, config)
+
+
 class DisabledAuthor(AuthorLane):
     """Fail if a reconstruction-capable path re-enters authoring."""
 
@@ -583,6 +618,32 @@ class MixedTailChecker(FakeChecker):
             item["required_repairs"] = ["repair the final item"]
             item["field_checks"][0]["verdict"] = "inaccurate"
             item["field_checks"][0]["required_repair"] = "repair the final item"
+        return outcome
+
+
+class OneModelInitialInaccurateChecker(FakeChecker):
+    """Reject one selected model only in the initial metadata generation."""
+
+    def __init__(self, failed_id: str) -> None:
+        """Store the model that must enter author repair."""
+
+        super().__init__()
+        self.failed_id = failed_id
+
+    def check_metadata(
+        self, artifacts: Sequence[AuthorArtifact], work_root: Path, config: DriverConfig
+    ) -> CheckerOutcome:
+        """Reject the selected model and accept every other gate item."""
+
+        outcome = super().check_metadata(artifacts, work_root, config)
+        assert outcome.gate is not None
+        for item in outcome.gate["items"]:
+            if item["stable_id"] != self.failed_id:
+                continue
+            item["verdict"] = "inaccurate"
+            item["required_repairs"] = ["repair selected model"]
+            item["field_checks"][0]["verdict"] = "inaccurate"
+            item["field_checks"][0]["required_repair"] = "repair selected model"
         return outcome
 
 
@@ -1202,7 +1263,10 @@ def test_parent_refuses_observed_adapter_digest_mismatch() -> None:
         "recipe_revision": proposal["recipe_revision"],
         "observed_recipe_revision": proposal["recipe_revision"],
         "observed_adapter_sha256": "sha256:" + "c" * 64,
+        "observed_code_manifest_sha256": None,
+        "observed_input_asset_sha256": None,
         "execution_identity": HASH,
+        "mode": None,
         "constructor_started": True,
         "constructor_completed": True,
         "input_completed": True,
@@ -1238,6 +1302,109 @@ def test_parent_refuses_observed_adapter_digest_mismatch() -> None:
         _receipt_envelope_error(SupervisedResult(observation, receipt, None), proposal, HASH)
         == "invalid-receipt:identity-or-error"
     )
+
+
+def test_parent_accepts_one_requested_mode_from_dual_mode_receipt() -> None:
+    """A fresh mode subprocess retains full metadata but completes only its request."""
+
+    proposal = make_author_proposal("m_dual_mode_receipt")
+    proposal["proposed_facts"]["modes"]["meaningful_modes"] = ["train", "eval"]
+    attempt = make_attempt("m_dual_mode_receipt", mode="train")
+    mode_receipt = {**attempt["worker_receipt"], "error": None}
+    receipt = {
+        "receipt_version": "menagerie.crawler.worker-receipt.v1",
+        "stable_id": proposal["stable_id"],
+        "source_identity": proposal["source_identity"],
+        "recipe_revision": proposal["recipe_revision"],
+        "observed_recipe_revision": proposal["recipe_revision"],
+        "observed_adapter_sha256": None,
+        "observed_code_manifest_sha256": None,
+        "observed_input_asset_sha256": driver_module._expected_input_asset_sha256(proposal),
+        "execution_identity": HASH,
+        "mode": "train",
+        "constructor_started": True,
+        "constructor_completed": True,
+        "input_completed": True,
+        "declared_meaningful_modes": ["train", "eval"],
+        "detected_meaningful_modes": ["train", "eval"],
+        "meaningful_modes": ["train", "eval"],
+        "per_mode": {"train": mode_receipt},
+        "policy_observation": attempt["policy_observation"],
+        "error": None,
+        "receipt_sha256": HASH,
+    }
+    observation = SupervisorObservation(
+        argv=("python", "worker.py"),
+        cwd="/scratch",
+        exit_code=0,
+        signal_number=None,
+        wall_seconds=0.1,
+        cpu_seconds=0.1,
+        peak_rss_bytes=1,
+        timed_out=False,
+        rss_exceeded=False,
+        stdout_sha256=HASH,
+        stdout_bytes=0,
+        stdout_tail="",
+        stderr_sha256=HASH,
+        stderr_bytes=0,
+        stderr_tail="",
+        stdout_path="/logs/stdout",
+        stderr_path="/logs/stderr",
+    )
+
+    train_result = SupervisedResult(observation, receipt, None)
+    assert (
+        _receipt_envelope_error(
+            train_result,
+            proposal,
+            HASH,
+            requested_mode="train",
+        )
+        is None
+    )
+    eval_attempt = make_attempt("m_dual_mode_receipt", mode="eval")
+    eval_receipt = {
+        **receipt,
+        "mode": "eval",
+        "per_mode": {"eval": {**eval_attempt["worker_receipt"], "error": None}},
+    }
+    environment = _test_environment(Path("/tmp/dual-mode-env"))
+    artifact = AuthorArtifact(proposal, {"sources": []}, Path("/tmp/dual-mode-model"))
+    attempts = (
+        *driver_module._attempts_from_supervised(
+            artifact,
+            train_result,
+            environment,
+            HASH,
+            0,
+            10.0,
+            1024,
+            requested_mode="train",
+        ),
+        *driver_module._attempts_from_supervised(
+            artifact,
+            SupervisedResult(observation, eval_receipt, None),
+            environment,
+            HASH,
+            0,
+            10.0,
+            1024,
+            requested_mode="eval",
+        ),
+    )
+    assert driver_module._attempt_policy_satisfied(attempts, proposal, 1)
+
+
+def test_attempt_policy_rejects_observed_asset_digest_mismatch() -> None:
+    """A clean success label cannot hide stale standard-input asset bytes."""
+
+    proposal = make_author_proposal("m_asset_mismatch")
+    attempt = make_attempt("m_asset_mismatch", mode="eval")
+    attempt["worker_receipt"]["observed_recipe_revision"] = proposal["recipe_revision"]
+    attempt["worker_receipt"]["observed_input_asset_sha256"] = "sha256:" + "f" * 64
+
+    assert not driver_module._attempt_policy_satisfied([attempt], proposal, 1)
 
 
 def _driver(
@@ -1374,6 +1541,41 @@ def test_checker_prompt_bytes_stale_gate_and_execution_identity(
         is None
     )
     assert _execution_identity(artifact.proposal, environment) != first_execution
+
+
+def test_award_closure_change_stales_execution_and_current_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Changed parent/reducer award semantics force revalidation, not resume skip."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    author = FakeAuthor()
+    driver = _driver(tmp_path, snapshot, author=author)
+    item = driver._ordered_work(snapshot, {})[0]
+    artifact = author.author(item, driver.paths.work_root, driver.config)
+    environment = _test_environment(tmp_path / "env")
+    gate_outcome = FakeChecker().check_metadata([artifact], driver.paths.work_root, driver.config)
+    assert gate_outcome.gate is not None
+    attempts = FakeForward().forward(artifact, environment, 1, driver.paths.work_root)
+    model = driver_module._assemble_run_model(
+        item,
+        artifact,
+        attempts,
+        [gate_outcome.gate],
+        driver.config,
+    )
+    assert driver_module._current_run_is_fresh(model, artifact, environment, [gate_outcome.gate])
+    first_execution = _execution_identity(artifact.proposal, environment)
+    monkeypatch.setattr(
+        driver_module,
+        "_award_closure_identity",
+        lambda: "sha256:" + "f" * 64,
+    )
+
+    assert _execution_identity(artifact.proposal, environment) != first_execution
+    assert not driver_module._current_run_is_fresh(
+        model, artifact, environment, [gate_outcome.gate]
+    )
 
 
 def test_checker_prompt_change_invalidates_author_cache_and_reauthors(
@@ -1643,6 +1845,52 @@ def test_author_failure_terminalizes_one_model_and_later_models_continue(tmp_pat
     }
     assert models[failed_id]["status"]["code"] == "failed:runner"
     assert sum(record["status"]["code"] == "runs" for record in models.values()) == 19
+
+
+def test_mode_normalization_failure_terminalizes_and_continues(tmp_path: Path) -> None:
+    """Malformed post-author modes fail one model without aborting the phase tail."""
+
+    snapshot = _snapshot(tmp_path, count=10)
+    failed_id = snapshot.items[0].stable_id
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=OneModelModeNormalizationFailure(failed_id),
+    ).run()
+
+    assert result.status == "complete"
+    models = {
+        record["stable_id"]: record
+        for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    }
+    assert models[failed_id]["status"]["code"] == "failed:runner"
+    assert models[failed_id]["status"]["reason_code"] == "protocol-violation"
+    assert sum(record["status"]["code"] == "runs" for record in models.values()) == 9
+
+
+def test_repair_author_failure_terminalizes_and_continues(tmp_path: Path) -> None:
+    """One failed repair generation drains the model and leaves later models runnable."""
+
+    snapshot = _snapshot(tmp_path, count=10)
+    failed_id = snapshot.items[0].stable_id
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=OneModelRepairFailure(failed_id),
+        checker=OneModelInitialInaccurateChecker(failed_id),
+    ).run()
+
+    assert result.status == "complete"
+    models = {
+        record["stable_id"]: record
+        for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    }
+    assert models[failed_id]["status"]["code"] == "failed:runner"
+    assert models[failed_id]["status"]["reason_code"] == "internal-error"
+    assert any(
+        stable_id != failed_id and record["status"]["code"] == "runs"
+        for stable_id, record in models.items()
+    )
 
 
 def test_checker_contract_failure_terminalizes_batch(tmp_path: Path) -> None:
@@ -1937,14 +2185,16 @@ def test_inaccurate_metadata_gate_repairs_are_bounded(tmp_path: Path) -> None:
 
 
 def test_fidelity_rejection_terminalizes_without_aborting(tmp_path: Path) -> None:
-    """A material fidelity rejection becomes failed:fidelity for every model."""
+    """Fidelity rejection repairs once before repeated-root terminalization."""
 
     snapshot = _snapshot(tmp_path)
+    author = FidelityAuthor()
+    checker = RejectingFidelityChecker()
     result = _driver(
         tmp_path,
         snapshot,
-        author=FidelityAuthor(),
-        checker=RejectingFidelityChecker(),
+        author=author,
+        checker=checker,
     ).run()
     # Fidelity rejection requests human review, which remains active campaign work.
     assert result.status == "terminal-partition-complete"
@@ -1952,6 +2202,14 @@ def test_fidelity_rejection_terminalizes_without_aborting(tmp_path: Path) -> Non
     assert {record["status"]["code"] for record in models} == {"failed:fidelity"}
     assert {record["status"]["reason_code"] for record in models} == {"major-drift-cap-exhausted"}
     assert all(record["status"]["human_review"]["required"] for record in models)
+    assert checker.fidelity_calls == 2 * len(snapshot.items)
+    assert all(author.calls[item.stable_id] == 2 for item in snapshot.items)
+    fidelity_gates = [
+        gate
+        for gate in scan_jsonl(_paths(tmp_path, snapshot).ledgers.gates)
+        if gate["gate_kind"] == "fidelity"
+    ]
+    assert len(fidelity_gates) == 2 * len(snapshot.items)
 
 
 @pytest.mark.parametrize(

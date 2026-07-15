@@ -11,7 +11,7 @@ from types import ModuleType
 import pytest
 
 from menagerie.crawler.constants import RunMode
-from menagerie.crawler.identity import compute_recipe_revision, hash_bytes
+from menagerie.crawler.identity import compute_recipe_revision, hash_bytes, stable_hash
 from menagerie.crawler.proposal import ProposalValidationError, validate_author_proposal
 from menagerie.crawler.recipe import RecipeError, load_declarative_recipe
 from menagerie.crawler.standard_inputs import InputSpec
@@ -157,6 +157,50 @@ def test_worker_refuses_changed_adapter_and_reports_matching_observation(tmp_pat
     assert receipt["recipe_revision"] == matching_revision
     assert receipt["observed_recipe_revision"] == matching_revision
     assert receipt["observed_adapter_sha256"] == hash_bytes(matching_adapter.read_bytes())
+
+
+def test_worker_refuses_changed_recursive_helper_before_import(tmp_path: Path) -> None:
+    """Every request-bound helper byte is rehashed before adapter import executes."""
+
+    helper = tmp_path / "helper.py"
+    helper.write_text("INCREMENT = 1\n", encoding="utf-8")
+    adapter = tmp_path / "adapter.py"
+    adapter.write_text(
+        _tiny_adapter()
+        .replace(
+            "import torch\n",
+            "import torch\nfrom helper import INCREMENT\n",
+        )
+        .replace("return value + 1", "return value + INCREMENT"),
+        encoding="utf-8",
+    )
+    members = [
+        {"path": "adapter.py", "sha256": hash_bytes(adapter.read_bytes())},
+        {"path": "helper.py", "sha256": hash_bytes(helper.read_bytes())},
+    ]
+    request = _worker_request(adapter, tmp_path, _adapter_revision(adapter))
+    assert isinstance(request.recipe, dict)
+    request.recipe.update(
+        {
+            "code_manifest": [
+                {
+                    "path": str(tmp_path / member["path"]),
+                    "identity_path": member["path"],
+                    "sha256": member["sha256"],
+                }
+                for member in members
+            ],
+            "code_manifest_sha256": stable_hash(members),
+        }
+    )
+    helper.write_text("INCREMENT = 2\n", encoding="utf-8")
+
+    receipt = run_worker(request)
+
+    assert receipt["constructor_started"] is False
+    assert receipt["observed_code_manifest_sha256"] != stable_hash(members)
+    assert receipt["error"]["exception_type"] == "menagerie.crawler.recipe.RecipeError"
+    assert "helper.py" in receipt["error"]["message"]
 
 
 @pytest.mark.parametrize("suffix", [".bin", ".npz", ".pkl"])

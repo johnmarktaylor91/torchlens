@@ -19,7 +19,12 @@ import numpy as np
 
 from menagerie.crawler.constants import RunMode
 from menagerie.crawler.frameworks import NativeForwardAdapter
-from menagerie.crawler.identity import canonical_json_bytes, compute_recipe_revision, stable_hash
+from menagerie.crawler.identity import (
+    canonical_json_bytes,
+    compute_recipe_revision,
+    hash_bytes,
+    stable_hash,
+)
 from menagerie.crawler.modes import (
     classify_train_eval_divergence,
     detect_meaningful_modes,
@@ -69,6 +74,7 @@ class WorkerRequest:
     scratch_root: Path
     receipt_path: Path
     input_contract: Optional[Mapping[str, Any]] = None
+    input_manifest: Optional[Mapping[str, Any]] = None
     seed: int = 0
     input_seed: int = 0
     device: str = "cpu"
@@ -104,10 +110,13 @@ class WorkerRequest:
             raise ValueError("worker recipe must be an object")
         input_value = value.get("input_spec")
         input_contract_value = value.get("input_contract")
+        input_manifest_value = value.get("input_manifest")
         if input_value is not None and not isinstance(input_value, Mapping):
             raise ValueError("worker input_spec must be an object or null")
         if input_contract_value is not None and not isinstance(input_contract_value, Mapping):
             raise ValueError("worker input_contract must be an object or null")
+        if input_manifest_value is not None and not isinstance(input_manifest_value, Mapping):
+            raise ValueError("worker input_manifest must be an object or null")
         if input_value is None and input_contract_value is None:
             raise ValueError("worker requires input_contract or legacy input_spec")
         modality_value = value.get("modality")
@@ -142,6 +151,9 @@ class WorkerRequest:
             input_contract=(
                 dict(input_contract_value) if isinstance(input_contract_value, Mapping) else None
             ),
+            input_manifest=(
+                dict(input_manifest_value) if isinstance(input_manifest_value, Mapping) else None
+            ),
             scratch_root=Path(str(value["scratch_root"])),
             receipt_path=receipt_value,
             seed=int(value.get("seed", 0)),
@@ -159,6 +171,79 @@ class WorkerRequest:
                 else None
             ),
         )
+
+
+def _observe_request_bytes(
+    request: WorkerRequest,
+) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Verify request-bound helper and standard-asset bytes before execution.
+
+    Parameters
+    ----------
+    request:
+        Complete worker request with parent-bound byte manifests.
+
+    Returns
+    -------
+    tuple[str | None, str | None, str | None]
+        Observed code-manifest and selected-input-asset digests plus an optional
+        fail-closed mismatch message.
+    """
+
+    manifest_value = request.recipe.get("code_manifest")
+    expected_manifest = request.recipe.get("code_manifest_sha256")
+    observed_manifest: Optional[str] = None
+    errors: list[str] = []
+    if manifest_value is not None or expected_manifest is not None:
+        if not isinstance(manifest_value, list) or not manifest_value:
+            raise RecipeError("typed-adapter worker request has no complete code manifest")
+        if not isinstance(expected_manifest, str):
+            raise RecipeError("typed-adapter worker request has no code-manifest digest")
+        observed_members: list[dict[str, str]] = []
+        for member in manifest_value:
+            if not isinstance(member, Mapping):
+                raise RecipeError("typed-adapter code-manifest member must be an object")
+            path_value = member.get("path")
+            identity_path = member.get("identity_path")
+            expected_digest = member.get("sha256")
+            if not all(
+                isinstance(value, str) and value
+                for value in (path_value, identity_path, expected_digest)
+            ):
+                raise RecipeError("typed-adapter code-manifest member is incomplete")
+            member_path = Path(str(path_value))
+            try:
+                digest = hash_bytes(member_path.read_bytes())
+            except OSError as exc:
+                errors.append(f"typed-adapter code-manifest member is unreadable: {exc}")
+                continue
+            if digest != expected_digest:
+                errors.append(f"typed-adapter code-manifest member changed: {identity_path}")
+            observed_members.append({"path": str(identity_path), "sha256": digest})
+        observed_manifest = stable_hash(observed_members)
+        if observed_manifest != expected_manifest:
+            errors.append("typed-adapter code-manifest aggregate digest changed")
+
+    selected_asset = (
+        request.input_manifest.get("selected_asset")
+        if isinstance(request.input_manifest, Mapping)
+        else None
+    )
+    observed_asset: Optional[str] = None
+    if selected_asset is not None:
+        if not isinstance(selected_asset, Mapping):
+            raise RecipeError("worker selected-asset manifest must be an object")
+        path_value = selected_asset.get("path")
+        expected_digest = selected_asset.get("sha256")
+        if not isinstance(path_value, str) or not isinstance(expected_digest, str):
+            raise RecipeError("worker selected-asset manifest is incomplete")
+        try:
+            observed_asset = hash_bytes(Path(path_value).read_bytes())
+        except OSError as exc:
+            errors.append(f"worker selected input asset is unreadable: {exc}")
+        if observed_asset is not None and observed_asset != expected_digest:
+            errors.append("worker selected input asset digest changed")
+    return observed_manifest, observed_asset, "; ".join(errors) or None
 
 
 def _seed_frameworks(seed: int, framework: str) -> None:
@@ -703,6 +788,13 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
     allowed_read_paths = [ASSET_ROOT]
     if isinstance(recipe_path, str) and recipe_path:
         allowed_read_paths.append(Path(recipe_path))
+    manifest_value = effective_recipe.get("code_manifest")
+    if isinstance(manifest_value, list):
+        allowed_read_paths.extend(
+            Path(str(member["path"]))
+            for member in manifest_value
+            if isinstance(member, Mapping) and isinstance(member.get("path"), str)
+        )
     policy = ExecutionPolicy(
         request.scratch_root,
         request.receipt_path.parent,
@@ -715,6 +807,8 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
         "recipe_revision": request.recipe_revision,
         "observed_recipe_revision": None,
         "observed_adapter_sha256": None,
+        "observed_code_manifest_sha256": None,
+        "observed_input_asset_sha256": None,
         "execution_identity": request.execution_identity,
         "seed": request.seed,
         "input_seed": request.input_seed,
@@ -735,6 +829,11 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
     }
     with policy:
         try:
+            observed_manifest, observed_asset, byte_error = _observe_request_bytes(request)
+            base["observed_code_manifest_sha256"] = observed_manifest
+            base["observed_input_asset_sha256"] = observed_asset
+            if byte_error is not None:
+                raise RecipeError(byte_error)
             _seed_frameworks(request.seed, request.framework)
             recipe_kind = effective_recipe.get("kind") or effective_recipe.get("recipe_type")
             if recipe_kind == "typed-adapter" and not isinstance(
@@ -778,6 +877,18 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
             args, kwargs, input_kind, input_asset, input_note = _materialize_dummy_call(
                 loaded, request
             )
+            selected_asset = (
+                request.input_manifest.get("selected_asset")
+                if isinstance(request.input_manifest, Mapping)
+                else None
+            )
+            expected_asset_id = (
+                selected_asset.get("asset_id") if isinstance(selected_asset, Mapping) else None
+            )
+            if input_asset != expected_asset_id:
+                raise RecipeError(
+                    "materialized input asset does not match the request-bound selected asset"
+                )
             base["input_completed"] = True
             declared = request.meaningful_modes or ()
             detected = detect_meaningful_modes(model)

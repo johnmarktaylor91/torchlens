@@ -15,7 +15,7 @@ from menagerie.crawler.constants import (
     TERMINAL_STATUS_CODES,
 )
 from menagerie.crawler.family_templates import FamilyTemplateError, validate_size_variant
-from menagerie.crawler.identity import hash_bytes
+from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.metadata import (
     MetadataValidationError,
     input_signature_matches_contract,
@@ -25,6 +25,7 @@ from menagerie.crawler.metadata import (
 from menagerie.crawler.models import AppendResult, JsonObject, LedgerPaths
 from menagerie.crawler.recordio import JsonlLedger, LedgerConflictError
 from menagerie.crawler.state import _select_current
+from menagerie.crawler.standard_inputs import ASSET_ROOT
 
 
 class ReductionError(ValueError):
@@ -47,6 +48,134 @@ _FACT_ROOTS = (
     "modes",
     "fidelity",
 )
+
+_MODALITY_STANDARD_ASSETS = {
+    "audio": "audio.csv",
+    "computer-vision": "image.ppm",
+    "image": "image.ppm",
+    "language": "text.txt",
+    "nlp": "text.txt",
+    "recsys": "tabular.csv",
+    "speech": "audio.csv",
+    "tabular": "tabular.csv",
+    "text": "text.txt",
+    "video": "image.ppm",
+    "vision": "image.ppm",
+}
+
+
+def expected_standard_asset(modality: object) -> Optional[dict[str, str]]:
+    """Return the exact standard asset selected by input materialization.
+
+    Parameters
+    ----------
+    modality:
+        Accepted modality string or sequence.
+
+    Returns
+    -------
+    dict[str, str] | None
+        Asset path, byte digest, and content-addressed identifier, or ``None``
+        when input materialization must use deterministic random fallback.
+    """
+
+    values = (modality,) if isinstance(modality, str) else modality
+    if not isinstance(values, (list, tuple)):
+        return None
+    normalized = tuple(str(value).strip().lower() for value in values)
+    selected_name: Optional[str] = None
+    for candidates in (
+        {"vision", "image", "computer-vision"},
+        {"language", "text", "nlp"},
+        {"audio", "speech"},
+        {"video"},
+        {"tabular", "recsys"},
+    ):
+        selected = next((value for value in normalized if value in candidates), None)
+        if selected is not None:
+            selected_name = _MODALITY_STANDARD_ASSETS[selected]
+            break
+    if selected_name is None:
+        return None
+    path = ASSET_ROOT / selected_name
+    digest = hash_bytes(path.read_bytes())
+    return {
+        "path": str(path.resolve()),
+        "sha256": digest,
+        "asset_id": f"standard:{selected_name}:{digest}",
+    }
+
+
+def output_signature_error(signature: object) -> Optional[str]:
+    """Return why an output signature is not a complete pytree contract.
+
+    Parameters
+    ----------
+    signature:
+        Candidate ``output_signature`` mapping.
+
+    Returns
+    -------
+    str | None
+        Stable validation error, or ``None`` for a complete signature.
+    """
+
+    if not isinstance(signature, Mapping):
+        return "signature is not an object"
+    tree = signature.get("tree")
+    leaves = signature.get("leaves")
+    if tree is None or not isinstance(leaves, list) or not leaves:
+        return "signature tree and leaves must be non-empty"
+    referenced: list[int] = []
+
+    def visit(node: object) -> bool:
+        """Validate one tree node and collect its leaf indices."""
+
+        if not isinstance(node, Mapping) or not node:
+            return False
+        if set(node) == {"leaf"} and isinstance(node.get("leaf"), int):
+            index = node.get("leaf")
+            if isinstance(index, bool):
+                return False
+            assert isinstance(index, int)
+            referenced.append(index)
+            return 0 <= index < len(leaves)
+        if set(node) in ({"tuple"}, {"list"}) and isinstance(next(iter(node.values())), list):
+            children = next(iter(node.values()))
+            assert isinstance(children, list)
+            return all(visit(child) for child in children)
+        return all(isinstance(key, str) and visit(child) for key, child in node.items())
+
+    if not visit(tree) or sorted(referenced) != list(range(len(leaves))):
+        return "signature tree does not reference each leaf exactly once"
+    for leaf in leaves:
+        if not isinstance(leaf, Mapping):
+            return "signature leaf is not an object"
+        path = leaf.get("path")
+        kind = leaf.get("kind")
+        python_type = leaf.get("python_type")
+        if (
+            not isinstance(path, str)
+            or not path
+            or kind not in {"tensor", "python"}
+            or not isinstance(python_type, str)
+            or not python_type
+        ):
+            return "signature leaf lacks path, kind, or python type"
+        if kind == "tensor":
+            shape = leaf.get("shape")
+            dtype = leaf.get("dtype")
+            if (
+                not isinstance(shape, list)
+                or any(
+                    not isinstance(dimension, int) or isinstance(dimension, bool) or dimension < 0
+                    for dimension in shape
+                )
+                or not isinstance(dtype, str)
+                or not dtype
+            ):
+                return "tensor signature leaf lacks a concrete shape or dtype"
+    return None
 
 
 def _model_facts(model: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -526,7 +655,9 @@ class CanonicalReducer:
             if gate["gate_kind"] != "fidelity":
                 raise ReductionError("fidelity must reference a per-model fidelity gate")
             rung_check = item.get("rung_check")
-            rejected_terminal = model.get("status", {}).get("code") == "failed:fidelity"
+            rejected_terminal = model.get("status", {}).get(
+                "code"
+            ) == "failed:fidelity" or self._is_fidelity_repair_failure(model)
             allowed_verdicts = (
                 {"major-drift", "slop", "cannot-verify"}
                 if rejected_terminal
@@ -550,6 +681,40 @@ class CanonicalReducer:
                 raise ReductionError(
                     "required fidelity gate is stale, unacceptable, or has a blocked rung check"
                 )
+
+    def _is_fidelity_repair_failure(self, model: Mapping[str, Any]) -> bool:
+        """Return whether a runner terminal is an evidenced fidelity-repair failure.
+
+        Parameters
+        ----------
+        model:
+            Proposed terminal revision.
+
+        Returns
+        -------
+        bool
+            True only when a driver-owned runner attempt failed after a current
+            rejected fidelity gate.
+        """
+
+        if model.get("status", {}).get("code") != "failed:runner":
+            return False
+        fidelity = model.get("fidelity", {})
+        if not fidelity.get("current") or fidelity.get("verdict") not in {
+            "major-drift",
+            "slop",
+            "cannot-verify",
+        }:
+            return False
+        attempts_by_id = {record["attempt_id"]: record for record in self._attempts.records}
+        return any(
+            (attempt := attempts_by_id.get(str(attempt_id))) is not None
+            and attempt.get("actor") == "driver"
+            and attempt.get("stage") == "runner"
+            and attempt.get("result") == "failed"
+            and attempt.get("environment") is None
+            for attempt_id in model.get("status", {}).get("attempt_ids", [])
+        )
 
     def _is_pre_fidelity_terminal(self, model: Mapping[str, Any]) -> bool:
         """Return whether a terminal record stopped before fidelity or execution.
@@ -660,6 +825,22 @@ class CanonicalReducer:
         accepted_work_ids: set[str] = set()
         implementation = model.get("implementation", {})
         evidence = model.get("evidence", {})
+        code_manifest = implementation.get("code_manifest")
+        expected_manifest_digest = (
+            stable_hash(code_manifest)
+            if isinstance(code_manifest, list) and code_manifest
+            else None
+        )
+        external_metadata = model.get("external_metadata", {})
+        modality = (
+            external_metadata.get("modality") if isinstance(external_metadata, Mapping) else None
+        )
+        expected_asset = (
+            expected_standard_asset(modality)
+            if implementation.get("recipe_type") == "declarative-library"
+            else None
+        )
+        expected_asset_digest = expected_asset["sha256"] if expected_asset is not None else None
         try:
             accepted_identities = recompute_accepted_identities(
                 _model_facts(model),
@@ -687,6 +868,10 @@ class CanonicalReducer:
                 or identities.get("checker_prompt") != _checker_prompt_hash()
                 or receipt.get("observed_recipe_revision") != accepted_identities.recipe
                 or receipt.get("observed_adapter_sha256") != implementation.get("code_sha256")
+                or receipt.get("observed_code_manifest_sha256") != expected_manifest_digest
+                or receipt.get("observed_input_asset_sha256") != expected_asset_digest
+                or receipt.get("input_asset")
+                != (expected_asset["asset_id"] if expected_asset is not None else None)
             ):
                 raise ReductionError("accepted attempt identities are stale for the current model")
             mode = str(attempt.get("mode"))
@@ -705,9 +890,7 @@ class CanonicalReducer:
                 or not input_signature_matches_contract(
                     receipt.get("input_signature"), input_contract
                 )
-                or not isinstance(signature, Mapping)
-                or "tree" not in signature
-                or not isinstance(signature.get("leaves"), list)
+                or output_signature_error(signature) is not None
             ):
                 raise ReductionError("accepted attempt lacks a complete zero-exit receipt")
             counts[mode] += 1

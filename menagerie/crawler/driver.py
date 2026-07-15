@@ -7,6 +7,7 @@ deterministic fakes and never need those external systems.
 
 from __future__ import annotations
 
+import ast
 import fcntl
 import json
 import logging
@@ -21,6 +22,7 @@ from collections import Counter, defaultdict
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Protocol, Sequence
 
@@ -94,7 +96,12 @@ from menagerie.crawler.models import JsonObject, LedgerPaths
 from menagerie.crawler.mirrors import ArtifactManifest, ArtifactOrigin, MirrorStore
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.recordio import JsonlLedger, SingleWriterError, scan_jsonl
-from menagerie.crawler.reducer import CanonicalReducer, default_ledger_paths
+from menagerie.crawler.reducer import (
+    CanonicalReducer,
+    default_ledger_paths,
+    expected_standard_asset,
+    output_signature_error,
+)
 from menagerie.crawler.routing import (
     IntentRoute,
     ModelRequirements,
@@ -148,6 +155,46 @@ _MODALITY_EXECUTION_ASSETS = {
 }
 # Backward-compatible inspection alias for the common (modality-independent) closure.
 _RUNNER_EXECUTION_CLOSURE = _RUNNER_COMMON_EXECUTION_CLOSURE
+_AWARD_CLOSURE_SYMBOLS = {
+    "driver.py": (
+        "CrawlerDriver._forward_and_reduce",
+        "_source_symbol_bytes",
+        "_award_closure_from_bytes",
+        "_award_closure_identity",
+        "_execution_identity",
+        "_current_run_is_fresh",
+        "_expected_adapter_sha256",
+        "_expected_code_manifest_sha256",
+        "_expected_input_asset_sha256",
+        "_expected_input_asset_id",
+        "_attempts_from_supervised",
+        "_receipt_envelope_error",
+        "_find_gate",
+        "_gate_item_matches_proposal",
+        "_fidelity_required",
+        "_attempt_policy_satisfied",
+        "_assemble_run_model",
+    ),
+    "reducer.py": (
+        "expected_standard_asset",
+        "output_signature_error",
+        "_model_facts",
+        "_checker_prompt_hash",
+        "CanonicalReducer.append_model",
+        "CanonicalReducer._validate_status",
+        "CanonicalReducer._validate_source",
+        "CanonicalReducer._validate_gates",
+        "CanonicalReducer._is_fidelity_repair_failure",
+        "CanonicalReducer._validate_family_template",
+        "CanonicalReducer._validate_deferral",
+        "CanonicalReducer._validate_execution",
+    ),
+}
+_AWARD_CLOSURE_SCHEMAS = (
+    "schemas/attempt-v2.schema.json",
+    "schemas/gate-v2.schema.json",
+    "schemas/model-v2.schema.json",
+)
 _FORBIDDEN_CACHE_ROOT_NAMES = frozenset(
     {
         ".cache",
@@ -1346,31 +1393,33 @@ class CrawlerDriver:
                 continue
             cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
             if cache.is_file():
-                value = _read_json(cache)
-                cached_artifact = _normalize_artifact_modes(
-                    AuthorArtifact(
-                        proposal=dict(value["proposal"]),
-                        source_manifest=dict(value["source_manifest"]),
-                        model_dir=Path(str(value["model_dir"])),
-                        terminal_status=value.get("terminal_status"),
-                        terminal_reason_code=value.get("terminal_reason_code"),
-                        terminal_detail=value.get("terminal_detail"),
-                        defer_evidence=(
-                            dict(value["defer_evidence"])
-                            if isinstance(value.get("defer_evidence"), Mapping)
-                            else None
-                        ),
-                        campaign_root_work_id=str(
-                            value.get("campaign_root_work_id") or value["proposal"]["work_id"]
-                        ),
-                        canonical_code_root=(
-                            Path(str(value["canonical_code_root"]))
-                            if value.get("canonical_code_root")
-                            else None
-                        ),
-                    ),
-                    self.config,
-                )
+                try:
+                    value = _read_json(cache)
+                    cached_artifact = _artifact_from_cache(value, self.config)
+                except Exception as exc:  # noqa: BLE001 -- malformed cache is model-local
+                    attempt = _driver_failure_attempt(
+                        item,
+                        None,
+                        "runner",
+                        "protocol-violation",
+                        exc,
+                        self.config,
+                        environment=None,
+                        created_at=self.dependencies.clock(),
+                    )
+                    persisted = reducer.append_attempt(attempt).record
+                    self._terminalize(
+                        item,
+                        None,
+                        "failed:runner",
+                        "protocol-violation",
+                        str(exc),
+                        (persisted,),
+                        reducer,
+                        operational,
+                        state,
+                    )
+                    continue
                 cache_current = value.get("artifact_identity") == _artifact_cache_identity(
                     item, cached_artifact, self.config
                 )
@@ -1428,18 +1477,24 @@ class CrawlerDriver:
                     state,
                 )
                 continue
-            artifact = _bind_requeue_artifact(item, artifact)
-            artifact = _normalize_artifact_modes(artifact, self.config)
-            if artifact.proposal.get("stable_id") != item.stable_id:
-                integration_error = DriverIntegrationError(
-                    "author proposal stable_id does not match intake"
+            try:
+                artifact = _bind_requeue_artifact(item, artifact)
+                artifact = _normalize_artifact_modes(artifact, self.config)
+                if artifact.proposal.get("stable_id") != item.stable_id:
+                    raise DriverIntegrationError("author proposal stable_id does not match intake")
+                artifact = replace(
+                    artifact,
+                    campaign_root_work_id=(
+                        artifact.campaign_root_work_id or str(artifact.proposal["work_id"])
+                    ),
                 )
+            except Exception as exc:  # noqa: BLE001 -- post-author validation is model-local
                 attempt = _driver_failure_attempt(
                     item,
                     artifact,
                     "runner",
                     "protocol-violation",
-                    integration_error,
+                    exc,
                     self.config,
                     environment=None,
                     created_at=self.dependencies.clock(),
@@ -1450,19 +1505,13 @@ class CrawlerDriver:
                     artifact,
                     "failed:runner",
                     "protocol-violation",
-                    str(integration_error),
+                    str(exc),
                     (persisted,),
                     reducer,
                     operational,
                     state,
                 )
                 continue
-            artifact = replace(
-                artifact,
-                campaign_root_work_id=(
-                    artifact.campaign_root_work_id or str(artifact.proposal["work_id"])
-                ),
-            )
             try:
                 _validate_artifact_identities(artifact, self.config)
             except DriverIntegrationError as exc:
@@ -1594,9 +1643,46 @@ class CrawlerDriver:
                     persisted, stable_id, artifacts[stable_id].proposal
                 ):
                     continue
-                artifacts[stable_id] = self._repair_author(
-                    items_by_id[stable_id], artifacts[stable_id], persisted, count
-                )
+                try:
+                    artifacts[stable_id] = self._repair_author(
+                        items_by_id[stable_id],
+                        artifacts[stable_id],
+                        persisted,
+                        count,
+                        gate_kind="metadata_batch",
+                    )
+                except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
+                    reason = (
+                        "protocol-violation"
+                        if isinstance(exc, DriverIntegrationError)
+                        else "internal-error"
+                    )
+                    attempt = _driver_failure_attempt(
+                        items_by_id[stable_id],
+                        artifacts[stable_id],
+                        "runner",
+                        reason,
+                        exc,
+                        self.config,
+                        environment=None,
+                        created_at=self.dependencies.clock(),
+                    )
+                    persisted_attempt = reducer.append_attempt(attempt).record
+                    self._terminalize(
+                        items_by_id[stable_id],
+                        artifacts[stable_id],
+                        "failed:runner",
+                        reason,
+                        str(exc),
+                        (persisted_attempt,),
+                        reducer,
+                        operational,
+                        state,
+                    )
+                    pending_ids.discard(stable_id)
+
+            if not pending_ids:
+                break
 
             pending_artifacts = [artifacts[stable_id] for stable_id in sorted(pending_ids)]
             requeued: set[str] = set()
@@ -1730,62 +1816,209 @@ class CrawlerDriver:
             artifact = artifacts[item.stable_id]
             if not _fidelity_required(artifact.proposal):
                 continue
-            if _find_gate(persisted, item.stable_id, "fidelity", artifact.proposal) is not None:
-                continue
-            try:
-                outcome = self.dependencies.checker.check_fidelity(
-                    artifact, self.paths.work_root, self.config
+            while True:
+                current_history = _fidelity_gate_history(
+                    persisted,
+                    item.stable_id,
+                    proposal=artifact.proposal,
                 )
-            except Exception as exc:  # noqa: BLE001 -- checker failure belongs to this model
-                attempt = _driver_failure_attempt(
-                    item,
-                    artifact,
-                    "fidelity",
-                    "identity-mismatch",
-                    exc,
-                    self.config,
-                    environment=None,
-                    created_at=self.dependencies.clock(),
+                if current_history and _fidelity_item_accepted(current_history[-1][1]):
+                    artifacts[item.stable_id] = self._promote_artifact(item, artifact)
+                    break
+                terminal_gate = _terminal_fidelity_gate(
+                    persisted,
+                    item.stable_id,
+                    _artifact_lineage(artifact),
+                    max_repairs=2,
                 )
-                persisted_attempt = reducer.append_attempt(attempt).record
-                self._terminalize(
-                    item,
-                    artifact,
-                    "failed:fidelity",
-                    "identity-mismatch",
-                    str(exc),
-                    (persisted_attempt,),
-                    reducer,
-                    operational,
-                    state,
-                    human_review=True,
+                if terminal_gate is not None:
+                    terminal_item = next(
+                        value
+                        for value in terminal_gate["items"]
+                        if value["stable_id"] == item.stable_id
+                    )
+                    verdict = str(terminal_item.get("fidelity", {}).get("verdict"))
+                    reason = (
+                        f"{verdict}-cap-exhausted"
+                        if verdict in {"major-drift", "slop", "cannot-verify"}
+                        else "cannot-verify-cap-exhausted"
+                    )
+                    self._terminalize(
+                        item,
+                        artifact,
+                        "failed:fidelity",
+                        reason,
+                        f"fidelity gate blocked after bounded repair: {verdict}",
+                        (),
+                        reducer,
+                        operational,
+                        state,
+                        human_review=True,
+                        root_cause_fingerprint=_gate_item_fingerprint(terminal_item),
+                    )
+                    break
+
+                rejected_count = sum(
+                    not _fidelity_item_accepted(gate_item)
+                    for _gate, gate_item in _fidelity_gate_history(
+                        persisted,
+                        item.stable_id,
+                        campaign_root_work_id=_artifact_lineage(artifact),
+                    )
                 )
-                continue
-            if outcome.backoff is not None:
-                return self._pause_for_usage(outcome.backoff, operational, len(work))
-            gate = _normalize_gate_generation(_require_gate(outcome), persisted, (item.stable_id,))
-            _require_gate_bindings(gate, (artifact,), "fidelity")
-            route_ready = _prepare_ledger_record(gate, len(persisted) + 1)
-            fidelity_decision = route_fidelity_gate(route_ready, artifact.proposal)
-            persisted_gate = reducer.append_gate(_without_ledger_fields(route_ready)).record
-            persisted.append(persisted_gate)
-            if not fidelity_decision.accepted_for_fidelity:
-                reason = fidelity_decision.failure_reason_code or "cannot-verify-cap-exhausted"
-                self._terminalize(
-                    item,
-                    artifact,
-                    "failed:fidelity",
-                    reason,
-                    f"fidelity gate blocked: {fidelity_decision.verdict.value}",
-                    (),
-                    reducer,
-                    operational,
-                    state,
-                    human_review=True,
+                if rejected_count:
+                    try:
+                        artifact = self._repair_author(
+                            item,
+                            artifact,
+                            persisted,
+                            rejected_count,
+                            gate_kind="fidelity",
+                        )
+                    except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
+                        reason = (
+                            "protocol-violation"
+                            if isinstance(exc, DriverIntegrationError)
+                            else "internal-error"
+                        )
+                        attempt = _driver_failure_attempt(
+                            item,
+                            artifact,
+                            "runner",
+                            reason,
+                            exc,
+                            self.config,
+                            environment=None,
+                            created_at=self.dependencies.clock(),
+                        )
+                        persisted_attempt = reducer.append_attempt(attempt).record
+                        self._terminalize(
+                            item,
+                            artifact,
+                            "failed:runner",
+                            reason,
+                            str(exc),
+                            (persisted_attempt,),
+                            reducer,
+                            operational,
+                            state,
+                        )
+                        break
+                    artifacts[item.stable_id] = artifact
+                    try:
+                        metadata_outcome = self.dependencies.checker.check_metadata(
+                            (artifact,), self.paths.work_root, self.config
+                        )
+                    except Exception as exc:  # noqa: BLE001 -- checker failure is model-local
+                        attempt = _driver_failure_attempt(
+                            item,
+                            artifact,
+                            "accuracy-gate",
+                            "checker-contract-invalid",
+                            exc,
+                            self.config,
+                            environment=None,
+                            created_at=self.dependencies.clock(),
+                        )
+                        persisted_attempt = reducer.append_attempt(attempt).record
+                        self._terminalize(
+                            item,
+                            artifact,
+                            "failed:accuracy-gate",
+                            "checker-contract-invalid",
+                            str(exc),
+                            (persisted_attempt,),
+                            reducer,
+                            operational,
+                            state,
+                            human_review=True,
+                        )
+                        break
+                    if metadata_outcome.backoff is not None:
+                        return self._pause_for_usage(
+                            metadata_outcome.backoff, operational, len(work)
+                        )
+                    metadata_gate = _normalize_gate_generation(
+                        _require_gate(metadata_outcome), persisted, (item.stable_id,)
+                    )
+                    _require_gate_bindings(metadata_gate, (artifact,), "metadata_batch")
+                    metadata_ready = _prepare_ledger_record(metadata_gate, len(persisted) + 1)
+                    metadata_decision = route_metadata_gate(
+                        metadata_ready,
+                        {
+                            item.stable_id: _metadata_repair_count(
+                                persisted,
+                                item.stable_id,
+                                _artifact_lineage(artifact),
+                            )
+                        },
+                        max_repairs=2,
+                    )[0]
+                    for record in emit_gate_records(metadata_ready):
+                        appended = reducer.append_gate(_without_ledger_fields(record))
+                        if appended.appended:
+                            persisted.append(appended.record)
+                    if not metadata_decision.canonical_write_allowed:
+                        latest = _find_gate(
+                            persisted,
+                            item.stable_id,
+                            "metadata_batch",
+                            artifact.proposal,
+                        )
+                        if latest is None:
+                            raise DriverIntegrationError(
+                                f"repaired metadata gate missing for {item.stable_id}"
+                            )
+                        self._terminalize_accuracy_gate(
+                            item,
+                            artifact,
+                            latest,
+                            reducer,
+                            operational,
+                            state,
+                        )
+                        break
+
+                try:
+                    outcome = self.dependencies.checker.check_fidelity(
+                        artifact, self.paths.work_root, self.config
+                    )
+                except Exception as exc:  # noqa: BLE001 -- checker failure belongs to this model
+                    attempt = _driver_failure_attempt(
+                        item,
+                        artifact,
+                        "fidelity",
+                        "identity-mismatch",
+                        exc,
+                        self.config,
+                        environment=None,
+                        created_at=self.dependencies.clock(),
+                    )
+                    persisted_attempt = reducer.append_attempt(attempt).record
+                    self._terminalize(
+                        item,
+                        artifact,
+                        "failed:fidelity",
+                        "identity-mismatch",
+                        str(exc),
+                        (persisted_attempt,),
+                        reducer,
+                        operational,
+                        state,
+                        human_review=True,
+                    )
+                    break
+                if outcome.backoff is not None:
+                    return self._pause_for_usage(outcome.backoff, operational, len(work))
+                gate = _normalize_gate_generation(
+                    _require_gate(outcome), persisted, (item.stable_id,)
                 )
-                continue
-            artifacts[item.stable_id] = self._promote_artifact(item, artifact)
-            self.dependencies.boundary_hook("after-gate", item.stable_id)
+                _require_gate_bindings(gate, (artifact,), "fidelity")
+                route_ready = _prepare_ledger_record(gate, len(persisted) + 1)
+                route_fidelity_gate(route_ready, artifact.proposal)
+                persisted_gate = reducer.append_gate(_without_ledger_fields(route_ready)).record
+                persisted.append(persisted_gate)
+                self.dependencies.boundary_hook("after-gate", item.stable_id)
         return None
 
     def _promote_artifact(self, item: WorkItem, artifact: AuthorArtifact) -> AuthorArtifact:
@@ -2085,19 +2318,44 @@ class CrawlerDriver:
         artifact: AuthorArtifact,
         gates: Sequence[Mapping[str, Any]],
         generation: int,
+        *,
+        gate_kind: str,
     ) -> AuthorArtifact:
-        """Persist checker findings and request one bounded author repair generation."""
+        """Persist checker findings and request one bounded author repair generation.
 
-        latest = _find_gate(gates, item.stable_id, "metadata_batch", artifact.proposal)
+        Parameters
+        ----------
+        item:
+            Current routed model.
+        artifact:
+            Most recent authored generation.
+        gates:
+            Durable checker history.
+        generation:
+            One-based bounded repair generation.
+        gate_kind:
+            ``metadata_batch`` or ``fidelity`` source finding.
+
+        Returns
+        -------
+        AuthorArtifact
+            Re-authored, normalized, identity-validated generation.
+        """
+
+        latest = _find_gate(gates, item.stable_id, gate_kind, artifact.proposal)
         if latest is None:
-            raise DriverIntegrationError(f"repair gate missing for {item.stable_id}")
+            raise DriverIntegrationError(f"{gate_kind} repair gate missing for {item.stable_id}")
         gate_item = next(value for value in latest["items"] if value["stable_id"] == item.stable_id)
         repair_path = (
-            self.paths.work_root / item.stable_id / "repair" / f"generation-{generation}.json"
+            self.paths.work_root
+            / item.stable_id
+            / "repair"
+            / f"{gate_kind}-generation-{generation}.json"
         )
         request = {
             "stable_id": item.stable_id,
             "generation": generation,
+            "gate_kind": gate_kind,
             "gate_id": latest["gate_id"],
             "root_cause_fingerprint": _gate_item_fingerprint(gate_item),
             "required_repairs": list(gate_item.get("required_repairs", [])),
@@ -2867,6 +3125,121 @@ def _installed_package_manifest_bytes(prefix: Path, *, strict: bool) -> bytes:
     return b"test-packages"
 
 
+def _source_symbol_bytes(
+    path: Path,
+    qualified_name: str,
+    *,
+    source: Optional[str] = None,
+    tree: Optional[ast.Module] = None,
+) -> bytes:
+    """Return exact source bytes for one module function or class method.
+
+    Parameters
+    ----------
+    path:
+        Python source file.
+    qualified_name:
+        Top-level function name or ``Class.method`` path.
+    source, tree:
+        Optional once-read/once-parsed module state for compositional batches.
+
+    Returns
+    -------
+    bytes
+        Exact UTF-8 source slice, including decorators when present.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If the requested award symbol cannot be located exactly.
+    """
+
+    source_text = path.read_text(encoding="utf-8") if source is None else source
+    module_tree = ast.parse(source_text, filename=str(path)) if tree is None else tree
+    parts = qualified_name.split(".")
+    body: Sequence[ast.stmt] = module_tree.body
+    found: Optional[ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef] = None
+    for part in parts:
+        found = next(
+            (
+                node
+                for node in body
+                if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == part
+            ),
+            None,
+        )
+        if found is None:
+            raise DriverIntegrationError(
+                f"award-closure source symbol is missing: {path.name}:{qualified_name}"
+            )
+        body = found.body
+    if found is None or found.end_lineno is None:
+        raise DriverIntegrationError(
+            f"award-closure source symbol has no exact span: {path.name}:{qualified_name}"
+        )
+    start_line = found.lineno
+    decorators = getattr(found, "decorator_list", ())
+    if decorators:
+        start_line = min(start_line, *(decorator.lineno for decorator in decorators))
+    lines = source_text.splitlines(keepends=True)
+    return "".join(lines[start_line - 1 : found.end_lineno]).encode("utf-8")
+
+
+@lru_cache(maxsize=8)
+def _award_closure_from_bytes(
+    source_items: tuple[tuple[str, bytes], ...],
+    schema_items: tuple[tuple[str, bytes], ...],
+) -> str:
+    """Hash selected award symbols from an immutable once-read byte snapshot.
+
+    Parameters
+    ----------
+    source_items:
+        Module-relative names and exact source bytes.
+    schema_items:
+        Schema-relative names and exact bytes.
+
+    Returns
+    -------
+    str
+        Compositional award-closure identity.
+    """
+
+    root = Path(__file__).parent
+    components: dict[str, str] = {}
+    for relative, source_bytes in source_items:
+        path = root / relative
+        source = source_bytes.decode("utf-8")
+        tree = ast.parse(source, filename=str(path))
+        for symbol in _AWARD_CLOSURE_SYMBOLS[relative]:
+            components[f"{relative}:{symbol}"] = hash_bytes(
+                _source_symbol_bytes(path, symbol, source=source, tree=tree)
+            )
+    for relative, schema_bytes in schema_items:
+        components[relative] = hash_bytes(schema_bytes)
+    return stable_hash(components)
+
+
+def _award_closure_identity() -> str:
+    """Hash only the parent/reducer code and schemas that decide run awards.
+
+    Returns
+    -------
+    str
+        Compositional award-closure identity kept separate from child runtime.
+    """
+
+    root = Path(__file__).parent
+    source_items = tuple(
+        (relative, (root / relative).read_bytes()) for relative in _AWARD_CLOSURE_SYMBOLS
+    )
+    schema_items = tuple(
+        (relative, (root / relative).read_bytes()) for relative in _AWARD_CLOSURE_SCHEMAS
+    )
+    return _award_closure_from_bytes(source_items, schema_items)
+
+
 def _runner_identity(modality: object = None) -> str:
     """Hash common runtime code plus only the selected standard-input asset.
 
@@ -3104,6 +3477,46 @@ def _normalize_artifact_modes(artifact: AuthorArtifact, config: DriverConfig) ->
     return replace(artifact, proposal=proposal)
 
 
+def _artifact_from_cache(value: Mapping[str, Any], config: DriverConfig) -> AuthorArtifact:
+    """Rehydrate and normalize one driver-owned author cache record.
+
+    Parameters
+    ----------
+    value:
+        Parsed author artifact cache.
+    config:
+        Current driver identity configuration.
+
+    Returns
+    -------
+    AuthorArtifact
+        Fully normalized cached artifact.
+    """
+
+    proposal = value.get("proposal")
+    source_manifest = value.get("source_manifest")
+    if not isinstance(proposal, Mapping) or not isinstance(source_manifest, Mapping):
+        raise DriverIntegrationError("cached author artifact is missing proposal/source facts")
+    artifact = AuthorArtifact(
+        proposal=dict(proposal),
+        source_manifest=dict(source_manifest),
+        model_dir=Path(str(value["model_dir"])),
+        terminal_status=value.get("terminal_status"),
+        terminal_reason_code=value.get("terminal_reason_code"),
+        terminal_detail=value.get("terminal_detail"),
+        defer_evidence=(
+            dict(value["defer_evidence"])
+            if isinstance(value.get("defer_evidence"), Mapping)
+            else None
+        ),
+        campaign_root_work_id=str(value.get("campaign_root_work_id") or proposal.get("work_id")),
+        canonical_code_root=(
+            Path(str(value["canonical_code_root"])) if value.get("canonical_code_root") else None
+        ),
+    )
+    return _normalize_artifact_modes(artifact, config)
+
+
 def _bind_model_code_manifest(proposal: JsonObject, model_dir: Path) -> bool:
     """Bind every recursively imported model-local module into proposal identities.
 
@@ -3192,6 +3605,7 @@ def _execution_identity(proposal: Mapping[str, Any], environment: EnvironmentBin
         framework_adapter={
             "framework": implementation["run_framework"],
             "recipe_type": implementation["recipe_type"],
+            "award_closure_sha256": _award_closure_identity(),
             "runtime_dependencies_sha256": stable_hash(
                 {
                     "source_identity": proposal.get("source_identity"),
@@ -4292,6 +4706,7 @@ def _worker_request(
             "code_manifest": [
                 {
                     "path": str((artifact.model_dir / str(member["path"])).resolve()),
+                    "identity_path": member["path"],
                     "sha256": member["sha256"],
                 }
                 for member in implementation["code_manifest"]
@@ -4303,6 +4718,11 @@ def _worker_request(
         "input_seed": input_seed,
         "modality": deepcopy(facts["external_metadata"]["modality"]),
         "input_contract_sha256": stable_hash(facts["input_contract"]),
+        "selected_asset": (
+            expected_standard_asset(facts["external_metadata"]["modality"])
+            if implementation["recipe_type"] == "declarative-library"
+            else None
+        ),
     }
     return {
         "stable_id": proposal["stable_id"],
@@ -4357,6 +4777,78 @@ def _expected_adapter_sha256(proposal: Mapping[str, Any]) -> Optional[str]:
     return str(value) if isinstance(value, str) else None
 
 
+def _expected_code_manifest_sha256(proposal: Mapping[str, Any]) -> Optional[str]:
+    """Return the identity-bound recursive code-manifest digest.
+
+    Parameters
+    ----------
+    proposal:
+        Current author proposal bound into a worker request.
+
+    Returns
+    -------
+    str | None
+        Aggregate manifest digest, or ``None`` for declarative recipes.
+    """
+
+    implementation = proposal.get("proposed_facts", {}).get("implementation", {})
+    manifest = implementation.get("code_manifest") if isinstance(implementation, Mapping) else None
+    return stable_hash(manifest) if isinstance(manifest, list) and manifest else None
+
+
+def _expected_input_asset_sha256(proposal: Mapping[str, Any]) -> Optional[str]:
+    """Return the digest of the selected request-bound standard input asset.
+
+    Parameters
+    ----------
+    proposal:
+        Current author proposal bound into a worker request.
+
+    Returns
+    -------
+    str | None
+        Selected standard-asset digest, or ``None`` for typed dummy calls and
+        random fallback.
+    """
+
+    facts = proposal.get("proposed_facts", {})
+    implementation = facts.get("implementation", {}) if isinstance(facts, Mapping) else {}
+    if not isinstance(implementation, Mapping) or implementation.get("recipe_type") != (
+        "declarative-library"
+    ):
+        return None
+    external = facts.get("external_metadata", {}) if isinstance(facts, Mapping) else {}
+    modality = external.get("modality") if isinstance(external, Mapping) else None
+    selected = expected_standard_asset(modality)
+    return selected["sha256"] if selected is not None else None
+
+
+def _expected_input_asset_id(proposal: Mapping[str, Any]) -> Optional[str]:
+    """Return the content-addressed selected standard input identifier.
+
+    Parameters
+    ----------
+    proposal:
+        Current author proposal bound into a worker request.
+
+    Returns
+    -------
+    str | None
+        Expected worker ``input_asset`` value.
+    """
+
+    facts = proposal.get("proposed_facts", {})
+    implementation = facts.get("implementation", {}) if isinstance(facts, Mapping) else {}
+    if not isinstance(implementation, Mapping) or implementation.get("recipe_type") != (
+        "declarative-library"
+    ):
+        return None
+    external = facts.get("external_metadata", {}) if isinstance(facts, Mapping) else {}
+    modality = external.get("modality") if isinstance(external, Mapping) else None
+    selected = expected_standard_asset(modality)
+    return selected["asset_id"] if selected is not None else None
+
+
 def _attempts_from_supervised(
     artifact: AuthorArtifact,
     result: SupervisedResult,
@@ -4380,7 +4872,12 @@ def _attempts_from_supervised(
     )
     receipt["policy_observation"] = policy
     parent_result = SupervisedResult(result.observation, receipt or None, result.receipt_error)
-    envelope_error = _receipt_envelope_error(parent_result, proposal, execution_identity)
+    envelope_error = _receipt_envelope_error(
+        parent_result,
+        proposal,
+        execution_identity,
+        requested_mode=requested_mode,
+    )
     if policy.get("cache_read_attempted"):
         envelope_error = "failed:policy-cache-read"
     effective_result = (
@@ -4445,6 +4942,8 @@ def _attempts_from_supervised(
             "receipt_sha256": receipt.get("receipt_sha256"),
             "observed_recipe_revision": receipt.get("observed_recipe_revision"),
             "observed_adapter_sha256": receipt.get("observed_adapter_sha256"),
+            "observed_code_manifest_sha256": receipt.get("observed_code_manifest_sha256"),
+            "observed_input_asset_sha256": receipt.get("observed_input_asset_sha256"),
             "constructor_started": bool(mode_receipt.get("constructor_started")),
             "constructor_completed": bool(mode_receipt.get("constructor_completed")),
             "input_completed": bool(mode_receipt.get("input_completed")),
@@ -4596,8 +5095,23 @@ def _receipt_envelope_error(
     result: SupervisedResult,
     proposal: Mapping[str, Any],
     execution_identity: str,
+    *,
+    requested_mode: Optional[str] = None,
 ) -> Optional[str]:
-    """Return a protocol error unless the complete child envelope is current."""
+    """Return a protocol error unless the requested child envelope is current.
+
+    Parameters
+    ----------
+    result:
+        Parent-owned supervisor observation and child receipt.
+    proposal:
+        Current accepted author proposal.
+    execution_identity:
+        Parent-computed execution identity.
+    requested_mode:
+        Explicit single mode assigned to this subprocess, or ``None`` for a
+        legacy all-modes request.
+    """
 
     if result.receipt_error is not None:
         return result.receipt_error
@@ -4613,7 +5127,10 @@ def _receipt_envelope_error(
         "recipe_revision",
         "observed_recipe_revision",
         "observed_adapter_sha256",
+        "observed_code_manifest_sha256",
+        "observed_input_asset_sha256",
         "execution_identity",
+        "mode",
         "constructor_started",
         "constructor_completed",
         "input_completed",
@@ -4634,6 +5151,8 @@ def _receipt_envelope_error(
         or receipt.get("recipe_revision") != proposal.get("recipe_revision")
         or receipt.get("observed_recipe_revision") != proposal.get("recipe_revision")
         or receipt.get("observed_adapter_sha256") != _expected_adapter_sha256(proposal)
+        or receipt.get("observed_code_manifest_sha256") != _expected_code_manifest_sha256(proposal)
+        or receipt.get("observed_input_asset_sha256") != _expected_input_asset_sha256(proposal)
         or receipt.get("execution_identity") != execution_identity
         or receipt.get("error") is not None
     ):
@@ -4648,16 +5167,36 @@ def _receipt_envelope_error(
         or not isinstance(declared, list)
     ):
         return "invalid-receipt:mode-envelope"
+    proposal_modes = set(
+        str(value)
+        for value in proposal.get("proposed_facts", {}).get("modes", {}).get("meaningful_modes", [])
+    )
+    mode_set = set(modes)
     if (
         not modes
-        or len(modes) != len(set(modes))
-        or not set(modes) <= {"train", "eval"}
-        or not set(detected) <= set(modes)
-        or set(declared) != set(modes)
+        or len(modes) != len(mode_set)
+        or not mode_set <= {"train", "eval"}
+        or not set(detected) <= mode_set
+        or set(declared) != mode_set
+        or mode_set != proposal_modes
         or not isinstance(per_mode, Mapping)
-        or set(per_mode) != set(modes)
     ):
         return "invalid-receipt:mode-envelope"
+    receipt_mode = receipt.get("mode")
+    validated_modes: tuple[str, ...]
+    if requested_mode is not None:
+        if (
+            requested_mode not in proposal_modes
+            or requested_mode not in mode_set
+            or receipt_mode != requested_mode
+            or set(per_mode) != {requested_mode}
+        ):
+            return "invalid-receipt:mode-envelope"
+        validated_modes = (requested_mode,)
+    else:
+        if receipt_mode is not None or set(per_mode) != mode_set:
+            return "invalid-receipt:mode-envelope"
+        validated_modes = tuple(str(mode) for mode in modes)
     required_mode = {
         "mode",
         "constructor_started",
@@ -4669,7 +5208,7 @@ def _receipt_envelope_error(
         "output_signature",
         "error",
     }
-    for mode in modes:
+    for mode in validated_modes:
         value = per_mode.get(mode)
         if (
             not isinstance(value, Mapping)
@@ -4685,13 +5224,10 @@ def _receipt_envelope_error(
                 value.get("input_signature"),
                 proposal.get("proposed_facts", {}).get("input_contract", {}),
             )
+            or value.get("input_asset") != _expected_input_asset_id(proposal)
         ):
             return "invalid-receipt:incomplete-mode"
-        signature = value.get("output_signature")
-        if not isinstance(signature, Mapping) or not {
-            "tree",
-            "leaves",
-        } <= set(signature):
+        if output_signature_error(value.get("output_signature")) is not None:
             return "invalid-receipt:output-signature"
     policy = receipt.get("policy_observation")
     required_policy = {
@@ -4975,6 +5511,7 @@ def _gate_item_fingerprint(item: Mapping[str, Any]) -> str:
             "integrity": item.get("integrity"),
             "field_checks": item.get("field_checks"),
             "rung_check": item.get("rung_check"),
+            "fidelity": item.get("fidelity"),
             "unsupported_claims": item.get("unsupported_claims"),
             "required_repairs": item.get("required_repairs"),
         }
@@ -5020,6 +5557,115 @@ def _metadata_gate_accepted(
         and item.get("integrity", {}).get("verdict") == "accurate"
         and item.get("rung_check", {}).get("verdict") == "accurate"
     )
+
+
+def _fidelity_gate_history(
+    gates: Sequence[Mapping[str, Any]],
+    stable_id: str,
+    *,
+    campaign_root_work_id: Optional[str] = None,
+    proposal: Optional[Mapping[str, Any]] = None,
+) -> tuple[tuple[JsonObject, JsonObject], ...]:
+    """Return persisted fidelity gates in one model lineage.
+
+    Parameters
+    ----------
+    gates:
+        Durable gate records.
+    stable_id:
+        Model identity.
+    campaign_root_work_id:
+        Optional stable author-repair lineage.
+    proposal:
+        Optional exact current proposal binding.
+
+    Returns
+    -------
+    tuple[tuple[dict[str, Any], dict[str, Any]], ...]
+        Matching gates and per-model items in ledger order.
+    """
+
+    history: list[tuple[JsonObject, JsonObject]] = []
+    for gate in gates:
+        if gate.get("gate_kind") != "fidelity":
+            continue
+        for item in gate.get("items", []):
+            if item.get("stable_id") != stable_id:
+                continue
+            if (
+                campaign_root_work_id is not None
+                and item.get("campaign_root_work_id") != campaign_root_work_id
+            ):
+                continue
+            if proposal is not None and not _gate_item_matches_proposal(item, proposal, "fidelity"):
+                continue
+            history.append((dict(gate), dict(item)))
+            break
+    return tuple(history)
+
+
+def _fidelity_item_accepted(item: Mapping[str, Any]) -> bool:
+    """Return whether one fidelity item permits execution.
+
+    Parameters
+    ----------
+    item:
+        Per-model fidelity checker item.
+
+    Returns
+    -------
+    bool
+        True only for an accepted verdict and rung check.
+    """
+
+    return bool(
+        item.get("fidelity", {}).get("verdict") in {"match", "minor-drift"}
+        and item.get("rung_check", {}).get("verdict") == "accurate"
+    )
+
+
+def _terminal_fidelity_gate(
+    gates: Sequence[Mapping[str, Any]],
+    stable_id: str,
+    campaign_root_work_id: str,
+    *,
+    max_repairs: int,
+) -> Optional[JsonObject]:
+    """Return the rejected fidelity gate that exhausts bounded repair.
+
+    Parameters
+    ----------
+    gates:
+        Durable gate records.
+    stable_id:
+        Model identity.
+    campaign_root_work_id:
+        Stable author-repair lineage.
+    max_repairs:
+        Maximum repairs after the initial generation.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Terminal rejected gate after cap exhaustion or repeated root cause.
+    """
+
+    rejected = [
+        (gate, item)
+        for gate, item in _fidelity_gate_history(
+            gates,
+            stable_id,
+            campaign_root_work_id=campaign_root_work_id,
+        )
+        if not _fidelity_item_accepted(item)
+    ]
+    if not rejected:
+        return None
+    fingerprints = [_gate_item_fingerprint(item) for _gate, item in rejected]
+    repeated = len(fingerprints) >= 2 and fingerprints[-1] in fingerprints[:-1]
+    if len(rejected) > max_repairs or repeated:
+        return rejected[-1][0]
+    return None
 
 
 def _metadata_repair_count(
@@ -5244,11 +5890,7 @@ def _attempt_policy_satisfied(
         mode = str(attempt.get("mode"))
         observation = attempt.get("supervisor_observation", {})
         output = receipt.get("output_signature")
-        complete_output = bool(
-            isinstance(output, Mapping)
-            and "tree" in output
-            and isinstance(output.get("leaves"), list)
-        )
+        complete_output = output_signature_error(output) is None
         if (
             attempt.get("result") == "succeeded"
             and receipt.get("present")
@@ -5268,6 +5910,10 @@ def _attempt_policy_satisfied(
             and mode in {"train", "eval"}
             and receipt.get("observed_recipe_revision") == proposal.get("recipe_revision")
             and receipt.get("observed_adapter_sha256") == _expected_adapter_sha256(proposal)
+            and receipt.get("observed_code_manifest_sha256")
+            == _expected_code_manifest_sha256(proposal)
+            and receipt.get("observed_input_asset_sha256") == _expected_input_asset_sha256(proposal)
+            and receipt.get("input_asset") == _expected_input_asset_id(proposal)
         ):
             counts[mode] += 1
             signatures[mode].append(output)
@@ -5376,6 +6022,8 @@ def _driver_failure_attempt(
             "receipt_sha256": None,
             "observed_recipe_revision": None,
             "observed_adapter_sha256": None,
+            "observed_code_manifest_sha256": None,
+            "observed_input_asset_sha256": None,
             "constructor_started": False,
             "constructor_completed": False,
             "input_completed": False,

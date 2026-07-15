@@ -240,6 +240,20 @@ def test_run_award_rejects_null_input_signature(tmp_path: Path) -> None:
             reducer.append_model(make_model(accepted=True))
 
 
+def test_run_award_rejects_null_output_signature_tree(tmp_path: Path) -> None:
+    """A null/empty output contract cannot satisfy reducer run-award validation."""
+
+    paths = _paths(tmp_path)
+    stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
+    attempt = make_attempt()
+    attempt["worker_receipt"]["output_signature"] = {"tree": None, "leaves": []}
+    with CanonicalReducer(paths, stable_ids) as reducer:
+        reducer.append_gate(make_gate(stable_ids))
+        reducer.append_attempt(attempt)
+        with pytest.raises(ReductionError, match="complete zero-exit receipt"):
+            reducer.append_model(make_model(accepted=True))
+
+
 def test_recursive_authored_gate_blocks_ungated_website_leaf(tmp_path: Path) -> None:
     """An accurate external-metadata subset cannot authorize the rest of proposed facts."""
 
