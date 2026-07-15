@@ -87,6 +87,7 @@ class BufferWriteTracker:
         # tracked in-place op whose PRE-op bytes diverge from ``expected`` reveals an untracked
         # host write that the op's version bump would otherwise MASK (r19-B): fail closed.
         self.address_to_expected_snapshot: dict[str, torch.Tensor] = {}
+        self.address_to_expected_storage_snapshot: dict[str, torch.Tensor] = {}
         self.storage_key_to_addresses: dict[tuple[Any, ...], dict[str, None]] = {}
         self._storage_key_cache: dict[tuple[int, int | None], tuple[Any, ...] | None] = {}
         self._storage_range_cache: dict[tuple[int, int | None], tuple[int, int]] = {}
@@ -98,6 +99,7 @@ class BufferWriteTracker:
         # embedded pre-forward state snapshot -- the exact buffer host-write-back tripwire,
         # mirrored onto params. address -> (whole-storage uint8 byte clone, tensor version).
         self.address_to_param_snapshot: dict[str, tuple[torch.Tensor, int | None]] = {}
+        self.address_to_param_tensor: dict[str, torch.Tensor] = {}
 
     def install(self) -> None:
         """Install scoped class ``__setattr__`` patches and seed the buffer index."""
@@ -160,6 +162,13 @@ class BufferWriteTracker:
                 # r19-B: seed the journal-expected value to the pre-forward snapshot; only a
                 # journaled in-place op advances it (see ``_advance_expected_after_journal``).
                 self.address_to_expected_snapshot.setdefault(address, pre_forward_value)
+                try:
+                    with _state.pause_logging():
+                        expected_storage = _whole_storage_uint8(tensor).clone()
+                except (RuntimeError, TypeError, NotImplementedError):
+                    with _state.pause_logging():
+                        expected_storage = _whole_storage_uint8(pre_forward_value).clone()
+                self.address_to_expected_storage_snapshot.setdefault(address, expected_storage)
         self._refresh_param_index(model)
 
     def _refresh_param_index(self, model: nn.Module) -> None:
@@ -188,6 +197,7 @@ class BufferWriteTracker:
                     except (RuntimeError, TypeError, NotImplementedError):
                         continue
                     self.address_to_param_snapshot[address] = (before, _tensor_version(tensor))
+                    self.address_to_param_tensor[address] = tensor
                     try:
                         param_storage_addresses[tensor.untyped_storage().data_ptr()] = address
                     except (RuntimeError, TypeError, NotImplementedError):
@@ -305,6 +315,16 @@ class BufferWriteTracker:
         if expected is not None and not _tensor_equal(expected, snapshot.value):
             _HOST_ESCAPE_MUTABLE_WRITEBACK.add(self.trace)
         self.address_to_expected_snapshot[snapshot.address] = current_value
+        try:
+            with _state.pause_logging():
+                self.address_to_expected_storage_snapshot[snapshot.address] = _whole_storage_uint8(
+                    snapshot.tensor
+                ).clone()
+        except (RuntimeError, TypeError, NotImplementedError):
+            with _state.pause_logging():
+                self.address_to_expected_storage_snapshot[snapshot.address] = _whole_storage_uint8(
+                    current_value
+                ).clone()
 
     def reconcile(self) -> None:
         """Reconcile registered-buffer changes after forward capture.
@@ -517,6 +537,17 @@ class BufferWriteTracker:
             # the tracked post-write bytes (not a stale pre-forward baseline).
             if address in self.address_to_expected_snapshot:
                 self.address_to_expected_snapshot[address] = alias_value
+            if address in self.address_to_expected_storage_snapshot:
+                try:
+                    with _state.pause_logging():
+                        self.address_to_expected_storage_snapshot[address] = _whole_storage_uint8(
+                            tensor
+                        ).clone()
+                except (RuntimeError, TypeError, NotImplementedError):
+                    with _state.pause_logging():
+                        self.address_to_expected_storage_snapshot[address] = _whole_storage_uint8(
+                            alias_value
+                        ).clone()
 
     def storage_key(self, tensor: torch.Tensor) -> tuple[Any, ...] | None:
         """Return a cached storage identity key for ``tensor``.

@@ -1241,7 +1241,7 @@ class _CompletenessDispatchMode(TorchDispatchMode):
             # is live and THIS traced op consumes a watched source whose bytes were transiently
             # written, catch it now -- BEFORE redispatch reads the mutated input -- rather than only
             # at forward end where a byte-exact restore would have already hidden it.
-            if in_scope and self.state.writeback_watch:
+            if in_scope:
                 _sample_writeback_at_consumption(self.state, args, kwargs)
         finally:
             self.state.callback_ns += time.perf_counter_ns() - started
@@ -1345,7 +1345,7 @@ def _sample_writeback_at_consumption(
     traced consumer of the source (restored before it is read) stays honestly VERIFIED.
     """
 
-    if not state.writeback_watch:
+    if not state.writeback_watch and not _has_state_toctou_watch(state.trace):
         return
     try:
         with _state.pause_logging():
@@ -1356,6 +1356,8 @@ def _sample_writeback_at_consumption(
                 except (RuntimeError, TypeError, NotImplementedError):
                     continue
             if not consumed_ptrs:
+                return
+            if _sample_state_toctou_at_consumption(state, consumed_ptrs):
                 return
             for source, version, before in state.writeback_watch:
                 try:
@@ -1371,6 +1373,140 @@ def _sample_writeback_at_consumption(
                     return
     except (RuntimeError, TypeError, NotImplementedError):
         return
+
+
+def _has_state_toctou_watch(trace: Any) -> bool:
+    """Return whether the active trace has registered state byte watches.
+
+    Returns
+    -------
+    bool
+        ``True`` when buffer/parameter write tracking has live state snapshots.
+    """
+
+    tracker = getattr(trace, "_buffer_write_tracker", None)
+    if tracker is None:
+        return False
+    param_snapshots = getattr(tracker, "address_to_param_snapshot", None)
+    buffer_snapshots = getattr(tracker, "address_to_expected_storage_snapshot", None)
+    return bool(param_snapshots) or bool(buffer_snapshots)
+
+
+def _sample_state_toctou_at_consumption(state: _WitnessState, consumed_ptrs: set[int]) -> bool:
+    """Detect transient registered-state mutations when a traced op consumes them.
+
+    Parameters
+    ----------
+    state:
+        Active completeness-witness state.
+    consumed_ptrs:
+        Storage data pointers consumed by the current dispatcher operation.
+
+    Returns
+    -------
+    bool
+        ``True`` when an opaque state write-back was detected and recorded.
+    """
+
+    tracker = getattr(state.trace, "_buffer_write_tracker", None)
+    if tracker is None:
+        return False
+    if _sample_param_toctou_at_consumption(state, tracker, consumed_ptrs):
+        return True
+    return _sample_buffer_toctou_at_consumption(state, tracker, consumed_ptrs)
+
+
+def _sample_param_toctou_at_consumption(
+    state: _WitnessState, tracker: Any, consumed_ptrs: set[int]
+) -> bool:
+    """Compare consumed parameters against their pre-forward byte snapshots.
+
+    Parameters
+    ----------
+    state:
+        Active completeness-witness state.
+    tracker:
+        Buffer/parameter write tracker attached to the active trace.
+    consumed_ptrs:
+        Storage data pointers consumed by the current dispatcher operation.
+
+    Returns
+    -------
+    bool
+        ``True`` when a consumed parameter differs from its pre-forward bytes.
+    """
+
+    tensors = getattr(tracker, "address_to_param_tensor", None)
+    snapshots = getattr(tracker, "address_to_param_snapshot", None)
+    if not isinstance(tensors, dict) or not isinstance(snapshots, dict):
+        return False
+    for address, source in tuple(tensors.items()):
+        if not isinstance(source, torch.Tensor):
+            continue
+        try:
+            if source.untyped_storage().data_ptr() not in consumed_ptrs:
+                continue
+        except (RuntimeError, TypeError, NotImplementedError):
+            continue
+        baseline = snapshots.get(address)
+        if not isinstance(baseline, tuple) or not baseline:
+            continue
+        before = baseline[0]
+        if not isinstance(before, torch.Tensor):
+            continue
+        try:
+            if not torch.equal(_whole_storage_uint8(source), before):
+                _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
+                return True
+        except (RuntimeError, TypeError, NotImplementedError):
+            _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
+            return True
+    return False
+
+
+def _sample_buffer_toctou_at_consumption(
+    state: _WitnessState, tracker: Any, consumed_ptrs: set[int]
+) -> bool:
+    """Compare consumed buffers against the journal-advanced expected bytes.
+
+    Parameters
+    ----------
+    state:
+        Active completeness-witness state.
+    tracker:
+        Buffer/parameter write tracker attached to the active trace.
+    consumed_ptrs:
+        Storage data pointers consumed by the current dispatcher operation.
+
+    Returns
+    -------
+    bool
+        ``True`` when a consumed buffer differs from its journal-advanced bytes.
+    """
+
+    tensors = getattr(tracker, "address_to_tensor", None)
+    snapshots = getattr(tracker, "address_to_expected_storage_snapshot", None)
+    if not isinstance(tensors, dict) or not isinstance(snapshots, dict):
+        return False
+    for address, source in tuple(tensors.items()):
+        if not isinstance(source, torch.Tensor):
+            continue
+        try:
+            if source.untyped_storage().data_ptr() not in consumed_ptrs:
+                continue
+        except (RuntimeError, TypeError, NotImplementedError):
+            continue
+        expected = snapshots.get(address)
+        if not isinstance(expected, torch.Tensor):
+            continue
+        try:
+            if not torch.equal(_whole_storage_uint8(source), expected):
+                _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
+                return True
+        except (RuntimeError, TypeError, NotImplementedError):
+            _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
+            return True
+    return False
 
 
 def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: str) -> Any:
