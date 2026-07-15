@@ -84,7 +84,12 @@ from menagerie.crawler.identity import (
     hash_bytes,
     stable_hash,
 )
-from menagerie.crawler.intake import IntakeItem, IntakeSnapshot, load_intake_snapshot
+from menagerie.crawler.intake import (
+    IntakeItem,
+    IntakeSnapshot,
+    legacy_requires_fidelity_audit,
+    load_intake_snapshot,
+)
 from menagerie.crawler.licenses import (
     LicenseDecision,
     LicenseEvidence,
@@ -1194,7 +1199,7 @@ class CrawlerDriver:
                             reducer,
                             operational,
                             state,
-                            award_run=False,
+                            award_run=True,
                         )
                         return DriverResult(
                             "paused:usage-limit", len(reducer.current_records), 0, pause
@@ -1736,6 +1741,10 @@ class CrawlerDriver:
     ) -> Optional[str]:
         """Run metadata batches and required per-model fidelity gates durably."""
 
+        for item in work:
+            artifacts[item.stable_id] = _require_legacy_audit_fidelity(
+                item, artifacts[item.stable_id], self.config
+            )
         persisted = scan_jsonl(self.paths.ledgers.gates)
         items_by_id = {item.stable_id: item for item in work}
         pending_ids = {
@@ -1779,14 +1788,18 @@ class CrawlerDriver:
                 ):
                     continue
                 try:
-                    artifacts[stable_id] = self._retry_infrastructure_call(
-                        lambda: self._repair_author(
-                            items_by_id[stable_id],
-                            artifacts[stable_id],
-                            persisted,
-                            count,
-                            gate_kind="metadata_batch",
-                        )
+                    artifacts[stable_id] = _require_legacy_audit_fidelity(
+                        items_by_id[stable_id],
+                        self._retry_infrastructure_call(
+                            lambda: self._repair_author(
+                                items_by_id[stable_id],
+                                artifacts[stable_id],
+                                persisted,
+                                count,
+                                gate_kind="metadata_batch",
+                            )
+                        ),
+                        self.config,
                     )
                 except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
                     reason = (
@@ -2046,14 +2059,18 @@ class CrawlerDriver:
                 )
                 if rejected_count:
                     try:
-                        artifact = self._retry_infrastructure_call(
-                            lambda: self._repair_author(
-                                item,
-                                artifact,
-                                persisted,
-                                rejected_count,
-                                gate_kind="fidelity",
-                            )
+                        artifact = _require_legacy_audit_fidelity(
+                            item,
+                            self._retry_infrastructure_call(
+                                lambda: self._repair_author(
+                                    item,
+                                    artifact,
+                                    persisted,
+                                    rejected_count,
+                                    gate_kind="fidelity",
+                                )
+                            ),
+                            self.config,
                         )
                     except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
                         reason = (
@@ -2617,7 +2634,8 @@ class CrawlerDriver:
             environment,
             execution_identity,
         )
-        cold_runs = 2 if _fidelity_required(artifact.proposal) else 1
+        rung = artifact.proposal.get("proposed_facts", {}).get("source_resolution", {}).get("rung")
+        cold_runs = 2 if rung in {"R3_PORT", "R4_REIMPLEMENT"} else 1
         if not _attempt_policy_satisfied(attempts, artifact.proposal, cold_runs):
             generated: tuple[Mapping[str, Any], ...]
             cache_identity = stable_hash(
@@ -6766,6 +6784,79 @@ def _artifact_lineage(artifact: AuthorArtifact) -> str:
     return str(artifact.campaign_root_work_id or artifact.proposal["work_id"])
 
 
+def _require_legacy_audit_fidelity(
+    item: WorkItem, artifact: AuthorArtifact, config: DriverConfig
+) -> AuthorArtifact:
+    """Make a legacy audit-class proposal require fresh fidelity verification.
+
+    Parameters
+    ----------
+    item:
+        Routed immutable intake item.
+    artifact:
+        Current author artifact.
+    config:
+        Checker identity used by the derived fidelity identity.
+
+    Returns
+    -------
+    AuthorArtifact
+        The original artifact or a deterministically rebound audit proposal.
+    """
+
+    flags = item.intake.preserved_legacy_flags
+    if not legacy_requires_fidelity_audit(flags):
+        return artifact
+    proposal = deepcopy(artifact.proposal)
+    facts = proposal.get("proposed_facts")
+    fidelity = facts.get("fidelity") if isinstance(facts, dict) else None
+    if not isinstance(facts, dict) or not isinstance(fidelity, dict):
+        raise DriverIntegrationError("legacy audit proposal has no mutable fidelity facts")
+    if fidelity.get("required") is True and proposal.get("fidelity_identity") is not None:
+        return artifact
+    fidelity.update(
+        {
+            "required": True,
+            "reason": "Legacy classic/faithful/slop claims require current fidelity re-verification.",
+            "verdict": None,
+            "fidelity_identity": None,
+            "gate_id": None,
+            "current": False,
+        }
+    )
+    try:
+        identities = recompute_accepted_identities(
+            facts,
+            checker_prompt_hash=_checker_prompt_hash(),
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
+        fidelity["fidelity_identity"] = identities.fidelity
+        identities = recompute_accepted_identities(
+            facts,
+            checker_prompt_hash=_checker_prompt_hash(),
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
+    except MetadataValidationError as exc:
+        raise DriverIntegrationError(str(exc)) from exc
+    if identities.fidelity is None:
+        raise DriverIntegrationError("legacy audit proposal did not derive a fidelity identity")
+    proposal.update(
+        {
+            "source_identity": identities.source,
+            "evidence_identity": identities.evidence,
+            "recipe_revision": identities.recipe,
+            "vet_identity": identities.vet,
+            "fidelity_identity": identities.fidelity,
+        }
+    )
+    proposal["proposal_sha256"] = stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+    return replace(artifact, proposal=proposal)
+
+
 def _fidelity_required(proposal: Mapping[str, Any]) -> bool:
     """Return whether the proposal's earned rung requires fidelity approval."""
 
@@ -7385,7 +7476,7 @@ def _assemble_terminal_model(
             "legacy_recipe_sha256": None,
             "legacy_module_sha256": None,
             "legacy_claims_untrusted": True,
-            "preserved_legacy_flags": [],
+            "preserved_legacy_flags": list(item.intake.preserved_legacy_flags),
             "discovery_sources": [item.intake.discovery_source],
         },
         **facts,
@@ -7540,18 +7631,46 @@ def _assemble_run_model(
 ) -> JsonObject:
     """Assemble a driver-owned terminal revision from independently durable facts."""
 
+    artifact = _require_legacy_audit_fidelity(item, artifact, config)
     proposal = artifact.proposal
     facts = deepcopy(dict(proposal["proposed_facts"]))
     stable_id = item.stable_id
     metadata_gate = _find_gate(gates, stable_id, "metadata_batch", proposal)
-    if metadata_gate is None:
-        raise DriverIntegrationError(f"metadata gate missing for {stable_id}")
-    metadata_item = next(
-        gate_item for gate_item in metadata_gate["items"] if gate_item["stable_id"] == stable_id
+    metadata_item = (
+        next(
+            gate_item for gate_item in metadata_gate["items"] if gate_item["stable_id"] == stable_id
+        )
+        if metadata_gate is not None
+        else None
     )
-    validate_authored_facts_for_write(facts, metadata_item)
+    metadata_accepted = bool(
+        metadata_item is not None
+        and metadata_item.get("verdict") == "accurate"
+        and metadata_item.get("integrity", {}).get("verdict") == "accurate"
+        and metadata_item.get("rung_check", {}).get("verdict") == "accurate"
+    )
     fidelity_gate = _find_gate(gates, stable_id, "fidelity", proposal)
     required_fidelity = _fidelity_required(proposal)
+    rung = facts.get("source_resolution", {}).get("rung")
+    if not metadata_accepted and (required_fidelity or rung not in {"R1_LIBRARY", "R2_VENDOR"}):
+        raise DriverIntegrationError(
+            f"pending metadata run is not eligible for fidelity-required rung {rung!r}"
+        )
+    if metadata_accepted and metadata_item is not None:
+        validate_authored_facts_for_write(facts, metadata_item)
+        metadata_state = "accepted"
+    else:
+        metadata_state = "pending"
+        for field in (
+            "taxonomy",
+            "external_metadata",
+            "website",
+            "people_and_origin",
+            "dates",
+            "citation",
+            "licenses",
+        ):
+            facts[field] = None
     if required_fidelity and fidelity_gate is None:
         raise DriverIntegrationError(f"fidelity gate missing for {stable_id}")
 
@@ -7584,7 +7703,7 @@ def _assemble_run_model(
         raise DriverIntegrationError(
             "worker receipts differ from the proposal-declared meaningful-mode set"
         )
-    required_cold_runs = 2 if required_fidelity else 1
+    required_cold_runs = 2 if rung in {"R3_PORT", "R4_REIMPLEMENT"} else 1
     if not _attempt_policy_satisfied(clean_attempts, proposal, required_cold_runs):
         raise DriverIntegrationError("accepted attempts do not satisfy the clean execution policy")
     selected: dict[str, Mapping[str, Any]] = {}
@@ -7619,7 +7738,7 @@ def _assemble_run_model(
         "parent_revision": None,
         "created_at": now,
         "revised_by": {"actor": "driver"},
-        "authored_metadata_state": "accepted",
+        "authored_metadata_state": metadata_state,
         "intake": {
             "snapshot_id": "driver-loaded",
             "snapshot_sha256": stable_hash(item.intake.to_dict()),
@@ -7627,7 +7746,7 @@ def _assemble_run_model(
             "legacy_recipe_sha256": None,
             "legacy_module_sha256": None,
             "legacy_claims_untrusted": True,
-            "preserved_legacy_flags": [],
+            "preserved_legacy_flags": list(item.intake.preserved_legacy_flags),
             "discovery_sources": [item.intake.discovery_source],
         },
         **facts,
@@ -7658,20 +7777,38 @@ def _assemble_run_model(
         },
         "accuracy_gate": {
             "required": True,
-            "vet_identity": proposal["vet_identity"],
-            "gate_id": metadata_gate["gate_id"],
-            "verdict": metadata_item["verdict"],
-            "current": True,
-            "checker_model": metadata_gate["checker"]["model"],
-            "checker_version": metadata_gate["checker"]["version"],
-            "prompt_sha256": metadata_gate["checker"]["prompt_sha256"],
+            "vet_identity": proposal["vet_identity"] if metadata_accepted else None,
+            "gate_id": (
+                metadata_gate["gate_id"]
+                if metadata_accepted and metadata_gate is not None
+                else None
+            ),
+            "verdict": metadata_item["verdict"] if metadata_accepted and metadata_item else None,
+            "current": metadata_accepted,
+            "checker_model": (
+                metadata_gate["checker"]["model"]
+                if metadata_accepted and metadata_gate is not None
+                else config.checker_model
+            ),
+            "checker_version": (
+                metadata_gate["checker"]["version"]
+                if metadata_accepted and metadata_gate is not None
+                else config.checker_version
+            ),
+            "prompt_sha256": (
+                metadata_gate["checker"]["prompt_sha256"]
+                if metadata_accepted and metadata_gate is not None
+                else _checker_prompt_hash()
+            ),
         },
         "execution": {
             "execution_identity": execution_identity,
             "environment_id": first_attempt["environment"]["env_id"],
             "env_generation": first_attempt["identities"]["environment"],
             "accepted_attempt_ids": accepted_ids,
-            "confirmation_policy": ("two-cold-r3-r4" if required_fidelity else "single-mechanical"),
+            "confirmation_policy": (
+                "two-cold-r3-r4" if rung in {"R3_PORT", "R4_REIMPLEMENT"} else "single-mechanical"
+            ),
             "network_attempted": any(
                 bool(attempt.get("policy_observation", {}).get("network_attempted"))
                 for attempt in clean_attempts
@@ -7726,15 +7863,23 @@ def _assemble_run_model(
             "author_model": proposal["author"]["model"],
             "author_version": proposal["author"]["version"],
             "author_prompt_sha256": proposal["author"]["prompt_sha256"],
-            "checker_model": metadata_gate["checker"]["model"],
-            "checker_version": metadata_gate["checker"]["version"],
+            "checker_model": (
+                metadata_gate["checker"]["model"]
+                if metadata_accepted and metadata_gate is not None
+                else config.checker_model
+            ),
+            "checker_version": (
+                metadata_gate["checker"]["version"]
+                if metadata_accepted and metadata_gate is not None
+                else config.checker_version
+            ),
             "producer_run_id": config.run_id,
             "machine_id": config.machine_id,
         },
         "budget": {
             "author_sessions_used": 1,
             "author_sessions_max": 3,
-            "gate_rounds_used": 1 + int(required_fidelity),
+            "gate_rounds_used": int(metadata_accepted) + int(required_fidelity),
             "run_revisions_used": 1,
             "explicit_grants": list(item.explicit_grants),
         },
@@ -7744,15 +7889,23 @@ def _assemble_run_model(
         "completeness": {
             "schema_valid": True,
             "mandatory_source_present": True,
-            "source_read_fields_complete": True,
-            "evidence_coverage_complete": True,
-            "accuracy_gate_current": True,
+            "source_read_fields_complete": metadata_accepted,
+            "evidence_coverage_complete": metadata_accepted,
+            "accuracy_gate_current": metadata_accepted,
             "required_fidelity_current": True,
             "execution_current": True,
-            "family_template_valid": True,
-            "release_eligible": True,
-            "issues": [],
+            "family_template_valid": metadata_accepted,
+            "release_eligible": metadata_accepted,
+            "issues": [] if metadata_accepted else ["authored-metadata-pending"],
         },
+        "untrusted_attempt": (
+            {
+                "proposal_sha256": proposal["proposal_sha256"],
+                "proposal": deepcopy(dict(proposal)),
+            }
+            if not metadata_accepted
+            else None
+        ),
     }
     return model
 
@@ -7771,20 +7924,6 @@ def _funnel_snapshot(current: Mapping[str, Mapping[str, Any]]) -> FunnelSnapshot
     )
 
 
-_AUDIT_FIDELITY_FLAGS = frozenset(
-    {
-        "classic-audit",
-        "legacy-known-slop",
-        "known-slop",
-        "slop-detected-r1-audit",
-        "presumed-slop",
-        "legacy-fidelity-claim",
-        "legacy-faithful-claimer",
-        "faithful-claimer",
-    }
-)
-
-
 def _completion_workflows(current: Mapping[str, Mapping[str, Any]]) -> tuple[str, ...]:
     """Return pending workflow gates not expressible by terminal partition shape."""
 
@@ -7794,7 +7933,7 @@ def _completion_workflows(current: Mapping[str, Mapping[str, Any]]) -> tuple[str
             record.get("intake", {}).get("preserved_legacy_flags", [])
         )
         fidelity = record.get("fidelity", {})
-        if flags & _AUDIT_FIDELITY_FLAGS and (
+        if legacy_requires_fidelity_audit(flags) and (
             not fidelity.get("gate_id")
             or fidelity.get("verdict")
             not in {"match", "minor-drift", "major-drift", "slop", "cannot-verify"}

@@ -16,6 +16,7 @@ from menagerie.crawler.constants import (
 )
 from menagerie.crawler.family_templates import FamilyTemplateError, validate_size_variant
 from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.intake import legacy_requires_fidelity_audit
 from menagerie.crawler.metadata import (
     MetadataValidationError,
     input_signature_matches_contract,
@@ -827,6 +828,7 @@ class CanonicalReducer:
         accuracy = model.get("accuracy_gate", {})
         rung = model.get("source_resolution", {}).get("rung")
         status_kind = model.get("status", {}).get("kind")
+        metadata_state = model.get("authored_metadata_state")
         identities = None
         rung_gate_current = False
         rung_found = self._gate_item(accuracy.get("gate_id"), stable_id)
@@ -845,8 +847,13 @@ class CanonicalReducer:
                 and rung_gate.get("checker", {}).get("prompt_sha256") == _checker_prompt_hash()
             )
         if status_kind == "runs" and not rung_gate_current:
-            raise ReductionError("runs requires a current identity-tight anti-slop/rung check gate")
-        if model.get("authored_metadata_state") == "accepted":
+            if metadata_state == "pending":
+                self._validate_pending_run_rung(model)
+            else:
+                raise ReductionError(
+                    "runs requires a current identity-tight anti-slop/rung check gate"
+                )
+        if metadata_state == "accepted":
             found = self._gate_item(accuracy.get("gate_id"), stable_id)
             if found is None:
                 raise ReductionError("accepted authored metadata is missing its gate")
@@ -887,7 +894,12 @@ class CanonicalReducer:
             ):
                 raise ReductionError("accepted source/evidence/recipe/vet identities are stale")
         fidelity = model.get("fidelity", {})
-        required = bool(fidelity.get("required")) or rung in {"R3_PORT", "R4_REIMPLEMENT"}
+        legacy_flags = model.get("intake", {}).get("preserved_legacy_flags", [])
+        required = (
+            bool(fidelity.get("required"))
+            or rung in {"R3_PORT", "R4_REIMPLEMENT"}
+            or legacy_requires_fidelity_audit(legacy_flags)
+        )
         if required:
             found = self._gate_item(fidelity.get("gate_id"), stable_id)
             if found is None:
@@ -941,6 +953,93 @@ class CanonicalReducer:
                 raise ReductionError(
                     "required fidelity gate is stale, unacceptable, or has a blocked rung check"
                 )
+
+    def _validate_pending_run_rung(self, model: Mapping[str, Any]) -> None:
+        """Validate a driver-owned R1/R2 run while authored metadata is pending.
+
+        Parameters
+        ----------
+        model:
+            Proposed pending-metadata run revision.
+        """
+
+        rung = model.get("source_resolution", {}).get("rung")
+        if rung not in {"R1_LIBRARY", "R2_VENDOR"}:
+            raise ReductionError("pending metadata runs are restricted to mechanical R1/R2")
+        accuracy = model.get("accuracy_gate", {})
+        if (
+            accuracy.get("gate_id") is not None
+            or accuracy.get("vet_identity") is not None
+            or accuracy.get("verdict") is not None
+            or accuracy.get("current")
+            or accuracy.get("prompt_sha256") != _checker_prompt_hash()
+        ):
+            raise ReductionError("pending metadata run carries false accuracy-gate authority")
+        for field in (
+            "taxonomy",
+            "external_metadata",
+            "website",
+            "people_and_origin",
+            "dates",
+            "citation",
+            "licenses",
+        ):
+            if model.get(field) is not None:
+                raise ReductionError("pending metadata run exposes ungated source-read fields")
+        untrusted = model.get("untrusted_attempt")
+        proposal = untrusted.get("proposal") if isinstance(untrusted, Mapping) else None
+        if not isinstance(untrusted, Mapping) or not isinstance(proposal, Mapping):
+            raise ReductionError("pending metadata run lacks its exact untrusted proposal")
+        proposal_sha256 = stable_hash(
+            {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+        )
+        if (
+            untrusted.get("proposal_sha256") != proposal_sha256
+            or proposal.get("proposal_sha256") != proposal_sha256
+            or proposal.get("stable_id") != model.get("stable_id")
+        ):
+            raise ReductionError("pending metadata run proposal identity is stale")
+        proposed_facts = proposal.get("proposed_facts")
+        if not isinstance(proposed_facts, Mapping):
+            raise ReductionError("pending metadata run proposal facts are incomplete")
+        for field in (
+            "identity",
+            "source_resolution",
+            "evidence",
+            "implementation",
+            "input_contract",
+            "fidelity",
+        ):
+            if model.get(field) != proposed_facts.get(field):
+                raise ReductionError(f"pending metadata run changed mechanical fact root {field}")
+        proposed_modes = proposed_facts.get("modes")
+        model_modes = model.get("modes")
+        if not isinstance(proposed_modes, Mapping) or not isinstance(model_modes, Mapping):
+            raise ReductionError("pending metadata run modes are incomplete")
+        for field in (
+            "meaningful_modes",
+            "train_eval_divergence",
+            "divergence_evidence",
+        ):
+            if model_modes.get(field) != proposed_modes.get(field):
+                raise ReductionError(f"pending metadata run changed mechanical modes.{field}")
+        try:
+            identities = recompute_accepted_identities(
+                proposed_facts,
+                checker_prompt_hash=_checker_prompt_hash(),
+                checker_model=str(accuracy.get("checker_model")),
+                checker_version=str(accuracy.get("checker_version")),
+            )
+        except MetadataValidationError as exc:
+            raise ReductionError(str(exc)) from exc
+        if (
+            proposal.get("source_identity") != identities.source
+            or proposal.get("evidence_identity") != identities.evidence
+            or proposal.get("recipe_revision") != identities.recipe
+            or model.get("evidence", {}).get("evidence_identity") != identities.evidence
+            or model.get("implementation", {}).get("recipe_revision") != identities.recipe
+        ):
+            raise ReductionError("pending metadata mechanical identities are stale")
 
     def _is_fidelity_repair_failure(self, model: Mapping[str, Any]) -> bool:
         """Return whether a runner terminal is an evidenced fidelity-repair failure.
@@ -1085,13 +1184,25 @@ class CanonicalReducer:
         accepted_work_ids: set[str] = set()
         implementation = model.get("implementation", {})
         evidence = model.get("evidence", {})
+        untrusted = model.get("untrusted_attempt")
+        pending_proposal = untrusted.get("proposal") if isinstance(untrusted, Mapping) else None
+        pending_facts = (
+            pending_proposal.get("proposed_facts")
+            if isinstance(pending_proposal, Mapping)
+            and model.get("authored_metadata_state") == "pending"
+            else None
+        )
         code_manifest = implementation.get("code_manifest")
         expected_manifest_digest = (
             stable_hash(code_manifest)
             if isinstance(code_manifest, list) and code_manifest
             else None
         )
-        external_metadata = model.get("external_metadata", {})
+        external_metadata = (
+            pending_facts.get("external_metadata")
+            if isinstance(pending_facts, Mapping)
+            else model.get("external_metadata", {})
+        )
         modality = (
             external_metadata.get("modality") if isinstance(external_metadata, Mapping) else None
         )
@@ -1104,7 +1215,7 @@ class CanonicalReducer:
         expected_asset_id = expected_asset["asset_id"] if expected_asset is not None else None
         try:
             accepted_identities = recompute_accepted_identities(
-                _model_facts(model),
+                pending_facts if isinstance(pending_facts, Mapping) else _model_facts(model),
                 checker_prompt_hash=_checker_prompt_hash(),
                 checker_model=str(model.get("accuracy_gate", {}).get("checker_model")),
                 checker_version=str(model.get("accuracy_gate", {}).get("checker_version")),
@@ -1175,9 +1286,15 @@ class CanonicalReducer:
             signatures[mode].append(signature)
         if len(accepted_work_ids) != 1:
             raise ReductionError("accepted attempts span multiple proposal work identities")
-        rung_gate = self._gate_item(model.get("accuracy_gate", {}).get("gate_id"), str(stable_id))
-        if rung_gate is None or str(rung_gate[1].get("work_id")) not in accepted_work_ids:
-            raise ReductionError("anti-slop/rung gate is stale for the accepted work identity")
+        if isinstance(pending_proposal, Mapping):
+            if str(pending_proposal.get("work_id")) not in accepted_work_ids:
+                raise ReductionError("pending run proposal is stale for the accepted work identity")
+        else:
+            rung_gate = self._gate_item(
+                model.get("accuracy_gate", {}).get("gate_id"), str(stable_id)
+            )
+            if rung_gate is None or str(rung_gate[1].get("work_id")) not in accepted_work_ids:
+                raise ReductionError("anti-slop/rung gate is stale for the accepted work identity")
         for mode in meaningful:
             reference = per_mode[mode]
             attempt_id = reference.get("attempt_id")

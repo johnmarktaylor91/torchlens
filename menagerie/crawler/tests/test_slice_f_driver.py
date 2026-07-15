@@ -1977,8 +1977,8 @@ def test_entire_seven_item_phase_flushes_as_final_tail(tmp_path: Path) -> None:
     assert len(scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)) == 7
 
 
-def test_quota_pause_runs_mechanical_forwards_without_partial_award(tmp_path: Path) -> None:
-    """A checker quota pause persists R1/R2 forwards but awards no run until recovery."""
+def test_quota_pause_awards_pending_runs_then_metadata_supersedes(tmp_path: Path) -> None:
+    """A quota pause awards proven R1/R2 runs and recovery supersedes their metadata."""
 
     snapshot = _snapshot(tmp_path)
     scheduler = FakePauseScheduler(tmp_path / "wakeups")
@@ -1993,7 +1993,13 @@ def test_quota_pause_runs_mechanical_forwards_without_partial_award(tmp_path: Pa
     assert result.status == "paused:usage-limit"
     assert scheduler.calls == 1
     paths = _paths(tmp_path, snapshot)
-    assert scan_jsonl(paths.ledgers.models) == []
+    pending = scan_jsonl(paths.ledgers.models)
+    assert len(pending) == len(snapshot.items)
+    assert {model["status"]["code"] for model in pending} == {"runs"}
+    assert {model["authored_metadata_state"] for model in pending} == {"pending"}
+    assert all(model["accuracy_gate"]["current"] is False for model in pending)
+    assert all(model["completeness"]["release_eligible"] is False for model in pending)
+    assert all(model["external_metadata"] is None for model in pending)
     attempts = scan_jsonl(paths.ledgers.attempts)
     assert len(attempts) == 2 * len(snapshot.items)
     assert set(forward.calls) == {item.stable_id for item in snapshot.items}
@@ -2004,6 +2010,52 @@ def test_quota_pause_runs_mechanical_forwards_without_partial_award(tmp_path: Pa
     resumed = _driver(tmp_path, snapshot, forward=resumed_forward).run()
     assert resumed.status == "complete"
     assert resumed_forward.calls == {}
+    revisions = scan_jsonl(paths.ledgers.models)
+    assert len(revisions) == 2 * len(snapshot.items)
+    current = {model["stable_id"]: model for model in revisions[-len(snapshot.items) :]}
+    assert {model["authored_metadata_state"] for model in current.values()} == {"accepted"}
+    assert all(model["completeness"]["release_eligible"] is True for model in current.values())
+    for model in current.values():
+        parent = next(
+            revision
+            for revision in pending
+            if revision["record_revision"] == model["parent_revision"]
+        )
+        assert model["status"]["supersedes_revision"] == parent["record_revision"]
+
+
+def test_legacy_faithful_r1_requires_current_fidelity_gate(tmp_path: Path) -> None:
+    """A fresh R1 selection cannot fast-pass an immutable legacy fidelity claim."""
+
+    master = tmp_path / "legacy-master.jsonl"
+    deferred = tmp_path / "legacy-deferred.jsonl"
+    _write_jsonl(
+        master,
+        [
+            {
+                "name": "LegacyFaithful",
+                "zoo": "unregistered-classics-pytorch",
+                "variant": "base",
+                "notes": "faithful-verified classic implementation",
+                "source_url": "https://example.com/legacy-faithful",
+            }
+        ],
+    )
+    _write_jsonl(deferred, [])
+    snapshot = create_intake_snapshot(master, deferred, tmp_path / "legacy-intake")
+    checker = FakeChecker()
+
+    result = _driver(tmp_path, snapshot, checker=checker).run()
+
+    assert result.status == "complete"
+    assert checker.fidelity_calls == 1
+    model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[-1]
+    assert "legacy-fidelity-claim" in model["intake"]["preserved_legacy_flags"]
+    assert "legacy-classic-requires-fidelity-audit" in model["intake"]["preserved_legacy_flags"]
+    assert model["fidelity"]["required"] is True
+    assert model["fidelity"]["current"] is True
+    assert model["fidelity"]["verdict"] == "match"
+    assert model["completeness"]["release_eligible"] is True
 
 
 def test_runtime_mode_expansion_is_model_local_and_restart_stable(tmp_path: Path) -> None:
@@ -2414,8 +2466,8 @@ def test_environment_medic_retries_before_model_fanout(tmp_path: Path) -> None:
     assert [record["status"]["code"] for record in models] == ["runs"]
 
 
-def test_post_use_teardown_failure_does_not_terminalize_pending_models(tmp_path: Path) -> None:
-    """A teardown error after successful banked forwards stays campaign-level only."""
+def test_post_use_teardown_failure_preserves_pending_run_award(tmp_path: Path) -> None:
+    """A teardown error cannot replace a durable pending run with a false failure."""
 
     class TeardownFailingEnvironments(FakeEnvironments):
         """Complete model use and then report teardown disk failure."""
@@ -2437,7 +2489,11 @@ def test_post_use_teardown_failure_does_not_terminalize_pending_models(tmp_path:
             pause_scheduler=FakePauseScheduler(tmp_path),
         ).run()
 
-    assert scan_jsonl(paths.ledgers.models) == []
+    models = scan_jsonl(paths.ledgers.models)
+    assert len(models) == 1
+    assert models[0]["status"]["code"] == "runs"
+    assert models[0]["authored_metadata_state"] == "pending"
+    assert models[0]["completeness"]["release_eligible"] is False
     assert len(scan_jsonl(paths.ledgers.attempts)) == 2
 
 

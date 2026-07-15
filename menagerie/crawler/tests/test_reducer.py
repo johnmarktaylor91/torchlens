@@ -265,7 +265,7 @@ def test_partition_duplicate_and_missing_are_rejected() -> None:
 def test_stale_rung_check_and_pending_metadata_cannot_bypass_run_gate(
     tmp_path: Path,
 ) -> None:
-    """A run always needs a current rung decision, independent of metadata state."""
+    """A pending run needs exact retained proposal proof, never a blind state flip."""
 
     paths = _paths(tmp_path)
     stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
@@ -280,8 +280,22 @@ def test_stale_rung_check_and_pending_metadata_cannot_bypass_run_gate(
     pending_paths = _paths(tmp_path / "pending")
     with CanonicalReducer(pending_paths, stable_ids) as reducer:
         reducer.append_attempt(make_attempt())
-        with pytest.raises(ReductionError, match="anti-slop/rung"):
+        with pytest.raises(ReductionError, match="pending metadata run"):
             reducer.append_model(make_model(accepted=False))
+
+
+def test_legacy_audit_flag_cannot_bypass_current_fidelity_gate(tmp_path: Path) -> None:
+    """Reducer rejects a fresh R1 run that drops a preserved legacy audit obligation."""
+
+    paths = _paths(tmp_path)
+    stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
+    model = make_model(accepted=True)
+    model["intake"]["preserved_legacy_flags"] = ["legacy-fidelity-claim"]
+    with CanonicalReducer(paths, stable_ids) as reducer:
+        reducer.append_gate(make_gate(stable_ids))
+        reducer.append_attempt(make_attempt())
+        with pytest.raises(ReductionError, match="required fidelity is missing"):
+            reducer.append_model(model)
 
 
 def test_family_template_true_is_verified_against_representative(tmp_path: Path) -> None:

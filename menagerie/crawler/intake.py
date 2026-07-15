@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
@@ -32,6 +33,8 @@ class IntakeItem:
         Input stream in which the roster member was observed.
     legacy_row_sha256:
         Hash of the complete untrusted legacy row.
+    preserved_legacy_flags:
+        Deterministic audit-routing risks derived from the immutable legacy row.
     """
 
     stable_id: str
@@ -40,6 +43,7 @@ class IntakeItem:
     variant: str
     discovery_source: str
     legacy_row_sha256: str
+    preserved_legacy_flags: tuple[str, ...]
 
     @property
     def natural_key(self) -> tuple[str, str, str]:
@@ -69,7 +73,96 @@ class IntakeItem:
             "variant": self.variant,
             "discovery_source": self.discovery_source,
             "legacy_row_sha256": self.legacy_row_sha256,
+            "preserved_legacy_flags": list(self.preserved_legacy_flags),
         }
+
+
+def derive_legacy_risk_flags(
+    row: Mapping[str, Any], *, discovery_source: str = ""
+) -> tuple[str, ...]:
+    """Derive authority-free audit risks from one immutable legacy row.
+
+    Parameters
+    ----------
+    row:
+        Complete untrusted legacy source row.
+    discovery_source:
+        Snapshot stream containing the row.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Canonically sorted risk flags used only to require fresh verification.
+    """
+
+    flags = {str(flag) for flag in row.get("flags", []) if isinstance(flag, str)}
+    recipe = row.get("recipe")
+    recipe_type = recipe.get("type") if isinstance(recipe, Mapping) else None
+    if recipe_type in {"statement", "expression", "exec-string"}:
+        flags.add("legacy-opaque-recipe")
+    if bool(row.get("quarantine")) or (
+        isinstance(recipe, Mapping) and bool(recipe.get("quarantine"))
+    ):
+        flags.add("legacy-quarantined-recipe")
+
+    claim_text = " ".join(
+        str(row.get(field, "")) for field in ("notes", "verified", "verification_expectation")
+    ).lower()
+    if any(token in claim_text for token in ("verified", "trace", "runs", "forward")):
+        flags.add("legacy-run-claim")
+    if (
+        "faithful" in claim_text
+        or "reimplement" in claim_text
+        or re.search(r"\bport(?:ed|ing)?\b", claim_text) is not None
+    ):
+        flags.add("legacy-fidelity-claim")
+
+    recipe_text = ""
+    if isinstance(recipe, Mapping):
+        recipe_text = " ".join(
+            str(recipe.get(field, "")) for field in ("code", "module", "symbol")
+        ).lower()
+    classic_text = " ".join(
+        (
+            discovery_source,
+            str(row.get("zoo", "")),
+            claim_text,
+            recipe_text,
+        )
+    ).lower()
+    if "classic" in classic_text:
+        flags.add("legacy-classic-requires-fidelity-audit")
+
+    audit_text = " ".join((*flags, claim_text)).lower()
+    if "slop" in audit_text:
+        flags.add("legacy-slop-requires-fidelity-audit")
+    if not row.get("source_url"):
+        flags.add("legacy-source-unresolved")
+    if row.get("deferral") is not None:
+        flags.add("legacy-deferred")
+    return tuple(sorted(flags))
+
+
+def legacy_requires_fidelity_audit(flags: Iterable[str]) -> bool:
+    """Return whether legacy risks require a current five-way fidelity gate.
+
+    Parameters
+    ----------
+    flags:
+        Preserved authority-free legacy risk markers.
+
+    Returns
+    -------
+    bool
+        Whether the row belongs to a classic, faithful/fidelity, or slop audit class.
+    """
+
+    normalized = {str(flag).strip().lower() for flag in flags}
+    return any(
+        token in flag
+        for flag in normalized
+        for token in ("classic", "faithful", "fidelity", "slop")
+    )
 
 
 @dataclass(frozen=True)
@@ -247,6 +340,7 @@ def _build_items(
                 variant=key[2],
                 discovery_source=source,
                 legacy_row_sha256=stable_hash(row),
+                preserved_legacy_flags=derive_legacy_risk_flags(row, discovery_source=source),
             )
             existing = by_key.get(key)
             if existing is not None:
@@ -269,8 +363,8 @@ def create_intake_snapshot(
 ) -> IntakeSnapshot:
     """Snapshot trusted roster inputs and assign durable IDs idempotently.
 
-    Only roster membership and the minimal natural key are promoted into intake.
-    Every other legacy field survives solely through the row hash.
+    Only roster membership, the minimal natural key, and conservative audit-risk
+    markers are promoted into intake. No legacy claim gains authority.
 
     Parameters
     ----------
@@ -359,6 +453,33 @@ def load_intake_snapshot(snapshot_root: Path) -> IntakeSnapshot:
     if not isinstance(manifest_value, dict):
         raise IntakeError("intake manifest must be a JSON object")
     rows = _read_jsonl(snapshot_root / "items.jsonl")
+    manifest_items = manifest_value.get("items")
+    if not isinstance(manifest_items, list) or rows != manifest_items:
+        raise IntakeError("intake items do not match the immutable manifest")
+    source_rows: dict[str, dict[str, Mapping[str, Any]]] = {}
+    for discovery_source, filename in (
+        ("master_catalog", "master_catalog.jsonl"),
+        ("deferred", "deferred.jsonl"),
+    ):
+        source_path = snapshot_root / "sources" / filename
+        if not source_path.is_file():
+            continue
+        source_rows[discovery_source] = {
+            stable_hash(source_row): source_row for source_row in _read_jsonl(source_path)
+        }
+
+    def loaded_flags(row: Mapping[str, Any]) -> tuple[str, ...]:
+        """Return stored flags or derive them from immutable snapshotted source bytes."""
+
+        raw_flags = row.get("preserved_legacy_flags")
+        if isinstance(raw_flags, list):
+            return tuple(sorted(str(flag) for flag in raw_flags))
+        discovery_source = str(row["discovery_source"])
+        source_row = source_rows.get(discovery_source, {}).get(str(row["legacy_row_sha256"]))
+        if source_row is None:
+            return derive_legacy_risk_flags({}, discovery_source=discovery_source)
+        return derive_legacy_risk_flags(source_row, discovery_source=discovery_source)
+
     items = tuple(
         IntakeItem(
             stable_id=str(row["stable_id"]),
@@ -367,6 +488,7 @@ def load_intake_snapshot(snapshot_root: Path) -> IntakeSnapshot:
             variant=str(row["variant"]),
             discovery_source=str(row["discovery_source"]),
             legacy_row_sha256=str(row["legacy_row_sha256"]),
+            preserved_legacy_flags=loaded_flags(row),
         )
         for row in rows
     )

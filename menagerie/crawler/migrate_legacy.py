@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from menagerie.crawler.identity import hash_bytes, stable_hash
-from menagerie.crawler.intake import IntakeItem, IntakeSnapshot
+from menagerie.crawler.intake import (
+    IntakeItem,
+    IntakeSnapshot,
+    derive_legacy_risk_flags,
+)
 from menagerie.crawler.models import JsonObject
 
 
@@ -122,27 +126,7 @@ def _legacy_flags(row: Mapping[str, Any]) -> set[str]:
         Audit-routing flags only.
     """
 
-    flags = {str(flag) for flag in row.get("flags", []) if isinstance(flag, str)}
-    recipe = row.get("recipe")
-    recipe_type = recipe.get("type") if isinstance(recipe, Mapping) else None
-    if recipe_type in {"statement", "expression", "exec-string"}:
-        flags.add("legacy-opaque-recipe")
-    if bool(row.get("quarantine")) or (
-        isinstance(recipe, Mapping) and bool(recipe.get("quarantine"))
-    ):
-        flags.add("legacy-quarantined-recipe")
-    claim_text = " ".join(
-        str(row.get(field, "")) for field in ("notes", "verified", "verification_expectation")
-    ).lower()
-    if any(token in claim_text for token in ("verified", "trace", "runs", "forward")):
-        flags.add("legacy-run-claim")
-    if any(token in claim_text for token in ("faithful", "reimplement", "port")):
-        flags.add("legacy-fidelity-claim")
-    if not row.get("source_url"):
-        flags.add("legacy-source-unresolved")
-    if row.get("deferral") is not None:
-        flags.add("legacy-deferred")
-    return flags
+    return set(derive_legacy_risk_flags(row))
 
 
 def _merge_rows(rows: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str, str], Mapping[str, Any]]:
@@ -223,7 +207,7 @@ def _migrate_item(
         Untriaged hash-only hint.
     """
 
-    flags: set[str] = set()
+    flags: set[str] = set(item.preserved_legacy_flags)
     legacy_row_sha256: Optional[str] = item.legacy_row_sha256
     recipe_sha256: Optional[str] = None
     notes_sha256: Optional[str] = None

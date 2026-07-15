@@ -5,7 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from menagerie.crawler.intake import create_intake_snapshot, load_intake_snapshot
+from menagerie.crawler.intake import (
+    create_intake_snapshot,
+    legacy_requires_fidelity_audit,
+    load_intake_snapshot,
+)
 
 
 def _write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
@@ -51,3 +55,38 @@ def test_intake_is_idempotent_and_preserves_stable_ids(tmp_path: Path) -> None:
     assert [item.stable_id for item in first.items] == [item.stable_id for item in second.items]
     assert {item.name: item.stable_id for item in first.items}["TinyNet"] == "m7"
     assert load_intake_snapshot(first.root).items == first.items
+
+
+def test_all_legacy_audit_classes_survive_snapshot_reload(tmp_path: Path) -> None:
+    """Classic, faithful, and slop risks remain canonical after a clean reload."""
+
+    master = tmp_path / "master.jsonl"
+    deferred = tmp_path / "deferred.jsonl"
+    _write_jsonl(
+        master,
+        [
+            {"name": "ClassicNet", "zoo": "unregistered-classics-pytorch", "variant": ""},
+            {
+                "name": "FaithfulNet",
+                "zoo": "fixtures",
+                "variant": "",
+                "notes": "faithful verified implementation",
+            },
+            {
+                "name": "SlopNet",
+                "zoo": "fixtures",
+                "variant": "",
+                "flags": ["legacy-known-slop"],
+            },
+        ],
+    )
+    _write_jsonl(deferred, [])
+
+    snapshot = create_intake_snapshot(master, deferred, tmp_path / "snapshots")
+    loaded = load_intake_snapshot(snapshot.root)
+    flags_by_name = {item.name: set(item.preserved_legacy_flags) for item in loaded.items}
+
+    assert "legacy-classic-requires-fidelity-audit" in flags_by_name["ClassicNet"]
+    assert "legacy-fidelity-claim" in flags_by_name["FaithfulNet"]
+    assert "legacy-slop-requires-fidelity-audit" in flags_by_name["SlopNet"]
+    assert all(legacy_requires_fidelity_audit(flags) for flags in flags_by_name.values())
