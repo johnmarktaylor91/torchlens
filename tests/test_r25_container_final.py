@@ -25,6 +25,7 @@ Three findings in the r24 non-invoking output-container rebuild
 from __future__ import annotations
 
 import dataclasses
+import sys
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -38,6 +39,8 @@ from torchlens._runnable_execution import _container_spec_reconstruction_lossy
 from torchlens.ir.container import (
     ContainerSpec,
     _container_type_is_admissible,
+    _model_output_has_foreign_init,
+    _resolve_container_type,
     reconstruction_is_lossy,
     reconstruction_is_lossy_by_type,
     rebuild_container_from_spec,
@@ -364,17 +367,24 @@ def test_pure_dataclass_run_is_verified_and_faithful(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_pure_model_output_run_is_verified_and_faithful(tmp_path: Path) -> None:
-    """A pure ModelOutput output is VERIFIED with faithful mapping + attribute views."""
+def test_custom_init_model_output_run_is_unverifiable_but_reconstructs(tmp_path: Path) -> None:
+    """r27-B2: a custom-``__init__`` ModelOutput is honest fail-closed UNVERIFIABLE.
+
+    ``_PureModelOutput`` defines its OWN ``__init__`` (a custom, non-``transformers`` constructor).
+    Whether that ``__init__`` computes a dropped tensor-derived extra attribute is NOT observable
+    from the type without INVOKING it (the construction-gadget RCE surface), so the load-time
+    recompute conservatively marks the node lossy -> UNVERIFIABLE. The output still RECONSTRUCTS
+    faithfully (correct type + mapping/attribute views); only the honesty verdict is downgraded.
+    """
 
     x = torch.randn(1, 4)
-    bundle = tmp_path / "pure_mo.tlspec"
+    bundle = tmp_path / "custom_init_mo.tlspec"
     tl.trace(_PureModelOutputModel(), x, capture=_CAP).save(
         bundle, level="runnable", include_weights=True
     )
-    result = tl.load(bundle).run(inputs=x)
+    result = tl.load(bundle).run(inputs=x, on_divergence="return_diverged")
 
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert type(result.output) is _PureModelOutput
     assert list(result.output.keys()) == ["logits"]
     assert result.output.logits is result.output["logits"]
@@ -593,8 +603,12 @@ def test_r26_forged_lossy_flag_on_slots_type_is_recomputed_lossy() -> None:
     assert _container_spec_reconstruction_lossy(forged) is True
 
 
+class _NoInitModelOutput(dict[str, Any]):
+    """A mapping ModelOutput with NO custom ``__init__`` (mapping-only, no computed extras)."""
+
+
 def test_r26_pure_outputs_stay_verified_under_recompute() -> None:
-    """Pure dataclass / ModelOutput outputs stay non-lossy under the load-time recompute."""
+    """Pure dataclass / no-custom-init ModelOutput outputs stay non-lossy under the recompute."""
 
     pure_dc = ContainerSpec(
         kind="dataclass",
@@ -606,15 +620,36 @@ def test_r26_pure_outputs_stay_verified_under_recompute() -> None:
     )
     assert _container_spec_reconstruction_lossy(pure_dc) is False
 
+    # A ModelOutput with no custom ``__init__`` is trusted (mapping populated inertly).
     pure_mo = ContainerSpec(
+        kind="hf_model_output",
+        length=1,
+        keys=("logits",),
+        type_module=_NoInitModelOutput.__module__,
+        type_qualname=_NoInitModelOutput.__qualname__,
+        lossy_reconstruction=False,
+    )
+    assert _container_spec_reconstruction_lossy(pure_mo) is False
+
+
+def test_r27_custom_init_model_output_forged_lossy_flag_is_recomputed_lossy() -> None:
+    """r27-B2: a forged ``lossy=False`` on a custom-``__init__`` ModelOutput is recomputed lossy.
+
+    ``_PureModelOutput`` defines its own ``__init__``; the load-time recompute flags it lossy
+    from the TYPE alone (never invoking the constructor), defeating the forged flag.
+    """
+
+    assert reconstruction_is_lossy_by_type(_PureModelOutput, ("logits",), "hf_model_output") is True
+
+    forged = ContainerSpec(
         kind="hf_model_output",
         length=1,
         keys=("logits",),
         type_module=_PureModelOutput.__module__,
         type_qualname=_PureModelOutput.__qualname__,
-        lossy_reconstruction=False,
+        lossy_reconstruction=False,  # attacker-forged
     )
-    assert _container_spec_reconstruction_lossy(pure_mo) is False
+    assert _container_spec_reconstruction_lossy(forged) is True
 
 
 def test_r26_forged_lossy_flag_on_unloaded_type_is_lossy() -> None:
@@ -629,3 +664,134 @@ def test_r26_forged_lossy_flag_on_unloaded_type_is_lossy() -> None:
         lossy_reconstruction=False,
     )
     assert _container_spec_reconstruction_lossy(forged) is True
+
+
+# --------------------------------------------------------------------------- #
+# r27-B-NEW (HIGH, RCE): the dotted ``type_qualname`` walk must resolve STATICALLY.
+# Plain ``getattr`` fired ``torch.__getattr__`` and lazily imported ~48 torch
+# submodules (running their top-level code) for ``type_module="torch"`` +
+# ``type_qualname="onnx"`` on a benign reconstruct / honesty gate. The fix uses
+# ``inspect.getattr_static`` (no ``__getattr__`` / descriptor invocation), so an
+# unmaterialized lazy submodule fails closed to the plain-container fallback.
+# --------------------------------------------------------------------------- #
+
+
+def _torch_submodules() -> set[str]:
+    """Return the currently-loaded ``torch.*`` submodule names."""
+
+    return {name for name in sys.modules if name == "torch" or name.startswith("torch.")}
+
+
+@pytest.mark.parametrize("kind", ["namedtuple", "dataclass", "hf_model_output", "dict"])
+def test_r27_lazy_import_gadget_resolve_imports_nothing(kind: str) -> None:
+    """Resolving a ``torch.onnx`` container ref imports NO torch submodule and falls back."""
+
+    spec = ContainerSpec(
+        kind=kind,  # type: ignore[arg-type]
+        length=2,
+        keys=("values", "indices"),
+        fields=("values", "indices"),
+        type_module="torch",
+        type_qualname="onnx",  # torch's lazy PEP-562 submodule -- must NOT be imported
+    )
+
+    before = _torch_submodules()
+    resolved = _resolve_container_type(spec)
+    after = _torch_submodules()
+
+    # Static resolution never imports the lazy submodule and never yields a container type.
+    assert resolved is None
+    assert after == before, f"resolve imported torch submodules: {sorted(after - before)}"
+
+
+def test_r27_lazy_import_gadget_rebuild_and_lossy_gate_import_nothing() -> None:
+    """Both rebuild and the honesty (lossy) gate stay import-free for the ``torch.onnx`` ref."""
+
+    spec = ContainerSpec(
+        kind="hf_model_output",
+        length=1,
+        keys=("logits",),
+        type_module="torch",
+        type_qualname="onnx",
+    )
+
+    before = _torch_submodules()
+    # Rebuild degrades to the plain mapping shape (no admissible type resolved), no import.
+    rebuilt = rebuild_container_from_spec(spec, [7])
+    # The honesty gate resolves the same ref (a not-loaded/plain-substitution -> lossy), no import.
+    assert _container_spec_reconstruction_lossy(spec) is True
+    after = _torch_submodules()
+
+    assert rebuilt == {"logits": 7}
+    assert after == before, f"gadget imported torch submodules: {sorted(after - before)}"
+
+
+def test_r27_deep_qualname_is_refused() -> None:
+    """A pathologically deep attacker qualname is refused (falls back), never walked."""
+
+    spec = ContainerSpec(
+        kind="namedtuple",
+        fields=("a",),
+        type_module="torch",
+        type_qualname=".".join(["x"] * 32),
+    )
+    assert _resolve_container_type(spec) is None
+
+
+def test_r27_getattr_static_does_not_fire_module_pep562_getattr() -> None:
+    """Static resolution never triggers a module-level ``__getattr__`` side effect."""
+
+    module_name = "tests._r27_pep562_probe_module"
+    probe = sys.modules.get(module_name)
+    if probe is None:
+        import types as _types
+
+        probe = _types.ModuleType(module_name)
+        fired: list[str] = []
+
+        def _module_getattr(name: str) -> Any:  # PEP-562 module __getattr__
+            fired.append(name)
+            raise AttributeError(name)
+
+        probe.__getattr__ = _module_getattr  # type: ignore[attr-defined]
+        probe._fired = fired  # type: ignore[attr-defined]
+        sys.modules[module_name] = probe
+
+    probe._fired.clear()  # type: ignore[attr-defined]
+    spec = ContainerSpec(
+        kind="namedtuple",
+        fields=("a",),
+        type_module=module_name,
+        type_qualname="Anything",
+    )
+    resolved = _resolve_container_type(spec)
+
+    assert resolved is None
+    assert probe._fired == []  # type: ignore[attr-defined]  # __getattr__ never invoked
+
+
+# --------------------------------------------------------------------------- #
+# r27-B2: custom-``__init__`` ModelOutput type-observable proxy (unit level).
+# --------------------------------------------------------------------------- #
+
+
+def test_r27_foreign_init_detection_matrix() -> None:
+    """``_model_output_has_foreign_init`` trusts mapping bases / transformers, flags custom init."""
+
+    class _CustomInitMO(dict[str, Any]):
+        def __init__(self, **kwargs: Any) -> None:
+            super().__init__(kwargs)
+            self.extra = 1.0  # computed non-key attribute
+
+    class _NoInitMO(dict[str, Any]):
+        pass
+
+    class _OrderedNoInitMO(OrderedDict):  # type: ignore[type-arg]
+        pass
+
+    assert _model_output_has_foreign_init(_CustomInitMO) is True
+    assert _model_output_has_foreign_init(_NoInitMO) is False
+    assert _model_output_has_foreign_init(_OrderedNoInitMO) is False
+
+    modeling_outputs = pytest.importorskip("transformers.modeling_outputs")
+    assert _model_output_has_foreign_init(modeling_outputs.BaseModelOutput) is False

@@ -6,6 +6,7 @@ from collections import OrderedDict, defaultdict
 from collections.abc import Callable
 import dataclasses
 from dataclasses import dataclass
+import inspect
 import sys
 import types
 from typing import Any, ClassVar, Literal, TypeAlias, cast
@@ -570,6 +571,59 @@ def _dataclass_defines_post_init(container_type: type[Any]) -> bool:
     return False
 
 
+# Classes whose ``__init__`` only mirrors declared fields into the mapping/attribute views of a
+# ``ModelOutput`` (or allocates the mapping) and therefore cannot silently compute a dropped
+# tensor-derived extra attribute: the builtin mapping bases and the ``transformers`` ModelOutput
+# family. A resolved ``__init__`` provided by any of these is trusted; anything else is a custom
+# constructor and is treated as a lossy black box (see ``_model_output_has_foreign_init``).
+_TRUSTED_MODEL_OUTPUT_INIT_BASES: tuple[type[Any], ...] = (object, dict, OrderedDict)
+
+
+def _model_output_has_foreign_init(container_type: type[Any]) -> bool:
+    """Return whether an ``hf_model_output`` type's own ``__init__`` is an untrusted constructor.
+
+    A custom (non-dataclass) ``dict``-subclass ``ModelOutput`` can compute, in its ``__init__``,
+    a NON-``None`` non-key instance attribute derived from a tensor (e.g. ``self.double = x * 2``)
+    that the non-invoking rebuild -- which restores only the captured mapping keys -- silently
+    drops. Unlike the ``__post_init__`` / ``__slots__`` / data-descriptor signals, that computed
+    extra is NOT observable from the type alone: the ONLY way to see it is to RUN ``__init__``,
+    which IS the construction-gadget RCE surface we must never invoke on an untrusted bundle. So
+    we use a TYPE-observable PROXY: the class that provides the winning (most-derived) ``__init__``.
+    If that ``__init__`` comes from a trusted populator -- the builtin mapping bases
+    (``object`` / ``dict`` / ``OrderedDict``) or a ``transformers`` ModelOutput-family class whose
+    generated / field-mirroring ``__init__`` only reflects declared fields -- reconstruction is
+    faithful. Any OTHER class defining ``__init__`` is a custom constructor whose effect we cannot
+    verify without running it, so the node is flagged lossy.
+
+    This DELIBERATELY over-triggers: a genuine hand-rolled custom ``ModelOutput`` whose ``__init__``
+    happens to set only its keys is still marked lossy (reported UNVERIFIABLE, never a false
+    VERIFIED). That is the intended honest fail-closed -- the tripwire refuses to bless an output it
+    cannot prove was reconstructed faithfully. Real ``transformers`` outputs and plain no-``__init__``
+    mapping subclasses stay eligible for VERIFIED.
+
+    Parameters
+    ----------
+    container_type:
+        Resolved ``hf_model_output`` container class.
+
+    Returns
+    -------
+    bool
+        True when the winning ``__init__`` is defined by an untrusted (non-mapping,
+        non-``transformers``) class.
+    """
+
+    for klass in getattr(container_type, "__mro__", (container_type,)):
+        if "__init__" not in getattr(klass, "__dict__", {}):
+            continue
+        # First (most-derived) class that defines ``__init__`` -- the one that would run.
+        if klass in _TRUSTED_MODEL_OUTPUT_INIT_BASES:
+            return False
+        module = getattr(klass, "__module__", "") or ""
+        return not module.startswith("transformers")
+    return False
+
+
 def reconstruction_is_lossy_by_type(
     container_type: type[Any], captured_names: tuple[Any, ...], kind: str
 ) -> bool:
@@ -588,10 +642,18 @@ def reconstruction_is_lossy_by_type(
     The ``__post_init__`` signal is applied ONLY to the plain-``dataclass`` kind: HuggingFace
     ``ModelOutput`` dataclasses use ``__post_init__`` solely to populate their mapping from
     fields (attrs == keys), so applying it to the ``hf_model_output`` kind would over-trigger
-    the standard/real ModelOutput case that must stay VERIFIED. The purely instance-level r25
-    "computed non-None extra attr on a custom (non-dataclass) ModelOutput ``__init__``" case is
-    not type-observable without invoking that ``__init__``; the caller keeps the persisted flag
-    as a supplementary (never sole) signal so genuine such captures still report lossy.
+    the standard/real ModelOutput case that must stay VERIFIED.
+
+    For the ``hf_model_output`` kind, the r27 hardening adds an INDEPENDENT type-observable proxy
+    for the r25 "computed non-``None`` extra attr on a custom (non-dataclass) ModelOutput
+    ``__init__``" case, which is otherwise invisible without INVOKING ``__init__`` (the RCE
+    construction-gadget surface): if the resolved type's own (most-derived) ``__init__`` is a
+    custom constructor -- one NOT provided by the trusted mapping bases (``dict`` / ``OrderedDict``)
+    or a ``transformers`` ModelOutput-family class -- reconstruction is flagged lossy (see
+    ``_model_output_has_foreign_init``). This defeats a forged ``lossy_reconstruction=False`` on
+    such a custom ModelOutput without executing its constructor, at the honest cost of marking
+    some genuine hand-rolled custom ModelOutputs UNVERIFIABLE. The persisted flag remains a
+    supplementary (never sole) signal so any remaining not-type-observable case still reports lossy.
 
     Parameters
     ----------
@@ -613,6 +675,8 @@ def reconstruction_is_lossy_by_type(
     if any(_name_is_data_descriptor(container_type, name) for name in captured_names):
         return True
     if kind == "dataclass" and _dataclass_defines_post_init(container_type):
+        return True
+    if kind == "hf_model_output" and _model_output_has_foreign_init(container_type):
         return True
     return False
 
@@ -831,14 +895,31 @@ def _container_type_is_admissible(container_type: type[Any], spec: ContainerSpec
     return False
 
 
+# A container ``type_qualname`` names a concrete class produced by the traced model
+# (``Outer.Inner`` at most a few components deep). A pathologically deep attacker qualname
+# has no legitimate container use and only widens the static-traversal surface, so the walk
+# is capped and an over-long reference falls back to the plain container shape.
+_MAX_QUALNAME_DEPTH = 10
+
+
 def _resolve_container_type(spec: ContainerSpec) -> type[Any] | None:
     """Resolve the concrete container type named by a spec under a default-deny gate.
 
-    Security contract (this is the fix for the output-container reconstruction RCE):
+    Security contract (this is the fix for the output-container reconstruction RCE and the
+    r27 lazy-import / descriptor gadget on the dotted-name walk):
 
     * NEVER imports an attacker-named module -- importing runs top-level module code.
       The type is resolved ONLY from a module already present in ``sys.modules``; every
       legit container type was produced by the traced model, so its module is loaded.
+    * Resolves the dotted ``type_qualname`` with :func:`inspect.getattr_static`, which reads
+      each hop STATICALLY from the object's ``__dict__`` / MRO and NEVER invokes a module
+      PEP-562 ``__getattr__`` or a class/metaclass descriptor / ``property.__get__``. Plain
+      ``getattr`` would fire those on the ATTACKER-chosen name BEFORE the admissibility gate:
+      e.g. ``type_module="torch"`` + ``type_qualname="onnx"`` triggered ``torch.__getattr__``
+      and lazily imported ~48 torch submodules (running their top-level code) during a benign
+      ``.run()`` -- and the same read fires on the honesty gate too. An unmaterialized lazy
+      submodule is absent from ``__dict__``, so the static walk fails closed to the fallback
+      and imports nothing. The qualname depth is also capped (see ``_MAX_QUALNAME_DEPTH``).
     * A resolved type is returned ONLY when it structurally matches the benign container
       kind recorded in the spec (see ``_container_type_is_admissible``); a resolved type
       that is NOT admissible (e.g. ``subprocess.Popen`` under a ``namedtuple`` kind) is a
@@ -875,10 +956,15 @@ def _resolve_container_type(spec: ContainerSpec) -> type[Any] | None:
         # Refuse to import an arbitrary bundle-named module; fall back to the plain
         # container shape rather than executing that module's top-level code.
         return None
+    parts = qualname.split(".")
+    if not parts or len(parts) > _MAX_QUALNAME_DEPTH:
+        return None
     resolved: Any = module
     try:
-        for attribute_name in qualname.split("."):
-            resolved = getattr(resolved, attribute_name)
+        for attribute_name in parts:
+            # STATIC resolution only: never invokes ``__getattr__`` / descriptor ``__get__``,
+            # and each hop must be present in the object's ``__dict__`` / MRO or this raises.
+            resolved = inspect.getattr_static(resolved, attribute_name)
     except AttributeError:
         return None
     if not isinstance(resolved, type):
