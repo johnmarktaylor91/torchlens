@@ -2016,7 +2016,7 @@ def _input_literal_witnesses(
     reporting a verified, attested result.
 
     A leaf *outside* the frozen literal grammar (enum, dataclass, set, bytes,
-    complex, numpy scalar, non-finite ``inf``/``nan`` float, ...) cannot be
+    complex, numpy scalar, ...) cannot be
     compared across save/load, so its value is recorded ``None`` -- a value-free
     fact. Such a leaf can still steer unobserved Python control flow, and because
     the executor cannot re-verify it, the run's witness coverage is genuinely
@@ -2319,7 +2319,7 @@ def _encode_literal(value: Any) -> NonTensorLiteral:
         # spurious (bool) user escape and falsely downgrade an exotic-key model (e.g. a
         # ``dict[float, int]`` branch) to UNVERIFIABLE on the unchanged input.
         if not math.isfinite(value):
-            raise _UnsupportedLiteralError("Non-finite floating-point literals are unsupported.")
+            return LiteralAtom(LiteralAtomKind.NONFINITE_FLOAT, _nonfinite_float_payload(value))
         # Normalize float subclasses (e.g. ``numpy.float64``) to a plain
         # ``float`` so the recorded literal round-trips to a grammar-native value
         # the safe metadata unpickler admits and value-equality can verify.
@@ -2358,6 +2358,25 @@ def _encode_literal(value: Any) -> NonTensorLiteral:
     raise _UnsupportedLiteralError(
         f"Value of type {value_type} is outside the frozen non-tensor literal grammar."
     )
+
+
+def _nonfinite_float_payload(value: float) -> str:
+    """Return the stable string payload for a non-finite float literal.
+
+    Parameters
+    ----------
+    value:
+        Python float known to be non-finite.
+
+    Returns
+    -------
+    str
+        One of ``"nan"``, ``"inf"``, or ``"-inf"``.
+    """
+
+    if math.isnan(value):
+        return "nan"
+    return "inf" if value > 0 else "-inf"
 
 
 def _encode_slice_component(value: Any, field_name: str) -> LiteralAtom:
