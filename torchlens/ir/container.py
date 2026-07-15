@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from collections.abc import Callable
 import dataclasses
 from dataclasses import dataclass
 import sys
-from typing import Any, ClassVar, Literal, TypeAlias
+from typing import Any, ClassVar, Literal, TypeAlias, cast
 
 from .._io import FieldPolicy
 
@@ -200,16 +200,20 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             for field_name in spec.fields
         }
         container_type = _resolve_container_type(spec)
-        if container_type is not None:
-            return container_type(**field_values)
+        if container_type is not None and _type_has_safe_new(container_type):
+            return _construct_dataclass_without_init(container_type, field_values)
         return field_values
     if spec.kind == "hf_model_output":
         key_values = {
             key: _rebuild_child_or_leaf(child_by_key, HFKey(key), leaf_iter) for key in spec.keys
         }
         container_type = _resolve_container_type(spec)
-        if container_type is not None:
-            return container_type(**key_values)
+        if (
+            container_type is not None
+            and _type_has_safe_new(container_type)
+            and issubclass(container_type, dict)
+        ):
+            return _construct_model_output_without_init(container_type, key_values)
         return key_values
     if spec.kind == "registered":
         values = [
@@ -270,6 +274,136 @@ def _rebuild_dict_subtype(spec: ContainerSpec, items: dict[Any, Any]) -> Any:
             raise ValueError(f"Unsafe defaultdict factory {factory_name!r} for reconstruction.")
         return container_type(factory, items)
     return container_type(items)
+
+
+# The ONLY ``__new__`` allocators that run no Python code at instance allocation:
+# ``object.__new__`` (plain dataclasses) and the builtin ``dict.__new__`` (shared by
+# ``OrderedDict``/``defaultdict`` and thus inherited by ``OrderedDict``-derived ModelOutput
+# classes). A type that OVERRIDES ``__new__`` matches neither of these identities and is
+# refused, so non-invoking reconstruction never executes an attacker-supplied allocator.
+_INERT_NEW_ALLOCATORS: tuple[Any, ...] = (object.__new__, dict.__new__)
+
+
+def _type_has_safe_new(container_type: type[Any]) -> bool:
+    """Return whether constructing ``container_type`` via ``__new__`` runs no attacker code.
+
+    Reconstructing a ``dataclass`` / ``hf_model_output`` output from an untrusted spec must
+    NEVER invoke arbitrary constructor code. We build the instance with ``cls.__new__(cls)``
+    and then set only the CAPTURED fields inertly (``object.__setattr__`` / the builtin dict
+    populator), so no attacker ``__init__`` / ``__post_init__`` runs. This guard makes sure
+    ``cls.__new__(cls)`` itself cannot run attacker code: a normal dataclass leaves ``__new__``
+    as ``object.__new__`` and an ``OrderedDict``-derived ModelOutput inherits the inert builtin
+    ``dict.__new__``, whereas a type that OVERRIDES ``__new__`` is exotic and is refused here
+    (the caller then falls back to the plain namespace / mapping shape rather than executing
+    that ``__new__``).
+
+    Parameters
+    ----------
+    container_type:
+        Already-resolved, admissible container class.
+
+    Returns
+    -------
+    bool
+        True when ``container_type.__new__`` is an inert builtin allocator.
+    """
+
+    return any(container_type.__new__ is inert_new for inert_new in _INERT_NEW_ALLOCATORS)
+
+
+def _inert_new(container_type: type[Any]) -> Any:
+    """Allocate an instance via the type's ``__new__`` WITHOUT running ``__init__``.
+
+    The caller has already verified (``_type_has_safe_new``) that ``container_type.__new__``
+    is an inert builtin allocator, so this executes no attacker code. We call it through
+    ``container_type.__new__`` rather than ``object.__new__(container_type)`` because
+    ``object.__new__`` refuses ``dict``/``OrderedDict`` subclasses ("not safe"), while the
+    inherited builtin ``__new__`` on the class allocates them correctly.
+
+    Parameters
+    ----------
+    container_type:
+        Admissible container class whose ``__new__`` was checked inert.
+
+    Returns
+    -------
+    Any
+        A freshly allocated, uninitialized instance of ``container_type``.
+    """
+
+    new = cast("Callable[[type[Any]], Any]", container_type.__new__)
+    return new(container_type)
+
+
+def _construct_dataclass_without_init(
+    container_type: type[Any], field_values: dict[str, Any]
+) -> Any:
+    """Rebuild a dataclass output WITHOUT invoking its ``__init__`` / ``__post_init__``.
+
+    Uses ``cls.__new__(cls)`` and sets each CAPTURED field via ``object.__setattr__``. This
+    reproduces the exact captured output (``__post_init__`` could otherwise RE-derive fields
+    that differ from what was traced) and executes NO attacker-chosen constructor code, which
+    closes the output-container construction-gadget surface. ``object.__setattr__`` also
+    bypasses a frozen dataclass's ``__setattr__``, so frozen outputs rebuild faithfully too.
+
+    Parameters
+    ----------
+    container_type:
+        Admissible dataclass type with an inert ``__new__`` (see ``_type_has_safe_new``).
+    field_values:
+        Captured ``{field_name: value}`` pairs to set on the instance.
+
+    Returns
+    -------
+    Any
+        Reconstructed dataclass instance with the captured field values.
+    """
+
+    obj = _inert_new(container_type)
+    for field_name, value in field_values.items():
+        object.__setattr__(obj, field_name, value)
+    return obj
+
+
+def _construct_model_output_without_init(
+    container_type: type[Any], key_values: dict[Any, Any]
+) -> Any:
+    """Rebuild a HuggingFace ``ModelOutput`` output WITHOUT invoking attacker constructor code.
+
+    A ``ModelOutput`` is a ``dict`` subclass whose ``__init__``/``__post_init__`` populate its
+    mapping view (and HuggingFace-style attribute aliases) from its set fields. We replicate
+    that populated state inertly: ``cls.__new__(cls)`` (an empty ``dict``-subclass instance),
+    then for each captured ``(key, value)`` set both the mapping entry (via the builtin
+    ``dict``/``OrderedDict`` ``__setitem__``) and the attribute (via ``object.__setattr__``) --
+    exactly what a faithful ``ModelOutput`` holds -- WITHOUT running the type's own
+    possibly-overridden ``__setitem__`` / ``__setattr__`` / ``__init__`` / ``__post_init__``.
+
+    The mapping entry uses ``OrderedDict.__setitem__`` for ``OrderedDict`` subclasses (real
+    transformers ``ModelOutput``) and the builtin ``dict.__setitem__`` for plain ``dict``
+    subclasses; ``dict.__setitem__`` on an ``OrderedDict`` corrupts its ordering bookkeeping,
+    so the correct inert populator is selected per base.
+
+    Parameters
+    ----------
+    container_type:
+        Admissible ``dict``-derived ModelOutput type with an inert ``__new__``.
+    key_values:
+        Captured ``{key: value}`` pairs in capture order.
+
+    Returns
+    -------
+    Any
+        Reconstructed ModelOutput with the captured mapping view and attributes.
+    """
+
+    setitem = (
+        OrderedDict.__setitem__ if issubclass(container_type, OrderedDict) else dict.__setitem__
+    )
+    obj = _inert_new(container_type)
+    for key, value in key_values.items():
+        setitem(obj, key, value)
+        object.__setattr__(obj, key, value)
+    return obj
 
 
 def _rebuild_child_or_leaf(
