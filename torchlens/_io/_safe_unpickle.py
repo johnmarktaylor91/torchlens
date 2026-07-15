@@ -19,11 +19,16 @@ loader -- raises :class:`pickle.UnpicklingError` and executes nothing.
 Allowlist policy (fail-closed):
 
 * Objects resolved from the ``torchlens`` package are admitted when they are a
-  ``type`` (the metadata dataclasses / enums / accessors -- reconstructed by normal
-  unpickling, never INVOKED with attacker args), or a VETTED-INERT first-party
-  callable: a PUBLIC, side-effect-free ``torchlens.*`` facet recipe / transform /
-  helper (e.g. ``torchlens.utils.display.identity``), decided by
-  ``torchlens.utils._callable_safety.is_inert_first_party_callable``. Trust is
+  ``type`` ON THE POSITIVE ``_SAFE_TORCHLENS_TYPES`` ALLOWLIST (vetted-inert metadata
+  dataclasses / enums / accessors), or a VETTED-INERT first-party callable: a PUBLIC,
+  side-effect-free ``torchlens.*`` facet recipe / transform / helper (e.g.
+  ``torchlens.utils.display.identity``), decided by
+  ``torchlens.utils._callable_safety.is_inert_first_party_callable``. A torchlens
+  ``type`` is NO LONGER admitted unconditionally: a pickle ``REDUCE`` INVOKES the
+  admitted type (or its reconstructed instance) with attacker args, so an
+  import-sink type such as ``torchlens.intervention.save.LazyImportRef`` (whose
+  ``__call__`` resolves an arbitrary import path from its own pickled field) is a
+  load-time RCE and is DENIED by the default-deny type allowlist. Trust is
   decided by the resolved object's real module, never the pickled path, so a key
   that walks attributes off a torchlens module to reach ``os.system`` (real module
   ``posix``) is denied. Crucially, a pickle ``REDUCE`` INVOKES the admitted callable
@@ -321,6 +326,168 @@ def _is_torchlens_appliance_module(module: str) -> bool:
         module == appliance or module.startswith(appliance + ".")
         for appliance in _TORCHLENS_APPLIANCE_MODULES
     )
+
+
+# Positive allowlist of VETTED-INERT first-party ``(module, qualname)`` DATA types
+# (default-deny). The torchlens ``type`` branch of ``find_class`` historically
+# admitted ANY resolved ``torchlens.*`` type unconditionally on the premise that a
+# resolved type is "reconstructed via normal unpickling, never INVOKED with attacker
+# args". That premise is FALSE: a pickle ``REDUCE`` may INVOKE any admitted type
+# (its instance, or the type itself) with attacker-chosen arguments. The concrete
+# load-time RCE (r23): ``torchlens.intervention.save.LazyImportRef`` is a frozen
+# dataclass whose ``__call__(import_path, ...)`` resolves an ARBITRARY import path
+# under a trust flag read from its OWN pickled field, so a crafted ``metadata.pkl``
+# reconstructs ``LazyImportRef(import_path="os:system", trust_custom_callables=True)``
+# and REDUCE-invokes it -> ``os.system`` on plain ``tl.load``.
+#
+# This closes that with the same default-deny discipline as the r22 callable gate: a
+# torchlens type is admitted ONLY if it is on this frozen allowlist of pure DATA
+# types -- dataclasses / enums / NamedTuples / plain accessor+value classes whose
+# reconstruction runs no import / exec / filesystem / process side effect and which
+# is NOT an import-sink / instance-callable gadget. Every other torchlens type --
+# above all ``LazyImportRef`` and any callable/import-sink/exec type -- is DENIED.
+#
+# Derivation (default-deny): the set is the vetted-inert DATA-type inventory of the
+# fixed set of first-party DATA modules that make up a scrubbed ``Trace``'s
+# ``metadata.pkl`` (data_classes.* / ir.* / intervention.types / intervention._super
+# / semantic.facets / quantities / capture.config+stop / _trace_state / _io.BlobRef /
+# visualization.code_panel). It was materialized by enumerating those modules and
+# admitting each class OWNED by the module (real ``__module__`` match, so no aliasing
+# to a logic module) that (a) is NOT instance-callable and (b) carries NO custom
+# ``__reduce__`` / ``__reduce_ex__``, then EXCLUDING live-view / error / exception
+# classes (``Facet`` / ``FacetView`` / ``MissingFacet`` / ``*Error`` / ...) that never
+# appear in scrubbed metadata. ``HelperSpec`` is the single vetted instance-callable
+# exception (``__call__`` takes no attacker args; its ``factory`` is scrubbed to
+# ``None`` before pickling, so it is not a reduce-invocable import sink). The result
+# was cross-checked against the torchlens types the real unpickler resolves across the
+# io / tlspec-runnable / semantic-facet / intervention / capture-oracle suites. The
+# import-sink / logic modules -- above all ``torchlens.intervention.save`` (home of
+# ``LazyImportRef``) -- are NOT data modules and are absent, so ``LazyImportRef`` is
+# denied on both counts (module not curated; instance-callable import sink). A legit
+# type not yet covered fails CLOSED (a load error surfacing in a test) and is added
+# only after the same vetting -- never by re-admitting the blanket "any torchlens
+# type" rule.
+_SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
+    {
+        # Trace runtime-state enum + capture config / stop directives.
+        ("torchlens._trace_state", "TraceState"),
+        ("torchlens.capture.config", "InternalCaptureConfig"),
+        ("torchlens.capture.stop", "StopDirective"),
+        # Portable I/O blob reference (NamedTuple of ids).
+        ("torchlens._io", "BlobRef"),
+        # Buffer / grad / param / op / layer / module data records + accessors.
+        ("torchlens.data_classes.buffer", "Buffer"),
+        ("torchlens.data_classes.buffer", "BufferAccessor"),
+        ("torchlens.data_classes.derived_grad", "DerivedGradAccessor"),
+        ("torchlens.data_classes.derived_grad", "DerivedGradRecord"),
+        ("torchlens.data_classes.derived_grad", "IntermediateDerivedGradAccessor"),
+        ("torchlens.data_classes.derived_grad", "IntermediateDerivedGradRecord"),
+        ("torchlens.data_classes.func_call_location", "FuncCallLocation"),
+        ("torchlens.data_classes.grad_fn", "GradFn"),
+        ("torchlens.data_classes.grad_fn", "GradFnAccessor"),
+        ("torchlens.data_classes.grad_fn", "GradFnCallAccessor"),
+        ("torchlens.data_classes.grad_fn_call", "GradFnCall"),  # locked rename target
+        ("torchlens.data_classes.layer", "Layer"),
+        ("torchlens.data_classes.layer", "LayerAccessor"),
+        ("torchlens.data_classes.layer", "OpAccessor"),
+        ("torchlens.data_classes.module", "HookInfo"),
+        ("torchlens.data_classes.module", "Module"),
+        ("torchlens.data_classes.module", "ModuleAccessor"),
+        ("torchlens.data_classes.module", "ModuleCall"),
+        ("torchlens.data_classes.module", "ModuleCallAccessor"),
+        ("torchlens.data_classes.op", "GradientRecord"),
+        ("torchlens.data_classes.op", "GradientRecordAccessor"),
+        ("torchlens.data_classes.op", "Op"),
+        ("torchlens.data_classes.op", "TensorLog"),  # locked rename-map alias of Op
+        ("torchlens.data_classes.param", "Param"),
+        ("torchlens.data_classes.param", "ParamAccessor"),
+        # Trace + conditional-control-flow data classes.
+        ("torchlens.data_classes.trace", "Conditional"),
+        ("torchlens.data_classes.trace", "ConditionalAccessor"),
+        ("torchlens.data_classes.trace", "ConditionalArm"),
+        ("torchlens.data_classes.trace", "ConditionalEvent"),
+        ("torchlens.data_classes.trace", "ConditionalRoleRef"),
+        ("torchlens.data_classes.trace", "ResolvedPostprocessing"),
+        ("torchlens.data_classes.trace", "ResolvedPreprocessing"),
+        ("torchlens.data_classes.trace", "Trace"),
+        # Bundle Super* aligned-view wrappers (locked ``NodeView`` rename target).
+        ("torchlens.intervention._super.super_op", "SuperLayer"),
+        ("torchlens.intervention._super.super_op", "SuperLayerAccessor"),
+        ("torchlens.intervention._super.super_op", "SuperOp"),  # locked rename target
+        ("torchlens.intervention._super.super_op", "SuperOpAccessor"),
+        ("torchlens.intervention._super.super_op", "TraceAccessor"),
+        # Intervention-spec DATA types (portable recipe descriptors, not runtime
+        # callables). ``HelperSpec`` is instance-callable but INERT: ``__call__``
+        # takes no attacker args and its ``factory`` is scrubbed to ``None`` before
+        # pickling, so it is not a reduce-invocable import sink.
+        ("torchlens.intervention.types", "CapturedArgTemplate"),
+        ("torchlens.intervention.types", "EdgeUseRecord"),
+        ("torchlens.intervention.types", "FireRecord"),
+        ("torchlens.intervention.types", "ForkFieldPolicy"),
+        ("torchlens.intervention.types", "FrozenHookSpec"),
+        ("torchlens.intervention.types", "FrozenInterventionSpec"),
+        ("torchlens.intervention.types", "FrozenTargetSpec"),
+        ("torchlens.intervention.types", "FrozenTargetValueSpec"),
+        ("torchlens.intervention.types", "FunctionRegistryKey"),
+        ("torchlens.intervention.types", "HelperSpec"),
+        ("torchlens.intervention.types", "HookSpec"),
+        ("torchlens.intervention.types", "InterventionDecision"),
+        ("torchlens.intervention.types", "InterventionSpec"),
+        ("torchlens.intervention.types", "LiteralTensor"),
+        ("torchlens.intervention.types", "LiteralValue"),
+        ("torchlens.intervention.types", "ParentRef"),
+        ("torchlens.intervention.types", "Relationship"),
+        ("torchlens.intervention.types", "TargetSpec"),
+        ("torchlens.intervention.types", "TargetValueSpec"),
+        ("torchlens.intervention.types", "TensorSliceSpec"),
+        ("torchlens.intervention.types", "Unsupported"),
+        # IR container / container-registry structural descriptors + enums.
+        ("torchlens.ir.container", "ContainerSpec"),
+        ("torchlens.ir.container", "DataclassField"),
+        ("torchlens.ir.container", "DictKey"),
+        ("torchlens.ir.container", "HFKey"),
+        ("torchlens.ir.container", "NamedField"),
+        ("torchlens.ir.container", "TupleIndex"),
+        ("torchlens.ir.container_registry", "ContainerLeafOccurrence"),
+        ("torchlens.ir.container_registry", "ContainerRecord"),
+        ("torchlens.ir.container_registry", "ContainerRegistry"),
+        ("torchlens.ir.container_registry", "ContainerSnapshot"),
+        ("torchlens.ir.container_registry", "FuncSite"),
+        ("torchlens.ir.container_registry", "IdentityEntry"),
+        ("torchlens.ir.container_registry", "ModelSite"),
+        ("torchlens.ir.container_registry", "ModuleSite"),
+        ("torchlens.ir.container_registry", "Phase"),
+        ("torchlens.ir.container_registry", "Role"),
+        ("torchlens.ir.container_registry", "WalkResult"),
+        # Device / dtype / tensor / param reference value types.
+        ("torchlens.ir.refs", "DeferredRef"),
+        ("torchlens.ir.refs", "DeviceRef"),
+        ("torchlens.ir.refs", "DtypeRef"),
+        ("torchlens.ir.refs", "ParamRef"),
+        ("torchlens.ir.refs", "ReservedLabel"),
+        ("torchlens.ir.refs", "TensorRef"),
+        # Physical-quantity value types.
+        ("torchlens.quantities", "Bytes"),
+        ("torchlens.quantities", "Duration"),
+        ("torchlens.quantities", "Flops"),
+        ("torchlens.quantities", "Macs"),
+        ("torchlens.quantities", "Quantity"),
+        ("torchlens.quantities", "_FloatQuantity"),
+        ("torchlens.quantities", "_IntQuantity"),
+        # Semantic facet snapshot + recipe descriptor data types.
+        ("torchlens.semantic.facets", "AbsenceReason"),
+        ("torchlens.semantic.facets", "FacetCapabilityFlags"),
+        ("torchlens.semantic.facets", "FacetContribution"),
+        ("torchlens.semantic.facets", "FacetMenuItem"),
+        ("torchlens.semantic.facets", "FacetRecipe"),
+        ("torchlens.semantic.facets", "FacetRegistrySnapshot"),
+        ("torchlens.semantic.facets", "FacetSpec"),
+        ("torchlens.semantic.facets", "TransformPrimitive"),
+        ("torchlens.semantic.facets", "_RegisteredRecipe"),
+        # Visualization code-panel source text value type.
+        ("torchlens.visualization.code_panel", "SourceText"),
+    }
+)
 
 
 # Exact (module, name) globals resolved directly. Every entry is either a pure
@@ -676,7 +843,20 @@ class SafeBundleUnpickler(pickle.Unpickler):
         ) and not _is_torchlens_appliance_module(module):
             obj = super().find_class(module, name)
             if isinstance(obj, type):
-                return obj
+                # A resolved TYPE is NO LONGER admitted unconditionally: a pickle
+                # ``REDUCE`` INVOKES the type (or its reconstructed instance) with
+                # attacker args, so an import-sink type such as ``LazyImportRef``
+                # would be a load-time RCE. Admit ONLY vetted-inert first-party DATA
+                # types on the positive allowlist; deny every other torchlens type.
+                if (module, name) in _SAFE_TORCHLENS_TYPES:
+                    return obj
+                raise pickle.UnpicklingError(
+                    "Blocked non-allowlisted torchlens type during bundle metadata "
+                    f"unpickle: {module}.{name}. Only vetted-inert first-party DATA "
+                    "types are admitted; import-sink / instance-callable types such "
+                    "as LazyImportRef are denied (a pickle REDUCE would INVOKE the "
+                    "reconstructed object with attacker arguments)."
+                )
             # Imported lazily to keep this early security front door free of
             # import-order coupling (mirrors ``_safe_getattr`` above).
             from ..utils._callable_safety import is_inert_first_party_callable

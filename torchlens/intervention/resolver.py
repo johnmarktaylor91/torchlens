@@ -29,6 +29,8 @@ from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 from ..ir.container_registry import Role
 from ..utils._callable_safety import (
+    _DENIED_MODULES,
+    _matches,
     is_inert_first_party_callable,
     is_pure_forward_callable,
     unsafe_callable_reason,
@@ -341,8 +343,26 @@ def resolve_function_registry_key(
                 return owner == "torchlens" or owner.startswith("torchlens.")
 
             def _enforce_foreign_trust(resolved_module: str) -> None:
-                """Default-deny a foreign callable by its REAL module identity."""
+                """Default-deny a foreign callable by its REAL module identity.
 
+                A hard denylist of dangerous modules (os / sys / subprocess /
+                builtins / importlib / ctypes / shutil / socket / ... via
+                ``_DENIED_MODULES``) is refused UNCONDITIONALLY -- even on the
+                trust-satisfied path. Trust means "run this user recipe", NEVER
+                "import os": a satisfied ``trust_custom_callables`` (or a matching
+                allowlist entry) must not be able to resolve ``os:system`` and hand
+                back a live ``os.system`` callable. This closes the trust-path leg of
+                the r23 ``LazyImportRef(import_path="os:system", trust=True)`` RCE.
+                """
+
+                if _matches(resolved_module, _DENIED_MODULES):
+                    raise UntrustedCallableError(
+                        "Refusing to resolve bundle-supplied custom callable from "
+                        f"dangerous module {resolved_module!r}; process / OS / "
+                        "serialization / import / dynamic-library modules are DENIED "
+                        "even under trust_custom_callables or an explicit module "
+                        "allowlist. Trust never authorizes importing these modules."
+                    )
                 if allowed_custom_callable_modules is not None:
                     if resolved_module not in allowed_custom_callable_modules:
                         raise UntrustedCallableError(
