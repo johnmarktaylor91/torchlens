@@ -2182,6 +2182,12 @@ def _numeric_attestation_check(
     if any(member.field != "out" for member in layer.members):
         return NumericAttestationStatus.NOT_APPLICABLE, None
     raw_members = layer.members
+    if _has_journaled_buffer_activation_member(descriptor, raw_members):
+        # Repeated registered-buffer source slots for the same state entry are journal points, not
+        # immutable activation payloads. A pure journaled replay can be path-faithful while each
+        # selected buffer slot's bytes are only meaningful at that journal point; skip byte-exact
+        # activation attestation rather than raising a false mismatch on a valid replay.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
     if _has_out_mutated_activation_member(descriptor, raw_members):
         # An archived activation that later became an ``out=`` destination was
         # captured before its mutation. Its pre-write bytes are allocator data,
@@ -2237,6 +2243,41 @@ def _numeric_attestation_check(
         NumericAttestationStatus.ATTESTED,
         ContractCheck(name="numeric_attestation:selected_slots", passed=True, diagnostic=None),
     )
+
+
+def _has_journaled_buffer_activation_member(
+    descriptor: SparseRunDescriptor,
+    members: Sequence[ActivationPayloadMember],
+) -> bool:
+    """Return whether selected activation payloads include journaled buffer slots.
+
+    Parameters
+    ----------
+    descriptor:
+        Sparse descriptor declaring tensor slot roles.
+    members:
+        Raw activation payload members selected for byte attestation.
+
+    Returns
+    -------
+    bool
+        ``True`` when multiple selected buffer slots refer to the same state entry.
+    """
+
+    slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
+    seen_state_names: set[str] = set()
+    for member in members:
+        slot = slots.get(member.slot_id)
+        if slot is None or slot.role is not TensorSlotRole.BUFFER:
+            continue
+        binding = slot.state_binding
+        if binding is None:
+            continue
+        state_name = binding.state_dict_name
+        if state_name in seen_state_names:
+            return True
+        seen_state_names.add(state_name)
+    return False
 
 
 def _has_out_mutated_activation_member(
