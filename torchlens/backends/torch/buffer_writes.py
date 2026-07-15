@@ -79,6 +79,14 @@ class BufferWriteTracker:
         self.address_to_object_id: dict[str, int] = {}
         self.address_to_storage_key: dict[str, tuple[Any, ...] | None] = {}
         self.address_to_version: dict[str, int | None] = {}
+        # r19-B: JOURNAL-EXPECTED buffer value per address. Seeded at forward START to the
+        # pre-forward snapshot and advanced ONLY by a tracked/journaled in-place op (to its
+        # post-op value). Unlike ``address_to_snapshot`` -- which a journaled write refreshes
+        # from the buffer's ACTUAL (possibly host-contaminated) bytes -- this expected value
+        # tracks exactly what the JOURNALED ops should produce from the pre-forward state. A
+        # tracked in-place op whose PRE-op bytes diverge from ``expected`` reveals an untracked
+        # host write that the op's version bump would otherwise MASK (r19-B): fail closed.
+        self.address_to_expected_snapshot: dict[str, torch.Tensor] = {}
         self.storage_key_to_addresses: dict[tuple[Any, ...], dict[str, None]] = {}
         self._storage_key_cache: dict[tuple[int, int | None], tuple[Any, ...] | None] = {}
         self._storage_range_cache: dict[tuple[int, int | None], tuple[int, int]] = {}
@@ -144,10 +152,14 @@ class BufferWriteTracker:
                     continue
                 address = f"{module_address}.{name}" if module_address else name
                 set_buffer_address(tensor, address)
-                self.trace._buffer_initial_values.setdefault(address, _copy_tensor_value(tensor))
+                pre_forward_value = _copy_tensor_value(tensor)
+                self.trace._buffer_initial_values.setdefault(address, pre_forward_value)
                 persistence = self.trace.__dict__.setdefault("_buffer_persistence", {})
                 persistence[address] = address in persistent_state_names
                 self._register_address(address, tensor, _copy_tensor_value(tensor))
+                # r19-B: seed the journal-expected value to the pre-forward snapshot; only a
+                # journaled in-place op advances it (see ``_advance_expected_after_journal``).
+                self.address_to_expected_snapshot.setdefault(address, pre_forward_value)
         self._refresh_param_index(model)
 
     def _refresh_param_index(self, model: nn.Module) -> None:
@@ -240,8 +252,10 @@ class BufferWriteTracker:
                 and _tensor_version(current) is not None
                 and snapshot.version != _tensor_version(current)
             )
+            journaled = False
             if fused:
                 if fused_update:
+                    journaled = True
                     self._record_write(
                         snapshot.address,
                         current,
@@ -251,6 +265,7 @@ class BufferWriteTracker:
                         func_name,
                     )
             elif value_changed or version_changed:
+                journaled = True
                 self._record_write(
                     snapshot.address,
                     current,
@@ -259,6 +274,37 @@ class BufferWriteTracker:
                     True,
                     func_name,
                 )
+            if journaled:
+                # r19-B: reconcile this journaled op's PRE-op bytes against the journal-expected
+                # bytes before advancing expected to the post-op value. A divergence means an
+                # untracked host write landed on the buffer's storage before this op and would be
+                # MASKED by the op's version bump (``self.npb[0] += 10`` then ``self.b.add_(1.0)``).
+                self._reconcile_journaled_buffer(snapshot, current_value)
+
+    def _reconcile_journaled_buffer(
+        self, snapshot: BufferSnapshot, current_value: torch.Tensor
+    ) -> None:
+        """Catch a host write masked by a journaled buffer op, then advance the expected value.
+
+        A buffer, unlike a param, IS journaled and replayed, so a PURE journaled in-place update
+        (a BatchNorm running-stat step, a plain ``self.b.add_(1.0)``) MUST stay VERIFIED. The hole
+        (r19-B) is an untracked HOST write into the buffer's storage that a subsequent journaled op
+        MASKS: the journaled op refreshes ``address_to_snapshot`` from the buffer's ACTUAL bytes, so
+        the end-of-forward value-change check sees no discrepancy and false-VERIFIES.
+
+        The fix reconciles the buffer's PRE-op bytes against the JOURNAL-EXPECTED bytes -- the value
+        the tracked ops produce from the pre-forward snapshot. For a pure journaled update the pre-op
+        bytes equal ``expected`` (no host write) -> stay VERIFIED; a host write before the op makes
+        the pre-op bytes diverge from ``expected`` -> fail closed to UNVERIFIABLE. Either way expected
+        is advanced to the post-op value so the NEXT journaled op reconciles against a fresh baseline.
+        """
+
+        from .completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
+
+        expected = self.address_to_expected_snapshot.get(snapshot.address)
+        if expected is not None and not _tensor_equal(expected, snapshot.value):
+            _HOST_ESCAPE_MUTABLE_WRITEBACK.add(self.trace)
+        self.address_to_expected_snapshot[snapshot.address] = current_value
 
     def reconcile(self) -> None:
         """Reconcile registered-buffer changes after forward capture.
@@ -310,18 +356,24 @@ class BufferWriteTracker:
                 continue
 
     def _reconcile_params(self, model: nn.Module) -> None:
-        """Flag an untracked/invisible host write into a PARAMETER's storage (r18, mirrors buffers).
+        """Flag ANY within-forward PARAMETER storage-byte change (r18 + r19-A, fail closed).
 
         Compares each named parameter's whole-storage bytes against its forward-START baseline.
-        A param whose bytes changed while its VERSION stayed put was mutated through an untracked
-        host path (a zero-copy ``.numpy()`` / ``data_ptr`` / storage write with no aten dispatch
-        and no version bump) that the sparse DAG and the embedded pre-forward state snapshot cannot
-        model -- the exact zero-copy host write-back the buffer ``reconcile`` catches (r15-C2).
-        Flagging it makes the run report UNVERIFIABLE instead of a false VERIFIED. A version BUMP
-        means a TRACKED in-place op touched the param and the replay reproduces it natively, so a
-        version-bumped param is NOT flagged here (the buffer journal handles its tracked writes the
-        same way). Params untouched during the forward (the overwhelming norm) never match and stay
-        VERIFIED, so there is ~zero over-trigger on ordinary Linear/Conv/MLP/BatchNorm models.
+        ANY within-forward byte change makes the param unfaithfully replayable and is flagged so
+        the run reports UNVERIFIABLE instead of a false VERIFIED.
+
+        r19-A closes a version-mask hole: unlike a BUFFER, a PARAMETER carries NO graph source node
+        and its in-place ops are NOT journaled/captured in the replayable DAG (params are excluded
+        from wrapper output logging), so the embedded pre-forward param state can never reproduce a
+        within-forward param mutation. A VERSION BUMP therefore does NOT mean the write replays --
+        a direct in-place aten op on a param (``with torch.no_grad(): self.w.add_(1.0)``), OR a
+        zero-copy host write followed by a version-bumping op, both leave the param bytes changed
+        while the DAG cannot model them. So the byte diff is checked VERSION-AGNOSTICALLY: whether
+        the version bumped OR stayed static, any net whole-storage change fails closed. (The pre-r19
+        code EXEMPTED version-bumped params on the false premise "version bump => the write is in the
+        DAG"; that premise holds for buffers, which ARE journaled, but NOT for params.) Read-only
+        param access leaves the bytes unchanged and stays VERIFIED, so there is ~zero over-trigger on
+        ordinary Linear/Conv/MLP/BatchNorm models (their params are untouched during the forward).
         """
 
         from .completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
@@ -337,11 +389,11 @@ class BufferWriteTracker:
                     baseline = self.address_to_param_snapshot.get(address)
                     if baseline is None:
                         continue
-                    before, before_version = baseline
-                    if _tensor_version(tensor) != before_version:
-                        # A tracked in-place op bumped the version: the write is in the DAG and
-                        # replays natively; the raw byte diff is expected, not an untracked escape.
-                        continue
+                    before, _before_version = baseline
+                    # VERSION-AGNOSTIC: a param whose whole-storage bytes changed during the forward
+                    # -- through ANY path, a tracked in-place aten op OR an untracked host write --
+                    # is not replayable from the embedded pre-forward state, because param in-place
+                    # ops are not captured in the DAG. Fail closed regardless of the version counter.
                     try:
                         after = _whole_storage_uint8(tensor)
                     except (RuntimeError, TypeError, NotImplementedError):
@@ -457,8 +509,14 @@ class BufferWriteTracker:
             if not _ranges_overlap(written_range, self.storage_range(tensor)):
                 continue
             clear_tensor_label(tensor)
-            self.address_to_snapshot[address] = _copy_tensor_value(tensor)
+            alias_value = _copy_tensor_value(tensor)
+            self.address_to_snapshot[address] = alias_value
             self.address_to_version[address] = _tensor_version(tensor)
+            # r19-B: a journaled write to an overlapping buffer also advances this alias's
+            # journal-expected value, so a later journaled op on the alias reconciles against
+            # the tracked post-write bytes (not a stale pre-forward baseline).
+            if address in self.address_to_expected_snapshot:
+                self.address_to_expected_snapshot[address] = alias_value
 
     def storage_key(self, tensor: torch.Tensor) -> tuple[Any, ...] | None:
         """Return a cached storage identity key for ``tensor``.
