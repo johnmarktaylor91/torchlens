@@ -1331,9 +1331,14 @@ def _load_unified_tlspec(
     Raises
     ------
     TorchLensIOError
-        If the unified kind is unsupported in this runtime.
+        If the unified kind is unsupported in this runtime, or if the bundle
+        path or one of its well-known members is a symlink.
     """
 
+    _reject_symlink_path(bundle_path, context="bundle path")
+    _reject_symlink_path(bundle_path / "manifest.json", context="manifest")
+    _reject_symlink_path(bundle_path / "metadata.pkl", context="metadata")
+    _reject_symlink_path(bundle_path / "blobs", context="blobs directory")
     manifest = _read_manifest_object(bundle_path / "manifest.json")
     kind = manifest.get("kind")
     if kind == "intervention":
@@ -1551,36 +1556,90 @@ def _preflight_schema_v2_payload_codecs(
     Raises
     ------
     TorchLensIOError
-        If body-index codec fields are malformed.
+        If body-index or tensors codec fields are malformed, or if the codec
+        registry fails unexpectedly during preflight.
     BackendPayloadUnsupportedError
-        If a declared materialized body entry uses an unsupported codec.
+        If a declared materialized body or tensor entry uses an unsupported
+        codec.
     """
 
     body_index = manifest.get("body_index", [])
     if not isinstance(body_index, list):
         raise TorchLensIOError("Manifest schema v2 trace body_index must be a list.")
-    for raw_entry in body_index:
-        if not isinstance(raw_entry, dict):
-            raise TorchLensIOError("Manifest schema v2 body_index entries must be objects.")
-        logical_backend = raw_entry.get("logical_backend", backend_name)
-        codec_name = raw_entry.get("codec")
-        if not isinstance(logical_backend, str) or logical_backend == "":
-            raise TorchLensIOError(
-                "Manifest body entry logical_backend must be a non-empty string."
+    tensors = manifest.get("tensors", [])
+    if not isinstance(tensors, list):
+        raise TorchLensIOError("Manifest schema v2 trace tensors must be a list.")
+    # ``body_index`` is the public mirror, but the load path materializes
+    # out/grad body blobs from the ``tensors`` entries. Both sections must
+    # declare a supported codec so a desynchronized manifest cannot smuggle an
+    # unvalidated codec past preflight into blob materialization.
+    for section_name, entries in (("body_index", body_index), ("tensors", tensors)):
+        for raw_entry in entries:
+            if not isinstance(raw_entry, dict):
+                raise TorchLensIOError(
+                    f"Manifest schema v2 {section_name} entries must be objects."
+                )
+            _preflight_schema_v2_entry_codec(
+                raw_entry,
+                backend_name=backend_name,
+                section_name=section_name,
             )
-        if logical_backend != backend_name:
-            raise TorchLensIOError(
-                f"Manifest backend {backend_name!r} conflicts with body entry "
-                f"logical_backend={logical_backend!r}."
-            )
-        if not isinstance(codec_name, str) or codec_name == "":
-            raise TorchLensIOError("Materialized schema v2 body entries require a codec string.")
+
+
+def _preflight_schema_v2_entry_codec(
+    raw_entry: dict[str, Any],
+    *,
+    backend_name: str,
+    section_name: str,
+) -> None:
+    """Validate one materialized schema-v2 manifest entry's payload codec.
+
+    Parameters
+    ----------
+    raw_entry:
+        Raw ``body_index`` or ``tensors`` manifest entry.
+    backend_name:
+        Logical backend declared by the trace manifest.
+    section_name:
+        Manifest section owning the entry, used in error messages.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the entry codec fields are malformed or codec resolution fails
+        unexpectedly.
+    BackendPayloadUnsupportedError
+        If the entry declares an unsupported codec.
+    """
+
+    logical_backend = raw_entry.get("logical_backend", backend_name)
+    codec_name = raw_entry.get("codec")
+    if not isinstance(logical_backend, str) or logical_backend == "":
+        raise TorchLensIOError(
+            f"Manifest {section_name} entry logical_backend must be a non-empty string."
+        )
+    if logical_backend != backend_name:
+        raise TorchLensIOError(
+            f"Manifest backend {backend_name!r} conflicts with {section_name} entry "
+            f"logical_backend={logical_backend!r}."
+        )
+    if not isinstance(codec_name, str) or codec_name == "":
+        raise TorchLensIOError(
+            f"Materialized schema v2 {section_name} entries require a codec string."
+        )
+    try:
         codec = get_payload_codec(logical_backend)
-        if codec.codec_name == "none" or codec.codec_name != codec_name:
-            raise BackendPayloadUnsupportedError(
-                f"Manifest schema v2 trace for backend {backend_name!r} declares unsupported "
-                f"payload codec {codec_name!r}."
-            )
+        supported_codec_name = str(codec.codec_name)
+    except Exception as exc:
+        raise TorchLensIOError(
+            f"Failed to resolve the payload codec for backend {logical_backend!r} "
+            "during manifest preflight."
+        ) from exc
+    if supported_codec_name == "none" or supported_codec_name != codec_name:
+        raise BackendPayloadUnsupportedError(
+            f"Manifest schema v2 trace for backend {backend_name!r} declares unsupported "
+            f"payload codec {codec_name!r}."
+        )
 
 
 def _manifest_for_unified_trace_load(manifest: dict[str, Any]) -> Manifest:
