@@ -73,7 +73,7 @@ def _ground_proposal(tmp_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         "sources": [
             {
                 "source_id": "source-1",
-                "url": "https://example.com/paper",
+                "url": "https://example.com/model",
                 "revision": "v1",
                 "content_sha256": source_hash,
                 "cas_path": str(source_path),
@@ -174,6 +174,29 @@ def test_valid_r4_with_cited_descriptive_text_passes(tmp_path: Path) -> None:
         proposal, allowed_model_dir=tmp_path, source_manifest=manifest
     )
     assert report.rung.value == "R4_REIMPLEMENT"
+
+
+def test_r4_checked_candidate_withheld_from_fetch_is_rejected(tmp_path: Path) -> None:
+    """A checked repository omitted from the CAS is a detectable coverage gap."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    code = (
+        "def build_model() -> object:\n"
+        "    return object()\n\n"
+        "def make_dummy_call(seed: int, device: str) -> tuple[tuple[()], dict[str, object]]:\n"
+        "    return (), {}\n"
+    )
+    _make_r4(proposal, manifest, tmp_path, code)
+    proposal["proposed_facts"]["source_resolution"]["search_report"]["links_checked"].append(
+        "https://code.example.org/example-net"
+    )
+
+    with pytest.raises(ProposalValidationError, match="checked-link coverage gap"):
+        validate_author_proposal(
+            proposal,
+            allowed_model_dir=tmp_path,
+            source_manifest=manifest,
+        )
 
 
 def test_recursive_helper_structural_slop_is_rejected(tmp_path: Path) -> None:

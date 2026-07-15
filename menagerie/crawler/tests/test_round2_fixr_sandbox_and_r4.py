@@ -254,6 +254,9 @@ def test_r4_inventory_uses_fetched_archive_bytes_not_author_labels(tmp_path: Pat
             )
         },
     )
+    proposal["proposed_facts"]["source_resolution"]["search_report"]["links_checked"].append(
+        "https://example.com/supplement.zip"
+    )
 
     with pytest.raises(ProposalValidationError, match="source code is available"):
         validate_author_proposal(
@@ -275,6 +278,9 @@ def test_r4_inventory_uses_fetched_archive_bytes_not_author_labels(tmp_path: Pat
             "supplement/plotting.c": "void plot_metrics(void) { return; }\n",
         },
     )
+    no_code_proposal["proposed_facts"]["source_resolution"]["search_report"][
+        "links_checked"
+    ].append("https://example.com/supplement.zip")
     report = validate_author_proposal(
         no_code_proposal,
         allowed_model_dir=no_code_root,

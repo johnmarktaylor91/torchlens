@@ -355,7 +355,7 @@
         },
         "evidence_ids": {
           "$ref": "#/$defs/string_array",
-          "description": "Mandatory supporting evidence identifiers."
+          "description": "Mandatory supporting evidence identifiers; may be empty only for external_metadata.keywords relevance judgments, which still require checked_source_ids and a reason."
         },
         "checked_source_ids": {
           "$ref": "#/$defs/string_array",

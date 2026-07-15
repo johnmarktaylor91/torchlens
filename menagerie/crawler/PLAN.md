@@ -1395,12 +1395,16 @@ Before finishing, fill every source-reading field in author-proposal.v2:
 6. code, paper-text, weight, and data license facts. Use NOASSERTION, null, or not-found-after-search rather
    than guessing;
 7. rung decision and why every higher rung failed, including queries, places, URLs, dates, languages,
-   archives, and conclusions;
+   archives, and conclusions. For R2 and especially an R4 negative proof, every URL listed in
+   search_report.links_checked must be sent through the controlled fetcher and retained in the source
+   manifest, including candidate repositories that turn out not to contain usable model code. A checked
+   but unfetched candidate is a coverage gap, not evidence that source is unavailable;
 8. original_framework, run_framework, native object/call, exact build symbol/config, initialization, mode,
    device policy, patches, code path, and source-to-code map;
 9. semantic input and output contract, legal dimensions, dtypes, values, masks, state, and control;
 10. LITERAL VERBATIM excerpts copied exactly with source_id and precise locator. Every authored factual
-    leaf must name supporting evidence_id values. Keep excerpts minimal but sufficient. Size variants may
+    leaf except external_metadata.keywords must name supporting evidence_id values. Keywords instead receive
+    an independent relevance/reasonableness check. Keep excerpts minimal but sufficient. Size variants may
     reference the family representative's stored grounding and may differ only in the parameter/input line;
 11. for R3/R4: literal architecture code/prose/equations-as-text, staged candidate code path, every declared
     deviation or source-unspecified choice, and the complete material-choice checklist; and
@@ -1410,6 +1414,18 @@ WEBSITE VOICE
 Use clear, factual, non-promotional English. Say what the architecture is, what mechanism distinguishes it,
 and its sourced task/domain. Do not use marketing language, benchmark claims, "state of the art," vague
 praise, or facts from memory. Distinguish the introducing work from the library that implements it.
+
+KEYWORDS ARE USER SEARCH TERMS
+Populate external_metadata.keywords with a concise set of reasonable ENGLISH queries a user would type to
+find this model. Cover the canonical model name plus common aliases, abbreviations, or nicknames; the
+architecture family; the task/problem in plain language; domain or modality; notable use cases; and common
+paper/lab shorthand when genuinely relevant. Be selective and user-intent oriented, not a mechanical dump
+of every taxonomy tag. Do not invent aliases or add generic buzzwords that would retrieve unrelated models.
+Keywords are relevance judgments: they need to be reasonable for the verified model, but need not appear
+verbatim in a source. For ResNet-50, a grounded set might include "ResNet-50", "ResNet50", "residual
+network", "image classification", "computer vision", and "image feature extractor". For Whisper, useful
+terms include "OpenAI Whisper", "automatic speech recognition", "speech to text", "audio transcription",
+"multilingual ASR", and "speech translation".
 
 R4 SUFFICIENCY TEST
 R4 is allowed only if literal primary evidence determines layer inventory and order; dimensions or rules;
@@ -1422,7 +1438,8 @@ text exists, otherwise `skipped:no-description`.
 PROCESS
 1. Inspect intake hints and prior failures, but trust only newly verified exact sources.
 2. Complete the ladder and freeze exact sources through the controlled fetcher.
-3. Capture literal evidence while each source is open and attach evidence_ids to all authored fields.
+3. Capture literal evidence while each source is open and attach evidence_ids to all authored fields except
+   keywords, whose relevance is checked against the verified model identity and sources.
 4. Author complete metadata and, when applicable, staged adapter, patch, port, or reimplementation code.
 5. Run the deterministic proposal validator and fix schema/evidence errors within this same session.
 6. If candidate execution is authorized, use only the standard candidate-run command. Preserve its receipt;
@@ -1439,9 +1456,11 @@ wrong, always. Material drift cannot be relabeled minor.
 SELF-CHECK
 - I used the highest available rung and documented every higher-rung failure.
 - At least one exact public primary source link supports every proposed terminal outcome.
-- Every authored factual leaf points to literal evidence or an explicit bounded not-found result.
+- Every authored factual leaf points to literal evidence or an explicit bounded not-found result, except
+  keyword leaves, which carry a defensible relevance judgment.
 - Citation, year, country, authors/labs/institutions, license, taxonomy, description, contribution, build,
   framework, and input claims are complete.
+- Keywords are non-empty, relevant English user search terms rather than copied or mechanical tags.
 - R3/R4 includes exact source, literal text/code evidence, code path, source map, and declared choices.
 - No pretrained asset, opaque eval/exec string, environment mutation, or invented architecture detail exists.
 - All files are under allowed_output_root and result.json validates against required_result_schema.
@@ -1521,6 +1540,14 @@ CHECK IN THIS ORDER
    license claim at the pinned revision. Missing license is never permission to infer one. Treat param
    count, layer/op types, shapes, FLOPs, graph structure, dtype, and device as optional TorchLens-derived
    facts, not external-metadata must-haves.
+   KEYWORD EXCEPTION: external_metadata.keywords are English user search terms, not quotations or citation
+   claims. Check that the non-empty terms are relevant and reasonable ways a user would find this exact
+   model: model name and genuine aliases/abbreviations, architecture family, plain-language task/problem,
+   domain/modality, notable use cases, and established paper/lab shorthand. Reject unrelated, misleading,
+   invented-alias, keyword-stuffed, or purely mechanical tag dumps. Do not require a good search phrase to
+   appear verbatim in a source, and do not mark it cannot-verify solely because it has no literal excerpt;
+   assess relevance against the verified identity and sources. Its field check may therefore have an empty
+   evidence_ids array, but must name the checked_source_ids and explain the relevance judgment.
 6. WEBSITE TEXT: verify tagline, paragraph, and contribution clause-by-clause. They must be grammatical,
    neutral, mutually consistent, source-grounded, and free of benchmark/marketing overclaim. Each factual
    clause needs evidence. For size variants, verify the prose is the accepted family template and only the
@@ -1529,8 +1556,8 @@ CHECK IN THIS ORDER
    run_framework, transparent native delegation, mode/device, patches, dummy-input semantics, dimensions,
    dtypes, values, masks/state/control, and output contract.
 8. EVIDENCE COVERAGE: enumerate every agent-authored leaf. Each positive factual claim needs adequate
-   literal evidence. A null/not-found value passes only when it makes no positive claim and the bounded
-   search is documented.
+   literal evidence, except keyword leaves use the relevance semantics in step 5. A null/not-found value
+   passes only when it makes no positive claim and the bounded search is documented.
 9. FIDELITY, WHEN REQUIRED:
    a. Before reading candidate code, derive topology, dimensions, operators, connectivity, state/control,
       material initialization, input, and output from the exact frozen source.
@@ -1547,6 +1574,9 @@ For every scoped authored field in every batch item, output accurate, inaccurate
 evidence_ids, checked source_ids, and a concise reason. Group only truly identical fields within the same
 item; never hide a failed leaf or emit a batch-wide substitute. Output the five-way fidelity verdict and
 material checks only for the per-model `fidelity` envelope whenever fidelity.required is true.
+For each keyword leaf, use accurate only when the term is a reasonable user search term for the model;
+use inaccurate for empty, irrelevant, misleading, invented, or spam-like terms. Keyword evidence_ids may
+be empty because this is a relevance judgment, while checked_source_ids and a specific reason remain required.
 
 DECISION RULE
 Top-level accurate requires every field result accurate and required fidelity match or strictly

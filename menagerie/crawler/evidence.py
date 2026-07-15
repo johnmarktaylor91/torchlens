@@ -159,6 +159,67 @@ def evidence_ids(evidence: Mapping[str, Any]) -> frozenset[str]:
     return frozenset(result)
 
 
+def fetched_sources_for_checked_links(
+    search_report: Mapping[str, Any],
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+) -> tuple[Mapping[str, Any], ...]:
+    """Bind every checked search-report link to one fetched CAS source.
+
+    Parameters
+    ----------
+    search_report:
+        Bounded source search whose ``links_checked`` entries claim inspected content.
+    source_manifest:
+        Exact controlled-fetch manifest for the author session.
+
+    Returns
+    -------
+    tuple[Mapping[str, Any], ...]
+        Manifest rows in checked-link order, ready for deterministic inventory.
+
+    Raises
+    ------
+    EvidenceValidationError
+        If a checked link was withheld from controlled fetch, is ambiguous, or did
+        not produce an inspectable fetched/already-present CAS object.
+    """
+
+    links = search_report.get("links_checked")
+    if (
+        not isinstance(links, list)
+        or not links
+        or not all(isinstance(link, str) and link.strip() for link in links)
+    ):
+        raise EvidenceValidationError("search_report.links_checked must be non-empty URLs")
+    if len(links) != len(set(links)):
+        raise EvidenceValidationError("search_report.links_checked contains duplicate URLs")
+
+    sources_by_url: dict[str, list[Mapping[str, Any]]] = {}
+    for source in _source_index(source_manifest).values():
+        url = source.get("url")
+        if isinstance(url, str) and url:
+            sources_by_url.setdefault(url, []).append(source)
+
+    bound: list[Mapping[str, Any]] = []
+    for link in links:
+        matches = sources_by_url.get(link, [])
+        if len(matches) != 1:
+            raise EvidenceValidationError(
+                f"checked search link must bind to exactly one controlled-fetch source: {link}"
+            )
+        source = matches[0]
+        if source.get("retrieval_status") not in {"fetched", "already-present"}:
+            raise EvidenceValidationError(
+                f"checked search link has no fetched CAS inventory: {link}"
+            )
+        if not isinstance(source.get("content_sha256"), str):
+            raise EvidenceValidationError(
+                f"checked search link has no hash-bound fetched bytes: {link}"
+            )
+        bound.append(source)
+    return tuple(bound)
+
+
 def _source_index(
     source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
 ) -> dict[str, Mapping[str, Any]]:

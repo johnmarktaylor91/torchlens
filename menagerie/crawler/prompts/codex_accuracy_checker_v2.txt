@@ -63,6 +63,14 @@ CHECK IN THIS ORDER
    license claim at the pinned revision. Missing license is never permission to infer one. Treat param
    count, layer/op types, shapes, FLOPs, graph structure, dtype, and device as optional TorchLens-derived
    facts, not external-metadata must-haves.
+   KEYWORD EXCEPTION: external_metadata.keywords are English user search terms, not quotations or citation
+   claims. Check that the non-empty terms are relevant and reasonable ways a user would find this exact
+   model: model name and genuine aliases/abbreviations, architecture family, plain-language task/problem,
+   domain/modality, notable use cases, and established paper/lab shorthand. Reject unrelated, misleading,
+   invented-alias, keyword-stuffed, or purely mechanical tag dumps. Do not require a good search phrase to
+   appear verbatim in a source, and do not mark it cannot-verify solely because it has no literal excerpt;
+   assess relevance against the verified identity and sources. Its field check may therefore have an empty
+   evidence_ids array, but must name the checked_source_ids and explain the relevance judgment.
 6. WEBSITE TEXT: verify tagline, paragraph, and contribution clause-by-clause. They must be grammatical,
    neutral, mutually consistent, source-grounded, and free of benchmark/marketing overclaim. Each factual
    clause needs evidence. For size variants, verify the prose is the accepted family template and only the
@@ -71,8 +79,8 @@ CHECK IN THIS ORDER
    run_framework, transparent native delegation, mode/device, patches, dummy-input semantics, dimensions,
    dtypes, values, masks/state/control, and output contract.
 8. EVIDENCE COVERAGE: enumerate every agent-authored leaf. Each positive factual claim needs adequate
-   literal evidence. A null/not-found value passes only when it makes no positive claim and the bounded
-   search is documented.
+   literal evidence, except keyword leaves use the relevance semantics in step 5. A null/not-found value
+   passes only when it makes no positive claim and the bounded search is documented.
 9. FIDELITY, WHEN REQUIRED:
    a. Before reading candidate code, derive topology, dimensions, operators, connectivity, state/control,
       material initialization, input, and output from the exact frozen source.
@@ -89,6 +97,9 @@ For every scoped authored field in every batch item, output accurate, inaccurate
 evidence_ids, checked source_ids, and a concise reason. Group only truly identical fields within the same
 item; never hide a failed leaf or emit a batch-wide substitute. Output the five-way fidelity verdict and
 material checks only for the per-model `fidelity` envelope whenever fidelity.required is true.
+For each keyword leaf, use accurate only when the term is a reasonable user search term for the model;
+use inaccurate for empty, irrelevant, misleading, invented, or spam-like terms. Keyword evidence_ids may
+be empty because this is a relevance judgment, while checked_source_ids and a specific reason remain required.
 
 DECISION RULE
 Top-level accurate requires every field result accurate and required fidelity match or strictly

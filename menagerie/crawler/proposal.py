@@ -12,7 +12,12 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.constants import AUTHOR_PROPOSAL_SCHEMA_VERSION, SourceRung
-from menagerie.crawler.evidence import EvidenceValidationError, evidence_ids, validate_evidence
+from menagerie.crawler.evidence import (
+    EvidenceValidationError,
+    evidence_ids,
+    fetched_sources_for_checked_links,
+    validate_evidence,
+)
 from menagerie.crawler.fetcher import cas_path as source_cas_path
 from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.metadata import MANDATORY_EXTERNAL_FIELDS
@@ -20,7 +25,7 @@ from menagerie.crawler.recipe import RecipeError, validate_pretrained_disable_fi
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
 
 DEFAULT_GATED_CLAIMS = frozenset(
-    {f"external_metadata.{field}" for field in MANDATORY_EXTERNAL_FIELDS}
+    {f"external_metadata.{field}" for field in MANDATORY_EXTERNAL_FIELDS if field != "keywords"}
     | {
         "external_metadata.description",
         "source_resolution.rung",
@@ -1226,6 +1231,7 @@ def _validate_source_ladder(
             raise ProposalValidationError(str(exc)) from exc
     if rung is SourceRung.REIMPLEMENT:
         _validate_r4_negative_proof(resolution, known_evidence)
+        _validate_checked_link_fetch_coverage(resolution, source_manifest, rung=rung)
         if _implementation_source_available(
             source_manifest,
             cas_root=cas_root,
@@ -1235,6 +1241,7 @@ def _validate_source_ladder(
                 "R4_REIMPLEMENT is forbidden when source code is available"
             )
     if rung is SourceRung.VENDOR:
+        _validate_checked_link_fetch_coverage(resolution, source_manifest, rung=rung)
         _validate_r2_source_binding(implementation, resolution, evidence, source_manifest)
     if rung in {SourceRung.VENDOR, SourceRung.PORT, SourceRung.REIMPLEMENT}:
         source_map = implementation.get("source_to_code_map")
@@ -1414,6 +1421,38 @@ def _validate_r2_source_binding(
             )
 
 
+def _validate_checked_link_fetch_coverage(
+    resolution: Mapping[str, Any],
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+    *,
+    rung: SourceRung,
+) -> None:
+    """Require every checked R2/R4 candidate link to have fetched CAS bytes.
+
+    Parameters
+    ----------
+    resolution:
+        Source-resolution block containing the bounded search report.
+    source_manifest:
+        Exact controlled-fetch source rows.
+    rung:
+        Selected source rung used in fail-closed diagnostics.
+
+    Raises
+    ------
+    ProposalValidationError
+        If an author-reported checked link was withheld from controlled fetch.
+    """
+
+    search_report = resolution.get("search_report")
+    if not isinstance(search_report, Mapping):
+        raise ProposalValidationError(f"{rung.value} requires a bounded search report")
+    try:
+        fetched_sources_for_checked_links(search_report, source_manifest)
+    except EvidenceValidationError as exc:
+        raise ProposalValidationError(f"{rung.value} checked-link coverage gap: {exc}") from exc
+
+
 def _source_manifest_index(
     source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
 ) -> dict[str, Mapping[str, Any]]:
@@ -1481,14 +1520,15 @@ def _implementation_source_available(
     """
 
     sources = _source_manifest_index(source_manifest)
-    return any(
+    inventory_results = [
         _source_cas_contains_implementation(
             source,
             cas_root=cas_root,
             linkage_terms=linkage_terms,
         )
         for source in sources.values()
-    )
+    ]
+    return any(inventory_results)
 
 
 def _source_cas_contains_implementation(
