@@ -219,8 +219,8 @@ def test_out_of_path_code_and_write_are_rejected(tmp_path: Path) -> None:
         validate_author_proposal(proposal, allowed_model_dir=model_dir, source_manifest=manifest)
 
 
-def test_r4_is_rejected_when_source_code_exists(tmp_path: Path) -> None:
-    """Fetched implementation source makes R4 a forbidden lower-rung shortcut."""
+def test_r4_source_classification_does_not_trust_author_role(tmp_path: Path) -> None:
+    """An implementation role without code bytes cannot fabricate a higher rung."""
 
     proposal, manifest = _ground_proposal(tmp_path)
     code = (
@@ -231,8 +231,10 @@ def test_r4_is_rejected_when_source_code_exists(tmp_path: Path) -> None:
     )
     _make_r4(proposal, manifest, tmp_path, code)
     manifest["sources"][0]["role"] = "implementation"
-    with pytest.raises(ProposalValidationError, match="source code is available"):
-        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+    report = validate_author_proposal(
+        proposal, allowed_model_dir=tmp_path, source_manifest=manifest
+    )
+    assert report.rung.value == "R4_REIMPLEMENT"
 
 
 def test_fabricated_citation_and_empty_description_are_rejected(tmp_path: Path) -> None:

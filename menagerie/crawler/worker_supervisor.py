@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import resource
 import signal
+import shutil
 import subprocess
 import sys
 import time
@@ -14,8 +16,12 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
-from menagerie.crawler.constants import DEFAULT_FORWARD_TIMEOUT_SECONDS, STDIO_TAIL_MAX_CHARS
-from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.constants import (
+    DEFAULT_FORWARD_TIMEOUT_SECONDS,
+    STDIO_TAIL_MAX_CHARS,
+    FailureStage,
+)
+from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.policy import (
     SandboxUnavailableError,
     build_safe_environment,
@@ -23,6 +29,41 @@ from menagerie.crawler.policy import (
     generate_macos_sandbox_profile,
     wrap_with_os_sandbox,
 )
+
+_DENIED_ERRNOS = ("EACCES", "ENETDOWN", "ENETUNREACH", "EPERM", "EROFS")
+_WRITE_OPEN_FLAGS = ("O_APPEND", "O_CREAT", "O_RDWR", "O_TMPFILE", "O_TRUNC", "O_WRONLY")
+_WRITE_SYSCALLS = frozenset(
+    {
+        "chmod",
+        "chown",
+        "creat",
+        "fchmodat",
+        "fchownat",
+        "link",
+        "linkat",
+        "mkdir",
+        "mkdirat",
+        "mknod",
+        "mknodat",
+        "open",
+        "openat",
+        "openat2",
+        "rename",
+        "renameat",
+        "renameat2",
+        "rmdir",
+        "symlink",
+        "symlinkat",
+        "truncate",
+        "unlink",
+        "unlinkat",
+        "utime",
+        "utimensat",
+        "utimes",
+    }
+)
+_SYSCALL_PATTERN = re.compile(r"(?:^|\s)([a-z][a-z0-9_]*)\(")
+_QUOTED_PATH_PATTERN = re.compile(r'"((?:[^"\\]|\\.)*)"')
 
 
 @dataclass(frozen=True)
@@ -108,6 +149,40 @@ class SupervisedResult:
     observation: SupervisorObservation
     worker_receipt: Optional[dict[str, Any]]
     receipt_error: Optional[str]
+
+
+@dataclass(frozen=True)
+class SandboxDenialObservation:
+    """OS-boundary network and outside-write denials observed by the supervisor.
+
+    Parameters
+    ----------
+    network_attempted:
+        Whether a network syscall reached the offline boundary.
+    socket_targets:
+        Sanitized syscall targets observed by the broker.
+    write_outside_scratch_attempted:
+        Whether a write syscall outside the allowed roots was denied.
+    write_paths:
+        Sanitized denied write paths.
+    """
+
+    network_attempted: bool = False
+    socket_targets: tuple[str, ...] = ()
+    write_outside_scratch_attempted: bool = False
+    write_paths: tuple[str, ...] = ()
+
+    @property
+    def poisoned(self) -> bool:
+        """Return whether the denial invalidates an otherwise successful receipt.
+
+        Returns
+        -------
+        bool
+            True for any observed denied network or outside-write operation.
+        """
+
+        return self.network_attempted or self.write_outside_scratch_attempted
 
 
 def _child_limit(rss_limit_bytes: int) -> None:
@@ -196,6 +271,386 @@ def _rusage_seconds(usage: resource.struct_rusage) -> float:
     return float(usage.ru_utime + usage.ru_stime)
 
 
+def _linux_audited_argv(
+    sandboxed_argv: Sequence[str], audit_executable: str, audit_path: Path
+) -> tuple[str, ...]:
+    """Insert a syscall-observation broker inside a Linux sandbox command.
+
+    Parameters
+    ----------
+    sandboxed_argv:
+        Complete bubblewrap or unshare command.
+    audit_executable:
+        Absolute path to ``strace``.
+    audit_path:
+        Writable broker output path.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Sandbox command whose child is supervised by the syscall broker.
+
+    Raises
+    ------
+    SandboxUnavailableError
+        If the sandbox wrapper has no child-command separator.
+    """
+
+    separators = [index for index, value in enumerate(sandboxed_argv) if value == "--"]
+    if not separators:
+        raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
+    separator = separators[-1]
+    broker = (
+        audit_executable,
+        "-f",
+        "-qq",
+        "-e",
+        "trace=%network,%file",
+        "-s",
+        "4096",
+        "-o",
+        str(audit_path),
+        "--",
+    )
+    return (
+        *sandboxed_argv[: separator + 1],
+        *broker,
+        *sandboxed_argv[separator + 1 :],
+    )
+
+
+def _syscall_name(line: str) -> Optional[str]:
+    """Return the traced syscall name from one broker line.
+
+    Parameters
+    ----------
+    line:
+        One text line emitted by the syscall broker.
+
+    Returns
+    -------
+    str | None
+        Syscall name, excluding strace process prefixes.
+    """
+
+    match = _SYSCALL_PATTERN.search(line)
+    return None if match is None else match.group(1)
+
+
+def _network_target(line: str) -> str:
+    """Return a bounded network target description from a traced syscall.
+
+    Parameters
+    ----------
+    line:
+        Network syscall trace line.
+
+    Returns
+    -------
+    str
+        Sanitized address-family and endpoint excerpt.
+    """
+
+    family = "AF_INET6" if "AF_INET6" in line else "AF_INET"
+    address_match = re.search(r'(?:inet_addr|inet_pton\([^,]+,)\("?([^"),]+)', line)
+    port_match = re.search(r"sin6?_port=htons\((\d+)\)", line)
+    address = address_match.group(1) if address_match is not None else "unknown"
+    port = port_match.group(1) if port_match is not None else "unknown"
+    return f"{family}:{address}:{port}"[:500]
+
+
+def _decoded_trace_paths(line: str) -> tuple[str, ...]:
+    """Decode quoted filesystem paths from one syscall trace line.
+
+    Parameters
+    ----------
+    line:
+        File syscall trace line.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Best-effort decoded quoted values in call order.
+    """
+
+    values: list[str] = []
+    for match in _QUOTED_PATH_PATTERN.finditer(line):
+        encoded = match.group(1)
+        try:
+            values.append(bytes(encoded, "utf-8").decode("unicode_escape"))
+        except UnicodeDecodeError:
+            values.append(encoded)
+    return tuple(values)
+
+
+def _outside_allowed_roots(path_text: str, cwd: Path, write_roots: Sequence[Path]) -> bool:
+    """Return whether a traced write path is outside every allowed root.
+
+    Parameters
+    ----------
+    path_text:
+        Traced absolute or working-directory-relative path.
+    cwd:
+        Worker working directory.
+    write_roots:
+        Sole writable roots granted to the OS sandbox.
+
+    Returns
+    -------
+    bool
+        True when the path is not beneath an allowed root.
+    """
+
+    path = Path(path_text)
+    candidate = (path if path.is_absolute() else cwd / path).resolve()
+    roots = tuple(root.resolve() for root in write_roots)
+    return not any(candidate == root or root in candidate.parents for root in roots)
+
+
+def _parse_linux_denial_audit(
+    audit_path: Path, cwd: Path, write_roots: Sequence[Path]
+) -> SandboxDenialObservation:
+    """Parse Linux syscall telemetry into closed worker policy observations.
+
+    Parameters
+    ----------
+    audit_path:
+        Broker output produced for one child process tree.
+    cwd:
+        Worker working directory used to resolve relative write targets.
+    write_roots:
+        Sole OS-sandbox writable roots.
+
+    Returns
+    -------
+    SandboxDenialObservation
+        Deduplicated network and outside-write denials.
+    """
+
+    try:
+        lines = audit_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return SandboxDenialObservation()
+    socket_targets: list[str] = []
+    write_paths: list[str] = []
+    for line in lines:
+        syscall = _syscall_name(line)
+        if syscall in {"connect", "sendmsg", "sendto"} and (
+            "AF_INET" in line or "AF_INET6" in line
+        ):
+            socket_targets.append(_network_target(line))
+            continue
+        if syscall not in _WRITE_SYSCALLS or not any(
+            f" {errno} " in line for errno in _DENIED_ERRNOS
+        ):
+            continue
+        if syscall in {"open", "openat", "openat2"} and not any(
+            flag in line for flag in _WRITE_OPEN_FLAGS
+        ):
+            continue
+        paths = _decoded_trace_paths(line)
+        outside_paths = [path for path in paths if _outside_allowed_roots(path, cwd, write_roots)]
+        if outside_paths:
+            write_paths.extend(outside_paths)
+        elif not paths:
+            write_paths.append(f"<{syscall}:denied-outside-sandbox>")
+    unique_targets = tuple(dict.fromkeys(socket_targets))
+    unique_paths = tuple(dict.fromkeys(write_paths))
+    return SandboxDenialObservation(
+        network_attempted=bool(unique_targets),
+        socket_targets=unique_targets,
+        write_outside_scratch_attempted=bool(unique_paths),
+        write_paths=unique_paths,
+    )
+
+
+def _macos_denial_audit(stderr: bytes) -> SandboxDenialObservation:
+    """Parse sandbox-exec denial messages when Seatbelt emits them to stderr.
+
+    Parameters
+    ----------
+    stderr:
+        Complete captured child stderr.
+
+    Returns
+    -------
+    SandboxDenialObservation
+        Denial flags derived only from explicit Seatbelt deny messages.
+    """
+
+    network: list[str] = []
+    writes: list[str] = []
+    for line in stderr.decode("utf-8", errors="replace").splitlines():
+        lowered = line.lower()
+        if "deny" not in lowered:
+            continue
+        if "network" in lowered:
+            network.append(line[-500:])
+        if "file-write" in lowered or "file write" in lowered:
+            writes.append(line[-500:])
+    return SandboxDenialObservation(
+        network_attempted=bool(network),
+        socket_targets=tuple(dict.fromkeys(network)),
+        write_outside_scratch_attempted=bool(writes),
+        write_paths=tuple(dict.fromkeys(writes)),
+    )
+
+
+def _merge_denial_observations(
+    *observations: SandboxDenialObservation,
+) -> SandboxDenialObservation:
+    """Merge OS denial channels without losing any observed target.
+
+    Parameters
+    ----------
+    *observations:
+        Denial observations for the same process tree.
+
+    Returns
+    -------
+    SandboxDenialObservation
+        Union of all flags and targets.
+    """
+
+    targets = tuple(
+        dict.fromkeys(
+            target for observation in observations for target in observation.socket_targets
+        )
+    )
+    paths = tuple(
+        dict.fromkeys(path for observation in observations for path in observation.write_paths)
+    )
+    return SandboxDenialObservation(
+        network_attempted=any(observation.network_attempted for observation in observations),
+        socket_targets=targets,
+        write_outside_scratch_attempted=any(
+            observation.write_outside_scratch_attempted for observation in observations
+        ),
+        write_paths=paths,
+    )
+
+
+def _atomic_rewrite_receipt(path: Path, receipt: Mapping[str, Any]) -> None:
+    """Atomically replace one supervisor-poisoned self-hashed receipt.
+
+    Parameters
+    ----------
+    path:
+        Existing worker receipt path.
+    receipt:
+        Receipt payload including its recomputed self hash.
+    """
+
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.supervisor.tmp")
+    data = canonical_json_bytes(receipt) + b"\n"
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def poison_receipt_for_sandbox_denial(receipt_path: Path, denial: SandboxDenialObservation) -> bool:
+    """Poison an otherwise successful worker receipt after an OS denial.
+
+    Parameters
+    ----------
+    receipt_path:
+        Atomic worker receipt to audit and, when necessary, replace.
+    denial:
+        Parent-observed OS denial telemetry.
+
+    Returns
+    -------
+    bool
+        True only when a valid worker receipt was poisoned.
+    """
+
+    if not denial.poisoned or not receipt_path.is_file():
+        return False
+    try:
+        loaded = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(loaded, dict) or loaded.get("receipt_version") != (
+        "menagerie.crawler.worker-receipt.v1"
+    ):
+        return False
+    payload = {key: value for key, value in loaded.items() if key != "receipt_sha256"}
+    policy_value = payload.get("policy_observation")
+    if not isinstance(policy_value, Mapping):
+        return False
+    policy = dict(policy_value)
+    policy["network_attempted"] = bool(policy.get("network_attempted")) or (
+        denial.network_attempted
+    )
+    policy["socket_targets"] = list(
+        dict.fromkeys([*policy.get("socket_targets", []), *denial.socket_targets])
+    )
+    policy["write_outside_scratch_attempted"] = (
+        bool(policy.get("write_outside_scratch_attempted"))
+        or denial.write_outside_scratch_attempted
+    )
+    policy["write_paths"] = list(
+        dict.fromkeys([*policy.get("write_paths", []), *denial.write_paths])
+    )
+    payload["policy_observation"] = policy
+    reason_code = "network-attempt" if denial.network_attempted else "write-outside-scratch"
+    error = {
+        "reason_code": reason_code,
+        "exception_type": ("menagerie.crawler.worker_supervisor.SandboxDenialObservation"),
+        "message": "OS sandbox denied a forbidden operation caught by worker code",
+        "traceback": None,
+    }
+    payload["error"] = error
+    per_mode_value = payload.get("per_mode")
+    if isinstance(per_mode_value, Mapping):
+        per_mode: dict[str, Any] = {}
+        for mode, mode_value in per_mode_value.items():
+            if isinstance(mode_value, Mapping):
+                poisoned_mode = dict(mode_value)
+                poisoned_mode["error"] = error
+                per_mode[str(mode)] = poisoned_mode
+            else:
+                per_mode[str(mode)] = mode_value
+        payload["per_mode"] = per_mode
+    record = {**payload, "receipt_sha256": stable_hash(payload)}
+    _atomic_rewrite_receipt(receipt_path, record)
+    return True
+
+
+def _poison_receipts_in_roots(
+    write_roots: Sequence[Path], denial: SandboxDenialObservation
+) -> None:
+    """Poison worker receipts found directly in explicit result roots.
+
+    Parameters
+    ----------
+    write_roots:
+        Explicit result directories granted to the child.
+    denial:
+        Parent-observed OS denial telemetry.
+    """
+
+    if not denial.poisoned:
+        return
+    for root in write_roots:
+        try:
+            candidates = tuple(root.glob("*.json"))
+        except OSError:
+            continue
+        for candidate in candidates:
+            poison_receipt_for_sandbox_denial(candidate, denial)
+
+
 def run_isolated_subprocess(
     argv: Sequence[str],
     scratch_root: Path,
@@ -250,7 +705,7 @@ def run_isolated_subprocess(
     working_directory = (cwd or Path.cwd()).resolve()
     sandbox = detect_os_sandbox()
     if sandbox is None:
-        raise SandboxUnavailableError("failed:sandbox-unavailable")
+        raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
     profile_path: Optional[Path] = None
     if sandbox.kind == "sandbox-exec":
         profile_path = scratch_root / "worker-sandbox.sb"
@@ -265,6 +720,18 @@ def run_isolated_subprocess(
         write_roots,
         macos_profile_path=profile_path,
     )
+    denial_audit_path: Optional[Path] = None
+    if sandbox.kind in {"bubblewrap", "unshare"}:
+        denial_audit_executable = shutil.which("strace")
+        if denial_audit_executable is None:
+            raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
+        denial_audit_path = scratch_root / "sandbox-denial-audit.log"
+        denial_audit_path.unlink(missing_ok=True)
+        sandboxed_argv = _linux_audited_argv(
+            sandboxed_argv,
+            denial_audit_executable,
+            denial_audit_path,
+        )
     usage_before = resource.getrusage(resource.RUSAGE_CHILDREN)
     started = time.monotonic()
     timed_out = False
@@ -306,6 +773,17 @@ def run_isolated_subprocess(
     exit_code = return_code if return_code is not None and return_code >= 0 else None
     stdout = stdout_path.read_bytes()
     stderr = stderr_path.read_bytes()
+    denial = _macos_denial_audit(stderr)
+    if denial_audit_path is not None:
+        denial = _merge_denial_observations(
+            denial,
+            _parse_linux_denial_audit(
+                denial_audit_path,
+                working_directory,
+                write_roots,
+            ),
+        )
+    _poison_receipts_in_roots(additional_write_roots, denial)
     return SupervisorObservation(
         argv=sandboxed_argv,
         cwd=str(working_directory),
@@ -351,7 +829,8 @@ def _sandbox_unavailable_observation(
     stdout_path = scratch_root / "stdout.log"
     stderr_path = scratch_root / "stderr.log"
     stdout = b""
-    stderr = b"failed:sandbox-unavailable\n"
+    status = f"failed:{FailureStage.SANDBOX_UNAVAILABLE.value}"
+    stderr = f"{status}\n".encode("utf-8")
     stdout_path.write_bytes(stdout)
     stderr_path.write_bytes(stderr)
     return SupervisorObservation(
@@ -454,7 +933,8 @@ def supervise_worker(
         )
     except SandboxUnavailableError:
         observation = _sandbox_unavailable_observation(argv, scratch_root, working_directory)
-        return SupervisedResult(observation, None, "failed:sandbox-unavailable")
+        status = f"failed:{FailureStage.SANDBOX_UNAVAILABLE.value}"
+        return SupervisedResult(observation, None, status)
     receipt, receipt_error = _load_receipt(receipt_path)
     if observation.exit_code != 0 or observation.signal_number is not None:
         return SupervisedResult(observation, None, receipt_error or "worker-exit-nonzero")

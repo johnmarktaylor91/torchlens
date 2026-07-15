@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
+import re
+import tarfile
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-import re
 from typing import Any, Iterable, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.constants import AUTHOR_PROPOSAL_SCHEMA_VERSION, SourceRung
 from menagerie.crawler.evidence import EvidenceValidationError, evidence_ids, validate_evidence
+from menagerie.crawler.fetcher import cas_path as source_cas_path
 from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.metadata import MANDATORY_EXTERNAL_FIELDS
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
@@ -89,6 +94,46 @@ _SUPPORT_STOPWORDS = frozenset(
 _WRITE_METHODS = frozenset(
     {"write_text", "write_bytes", "touch", "mkdir", "rename", "replace", "unlink", "rmdir"}
 )
+_IMPLEMENTATION_SOURCE_SUFFIXES = frozenset(
+    {
+        ".c",
+        ".cc",
+        ".cpp",
+        ".cu",
+        ".cuh",
+        ".cxx",
+        ".go",
+        ".h",
+        ".hh",
+        ".hpp",
+        ".hxx",
+        ".ipynb",
+        ".java",
+        ".jl",
+        ".js",
+        ".kt",
+        ".lua",
+        ".m",
+        ".mm",
+        ".py",
+        ".pyx",
+        ".r",
+        ".rs",
+        ".scala",
+        ".swift",
+        ".ts",
+    }
+)
+_NON_IMPLEMENTATION_CODE_NAMES = frozenset(
+    {
+        "__init__.py",
+        "conftest.py",
+        "setup.py",
+        "version.py",
+    }
+)
+_NON_IMPLEMENTATION_SOURCE_DIRS = frozenset({".github", "ci", "doc", "docs", "test", "tests"})
+_MAX_TEXT_INVENTORY_BYTES = 8 * 1024**2
 
 
 class ProposalValidationError(ValueError):
@@ -192,6 +237,7 @@ def validate_author_proposal(
         evidence,
         known_evidence,
         source_manifest,
+        cas_root,
     )
     _validate_structural_slop(facts, code_path)
     _validate_anti_slop(facts)
@@ -789,6 +835,7 @@ def _validate_source_ladder(
     evidence: Mapping[str, Any],
     known_evidence: frozenset[str],
     source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+    cas_root: Union[str, Path, None],
 ) -> None:
     """Enforce rung-specific source-ladder honesty.
 
@@ -802,6 +849,8 @@ def _validate_source_ladder(
         Valid literal evidence identifiers.
     source_manifest:
         Exact fetched sources.
+    cas_root:
+        Optional source CAS root for source inventory inspection.
 
     Raises
     ------
@@ -832,7 +881,7 @@ def _validate_source_ladder(
         if not recipe.get("pretrained_disable_fields"):
             raise ProposalValidationError("R1_LIBRARY must explicitly disable pretrained fields")
     if rung is SourceRung.REIMPLEMENT and _implementation_source_available(
-        resolution, source_manifest
+        source_manifest, cas_root=cas_root
     ):
         raise ProposalValidationError("R4_REIMPLEMENT is forbidden when source code is available")
     if rung is SourceRung.VENDOR:
@@ -1002,39 +1051,221 @@ def _source_manifest_index(
 
 
 def _implementation_source_available(
-    resolution: Mapping[str, Any],
     source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+    *,
+    cas_root: Union[str, Path, None],
 ) -> bool:
-    """Return whether fetched evidence exposes usable implementation source.
+    """Return whether exact fetched CAS bytes expose implementation source.
 
     Parameters
     ----------
-    resolution:
-        Proposal source-resolution block.
     source_manifest:
         Controlled-fetch manifest wrapper or rows.
+    cas_root:
+        Optional CAS root for manifests without an explicit object path.
 
     Returns
     -------
     bool
-        True when any exact fetched source is classified as implementation.
+        True when a fetched object inventory contains usable source code.
     """
 
-    candidates: list[Mapping[str, Any]] = []
-    resolution_sources = resolution.get("sources", [])
-    if isinstance(resolution_sources, list):
-        candidates.extend(item for item in resolution_sources if isinstance(item, Mapping))
-    if isinstance(source_manifest, Mapping):
-        manifest_sources = source_manifest.get("sources", [source_manifest])
-    else:
-        manifest_sources = source_manifest
-    if isinstance(manifest_sources, Sequence) and not isinstance(manifest_sources, (str, bytes)):
-        candidates.extend(item for item in manifest_sources if isinstance(item, Mapping))
+    sources = _source_manifest_index(source_manifest)
     return any(
-        source.get("role") == "implementation"
-        or source.get("source_code_available") is True
-        or source.get("content_kind") == "source-code"
-        for source in candidates
+        _source_cas_contains_implementation(source, cas_root=cas_root)
+        for source in sources.values()
+    )
+
+
+def _source_cas_contains_implementation(
+    source: Mapping[str, Any], *, cas_root: Union[str, Path, None]
+) -> bool:
+    """Inspect one hash-bound CAS object for usable implementation code.
+
+    Parameters
+    ----------
+    source:
+        Controlled-fetch manifest row.
+    cas_root:
+        Optional CAS root for manifests without an explicit object path.
+
+    Returns
+    -------
+    bool
+        True when archive names, a byte manifest, or raw source bytes expose code.
+
+    Raises
+    ------
+    ProposalValidationError
+        If fetched bytes are absent or no longer match their declared digest.
+    """
+
+    path_value = source.get("cas_path")
+    digest = source.get("content_sha256")
+    if not isinstance(digest, str):
+        raise ProposalValidationError("fetched source manifest has no content_sha256")
+    if isinstance(path_value, str) and path_value:
+        path = Path(path_value)
+    elif cas_root is not None:
+        path = source_cas_path(cas_root, digest)
+    else:
+        raise ProposalValidationError("R4 source inventory has no inspectable CAS path")
+    if not _cas_object_matches_digest(path, digest):
+        raise ProposalValidationError(f"R4 source inventory CAS object does not match {digest}")
+    try:
+        if zipfile.is_zipfile(path):
+            with zipfile.ZipFile(path) as archive:
+                return any(
+                    not member.is_dir()
+                    and member.file_size > 0
+                    and _inventory_name_is_implementation(member.filename)
+                    for member in archive.infolist()
+                )
+        if tarfile.is_tarfile(path):
+            with tarfile.open(path, mode="r:*") as archive:
+                return any(
+                    member.isfile()
+                    and member.size > 0
+                    and _inventory_name_is_implementation(member.name)
+                    for member in archive
+                )
+        with path.open("rb") as handle:
+            content = handle.read(_MAX_TEXT_INVENTORY_BYTES + 1)
+    except (OSError, tarfile.TarError, zipfile.BadZipFile) as exc:
+        raise ProposalValidationError(
+            f"cannot inventory fetched source CAS object {path}: {exc}"
+        ) from exc
+    if len(content) > _MAX_TEXT_INVENTORY_BYTES:
+        return False
+    return _byte_manifest_has_implementation(content) or _raw_python_is_implementation(content)
+
+
+def _cas_object_matches_digest(path: Path, digest: str) -> bool:
+    """Return whether a CAS file exists and matches its prefixed SHA-256 digest.
+
+    Parameters
+    ----------
+    path:
+        Candidate exact CAS object.
+    digest:
+        Declared prefixed SHA-256 digest.
+
+    Returns
+    -------
+    bool
+        True only for a byte-identical regular file.
+    """
+
+    if not path.is_file() or not digest.startswith("sha256:"):
+        return False
+    hasher = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024**2), b""):
+                hasher.update(chunk)
+    except OSError:
+        return False
+    return f"sha256:{hasher.hexdigest()}" == digest
+
+
+def _inventory_name_is_implementation(value: str) -> bool:
+    """Return whether an archive-internal path denotes usable source code.
+
+    Parameters
+    ----------
+    value:
+        Archive member or byte-manifest path.
+
+    Returns
+    -------
+    bool
+        True for a non-packaging code file outside documentation/test trees.
+    """
+
+    normalized = value.replace("\\", "/").strip("/")
+    path = Path(normalized)
+    lowered_parts = {part.lower() for part in path.parts[:-1]}
+    name = path.name.lower()
+    return (
+        bool(name)
+        and name not in _NON_IMPLEMENTATION_CODE_NAMES
+        and not lowered_parts & _NON_IMPLEMENTATION_SOURCE_DIRS
+        and path.suffix.lower() in _IMPLEMENTATION_SOURCE_SUFFIXES
+    )
+
+
+def _byte_manifest_has_implementation(content: bytes) -> bool:
+    """Inspect JSON manifest bytes for embedded source-code paths.
+
+    Parameters
+    ----------
+    content:
+        Small non-archive CAS object bytes.
+
+    Returns
+    -------
+    bool
+        True when any manifest string names a usable code file.
+    """
+
+    try:
+        value = json.loads(content.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return False
+
+    def strings(item: object) -> Iterable[str]:
+        """Yield every string key and value from a JSON-like manifest.
+
+        Parameters
+        ----------
+        item:
+            Current JSON value.
+
+        Yields
+        ------
+        str
+            String keys and scalar string values.
+        """
+
+        if isinstance(item, Mapping):
+            for key, child in item.items():
+                if isinstance(key, str):
+                    yield key
+                yield from strings(child)
+        elif isinstance(item, Sequence) and not isinstance(item, (str, bytes)):
+            for child in item:
+                yield from strings(child)
+        elif isinstance(item, str):
+            yield item
+
+    return any(_inventory_name_is_implementation(value) for value in strings(value))
+
+
+def _raw_python_is_implementation(content: bytes) -> bool:
+    """Recognize extensionless raw Python implementation bytes structurally.
+
+    Parameters
+    ----------
+    content:
+        Small non-archive CAS object bytes.
+
+    Returns
+    -------
+    bool
+        True when parseable Python defines executable model-like structure.
+    """
+
+    try:
+        tree = ast.parse(content.decode("utf-8"))
+    except (UnicodeDecodeError, SyntaxError):
+        return False
+    definitions = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.AsyncFunctionDef, ast.ClassDef, ast.FunctionDef))
+    ]
+    return bool(definitions) and any(
+        isinstance(node, (ast.Import, ast.ImportFrom, ast.ClassDef)) for node in tree.body
     )
 
 

@@ -664,6 +664,7 @@ def build_safe_environment(
             "NUMEXPR_NUM_THREADS": "1",
             "TOKENIZERS_PARALLELISM": "false",
             "MENAGERIE_EXECUTION_OFFLINE": "1",
+            "PYTHONDONTWRITEBYTECODE": "1",
         }
     )
     return safe

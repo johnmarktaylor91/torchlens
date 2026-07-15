@@ -325,6 +325,7 @@ def detect_meaningful_modes(
         Meaningful modes in train/eval order.
     """
 
+    # This heuristic cannot see every native/custom branch; author declarations and checker vetting cover it.
     if captured_outputs is not None and {"train", "eval"}.issubset(captured_outputs):
         divergence = classify_train_eval_divergence(
             captured_outputs["train"], captured_outputs["eval"]
