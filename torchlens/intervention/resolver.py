@@ -409,6 +409,47 @@ def resolve_function_registry_key(
                 _enforce_foreign_trust(module_name)
                 module = importlib.import_module(module_name)
                 obj = _walk_qualname(module)
+                # RE-ENFORCE the DENYLIST on the RESOLVED callable's REAL module
+                # identity, NEVER the import-PATH string. A DOTTED qualname
+                # attribute-walks off the imported module and can land on a callable
+                # from a DIFFERENT, denied module: ``torch:os.system`` passes the
+                # pre-import gate on the non-denied root ``torch`` yet resolves
+                # ``os.system`` (real module ``posix``), and ``torch:serialization.load``
+                # resolves ``torch.load`` (real module ``torch.serialization``). Both
+                # are hard-denied here on the resolved owner. We re-enforce the
+                # DENYLIST (never hand back a process / OS / serialization / import
+                # callable, even under trust) but NOT the allowlist: the allowlist
+                # governs which MODULES may be IMPORTED (already enforced pre-import on
+                # ``module_name``), and the resolved ``__module__`` is an implementation
+                # detail -- ``operator:neg`` legitimately resolves ``operator.neg`` whose
+                # real module is the C accelerator ``_operator``, so re-checking the
+                # allowlist on the resolved owner would wrongly deny it.
+                resolved_owner = str(getattr(obj, "__module__", "") or module_name)
+                if _matches(resolved_owner, _DENIED_MODULES):
+                    raise UntrustedCallableError(
+                        "Refusing bundle-supplied custom callable whose RESOLVED real "
+                        f"module {resolved_owner!r} is a dangerous (process / OS / "
+                        "serialization / import) module reached by attribute-walking a "
+                        f"dotted qualname off {module_name!r}; denied even under trust."
+                    )
+                # A callable that walked BACK into the torch namespace via a dotted
+                # qualname must be a PURE forward op: ``torch`` also hosts
+                # side-effecting builtins (``torch.from_file``) whose real module is
+                # the bare, non-denied ``"torch"``. Parity with
+                # ``runnable_load._finalize_resolution``'s ``is_pure_forward_callable``
+                # gate. Genuinely foreign (non-torch) trusted callables are NOT
+                # subject to this gate -- trust means "run this user recipe".
+                if callable(obj) and (
+                    resolved_owner == "torch" or resolved_owner.startswith("torch.")
+                ):
+                    if not is_pure_forward_callable(obj):
+                        raise UntrustedCallableError(
+                            "Refusing bundle-supplied custom callable "
+                            f"{module_name}:{qualname}: it resolves to a side-effecting "
+                            f"torch callable ({unsafe_callable_reason(obj)}) reached via "
+                            "a dotted qualname; only pure forward/tensor ops resolve "
+                            "from the torch namespace."
+                        )
 
             if not callable(obj):
                 raise TypeError(f"{key.import_path!r} resolved to non-callable {obj!r}")
