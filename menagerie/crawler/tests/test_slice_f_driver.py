@@ -931,44 +931,160 @@ def _test_environment(prefix: Path) -> EnvironmentBinding:
 def test_runner_execution_manifest_is_compositional_by_selected_modality(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Unselected assets and operational schemas cannot stale unrelated models."""
+    """Only semantic runtime behavior and the one selected asset stale a runner."""
 
-    root = Path(driver_module.__file__).parent
-    discovered: set[str] = {"__init__.py"}
-    pending = ["worker.py", "worker_supervisor.py"]
-    while pending:
-        relative = pending.pop()
-        if relative in discovered:
-            continue
-        discovered.add(relative)
-        tree = ast.parse((root / relative).read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ImportFrom) or not node.module:
-                continue
-            prefix = "menagerie.crawler."
-            if not node.module.startswith(prefix):
-                continue
-            candidate = f"{node.module.removeprefix(prefix).replace('.', '/')}.py"
-            if (root / candidate).is_file():
-                pending.append(candidate)
-    maintained = set(_RUNNER_EXECUTION_CLOSURE)
-    assert discovered <= maintained
-    assert "schemas/operational-event-v1.schema.json" not in maintained
-    assert not any(path.startswith("assets/standard/") for path in maintained)
+    assert _RUNNER_EXECUTION_CLOSURE == {
+        "worker.py": ("main",),
+        "worker_supervisor.py": ("run_isolated_subprocess",),
+    }
 
     original_read_bytes = Path.read_bytes
+    original_read_text = Path.read_text
 
-    def changed_audio(path: Path) -> bytes:
-        """Change only the unselected audio fixture bytes."""
+    def changed_unselected_assets(path: Path) -> bytes:
+        """Change assets not selected by vision precedence."""
 
         value = original_read_bytes(path)
-        return value + b"changed" if path.name == "audio.csv" else value
+        return value + b"changed" if path.name in {"audio.csv", "text.txt"} else value
 
-    vision_before = _runner_identity("vision")
+    def comment_only_source_change(
+        path: Path, encoding: Optional[str] = None, errors: Optional[str] = None
+    ) -> str:
+        """Append a non-behavioral comment to formerly whole-file-hashed modules."""
+
+        value = original_read_text(path, encoding=encoding, errors=errors)
+        if path.name in {"constants.py", "models.py", "worker_supervisor.py"}:
+            return f"{value}\n# unrelated review comment\n"
+        return value
+
+    vision_before = _runner_identity(["vision", "text"])
     audio_before = _runner_identity("audio")
-    monkeypatch.setattr(Path, "read_bytes", changed_audio)
-    assert _runner_identity("vision") == vision_before
+    monkeypatch.setattr(Path, "read_bytes", changed_unselected_assets)
+    monkeypatch.setattr(Path, "read_text", comment_only_source_change)
+    assert _runner_identity(["vision", "text"]) == vision_before
     assert _runner_identity("audio") != audio_before
+
+
+def test_award_closure_manifest_contains_transitive_run_validators() -> None:
+    """Tripwire every project callable reached by both run-award validators."""
+
+    root = Path(driver_module.__file__).parent
+    manifest = {
+        (relative, symbol)
+        for relative, symbols in driver_module._AWARD_CLOSURE_SYMBOLS.items()
+        for symbol in symbols
+    }
+    roots = {
+        ("driver.py", "_attempt_policy_satisfied"),
+        ("reducer.py", "CanonicalReducer._validate_execution"),
+    }
+    pending = list(roots)
+    reached: set[tuple[str, str]] = set()
+    trees: dict[str, ast.Module] = {}
+    definitions: dict[str, dict[str, ast.AST]] = {}
+    imports: dict[str, dict[str, tuple[str, str]]] = {}
+    while pending:
+        relative, symbol = pending.pop()
+        if (relative, symbol) in reached:
+            continue
+        reached.add((relative, symbol))
+        if relative not in trees:
+            tree = ast.parse((root / relative).read_text(encoding="utf-8"))
+            module_definitions: dict[str, ast.AST] = {}
+            module_imports: dict[str, tuple[str, str]] = {}
+            for node in tree.body:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    module_definitions[node.name] = node
+                elif isinstance(node, ast.ClassDef):
+                    for child in node.body:
+                        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                            module_definitions[f"{node.name}.{child.name}"] = child
+                elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                    prefix = "menagerie.crawler."
+                    if node.module.startswith(prefix):
+                        imported_relative = (
+                            f"{node.module.removeprefix(prefix).replace('.', '/')}.py"
+                        )
+                        for imported_name in node.names:
+                            module_imports[imported_name.asname or imported_name.name] = (
+                                imported_relative,
+                                imported_name.name,
+                            )
+            trees[relative] = tree
+            definitions[relative] = module_definitions
+            imports[relative] = module_imports
+        definition = definitions[relative][symbol]
+        class_name = symbol.split(".", 1)[0] if "." in symbol else None
+        for call in (node for node in ast.walk(definition) if isinstance(node, ast.Call)):
+            if isinstance(call.func, ast.Name):
+                name = call.func.id
+                local = (relative, name)
+                resolved_import = imports[relative].get(name)
+                if name in definitions[relative]:
+                    pending.append(local)
+                elif resolved_import is not None and (root / resolved_import[0]).is_file():
+                    pending.append(resolved_import)
+            elif (
+                class_name is not None
+                and isinstance(call.func, ast.Attribute)
+                and isinstance(call.func.value, ast.Name)
+                and call.func.value.id == "self"
+            ):
+                local_method = (relative, f"{class_name}.{call.func.attr}")
+                if local_method[1] in definitions[relative]:
+                    pending.append(local_method)
+    assert reached <= manifest, sorted(reached - manifest)
+    assert {
+        ("metadata.py", "input_signature_matches_contract"),
+        ("metadata.py", "recompute_accepted_identities"),
+        ("metadata.py", "authored_fact_leaves"),
+        ("metadata.py", "canonical_meaningful_modes"),
+        ("reducer.py", "expected_standard_asset"),
+        ("reducer.py", "output_signature_error"),
+    } <= reached
+    assert {
+        ("metadata.py", "validate_authored_facts_for_write"),
+        ("gates.py", "route_metadata_gate"),
+        ("gates.py", "route_fidelity_gate"),
+        ("family_templates.py", "validate_size_variant"),
+        ("reducer.py", "CanonicalReducer.append_attempt"),
+        ("reducer.py", "CanonicalReducer.append_gate"),
+        ("reducer.py", "_validate_persisted_requeue_lineage"),
+        ("reducer.py", "_select_current"),
+        ("state.py", "_select_current"),
+        ("driver.py", "_matching_attempts"),
+        ("driver.py", "_worker_request"),
+        ("driver.py", "SupervisedForwardLane.forward"),
+    } <= manifest
+
+
+def test_award_validator_behavior_change_changes_closure_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Changing a formerly omitted receipt validator stales the award closure."""
+
+    before = driver_module._award_closure_identity()
+    original_read_bytes = Path.read_bytes
+
+    def changed_metadata_validator(path: Path) -> bytes:
+        """Tighten one included metadata validator in its immutable source snapshot."""
+
+        value = original_read_bytes(path)
+        if path.name != "metadata.py":
+            return value
+        old = (
+            b'    if not isinstance(signature, Mapping) or "tree" not in signature:\n'
+            b"        return False\n"
+        )
+        new = (
+            b'    if not isinstance(signature, Mapping) or "tree" not in signature:\n'
+            b"        return bool(signature)\n"
+        )
+        assert old in value
+        return value.replace(old, new, 1)
+
+    monkeypatch.setattr(Path, "read_bytes", changed_metadata_validator)
+    assert driver_module._award_closure_identity() != before
 
 
 def test_parent_read_telemetry_sets_cache_attempt_for_closed_roots() -> None:
@@ -1598,6 +1714,42 @@ def test_checker_prompt_change_invalidates_author_cache_and_reauthors(
     paths = _paths(tmp_path, snapshot)
     assert len(scan_jsonl(paths.ledgers.gates)) == 2
     assert len(scan_jsonl(paths.ledgers.models)) == 2 * len(snapshot.items)
+
+
+def test_author_prompt_change_stales_cached_gates_and_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A live author-prompt change reauthors every cached dependent artifact."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    assert _driver(tmp_path, snapshot).run().status == "complete"
+    stable_id = snapshot.items[0].stable_id
+    original_read_bytes = Path.read_bytes
+
+    def changed_author_prompt(path: Path) -> bytes:
+        """Return revised bytes only for the frozen author prompt."""
+
+        value = original_read_bytes(path)
+        if path.name == "claude_crawler_author_v2.txt":
+            return value + b"\nRequire one more source-bound fact.\n"
+        return value
+
+    monkeypatch.setattr(Path, "read_bytes", changed_author_prompt)
+    author = FakeAuthor()
+    forward = FakeForward()
+    result = _driver(tmp_path, snapshot, author=author, forward=forward).run()
+
+    assert result.status == "complete"
+    assert set(author.calls) == {stable_id}
+    assert set(forward.calls) == {stable_id}
+    paths = _paths(tmp_path, snapshot)
+    assert len(scan_jsonl(paths.ledgers.gates)) == 2
+    models = scan_jsonl(paths.ledgers.models)
+    assert len(models) == 2
+    assert (
+        models[0]["provenance"]["author_prompt_sha256"]
+        != models[1]["provenance"]["author_prompt_sha256"]
+    )
 
 
 def test_only_driver_awards_runs_after_gate_receipts_and_both_modes(tmp_path: Path) -> None:
