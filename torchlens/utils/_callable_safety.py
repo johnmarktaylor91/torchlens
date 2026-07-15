@@ -486,6 +486,58 @@ _APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens.no
 FACET_RECIPE_MARKER_ATTR = "_torchlens_facet_recipe"
 
 
+# POSITIVE allowlist of the genuinely-INERT public first-party callables that
+# legitimately appear as pickle-REDUCE / resolver targets in real bundles, keyed by
+# the callable's REAL ``(module, qualname)`` (decided AFTER capture-unwrap, never by
+# the attacker-controlled pickled path). This REPLACES the pre-r22 "any PUBLIC
+# torchlens.* callable is inert" fallthrough, which was unsound: that policy admitted
+# side-effecting PUBLIC callables (``fastlog.cleanup.cleanup_partial`` ->
+# ``shutil.rmtree`` of an attacker-named directory on plain ``tl.load``;
+# ``mark_torch_capability_missing`` / ``register_payload_codec`` / ``save_intervention``
+# / ``export.*`` / ``wrap_torch`` -> global/process-state poison) because the verb
+# denylist (``_DENIED_*`` name guards) never covered the filesystem / registry /
+# capability-mutation verb class and a public name alone proved nothing. A denylist
+# over a version-drifting first-party surface is unsound; default-deny is the fix
+# (exactly as ``_ALLOWED_OPERATOR_NAMES`` inverted the operator surface).
+#
+# Membership derivation (empirical + vetted): the ONLY first-party callables that
+# legit bundles / the intervention resolver reference BY IDENTITY are (a) facet
+# recipes + their predicates -- admitted deterministically by the marker branch
+# below, NOT enumerated here -- and (b) the pure built-in intervention helper
+# factories plus the ``identity`` display transform, enumerated here. Each entry was
+# read and vetted INERT to INVOKE with attacker args: every helper factory merely
+# constructs and returns a ``HelperSpec`` dataclass (its tensor-op side effects live
+# only inside an unexecuted ``factory``/``_hook`` closure) or raises a validation
+# error; ``identity`` returns its argument. NONE performs filesystem / import / exec /
+# spawn / network / global-state mutation. Anything torchlens-owned but not here (and
+# not marker-stamped) fails closed. Erring to DENY: only these vetted members admit.
+_VETTED_INERT_FIRST_PARTY: frozenset[tuple[str, str]] = frozenset(
+    {
+        # Pure display transform (raw-input/output transform saved by reference).
+        ("torchlens.utils.display", "identity"),
+        # Built-in intervention helper factories (import-ref-portable helper saves +
+        # the intervention resolver's ``torchlens.intervention.helpers:<name>`` refs).
+        ("torchlens.intervention.helpers", "zero_ablate"),
+        ("torchlens.intervention.helpers", "mean_ablate"),
+        ("torchlens.intervention.helpers", "resample_ablate"),
+        ("torchlens.intervention.helpers", "steer"),
+        ("torchlens.intervention.helpers", "scale"),
+        ("torchlens.intervention.helpers", "clamp"),
+        ("torchlens.intervention.helpers", "noise"),
+        ("torchlens.intervention.helpers", "project_onto"),
+        ("torchlens.intervention.helpers", "project_off"),
+        ("torchlens.intervention.helpers", "swap_with"),
+        ("torchlens.intervention.helpers", "splice_module"),
+        ("torchlens.intervention.helpers", "bwd_hook"),
+        ("torchlens.intervention.helpers", "grad_zero"),
+        ("torchlens.intervention.helpers", "grad_scale"),
+        ("torchlens.intervention.helpers", "grad_clip"),
+        ("torchlens.intervention.helpers", "grad_noise"),
+        ("torchlens.intervention.helpers", "grad_clamp"),
+    }
+)
+
+
 def is_inert_first_party_callable(func: Callable[..., Any]) -> bool:
     """Return whether ``func`` is a first-party TorchLens callable that is INERT to
     INVOKE with attacker-controlled arguments at unpickle / resolve time.
@@ -494,31 +546,39 @@ def is_inert_first_party_callable(func: Callable[..., Any]) -> bool:
     admitted callable with attacker-supplied args. Trusting *every* torchlens-owned
     callable (the pre-r21 policy) was a confirmed load-time RCE: the private helper
     ``torchlens.utils._module_is_installed`` performs ``importlib.import_module`` on
-    its argument, so a crafted ``metadata.pkl`` whose ``REDUCE`` named it ran an
-    arbitrary import (attacker top-level code) on a plain ``tl.load(path)`` -- before
-    ``.run()`` and before any downstream callable-safety gate could fire.
+    its argument. The pre-r22 narrowing kept a "PUBLIC name proves inertness"
+    fallthrough, which was STILL unsound: the verb denylist omitted the filesystem /
+    registry / capability-mutation verb class, so PUBLIC side-effecting callables such
+    as ``torchlens.fastlog.cleanup.cleanup_partial`` (``shutil.rmtree`` of an
+    attacker-named directory) and ``mark_torch_capability_missing`` (global HAS_*
+    flag poison) were admitted and INVOKED on a plain ``tl.load(path)``.
 
-    This narrows first-party trust to a DETERMINISTIC, process-state-INDEPENDENT
-    (no live-registry lookup) set of vetted-inert callables:
+    This is now a POSITIVE ALLOWLIST (default-DENY), keyed on the callable's REAL,
+    capture-unwrapped identity -- never the attacker-controlled pickled path:
 
-    * FIRST-PARTY only -- the real, capture-unwrapped ``__module__`` is genuinely
-      ``torchlens.*`` and is NOT an extras-gated appliance package.
+    * FIRST-PARTY only -- the real ``__module__`` is genuinely ``torchlens.*`` and is
+      NOT an extras-gated appliance package.
     * SIDE-EFFECT-FREE by name -- the same structural file-I/O / serialization /
-      import / spawn / global-state-mutation guard applied to the torch surface, so
-      a torchlens callable that opens/imports/execs is denied even if it were marked.
-    * Then admitted if EITHER it carries the deterministic facet-registration marker
-      (``FACET_RECIPE_MARKER_ATTR``, stamped on every recipe function AND predicate at
-      ``@torchlens.facets.register`` time -- this covers a genuine but PRIVATE-named
-      registration callable such as the built-in residual predicate
-      ``_is_transformer_block``), OR it is PUBLIC (terminal + qualname leaf not private
-      or dunder). Every torchlens.* arbitrary-import / dynamic-attr gadget is
-      private-or-dunder AND unmarked (``_module_is_installed`` /
-      ``_import_module_attr_or_none`` / ``_user_func`` / ``__getattr__`` / ...), so it
-      falls through both branches; the public facet recipes / transforms / helpers
-      that legitimately appear as pickle globals (``layer_norm`` / ``gpt2_attention``
-      / ``identity`` / ``clamp`` / ``zero_ablate``) are admitted by the PUBLIC branch.
+      import / spawn / global-state-mutation guard applied to the torch surface
+      (belt-and-suspenders; the allowlist below is the load-bearing gate).
+    * Then admitted ONLY if EITHER it carries the deterministic facet-registration
+      marker (``FACET_RECIPE_MARKER_ATTR``, stamped on every recipe function AND
+      predicate at ``@torchlens.facets.register`` time -- this covers a genuine but
+      PRIVATE-named registration callable such as the built-in residual predicate
+      ``_is_transformer_block``), OR its real ``(module, qualname)`` is in the frozen,
+      empirically-vetted ``_VETTED_INERT_FIRST_PARTY`` set (``identity`` + the pure
+      built-in intervention helper factories).
 
     Everything else torchlens-owned-but-not-vetted fails closed (the caller raises).
+    The public-name fallthrough is GONE: ``cleanup_partial`` / ``cleanup_tmp`` /
+    ``mark_torch_capability_missing`` / ``register_payload_codec`` /
+    ``save_intervention`` / ``torchlens.export.*`` / ``wrap_torch`` / ``unwrap_torch`` /
+    ``_module_is_installed`` are all denied -- neither marker-stamped nor allowlisted.
+
+    The marker cannot be forged through the pickle stream: it is an attribute set on
+    the resolved function object at import/registration time, NOT carried in the
+    pickle. A REDUCE naming an arbitrary function resolves to THAT object, which bears
+    the marker only if it was genuinely stamped by ``@facets.register``.
     """
 
     real = _unwrap_capture_wrapper(func)
@@ -527,22 +587,20 @@ def is_inert_first_party_callable(func: Callable[..., Any]) -> bool:
         return False
     if _matches(module, _APPLIANCE_MODULES):
         return False
-    # Deny I/O / import / exec / spawn / state-mutation by NAME regardless of marker.
+    # Deny I/O / import / exec / spawn / state-mutation by NAME regardless of marker
+    # (belt-and-suspenders; the positive allowlist below is the load-bearing gate).
     if _is_side_effecting_callable_name(real):
         return False
     # Genuine facet-registration entry point (recipe func or its predicate), even if
     # its name is private -- the marker is set by our own trusted registration code.
     if getattr(real, FACET_RECIPE_MARKER_ATTR, False) is True:
         return True
-    # Otherwise require a PUBLIC name (blocks the private import gadget class).
-    name = _terminal_callable_name(real)
-    if not name or name.startswith("_"):
-        return False
+    # Otherwise admit ONLY the frozen, vetted-inert public callables by their REAL
+    # (module, qualname). No public-name fallthrough: default-deny.
     qualname = str(getattr(real, "__qualname__", "") or "")
-    leaf = qualname.rsplit(".", maxsplit=1)[-1] if qualname else name
-    if leaf.startswith("_"):
+    if not qualname:
         return False
-    return True
+    return (module, qualname) in _VETTED_INERT_FIRST_PARTY
 
 
 def unsafe_callable_reason(func: Callable[..., Any]) -> str:
