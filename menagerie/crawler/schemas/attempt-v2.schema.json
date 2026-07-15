@@ -668,8 +668,6 @@
         "input_completed",
         "forward_started",
         "forward_completed",
-        "constructor_seconds",
-        "forward_seconds",
         "mode",
         "input_signature",
         "output_signature",

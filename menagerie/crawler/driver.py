@@ -211,6 +211,7 @@ _AWARD_CLOSURE_SYMBOLS = {
     "reducer.py": (
         "expected_standard_asset",
         "output_signature_error",
+        "_parent_success_attestation_matches",
         "_select_current",
         "_records_root",
         "_revision_work_ids",
