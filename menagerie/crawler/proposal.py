@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ast
 import hashlib
-import json
 import re
 import tarfile
 import zipfile
@@ -17,6 +16,7 @@ from menagerie.crawler.evidence import EvidenceValidationError, evidence_ids, va
 from menagerie.crawler.fetcher import cas_path as source_cas_path
 from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.metadata import MANDATORY_EXTERNAL_FIELDS
+from menagerie.crawler.recipe import RecipeError, validate_pretrained_disable_fields
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
 
 DEFAULT_GATED_CLAIMS = frozenset(
@@ -232,6 +232,7 @@ def validate_author_proposal(
     code_path = _validate_code(implementation, rung, allowed_dir)
     _validate_source_ladder(
         rung,
+        facts,
         resolution,
         implementation,
         evidence,
@@ -830,6 +831,7 @@ def _validate_literal_write_target(node: ast.Call, allowed_dir: Path, call_name:
 
 def _validate_source_ladder(
     rung: SourceRung,
+    facts: Mapping[str, Any],
     resolution: Mapping[str, Any],
     implementation: Mapping[str, Any],
     evidence: Mapping[str, Any],
@@ -843,6 +845,8 @@ def _validate_source_ladder(
     ----------
     rung:
         Selected rung.
+    facts:
+        Complete proposal facts used to bind source symbols to the claimed family.
     resolution, implementation, evidence:
         Proposal source and implementation blocks.
     known_evidence:
@@ -880,8 +884,18 @@ def _validate_source_ladder(
             raise ProposalValidationError("R1_LIBRARY recipe is incomplete")
         if not recipe.get("pretrained_disable_fields"):
             raise ProposalValidationError("R1_LIBRARY must explicitly disable pretrained fields")
+        kwargs = recipe.get("kwargs")
+        disable_fields = recipe.get("pretrained_disable_fields")
+        if not isinstance(kwargs, Mapping) or not isinstance(disable_fields, list):
+            raise ProposalValidationError("R1_LIBRARY pretrained disable declaration is malformed")
+        try:
+            validate_pretrained_disable_fields(kwargs, disable_fields)
+        except RecipeError as exc:
+            raise ProposalValidationError(str(exc)) from exc
     if rung is SourceRung.REIMPLEMENT and _implementation_source_available(
-        source_manifest, cas_root=cas_root
+        source_manifest,
+        cas_root=cas_root,
+        linkage_terms=_model_linkage_terms(facts),
     ):
         raise ProposalValidationError("R4_REIMPLEMENT is forbidden when source code is available")
     if rung is SourceRung.VENDOR:
@@ -1054,6 +1068,7 @@ def _implementation_source_available(
     source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
     *,
     cas_root: Union[str, Path, None],
+    linkage_terms: frozenset[str],
 ) -> bool:
     """Return whether exact fetched CAS bytes expose implementation source.
 
@@ -1063,6 +1078,8 @@ def _implementation_source_available(
         Controlled-fetch manifest wrapper or rows.
     cas_root:
         Optional CAS root for manifests without an explicit object path.
+    linkage_terms:
+        Normalized model/family symbols that source bytes must actually reference.
 
     Returns
     -------
@@ -1072,13 +1089,20 @@ def _implementation_source_available(
 
     sources = _source_manifest_index(source_manifest)
     return any(
-        _source_cas_contains_implementation(source, cas_root=cas_root)
+        _source_cas_contains_implementation(
+            source,
+            cas_root=cas_root,
+            linkage_terms=linkage_terms,
+        )
         for source in sources.values()
     )
 
 
 def _source_cas_contains_implementation(
-    source: Mapping[str, Any], *, cas_root: Union[str, Path, None]
+    source: Mapping[str, Any],
+    *,
+    cas_root: Union[str, Path, None],
+    linkage_terms: frozenset[str],
 ) -> bool:
     """Inspect one hash-bound CAS object for usable implementation code.
 
@@ -1088,6 +1112,8 @@ def _source_cas_contains_implementation(
         Controlled-fetch manifest row.
     cas_root:
         Optional CAS root for manifests without an explicit object path.
+    linkage_terms:
+        Normalized model/family symbols required for relevance.
 
     Returns
     -------
@@ -1117,18 +1143,34 @@ def _source_cas_contains_implementation(
             with zipfile.ZipFile(path) as archive:
                 return any(
                     not member.is_dir()
-                    and member.file_size > 0
+                    and 0 < member.file_size <= _MAX_TEXT_INVENTORY_BYTES
                     and _inventory_name_is_implementation(member.filename)
+                    and _code_bytes_are_relevant_implementation(
+                        member.filename,
+                        archive.read(member),
+                        source,
+                        linkage_terms,
+                    )
                     for member in archive.infolist()
                 )
         if tarfile.is_tarfile(path):
             with tarfile.open(path, mode="r:*") as archive:
-                return any(
-                    member.isfile()
-                    and member.size > 0
-                    and _inventory_name_is_implementation(member.name)
-                    for member in archive
-                )
+                for member in archive:
+                    if (
+                        not member.isfile()
+                        or not 0 < member.size <= _MAX_TEXT_INVENTORY_BYTES
+                        or not _inventory_name_is_implementation(member.name)
+                    ):
+                        continue
+                    extracted = archive.extractfile(member)
+                    if extracted is not None and _code_bytes_are_relevant_implementation(
+                        member.name,
+                        extracted.read(_MAX_TEXT_INVENTORY_BYTES + 1),
+                        source,
+                        linkage_terms,
+                    ):
+                        return True
+                return False
         with path.open("rb") as handle:
             content = handle.read(_MAX_TEXT_INVENTORY_BYTES + 1)
     except (OSError, tarfile.TarError, zipfile.BadZipFile) as exc:
@@ -1137,7 +1179,12 @@ def _source_cas_contains_implementation(
         ) from exc
     if len(content) > _MAX_TEXT_INVENTORY_BYTES:
         return False
-    return _byte_manifest_has_implementation(content) or _raw_python_is_implementation(content)
+    return _code_bytes_are_relevant_implementation(
+        str(source.get("url") or path.name),
+        content,
+        source,
+        linkage_terms,
+    )
 
 
 def _cas_object_matches_digest(path: Path, digest: str) -> bool:
@@ -1194,79 +1241,149 @@ def _inventory_name_is_implementation(value: str) -> bool:
     )
 
 
-def _byte_manifest_has_implementation(content: bytes) -> bool:
-    """Inspect JSON manifest bytes for embedded source-code paths.
+def _model_linkage_terms(facts: Mapping[str, Any]) -> frozenset[str]:
+    """Return normalized identity/family tokens for source relevance checks.
 
     Parameters
     ----------
-    content:
-        Small non-archive CAS object bytes.
+    facts:
+        Complete proposed facts with identity and taxonomy blocks.
+
+    Returns
+    -------
+    frozenset[str]
+        Specific lowercase alphanumeric model/family tokens.
+    """
+
+    values: list[str] = []
+    identity = facts.get("identity")
+    if isinstance(identity, Mapping):
+        for field in ("canonical_name", "acronym"):
+            value = identity.get(field)
+            if isinstance(value, str):
+                values.append(value)
+        aliases = identity.get("aliases")
+        if isinstance(aliases, list):
+            values.extend(value for value in aliases if isinstance(value, str))
+    taxonomy = facts.get("taxonomy")
+    if isinstance(taxonomy, Mapping) and isinstance(taxonomy.get("family"), str):
+        values.append(str(taxonomy["family"]))
+    terms: set[str] = set()
+    for value in values:
+        split_camel = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", value)
+        normalized_full = re.sub(r"[^a-z0-9]+", "", value.lower())
+        if len(normalized_full) >= 4:
+            terms.add(normalized_full)
+        for token in re.findall(r"[a-z0-9]+", split_camel.lower()):
+            if len(token) >= 4 and token not in _SUPPORT_STOPWORDS:
+                terms.add(token)
+    return frozenset(terms)
+
+
+def _python_has_model_structure(text: str) -> bool:
+    """Return whether Python source contains executable architecture structure.
+
+    Parameters
+    ----------
+    text:
+        Decoded candidate source.
 
     Returns
     -------
     bool
-        True when any manifest string names a usable code file.
+        True for a model class/function with forward structure or layer construction.
     """
 
     try:
-        value = json.loads(content.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+        tree = ast.parse(text)
+    except SyntaxError:
         return False
-
-    def strings(item: object) -> Iterable[str]:
-        """Yield every string key and value from a JSON-like manifest.
-
-        Parameters
-        ----------
-        item:
-            Current JSON value.
-
-        Yields
-        ------
-        str
-            String keys and scalar string values.
-        """
-
-        if isinstance(item, Mapping):
-            for key, child in item.items():
-                if isinstance(key, str):
-                    yield key
-                yield from strings(child)
-        elif isinstance(item, Sequence) and not isinstance(item, (str, bytes)):
-            for child in item:
-                yield from strings(child)
-        elif isinstance(item, str):
-            yield item
-
-    return any(_inventory_name_is_implementation(value) for value in strings(value))
-
-
-def _raw_python_is_implementation(content: bytes) -> bool:
-    """Recognize extensionless raw Python implementation bytes structurally.
-
-    Parameters
-    ----------
-    content:
-        Small non-archive CAS object bytes.
-
-    Returns
-    -------
-    bool
-        True when parseable Python defines executable model-like structure.
-    """
-
-    try:
-        tree = ast.parse(content.decode("utf-8"))
-    except (UnicodeDecodeError, SyntaxError):
-        return False
-    definitions = [
+    classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
+    forward_methods = [
         node
-        for node in tree.body
-        if isinstance(node, (ast.AsyncFunctionDef, ast.ClassDef, ast.FunctionDef))
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef))
+        and node.name in {"call", "forward"}
     ]
-    return bool(definitions) and any(
-        isinstance(node, (ast.Import, ast.ImportFrom, ast.ClassDef)) for node in tree.body
+    model_classes = [
+        node
+        for node in classes
+        if any(
+            _call_name(base).rsplit(".", 1)[-1]
+            in {"Layer", "Model", "Module", "Network", "Sequential"}
+            for base in node.bases
+        )
+        or node.name.lower().endswith(("model", "net", "network"))
+    ]
+    architecture_calls = [
+        _call_name(node.func).rsplit(".", 1)[-1]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and _call_name(node.func).rsplit(".", 1)[-1]
+        in (_GENERIC_MODEL_CALLS | {"Embedding", "GRU", "LSTM", "MultiheadAttention"})
+    ]
+    builders = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef))
+        and node.name.lower().startswith(("build", "create", "make"))
+    ]
+    return bool(
+        (model_classes and (forward_methods or architecture_calls))
+        or (forward_methods and architecture_calls)
+        or (builders and architecture_calls)
     )
+
+
+def _code_bytes_are_relevant_implementation(
+    member_name: str,
+    content: bytes,
+    source: Mapping[str, Any],
+    linkage_terms: frozenset[str],
+) -> bool:
+    """Verify architecture structure and source-to-family linkage in exact bytes.
+
+    Parameters
+    ----------
+    member_name:
+        Archive member name or raw-source locator.
+    content:
+        Exact fetched candidate source bytes.
+    source:
+        Bound controlled-fetch manifest row.
+    linkage_terms:
+        Specific claimed model/family symbols.
+
+    Returns
+    -------
+    bool
+        True only when the bytes are both model-like and linked to the claimed family.
+    """
+
+    if not content or len(content) > _MAX_TEXT_INVENTORY_BYTES or not linkage_terms:
+        return False
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    source_context = " ".join(
+        str(source.get(field) or "") for field in ("url", "revision", "source_id")
+    )
+    normalized_context = re.sub(r"[^a-z0-9]+", "", f"{member_name} {source_context} {text}".lower())
+    if not any(term in normalized_context for term in linkage_terms):
+        return False
+    if Path(member_name).suffix.lower() in {".py", ".pyx", ""}:
+        return _python_has_model_structure(text)
+    architecture_tokens = re.search(
+        r"\b(?:attention|conv(?:olution)?|embedding|forward|layer|lstm|model|module|network)\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    definition_tokens = re.search(
+        r"\b(?:class|def|function|struct)\s+[A-Za-z_][A-Za-z0-9_]*",
+        text,
+    )
+    return architecture_tokens is not None and definition_tokens is not None
 
 
 def _validate_structural_slop(facts: Mapping[str, Any], code_path: Optional[Path]) -> None:

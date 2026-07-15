@@ -32,8 +32,18 @@ def test_macos_profile_denies_network_and_writes_except_designated_roots(
         "(version 1)\n"
         "(allow default)\n"
         "(deny network*)\n"
+        "(deny file-read-data)\n"
         "(deny file-write*)\n"
+        '(allow file-read* (subpath "/System"))\n'
+        '(allow file-read* (subpath "/usr/lib"))\n'
+        '(allow file-read* (subpath "/Library/Apple"))\n'
+        '(allow file-read* (subpath "/private/etc"))\n'
+        '(allow file-read* (subpath "/dev"))\n'
         '(allow file-write* (literal "/dev/null"))\n'
+        f'(allow file-read* (literal "{result.resolve()}"))\n'
+        f'(allow file-read* (subpath "{result.resolve()}"))\n'
+        f'(allow file-read* (literal "{scratch.resolve()}"))\n'
+        f'(allow file-read* (subpath "{scratch.resolve()}"))\n'
         f'(allow file-write* (literal "{result.resolve()}"))\n'
         f'(allow file-write* (subpath "{result.resolve()}"))\n'
         f'(allow file-write* (literal "{scratch.resolve()}"))\n'
@@ -74,7 +84,8 @@ def test_linux_os_sandbox_wraps_command_and_denies_network_and_outside_write(
         rss_limit_bytes=1024**3,
     )
 
-    assert Path(observation.argv[0]).resolve() == Path(sandbox.executable).resolve()
+    assert Path(observation.argv[0]).name == "strace"
+    assert str(Path(sandbox.executable).resolve()) in observation.argv
     assert "--unshare-net" in observation.argv or "--net" in observation.argv
     assert observation.exit_code == 71
     assert "write_denied=True network_denied=True" in observation.stdout_tail

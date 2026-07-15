@@ -5,8 +5,32 @@ from __future__ import annotations
 from pathlib import Path
 
 from menagerie.crawler.constants import RunMode
+from menagerie.crawler.identity import compute_recipe_revision, hash_bytes
 from menagerie.crawler.standard_inputs import InputSpec
 from menagerie.crawler.worker import WorkerRequest, run_worker
+
+
+def _adapter_revision(path: Path, source_identity: str = "unbound") -> str:
+    """Return the exact typed-adapter revision expected by a worker request.
+
+    Parameters
+    ----------
+    path:
+        Adapter source path.
+    source_identity:
+        Source identity bound into the revision.
+
+    Returns
+    -------
+    str
+        Exact recipe revision.
+    """
+
+    return compute_recipe_revision(
+        {"recipe_type": "typed-adapter", "path": path.name},
+        source_identity,
+        adapter_bytes=path.read_bytes(),
+    )
 
 
 def test_worker_builds_input_and_runs_both_modes(tmp_path: Path) -> None:
@@ -36,12 +60,17 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
     receipt_path = tmp_path / "result" / "receipt.json"
     request = WorkerRequest(
         stable_id="m_tiny",
-        recipe={"kind": "typed-adapter", "path": str(adapter)},
+        recipe={
+            "kind": "typed-adapter",
+            "path": str(adapter),
+            "adapter_sha256": hash_bytes(adapter.read_bytes()),
+        },
         modality="unknown",
         input_spec=InputSpec((1, 4), "float32"),
         scratch_root=tmp_path / "scratch",
         receipt_path=receipt_path,
         meaningful_modes=(RunMode.TRAIN, RunMode.EVAL),
+        recipe_revision=_adapter_revision(adapter),
     )
 
     receipt = run_worker(request)
@@ -82,12 +111,17 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
     )
     request = WorkerRequest(
         stable_id="m_batchnorm",
-        recipe={"kind": "typed-adapter", "path": str(adapter)},
+        recipe={
+            "kind": "typed-adapter",
+            "path": str(adapter),
+            "adapter_sha256": hash_bytes(adapter.read_bytes()),
+        },
         modality=None,
         input_spec=InputSpec((1, 1), "float32"),
         scratch_root=tmp_path / "scratch",
         receipt_path=tmp_path / "result" / "receipt.json",
         meaningful_modes=(RunMode.EVAL,),
+        recipe_revision=_adapter_revision(adapter),
     )
 
     receipt = run_worker(request)
@@ -128,12 +162,17 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
     )
     request = WorkerRequest(
         stable_id="m_invalid_dummy",
-        recipe={"kind": "typed-adapter", "path": str(adapter)},
+        recipe={
+            "kind": "typed-adapter",
+            "path": str(adapter),
+            "adapter_sha256": hash_bytes(adapter.read_bytes()),
+        },
         modality=None,
         input_spec=InputSpec((1,), "float32"),
         scratch_root=tmp_path / "scratch",
         receipt_path=tmp_path / "result" / "receipt.json",
         meaningful_modes=(RunMode.EVAL,),
+        recipe_revision=_adapter_revision(adapter),
     )
 
     receipt = run_worker(request)

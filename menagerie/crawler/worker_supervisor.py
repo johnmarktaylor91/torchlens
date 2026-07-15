@@ -8,6 +8,7 @@ import re
 import resource
 import signal
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -64,6 +65,45 @@ _WRITE_SYSCALLS = frozenset(
 )
 _SYSCALL_PATTERN = re.compile(r"(?:^|\s)([a-z][a-z0-9_]*)\(")
 _QUOTED_PATH_PATTERN = re.compile(r'"((?:[^"\\]|\\.)*)"')
+_RUNTIME_READ_SUFFIXES = frozenset(
+    {
+        ".a",
+        ".c",
+        ".cc",
+        ".cpp",
+        ".cu",
+        ".cuh",
+        ".dylib",
+        ".h",
+        ".hpp",
+        ".py",
+        ".pyc",
+        ".pyd",
+        ".pyi",
+        ".pyx",
+        ".so",
+    }
+)
+_SPECIAL_READ_ROOTS = (Path("/dev"), Path("/proc"), Path("/sys"))
+_SYSTEM_READ_ROOTS = (
+    Path("/etc/fonts"),
+    Path("/usr/share/fonts"),
+    Path("/usr/share/locale"),
+    Path("/usr/share/zoneinfo"),
+)
+_SYSTEM_READ_FILES = frozenset(
+    {
+        Path("/etc/group"),
+        Path("/etc/hosts"),
+        Path("/etc/ld.so.cache"),
+        Path("/etc/locale.alias"),
+        Path("/etc/localtime"),
+        Path("/etc/nsswitch.conf"),
+        Path("/etc/passwd"),
+        Path("/etc/resolv.conf"),
+    }
+)
+_TERMINAL_TRACE_PATTERN = re.compile(r"\+\+\+ (?:exited with|killed by) .+ \+\+\+$")
 
 
 @dataclass(frozen=True)
@@ -165,12 +205,19 @@ class SandboxDenialObservation:
         Whether a write syscall outside the allowed roots was denied.
     write_paths:
         Sanitized denied write paths.
+    checkpoint_or_weight_read_attempted, checkpoint_paths:
+        Undeclared model-data reads observed at the kernel boundary.
+    telemetry_failure:
+        Fail-closed broker-integrity diagnostic, if telemetry was not trustworthy.
     """
 
     network_attempted: bool = False
     socket_targets: tuple[str, ...] = ()
     write_outside_scratch_attempted: bool = False
     write_paths: tuple[str, ...] = ()
+    checkpoint_or_weight_read_attempted: bool = False
+    checkpoint_paths: tuple[str, ...] = ()
+    telemetry_failure: Optional[str] = None
 
     @property
     def poisoned(self) -> bool:
@@ -182,7 +229,12 @@ class SandboxDenialObservation:
             True for any observed denied network or outside-write operation.
         """
 
-        return self.network_attempted or self.write_outside_scratch_attempted
+        return (
+            self.network_attempted
+            or self.write_outside_scratch_attempted
+            or self.checkpoint_or_weight_read_attempted
+            or self.telemetry_failure is not None
+        )
 
 
 def _child_limit(rss_limit_bytes: int) -> None:
@@ -274,7 +326,7 @@ def _rusage_seconds(usage: resource.struct_rusage) -> float:
 def _linux_audited_argv(
     sandboxed_argv: Sequence[str], audit_executable: str, audit_path: Path
 ) -> tuple[str, ...]:
-    """Insert a syscall-observation broker inside a Linux sandbox command.
+    """Wrap a Linux sandbox command in a parent-owned syscall broker.
 
     Parameters
     ----------
@@ -283,40 +335,146 @@ def _linux_audited_argv(
     audit_executable:
         Absolute path to ``strace``.
     audit_path:
-        Writable broker output path.
+        Parent-owned broker output path outside every child-writable bind.
 
     Returns
     -------
     tuple[str, ...]
-        Sandbox command whose child is supervised by the syscall broker.
-
-    Raises
-    ------
-    SandboxUnavailableError
-        If the sandbox wrapper has no child-command separator.
+        Broker command supervising the complete sandboxed process tree.
     """
 
-    separators = [index for index, value in enumerate(sandboxed_argv) if value == "--"]
-    if not separators:
-        raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
-    separator = separators[-1]
-    broker = (
+    return (
         audit_executable,
         "-f",
-        "-qq",
+        "-q",
+        "-yy",
         "-e",
-        "trace=%network,%file",
+        "trace=%network,%file,%process",
         "-s",
         "4096",
         "-o",
         str(audit_path),
         "--",
+        *sandboxed_argv,
     )
-    return (
-        *sandboxed_argv[: separator + 1],
-        *broker,
-        *sandboxed_argv[separator + 1 :],
-    )
+
+
+def _parent_owned_audit_path(
+    scratch_root: Path, write_roots: Sequence[Path]
+) -> tuple[Path, tuple[int, int]]:
+    """Create immutable-identity telemetry storage outside child-writable roots.
+
+    Parameters
+    ----------
+    scratch_root:
+        Supervisor scratch directory used to choose a nearby parent-owned sibling.
+    write_roots:
+        Roots that the OS sandbox exposes writable to the child.
+
+    Returns
+    -------
+    tuple[pathlib.Path, tuple[int, int]]
+        Audit path and its parent-recorded device/inode identity.
+
+    Raises
+    ------
+    SandboxUnavailableError
+        If no parent-owned location can be established.
+    """
+
+    roots = tuple(root.resolve() for root in write_roots)
+    base = scratch_root.resolve().parent
+    for _attempt in range(8):
+        directory = base / f".menagerie-parent-audit-{os.getpid()}-{time.time_ns()}"
+        if not any(directory == root or root in directory.parents for root in roots):
+            try:
+                directory.mkdir(mode=0o700)
+                path = directory / "sandbox-syscalls.log"
+                descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                os.close(descriptor)
+                os.link(path, directory / "sandbox-syscalls.anchor")
+                status = path.stat()
+                return path, (status.st_dev, status.st_ino)
+            except OSError as exc:
+                raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value) from exc
+        base = base.parent
+    raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
+
+
+def _request_allowed_read_paths(argv: Sequence[str]) -> tuple[Path, ...]:
+    """Derive exact executable/source/input paths from a worker argv and request.
+
+    Parameters
+    ----------
+    argv:
+        Original unsandboxed command vector.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Parent-verified paths allowed as runtime source or standard input.
+    """
+
+    allowed: list[Path] = []
+    if argv:
+        executable = Path(argv[0])
+        if executable.exists():
+            allowed.append(executable)
+    allowed.append(Path(__file__).with_name("assets") / "standard")
+    try:
+        request_index = argv.index("--request") + 1
+        request_path = Path(argv[request_index]).resolve()
+    except (ValueError, IndexError):
+        return tuple(dict.fromkeys(allowed))
+    allowed.append(request_path)
+    try:
+        request = json.loads(request_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return tuple(dict.fromkeys(allowed))
+    if not isinstance(request, Mapping):
+        return tuple(dict.fromkeys(allowed))
+    recipe = request.get("recipe")
+    if isinstance(recipe, Mapping):
+        adapter_path = recipe.get("path")
+        if isinstance(adapter_path, str) and adapter_path:
+            resolved_adapter = Path(adapter_path).resolve()
+            allowed.append(resolved_adapter)
+            for directory in (resolved_adapter.parent, *resolved_adapter.parents[:4]):
+                sidecar = directory / "driver-author-artifact.json"
+                if sidecar.is_file():
+                    allowed.append(sidecar)
+                    break
+    input_contract = request.get("input_contract")
+    if isinstance(input_contract, Mapping):
+        input_code_path = input_contract.get("code_path")
+        if isinstance(input_code_path, str) and input_code_path:
+            allowed.append(Path(input_code_path))
+    return tuple(dict.fromkeys(path.resolve() for path in allowed))
+
+
+def _runtime_read_roots(argv: Sequence[str], cwd: Path) -> tuple[Path, ...]:
+    """Return environment/source roots limited to runtime-code reads on macOS.
+
+    Parameters
+    ----------
+    argv:
+        Original worker command vector.
+    cwd:
+        Read-only source working directory.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Python environment and source roots.
+    """
+
+    roots = [cwd.resolve()]
+    if argv:
+        executable = Path(argv[0]).resolve()
+        roots.append(
+            executable.parent.parent if executable.parent.name == "bin" else executable.parent
+        )
+    return tuple(dict.fromkeys(roots))
 
 
 def _syscall_name(line: str) -> Optional[str]:
@@ -407,8 +565,143 @@ def _outside_allowed_roots(path_text: str, cwd: Path, write_roots: Sequence[Path
     return not any(candidate == root or root in candidate.parents for root in roots)
 
 
+def _telemetry_failure_observation(detail: str) -> SandboxDenialObservation:
+    """Return a fail-closed policy observation for invalid broker telemetry.
+
+    Parameters
+    ----------
+    detail:
+        Bounded parent-owned integrity diagnosis.
+
+    Returns
+    -------
+    SandboxDenialObservation
+        Poisoning checkpoint-read observation.
+    """
+
+    marker = f"<sandbox-telemetry-invalid:{detail}>"
+    return SandboxDenialObservation(
+        checkpoint_or_weight_read_attempted=True,
+        checkpoint_paths=(marker,),
+        telemetry_failure=detail,
+    )
+
+
+def _resolved_trace_path(path_text: str, cwd: Path) -> Path:
+    """Resolve one traced path conservatively against the worker directory.
+
+    Parameters
+    ----------
+    path_text:
+        Absolute or tracee-relative path.
+    cwd:
+        Worker working directory.
+
+    Returns
+    -------
+    pathlib.Path
+        Normalized candidate path.
+    """
+
+    path = Path(path_text)
+    return (path if path.is_absolute() else cwd / path).resolve()
+
+
+def _read_path_is_allowed(
+    path_text: str,
+    cwd: Path,
+    write_roots: Sequence[Path],
+    allowed_read_paths: Sequence[Path],
+) -> bool:
+    """Return whether a kernel-level read belongs to the closed runtime allowlist.
+
+    Parameters
+    ----------
+    path_text:
+        Path decoded from one successful read-only open.
+    cwd:
+        Worker working directory.
+    write_roots:
+        Fresh scratch/result roots whose contents are parent-authorized runtime state.
+    allowed_read_paths:
+        Exact source/input paths derived from the immutable worker request.
+
+    Returns
+    -------
+    bool
+        True only for declared inputs, source/runtime code, or OS runtime support.
+    """
+
+    candidate = _resolved_trace_path(path_text, cwd)
+    roots = tuple(root.resolve() for root in write_roots)
+    allowed = tuple(path.resolve() for path in allowed_read_paths)
+    if candidate in _SYSTEM_READ_FILES:
+        return True
+    if path_text in {"self", "self/fd", "self/mountinfo"} or re.fullmatch(
+        r"\d+/(?:fd|ns)(?:/.*)?", path_text
+    ):
+        return True
+    if any(candidate == root or root in candidate.parents for root in _SPECIAL_READ_ROOTS):
+        return True
+    if any(candidate == root or root in candidate.parents for root in _SYSTEM_READ_ROOTS):
+        return True
+    if candidate.is_relative_to(Path("/usr/lib/locale")) or "gconv" in candidate.parts:
+        return True
+    if any(candidate == root or root in candidate.parents for root in roots):
+        return True
+    if any(candidate == path or path in candidate.parents for path in allowed):
+        return True
+    try:
+        if candidate.is_dir():
+            return True
+    except OSError:
+        pass
+    if any(part.endswith((".dist-info", ".egg-info")) for part in candidate.parts):
+        return True
+    name = candidate.name.lower()
+    if candidate.suffix.lower() == ".pth" and any(
+        part in {"site-packages", "dist-packages"} for part in candidate.parts
+    ):
+        try:
+            data = candidate.read_bytes()
+            return len(data) <= 1024**2 and b"\x00" not in data
+        except OSError:
+            return False
+    if candidate.suffix.lower() == ".cnf" and "ssl" in candidate.parts:
+        return True
+    return candidate.suffix.lower() in _RUNTIME_READ_SUFFIXES or ".so." in name
+
+
+def _trace_line_is_well_formed(line: str) -> bool:
+    """Return whether one nonempty strace line has a recognized complete form.
+
+    Parameters
+    ----------
+    line:
+        One parent-owned telemetry line.
+
+    Returns
+    -------
+    bool
+        True for syscall, signal, continuation, or terminal records.
+    """
+
+    return bool(
+        _syscall_name(line)
+        or _TERMINAL_TRACE_PATTERN.search(line)
+        or "<unfinished ...>" in line
+        or "resumed>" in line
+        or re.search(r"(?:^|\s)--- SIG[A-Z0-9]+ ", line)
+    )
+
+
 def _parse_linux_denial_audit(
-    audit_path: Path, cwd: Path, write_roots: Sequence[Path]
+    audit_path: Path,
+    cwd: Path,
+    write_roots: Sequence[Path],
+    *,
+    expected_identity: Optional[tuple[int, int]] = None,
+    allowed_read_paths: Sequence[Path] = (),
 ) -> SandboxDenialObservation:
     """Parse Linux syscall telemetry into closed worker policy observations.
 
@@ -420,6 +713,10 @@ def _parse_linux_denial_audit(
         Worker working directory used to resolve relative write targets.
     write_roots:
         Sole OS-sandbox writable roots.
+    expected_identity:
+        Parent-recorded device/inode pair for replacement detection.
+    allowed_read_paths:
+        Explicit source/input paths authorized for model execution.
 
     Returns
     -------
@@ -428,17 +725,54 @@ def _parse_linux_denial_audit(
     """
 
     try:
-        lines = audit_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        status = audit_path.stat()
+        if not stat.S_ISREG(status.st_mode):
+            return _telemetry_failure_observation("not-regular")
+        if expected_identity is not None and (status.st_dev, status.st_ino) != expected_identity:
+            return _telemetry_failure_observation("replaced")
+        anchor = audit_path.with_name("sandbox-syscalls.anchor")
+        if anchor.exists():
+            anchor_status = anchor.stat()
+            if (anchor_status.st_dev, anchor_status.st_ino) != (status.st_dev, status.st_ino):
+                return _telemetry_failure_observation("replaced")
+        content = audit_path.read_text(encoding="utf-8", errors="strict")
+    except UnicodeDecodeError:
+        return _telemetry_failure_observation("unparsable-encoding")
     except OSError:
-        return SandboxDenialObservation()
+        return _telemetry_failure_observation("missing")
+    lines = content.splitlines()
+    if not lines:
+        return _telemetry_failure_observation("empty")
+    if not _TERMINAL_TRACE_PATTERN.search(lines[-1]):
+        return _telemetry_failure_observation("truncated")
+    if any(not _trace_line_is_well_formed(line) for line in lines if line.strip()):
+        return _telemetry_failure_observation("unparsable-record")
     socket_targets: list[str] = []
     write_paths: list[str] = []
+    checkpoint_paths: list[str] = []
     for line in lines:
         syscall = _syscall_name(line)
         if syscall in {"connect", "sendmsg", "sendto"} and (
             "AF_INET" in line or "AF_INET6" in line
         ):
             socket_targets.append(_network_target(line))
+            continue
+        if syscall in {"open", "openat", "openat2"} and not any(
+            flag in line for flag in _WRITE_OPEN_FLAGS
+        ):
+            paths = _decoded_trace_paths(line)
+            successful = not re.search(r"= -1(?:\s|$)", line) and bool(
+                re.search(r"= (?:\d+|0x[0-9a-fA-F]+)(?:<|\s|$)", line)
+            )
+            if successful and paths:
+                path_text = paths[0]
+                if not _read_path_is_allowed(
+                    path_text,
+                    cwd,
+                    write_roots,
+                    allowed_read_paths,
+                ):
+                    checkpoint_paths.append(path_text)
             continue
         if syscall not in _WRITE_SYSCALLS or not any(
             f" {errno} " in line for errno in _DENIED_ERRNOS
@@ -456,11 +790,14 @@ def _parse_linux_denial_audit(
             write_paths.append(f"<{syscall}:denied-outside-sandbox>")
     unique_targets = tuple(dict.fromkeys(socket_targets))
     unique_paths = tuple(dict.fromkeys(write_paths))
+    unique_checkpoints = tuple(dict.fromkeys(checkpoint_paths))
     return SandboxDenialObservation(
         network_attempted=bool(unique_targets),
         socket_targets=unique_targets,
         write_outside_scratch_attempted=bool(unique_paths),
         write_paths=unique_paths,
+        checkpoint_or_weight_read_attempted=bool(unique_checkpoints),
+        checkpoint_paths=unique_checkpoints,
     )
 
 
@@ -480,6 +817,7 @@ def _macos_denial_audit(stderr: bytes) -> SandboxDenialObservation:
 
     network: list[str] = []
     writes: list[str] = []
+    checkpoint_paths: list[str] = []
     for line in stderr.decode("utf-8", errors="replace").splitlines():
         lowered = line.lower()
         if "deny" not in lowered:
@@ -488,11 +826,15 @@ def _macos_denial_audit(stderr: bytes) -> SandboxDenialObservation:
             network.append(line[-500:])
         if "file-write" in lowered or "file write" in lowered:
             writes.append(line[-500:])
+        if "file-read-data" in lowered or "file read data" in lowered:
+            checkpoint_paths.append(line[-500:])
     return SandboxDenialObservation(
         network_attempted=bool(network),
         socket_targets=tuple(dict.fromkeys(network)),
         write_outside_scratch_attempted=bool(writes),
         write_paths=tuple(dict.fromkeys(writes)),
+        checkpoint_or_weight_read_attempted=bool(checkpoint_paths),
+        checkpoint_paths=tuple(dict.fromkeys(checkpoint_paths)),
     )
 
 
@@ -520,6 +862,16 @@ def _merge_denial_observations(
     paths = tuple(
         dict.fromkeys(path for observation in observations for path in observation.write_paths)
     )
+    checkpoint_paths = tuple(
+        dict.fromkeys(path for observation in observations for path in observation.checkpoint_paths)
+    )
+    telemetry_failures = tuple(
+        dict.fromkeys(
+            observation.telemetry_failure
+            for observation in observations
+            if observation.telemetry_failure is not None
+        )
+    )
     return SandboxDenialObservation(
         network_attempted=any(observation.network_attempted for observation in observations),
         socket_targets=targets,
@@ -527,6 +879,11 @@ def _merge_denial_observations(
             observation.write_outside_scratch_attempted for observation in observations
         ),
         write_paths=paths,
+        checkpoint_or_weight_read_attempted=any(
+            observation.checkpoint_or_weight_read_attempted for observation in observations
+        ),
+        checkpoint_paths=checkpoint_paths,
+        telemetry_failure=";".join(telemetry_failures) if telemetry_failures else None,
     )
 
 
@@ -602,12 +959,26 @@ def poison_receipt_for_sandbox_denial(receipt_path: Path, denial: SandboxDenialO
     policy["write_paths"] = list(
         dict.fromkeys([*policy.get("write_paths", []), *denial.write_paths])
     )
+    policy["checkpoint_or_weight_read_attempted"] = (
+        bool(policy.get("checkpoint_or_weight_read_attempted"))
+        or denial.checkpoint_or_weight_read_attempted
+    )
+    policy["checkpoint_paths"] = list(
+        dict.fromkeys([*policy.get("checkpoint_paths", []), *denial.checkpoint_paths])
+    )
     payload["policy_observation"] = policy
-    reason_code = "network-attempt" if denial.network_attempted else "write-outside-scratch"
+    if denial.network_attempted:
+        reason_code = "network-attempt"
+    elif denial.write_outside_scratch_attempted:
+        reason_code = "write-outside-scratch"
+    else:
+        reason_code = "checkpoint-read"
     error = {
         "reason_code": reason_code,
         "exception_type": ("menagerie.crawler.worker_supervisor.SandboxDenialObservation"),
-        "message": "OS sandbox denied a forbidden operation caught by worker code",
+        "message": (
+            "parent-owned syscall telemetry observed a forbidden operation or failed integrity"
+        ),
         "traceback": None,
     }
     payload["error"] = error
@@ -703,6 +1074,7 @@ def run_isolated_subprocess(
     stderr_path = scratch_root / "stderr.log"
     safe_environment = build_safe_environment(scratch_root, base_environment=base_environment)
     working_directory = (cwd or Path.cwd()).resolve()
+    allowed_read_paths = _request_allowed_read_paths(argv)
     sandbox = detect_os_sandbox()
     if sandbox is None:
         raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
@@ -710,7 +1082,11 @@ def run_isolated_subprocess(
     if sandbox.kind == "sandbox-exec":
         profile_path = scratch_root / "worker-sandbox.sb"
         profile_path.write_text(
-            generate_macos_sandbox_profile(write_roots),
+            generate_macos_sandbox_profile(
+                write_roots,
+                allowed_read_paths=allowed_read_paths,
+                runtime_read_roots=_runtime_read_roots(argv, working_directory),
+            ),
             encoding="utf-8",
         )
     sandboxed_argv = wrap_with_os_sandbox(
@@ -721,12 +1097,14 @@ def run_isolated_subprocess(
         macos_profile_path=profile_path,
     )
     denial_audit_path: Optional[Path] = None
+    denial_audit_identity: Optional[tuple[int, int]] = None
     if sandbox.kind in {"bubblewrap", "unshare"}:
         denial_audit_executable = shutil.which("strace")
         if denial_audit_executable is None:
             raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
-        denial_audit_path = scratch_root / "sandbox-denial-audit.log"
-        denial_audit_path.unlink(missing_ok=True)
+        denial_audit_path, denial_audit_identity = _parent_owned_audit_path(
+            scratch_root, write_roots
+        )
         sandboxed_argv = _linux_audited_argv(
             sandboxed_argv,
             denial_audit_executable,
@@ -781,6 +1159,8 @@ def run_isolated_subprocess(
                 denial_audit_path,
                 working_directory,
                 write_roots,
+                expected_identity=denial_audit_identity,
+                allowed_read_paths=allowed_read_paths,
             ),
         )
     _poison_receipts_in_roots(additional_write_roots, denial)

@@ -6,9 +6,11 @@ import ast
 import builtins
 import importlib.abc
 import importlib.machinery
+import io
 import json
 import os
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -32,7 +34,38 @@ _CREDENTIAL_MARKERS = (
     "CREDENTIAL",
     "COOKIE",
 )
-_CHECKPOINT_SUFFIXES = (".pt", ".pth", ".ckpt", ".safetensors", ".h5", ".weights")
+_RUNTIME_SOURCE_SUFFIXES = frozenset(
+    {
+        ".a",
+        ".c",
+        ".cc",
+        ".cpp",
+        ".cu",
+        ".cuh",
+        ".dylib",
+        ".h",
+        ".hpp",
+        ".py",
+        ".pyc",
+        ".pyd",
+        ".pyi",
+        ".pyx",
+        ".so",
+    }
+)
+_SPECIAL_READ_ROOTS = (Path("/dev"), Path("/proc"), Path("/sys"))
+_SYSTEM_READ_FILES = frozenset(
+    {
+        Path("/etc/group"),
+        Path("/etc/hosts"),
+        Path("/etc/ld.so.cache"),
+        Path("/etc/locale.alias"),
+        Path("/etc/localtime"),
+        Path("/etc/nsswitch.conf"),
+        Path("/etc/passwd"),
+        Path("/etc/resolv.conf"),
+    }
+)
 _SAFE_INHERITED_KEYS = (
     "PATH",
     "PYTHONPATH",
@@ -93,18 +126,27 @@ def _normalized_write_roots(write_roots: Sequence[Path]) -> tuple[Path, ...]:
     return tuple(roots)
 
 
-def generate_macos_sandbox_profile(write_roots: Sequence[Path]) -> str:
+def generate_macos_sandbox_profile(
+    write_roots: Sequence[Path],
+    *,
+    allowed_read_paths: Sequence[Path] = (),
+    runtime_read_roots: Sequence[Path] = (),
+) -> str:
     """Generate a deterministic sandbox-exec profile for offline execution.
 
     Parameters
     ----------
     write_roots:
         Sole filesystem roots where writes are permitted.
+    allowed_read_paths:
+        Exact source/input paths or directories permitted for data reads.
+    runtime_read_roots:
+        Environment/source roots restricted to executable-code file suffixes.
 
     Returns
     -------
     str
-        Complete Seatbelt profile denying network and all other writes.
+        Complete Seatbelt profile denying network, undeclared reads, and other writes.
     """
 
     roots = _normalized_write_roots(write_roots)
@@ -112,9 +154,25 @@ def generate_macos_sandbox_profile(write_roots: Sequence[Path]) -> str:
         "(version 1)",
         "(allow default)",
         "(deny network*)",
+        "(deny file-read-data)",
         "(deny file-write*)",
+        '(allow file-read* (subpath "/System"))',
+        '(allow file-read* (subpath "/usr/lib"))',
+        '(allow file-read* (subpath "/Library/Apple"))',
+        '(allow file-read* (subpath "/private/etc"))',
+        '(allow file-read* (subpath "/dev"))',
         '(allow file-write* (literal "/dev/null"))',
     ]
+    read_paths = tuple(dict.fromkeys(path.resolve() for path in (*roots, *allowed_read_paths)))
+    for path in read_paths:
+        encoded = json.dumps(str(path), ensure_ascii=True)
+        lines.append(f"(allow file-read* (literal {encoded}))")
+        if path in roots or path.is_dir():
+            lines.append(f"(allow file-read* (subpath {encoded}))")
+    runtime_suffixes = "a|c|cc|cpp|cu|cuh|dylib|h|hpp|metallib|py|pyc|pyd|pyi|pyx|so"
+    for root in tuple(dict.fromkeys(path.resolve() for path in runtime_read_roots)):
+        pattern = f"^{re.escape(str(root))}/.*\\.(?:{runtime_suffixes})$"
+        lines.append(f"(allow file-read* (regex #{json.dumps(pattern)}))")
     for root in roots:
         encoded = json.dumps(str(root), ensure_ascii=True)
         lines.append(f"(allow file-write* (literal {encoded}))")
@@ -226,7 +284,11 @@ def _probe_sandbox_exec(executable: str) -> bool:
         True when Seatbelt launches a no-op under the profile.
     """
 
-    profile = generate_macos_sandbox_profile(())
+    profile = generate_macos_sandbox_profile(
+        (),
+        allowed_read_paths=(Path(sys.executable),),
+        runtime_read_roots=(Path(sys.prefix), Path.cwd()),
+    )
     return _probe_command((executable, "-p", profile, *_python_probe_argv()))
 
 
@@ -755,9 +817,16 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
         Sole writable filesystem root.
     additional_write_roots:
         Other explicit result roots, normally the atomic receipt directory.
+    allowed_read_paths:
+        Explicit source and input files or directories authorized by the parent request.
     """
 
-    def __init__(self, scratch_root: Path, *additional_write_roots: Path) -> None:
+    def __init__(
+        self,
+        scratch_root: Path,
+        *additional_write_roots: Path,
+        allowed_read_paths: Sequence[Path] = (),
+    ) -> None:
         """Initialize inactive tripwires.
 
         Parameters
@@ -766,15 +835,22 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
             Primary writable root.
         *additional_write_roots:
             Explicit additional writable roots.
+        allowed_read_paths:
+            Exact source/input paths that model construction may read.
         """
 
         self.allowed_roots = tuple(
             path.resolve() for path in (scratch_root, *additional_write_roots)
         )
+        self.allowed_read_paths = tuple(path.resolve() for path in allowed_read_paths)
+        self.environment_search_paths = frozenset(
+            Path(value).resolve() for value in sys.path if isinstance(value, str) and value
+        )
         self.observation = PolicyObservation(
             credentials_present=any(_contains_credential_name(name) for name in os.environ)
         )
         self._original_open = builtins.open
+        self._original_io_open = io.open
         self._original_os_open = os.open
         self._original_connect = socket.socket.connect
         self._original_connect_ex = socket.socket.connect_ex
@@ -839,6 +915,45 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
             return True
         return any(candidate == root or root in candidate.parents for root in self.allowed_roots)
 
+    def _read_path_allowed(
+        self, value: Union[str, bytes, os.PathLike[str], os.PathLike[bytes]]
+    ) -> bool:
+        """Return whether a read is explicit input/source or runtime support.
+
+        Parameters
+        ----------
+        value:
+            Filesystem path opened for reading.
+
+        Returns
+        -------
+        bool
+            True only for the closed read allowlist.
+        """
+
+        candidate = Path(os.fsdecode(value)).resolve()
+        if candidate == Path(os.devnull).resolve() or candidate in _SYSTEM_READ_FILES:
+            return True
+        if any(candidate == root or root in candidate.parents for root in _SPECIAL_READ_ROOTS):
+            return True
+        if any(
+            candidate == allowed or allowed in candidate.parents
+            for allowed in self.allowed_read_paths
+        ):
+            return True
+        if candidate in self.environment_search_paths:
+            return True
+        if any(candidate == root or root in candidate.parents for root in self.allowed_roots):
+            return True
+        if any(part.endswith((".dist-info", ".egg-info")) for part in candidate.parts):
+            return True
+        name = candidate.name.lower()
+        if name.startswith("__editable__.") and name.endswith(".__path_hook__"):
+            return True
+        if name.startswith("python") and name.endswith(".zip") and "lib" in candidate.parts:
+            return True
+        return candidate.suffix.lower() in _RUNTIME_SOURCE_SUFFIXES or ".so." in name
+
     def _audit_path(self, value: Any, *, writing: bool) -> None:
         """Audit one Python-level file access.
 
@@ -853,10 +968,12 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
         if isinstance(value, int):
             return
         path_text = os.fsdecode(value)
-        if not writing and path_text.lower().endswith(_CHECKPOINT_SUFFIXES):
+        if not writing and not self._read_path_allowed(value):
             self.observation.checkpoint_or_weight_read_attempted = True
             self.observation.checkpoint_paths.append(path_text)
-            raise PolicyViolation("checkpoint-read", f"blocked checkpoint read: {path_text}")
+            raise PolicyViolation(
+                "checkpoint-read", f"blocked undeclared model-data read: {path_text}"
+            )
         if writing and not self._path_allowed(value):
             self.observation.write_outside_scratch_attempted = True
             self.observation.write_paths.append(path_text)
@@ -967,6 +1084,7 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
         """
 
         setattr(builtins, "open", self._open)
+        setattr(io, "open", self._open)
         setattr(os, "open", self._os_open)
         setattr(socket.socket, "connect", self._blocked_connect_function)
         setattr(socket.socket, "connect_ex", self._blocked_connect_function)
@@ -984,6 +1102,7 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
         """
 
         setattr(builtins, "open", self._original_open)
+        setattr(io, "open", self._original_io_open)
         setattr(os, "open", self._original_os_open)
         setattr(socket.socket, "connect", self._original_connect)
         setattr(socket.socket, "connect_ex", self._original_connect_ex)

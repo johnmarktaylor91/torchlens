@@ -26,8 +26,9 @@ from menagerie.crawler.modes import (
     output_signature,
 )
 from menagerie.crawler.policy import ExecutionPolicy, PolicyObservation, PolicyViolation
-from menagerie.crawler.recipe import LoadedRecipe, load_recipe
+from menagerie.crawler.recipe import LoadedRecipe, RecipeError, load_recipe
 from menagerie.crawler.standard_inputs import (
+    ASSET_ROOT,
     InputSpec,
     materialize_standard_input,
 )
@@ -168,6 +169,69 @@ def _seed_frameworks(seed: int, framework: str) -> None:
         import paddle
 
         paddle.seed(seed)
+
+
+def _sidecar_adapter_sha256(request: WorkerRequest, adapter_path: Path) -> Optional[str]:
+    """Recover an accepted adapter digest from the parent-owned artifact sidecar.
+
+    Parameters
+    ----------
+    request:
+        Worker request carrying the campaign/source identities.
+    adapter_path:
+        Typed adapter path selected by the driver.
+
+    Returns
+    -------
+    str | None
+        Exact accepted code digest, or ``None`` when no fully bound sidecar exists.
+    """
+
+    resolved_adapter = adapter_path.resolve()
+    for directory in (resolved_adapter.parent, *resolved_adapter.parents[:4]):
+        sidecar = directory / "driver-author-artifact.json"
+        if not sidecar.is_file():
+            continue
+        try:
+            artifact = json.loads(sidecar.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        if not isinstance(artifact, Mapping):
+            return None
+        proposal = artifact.get("proposal")
+        model_dir_value = artifact.get("model_dir")
+        if not isinstance(proposal, Mapping) or not isinstance(model_dir_value, str):
+            return None
+        claimed_proposal_hash = proposal.get("proposal_sha256")
+        proposal_payload = {
+            key: value for key, value in proposal.items() if key != "proposal_sha256"
+        }
+        if claimed_proposal_hash != stable_hash(proposal_payload):
+            return None
+        if (
+            proposal.get("stable_id") != request.stable_id
+            or proposal.get("source_identity") != request.source_identity
+            or proposal.get("recipe_revision") != request.recipe_revision
+        ):
+            return None
+        facts = proposal.get("proposed_facts")
+        implementation = facts.get("implementation") if isinstance(facts, Mapping) else None
+        if not isinstance(implementation, Mapping):
+            return None
+        code_value = implementation.get("code_path")
+        code_digest = implementation.get("code_sha256")
+        verified_hashes = proposal.get("verified_hashes")
+        if not isinstance(code_value, str) or not isinstance(code_digest, str):
+            return None
+        model_dir = Path(model_dir_value).resolve()
+        code_path = Path(code_value)
+        resolved_code = (code_path if code_path.is_absolute() else model_dir / code_path).resolve()
+        if resolved_code != resolved_adapter:
+            return None
+        if not isinstance(verified_hashes, Mapping) or verified_hashes.get("code") != code_digest:
+            return None
+        return code_digest
+    return None
 
 
 def _parameter_counts(model: object) -> tuple[Optional[int], Optional[int]]:
@@ -610,11 +674,29 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
     """
 
     request.scratch_root.mkdir(parents=True, exist_ok=True)
-    policy = ExecutionPolicy(request.scratch_root, request.receipt_path.parent)
+    recipe_path = request.recipe.get("path")
+    effective_recipe = dict(request.recipe)
+    if isinstance(recipe_path, str) and recipe_path:
+        adapter_digest = effective_recipe.get("adapter_sha256")
+        if not isinstance(adapter_digest, str):
+            sidecar_digest = _sidecar_adapter_sha256(request, Path(recipe_path))
+            if sidecar_digest is not None:
+                effective_recipe["adapter_sha256"] = sidecar_digest
+    allowed_read_paths = [ASSET_ROOT]
+    if isinstance(recipe_path, str) and recipe_path:
+        allowed_read_paths.append(Path(recipe_path))
+    policy = ExecutionPolicy(
+        request.scratch_root,
+        request.receipt_path.parent,
+        allowed_read_paths=allowed_read_paths,
+    )
     base: dict[str, Any] = {
         "receipt_version": "menagerie.crawler.worker-receipt.v1",
         "stable_id": request.stable_id,
         "source_identity": request.source_identity,
+        "recipe_revision": request.recipe_revision,
+        "observed_recipe_revision": None,
+        "observed_adapter_sha256": None,
         "execution_identity": request.execution_identity,
         "seed": request.seed,
         "device": request.device,
@@ -634,10 +716,16 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
     with policy:
         try:
             _seed_frameworks(request.seed, request.framework)
+            recipe_kind = effective_recipe.get("kind") or effective_recipe.get("recipe_type")
+            if recipe_kind == "typed-adapter" and not isinstance(
+                effective_recipe.get("adapter_sha256"), str
+            ):
+                raise RecipeError("typed-adapter worker request requires adapter_sha256")
             loaded: LoadedRecipe = load_recipe(
-                request.recipe, source_identity=request.source_identity
+                effective_recipe, source_identity=request.source_identity
             )
-            base["recipe_revision"] = request.recipe_revision
+            base["observed_recipe_revision"] = loaded.recipe_revision
+            base["observed_adapter_sha256"] = loaded.adapter_sha256
             base["constructor_started"] = True
             constructor_started = time.monotonic()
             model = loaded.build_model()
