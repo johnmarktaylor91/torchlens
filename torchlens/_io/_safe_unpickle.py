@@ -405,6 +405,10 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens.data_classes.prehook", "TensorInputObservation"),
         ("torchlens.data_classes.prehook", "ModuleInputSnapshot"),
         ("torchlens.data_classes.prehook", "PreHookEffect"),
+        # Backward-pass records. __setstate__ is the same inert version-compat
+        # field-refill pattern Trace/Op use (default_fill_state); no side effects.
+        ("torchlens.data_classes.backward_pass", "BackwardPass"),
+        ("torchlens.data_classes.backward_pass", "BackwardPassAccessor"),
         # Trace + conditional-control-flow data classes.
         ("torchlens.data_classes.trace", "Conditional"),
         ("torchlens.data_classes.trace", "ConditionalAccessor"),
