@@ -290,5 +290,7 @@ def test_missing_linux_read_audit_fails_closed(
     result = _supervise_adapter(tmp_path, _tiny_adapter("return Tiny()"))
 
     assert result.worker_receipt is None
-    assert result.receipt_error == "failed:sandbox-unavailable"
+    # R6-M3: sandbox-unavailability is a closed-taxonomy `failed:policy` terminal
+    # (reason `sandbox-unavailable-v1`); the missing-audit path still fails closed.
+    assert result.receipt_error == "failed:policy"
     assert result.observation.exit_code is None
