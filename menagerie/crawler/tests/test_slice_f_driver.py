@@ -55,7 +55,7 @@ from menagerie.crawler.envs import (
     LockArtifacts,
     load_environment_registry,
 )
-from menagerie.crawler.env_lifecycle import EnvironmentProbeError, ProbeResult
+from menagerie.crawler.env_lifecycle import DiskRecoveryError, EnvironmentProbeError, ProbeResult
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.fetcher import fetch_targets as controlled_fetch_targets
@@ -2036,7 +2036,7 @@ def test_human_requeue_consumes_grant_and_supersedes_failed_gate(tmp_path: Path)
 
 
 def test_environment_failure_terminalizes_intent(tmp_path: Path) -> None:
-    """A typed environment probe failure terminalizes all assigned models."""
+    """A probe failure terminalizes assigned models only after the medic retry."""
 
     snapshot = _snapshot(tmp_path)
     result = _driver(
@@ -2049,6 +2049,297 @@ def test_environment_failure_terminalizes_intent(tmp_path: Path) -> None:
     models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
     assert {record["status"]["code"] for record in models} == {"failed:environment"}
     assert {record["status"]["reason_code"] for record in models} == {"probe-failed"}
+
+
+def test_environment_medic_retries_before_model_fanout(tmp_path: Path) -> None:
+    """A transient pre-use environment failure is retried without model terminals."""
+
+    class FlakyEnvironments(FakeEnvironments):
+        """Fail one probe cycle before running the environment callback."""
+
+        def __init__(self, root: Path) -> None:
+            """Initialize one-shot environment failure state."""
+
+            super().__init__(root)
+            self.calls = 0
+
+        def run(self, intent: EnvironmentIntent, *, use: Any) -> object:
+            """Raise before use once, then run normally."""
+
+            self.calls += 1
+            if self.calls == 1:
+                raise EnvironmentProbeError("synthetic transient probe failure")
+            return super().run(intent, use=use)
+
+    snapshot = _snapshot(tmp_path, count=1)
+    environments = FlakyEnvironments(tmp_path / "fake-envs")
+    result = _driver(tmp_path, snapshot, environments=environments).run()
+
+    assert result.status == "complete"
+    assert environments.calls == 2
+    models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    assert [record["status"]["code"] for record in models] == ["runs"]
+
+
+def test_post_use_teardown_failure_does_not_terminalize_pending_models(tmp_path: Path) -> None:
+    """A teardown error after successful banked forwards stays campaign-level only."""
+
+    class TeardownFailingEnvironments(FakeEnvironments):
+        """Complete model use and then report teardown disk failure."""
+
+        def run(self, intent: EnvironmentIntent, *, use: Any) -> object:
+            """Invoke use successfully before raising a teardown exception."""
+
+            super().run(intent, use=use)
+            raise DiskRecoveryError("synthetic post-use teardown failure")
+
+    snapshot = _snapshot(tmp_path, count=1)
+    paths = _paths(tmp_path, snapshot)
+    with pytest.raises(DiskRecoveryError, match="post-use teardown"):
+        _driver(
+            tmp_path,
+            snapshot,
+            checker=FakeChecker(quota=True),
+            environments=TeardownFailingEnvironments(tmp_path / "fake-envs"),
+            pause_scheduler=FakePauseScheduler(tmp_path),
+        ).run()
+
+    assert scan_jsonl(paths.ledgers.models) == []
+    assert len(scan_jsonl(paths.ledgers.attempts)) == 2
+
+
+def test_disposable_author_cache_corruption_reauthors(tmp_path: Path) -> None:
+    """Malformed local author cache bytes are discarded instead of terminalized."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    paths = _paths(tmp_path, snapshot)
+    stable_id = snapshot.items[0].stable_id
+    cache = paths.work_root / stable_id / "driver-author-artifact.json"
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text("{not-json", encoding="utf-8")
+    author = FakeAuthor()
+
+    result = _driver(tmp_path, snapshot, author=author).run()
+
+    assert result.status == "complete"
+    assert author.calls == {stable_id: 1}
+    assert scan_jsonl(paths.ledgers.models)[0]["status"]["code"] == "runs"
+
+
+def test_stale_forward_cache_work_id_regenerates_without_campaign_failure(tmp_path: Path) -> None:
+    """A same-execution cache from another work generation is disposable."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    author = FakeAuthor()
+    driver = _driver(tmp_path, snapshot, author=author)
+    item = driver._ordered_work(snapshot, {})[0]
+    artifact = author.author(item, driver.paths.work_root, driver.config)
+    intent = driver.registry.intents[item.route.intent]
+    prefix = tmp_path / "fake-envs" / intent.name
+    prefix.mkdir(parents=True, exist_ok=True)
+    environment = _environment_binding(
+        intent,
+        prefix,
+        (ProbeResult("synthetic-canary", True, "ok"),),
+        strict=False,
+    )
+    execution_identity = _execution_identity(artifact.proposal, environment)
+    cache_identity = stable_hash(
+        {
+            "execution_identity": execution_identity,
+            "work_id": artifact.proposal["work_id"],
+        }
+    )
+    cache = (
+        driver.paths.work_root
+        / item.stable_id
+        / f"driver-forward-attempts-{cache_identity[7:23]}.json"
+    )
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(
+        json.dumps(
+            {
+                "work_id": "work-stale-requeue",
+                "execution_identity": execution_identity,
+                "attempts": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    forward = FakeForward()
+
+    result = _driver(tmp_path, snapshot, forward=forward).run()
+
+    assert result.status == "complete"
+    assert forward.calls == {item.stable_id: 1}
+    assert scan_jsonl(driver.paths.ledgers.models)[0]["status"]["code"] == "runs"
+
+
+def test_transient_author_and_checker_infrastructure_retry_without_terminals(
+    tmp_path: Path,
+) -> None:
+    """One spawn/transport failure cannot become a model or batch terminal."""
+
+    class FlakyAuthor(FakeAuthor):
+        """Raise one spawn-shaped error before authoring successfully."""
+
+        def __init__(self) -> None:
+            """Initialize one-shot spawn failure state."""
+
+            super().__init__()
+            self.attempts = 0
+
+        def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+            """Fail the first process invocation only."""
+
+            self.attempts += 1
+            if self.attempts == 1:
+                raise FileNotFoundError("synthetic missing author CLI")
+            return super().author(item, work_root, config)
+
+    class FlakyChecker(FakeChecker):
+        """Raise one transport error before returning a valid metadata gate."""
+
+        def __init__(self) -> None:
+            """Initialize one-shot transport failure state."""
+
+            super().__init__()
+            self.attempts = 0
+
+        def check_metadata(
+            self,
+            artifacts: Sequence[AuthorArtifact],
+            work_root: Path,
+            config: DriverConfig,
+        ) -> CheckerOutcome:
+            """Fail once, then delegate to the valid checker."""
+
+            self.attempts += 1
+            if self.attempts == 1:
+                raise ConnectionError("synthetic checker transport reset")
+            return super().check_metadata(artifacts, work_root, config)
+
+    snapshot = _snapshot(tmp_path, count=1)
+    author = FlakyAuthor()
+    checker = FlakyChecker()
+    result = _driver(tmp_path, snapshot, author=author, checker=checker).run()
+
+    assert result.status == "complete"
+    assert author.attempts == 2
+    assert author.calls == {snapshot.items[0].stable_id: 1}
+    assert checker.attempts == 2
+    models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    assert [record["status"]["code"] for record in models] == ["runs"]
+
+
+def test_promotion_failure_terminalizes_model_and_continues_tail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A deterministic publication error cannot block later accepted models."""
+
+    snapshot = _snapshot(tmp_path, count=2)
+    failed_id = snapshot.items[0].stable_id
+    original = driver_module._promote_accepted_code
+
+    def fail_one_promotion(artifact: AuthorArtifact, paths: DriverPaths) -> AuthorArtifact:
+        """Fail publication for one stable ID and preserve the normal tail path."""
+
+        if artifact.proposal["stable_id"] == failed_id:
+            raise DriverIntegrationError("synthetic deterministic promotion failure")
+        return original(artifact, paths)
+
+    monkeypatch.setattr(driver_module, "_promote_accepted_code", fail_one_promotion)
+    result = _driver(tmp_path, snapshot).run()
+
+    assert result.status == "complete"
+    models = {
+        record["stable_id"]: record
+        for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    }
+    assert models[failed_id]["status"]["code"] == "failed:runner"
+    assert models[failed_id]["status"]["reason_code"] == "protocol-violation"
+    assert any(
+        stable_id != failed_id and record["status"]["code"] == "runs"
+        for stable_id, record in models.items()
+    )
+
+
+def test_private_deferral_avoids_public_promotion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A valid private disposition remains private while entering its terminal lane."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    driver = _driver(tmp_path, snapshot)
+    item = driver._ordered_work(snapshot, {})[0]
+    base = FakeAuthor().author(item, driver.paths.work_root, driver.config)
+    base.proposal["proposed_facts"]["licenses"]["redistribution_class"] = "restricted-private"
+    artifact = AuthorArtifact(
+        base.proposal,
+        base.source_manifest,
+        base.model_dir,
+        terminal_status="deferred:needs-cuda",
+        terminal_detail="private source proves an unavoidable CUDA operator",
+        defer_evidence={
+            "target_status": "deferred:needs-cuda",
+            "source_ids": ["source-1"],
+            "probe_attempt_ids": [],
+            "explanation": "private source proves an unavoidable CUDA operator",
+        },
+    )
+
+    def reject_publication(*_args: Any, **_kwargs: Any) -> AuthorArtifact:
+        """Trip if private bytes reach either public promotion function."""
+
+        raise AssertionError("private deferral reached public promotion")
+
+    monkeypatch.setattr(driver_module, "_promote_accepted_code", reject_publication)
+    monkeypatch.setattr(
+        driver_module,
+        "_promote_and_publish_accepted_artifact",
+        reject_publication,
+    )
+
+    assert driver._promote_artifact(item, artifact) is artifact
+
+
+def test_transient_fidelity_checker_infrastructure_retries(tmp_path: Path) -> None:
+    """A one-shot fidelity transport error does not become identity mismatch."""
+
+    class FlakyFidelityChecker(FakeChecker):
+        """Fail the first fidelity transport invocation only."""
+
+        def __init__(self) -> None:
+            """Initialize one-shot fidelity failure state."""
+
+            super().__init__()
+            self.attempts = 0
+
+        def check_fidelity(
+            self,
+            artifact: AuthorArtifact,
+            work_root: Path,
+            config: DriverConfig,
+        ) -> CheckerOutcome:
+            """Raise once, then return a valid fidelity gate."""
+
+            self.attempts += 1
+            if self.attempts == 1:
+                raise ConnectionError("synthetic fidelity transport reset")
+            return super().check_fidelity(artifact, work_root, config)
+
+    snapshot = _snapshot(tmp_path, count=1)
+    checker = FlakyFidelityChecker()
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=FidelityAuthor(),
+        checker=checker,
+    ).run()
+
+    assert result.status == "complete"
+    assert checker.attempts == 2
+    assert scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[0]["status"]["code"] == "runs"
 
 
 def test_sandbox_unavailable_has_honest_terminal_and_null_environment(tmp_path: Path) -> None:
@@ -2263,6 +2554,61 @@ def test_fidelity_rejection_terminalizes_without_aborting(tmp_path: Path) -> Non
         if gate["gate_kind"] == "fidelity"
     ]
     assert len(fidelity_gates) == 2 * len(snapshot.items)
+
+
+def test_fidelity_repair_metadata_reenters_bounded_repair_loop(tmp_path: Path) -> None:
+    """A first repaired-metadata rejection uses its remaining repair budget."""
+
+    class RepairMetadataChecker(FakeChecker):
+        """Reject one repaired metadata generation, then accept the repair."""
+
+        def check_metadata(
+            self,
+            artifacts: Sequence[AuthorArtifact],
+            work_root: Path,
+            config: DriverConfig,
+        ) -> CheckerOutcome:
+            """Make only the first post-fidelity-repair metadata gate inaccurate."""
+
+            outcome = super().check_metadata(artifacts, work_root, config)
+            assert outcome.gate is not None
+            if self.metadata_calls == 2:
+                gate_item = outcome.gate["items"][0]
+                gate_item["verdict"] = "inaccurate"
+                gate_item["required_repairs"] = ["repair changed metadata"]
+                gate_item["field_checks"][0]["verdict"] = "inaccurate"
+                gate_item["field_checks"][0]["reason"] = "changed metadata mismatch"
+                gate_item["field_checks"][0]["required_repair"] = "repair changed metadata"
+            return outcome
+
+        def check_fidelity(
+            self,
+            artifact: AuthorArtifact,
+            work_root: Path,
+            config: DriverConfig,
+        ) -> CheckerOutcome:
+            """Reject the initial fidelity generation and accept the repaired one."""
+
+            outcome = super().check_fidelity(artifact, work_root, config)
+            assert outcome.gate is not None
+            if self.fidelity_calls == 1:
+                gate_item = outcome.gate["items"][0]
+                gate_item["verdict"] = "inaccurate"
+                gate_item["fidelity"]["verdict"] = "major-drift"
+                gate_item["fidelity"]["contradictions"] = ["initial topology mismatch"]
+            return outcome
+
+    snapshot = _snapshot(tmp_path, count=1)
+    author = FidelityAuthor()
+    checker = RepairMetadataChecker()
+    result = _driver(tmp_path, snapshot, author=author, checker=checker).run()
+
+    assert result.status == "complete"
+    assert checker.metadata_calls == 3
+    assert checker.fidelity_calls == 2
+    assert author.calls[snapshot.items[0].stable_id] == 3
+    models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    assert [record["status"]["code"] for record in models] == ["runs"]
 
 
 @pytest.mark.parametrize(

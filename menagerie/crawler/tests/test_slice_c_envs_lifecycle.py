@@ -9,6 +9,7 @@ from typing import Sequence
 import pytest
 
 from menagerie.crawler.env_lifecycle import (
+    DiskRecoveryError,
     ProbeResult,
     SequentialEnvironmentLifecycle,
     SolveResult,
@@ -164,3 +165,42 @@ def test_cap_exceeding_solve_is_typed_recorded_and_not_materialized(tmp_path: Pa
     assert recorded[0].metric == "seconds"
     assert events == ["solve:osx-arm64"]
     assert not intent.lock.lock_path.exists()
+
+
+def test_failed_teardown_releases_lifecycle_for_a_later_retry(tmp_path: Path) -> None:
+    """A remove exception cannot leave the sequential lifecycle permanently busy."""
+
+    class RemoveFailingBackend(FakeEnvironmentBackend):
+        """Fail only the first teardown after otherwise successful use."""
+
+        def __init__(self, events: list[str]) -> None:
+            """Initialize one-shot teardown failure state."""
+
+            super().__init__(events)
+            self.remove_calls = 0
+
+        def remove(self, prefix: Path) -> None:
+            """Raise on the first removal and succeed on the next."""
+
+            del prefix
+            self.remove_calls += 1
+            self.events.append("remove")
+            if self.remove_calls == 1:
+                raise DiskRecoveryError("synthetic teardown failure")
+
+    root = _copy_env_specs(tmp_path)
+    intent = load_environment_registry(root).intents["core"]
+    events: list[str] = []
+    lifecycle = SequentialEnvironmentLifecycle(
+        RemoveFailingBackend(events),
+        EffortTracker({"environment": StageCap(attempts=2, seconds=10, bytes=200)}),
+        env_root=tmp_path / "active",
+        disk_free=lambda _path: 1000,
+        minimum_free_bytes=0,
+    )
+
+    with pytest.raises(DiskRecoveryError, match="synthetic teardown"):
+        lifecycle.run(intent, use=lambda _prefix, _probes: events.append("use"))
+    lifecycle.run(intent, use=lambda _prefix, _probes: events.append("use"))
+
+    assert events.count("use") == 2
