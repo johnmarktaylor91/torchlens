@@ -204,8 +204,10 @@ class SequentialEnvironmentLifecycle:
                 raise EnvironmentProbeError(f"environment probes failed: {names}")
             use(prefix, probe_results)
         finally:
-            self._backend.remove(prefix)
-            self._active = None
+            try:
+                self._backend.remove(prefix)
+            finally:
+                self._active = None
         disk_after_teardown = self._disk_free(self._env_root)
         if disk_after_teardown + self._recovery_tolerance_bytes < disk_before:
             raise DiskRecoveryError(

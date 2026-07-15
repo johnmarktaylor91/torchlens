@@ -1511,63 +1511,54 @@ class CrawlerDriver:
                 try:
                     value = _read_json(cache)
                     cached_artifact = _artifact_from_cache(value, self.config)
-                except Exception as exc:  # noqa: BLE001 -- malformed cache is model-local
-                    attempt = _driver_failure_attempt(
-                        item,
-                        None,
-                        "runner",
-                        "protocol-violation",
-                        exc,
-                        self.config,
-                        environment=None,
-                        created_at=self.dependencies.clock(),
+                except Exception:  # noqa: BLE001 -- disposable cache is safe to regenerate
+                    cache.unlink(missing_ok=True)
+                else:
+                    cache_current = value.get("artifact_identity") == _artifact_cache_identity(
+                        item, cached_artifact, self.config
                     )
-                    persisted = reducer.append_attempt(attempt).record
-                    self._terminalize(
-                        item,
-                        None,
-                        "failed:runner",
-                        "protocol-violation",
-                        str(exc),
-                        (persisted,),
-                        reducer,
-                        operational,
-                        state,
-                    )
-                    continue
-                cache_current = value.get("artifact_identity") == _artifact_cache_identity(
-                    item, cached_artifact, self.config
-                )
-                if cache_current:
-                    try:
-                        _validate_artifact_identities(cached_artifact, self.config)
-                    except DriverIntegrationError:
-                        cache_current = False
-                if cache_current:
-                    terminal = _artifact_terminal_status(cached_artifact)
-                    if terminal is not None:
-                        if terminal[0].startswith("deferred:"):
-                            cached_artifact = _promote_and_publish_accepted_artifact(
-                                item, cached_artifact, self.paths
-                            )
-                        current = reducer.current_records.get(item.stable_id)
-                        if current is None or current.get("status", {}).get("code") != terminal[0]:
-                            self._terminalize(
-                                item,
-                                cached_artifact,
-                                terminal[0],
-                                terminal[1],
-                                cached_artifact.terminal_detail,
-                                (),
-                                reducer,
-                                operational,
-                                state,
-                            )
-                    else:
-                        artifacts[item.stable_id] = cached_artifact
-                    continue
+                    if cache_current:
+                        try:
+                            _validate_artifact_identities(cached_artifact, self.config)
+                        except DriverIntegrationError:
+                            cache_current = False
+                    if cache_current:
+                        terminal = _artifact_terminal_status(cached_artifact)
+                        if terminal is not None:
+                            if terminal[0].startswith("deferred:"):
+                                promoted_cached = self._promote_or_terminalize(
+                                    item,
+                                    cached_artifact,
+                                    reducer,
+                                    operational,
+                                    state,
+                                )
+                                if promoted_cached is None:
+                                    continue
+                                cached_artifact = promoted_cached
+                            current = reducer.current_records.get(item.stable_id)
+                            if (
+                                current is None
+                                or current.get("status", {}).get("code") != terminal[0]
+                            ):
+                                self._terminalize(
+                                    item,
+                                    cached_artifact,
+                                    terminal[0],
+                                    terminal[1],
+                                    cached_artifact.terminal_detail,
+                                    (),
+                                    reducer,
+                                    operational,
+                                    state,
+                                )
+                        else:
+                            artifacts[item.stable_id] = cached_artifact
+                        continue
             try:
-                artifact = self.dependencies.author.author(item, self.paths.work_root, self.config)
+                artifact = self._retry_infrastructure_call(
+                    lambda: self.dependencies.author.author(item, self.paths.work_root, self.config)
+                )
             except Exception as exc:  # noqa: BLE001 -- author failure belongs to this model
                 attempt = _driver_failure_attempt(
                     item,
@@ -1674,7 +1665,16 @@ class CrawlerDriver:
             if terminal is not None:
                 status_code, reason_code = terminal
                 if status_code.startswith("deferred:"):
-                    artifact = _promote_and_publish_accepted_artifact(item, artifact, self.paths)
+                    promoted = self._promote_or_terminalize(
+                        item,
+                        artifact,
+                        reducer,
+                        operational,
+                        state,
+                    )
+                    if promoted is None:
+                        continue
+                    artifact = promoted
                     cache_value.update(
                         {
                             "source_manifest": artifact.source_manifest,
@@ -1759,17 +1759,20 @@ class CrawlerDriver:
                 ):
                     continue
                 try:
-                    artifacts[stable_id] = self._repair_author(
-                        items_by_id[stable_id],
-                        artifacts[stable_id],
-                        persisted,
-                        count,
-                        gate_kind="metadata_batch",
+                    artifacts[stable_id] = self._retry_infrastructure_call(
+                        lambda: self._repair_author(
+                            items_by_id[stable_id],
+                            artifacts[stable_id],
+                            persisted,
+                            count,
+                            gate_kind="metadata_batch",
+                        )
                     )
                 except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
                     reason = (
                         "protocol-violation"
                         if isinstance(exc, DriverIntegrationError)
+                        and not self._is_infrastructure_error(exc)
                         else "internal-error"
                     )
                     attempt = _driver_failure_attempt(
@@ -1804,10 +1807,57 @@ class CrawlerDriver:
             for batch in _metadata_batches(pending_artifacts):
                 batch_ids = tuple(str(artifact.proposal["stable_id"]) for artifact in batch)
                 try:
-                    outcome = self.dependencies.checker.check_metadata(
-                        batch, self.paths.work_root, self.config
+                    outcome = self._retry_infrastructure_call(
+                        lambda: self.dependencies.checker.check_metadata(
+                            batch, self.paths.work_root, self.config
+                        )
                     )
                 except Exception as exc:  # noqa: BLE001 -- checker failure is per batch item
+                    infrastructure = self._is_infrastructure_error(exc)
+                    stage = "runner" if infrastructure else "accuracy-gate"
+                    reason = "internal-error" if infrastructure else "checker-contract-invalid"
+                    for stable_id in batch_ids:
+                        item = items_by_id[stable_id]
+                        attempt = _driver_failure_attempt(
+                            item,
+                            artifacts[stable_id],
+                            stage,
+                            reason,
+                            exc,
+                            self.config,
+                            environment=None,
+                            created_at=self.dependencies.clock(),
+                        )
+                        persisted_attempt = reducer.append_attempt(attempt).record
+                        self._terminalize(
+                            item,
+                            artifacts[stable_id],
+                            f"failed:{stage}",
+                            reason,
+                            str(exc),
+                            (persisted_attempt,),
+                            reducer,
+                            operational,
+                            state,
+                            human_review=not infrastructure,
+                        )
+                        pending_ids.discard(stable_id)
+                    continue
+                if outcome.backoff is not None:
+                    return self._pause_for_usage(outcome.backoff, operational, len(work))
+                try:
+                    raw_gate = _require_gate(outcome)
+                    gate = _normalize_gate_generation(raw_gate, persisted, batch_ids)
+                    _require_gate_bindings(gate, batch, "metadata_batch")
+                    route_ready = _prepare_ledger_record(gate, len(persisted) + 1)
+                    counts = {
+                        stable_id: _metadata_repair_count(
+                            persisted, stable_id, _artifact_lineage(artifacts[stable_id])
+                        )
+                        for stable_id in batch_ids
+                    }
+                    decisions = route_metadata_gate(route_ready, counts, max_repairs=2)
+                except Exception as exc:  # noqa: BLE001 -- invalid checker output is per batch
                     for stable_id in batch_ids:
                         item = items_by_id[stable_id]
                         attempt = _driver_failure_attempt(
@@ -1835,19 +1885,6 @@ class CrawlerDriver:
                         )
                         pending_ids.discard(stable_id)
                     continue
-                if outcome.backoff is not None:
-                    return self._pause_for_usage(outcome.backoff, operational, len(work))
-                raw_gate = _require_gate(outcome)
-                gate = _normalize_gate_generation(raw_gate, persisted, batch_ids)
-                _require_gate_bindings(gate, batch, "metadata_batch")
-                route_ready = _prepare_ledger_record(gate, len(persisted) + 1)
-                counts = {
-                    stable_id: _metadata_repair_count(
-                        persisted, stable_id, _artifact_lineage(artifacts[stable_id])
-                    )
-                    for stable_id in batch_ids
-                }
-                decisions = route_metadata_gate(route_ready, counts, max_repairs=2)
                 for record in emit_gate_records(route_ready):
                     result = reducer.append_gate(_without_ledger_fields(record))
                     if result.appended:
@@ -1897,7 +1934,9 @@ class CrawlerDriver:
             artifact = artifacts[item.stable_id]
             rung = artifact.proposal["proposed_facts"]["source_resolution"]["rung"]
             if rung in {"R1_LIBRARY", "R2_VENDOR"} and not _fidelity_required(artifact.proposal):
-                artifacts[item.stable_id] = self._promote_artifact(item, artifact)
+                promoted = self._promote_or_terminalize(item, artifact, reducer, operational, state)
+                if promoted is not None:
+                    artifacts[item.stable_id] = promoted
 
         for item in work:
             if (
@@ -1938,7 +1977,11 @@ class CrawlerDriver:
                     proposal=artifact.proposal,
                 )
                 if current_history and _fidelity_item_accepted(current_history[-1][1]):
-                    artifacts[item.stable_id] = self._promote_artifact(item, artifact)
+                    promoted = self._promote_or_terminalize(
+                        item, artifact, reducer, operational, state
+                    )
+                    if promoted is not None:
+                        artifacts[item.stable_id] = promoted
                     break
                 terminal_gate = _terminal_fidelity_gate(
                     persisted,
@@ -1983,17 +2026,20 @@ class CrawlerDriver:
                 )
                 if rejected_count:
                     try:
-                        artifact = self._repair_author(
-                            item,
-                            artifact,
-                            persisted,
-                            rejected_count,
-                            gate_kind="fidelity",
+                        artifact = self._retry_infrastructure_call(
+                            lambda: self._repair_author(
+                                item,
+                                artifact,
+                                persisted,
+                                rejected_count,
+                                gate_kind="fidelity",
+                            )
                         )
                     except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
                         reason = (
                             "protocol-violation"
                             if isinstance(exc, DriverIntegrationError)
+                            and not self._is_infrastructure_error(exc)
                             else "internal-error"
                         )
                         attempt = _driver_failure_attempt(
@@ -2020,85 +2066,205 @@ class CrawlerDriver:
                         )
                         break
                     artifacts[item.stable_id] = artifact
-                    try:
-                        metadata_outcome = self.dependencies.checker.check_metadata(
-                            (artifact,), self.paths.work_root, self.config
-                        )
-                    except Exception as exc:  # noqa: BLE001 -- checker failure is model-local
-                        attempt = _driver_failure_attempt(
-                            item,
-                            artifact,
-                            "accuracy-gate",
-                            "checker-contract-invalid",
-                            exc,
-                            self.config,
-                            environment=None,
-                            created_at=self.dependencies.clock(),
-                        )
-                        persisted_attempt = reducer.append_attempt(attempt).record
-                        self._terminalize(
-                            item,
-                            artifact,
-                            "failed:accuracy-gate",
-                            "checker-contract-invalid",
-                            str(exc),
-                            (persisted_attempt,),
-                            reducer,
-                            operational,
-                            state,
-                            human_review=True,
-                        )
-                        break
-                    if metadata_outcome.backoff is not None:
-                        return self._pause_for_usage(
-                            metadata_outcome.backoff, operational, len(work)
-                        )
-                    metadata_gate = _normalize_gate_generation(
-                        _require_gate(metadata_outcome), persisted, (item.stable_id,)
-                    )
-                    _require_gate_bindings(metadata_gate, (artifact,), "metadata_batch")
-                    metadata_ready = _prepare_ledger_record(metadata_gate, len(persisted) + 1)
-                    metadata_decision = route_metadata_gate(
-                        metadata_ready,
-                        {
-                            item.stable_id: _metadata_repair_count(
-                                persisted,
-                                item.stable_id,
-                                _artifact_lineage(artifact),
+                    metadata_blocked = False
+                    while True:
+                        try:
+                            metadata_outcome = self._retry_infrastructure_call(
+                                lambda: self.dependencies.checker.check_metadata(
+                                    (artifact,), self.paths.work_root, self.config
+                                )
                             )
-                        },
-                        max_repairs=2,
-                    )[0]
-                    for record in emit_gate_records(metadata_ready):
-                        appended = reducer.append_gate(_without_ledger_fields(record))
-                        if appended.appended:
-                            persisted.append(appended.record)
-                    if not metadata_decision.canonical_write_allowed:
-                        latest = _find_gate(
+                        except Exception as exc:  # noqa: BLE001 -- model-local checker failure
+                            infrastructure = self._is_infrastructure_error(exc)
+                            stage = "runner" if infrastructure else "accuracy-gate"
+                            reason = (
+                                "internal-error" if infrastructure else "checker-contract-invalid"
+                            )
+                            attempt = _driver_failure_attempt(
+                                item,
+                                artifact,
+                                stage,
+                                reason,
+                                exc,
+                                self.config,
+                                environment=None,
+                                created_at=self.dependencies.clock(),
+                            )
+                            persisted_attempt = reducer.append_attempt(attempt).record
+                            self._terminalize(
+                                item,
+                                artifact,
+                                f"failed:{stage}",
+                                reason,
+                                str(exc),
+                                (persisted_attempt,),
+                                reducer,
+                                operational,
+                                state,
+                                human_review=not infrastructure,
+                            )
+                            metadata_blocked = True
+                            break
+                        if metadata_outcome.backoff is not None:
+                            return self._pause_for_usage(
+                                metadata_outcome.backoff, operational, len(work)
+                            )
+                        try:
+                            metadata_gate = _normalize_gate_generation(
+                                _require_gate(metadata_outcome), persisted, (item.stable_id,)
+                            )
+                            _require_gate_bindings(metadata_gate, (artifact,), "metadata_batch")
+                            metadata_ready = _prepare_ledger_record(
+                                metadata_gate, len(persisted) + 1
+                            )
+                            metadata_decision = route_metadata_gate(
+                                metadata_ready,
+                                {
+                                    item.stable_id: _metadata_repair_count(
+                                        persisted,
+                                        item.stable_id,
+                                        _artifact_lineage(artifact),
+                                    )
+                                },
+                                max_repairs=2,
+                            )[0]
+                        except Exception as exc:  # noqa: BLE001 -- invalid checker contract
+                            attempt = _driver_failure_attempt(
+                                item,
+                                artifact,
+                                "accuracy-gate",
+                                "checker-contract-invalid",
+                                exc,
+                                self.config,
+                                environment=None,
+                                created_at=self.dependencies.clock(),
+                            )
+                            persisted_attempt = reducer.append_attempt(attempt).record
+                            self._terminalize(
+                                item,
+                                artifact,
+                                "failed:accuracy-gate",
+                                "checker-contract-invalid",
+                                str(exc),
+                                (persisted_attempt,),
+                                reducer,
+                                operational,
+                                state,
+                                human_review=True,
+                            )
+                            metadata_blocked = True
+                            break
+                        for record in emit_gate_records(metadata_ready):
+                            appended = reducer.append_gate(_without_ledger_fields(record))
+                            if appended.appended:
+                                persisted.append(appended.record)
+                        if metadata_decision.canonical_write_allowed:
+                            break
+                        if metadata_decision.human_review_required:
+                            self._terminalize_accuracy_gate(
+                                item,
+                                artifact,
+                                metadata_ready,
+                                reducer,
+                                operational,
+                                state,
+                            )
+                            metadata_blocked = True
+                            break
+                        metadata_repair_count = _metadata_repair_count(
                             persisted,
                             item.stable_id,
-                            "metadata_batch",
-                            artifact.proposal,
+                            _artifact_lineage(artifact),
                         )
-                        if latest is None:
-                            raise DriverIntegrationError(
-                                f"repaired metadata gate missing for {item.stable_id}"
+                        try:
+                            artifact = self._retry_infrastructure_call(
+                                lambda: self._repair_author(
+                                    item,
+                                    artifact,
+                                    persisted,
+                                    metadata_repair_count,
+                                    gate_kind="metadata_batch",
+                                )
                             )
-                        self._terminalize_accuracy_gate(
-                            item,
-                            artifact,
-                            latest,
-                            reducer,
-                            operational,
-                            state,
-                        )
+                        except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
+                            reason = (
+                                "protocol-violation"
+                                if isinstance(exc, DriverIntegrationError)
+                                and not self._is_infrastructure_error(exc)
+                                else "internal-error"
+                            )
+                            attempt = _driver_failure_attempt(
+                                item,
+                                artifact,
+                                "runner",
+                                reason,
+                                exc,
+                                self.config,
+                                environment=None,
+                                created_at=self.dependencies.clock(),
+                            )
+                            persisted_attempt = reducer.append_attempt(attempt).record
+                            self._terminalize(
+                                item,
+                                artifact,
+                                "failed:runner",
+                                reason,
+                                str(exc),
+                                (persisted_attempt,),
+                                reducer,
+                                operational,
+                                state,
+                            )
+                            metadata_blocked = True
+                            break
+                        artifacts[item.stable_id] = artifact
+                    if metadata_blocked:
                         break
 
                 try:
-                    outcome = self.dependencies.checker.check_fidelity(
-                        artifact, self.paths.work_root, self.config
+                    outcome = self._retry_infrastructure_call(
+                        lambda: self.dependencies.checker.check_fidelity(
+                            artifact, self.paths.work_root, self.config
+                        )
                     )
                 except Exception as exc:  # noqa: BLE001 -- checker failure belongs to this model
+                    infrastructure = self._is_infrastructure_error(exc)
+                    stage = "runner" if infrastructure else "fidelity"
+                    reason = "internal-error" if infrastructure else "identity-mismatch"
+                    attempt = _driver_failure_attempt(
+                        item,
+                        artifact,
+                        stage,
+                        reason,
+                        exc,
+                        self.config,
+                        environment=None,
+                        created_at=self.dependencies.clock(),
+                    )
+                    persisted_attempt = reducer.append_attempt(attempt).record
+                    self._terminalize(
+                        item,
+                        artifact,
+                        f"failed:{stage}",
+                        reason,
+                        str(exc),
+                        (persisted_attempt,),
+                        reducer,
+                        operational,
+                        state,
+                        human_review=not infrastructure,
+                    )
+                    break
+                if outcome.backoff is not None:
+                    return self._pause_for_usage(outcome.backoff, operational, len(work))
+                try:
+                    gate = _normalize_gate_generation(
+                        _require_gate(outcome), persisted, (item.stable_id,)
+                    )
+                    _require_gate_bindings(gate, (artifact,), "fidelity")
+                    route_ready = _prepare_ledger_record(gate, len(persisted) + 1)
+                    route_fidelity_gate(route_ready, artifact.proposal)
+                except Exception as exc:  # noqa: BLE001 -- invalid checker contract is model-local
                     attempt = _driver_failure_attempt(
                         item,
                         artifact,
@@ -2123,28 +2289,153 @@ class CrawlerDriver:
                         human_review=True,
                     )
                     break
-                if outcome.backoff is not None:
-                    return self._pause_for_usage(outcome.backoff, operational, len(work))
-                gate = _normalize_gate_generation(
-                    _require_gate(outcome), persisted, (item.stable_id,)
-                )
-                _require_gate_bindings(gate, (artifact,), "fidelity")
-                route_ready = _prepare_ledger_record(gate, len(persisted) + 1)
-                route_fidelity_gate(route_ready, artifact.proposal)
                 persisted_gate = reducer.append_gate(_without_ledger_fields(route_ready)).record
                 persisted.append(persisted_gate)
                 self.dependencies.boundary_hook("after-gate", item.stable_id)
         return None
 
+    def _retry_infrastructure_call(self, operation: Callable[[], Any]) -> Any:
+        """Retry one external author or checker infrastructure failure once.
+
+        Parameters
+        ----------
+        operation:
+            Zero-argument external lane invocation.
+
+        Returns
+        -------
+        Any
+            Successful lane result.
+
+        Raises
+        ------
+        Exception
+            The first contract error or the second infrastructure error.
+        """
+
+        for attempt in range(2):
+            try:
+                return operation()
+            except Exception as exc:  # noqa: BLE001 -- typed below before retry
+                if attempt == 1 or not self._is_infrastructure_error(exc):
+                    raise
+        raise AssertionError("bounded infrastructure retry did not return or raise")
+
+    @staticmethod
+    def _is_infrastructure_error(exc: Exception) -> bool:
+        """Return whether an exception represents spawn or transport infrastructure.
+
+        Parameters
+        ----------
+        exc:
+            External lane exception.
+
+        Returns
+        -------
+        bool
+            Whether retrying the external process or transport is appropriate.
+        """
+
+        current: BaseException | None = exc
+        seen: set[int] = set()
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            if isinstance(current, (OSError, subprocess.SubprocessError)):
+                return True
+            if isinstance(current, DriverIntegrationError):
+                message = str(current).lower()
+                if message.startswith(
+                    (
+                        "author command failed",
+                        "author source request failed",
+                        "checker command failed",
+                    )
+                ):
+                    return True
+            current = current.__cause__ or current.__context__
+        return False
+
+    def _promote_or_terminalize(
+        self,
+        item: WorkItem,
+        artifact: AuthorArtifact,
+        reducer: CanonicalReducer,
+        operational: JsonlLedger,
+        state: JsonObject,
+    ) -> Optional[AuthorArtifact]:
+        """Promote one artifact or append an honest model-local publication failure.
+
+        Parameters
+        ----------
+        item, artifact:
+            Model and independently checked author artifact.
+        reducer, operational, state:
+            Durable model, event, and cursor stores.
+
+        Returns
+        -------
+        AuthorArtifact | None
+            Promoted artifact, or ``None`` after terminalizing a failed publication.
+        """
+
+        try:
+            return self._promote_artifact(item, artifact)
+        except Exception as exc:  # noqa: BLE001 -- publication failure belongs to one model
+            reason = (
+                "protocol-violation"
+                if isinstance(exc, DriverIntegrationError)
+                else "internal-error"
+            )
+            attempt = _driver_failure_attempt(
+                item,
+                artifact,
+                "runner",
+                reason,
+                exc,
+                self.config,
+                environment=None,
+                created_at=self.dependencies.clock(),
+            )
+            persisted_attempt = reducer.append_attempt(attempt).record
+            self._terminalize(
+                item,
+                artifact,
+                "failed:runner",
+                reason,
+                str(exc),
+                (persisted_attempt,),
+                reducer,
+                operational,
+                state,
+            )
+            return None
+
     def _promote_artifact(self, item: WorkItem, artifact: AuthorArtifact) -> AuthorArtifact:
         """Promote accepted authored code and persist its canonical model root."""
 
         canonical_root = _canonical_crawler_root(self.paths)
-        promoted = (
-            _promote_and_publish_accepted_artifact(item, artifact, self.paths)
-            if canonical_root.name == "crawler" and canonical_root.parent.name == "menagerie"
-            else _promote_accepted_code(artifact, self.paths)
+        redistribution = (
+            artifact.proposal.get("proposed_facts", {})
+            .get("licenses", {})
+            .get("redistribution_class")
         )
+        private_deferral = (
+            artifact.terminal_status is not None
+            and artifact.terminal_status.startswith("deferred:")
+            and redistribution in {"restricted-private", "manifest-only"}
+        )
+        if private_deferral:
+            promoted = artifact
+        elif artifact.terminal_status is not None and artifact.terminal_status.startswith(
+            "deferred:"
+        ):
+            promoted = _promote_and_publish_accepted_artifact(item, artifact, self.paths)
+        else:
+            promoted = (
+                _promote_and_publish_accepted_artifact(item, artifact, self.paths)
+                if canonical_root.name == "crawler" and canonical_root.parent.name == "menagerie"
+                else _promote_accepted_code(artifact, self.paths)
+            )
         cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
         value = _read_json(cache) if cache.is_file() else {}
         value.update(
@@ -2232,45 +2523,59 @@ class CrawlerDriver:
                     )
                 use_completed = True
 
-            try:
-                self.dependencies.environments.run(intent, use=use)
-            except DriverPaused:
-                raise
-            except Exception as exc:  # noqa: BLE001 -- classify per-model env failures
-                if use_entered and not use_completed:
+            environment_failure: Exception | None = None
+            for environment_attempt in range(2):
+                use_entered = False
+                use_completed = False
+                try:
+                    self.dependencies.environments.run(intent, use=use)
+                except DriverPaused:
                     raise
-                pending = [
-                    item
-                    for item in by_intent[intent_name]
-                    if item.stable_id not in reducer.current_records
-                    or self.config.only_status is not None
-                ]
-                if not pending:
-                    raise
-                stage, reason = _environment_failure(exc)
-                for item in pending:
-                    attempt = _driver_failure_attempt(
-                        item,
-                        artifacts[item.stable_id],
-                        stage,
-                        reason,
-                        exc,
-                        self.config,
-                        environment=intent.name,
-                        created_at=self.dependencies.clock(),
-                    )
-                    persisted = reducer.append_attempt(attempt).record
-                    self._terminalize(
-                        item,
-                        artifacts[item.stable_id],
-                        f"failed:{stage}",
-                        reason,
-                        str(exc),
-                        (persisted,),
-                        reducer,
-                        operational,
-                        state,
-                    )
+                except Exception as exc:  # noqa: BLE001 -- lifecycle phase decides ownership
+                    if use_completed:
+                        raise
+                    if use_entered:
+                        raise
+                    environment_failure = exc
+                    if environment_attempt == 0:
+                        continue
+                else:
+                    environment_failure = None
+                break
+            if environment_failure is None:
+                continue
+            pending = [
+                item
+                for item in by_intent[intent_name]
+                if item.stable_id not in reducer.current_records
+                or self.config.only_status is not None
+            ]
+            if not pending:
+                raise environment_failure
+            stage, reason = _environment_failure(environment_failure)
+            for item in pending:
+                attempt = _driver_failure_attempt(
+                    item,
+                    artifacts[item.stable_id],
+                    stage,
+                    reason,
+                    environment_failure,
+                    self.config,
+                    environment=intent.name,
+                    created_at=self.dependencies.clock(),
+                )
+                persisted = reducer.append_attempt(attempt).record
+                self._terminalize(
+                    item,
+                    artifacts[item.stable_id],
+                    f"failed:{stage}",
+                    reason,
+                    str(environment_failure),
+                    (persisted,),
+                    reducer,
+                    operational,
+                    state,
+                )
 
     def _forward_and_reduce(
         self,
@@ -2295,20 +2600,32 @@ class CrawlerDriver:
         cold_runs = 2 if _fidelity_required(artifact.proposal) else 1
         if not _attempt_policy_satisfied(attempts, artifact.proposal, cold_runs):
             generated: tuple[Mapping[str, Any], ...]
+            cache_identity = stable_hash(
+                {
+                    "execution_identity": execution_identity,
+                    "work_id": artifact.proposal.get("work_id"),
+                }
+            )
             cache = (
                 self.paths.work_root
                 / item.stable_id
-                / f"driver-forward-attempts-{execution_identity[7:23]}.json"
+                / f"driver-forward-attempts-{cache_identity[7:23]}.json"
             )
+            cached: JsonObject | None = None
             if cache.is_file():
-                cached = _read_json(cache)
-                if (
-                    cached.get("work_id") != artifact.proposal.get("work_id")
-                    or cached.get("execution_identity") != execution_identity
-                ):
-                    raise DriverIntegrationError(
-                        f"forward attempt cache work identity changed for {item.stable_id}"
-                    )
+                try:
+                    candidate = _read_json(cache)
+                except Exception:  # noqa: BLE001 -- disposable replay cache is regenerable
+                    cache.unlink(missing_ok=True)
+                else:
+                    if (
+                        candidate.get("work_id") == artifact.proposal.get("work_id")
+                        and candidate.get("execution_identity") == execution_identity
+                    ):
+                        cached = candidate
+                    else:
+                        cache.unlink(missing_ok=True)
+            if cached is not None:
                 generated = tuple(
                     dict(value)
                     for value in cached.get("attempts", [])
