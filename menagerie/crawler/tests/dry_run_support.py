@@ -24,6 +24,7 @@ from menagerie.crawler.identity import (
 )
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
 from menagerie.crawler.models import LedgerPaths
+from menagerie.crawler.proposal import model_code_manifest
 from menagerie.crawler.tests.conftest import NOW
 from menagerie.crawler.tests.test_slice_f_driver import (
     FakeAuthor,
@@ -221,6 +222,8 @@ class TinyModelAuthor(FakeAuthor):
                 "library_recipe": None,
             }
         )
+        code_manifest = [dict(row) for row in model_code_manifest(adapter_path, artifact.model_dir)]
+        implementation["code_manifest"] = code_manifest
         contract = facts["input_contract"]
         contract["code_path"] = "adapter.py"
         contract["args"][0].update(
@@ -230,6 +233,7 @@ class TinyModelAuthor(FakeAuthor):
             }
         )
         proposal["verified_hashes"]["code"] = hash_bytes(adapter_bytes)
+        proposal["verified_hashes"]["code_manifest"] = stable_hash(code_manifest)
         if case.fidelity_required:
             fidelity_identity = stable_hash(
                 {"stable_id": item.stable_id, "kind": "dry-run-fidelity"}

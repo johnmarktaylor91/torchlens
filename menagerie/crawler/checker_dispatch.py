@@ -20,19 +20,10 @@ from menagerie.crawler.constants import (
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.models import JsonObject
+from menagerie.crawler.proposal import ProposalValidationError, required_verified_hash_keys
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
 
 PROMPT_PATH = Path(__file__).with_name("prompts") / f"{CHECKER_PROMPT_NAME}.txt"
-_VERIFIED_HASH_KEYS = frozenset(
-    {
-        "proposal",
-        "source_manifest",
-        "evidence",
-        "code",
-        "source_to_code_map",
-        "family_template",
-    }
-)
 
 
 class CheckerDispatchError(ValueError):
@@ -368,7 +359,14 @@ def _build_envelope(
         if any(field not in item for field in required):
             raise CheckerDispatchError("checker item is missing identity/hash bindings")
         verified_hashes = item.get("verified_hashes")
-        if not isinstance(verified_hashes, Mapping) or set(verified_hashes) != _VERIFIED_HASH_KEYS:
+        proposal = item.get("proposal")
+        if not isinstance(proposal, Mapping):
+            raise CheckerDispatchError("checker item proposal must be a complete object")
+        try:
+            required_hash_keys = required_verified_hash_keys(proposal, include_proposal=True)
+        except ProposalValidationError as exc:
+            raise CheckerDispatchError(str(exc)) from exc
+        if not isinstance(verified_hashes, Mapping) or set(verified_hashes) != required_hash_keys:
             raise CheckerDispatchError(
                 "checker item verified_hashes must bind the exact proposal/artifact pack"
             )
