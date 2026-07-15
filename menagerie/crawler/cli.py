@@ -11,7 +11,12 @@ import sys
 from pathlib import Path
 from typing import Optional, Protocol, Sequence
 
-from menagerie.crawler.checkpoint import CheckpointError, create_canonical_checkpoint
+from menagerie.crawler.checkpoint import (
+    CheckpointError,
+    append_canonical_requeue_grant,
+    build_canonical_requeue_grant,
+    create_canonical_checkpoint,
+)
 from menagerie.crawler.doctor import DoctorConfig, DoctorError, DoctorProbes, run_doctor
 from menagerie.crawler.driver import (
     CommandAuthorLane,
@@ -31,7 +36,6 @@ from menagerie.crawler.driver import (
     utc_now,
 )
 from menagerie.crawler.envs import load_environment_registry
-from menagerie.crawler.identity import canonical_json_bytes, stable_hash
 from menagerie.crawler.intake import create_intake_snapshot, load_intake_snapshot
 from menagerie.crawler.recordio import SingleWriterError
 from menagerie.crawler.reducer import materialize_current
@@ -119,6 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
     requeue.add_argument("--reason", required=True)
     requeue.add_argument("--grant", required=True, type=int)
     requeue.add_argument("--stage", required=True)
+    requeue.add_argument("--granted-by", default="operator")
 
     handoff = subparsers.add_parser(
         "handoff", aliases=["handoff-linux"], help="run Linux deferred sweep"
@@ -451,31 +456,33 @@ def _teardown_command(args: argparse.Namespace) -> int:
 
 
 def _requeue_command(args: argparse.Namespace) -> int:
-    """Append one explicit runtime effort grant without mutating canonical history."""
+    """Lock and append one validated grant directly to canonical history."""
 
-    if args.grant < 1:
-        raise ValueError("--grant must be positive")
-    payload = {
-        "grant_id": stable_hash(
-            {
-                "stable_id": args.stable_id,
-                "stage": args.stage,
-                "reason": args.reason,
-                "grant": args.grant,
-            }
-        ),
-        "stable_id": args.stable_id,
-        "stage": args.stage,
-        "reason": args.reason,
-        "attempts": args.grant,
+    runtime = args.repo_root / ".crawl-local"
+    path = (
+        args.repo_root
+        / "menagerie"
+        / "crawler"
+        / "records"
+        / "operational"
+        / "requeue-grants.jsonl"
+    )
+    owner = {
+        "pid": os.getpid(),
+        "run_id": "requeue",
+        "target": None,
         "created_at": utc_now(),
     }
-    path = args.repo_root / ".crawl-local" / "requeue-grants.jsonl"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("ab") as handle:
-        handle.write(canonical_json_bytes(payload) + b"\n")
-        handle.flush()
-        os.fsync(handle.fileno())
+    with DriverLock(runtime / "locks" / "driver.lock", owner):
+        payload = build_canonical_requeue_grant(
+            path,
+            stable_id=args.stable_id,
+            stage=args.stage,
+            reason=args.reason,
+            attempts=args.grant,
+            granted_by=args.granted_by,
+        )
+        append_canonical_requeue_grant(path, payload)
     print(json.dumps(payload, sort_keys=True))
     return EXIT_OK
 

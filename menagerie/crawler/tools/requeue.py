@@ -6,13 +6,14 @@ import argparse
 import json
 import os
 import sys
-from dataclasses import asdict
 from pathlib import Path
 from typing import Optional, Sequence
 
-from menagerie.crawler.effort import EffortGrant
-from menagerie.crawler.identity import canonical_json_bytes, stable_hash
-from menagerie.crawler.recordio import scan_jsonl
+from menagerie.crawler.checkpoint import (
+    append_canonical_requeue_grant,
+    build_canonical_requeue_grant,
+)
+from menagerie.crawler.driver import DriverLock, DriverLockError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,7 +31,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--grant", required=True, type=int, help="additional attempt count")
     parser.add_argument("--stage", required=True)
     parser.add_argument("--granted-by", default="operator")
-    parser.add_argument("--ledger", type=Path, default=Path(".crawl-local/requeue-grants.jsonl"))
+    parser.add_argument("--repo-root", type=Path, default=Path.cwd())
+    parser.add_argument("--ledger", type=Path)
     return parser
 
 
@@ -50,39 +52,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     args = build_parser().parse_args(argv)
     try:
-        if args.grant < 1:
-            raise ValueError("--grant must be positive")
-        prior = scan_jsonl(args.ledger, validate=False)
-        generation = len(prior) + 1
-        grant_id = stable_hash(
-            {
-                "generation": generation,
-                "stable_id": args.stable_id,
-                "stage": args.stage,
-                "reason": args.reason,
-                "attempts": args.grant,
-                "granted_by": args.granted_by,
-            }
+        repo_root = args.repo_root.resolve()
+        ledger = args.ledger or (
+            repo_root / "menagerie" / "crawler" / "records" / "operational" / "requeue-grants.jsonl"
         )
-        grant = EffortGrant(
-            grant_id=grant_id,
-            stage=args.stage,
-            reason=args.reason,
-            granted_by=args.granted_by,
-            attempts=args.grant,
-        )
-        payload = {
-            **asdict(grant),
-            "stable_id": args.stable_id,
-            "new_work_generation": generation,
+        owner = {
+            "pid": os.getpid(),
+            "run_id": "requeue-tool",
+            "target": None,
         }
-        args.ledger.parent.mkdir(parents=True, exist_ok=True)
-        with args.ledger.open("ab") as handle:
-            handle.write(canonical_json_bytes(payload) + b"\n")
-            handle.flush()
-            os.fsync(handle.fileno())
+        with DriverLock(repo_root / ".crawl-local" / "locks" / "driver.lock", owner):
+            payload = build_canonical_requeue_grant(
+                ledger,
+                stable_id=args.stable_id,
+                stage=args.stage,
+                reason=args.reason,
+                attempts=args.grant,
+                granted_by=args.granted_by,
+            )
+            append_canonical_requeue_grant(ledger, payload)
         print(json.dumps(payload, sort_keys=True))
-    except (OSError, ValueError) as exc:
+    except (DriverLockError, OSError, ValueError) as exc:
         print(f"requeue failed: {exc}", file=sys.stderr)
         return 1
     return 0

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
 
+import menagerie.crawler.checkpoint as checkpoint_module
 from menagerie.crawler.checkpoint import (
+    CheckpointValidationError,
     RestrictedPublicArtifact,
     create_canonical_checkpoint,
     create_checkpoint_set,
@@ -16,10 +19,69 @@ from menagerie.crawler.licenses import (
     LicenseEvidenceStatus,
     store_licensed_artifact,
 )
+from menagerie.crawler.identity import canonical_json_bytes
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
 from menagerie.crawler.status import checkpoint_consistency_report, completeness_report
 from menagerie.crawler.tests.conftest import make_model
 from menagerie.crawler.tests.test_checkpoint_transaction import RecordingGit, _clean_state
+
+
+def test_canonical_requeue_history_must_extend_head_byte_for_byte(tmp_path: Path) -> None:
+    """A complete valid rewrite cannot erase a committed canonical grant line."""
+
+    relative = Path("menagerie/crawler/records/operational/requeue-grants.jsonl")
+    ledger = tmp_path / relative
+    ledger.parent.mkdir(parents=True)
+    ledger.write_text('{"grant_id":"historical"}\n', encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "crawler@example.test"], cwd=tmp_path, check=True
+    )
+    subprocess.run(["git", "config", "user.name", "Crawler Test"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "--", relative.as_posix()], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "fixture"], cwd=tmp_path, check=True)
+
+    ledger.write_text('{"grant_id":"rewritten"}\n', encoding="utf-8")
+    with pytest.raises(CheckpointValidationError, match="not an append-only extension"):
+        checkpoint_module._validate_canonical_jsonl_append_only(
+            tmp_path,
+            tmp_path / "menagerie" / "crawler",
+            (relative,),
+            checkpoint_module._run_git,
+        )
+
+
+def test_external_record_traceback_and_stdio_are_license_sensitive() -> None:
+    """Generated JSON cannot auto-attest unclassified third-party source text."""
+
+    record = {
+        "schema_version": "menagerie.crawler.attempt.v2",
+        "supervisor": {
+            "stdout_tail": "restricted source bytes printed by dependency",
+            "stderr_tail": "",
+        },
+        "error": {
+            "message": "dependency echoed a source line",
+            "traceback": "Traceback with restricted source bytes",
+        },
+    }
+    content = canonical_json_bytes(record) + b"\n"
+    with pytest.raises(RestrictedPublicArtifact, match="externally controlled text"):
+        checkpoint_module._validate_generated_metadata_bytes(
+            Path("menagerie/crawler/records/attempts/test.jsonl"), content
+        )
+    failed_model = {
+        "schema_version": "menagerie.crawler.model.v2",
+        "status": {
+            "kind": "failed",
+            "detail": "duplicated dependency exception source line",
+        },
+    }
+    with pytest.raises(RestrictedPublicArtifact, match=r"status\.detail"):
+        checkpoint_module._validate_generated_metadata_bytes(
+            Path("menagerie/crawler/records/models/test.jsonl"),
+            canonical_json_bytes(failed_model) + b"\n",
+        )
 
 
 def _mirrors(root: Path) -> MirrorStore:

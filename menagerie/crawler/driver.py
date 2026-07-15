@@ -37,10 +37,12 @@ from menagerie.crawler.checkpoint import (
     ReconstructionValidationError,
     append_canonical_operational_event,
     append_canonical_requeue_grant,
+    canonical_reconstruction_source_manifest,
     canonical_operational_ledger_path,
     canonical_requeue_grants_path,
     record_checkpoint_review,
     record_review_signoff,
+    reconstruction_transaction_id,
     validate_canonical_reconstruction,
 )
 from menagerie.crawler.constants import (
@@ -2655,13 +2657,21 @@ class CrawlerDriver:
             Locked append-only operational ledger containing identities and attempts.
         """
 
+        canonical_path = canonical_operational_ledger_path(self.paths.ledgers.models)
+        canonical_events = scan_jsonl(canonical_path)
+        durable_events_by_id = {
+            str(event.get("event_id")): event for event in (*canonical_events, *operational.records)
+        }
+        for event in canonical_events:
+            operational.append(event)
+        durable_events = tuple(durable_events_by_id.values())
         delivered = {
             str(event.get("details", {}).get("notification_event_id"))
-            for event in operational.records
+            for event in durable_events
             if event.get("event_kind") == OperationalEventKind.NOTIFICATION_DELIVERY.value
             and event.get("status") == OperationalEventStatus.NOTIFICATION_DELIVERED.value
         }
-        for event in tuple(operational.records):
+        for event in durable_events:
             event_id = str(event.get("event_id"))
             if event_id in delivered:
                 continue
@@ -2695,9 +2705,15 @@ class CrawlerDriver:
     ) -> bool:
         """Record best-effort delivery separately from its durable notification identity."""
 
+        canonical_path = canonical_operational_ledger_path(self.paths.ledgers.models)
+        canonical_events = scan_jsonl(canonical_path)
+        combined_by_id = {
+            str(event.get("event_id")): event for event in (*canonical_events, *operational.records)
+        }
+        combined = tuple(combined_by_id.values())
         completed = [
             event
-            for event in operational.records
+            for event in combined
             if event.get("event_kind") == OperationalEventKind.NOTIFICATION_DELIVERY.value
             and event.get("details", {}).get("notification_event_id") == notification_event_id
             and event.get("status") == OperationalEventStatus.NOTIFICATION_DELIVERED.value
@@ -2707,13 +2723,11 @@ class CrawlerDriver:
         prior_attempts = sum(
             event.get("event_kind") == OperationalEventKind.NOTIFICATION_DELIVERY.value
             and event.get("details", {}).get("notification_event_id") == notification_event_id
-            for event in operational.records
+            for event in combined
         )
         idempotency_key = stable_hash(
             {
                 "notification_event_id": notification_event_id,
-                "run_id": self.config.run_id,
-                "machine_id": self.config.machine_id,
             }
         )
         try:
@@ -2726,42 +2740,47 @@ class CrawlerDriver:
             error: Optional[str] = None
         except Exception as exc:  # noqa: BLE001 -- injected notifiers are also best-effort
             delivered = False
-            error = f"{type(exc).__module__}.{type(exc).__qualname__}: {exc}"
-            LOGGER.warning("crawler notifier failed (%s): %s", error, summary)
+            error = stable_hash(
+                {
+                    "exception_type": f"{type(exc).__module__}.{type(exc).__qualname__}",
+                    "message": str(exc),
+                }
+            )
+            LOGGER.warning("crawler notifier failed (%s): %s", type(exc).__qualname__, summary)
         delivery_id = stable_hash(
             {
                 "idempotency_key": idempotency_key,
                 "attempt": prior_attempts + 1,
             }
         )[7:31]
-        operational.append(
-            {
-                "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
-                "event_id": f"notification-delivery-{delivery_id}",
-                "created_at": self.dependencies.clock(),
-                "event_kind": OperationalEventKind.NOTIFICATION_DELIVERY.value,
-                "status": (
-                    OperationalEventStatus.NOTIFICATION_DELIVERED.value
-                    if delivered
-                    else OperationalEventStatus.NOTIFICATION_FAILED.value
-                ),
-                "provider": None,
-                "observed_response": None,
-                "reset_at": None,
-                "queued_work_counts": {"models": 0},
-                "current_environment": None,
-                "run_id": self.config.run_id,
-                "machine_id": self.config.machine_id,
-                "details": {
-                    "notification_event_id": notification_event_id,
-                    "idempotency_key": idempotency_key,
-                    "attempt": prior_attempts + 1,
-                    "completion": delivered,
-                    "delivered": delivered,
-                    "error": error,
-                },
-            }
-        )
+        delivery_event = {
+            "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+            "event_id": f"notification-delivery-{delivery_id}",
+            "created_at": self.dependencies.clock(),
+            "event_kind": OperationalEventKind.NOTIFICATION_DELIVERY.value,
+            "status": (
+                OperationalEventStatus.NOTIFICATION_DELIVERED.value
+                if delivered
+                else OperationalEventStatus.NOTIFICATION_FAILED.value
+            ),
+            "provider": None,
+            "observed_response": None,
+            "reset_at": None,
+            "queued_work_counts": {"models": 0},
+            "current_environment": None,
+            "run_id": self.config.run_id,
+            "machine_id": self.config.machine_id,
+            "details": {
+                "notification_event_id": notification_event_id,
+                "idempotency_key": idempotency_key,
+                "attempt": prior_attempts + 1,
+                "completion": delivered,
+                "delivered": delivered,
+                "error": error,
+            },
+        }
+        append_canonical_operational_event(canonical_path, delivery_event)
+        operational.append(delivery_event)
         return delivered
 
     def _maybe_pause_for_review(
@@ -2833,25 +2852,29 @@ class CrawlerDriver:
         return True
 
     def _review_is_pending(self, operational: JsonlLedger) -> bool:
-        """Return whether a checkpoint event lacks a later signoff event."""
+        """Return whether any canonical/runtime policy key lacks a signoff."""
 
-        review_sequence = max(
-            (
-                int(event["ledger_seq"])
-                for event in operational.records
-                if event.get("event_kind") == OperationalEventKind.CHECKPOINT_REVIEW.value
-            ),
-            default=0,
-        )
-        signoff_sequence = max(
-            (
-                int(event["ledger_seq"])
-                for event in operational.records
-                if event.get("event_kind") == OperationalEventKind.REVIEW_SIGNOFF.value
-            ),
-            default=0,
-        )
-        return review_sequence > signoff_sequence
+        canonical_path = canonical_operational_ledger_path(self.paths.ledgers.models)
+        combined_by_id = {
+            str(event.get("event_id")): event
+            for event in (*scan_jsonl(canonical_path), *operational.records)
+        }
+        combined = tuple(combined_by_id.values())
+        review_keys = {
+            str(event.get("details", {}).get("policy_key"))
+            for event in combined
+            if event.get("event_kind") == OperationalEventKind.CHECKPOINT_REVIEW.value
+            and isinstance(event.get("details"), Mapping)
+            and isinstance(event.get("details", {}).get("policy_key"), str)
+        }
+        signoff_keys = {
+            str(event.get("details", {}).get("policy_key"))
+            for event in combined
+            if event.get("event_kind") == OperationalEventKind.REVIEW_SIGNOFF.value
+            and isinstance(event.get("details"), Mapping)
+            and isinstance(event.get("details", {}).get("policy_key"), str)
+        }
+        return bool(review_keys - signoff_keys)
 
     def _record_review_signoff(
         self,
@@ -3941,7 +3964,7 @@ def _rehydrate_canonical_artifact(item: WorkItem, paths: DriverPaths) -> Optiona
     if not manifest_path.is_file():
         return None
     try:
-        validate_canonical_reconstruction(
+        validated = validate_canonical_reconstruction(
             manifest_path,
             canonical_root,
             expected_stable_id=item.stable_id,
@@ -3949,58 +3972,15 @@ def _rehydrate_canonical_artifact(item: WorkItem, paths: DriverPaths) -> Optiona
         )
     except ReconstructionValidationError as exc:
         raise DriverIntegrationError(str(exc)) from exc
-    value = _read_json(manifest_path)
-    schema_version = value.get("schema_version")
-    if (
-        schema_version
-        not in {
-            "menagerie.crawler.reconstruction.v1",
-            "menagerie.crawler.reconstruction.v2",
-        }
-        or value.get("stable_id") != item.stable_id
-        or value.get("intake_item_sha256") != stable_hash(item.intake.to_dict())
-    ):
-        raise DriverIntegrationError(
-            f"canonical reconstruction identity is stale for {item.stable_id}"
-        )
-    if schema_version == "menagerie.crawler.reconstruction.v2":
-        marker_path = manifest_path.with_name(f"{item.stable_id}.commit.json")
-        if not marker_path.is_file():
-            raise DriverIntegrationError("canonical reconstruction transaction is uncommitted")
-        marker = _read_json(marker_path)
-        if marker.get("transaction_id") != value.get("transaction_id") or marker.get(
-            "proposal_sha256"
-        ) != value.get("proposal_sha256"):
-            raise DriverIntegrationError("canonical reconstruction commit marker is stale")
-    proposal_value = value.get("proposal")
-    source_value = value.get("source_manifest")
-    if not isinstance(proposal_value, Mapping) or not isinstance(source_value, Mapping):
-        raise DriverIntegrationError("canonical reconstruction lacks proposal/source facts")
-    proposal = deepcopy(dict(proposal_value))
-    if proposal.get("proposal_sha256") != stable_hash(
-        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
-    ):
-        raise DriverIntegrationError("canonical reconstruction proposal digest changed")
+    value = validated.manifest
+    proposal = deepcopy(validated.proposal)
     implementation = proposal.get("proposed_facts", {}).get("implementation", {})
     code_value = implementation.get("code_path") if isinstance(implementation, Mapping) else None
     if isinstance(code_value, str) and Path(code_value).is_absolute():
         return None
-    model_relative = Path(str(value["canonical_code_root"]))
-    if model_relative.is_absolute():
-        raise DriverIntegrationError(
-            "reconstruction canonical_code_root must be repository-relative"
-        )
     repo_root = _canonical_repo_root(canonical_root)
-    intake_id = value.get("intake_snapshot_id")
-    if not isinstance(intake_id, str):
-        raise DriverIntegrationError("reconstruction intake snapshot identity is missing")
-    canonical_intake = canonical_root / "records" / "intake" / intake_id
-    if load_intake_snapshot(canonical_intake).snapshot_sha256 != value.get(
-        "intake_snapshot_sha256"
-    ):
-        raise DriverIntegrationError("reconstruction intake snapshot digest changed")
-    model_dir = (repo_root / model_relative).resolve()
-    source_manifest = deepcopy(dict(source_value))
+    model_dir = validated.model_root
+    source_manifest = deepcopy(validated.source_manifest)
     sources = source_manifest.get("sources", [])
     if not isinstance(sources, list):
         raise DriverIntegrationError("reconstruction source manifest is malformed")
@@ -4047,13 +4027,16 @@ def _promote_and_publish_accepted_artifact(
         Canonically rebound artifact safe for worker execution.
     """
 
-    transaction_id = stable_hash(
-        {
-            "stable_id": item.stable_id,
-            "proposal": artifact.proposal.get("proposal_sha256"),
-            "source_manifest": artifact.source_manifest,
-            "intake": stable_hash(item.intake.to_dict()),
-        }
+    canonical_root = _canonical_crawler_root(paths)
+    repo_root = _canonical_repo_root(canonical_root)
+    transaction_source_manifest = canonical_reconstruction_source_manifest(
+        artifact.source_manifest, canonical_root, repo_root
+    )
+    transaction_id = reconstruction_transaction_id(
+        item.stable_id,
+        str(artifact.proposal.get("proposal_sha256")),
+        transaction_source_manifest,
+        stable_hash(item.intake.to_dict()),
     )
     transaction_root = paths.runtime_root / "promotion-transactions" / item.stable_id
     _recover_incomplete_promotion(transaction_root)
@@ -6235,12 +6218,7 @@ def _placeholder_facts(item: WorkItem, created_at: str) -> JsonObject:
     """Build schema-complete unresolved facts without inventing an executable model."""
 
     source_id = "intake-discovery-record"
-    catalog_name = (
-        "deferred.jsonl" if item.intake.discovery_source == "deferred" else "master_catalog.jsonl"
-    )
-    source_url = (
-        f"https://github.com/johnmarktaylor91/torchlens/blob/main/menagerie/data/{catalog_name}"
-    )
+    source_url = "https://github.com/johnmarktaylor91/torchlens"
     evidence_text = f"name={item.intake.name}; zoo={item.intake.zoo}; variant={item.intake.variant}"
     return {
         "identity": {
@@ -6290,18 +6268,20 @@ def _placeholder_facts(item: WorkItem, created_at: str) -> JsonObject:
                 {
                     "source_id": source_id,
                     "role": "documentation",
-                    "kind": "repository",
+                    "kind": "intake-snapshot",
                     "url": source_url,
-                    "revision_kind": "commit",
-                    "revision": "campaign-branch",
-                    "locator": (f"{item.intake.name}|{item.intake.zoo}|{item.intake.variant}"),
-                    "content_sha256": item.intake.legacy_row_sha256,
-                    "byte_count": len(evidence_text.encode("utf-8")),
+                    "revision_kind": "immutable-intake-item",
+                    "revision": item.intake.legacy_row_sha256,
+                    "locator": (
+                        f"menagerie/crawler/records/intake/*/items.jsonl#stable_id={item.stable_id}"
+                    ),
+                    "content_sha256": None,
+                    "byte_count": 0,
                     "media_type": "application/x-ndjson",
                     "retrieved_at": created_at,
                     "fetch_recipe": "trusted-intake-snapshot",
                     "mirror_class": "public",
-                    "mirror_digest": item.intake.legacy_row_sha256,
+                    "mirror_digest": None,
                 }
             ],
         },
@@ -6352,7 +6332,7 @@ def _placeholder_facts(item: WorkItem, created_at: str) -> JsonObject:
             "device_policy": "cpu",
             "required_construct_asset": None,
             "recipe_revision": stable_hash({"stable_id": item.stable_id, "state": "unresolved"}),
-            "torchlens_import_static_check": "passed",
+            "torchlens_import_static_check": "not-applicable-no-code",
         },
         "input_contract": {
             "code_path": None,

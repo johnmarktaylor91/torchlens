@@ -22,7 +22,7 @@ from menagerie.crawler.checkpoint import (
     create_canonical_checkpoint,
 )
 from menagerie.crawler.cli import main
-from menagerie.crawler.constants import MODEL_SCHEMA_VERSION
+from menagerie.crawler.constants import ATTEMPT_SCHEMA_VERSION, MODEL_SCHEMA_VERSION
 from menagerie.crawler.driver import (
     AuthorArtifact,
     DriverIntegrationError,
@@ -45,7 +45,7 @@ from menagerie.crawler.driver import (
     EnvironmentBinding,
     WorkItem,
 )
-from menagerie.crawler.envs import load_environment_registry
+from menagerie.crawler.envs import DEFAULT_ENVS_ROOT, load_environment_registry
 from menagerie.crawler.identity import canonical_json_bytes, stable_hash
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
 from menagerie.crawler.licenses import (
@@ -58,7 +58,7 @@ from menagerie.crawler.licenses import (
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.routing import ModelRequirements, route_model
-from menagerie.crawler.tests.conftest import make_author_proposal, make_model
+from menagerie.crawler.tests.conftest import make_attempt, make_author_proposal, make_model
 from menagerie.crawler.tests.test_slice_f_driver import (
     FakeChecker,
     FakeEnvironments,
@@ -255,7 +255,13 @@ def test_crash_mid_promotion_rolls_back_before_exposure(
 
 @pytest.mark.parametrize(
     "tamper",
-    ["marker-transaction", "proposal-digest", "missing-source-byte"],
+    [
+        "marker-transaction",
+        "both-transaction-fields",
+        "legacy-v1-downgrade",
+        "proposal-digest",
+        "missing-source-byte",
+    ],
 )
 def test_reconstruction_tampering_is_refused_by_staging_and_rehydration(
     tmp_path: Path,
@@ -285,6 +291,17 @@ def test_reconstruction_tampering_is_refused_by_staging_and_rehydration(
         marker = json.loads(marker_path.read_text(encoding="utf-8"))
         marker["transaction_id"] = "sha256:" + "f" * 64
         marker_path.write_bytes(canonical_json_bytes(marker) + b"\n")
+    elif tamper == "both-transaction-fields":
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+        marker["transaction_id"] = "sha256:" + "f" * 64
+        reconstruction["transaction_id"] = marker["transaction_id"]
+        marker_path.write_bytes(canonical_json_bytes(marker) + b"\n")
+        reconstruction_path.write_bytes(canonical_json_bytes(reconstruction) + b"\n")
+    elif tamper == "legacy-v1-downgrade":
+        reconstruction["schema_version"] = "menagerie.crawler.reconstruction.v1"
+        reconstruction.pop("transaction_id")
+        reconstruction_path.write_bytes(canonical_json_bytes(reconstruction) + b"\n")
+        marker_path.unlink()
     elif tamper == "proposal-digest":
         reconstruction["proposal_sha256"] = "sha256:" + "f" * 64
         reconstruction_path.write_bytes(canonical_json_bytes(reconstruction) + b"\n")
@@ -367,6 +384,32 @@ def _write_jsonl(path: Path, rows: Sequence[dict[str, Any]]) -> None:
     path.write_bytes(b"".join(canonical_json_bytes(row) + b"\n" for row in rows))
 
 
+def _append_environment_attestation(
+    records_root: Path,
+    stable_id: str,
+    *,
+    family: str,
+    target: str,
+    lock_sha256: str,
+    export_sha256: str,
+) -> None:
+    """Append one canonical attempt binding target lock, toolchain, and passed probes."""
+
+    attempt = make_attempt(stable_id)
+    attempt["environment"].update(
+        {
+            "family": family,
+            "target": target,
+            "lock_sha256": lock_sha256,
+            "resolved_export_sha256": export_sha256,
+        }
+    )
+    with JsonlLedger(
+        records_root / "attempts" / "environment-attestation.jsonl", ATTEMPT_SCHEMA_VERSION
+    ) as ledger:
+        ledger.append(attempt)
+
+
 def _mirrors(root: Path) -> MirrorStore:
     """Return conventional separated runtime mirror roots."""
 
@@ -407,6 +450,7 @@ def _clean_state(
         model["completeness"]["issues"] = [status_code]
     if status_code == "failed:forward":
         model["status"]["reason_code"] = "exception"
+        model["status"]["detail"] = checkpoint_module.hash_bytes(b"synthetic failure")
     with JsonlLedger(records / "models" / "current-shard.jsonl", MODEL_SCHEMA_VERSION) as ledger:
         ledger.append(model)
     _write_jsonl(records / "attempts" / "local.jsonl", [])
@@ -767,14 +811,26 @@ def test_checkpoint_includes_promoted_code_and_exact_environment_for_clean_repro
     assert promoted_path.is_file()
     assert ".crawl-local" not in promoted_path.parts
 
-    env_root = tmp_path / "menagerie" / "crawler" / "envs" / "core"
+    crawler_envs = tmp_path / "menagerie" / "crawler" / "envs"
+    shutil.copytree(DEFAULT_ENVS_ROOT, crawler_envs)
+    env_root = crawler_envs / "core"
     lock_path = env_root / "locks" / "linux-x86_64-cuda.lock"
-    export_path = env_root / "resolved-exports" / "linux-x86_64-cuda.json"
-    lock_path.parent.mkdir(parents=True)
-    export_path.parent.mkdir(parents=True)
-    (env_root / "environment.yml").write_text("name: core\n", encoding="utf-8")
-    lock_path.write_bytes(b"exact target lock\n")
+    export_path = env_root / "locks" / "linux-x86_64-cuda.resolved.json"
+    export_hash_path = env_root / "locks" / "linux-x86_64-cuda.resolved.sha256"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path.write_bytes(b"https://conda.example.test/core.conda#sha256=" + b"a" * 64 + b"\n")
     export_path.write_bytes(b'{"python":"3.11","torch":"test"}\n')
+    export_hash_path.write_text(
+        f"{checkpoint_module.hash_bytes(export_path.read_bytes())}\n", encoding="utf-8"
+    )
+    _append_environment_attestation(
+        tmp_path / "menagerie" / "crawler" / "records",
+        stable_id,
+        family="core",
+        target="linux-x86_64-cuda",
+        lock_sha256=checkpoint_module.hash_bytes(lock_path.read_bytes()),
+        export_sha256=checkpoint_module.hash_bytes(export_path.read_bytes()),
+    )
 
     code_artifact = store_licensed_artifact(
         mirrors,
@@ -980,10 +1036,34 @@ def test_environment_metadata_gets_safe_provenance_and_rejects_private_url(
     """Locks/exports use the safe package-metadata class and reject private URLs."""
 
     snapshot, mirrors = _clean_state(tmp_path)
-    env = tmp_path / "menagerie" / "crawler" / "envs" / "core"
+    crawler_envs = tmp_path / "menagerie" / "crawler" / "envs"
+    shutil.copytree(DEFAULT_ENVS_ROOT, crawler_envs)
+    env = crawler_envs / "core"
     lock = env / "locks" / "osx-arm64.lock"
-    lock.parent.mkdir(parents=True)
-    lock.write_text("https://conda.example.test/pkg.conda#sha256=abc\n", encoding="utf-8")
+    export = env / "locks" / "osx-arm64.resolved.json"
+    export_hash = env / "locks" / "osx-arm64.resolved.sha256"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text(f"https://conda.example.test/pkg.conda#sha256={'a' * 64}\n", encoding="utf-8")
+    export.write_text('{"python":"3.11"}\n', encoding="utf-8")
+    export_hash.write_text(
+        f"{checkpoint_module.hash_bytes(export.read_bytes())}\n", encoding="utf-8"
+    )
+    with pytest.raises(CheckpointValidationError, match="compiler/SDK/probe-bound"):
+        create_canonical_checkpoint(
+            tmp_path,
+            snapshot.root,
+            mirrors=mirrors,
+            branch="menagerie/crawler-pipeline",
+            git_runner=RecordingGit(),
+        )
+    _append_environment_attestation(
+        tmp_path / "menagerie" / "crawler" / "records",
+        snapshot.items[0].stable_id,
+        family="core",
+        target="osx-arm64",
+        lock_sha256=checkpoint_module.hash_bytes(lock.read_bytes()),
+        export_sha256=checkpoint_module.hash_bytes(export.read_bytes()),
+    )
     create_canonical_checkpoint(
         tmp_path,
         snapshot.root,
@@ -999,6 +1079,16 @@ def test_environment_metadata_gets_safe_provenance_and_rejects_private_url(
     assert row["disposition"] == "safe-package-metadata-v1"
     assert row["content_sha256"] == checkpoint_module.hash_bytes(lock.read_bytes())
 
+    lock.write_text("https://conda.example.test/pkg.conda#sha256=abc\n", encoding="utf-8")
+    with pytest.raises(CheckpointValidationError, match="canonical SHA-256"):
+        create_canonical_checkpoint(
+            tmp_path,
+            snapshot.root,
+            mirrors=mirrors,
+            branch="menagerie/crawler-pipeline",
+            git_runner=RecordingGit(),
+        )
+
     lock.write_text(
         "https://user:secret@private.example.test/pkg.conda\n",  # pragma: allowlist secret
         encoding="utf-8",
@@ -1011,3 +1101,33 @@ def test_environment_metadata_gets_safe_provenance_and_rejects_private_url(
             branch="menagerie/crawler-pipeline",
             git_runner=RecordingGit(),
         )
+
+
+def test_requeue_cli_reports_success_only_after_canonical_append(tmp_path: Path) -> None:
+    """Operator authorization survives deletion of all disposable runtime state."""
+
+    snapshot = _snapshot(tmp_path)
+    stable_id = snapshot.items[0].stable_id
+    result = main(
+        [
+            "--repo-root",
+            str(tmp_path),
+            "requeue",
+            stable_id,
+            "--reason",
+            "reviewed retry",
+            "--grant",
+            "1",
+            "--stage",
+            "forward",
+        ]
+    )
+    assert result == 0
+    canonical = (
+        tmp_path / "menagerie" / "crawler" / "records" / "operational" / "requeue-grants.jsonl"
+    )
+    grants = scan_jsonl(canonical, validate=False)
+    assert len(grants) == 1
+    assert grants[0]["new_work_generation"] == 1
+    shutil.rmtree(tmp_path / ".crawl-local")
+    assert scan_jsonl(canonical, validate=False) == grants
