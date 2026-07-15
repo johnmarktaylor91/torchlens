@@ -283,6 +283,9 @@ def _execute_loaded_sparse_transaction(
         for check in contract_checks
         if check.name.startswith("input_literal:") or check.name.startswith("input_nontensor_tree:")
     )
+    input_alias_unreproducible = any(
+        not check.passed for check in contract_checks if check.name == "input_alias_topology"
+    )
     tensor_derived_scalar_stale = _tensor_derived_scalar_stale(
         descriptor, slot_values, witness_source_snapshots
     )
@@ -303,6 +306,7 @@ def _execute_loaded_sparse_transaction(
         unbound_state_escape_stale=unbound_state_escape_stale,
         container_reconstruction_lossy=container_reconstruction_lossy,
         output_not_reproduced=output_not_reproduced,
+        input_alias_unreproducible=input_alias_unreproducible,
     )
     if attestation_check is not None:
         contract_checks.append(attestation_check)
@@ -665,6 +669,14 @@ def _bind_runtime_inputs(
     values: dict[str, torch.Tensor] = {}
     checks: list[ContractCheck] = []
     positions = _model_input_arity_positions(descriptor)
+    # Torch capture DE-ALIASES model inputs (each input leaf is cloned before the forward,
+    # so ``forward(a, b)`` with ``a is b`` is captured as two DISTINCT tensors). The recorded
+    # DAG and activation archive therefore reflect distinct-input semantics, and each runtime
+    # input slot is likewise cloned independently. A runtime call that passes ALIASED inputs
+    # (same object, or distinct views sharing storage) is NOT reproducible against that
+    # de-aliased capture when an in-place op mutates an input -- see
+    # ``_input_alias_topology_checks``, which fails such a run closed instead of a false VERIFIED.
+    raw_values: dict[str, torch.Tensor] = {}
     for slot in input_slots:
         binding = slot.input_binding
         if binding is None:
@@ -688,6 +700,7 @@ def _bind_runtime_inputs(
                 slot,
                 f"Runtime input leaf is {type(value).__name__}, expected torch.Tensor.",
             )
+        raw_values[slot.slot_id] = value
         values[slot.slot_id] = value.detach().clone()
         shape_ok = tuple(value.shape) == slot.shape
         dtype_ok = str(value.dtype) == slot.dtype
@@ -722,7 +735,93 @@ def _bind_runtime_inputs(
     checks.extend(_input_tree_contract_checks(descriptor, inputs))
     checks.extend(_input_literal_contract_checks(descriptor, inputs, positions))
     checks.extend(_input_nontensor_tree_contract_checks(descriptor, inputs, positions))
+    checks.extend(_input_alias_topology_checks(descriptor, input_slots, raw_values))
     return values, tuple(checks)
+
+
+def _model_input_version_closure(descriptor: SparseRunDescriptor) -> set[str]:
+    """Return model-input slot ids plus every slot transitively versioned from one."""
+
+    closure = {
+        slot.slot_id for slot in descriptor.tensor_slots if slot.role is TensorSlotRole.MODEL_INPUT
+    }
+    changed = True
+    while changed:
+        changed = False
+        for slot in descriptor.tensor_slots:
+            if slot.version_of in closure and slot.slot_id not in closure:
+                closure.add(slot.slot_id)
+                changed = True
+    return closure
+
+
+def _descriptor_mutates_model_input(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether any in-place call targets a model-input slot (or its version chain)."""
+
+    closure = _model_input_version_closure(descriptor)
+    for call in descriptor.calls:
+        if call.is_inplace and _mutation_target_slot_id(call) in closure:
+            return True
+    return False
+
+
+def _tensor_storage_key(value: torch.Tensor) -> int | None:
+    """Return a stable base-storage identity for aliasing comparison, or ``None``."""
+
+    try:
+        return int(value.untyped_storage().data_ptr())
+    except (RuntimeError, AttributeError):
+        return None
+
+
+def _input_alias_topology_checks(
+    descriptor: SparseRunDescriptor,
+    input_slots: Sequence[TensorSlotDescriptor],
+    raw_values: Mapping[str, torch.Tensor],
+) -> tuple[ContractCheck, ...]:
+    """Fail closed on runtime input aliasing unreproducible against a de-aliased capture.
+
+    Torch capture clones each model-input leaf before the forward, so aliasing between
+    input sites (``forward(a, b)`` with ``a is b``, or two views sharing storage) is LOST:
+    the recorded DAG / archive reflect distinct-input semantics. When any in-place call
+    mutates a model input, a runtime call whose inputs DO alias would propagate that
+    mutation between sites while the de-aliased replay (independent per-slot clones) would
+    not -- a divergence from a fresh model on the given inputs that the replay would
+    otherwise falsely VERIFY. Such an aliased-input run is therefore failed closed. A run
+    with no in-place mutation of an input, or with no input aliasing, is unaffected (no
+    over-trigger): read-only aliasing is numerically irrelevant and stays VERIFIED.
+    """
+
+    if not _descriptor_mutates_model_input(descriptor):
+        return ()
+    storage_to_slots: dict[int, list[str]] = {}
+    for slot in input_slots:
+        value = raw_values.get(slot.slot_id)
+        if not isinstance(value, torch.Tensor):
+            continue
+        storage_key = _tensor_storage_key(value)
+        if storage_key is None:
+            continue
+        storage_to_slots.setdefault(storage_key, []).append(slot.slot_id)
+    aliased = {key: slots for key, slots in storage_to_slots.items() if len(slots) > 1}
+    if not aliased:
+        return ()
+    return (
+        _contract_check(
+            "input_alias_topology",
+            False,
+            RunnableErrorCode.INPUT_TREE_MISMATCH,
+            "Runtime model inputs alias (share storage) while an in-place op mutates a "
+            "model input; capture de-aliases inputs, so the recorded taken path cannot "
+            "reproduce the aliased mutation and must not be blessed VERIFIED.",
+            details=(
+                (
+                    "aliased_input_slot_groups",
+                    repr({key: sorted(slots) for key, slots in aliased.items()}),
+                ),
+            ),
+        ),
+    )
 
 
 def _clone_state_values(
@@ -2463,6 +2562,7 @@ def _numeric_attestation_check(
     unbound_state_escape_stale: bool = False,
     container_reconstruction_lossy: bool = False,
     output_not_reproduced: bool = False,
+    input_alias_unreproducible: bool = False,
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
     """Compare recomputed saved slots with the independent activation archive.
 
@@ -2509,6 +2609,12 @@ def _numeric_attestation_check(
         # An unbound state slot (read only through an untraced host path) was staged
         # with a value differing from capture, so the recorded taken path may not
         # apply; a byte-exact attestation would dishonestly bless a stale result.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    if input_alias_unreproducible:
+        # Runtime inputs alias (share storage) while an in-place op mutates a model
+        # input, but capture de-aliases inputs, so the recorded taken path cannot
+        # reproduce the aliased mutation. The run diverges; attesting recomputed slots
+        # against the de-aliased archive would be an internally inconsistent false positive.
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if output_not_reproduced:
         # The captured forward returned a HOST-ESCAPED non-tensor scalar (or otherwise

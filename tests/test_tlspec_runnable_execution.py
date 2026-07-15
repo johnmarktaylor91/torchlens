@@ -922,3 +922,102 @@ def test_c1_value_at_path_mapping_and_index_paths_unaffected() -> None:
     # Mapping keys use ``[]`` not getattr, so even a dunder-looking KEY is allowed.
     assert torch.equal(_value_at_path(root, ("weird__key__",)), root["weird__key__"])
     assert _value_at_path(root, ("nested", 1, "k")) == 5
+
+
+# --------------------------------------------------------------------------- #
+# r27-H3: torch capture DE-ALIASES model inputs (each leaf is cloned before the
+# forward). A runtime call whose inputs ALIAS (same object, or distinct views
+# sharing storage) while an in-place op mutates a model input is NOT reproducible
+# against that de-aliased capture: a fresh model on the aliased inputs propagates
+# the mutation between sites, the de-aliased replay does not. Such a run must fail
+# closed (DIVERGED / NOT_APPLICABLE), never a false VERIFIED.
+# --------------------------------------------------------------------------- #
+
+
+class _AliasInplaceModel(nn.Module):
+    """Mutate one model input in place, then read another input site."""
+
+    def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        """In-place add on ``a``; a fresh aliased model would see it through ``b``."""
+
+        a.add_(1.0)
+        return b * 2.0
+
+
+def _save_alias_runnable(path: Path) -> Path:
+    """Capture and save the in-place two-input alias model as a runnable artifact."""
+
+    t = torch.tensor([1.0, 2.0])
+    trace = tl.trace(
+        _AliasInplaceModel(),
+        [t, t],
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
+    )
+    trace.save(path, level="runnable", include_activations=True)
+    return path
+
+
+def test_h3_same_object_aliased_input_with_inplace_fails_closed(tmp_path: Path) -> None:
+    """Runtime ``a is b`` with an in-place op on an input must not be VERIFIED."""
+
+    path = _save_alias_runnable(tmp_path / "alias_same.tlspec")
+    shared = torch.tensor([1.0, 2.0])
+
+    with pytest.raises(PathDivergenceError):
+        tl.load(path).run(inputs=[shared, shared])
+    diverged = tl.load(path).run(
+        inputs=[shared, shared], on_divergence=DivergencePolicy.RETURN_DIVERGED
+    )
+    assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
+    assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
+
+
+def test_h3_view_aliased_distinct_objects_with_inplace_fails_closed(tmp_path: Path) -> None:
+    """Distinct runtime objects that share storage must also fail closed."""
+
+    path = _save_alias_runnable(tmp_path / "alias_view.tlspec")
+    base = torch.tensor([1.0, 2.0])
+    view = base.view_as(base)
+    assert base is not view
+    assert base.untyped_storage().data_ptr() == view.untyped_storage().data_ptr()
+
+    diverged = tl.load(path).run(
+        inputs=[base, view], on_divergence=DivergencePolicy.RETURN_DIVERGED
+    )
+    assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
+    assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
+
+
+def test_h3_distinct_inputs_still_verify(tmp_path: Path) -> None:
+    """Distinct (non-aliased) runtime inputs match the de-aliased capture -> VERIFIED."""
+
+    path = _save_alias_runnable(tmp_path / "alias_distinct.tlspec")
+    a = torch.tensor([1.0, 2.0])
+    b = torch.tensor([1.0, 2.0])
+
+    result = tl.load(path).run(inputs=[a, b])
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
+
+
+def test_h3_readonly_aliased_inputs_do_not_over_trigger(tmp_path: Path) -> None:
+    """Aliased inputs with NO in-place mutation stay VERIFIED (no over-trigger)."""
+
+    class _ReadOnly(nn.Module):
+        def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+            return a + b
+
+    z = torch.tensor([3.0, 4.0])
+    trace = tl.trace(
+        _ReadOnly(),
+        [z, z],
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
+    )
+    trace.save(tmp_path / "readonly.tlspec", level="runnable", include_activations=True)
+    shared = torch.tensor([3.0, 4.0])
+    result = tl.load(tmp_path / "readonly.tlspec").run(inputs=[shared, shared])
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
