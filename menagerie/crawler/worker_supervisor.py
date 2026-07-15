@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, BinaryIO, Mapping, Optional, Sequence
 
 from menagerie.crawler.constants import (
     DEFAULT_FORWARD_TIMEOUT_SECONDS,
@@ -25,6 +25,7 @@ from menagerie.crawler.constants import (
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.policy import (
     SandboxUnavailableError,
+    _linux_minimal_read_mounts,
     build_safe_environment,
     detect_os_sandbox,
     generate_macos_sandbox_profile,
@@ -104,6 +105,7 @@ _SYSTEM_READ_FILES = frozenset(
     }
 )
 _TERMINAL_TRACE_PATTERN = re.compile(r"\+\+\+ (?:exited with|killed by) .+ \+\+\+$")
+_MACOS_AUDIT_COMPLETION_MARKER = "MENAGERIE_MACOS_SANDBOX_AUDIT_COMPLETE_V1"
 
 
 @dataclass(frozen=True)
@@ -193,7 +195,7 @@ class SupervisedResult:
 
 @dataclass(frozen=True)
 class SandboxDenialObservation:
-    """OS-boundary network and outside-write denials observed by the supervisor.
+    """OS-boundary policy denials observed by the supervisor.
 
     Parameters
     ----------
@@ -360,7 +362,10 @@ def _linux_audited_argv(
 
 
 def _parent_owned_audit_path(
-    scratch_root: Path, write_roots: Sequence[Path]
+    scratch_root: Path,
+    write_roots: Sequence[Path],
+    *,
+    filename: str = "sandbox-syscalls.log",
 ) -> tuple[Path, tuple[int, int]]:
     """Create immutable-identity telemetry storage outside child-writable roots.
 
@@ -370,6 +375,8 @@ def _parent_owned_audit_path(
         Supervisor scratch directory used to choose a nearby parent-owned sibling.
     write_roots:
         Roots that the OS sandbox exposes writable to the child.
+    filename:
+        Fixed telemetry filename inside the parent-owned directory.
 
     Returns
     -------
@@ -389,10 +396,10 @@ def _parent_owned_audit_path(
         if not any(directory == root or root in directory.parents for root in roots):
             try:
                 directory.mkdir(mode=0o700)
-                path = directory / "sandbox-syscalls.log"
+                path = directory / filename
                 descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 os.close(descriptor)
-                os.link(path, directory / "sandbox-syscalls.anchor")
+                os.link(path, directory / f"{filename}.anchor")
                 status = path.stat()
                 return path, (status.st_dev, status.st_ino)
             except OSError as exc:
@@ -730,7 +737,7 @@ def _parse_linux_denial_audit(
             return _telemetry_failure_observation("not-regular")
         if expected_identity is not None and (status.st_dev, status.st_ino) != expected_identity:
             return _telemetry_failure_observation("replaced")
-        anchor = audit_path.with_name("sandbox-syscalls.anchor")
+        anchor = audit_path.with_name(f"{audit_path.name}.anchor")
         if anchor.exists():
             anchor_status = anchor.stat()
             if (anchor_status.st_dev, anchor_status.st_ino) != (status.st_dev, status.st_ino):
@@ -761,10 +768,7 @@ def _parse_linux_denial_audit(
             flag in line for flag in _WRITE_OPEN_FLAGS
         ):
             paths = _decoded_trace_paths(line)
-            successful = not re.search(r"= -1(?:\s|$)", line) and bool(
-                re.search(r"= (?:\d+|0x[0-9a-fA-F]+)(?:<|\s|$)", line)
-            )
-            if successful and paths:
+            if paths:
                 path_text = paths[0]
                 if not _read_path_is_allowed(
                     path_text,
@@ -801,34 +805,84 @@ def _parse_linux_denial_audit(
     )
 
 
-def _macos_denial_audit(stderr: bytes) -> SandboxDenialObservation:
-    """Parse sandbox-exec denial messages when Seatbelt emits them to stderr.
+def _macos_denial_message(line: str) -> Optional[str]:
+    """Extract one Seatbelt denial message from an audited macOS record.
 
     Parameters
     ----------
-    stderr:
-        Complete captured child stderr.
+    line:
+        One parent-owned NDJSON or legacy textual audit record.
+
+    Returns
+    -------
+    str | None
+        Denial message, or ``None`` when the record is unrecognized.
+    """
+
+    stripped = line.strip()
+    if not stripped:
+        return None
+    if stripped.startswith("{"):
+        try:
+            value = json.loads(stripped)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(value, Mapping):
+            return None
+        for key in ("eventMessage", "composedMessage", "message"):
+            message = value.get(key)
+            if isinstance(message, str) and "deny" in message.lower():
+                return message
+        return None
+    return stripped if "deny" in stripped.lower() else None
+
+
+def _macos_denial_audit(telemetry: bytes) -> SandboxDenialObservation:
+    """Parse completion-marked parent-owned macOS Seatbelt telemetry.
+
+    Parameters
+    ----------
+    telemetry:
+        Complete bytes written by the parent-controlled unified-log collector.
 
     Returns
     -------
     SandboxDenialObservation
-        Denial flags derived only from explicit Seatbelt deny messages.
+        Parsed denials, with fail-closed poison for missing or malformed completion.
     """
+
+    try:
+        lines = telemetry.decode("utf-8", errors="strict").splitlines()
+    except UnicodeDecodeError:
+        return _telemetry_failure_observation("unparsable-encoding")
+    if not lines:
+        return _telemetry_failure_observation("empty")
+    completed = lines[-1] == _MACOS_AUDIT_COMPLETION_MARKER
+    records = lines[:-1] if completed else lines
 
     network: list[str] = []
     writes: list[str] = []
     checkpoint_paths: list[str] = []
-    for line in stderr.decode("utf-8", errors="replace").splitlines():
-        lowered = line.lower()
-        if "deny" not in lowered:
+    unparseable = False
+    for line in records:
+        message = _macos_denial_message(line)
+        if message is None:
+            unparseable = True
             continue
+        lowered = message.lower()
+        recognized = False
         if "network" in lowered:
-            network.append(line[-500:])
+            network.append(message[-500:])
+            recognized = True
         if "file-write" in lowered or "file write" in lowered:
-            writes.append(line[-500:])
+            writes.append(message[-500:])
+            recognized = True
         if "file-read-data" in lowered or "file read data" in lowered:
-            checkpoint_paths.append(line[-500:])
-    return SandboxDenialObservation(
+            checkpoint_paths.append(message[-500:])
+            recognized = True
+        if not recognized:
+            unparseable = True
+    observed = SandboxDenialObservation(
         network_attempted=bool(network),
         socket_targets=tuple(dict.fromkeys(network)),
         write_outside_scratch_attempted=bool(writes),
@@ -836,6 +890,156 @@ def _macos_denial_audit(stderr: bytes) -> SandboxDenialObservation:
         checkpoint_or_weight_read_attempted=bool(checkpoint_paths),
         checkpoint_paths=tuple(dict.fromkeys(checkpoint_paths)),
     )
+    failures: list[SandboxDenialObservation] = []
+    if not completed:
+        failures.append(_telemetry_failure_observation("truncated"))
+    if unparseable:
+        failures.append(_telemetry_failure_observation("unparsable-record"))
+    return _merge_denial_observations(observed, *failures)
+
+
+def _parse_macos_denial_audit(
+    audit_path: Path,
+    *,
+    expected_identity: Optional[tuple[int, int]] = None,
+) -> SandboxDenialObservation:
+    """Verify and parse one parent-owned macOS Seatbelt audit channel.
+
+    Parameters
+    ----------
+    audit_path:
+        Parent-controlled unified-log output path.
+    expected_identity:
+        Parent-recorded device/inode pair for replacement detection.
+
+    Returns
+    -------
+    SandboxDenialObservation
+        Parsed denial or fail-closed telemetry-integrity observation.
+    """
+
+    try:
+        status = audit_path.stat()
+        if not stat.S_ISREG(status.st_mode):
+            return _telemetry_failure_observation("not-regular")
+        if expected_identity is not None and (status.st_dev, status.st_ino) != expected_identity:
+            return _telemetry_failure_observation("replaced")
+        anchor = audit_path.with_name(f"{audit_path.name}.anchor")
+        anchor_status = anchor.stat()
+        if (anchor_status.st_dev, anchor_status.st_ino) != (status.st_dev, status.st_ino):
+            return _telemetry_failure_observation("replaced")
+        telemetry = audit_path.read_bytes()
+    except OSError:
+        return _telemetry_failure_observation("missing")
+    return _macos_denial_audit(telemetry)
+
+
+@dataclass
+class _MacOSAuditChannel:
+    """Parent-owned unified-log collector state for one sandboxed process tree."""
+
+    path: Path
+    expected_identity: tuple[int, int]
+    process: subprocess.Popen[Any]
+    handle: BinaryIO
+
+
+def _start_macos_denial_audit(
+    scratch_root: Path, write_roots: Sequence[Path]
+) -> _MacOSAuditChannel:
+    """Start the parent-controlled macOS Seatbelt denial collector.
+
+    Parameters
+    ----------
+    scratch_root:
+        Supervisor scratch root used to place a non-child-writable sibling channel.
+    write_roots:
+        Every root writable by the sandboxed child.
+
+    Returns
+    -------
+    _MacOSAuditChannel
+        Live parent-owned collector and immutable channel identity.
+
+    Raises
+    ------
+    SandboxUnavailableError
+        If the unified-log audit API cannot be started.
+    """
+
+    log_executable = shutil.which("log")
+    if log_executable is None:
+        raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
+    path, identity = _parent_owned_audit_path(
+        scratch_root,
+        write_roots,
+        filename="macos-seatbelt.ndjson",
+    )
+    handle = path.open("wb")
+    try:
+        process = subprocess.Popen(
+            (
+                log_executable,
+                "stream",
+                "--style",
+                "ndjson",
+                "--predicate",
+                'eventMessage CONTAINS[c] "deny"',
+            ),
+            stdin=subprocess.DEVNULL,
+            stdout=handle,
+            stderr=subprocess.DEVNULL,
+            shell=False,
+            start_new_session=True,
+            close_fds=True,
+        )
+        time.sleep(0.05)
+        if process.poll() is not None:
+            raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
+    except (OSError, SandboxUnavailableError):
+        handle.close()
+        raise
+    return _MacOSAuditChannel(path, identity, process, handle)
+
+
+def _finish_macos_denial_audit(channel: _MacOSAuditChannel) -> None:
+    """Stop a macOS collector and append the parent completion marker if trustworthy.
+
+    Parameters
+    ----------
+    channel:
+        Live parent-owned collector state.
+    """
+
+    completed = False
+    try:
+        channel.process.terminate()
+        return_code = channel.process.wait(timeout=5)
+        completed = return_code in {0, -signal.SIGTERM}
+    except (OSError, subprocess.TimeoutExpired):
+        _kill_process_group(channel.process)
+        channel.process.wait()
+    finally:
+        channel.handle.flush()
+        os.fsync(channel.handle.fileno())
+        channel.handle.close()
+    if not completed:
+        return
+    try:
+        status = channel.path.stat()
+        if (status.st_dev, status.st_ino) != channel.expected_identity:
+            return
+        with channel.path.open("ab") as handle:
+            if status.st_size > 0:
+                with channel.path.open("rb") as read_handle:
+                    read_handle.seek(-1, os.SEEK_END)
+                    if read_handle.read(1) != b"\n":
+                        handle.write(b"\n")
+            handle.write((_MACOS_AUDIT_COMPLETION_MARKER + "\n").encode("ascii"))
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError:
+        return
 
 
 def _merge_denial_observations(
@@ -1079,6 +1283,7 @@ def run_isolated_subprocess(
     if sandbox is None:
         raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
     profile_path: Optional[Path] = None
+    linux_read_mounts: tuple[Path, ...] = ()
     if sandbox.kind == "sandbox-exec":
         profile_path = scratch_root / "worker-sandbox.sb"
         profile_path.write_text(
@@ -1089,16 +1294,24 @@ def run_isolated_subprocess(
             ),
             encoding="utf-8",
         )
+    elif sandbox.kind == "bubblewrap":
+        linux_read_mounts = _linux_minimal_read_mounts(
+            argv,
+            working_directory,
+            allowed_read_paths,
+        )
     sandboxed_argv = wrap_with_os_sandbox(
         sandbox,
         argv,
         working_directory,
         write_roots,
         macos_profile_path=profile_path,
+        allowed_read_paths=allowed_read_paths,
     )
     denial_audit_path: Optional[Path] = None
     denial_audit_identity: Optional[tuple[int, int]] = None
-    if sandbox.kind in {"bubblewrap", "unshare"}:
+    macos_audit_channel: Optional[_MacOSAuditChannel] = None
+    if sandbox.kind == "bubblewrap":
         denial_audit_executable = shutil.which("strace")
         if denial_audit_executable is None:
             raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
@@ -1110,38 +1323,44 @@ def run_isolated_subprocess(
             denial_audit_executable,
             denial_audit_path,
         )
+    elif sandbox.kind == "sandbox-exec":
+        macos_audit_channel = _start_macos_denial_audit(scratch_root, write_roots)
     usage_before = resource.getrusage(resource.RUSAGE_CHILDREN)
     started = time.monotonic()
     timed_out = False
     rss_exceeded = False
     peak_rss = 0
-    with stdout_path.open("wb") as stdout_handle, stderr_path.open("wb") as stderr_handle:
-        process = subprocess.Popen(
-            list(sandboxed_argv),
-            cwd=working_directory,
-            env=safe_environment,
-            stdin=subprocess.DEVNULL,
-            stdout=stdout_handle,
-            stderr=stderr_handle,
-            shell=False,
-            start_new_session=True,
-            close_fds=True,
-            preexec_fn=partial(_child_limit, rss_limit_bytes),
-        )
-        while process.poll() is None:
-            elapsed = time.monotonic() - started
-            current_rss = _linux_rss(process.pid)
-            peak_rss = max(peak_rss, current_rss)
-            if current_rss and rss_limit_bytes > 0 and current_rss > rss_limit_bytes:
-                rss_exceeded = True
-                _kill_process_group(process)
-                break
-            if elapsed >= timeout_seconds:
-                timed_out = True
-                _kill_process_group(process)
-                break
-            time.sleep(0.01)
-        process.wait()
+    try:
+        with stdout_path.open("wb") as stdout_handle, stderr_path.open("wb") as stderr_handle:
+            process = subprocess.Popen(
+                list(sandboxed_argv),
+                cwd=working_directory,
+                env=safe_environment,
+                stdin=subprocess.DEVNULL,
+                stdout=stdout_handle,
+                stderr=stderr_handle,
+                shell=False,
+                start_new_session=True,
+                close_fds=True,
+                preexec_fn=partial(_child_limit, rss_limit_bytes),
+            )
+            while process.poll() is None:
+                elapsed = time.monotonic() - started
+                current_rss = _linux_rss(process.pid)
+                peak_rss = max(peak_rss, current_rss)
+                if current_rss and rss_limit_bytes > 0 and current_rss > rss_limit_bytes:
+                    rss_exceeded = True
+                    _kill_process_group(process)
+                    break
+                if elapsed >= timeout_seconds:
+                    timed_out = True
+                    _kill_process_group(process)
+                    break
+                time.sleep(0.01)
+            process.wait()
+    finally:
+        if macos_audit_channel is not None:
+            _finish_macos_denial_audit(macos_audit_channel)
     wall_seconds = time.monotonic() - started
     usage_after = resource.getrusage(resource.RUSAGE_CHILDREN)
     cpu_seconds = max(0.0, _rusage_seconds(usage_after) - _rusage_seconds(usage_before))
@@ -1151,17 +1370,19 @@ def run_isolated_subprocess(
     exit_code = return_code if return_code is not None and return_code >= 0 else None
     stdout = stdout_path.read_bytes()
     stderr = stderr_path.read_bytes()
-    denial = _macos_denial_audit(stderr)
-    if denial_audit_path is not None:
-        denial = _merge_denial_observations(
-            denial,
-            _parse_linux_denial_audit(
-                denial_audit_path,
-                working_directory,
-                write_roots,
-                expected_identity=denial_audit_identity,
-                allowed_read_paths=allowed_read_paths,
-            ),
+    denial = SandboxDenialObservation()
+    if macos_audit_channel is not None:
+        denial = _parse_macos_denial_audit(
+            macos_audit_channel.path,
+            expected_identity=macos_audit_channel.expected_identity,
+        )
+    elif denial_audit_path is not None:
+        denial = _parse_linux_denial_audit(
+            denial_audit_path,
+            working_directory,
+            write_roots,
+            expected_identity=denial_audit_identity,
+            allowed_read_paths=(*allowed_read_paths, *linux_read_mounts),
         )
     _poison_receipts_in_roots(additional_write_roots, denial)
     return SupervisorObservation(
