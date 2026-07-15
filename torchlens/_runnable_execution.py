@@ -299,6 +299,8 @@ def _execute_loaded_sparse_transaction(
         host_rng_unreproduced=host_rng_unreproduced,
         tensor_derived_scalar_stale=tensor_derived_scalar_stale,
         unbound_state_escape_stale=unbound_state_escape_stale,
+        container_reconstruction_lossy=container_reconstruction_lossy,
+        output_not_reproduced=output_not_reproduced,
     )
     if attestation_check is not None:
         contract_checks.append(attestation_check)
@@ -672,7 +674,7 @@ def _bind_runtime_inputs(
         try:
             root = _input_site_value(inputs, binding.model_site_position, positions)
             value = _value_at_path(root, binding.container_path)
-        except (KeyError, IndexError, TypeError) as exc:
+        except (KeyError, IndexError, TypeError, AttributeError) as exc:
             raise _input_error(
                 RunnableErrorCode.INPUT_TREE_MISMATCH,
                 slot,
@@ -2361,6 +2363,8 @@ def _numeric_attestation_check(
     host_rng_unreproduced: bool = False,
     tensor_derived_scalar_stale: bool = False,
     unbound_state_escape_stale: bool = False,
+    container_reconstruction_lossy: bool = False,
+    output_not_reproduced: bool = False,
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
     """Compare recomputed saved slots with the independent activation archive.
 
@@ -2407,6 +2411,19 @@ def _numeric_attestation_check(
         # An unbound state slot (read only through an untraced host path) was staged
         # with a value differing from capture, so the recorded taken path may not
         # apply; a byte-exact attestation would dishonestly bless a stale result.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    if output_not_reproduced:
+        # The captured forward returned a HOST-ESCAPED non-tensor scalar (or otherwise
+        # unrepresentable value): the sparse DAG emitted a dropped ``None`` that was
+        # never produced or compared, so ``_path_faithfulness`` ceils this run at
+        # UNVERIFIABLE. Attesting selected internal slots as ATTESTED while the output
+        # itself was never reproduced is internally inconsistent -- a false positive.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    if container_reconstruction_lossy:
+        # The output container reconstructs lossily (computed non-field state, a
+        # ``__slots__`` layout, or a data-descriptor field), so ``_path_faithfulness``
+        # ceils this run at UNVERIFIABLE. A byte-exact ATTESTED alongside an
+        # UNVERIFIABLE path would be an internally inconsistent false positive.
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
         # Incomplete witness coverage (e.g. an opaque non-tensor input leaf that
@@ -3206,8 +3223,43 @@ def _decode_torch_symbol(qualname: str) -> Any:
     )
 
 
+def _field_getattr(current: Any, component: Any) -> Any:
+    """Read one attribute-path component against a structurally-known field only.
+
+    Attacker-controlled path strings from an untrusted bundle reach this function
+    (``input_binding.container_path``, the recorded literal-witness ``fact["path"]``,
+    and the reconstructed output ``slot.output_path``). An unconstrained ``getattr``
+    would fire arbitrary victim-object descriptor getters and could walk dunder chains
+    (``__class__.__init__.__globals__`` ...), so the component must be a string that is
+    STRUCTURALLY PRESENT as a declared field on the current object's type -- a dataclass
+    field, a namedtuple ``_fields`` entry, or a ``torch.return_types`` structseq field.
+    Dunder / descriptor attributes (``__class__``, ``__dict__``, ...) are never declared
+    fields, so this check inherently excludes the escape chains; anything else raises
+    ``AttributeError`` and every caller fails closed.
+    """
+
+    if not isinstance(component, str):
+        raise AttributeError(f"Non-string attribute component {component!r}.")
+    allowed: set[str] = set()
+    if dataclasses.is_dataclass(current) and not isinstance(current, type):
+        allowed.update(field.name for field in dataclasses.fields(current))
+    allowed.update(_container_field_names(current))
+    if component not in allowed:
+        raise AttributeError(
+            f"Attribute component {component!r} is not a structurally-known field of "
+            f"{type(current).__name__}."
+        )
+    return getattr(current, component)
+
+
 def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
-    """Read one list/tuple/mapping/object path from a runtime value."""
+    """Read one list/tuple/mapping/object path from a runtime value.
+
+    Attribute traversal is constrained to structurally-known container fields via
+    :func:`_field_getattr`; string components are never fed to an unconstrained
+    ``getattr`` (untrusted-bundle path strings could otherwise walk descriptor / dunder
+    chains).
+    """
 
     current = value
     for component in path:
@@ -3216,7 +3268,7 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
         elif isinstance(component, int):
             current = current[component]
         else:
-            current = getattr(current, component)
+            current = _field_getattr(current, component)
     return current
 
 

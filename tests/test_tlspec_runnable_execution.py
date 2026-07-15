@@ -871,3 +871,54 @@ def _assert_outs_equal(trace: tl.Trace, expected: tuple[torch.Tensor | None, ...
             assert op.out is None
         else:
             assert torch.equal(op.out, value)
+
+
+# --------------------------------------------------------------------------- #
+# r27-C1: ``_value_at_path`` must never feed an attacker-controlled path string
+# to an unconstrained ``getattr``. Path components are reached from untrusted
+# bundle fields (``input_binding.container_path`` and the recorded literal-witness
+# ``fact["path"]``), so a component like ``"__class__"`` must be refused rather
+# than firing descriptor getters or walking a dunder escape chain.
+# --------------------------------------------------------------------------- #
+
+
+class _C1FieldPair(NamedTuple):
+    """Namedtuple container with one legitimate structural field."""
+
+    value: torch.Tensor
+    meta: int
+
+
+def test_c1_value_at_path_refuses_dunder_attribute_traversal() -> None:
+    """A dunder / non-field attribute component raises AttributeError, never resolves."""
+
+    from torchlens._runnable_execution import _field_getattr, _value_at_path
+
+    pair = _C1FieldPair(torch.zeros(2), 3)
+
+    # Legitimate structural field access still works (no over-trigger).
+    assert torch.equal(_value_at_path(pair, ("value",)), pair.value)
+    assert _value_at_path(pair, ("meta",)) == 3
+
+    # A dunder escape-chain component is refused BEFORE any getattr fires.
+    for attacker in ("__class__", "__init__", "__globals__", "__dict__", "__reduce__"):
+        with pytest.raises(AttributeError):
+            _value_at_path(pair, (attacker,))
+        with pytest.raises(AttributeError):
+            _field_getattr(pair, attacker)
+
+    # A non-field public attribute that genuinely exists on the object is still
+    # refused: only STRUCTURALLY-declared fields are traversable.
+    with pytest.raises(AttributeError):
+        _value_at_path(pair, ("count",))  # tuple.count method attribute
+
+
+def test_c1_value_at_path_mapping_and_index_paths_unaffected() -> None:
+    """Mapping-key and integer-index traversal still work (attr guard is scoped)."""
+
+    from torchlens._runnable_execution import _value_at_path
+
+    root = {"weird__key__": torch.ones(3), "nested": [torch.zeros(1), {"k": 5}]}
+    # Mapping keys use ``[]`` not getattr, so even a dunder-looking KEY is allowed.
+    assert torch.equal(_value_at_path(root, ("weird__key__",)), root["weird__key__"])
+    assert _value_at_path(root, ("nested", 1, "k")) == 5
