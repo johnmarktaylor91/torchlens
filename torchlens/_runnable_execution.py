@@ -279,7 +279,9 @@ def _execute_loaded_sparse_transaction(
     )
     _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
     nontensor_inputs_match = all(
-        check.passed for check in contract_checks if check.name.startswith("input_literal:")
+        check.passed
+        for check in contract_checks
+        if check.name.startswith("input_literal:") or check.name.startswith("input_nontensor_tree:")
     )
     tensor_derived_scalar_stale = _tensor_derived_scalar_stale(
         descriptor, slot_values, witness_source_snapshots
@@ -719,6 +721,7 @@ def _bind_runtime_inputs(
         )
     checks.extend(_input_tree_contract_checks(descriptor, inputs))
     checks.extend(_input_literal_contract_checks(descriptor, inputs, positions))
+    checks.extend(_input_nontensor_tree_contract_checks(descriptor, inputs, positions))
     return values, tuple(checks)
 
 
@@ -837,6 +840,101 @@ def _input_tree_contract_checks(
                 actual == expected,
                 RunnableErrorCode.INPUT_TREE_MISMATCH,
                 "Runtime input tensor-leaf paths disagree with the recorded input tree.",
+                details=(
+                    ("model_site_position", repr(position)),
+                    ("expected_paths", repr(sorted(expected, key=repr))),
+                    ("actual_paths", repr(sorted(actual, key=repr))),
+                ),
+            )
+        )
+    return tuple(checks)
+
+
+def _runtime_nontensor_leaf_paths(root: Any) -> set[tuple[str | int, ...]]:
+    """Enumerate runtime non-tensor input leaf paths, mirroring the capture walk.
+
+    Reproduces the capture-side ``_record_runnable_input_literal_leaves`` traversal so
+    the runtime non-tensor leaf-path SET aligns with the recorded fact set: tensor
+    leaves are skipped, namedtuples descend by field name, mappings descend under
+    grammar-encodable keys (a non-encodable key collapses its whole subtree to one
+    opaque leaf at the parent path, exactly as capture does), and lists/tuples descend
+    by index. Every other value is a scalar leaf recorded at its path.
+    """
+
+    from torchlens._io.runnable import _UnsupportedLiteralError, _encode_literal_key
+
+    paths: set[tuple[str | int, ...]] = set()
+
+    def _walk(value: Any, path: tuple[str | int, ...]) -> None:
+        """Descend one runtime boundary value, collecting every non-tensor leaf path."""
+
+        if isinstance(value, torch.Tensor):
+            return
+        if isinstance(value, tuple) and hasattr(value, "_fields"):
+            for name in value._fields:
+                _walk(getattr(value, name), (*path, str(name)))
+            return
+        if isinstance(value, Mapping):
+            for key, child in value.items():
+                try:
+                    _encode_literal_key(key)
+                except _UnsupportedLiteralError:
+                    paths.add(path)
+                    continue
+                _walk(child, (*path, key))
+            return
+        if isinstance(value, (list, tuple)):
+            for index, child in enumerate(value):
+                _walk(child, (*path, index))
+            return
+        paths.add(path)
+
+    _walk(root, ())
+    return paths
+
+
+def _input_nontensor_tree_contract_checks(
+    descriptor: SparseRunDescriptor,
+    inputs: Any,
+    positions: set[Any],
+) -> tuple[ContractCheck, ...]:
+    """Compare the runtime NON-tensor leaf-path tree with every recorded input site.
+
+    The per-leaf value check (:func:`_input_literal_contract_checks`) only visits
+    leaves RECORDED at capture, so it catches a CHANGED or MISSING non-tensor leaf but
+    is blind to an EXTRA runtime non-tensor leaf (an added dict key the model branches
+    on via ``'flag' in d`` / ``d.get('mode')``, or a longer list). An extra leaf can
+    steer unwitnessed Python control flow while replay still reports VERIFIED against a
+    fresh model on the given inputs. This mirrors the tensor-leaf set-equality
+    (:func:`_input_tree_contract_checks`) for non-tensor leaves: EVERY model-input site
+    is seeded with its recorded non-tensor leaf-path set (the empty set when capture had
+    no non-tensor leaf at that site), and any runtime non-tensor leaf path absent at
+    capture -- or a recorded one absent at runtime -- diverges the run.
+    """
+
+    expected_by_position: dict[Any, set[tuple[str | int, ...]]] = {
+        position: set() for position in positions
+    }
+    for _witness, fact in _model_input_literal_facts(descriptor):
+        raw_position = fact.get("position")
+        position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
+        path = tuple(fact.get("path", ()) or ())
+        expected_by_position.setdefault(position, set()).add(path)
+
+    checks: list[ContractCheck] = []
+    for position, expected in expected_by_position.items():
+        try:
+            root = _input_site_value(inputs, position, positions)
+            actual = _runtime_nontensor_leaf_paths(root)
+        except (KeyError, IndexError, TypeError, AttributeError):
+            actual = set()
+        checks.append(
+            _contract_check(
+                f"input_nontensor_tree:{position!r}",
+                actual == expected,
+                RunnableErrorCode.INPUT_TREE_MISMATCH,
+                "Runtime non-tensor input leaf paths disagree with the recorded input "
+                "tree; an added/removed non-tensor leaf can steer an unwitnessed path.",
                 details=(
                     ("model_site_position", repr(position)),
                     ("expected_paths", repr(sorted(expected, key=repr))),
