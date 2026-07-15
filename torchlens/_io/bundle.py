@@ -1401,6 +1401,10 @@ def _preflight_unified_trace_manifest(
     if not isinstance(schema_version, int) or isinstance(schema_version, bool):
         raise TorchLensIOError("Unified trace manifest schema_version must be an integer.")
     if schema_version == 1:
+        # Schema v1 is torch-only (see ``_manifest_for_unified_trace_load``), so a
+        # per-entry logical_backend that is not torch would force materialization
+        # to import a foreign codec runtime. Fail closed before the body index.
+        _preflight_torch_entry_logical_backends(manifest, backend_name="torch")
         _preflight_unified_trace_body_index(manifest, bundle_path=bundle_path)
         return
     if schema_version != 2:
@@ -1427,6 +1431,11 @@ def _preflight_unified_trace_manifest(
             or manifest.get("torch_version") == ""
         ):
             raise TorchLensIOError("Torch manifest schema v2 requires non-empty torch_version.")
+        # A torch bundle early-returns past ``_preflight_schema_v2_payload_codecs``,
+        # yet materialization still honors each entry's ``logical_backend``. Assert
+        # every entry stays torch so a torch-declared bundle cannot smuggle a
+        # non-torch codec import past preflight.
+        _preflight_torch_entry_logical_backends(manifest, backend_name=backend_name)
         _preflight_unified_trace_body_index(manifest, bundle_path=bundle_path)
         return
 
@@ -1537,6 +1546,60 @@ def _preflight_schema_v2_runtime(
             "Manifest TensorFlow runtime version "
             f"{saved_version!r} does not match installed tensorflow {current_version!r}."
         )
+
+
+def _preflight_torch_entry_logical_backends(
+    manifest: dict[str, Any],
+    *,
+    backend_name: str,
+) -> None:
+    """Fail closed for torch bundles that declare a non-torch entry backend.
+
+    Torch trace bundles (schema v1, and schema v2 with ``backend == "torch"``)
+    early-return past ``_preflight_schema_v2_payload_codecs``, but blob
+    materialization (``materialize_transport_tensor``) still keys off each
+    manifest entry's ``logical_backend``. A per-entry ``logical_backend`` that is
+    not ``backend_name`` would therefore force a non-torch payload codec import
+    (and, if the runtime is present, decode) during a DEFAULT ``tl.load`` on a
+    torch-declared bundle. Reject any such entry before the body index.
+
+    Parameters
+    ----------
+    manifest:
+        Raw unified torch trace manifest.
+    backend_name:
+        Declared torch backend name (``"torch"``).
+
+    Raises
+    ------
+    TorchLensIOError
+        If ``body_index`` or ``tensors`` is malformed, or if any entry declares
+        a ``logical_backend`` other than ``backend_name``.
+    """
+
+    for section_name in ("body_index", "tensors"):
+        entries = manifest.get(section_name, [])
+        if not isinstance(entries, list):
+            raise TorchLensIOError(f"Torch trace manifest {section_name} must be a list.")
+        for raw_entry in entries:
+            if not isinstance(raw_entry, dict):
+                raise TorchLensIOError(
+                    f"Torch trace manifest {section_name} entries must be objects."
+                )
+            logical_backend = raw_entry.get("logical_backend", backend_name)
+            if logical_backend is None:
+                continue
+            if not isinstance(logical_backend, str) or logical_backend == "":
+                raise TorchLensIOError(
+                    f"Torch trace manifest {section_name} entry logical_backend must be a "
+                    "non-empty string."
+                )
+            if logical_backend != backend_name:
+                raise TorchLensIOError(
+                    f"Torch trace manifest declares {section_name} entry "
+                    f"logical_backend={logical_backend!r}; a torch bundle may not select a "
+                    "non-torch payload codec."
+                )
 
 
 def _preflight_schema_v2_payload_codecs(
