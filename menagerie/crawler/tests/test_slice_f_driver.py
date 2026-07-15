@@ -1126,7 +1126,8 @@ def test_failed_forward_terminalizes_and_campaign_continues(tmp_path: Path) -> N
         snapshot,
         forward=OneModelForwardFailure(failed_id),
     ).run()
-    assert result.status == "terminal-partition-complete"
+    # An evidenced failed:forward outcome is terminal; it leaves no campaign work pending.
+    assert result.status == "complete"
     paths = _paths(tmp_path, snapshot)
     models = {record["stable_id"]: record for record in scan_jsonl(paths.ledgers.models)}
     assert models[failed_id]["status"]["code"] == "failed:forward"
@@ -1161,7 +1162,8 @@ def test_author_failure_terminalizes_one_model_and_later_models_continue(tmp_pat
         snapshot,
         author=OneModelAuthorFailure(failed_id),
     ).run()
-    assert result.status == "terminal-partition-complete"
+    # An evidenced failed:runner outcome is terminal; it leaves no campaign work pending.
+    assert result.status == "complete"
     models = {
         record["stable_id"]: record
         for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
@@ -1175,10 +1177,12 @@ def test_checker_contract_failure_terminalizes_batch(tmp_path: Path) -> None:
 
     snapshot = _snapshot(tmp_path)
     result = _driver(tmp_path, snapshot, checker=FailingMetadataChecker()).run()
+    # The requested human-review queue is active campaign work after terminalization.
     assert result.status == "terminal-partition-complete"
     models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
     assert {record["status"]["code"] for record in models} == {"failed:accuracy-gate"}
     assert {record["status"]["reason_code"] for record in models} == {"checker-contract-invalid"}
+    assert all(record["status"]["human_review"]["required"] for record in models)
 
 
 def test_environment_failure_terminalizes_intent(tmp_path: Path) -> None:
@@ -1190,7 +1194,8 @@ def test_environment_failure_terminalizes_intent(tmp_path: Path) -> None:
         snapshot,
         environments=FailingEnvironments(tmp_path / "fake-envs"),
     ).run()
-    assert result.status == "terminal-partition-complete"
+    # An evidenced environment failure is terminal; it leaves no campaign work pending.
+    assert result.status == "complete"
     models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
     assert {record["status"]["code"] for record in models} == {"failed:environment"}
     assert {record["status"]["reason_code"] for record in models} == {"probe-failed"}
@@ -1201,7 +1206,8 @@ def test_sandbox_unavailable_has_honest_terminal_and_null_environment(tmp_path: 
 
     snapshot = _snapshot(tmp_path)
     result = _driver(tmp_path, snapshot, forward=SandboxUnavailableForward()).run()
-    assert result.status == "terminal-partition-complete"
+    # An evidenced sandbox refusal is terminal; it leaves no campaign work pending.
+    assert result.status == "complete"
     paths = _paths(tmp_path, snapshot)
     models = scan_jsonl(paths.ledgers.models)
     assert {record["status"]["code"] for record in models} == {"failed:sandbox-unavailable"}
@@ -1218,7 +1224,8 @@ def test_skip_and_evidenced_deferral_use_driver_terminalization(tmp_path: Path) 
 
     snapshot = _snapshot(tmp_path, count=2)
     result = _driver(tmp_path, snapshot, author=TerminalOutcomeAuthor()).run()
-    assert result.status == "terminal-partition-complete"
+    # Ruled skips and evidenced deferrals are final outcomes, not pending campaign work.
+    assert result.status == "complete"
     paths = _paths(tmp_path, snapshot)
     models = scan_jsonl(paths.ledgers.models)
     assert {record["status"]["code"] for record in models} == {
@@ -1238,7 +1245,8 @@ def test_cached_terminal_artifacts_follow_same_terminal_branch_on_resume(tmp_pat
     snapshot = _snapshot(tmp_path, count=2)
     author = TerminalOutcomeAuthor()
     first = _driver(tmp_path, snapshot, author=author).run()
-    assert first.status == "terminal-partition-complete"
+    # Cached clean terminal outcomes remain complete because replay creates no pending work.
+    assert first.status == "complete"
     paths = _paths(tmp_path, snapshot)
     first_models = scan_jsonl(paths.ledgers.models)
     checker = FakeChecker()
@@ -1250,7 +1258,7 @@ def test_cached_terminal_artifacts_follow_same_terminal_branch_on_resume(tmp_pat
         checker=checker,
         forward=forward,
     ).run()
-    assert second.status == "terminal-partition-complete"
+    assert second.status == "complete"
     assert checker.metadata_calls == 0
     assert forward.calls == {}
     assert scan_jsonl(paths.ledgers.models) == first_models
@@ -1283,6 +1291,7 @@ def test_inaccurate_metadata_gate_repairs_are_bounded(tmp_path: Path) -> None:
         author=RepairingIdentityAuthor(),
         checker=checker,
     ).run()
+    # Exhausted repairs enter human review, so the terminal partition still has pending work.
     assert result.status == "terminal-partition-complete"
     assert checker.metadata_calls == 3
     paths = _paths(tmp_path, snapshot)
@@ -1312,10 +1321,12 @@ def test_fidelity_rejection_terminalizes_without_aborting(tmp_path: Path) -> Non
         author=FidelityAuthor(),
         checker=RejectingFidelityChecker(),
     ).run()
+    # Fidelity rejection requests human review, which remains active campaign work.
     assert result.status == "terminal-partition-complete"
     models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
     assert {record["status"]["code"] for record in models} == {"failed:fidelity"}
     assert {record["status"]["reason_code"] for record in models} == {"major-drift-cap-exhausted"}
+    assert all(record["status"]["human_review"]["required"] for record in models)
 
 
 def test_partial_multi_attempt_append_resumes_idempotently(tmp_path: Path) -> None:

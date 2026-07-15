@@ -388,6 +388,8 @@ def _record_completion_issues(records: Sequence[Mapping[str, Any]]) -> dict[str,
         status = record.get("status", {})
         status_code = str(status.get("code"))
         kind = status.get("kind")
+        if status.get("human_review", {}).get("required") is True:
+            issues["human_review_pending"].append(stable_id)
         completeness = record.get("completeness", {})
         required_true = (*base_required, *run_required) if kind == "runs" else base_required
         for field in required_true:
