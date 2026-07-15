@@ -561,6 +561,32 @@ Changed-input/random-state activation runs and sparse-only runs are `not_applica
 silently claims a numeric pass. Unsaved slots have no numeric claim. Sparse-only promises
 contract/witness honesty, not numerical reproduction.
 
+### Declared state model boundary
+
+The declared state model is exactly the capture-time `state_dict` (named parameters plus persistent
+buffers) together with the taken-path DAG. `verified` asserts faithful reproduction against oracle
+1: a *separate, fresh* live-model run from that state on the given inputs. It does not assert that a
+specific already-run model *instance* will reproduce the replay on a later call.
+
+A model whose `forward` is not a pure function of `(inputs, state_dict)` because it carries hidden
+mutable state in unregistered Python attributes — an arbitrary attribute, or a retained
+activation-derived handle such as a kept `numpy()`/`untyped_storage()` view or a retained detached
+tensor — that evolves *across* forwards is outside the declared state model. That hidden cross-forward
+state is not captured and cannot be, so replaying the captured taken path faithfully reproduces the
+captured forward (and matches a fresh instance on the given inputs) but is not expected to reproduce
+that same instance's subsequent, differently-branched forwards. Such a case stays `verified`; it is
+not a divergence, because the divergence exists only against a re-run of the same mutated instance,
+never against oracle 1.
+
+The in-scope counterpart is a host write that occurs *within* the captured forward and corrupts the
+captured computation: a host write through a zero-copy alias into a captured activation's storage, or
+into a registered parameter/buffer's storage, changes what the taken-path DAG consumed. These are
+witnessed — observable writes are caught by whole-storage byte comparison (including per-consumption
+sampling), and the only unobservable surface (a raw `data_ptr()` pointer) fails closed to
+`unverifiable`. Parameters and buffers are witnessed identically: a bytes-changed-but-version-static
+storage during the forward is an opaque host write-back (`unverifiable`), while a read-only exposure
+of either stays `verified`.
+
 ## 12. Optional-payload API spelling and docs lockstep
 
 `include_weights` and `include_activations` are confirmed on `tl.save`/`Trace.save` with

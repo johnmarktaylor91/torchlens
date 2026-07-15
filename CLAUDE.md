@@ -257,6 +257,18 @@ Trace refused by validation, export, faithful comparison, and path-assuming inte
 Incomplete witness coverage is `unverifiable`, never `verified`; numeric attestation is
 `not_applicable` for sparse-only or ineligible activation-payload runs.
 
+The declared state model is the capture-time `state_dict` (named parameters plus persistent buffers)
+and the taken-path DAG. `verified` is faithfulness against a *fresh* live-model run from that state on
+the given inputs (oracle 1) — NOT reproduction of a specific already-run instance's later, differently
+branched forwards. Hidden non-`state_dict` Python state mutated *across* forwards (an arbitrary
+attribute, or a retained activation-derived handle — a kept `numpy()`/`untyped_storage()` view or a
+detached tensor) is out of scope and stays `verified`; the "divergence" exists only against re-running
+the same mutated instance, never oracle 1. In scope and witnessed identically for activations,
+parameters, and buffers: a host write *within* the captured forward into captured storage — caught by
+whole-storage byte comparison + per-consumption sampling, with the raw `data_ptr()` surface fail-closed
+to `unverifiable`, and a read-only exposure staying `verified`. Full boundary in
+`docs/reference/runnable_tlspec_contract.md` section 11.
+
 The frozen runnable enums live in `torchlens.runnable`: `ReadinessStatus`, `RunProvider`,
 `StateSource`, `PathFaithfulness`, `DivergencePolicy`, `NumericAttestationStatus`, and
 `RunnableErrorCode`. Public code branches on these values or the structured report, not exception
