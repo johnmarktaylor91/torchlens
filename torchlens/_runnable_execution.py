@@ -28,7 +28,13 @@ from .errors import (
     RuntimeSignatureDriftError,
 )
 from .intervention.replay import _CallConeNode, _walk_call_cone
-from .ir.container import ContainerSpec, rebuild_container_from_spec
+from .ir.container import (
+    ContainerReconstructionError,
+    ContainerSpec,
+    rebuild_container_from_spec,
+    reconstruction_is_lossy_by_type,
+    resolve_container_type,
+)
 from .utils.rng import (
     aten_qualname_is_seeded_rng,
     restore_host_rng,
@@ -279,9 +285,9 @@ def _execute_loaded_sparse_transaction(
         descriptor, slot_values, witness_source_snapshots
     )
     unbound_state_escape_stale = _unbound_state_escape_stale(descriptor, slot_values)
-    container_reconstruction_lossy = _container_spec_reconstruction_lossy(
-        _output_container_spec(fork)
-    )
+    output_container_spec = _output_container_spec(fork)
+    container_reconstruction_lossy = _container_spec_reconstruction_lossy(output_container_spec)
+    output_not_reproduced = _output_not_reproduced(descriptor, output_container_spec)
     numeric_attestation, attestation_check = _numeric_attestation_check(
         descriptor,
         prepared_state,
@@ -305,6 +311,7 @@ def _execute_loaded_sparse_transaction(
         tensor_derived_scalar_stale=tensor_derived_scalar_stale,
         unbound_state_escape_stale=unbound_state_escape_stale,
         container_reconstruction_lossy=container_reconstruction_lossy,
+        output_not_reproduced=output_not_reproduced,
     )
     path_faithfulness, mismatch = mark_trace_path_status(
         fork,
@@ -1451,6 +1458,40 @@ def _output_container_spec(trace: Any) -> ContainerSpec | None:
     return None
 
 
+def _output_not_reproduced(
+    descriptor: SparseRunDescriptor, container_spec: ContainerSpec | None
+) -> bool:
+    """Return whether the captured model output was NOT reproduced by the sparse replay.
+
+    A model whose forward returns a HOST-ESCAPED non-tensor Python scalar (``float(x.sum())``,
+    ``x.item()``, ``int(...)``, ``bool(...)``) has NO output tensor slots AND no reconstructable
+    output container spec, so the sparse DAG cannot emit that value: ``_reconstruct_output``
+    returns a dropped ``None``. The escape-witness class applies to the OUTPUT too -- an output
+    the replay never produced or compared must never be blessed VERIFIED. Stage-6 downgrades
+    such a run to UNVERIFIABLE.
+
+    A normal tensor output has >= 1 ``OUTPUT`` tensor slot; a container output (even one whose
+    leaves are all literals) carries a ``ContainerSpec``; both are genuinely produced/compared
+    and stay eligible for VERIFIED. Only the "no output slot AND no container spec" shape -- the
+    host-escaped / dropped output -- is flagged here.
+
+    Parameters
+    ----------
+    descriptor:
+        Runnable descriptor whose tensor slots include the model-output slots.
+    container_spec:
+        The shared recorded output ``ContainerSpec`` (``None`` when none was recorded).
+
+    Returns
+    -------
+    bool
+        True when replay produced no output tensor and no reconstructable container.
+    """
+
+    has_output_slot = any(slot.role is TensorSlotRole.OUTPUT for slot in descriptor.tensor_slots)
+    return not has_output_slot and container_spec is None
+
+
 def _container_spec_reconstruction_lossy(spec: ContainerSpec | None) -> bool:
     """Return whether ``spec`` (or any nested child) reconstructs lossily.
 
@@ -1459,13 +1500,48 @@ def _container_spec_reconstruction_lossy(spec: ContainerSpec | None) -> bool:
     flagged ``lossy_reconstruction`` at capture: the non-invoking rebuild cannot restore
     that state and must NOT be blessed VERIFIED. Any lossy node anywhere in the output
     container tree downgrades the whole run to UNVERIFIABLE.
+
+    The persisted ``lossy_reconstruction`` flag is attacker-controlled in an untrusted bundle,
+    so we NEVER trust a ``False`` alone: for every dataclass / ``hf_model_output`` node we ALSO
+    recompute lossiness INDEPENDENTLY from the RESOLVED type at load time (``__slots__`` /
+    data-descriptor field / dropped non-field state), so a forged ``lossy_reconstruction=False``
+    cannot force a false VERIFIED. The persisted flag stays as a supplementary signal (kept for
+    the purely instance-level custom-``ModelOutput`` case that is not type-observable at load),
+    but it can only ADD lossiness, never suppress the independent recompute.
     """
 
     if spec is None:
         return False
-    if getattr(spec, "lossy_reconstruction", False):
+    if _spec_node_reconstruction_lossy(spec):
         return True
     return any(_container_spec_reconstruction_lossy(child) for _, child in spec.child_specs)
+
+
+def _spec_node_reconstruction_lossy(spec: ContainerSpec) -> bool:
+    """Return whether one dataclass / ``hf_model_output`` node reconstructs lossily.
+
+    Combines the persisted (supplementary) flag with an INDEPENDENT load-time recompute from
+    the resolved type. A tampered spec naming a type that fails default-deny admissibility, or
+    one whose type is not loaded (reconstruction then falls back to a plain namespace / mapping
+    that is NOT the captured container type), is treated as lossy -- never a false VERIFIED.
+    """
+
+    if getattr(spec, "lossy_reconstruction", False):
+        return True
+    if spec.kind not in {"dataclass", "hf_model_output"}:
+        return False
+    captured_names = spec.fields if spec.kind == "dataclass" else spec.keys
+    try:
+        container_type = resolve_container_type(spec)
+    except ContainerReconstructionError:
+        # A tampered / non-admissible type is refused at reconstruction; for the honesty
+        # gate treat it as lossy so it can never be blessed VERIFIED.
+        return True
+    if container_type is None:
+        # The captured type is not loaded, so reconstruction returns a plain namespace / mapping
+        # rather than the recorded container type: a lossy substitution, never a false VERIFIED.
+        return True
+    return reconstruction_is_lossy_by_type(container_type, captured_names, spec.kind)
 
 
 def _reconstruct_live_output(trace: Any) -> tuple[Any, bool]:
@@ -2205,6 +2281,7 @@ def _path_faithfulness(
     tensor_derived_scalar_stale: bool = False,
     unbound_state_escape_stale: bool = False,
     container_reconstruction_lossy: bool = False,
+    output_not_reproduced: bool = False,
 ) -> tuple[PathFaithfulness, RunnableDiagnostic | None]:
     """Classify exact three-state path faithfulness after all honesty checks."""
 
@@ -2212,6 +2289,12 @@ def _path_faithfulness(
     if failed is not None:
         return PathFaithfulness.DIVERGED, failed.diagnostic
     if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
+        return PathFaithfulness.UNVERIFIABLE, None
+    if output_not_reproduced:
+        # The captured forward returned a HOST-ESCAPED non-tensor scalar (or otherwise
+        # unrepresentable value): no output tensor slot and no reconstructable output container,
+        # so the sparse DAG emitted a dropped ``None`` that was never produced or compared. A
+        # dropped output can never be VERIFIED; the honest ceiling is UNVERIFIABLE.
         return PathFaithfulness.UNVERIFIABLE, None
     if container_reconstruction_lossy:
         # The output is a dataclass / ModelOutput whose live instance carried computed

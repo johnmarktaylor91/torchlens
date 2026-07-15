@@ -355,3 +355,78 @@ def test_f6_exotic_output_dict_key_typed_reject_not_raw_valueerror(
     result = tl.load(path).run(inputs=x)
     assert result.report.path_faithfulness is not PathFaithfulness.DIVERGED
     assert key in result.output
+
+
+# --------------------------------------------------------------------------- #
+# r26-C1: a host-escaped non-tensor scalar OUTPUT the sparse DAG cannot reproduce
+# must be UNVERIFIABLE, never a false VERIFIED with a dropped ``None`` output.
+# --------------------------------------------------------------------------- #
+
+
+class _IntScalarOutput(nn.Module):
+    """Return an ``int(...)`` host-escaped scalar (no output tensor slot)."""
+
+    def forward(self, x: torch.Tensor) -> Any:
+        return int(x.argmax().item())
+
+
+class _FloatScalarOutput(nn.Module):
+    """Return a ``float(...)`` host-escaped scalar derived from a param op."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> Any:
+        return float(self.lin(x).sum().detach())
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    ("model_factory", "x"),
+    [
+        (_IntScalarOutput, torch.tensor([0.1, 0.9, 0.3, 0.2])),
+        (_FloatScalarOutput, torch.randn(2, 4)),
+    ],
+)
+def test_r26_host_escaped_scalar_output_is_unverifiable(
+    model_factory: Any, x: torch.Tensor, tmp_path: Path
+) -> None:
+    """A model returning a host-escaped Python scalar has no reproducible output.
+
+    ``trace.output_layers == []`` (no output tensor slot) and no output ``ContainerSpec``, so
+    the sparse replay emits a dropped ``None`` that was never produced or compared. Stage-6 must
+    report UNVERIFIABLE, never a false VERIFIED on that None output.
+    """
+
+    model = model_factory()
+    trace = _capture(model, x)
+    assert trace.output_layers == []
+    path = tmp_path / "scalar_out.tlspec"
+    trace.save(path, level="runnable", include_activations=True)
+
+    result = tl.load(path).run(inputs=x)
+
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
+    assert result.report.poisoned
+    assert result.output is None
+
+
+@pytest.mark.smoke
+def test_r26_normal_tensor_output_still_verified(tmp_path: Path) -> None:
+    """A normal tensor-output model must still VERIFY (no C1 over-trigger)."""
+
+    class _TensorOut(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.lin(x)
+
+    x = torch.randn(2, 4)
+    result = _roundtrip(_TensorOut(), x, tmp_path / "tensor_out.tlspec", include_activations=True)
+
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert isinstance(result.output, torch.Tensor)

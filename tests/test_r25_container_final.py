@@ -27,17 +27,19 @@ from __future__ import annotations
 import dataclasses
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable_execution import _container_spec_reconstruction_lossy
 from torchlens.ir.container import (
     ContainerSpec,
     _container_type_is_admissible,
     reconstruction_is_lossy,
+    reconstruction_is_lossy_by_type,
     rebuild_container_from_spec,
 )
 from torchlens.options import CaptureOptions
@@ -443,3 +445,187 @@ class _Point(tuple):  # stand-in namedtuple-like with _fields
 
     def __new__(cls, x: Any, y: Any) -> "_Point":
         return super().__new__(cls, (x, y))
+
+
+# --------------------------------------------------------------------------- #
+# r26-B1 (HIGH, RCE): the namedtuple branch must NEVER invoke the resolved type's
+# ``__new__`` -- a ``tuple`` subclass with ``_fields`` whose ``__new__`` executes code
+# is a load/run construction gadget. Reconstruction goes through the inert
+# ``tuple.__new__`` and the weaponized ``__new__`` never fires.
+# --------------------------------------------------------------------------- #
+
+
+_NAMEDTUPLE_NEW_SENTINEL: list[Any] = []
+
+
+class _WeaponizedNamedTupleLike(tuple):
+    """A ``tuple`` subclass with ``_fields`` whose ``__new__`` runs code (RCE gadget).
+
+    Passes namedtuple admissibility (``issubclass(tuple)`` + ``_fields``). The r26 fix rebuilds
+    it via the inert ``tuple.__new__`` and MUST NEVER invoke this ``__new__``.
+    """
+
+    _fields = ("a", "b")
+
+    def __new__(cls, *args: Any) -> "_WeaponizedNamedTupleLike":  # pragma: no cover
+        _NAMEDTUPLE_NEW_SENTINEL.append("weaponized __new__ ran")
+        return tuple.__new__(cls, args)
+
+
+class _PairNamedTuple(NamedTuple):
+    """A genuine compiler-generated namedtuple output."""
+
+    a: int
+    b: int
+
+
+def test_r26_namedtuple_weaponized_new_is_never_invoked() -> None:
+    """A namedtuple-like type's code-executing ``__new__`` never fires on reconstruction."""
+
+    _NAMEDTUPLE_NEW_SENTINEL.clear()
+    spec = ContainerSpec(
+        kind="namedtuple",
+        length=2,
+        fields=("a", "b"),
+        type_module=_WeaponizedNamedTupleLike.__module__,
+        type_qualname=_WeaponizedNamedTupleLike.__qualname__,
+    )
+    # Admissible (tuple subclass + _fields) yet its __new__ must not run.
+    assert _container_type_is_admissible(_WeaponizedNamedTupleLike, spec)
+
+    rebuilt = rebuild_container_from_spec(spec, [1, 2])
+
+    assert _NAMEDTUPLE_NEW_SENTINEL == []  # RCE gadget never fired
+    assert tuple(rebuilt) == (1, 2)
+
+
+def test_r26_genuine_namedtuple_reconstructs_faithfully_via_tuple_new() -> None:
+    """A genuine namedtuple reconstructs to its exact type without invoking its ``__new__``."""
+
+    spec = ContainerSpec(
+        kind="namedtuple",
+        length=2,
+        fields=("a", "b"),
+        type_module=_PairNamedTuple.__module__,
+        type_qualname=_PairNamedTuple.__qualname__,
+    )
+    rebuilt = rebuild_container_from_spec(spec, [3, 4])
+
+    assert type(rebuilt) is _PairNamedTuple
+    assert rebuilt.a == 3 and rebuilt.b == 4
+
+
+def test_r26_structseq_output_still_reconstructs() -> None:
+    """A genuine torch structseq still reconstructs through its own inert C constructor."""
+
+    live = torch.max(torch.randn(3, 3), dim=0)
+    spec = ContainerSpec(
+        kind="namedtuple",
+        length=2,
+        fields=("values", "indices"),
+        type_module="torch.return_types",
+        type_qualname="max",
+    )
+    rebuilt = rebuild_container_from_spec(spec, [live.values, live.indices])
+
+    assert type(rebuilt) is type(live)
+    assert torch.equal(rebuilt.values, live.values)
+
+
+# --------------------------------------------------------------------------- #
+# r26-B2 (LOW-MED, honesty): ``lossy_reconstruction`` is attacker-controlled in a
+# forged bundle. Lossiness is RECOMPUTED independently from the resolved type at load,
+# so a forged ``lossy_reconstruction=False`` cannot force a false VERIFIED.
+# --------------------------------------------------------------------------- #
+
+
+@dataclasses.dataclass(slots=True)
+class _SlotsDataclassOut:
+    """A ``__slots__`` dataclass output (no instance ``__dict__`` -> lossy rebuild)."""
+
+    a: Any = None
+
+
+def test_r26_forged_lossy_flag_on_post_init_dataclass_is_recomputed_lossy() -> None:
+    """A forged ``lossy_reconstruction=False`` on a __post_init__ dataclass is recomputed lossy."""
+
+    # Independent type-only recompute defeats the forged flag.
+    assert reconstruction_is_lossy_by_type(_DerivedAttrDataclassOut, ("a",), "dataclass") is True
+
+    forged = ContainerSpec(
+        kind="dataclass",
+        length=1,
+        fields=("a",),
+        type_module=_DerivedAttrDataclassOut.__module__,
+        type_qualname=_DerivedAttrDataclassOut.__qualname__,
+        lossy_reconstruction=False,  # attacker-forged
+    )
+    assert _container_spec_reconstruction_lossy(forged) is True
+
+
+def test_r26_forged_lossy_flag_on_descriptor_field_is_recomputed_lossy() -> None:
+    """A forged flag on a data-descriptor-field dataclass is recomputed lossy at load."""
+
+    forged = ContainerSpec(
+        kind="dataclass",
+        length=1,
+        fields=("endpoint",),
+        type_module=_DescriptorFieldDataclass.__module__,
+        type_qualname=_DescriptorFieldDataclass.__qualname__,
+        lossy_reconstruction=False,
+    )
+    assert _container_spec_reconstruction_lossy(forged) is True
+
+
+def test_r26_forged_lossy_flag_on_slots_type_is_recomputed_lossy() -> None:
+    """A forged flag on a ``__slots__`` output type is recomputed lossy at load."""
+
+    forged = ContainerSpec(
+        kind="dataclass",
+        length=1,
+        fields=("a",),
+        type_module=_SlotsDataclassOut.__module__,
+        type_qualname=_SlotsDataclassOut.__qualname__,
+        lossy_reconstruction=False,
+    )
+    # A __slots__ type has no instance __dict__ -> lossy regardless of the forged flag.
+    assert reconstruction_is_lossy_by_type(_SlotsDataclassOut, ("a",), "dataclass") is True
+    assert _container_spec_reconstruction_lossy(forged) is True
+
+
+def test_r26_pure_outputs_stay_verified_under_recompute() -> None:
+    """Pure dataclass / ModelOutput outputs stay non-lossy under the load-time recompute."""
+
+    pure_dc = ContainerSpec(
+        kind="dataclass",
+        length=2,
+        fields=("logits", "tag"),
+        type_module=_PureDataclassOut.__module__,
+        type_qualname=_PureDataclassOut.__qualname__,
+        lossy_reconstruction=False,
+    )
+    assert _container_spec_reconstruction_lossy(pure_dc) is False
+
+    pure_mo = ContainerSpec(
+        kind="hf_model_output",
+        length=1,
+        keys=("logits",),
+        type_module=_PureModelOutput.__module__,
+        type_qualname=_PureModelOutput.__qualname__,
+        lossy_reconstruction=False,
+    )
+    assert _container_spec_reconstruction_lossy(pure_mo) is False
+
+
+def test_r26_forged_lossy_flag_on_unloaded_type_is_lossy() -> None:
+    """A dataclass spec whose type is not loaded rebuilds to a plain namespace -> lossy."""
+
+    forged = ContainerSpec(
+        kind="dataclass",
+        length=1,
+        fields=("a",),
+        type_module="tests._r26_never_imported_module",
+        type_qualname="Missing",
+        lossy_reconstruction=False,
+    )
+    assert _container_spec_reconstruction_lossy(forged) is True
