@@ -235,8 +235,10 @@ def test_proposal_refuses_bogus_pretrained_disable_field(tmp_path: Path) -> None
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux syscall-broker regression")
-def test_native_undeclared_weight_read_is_parent_poisoned(tmp_path: Path) -> None:
-    """A caught libc read bypassing Python hooks is still a failed policy receipt."""
+def test_native_undeclared_weight_probe_is_denied_without_false_read_poison(
+    tmp_path: Path,
+) -> None:
+    """A namespace-denied libc probe returns no bytes and remains separate telemetry."""
 
     if shutil.which("strace") is None:
         pytest.skip("strace is unavailable")
@@ -291,9 +293,9 @@ def test_native_undeclared_weight_read_is_parent_poisoned(tmp_path: Path) -> Non
         pytest.skip("working Linux OS sandbox is unavailable")
     assert result.worker_receipt is not None
     policy = result.worker_receipt["policy_observation"]
-    assert policy["checkpoint_or_weight_read_attempted"] is True
-    assert str(hidden) in policy["checkpoint_paths"]
-    assert result.worker_receipt["error"]["reason_code"] == "checkpoint-read"
+    assert policy["checkpoint_or_weight_read_attempted"] is False
+    assert str(hidden) in result.observation.failed_read_probe_paths
+    assert result.worker_receipt["error"] is None
 
 
 @pytest.mark.parametrize("failure", ["missing", "truncated", "replaced"])

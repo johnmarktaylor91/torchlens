@@ -69,6 +69,12 @@ _WRITE_SYSCALLS = frozenset(
 )
 _SYSCALL_PATTERN = re.compile(r"(?:^|\s)([a-z][a-z0-9_]*)\(")
 _QUOTED_PATH_PATTERN = re.compile(r'"((?:[^"\\]|\\.)*)"')
+_OPEN_RESULT_PATTERN = re.compile(r"\)\s+=\s+(-?\d+)(?:<[^>]*>)?(?:\s|$)")
+_RESUMED_TRACE_PATTERN = re.compile(
+    r"^(?P<leader>\s*(?:(?:\[pid\s+)?(?P<pid>\d+)\]?\s+)?)"
+    r"<\.\.\. (?P<syscall>[a-z][a-z0-9_]*) resumed>(?P<suffix>.*)$"
+)
+_TRACE_PID_PATTERN = re.compile(r"^\s*(?:\[pid\s+)?(?P<pid>\d+)\]?\s+")
 _SPECIAL_READ_ROOTS = (Path("/dev"), Path("/proc"), Path("/sys"))
 _SYSTEM_READ_FILES = frozenset(
     {
@@ -103,6 +109,8 @@ class SupervisorObservation:
         Resource enforcement outcomes.
     stdout/stderr fields:
         Hashes, sizes, bounded tails, and local paths.
+    failed_read_probe_paths:
+        Undeclared read-only opens that failed before returning a descriptor.
     """
 
     argv: tuple[str, ...]
@@ -122,6 +130,7 @@ class SupervisorObservation:
     stderr_tail: str
     stdout_path: str
     stderr_path: str
+    failed_read_probe_paths: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible parent observation.
@@ -150,6 +159,7 @@ class SupervisorObservation:
             "stderr_tail": self.stderr_tail,
             "stdout_path": self.stdout_path,
             "stderr_path": self.stderr_path,
+            "failed_read_probe_paths": list(self.failed_read_probe_paths),
         }
 
 
@@ -188,6 +198,9 @@ class SandboxDenialObservation:
         Sanitized denied write paths.
     checkpoint_or_weight_read_attempted, checkpoint_paths:
         Undeclared model-data reads observed at the kernel boundary.
+    failed_read_probe_paths:
+        Undeclared read-only opens that returned a negative file descriptor. These
+        retain diagnostic value but do not poison a receipt because no bytes were read.
     telemetry_failure:
         Fail-closed broker-integrity diagnostic, if telemetry was not trustworthy.
     """
@@ -198,6 +211,7 @@ class SandboxDenialObservation:
     write_paths: tuple[str, ...] = ()
     checkpoint_or_weight_read_attempted: bool = False
     checkpoint_paths: tuple[str, ...] = ()
+    failed_read_probe_paths: tuple[str, ...] = ()
     telemetry_failure: Optional[str] = None
 
     @property
@@ -697,6 +711,81 @@ def _read_path_is_allowed(
     return _runtime_code_path_allowed(candidate, runtime_code_roots)
 
 
+def _trace_process_id(line: str) -> str:
+    """Return the strace process identifier or a single-process sentinel.
+
+    Parameters
+    ----------
+    line:
+        One syscall telemetry line.
+
+    Returns
+    -------
+    str
+        Stable key used to pair unfinished and resumed syscall records.
+    """
+
+    match = _TRACE_PID_PATTERN.match(line)
+    return match.group("pid") if match is not None else "<single-process>"
+
+
+def _complete_trace_records(lines: Sequence[str]) -> Optional[tuple[str, ...]]:
+    """Join interleaved strace unfinished/resumed records without losing results.
+
+    Parameters
+    ----------
+    lines:
+        Integrity-checked raw strace lines.
+
+    Returns
+    -------
+    tuple[str, ...] | None
+        Complete records, or ``None`` when continuation telemetry is inconsistent.
+    """
+
+    pending: dict[tuple[str, str], str] = {}
+    completed: list[str] = []
+    for line in lines:
+        if "<unfinished ...>" in line:
+            syscall = _syscall_name(line)
+            if syscall is None:
+                return None
+            key = (_trace_process_id(line), syscall)
+            if key in pending:
+                return None
+            pending[key] = line.replace("<unfinished ...>", "", 1).rstrip()
+            continue
+        resumed = _RESUMED_TRACE_PATTERN.match(line)
+        if resumed is not None:
+            key = (_trace_process_id(line), resumed.group("syscall"))
+            prefix = pending.pop(key, None)
+            if prefix is None:
+                return None
+            completed.append(f"{prefix}{resumed.group('suffix')}")
+            continue
+        completed.append(line)
+    return None if pending else tuple(completed)
+
+
+def _read_only_open_result(line: str) -> Optional[int]:
+    """Return the file descriptor result from one complete read-only open.
+
+    Parameters
+    ----------
+    line:
+        Complete ``open``, ``openat``, or ``openat2`` trace record.
+
+    Returns
+    -------
+    int | None
+        Nonnegative descriptor for success, negative result for failure, or ``None``
+        when the supposedly complete result is unparsable.
+    """
+
+    matches = _OPEN_RESULT_PATTERN.findall(line)
+    return int(matches[-1]) if matches else None
+
+
 def _trace_line_is_well_formed(line: str) -> bool:
     """Return whether one nonempty strace line has a recognized complete form.
 
@@ -768,17 +857,21 @@ def _parse_linux_denial_audit(
         return _telemetry_failure_observation("unparsable-encoding")
     except OSError:
         return _telemetry_failure_observation("missing")
-    lines = content.splitlines()
-    if not lines:
+    raw_lines = content.splitlines()
+    if not raw_lines:
         return _telemetry_failure_observation("empty")
-    if not _TERMINAL_TRACE_PATTERN.search(lines[-1]):
+    if not _TERMINAL_TRACE_PATTERN.search(raw_lines[-1]):
         return _telemetry_failure_observation("truncated")
-    if any(not _trace_line_is_well_formed(line) for line in lines if line.strip()):
+    if any(not _trace_line_is_well_formed(line) for line in raw_lines if line.strip()):
         return _telemetry_failure_observation("unparsable-record")
+    completed_lines = _complete_trace_records(raw_lines)
+    if completed_lines is None:
+        return _telemetry_failure_observation("unparsable-continuation")
     socket_targets: list[str] = []
     write_paths: list[str] = []
     checkpoint_paths: list[str] = []
-    for line in lines:
+    failed_read_probe_paths: list[str] = []
+    for line in completed_lines:
         syscall = _syscall_name(line)
         if syscall in {"connect", "sendmsg", "sendto"} and (
             "AF_INET" in line or "AF_INET6" in line
@@ -791,15 +884,23 @@ def _parse_linux_denial_audit(
             paths = _decoded_trace_paths(line)
             if paths:
                 path_text = paths[0]
-                if not _read_path_is_allowed(
+                allowed = _read_path_is_allowed(
                     path_text,
                     cwd,
                     write_roots,
                     allowed_read_paths,
                     runtime_code_roots,
                     directory_only="O_DIRECTORY" in line,
-                ):
+                )
+                if allowed:
+                    continue
+                result = _read_only_open_result(line)
+                if result is None:
+                    return _telemetry_failure_observation("unparsable-open-result")
+                if result >= 0:
                     checkpoint_paths.append(path_text)
+                else:
+                    failed_read_probe_paths.append(path_text)
             continue
         if syscall not in _WRITE_SYSCALLS or not any(
             f" {errno} " in line for errno in _DENIED_ERRNOS
@@ -818,6 +919,7 @@ def _parse_linux_denial_audit(
     unique_targets = tuple(dict.fromkeys(socket_targets))
     unique_paths = tuple(dict.fromkeys(write_paths))
     unique_checkpoints = tuple(dict.fromkeys(checkpoint_paths))
+    unique_failed_probes = tuple(dict.fromkeys(failed_read_probe_paths))
     return SandboxDenialObservation(
         network_attempted=bool(unique_targets),
         socket_targets=unique_targets,
@@ -825,6 +927,7 @@ def _parse_linux_denial_audit(
         write_paths=unique_paths,
         checkpoint_or_weight_read_attempted=bool(unique_checkpoints),
         checkpoint_paths=unique_checkpoints,
+        failed_read_probe_paths=unique_failed_probes,
     )
 
 
@@ -1092,6 +1195,11 @@ def _merge_denial_observations(
     checkpoint_paths = tuple(
         dict.fromkeys(path for observation in observations for path in observation.checkpoint_paths)
     )
+    failed_read_probe_paths = tuple(
+        dict.fromkeys(
+            path for observation in observations for path in observation.failed_read_probe_paths
+        )
+    )
     telemetry_failures = tuple(
         dict.fromkeys(
             observation.telemetry_failure
@@ -1110,6 +1218,7 @@ def _merge_denial_observations(
             observation.checkpoint_or_weight_read_attempted for observation in observations
         ),
         checkpoint_paths=checkpoint_paths,
+        failed_read_probe_paths=failed_read_probe_paths,
         telemetry_failure=";".join(telemetry_failures) if telemetry_failures else None,
     )
 
@@ -1430,6 +1539,7 @@ def run_isolated_subprocess(
         stderr_tail=_tail(stderr),
         stdout_path=str(stdout_path),
         stderr_path=str(stderr_path),
+        failed_read_probe_paths=denial.failed_read_probe_paths,
     )
 
 

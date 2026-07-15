@@ -130,9 +130,9 @@ def test_linux_undeclared_native_read_is_denied_before_bytes_are_returned(
     assert result.worker_receipt["constructor_completed"] is True
     assert result.worker_receipt["per_mode"]["eval"]["forward_completed"] is True
     policy = result.worker_receipt["policy_observation"]
-    assert policy["checkpoint_or_weight_read_attempted"] is True
-    assert str(hidden_input) in policy["checkpoint_paths"]
-    assert result.worker_receipt["error"]["reason_code"] == "checkpoint-read"
+    assert policy["checkpoint_or_weight_read_attempted"] is False
+    assert str(hidden_input) in result.observation.failed_read_probe_paths
+    assert result.worker_receipt["error"] is None
 
 
 def _successful_receipt(path: Path) -> None:
