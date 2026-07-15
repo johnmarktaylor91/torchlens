@@ -132,75 +132,124 @@ from menagerie.crawler.worker_supervisor import (
 
 LOGGER = logging.getLogger(__name__)
 
-_RUNNER_COMMON_EXECUTION_CLOSURE = (
-    "__init__.py",
-    "constants.py",
-    "frameworks.py",
-    "identity.py",
-    "models.py",
-    "modes.py",
-    "policy.py",
-    "recipe.py",
-    "standard_inputs.py",
-    "worker.py",
-    "worker_supervisor.py",
-    "schemas/attempt-v2.schema.json",
-    "schemas/author-proposal-v2.schema.json",
-    "schemas/gate-v2.schema.json",
-    "schemas/model-v2.schema.json",
-)
-_MODALITY_EXECUTION_ASSETS = {
-    "audio": "assets/standard/audio.csv",
-    "computer-vision": "assets/standard/image.ppm",
-    "image": "assets/standard/image.ppm",
-    "language": "assets/standard/text.txt",
-    "nlp": "assets/standard/text.txt",
-    "recsys": "assets/standard/tabular.csv",
-    "speech": "assets/standard/audio.csv",
-    "tabular": "assets/standard/tabular.csv",
-    "text": "assets/standard/text.txt",
-    "video": "assets/standard/image.ppm",
-    "vision": "assets/standard/image.ppm",
+# Reviewed runtime roots. ``_runner_identity`` discovers their transitive local call
+# graph and hashes semantic AST nodes, not whole modules or operational schemas.
+_RUNNER_COMMON_EXECUTION_CLOSURE = {
+    "worker.py": ("main",),
+    "worker_supervisor.py": ("run_isolated_subprocess",),
 }
-# Backward-compatible inspection alias for the common (modality-independent) closure.
+_RUNNER_IDENTITY_CACHE: dict[str, str] = {}
+# Backward-compatible inspection alias for the reviewed runtime roots.
 _RUNNER_EXECUTION_CLOSURE = _RUNNER_COMMON_EXECUTION_CLOSURE
 _AWARD_CLOSURE_SYMBOLS = {
     "driver.py": (
         "CrawlerDriver._forward_and_reduce",
+        "SupervisedForwardLane.forward",
         "_source_symbol_bytes",
         "_award_closure_from_bytes",
         "_award_closure_identity",
+        "_runner_identity",
         "_execution_identity",
         "_current_run_is_fresh",
+        "_validate_artifact_identities",
+        "_worker_request",
+        "_supervise_environment_worker",
+        "_read_verified_worker_receipt",
         "_expected_adapter_sha256",
         "_expected_code_manifest_sha256",
         "_expected_input_asset_sha256",
         "_expected_input_asset_id",
         "_attempts_from_supervised",
+        "_supervised_failure",
         "_receipt_envelope_error",
         "_find_gate",
         "_gate_item_matches_proposal",
         "_fidelity_required",
+        "_matching_attempts",
         "_attempt_policy_satisfied",
         "_assemble_run_model",
+    ),
+    "family_templates.py": (
+        "validate_size_variant",
+        "_validate_representative",
+    ),
+    "gates.py": (
+        "MetadataRouteDecision",
+        "FidelityRouteDecision",
+        "route_metadata_gate",
+        "route_fidelity_gate",
+        "_validate_gate",
+        "_items",
+    ),
+    "identity.py": (
+        "canonical_json_bytes",
+        "hash_bytes",
+        "stable_hash",
+        "normalize_url",
+        "compute_source_identity",
+        "compute_evidence_identity",
+        "compute_recipe_revision",
+        "compute_fidelity_identity",
+        "compute_vet_identity",
+        "compute_execution_identity",
+    ),
+    "metadata.py": (
+        "_required_external_fields",
+        "AcceptedIdentities",
+        "canonical_meaningful_modes",
+        "authored_fact_leaves",
+        "_evidence_references",
+        "recompute_accepted_identities",
+        "validate_external_metadata",
+        "validate_authored_facts_for_write",
+        "input_signature_matches_contract",
+        "_validate_gate_header",
+        "_mapping",
     ),
     "reducer.py": (
         "expected_standard_asset",
         "output_signature_error",
+        "_select_current",
+        "_records_root",
+        "_revision_work_ids",
+        "_validate_persisted_requeue_lineage",
         "_model_facts",
         "_checker_prompt_hash",
+        "CanonicalReducer.__init__",
+        "CanonicalReducer.append_attempt",
+        "CanonicalReducer.append_gate",
         "CanonicalReducer.append_model",
         "CanonicalReducer._validate_status",
         "CanonicalReducer._validate_source",
+        "CanonicalReducer._gate_item",
         "CanonicalReducer._validate_gates",
         "CanonicalReducer._is_fidelity_repair_failure",
+        "CanonicalReducer._is_pre_fidelity_terminal",
         "CanonicalReducer._validate_family_template",
         "CanonicalReducer._validate_deferral",
         "CanonicalReducer._validate_execution",
     ),
+    "recordio.py": (
+        "_fsync_directory",
+        "_logical_payload",
+        "_identity_key",
+        "_verify_hash",
+        "scan_jsonl",
+        "recover_torn_tail",
+        "JsonlLedger.__init__",
+        "JsonlLedger.append",
+        "JsonlLedger._next_sequence",
+    ),
+    "schema.py": (
+        "load_schema",
+        "get_validator",
+        "validate_payload",
+    ),
+    "state.py": ("_select_current",),
 }
 _AWARD_CLOSURE_SCHEMAS = (
     "schemas/attempt-v2.schema.json",
+    "schemas/author-proposal-v2.schema.json",
     "schemas/gate-v2.schema.json",
     "schemas/model-v2.schema.json",
 )
@@ -3358,7 +3407,7 @@ def _award_closure_identity() -> str:
 
 
 def _runner_identity(modality: object = None) -> str:
-    """Hash common runtime code plus only the selected standard-input asset.
+    """Hash transitive runtime behavior plus the exact selected input asset.
 
     Parameters
     ----------
@@ -3373,22 +3422,127 @@ def _runner_identity(modality: object = None) -> str:
     """
 
     root = Path(__file__).parent
-    modalities = (
-        (modality,)
-        if isinstance(modality, str)
-        else tuple(value for value in modality if isinstance(value, str))
-        if isinstance(modality, (list, tuple))
-        else ()
-    )
-    selected_assets = {
-        _MODALITY_EXECUTION_ASSETS[value.strip().lower()]
-        for value in modalities
-        if value.strip().lower() in _MODALITY_EXECUTION_ASSETS
+    source_texts = {
+        path.name: path.read_text(encoding="utf-8") for path in sorted(root.glob("*.py"))
     }
-    closure = (*_RUNNER_COMMON_EXECUTION_CLOSURE, *sorted(selected_assets))
-    return stable_hash(
-        {relative: hash_bytes((root / relative).read_bytes()) for relative in closure}
+    selected_asset = expected_standard_asset(modality)
+    cache_key = stable_hash(
+        {
+            "platform": sys.platform,
+            "sources": {
+                relative: hash_bytes(source.encode("utf-8"))
+                for relative, source in source_texts.items()
+            },
+            "selected_asset": (
+                {
+                    "asset_id": selected_asset["asset_id"],
+                    "sha256": selected_asset["sha256"],
+                }
+                if selected_asset is not None
+                else None
+            ),
+        }
     )
+    cached = _RUNNER_IDENTITY_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    module_trees: dict[str, ast.Module] = {}
+    module_definitions: dict[str, dict[str, ast.stmt]] = {}
+    module_imports: dict[str, dict[str, tuple[str, str]]] = {}
+    pending = [
+        (relative, symbol)
+        for relative, symbols in _RUNNER_COMMON_EXECUTION_CLOSURE.items()
+        for symbol in symbols
+    ]
+    components: dict[str, str] = {}
+    while pending:
+        relative, symbol = pending.pop()
+        component = f"{relative}:{symbol}"
+        if component in components:
+            continue
+        path = root / relative
+        if relative not in module_trees:
+            source = source_texts.get(relative)
+            if source is None:
+                source = path.read_text(encoding="utf-8")
+            tree = ast.parse(source, filename=str(path))
+            definitions: dict[str, ast.stmt] = {}
+            imports: dict[str, tuple[str, str]] = {}
+            for node in tree.body:
+                if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                    definitions[node.name] = node
+                elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    targets = node.targets if isinstance(node, ast.Assign) else (node.target,)
+                    for target in targets:
+                        if isinstance(target, ast.Name):
+                            definitions[target.id] = node
+                elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                    prefix = "menagerie.crawler."
+                    if node.module.startswith(prefix):
+                        imported_relative = (
+                            f"{node.module.removeprefix(prefix).replace('.', '/')}.py"
+                        )
+                        if (root / imported_relative).is_file():
+                            for imported_name in node.names:
+                                imports[imported_name.asname or imported_name.name] = (
+                                    imported_relative,
+                                    imported_name.name,
+                                )
+            module_trees[relative] = tree
+            module_definitions[relative] = definitions
+            module_imports[relative] = imports
+        definition = module_definitions[relative].get(symbol)
+        if definition is None:
+            raise DriverIntegrationError(
+                f"runner-closure source symbol is missing: {relative}:{symbol}"
+            )
+        semantic = deepcopy(definition)
+        for descendant in ast.walk(semantic):
+            body = getattr(descendant, "body", None)
+            if (
+                isinstance(body, list)
+                and body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                del body[0]
+        components[component] = hash_bytes(
+            ast.dump(semantic, annotate_fields=True, include_attributes=False).encode("utf-8")
+        )
+        loaded_names = {
+            node.id
+            for node in ast.walk(definition)
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+        }
+        for name in loaded_names:
+            if name in module_definitions[relative]:
+                pending.append((relative, name))
+                continue
+            resolved_import = module_imports[relative].get(name)
+            if resolved_import is None:
+                continue
+            imported_relative, imported_symbol = resolved_import
+            lowered = imported_symbol.lower()
+            if sys.platform.startswith("linux") and (
+                "macos" in lowered or "sandbox_exec" in lowered
+            ):
+                continue
+            if sys.platform == "darwin" and ("linux" in lowered or "bubblewrap" in lowered):
+                continue
+            pending.append((imported_relative, imported_symbol))
+    if selected_asset is not None:
+        components["selected_standard_asset"] = stable_hash(
+            {
+                "asset_id": selected_asset["asset_id"],
+                "sha256": selected_asset["sha256"],
+            }
+        )
+    identity = stable_hash(components)
+    if len(_RUNNER_IDENTITY_CACHE) >= 16:
+        _RUNNER_IDENTITY_CACHE.clear()
+    _RUNNER_IDENTITY_CACHE[cache_key] = identity
+    return identity
 
 
 def _checker_prompt_hash() -> str:
@@ -3405,6 +3559,14 @@ def _validate_artifact_identities(artifact: AuthorArtifact, config: DriverConfig
     """Reject an author artifact whose claimed identities do not match accepted facts."""
 
     proposal = artifact.proposal
+    prompt_path = Path(__file__).with_name("prompts") / "claude_crawler_author_v2.txt"
+    try:
+        live_author_prompt = hash_bytes(prompt_path.read_bytes())
+    except OSError as exc:
+        raise DriverIntegrationError(f"author prompt bytes are unavailable: {exc}") from exc
+    author = proposal.get("author")
+    if not isinstance(author, Mapping) or author.get("prompt_sha256") != live_author_prompt:
+        raise DriverIntegrationError("author proposal does not bind the current frozen prompt")
     facts = proposal.get("proposed_facts")
     if not isinstance(facts, Mapping):
         raise DriverIntegrationError("author proposal has no proposed_facts object")
@@ -3707,6 +3869,11 @@ def _execution_identity(proposal: Mapping[str, Any], environment: EnvironmentBin
     implementation = facts["implementation"]
     external = facts.get("external_metadata")
     modality = external.get("modality") if isinstance(external, Mapping) else None
+    prompt_path = Path(__file__).with_name("prompts") / "claude_crawler_author_v2.txt"
+    try:
+        live_author_prompt = hash_bytes(prompt_path.read_bytes())
+    except OSError as exc:
+        raise DriverIntegrationError(f"author prompt bytes are unavailable: {exc}") from exc
     return compute_execution_identity(
         stable_id=str(proposal["stable_id"]),
         recipe_revision=str(proposal["recipe_revision"]),
@@ -3735,6 +3902,7 @@ def _execution_identity(proposal: Mapping[str, Any], environment: EnvironmentBin
                     "modes": facts.get("modes"),
                     "verified_hashes": proposal.get("verified_hashes"),
                     "author_prompt": proposal.get("author", {}).get("prompt_sha256"),
+                    "live_author_prompt": live_author_prompt,
                     "checker_prompt": _checker_prompt_hash(),
                     "vet_identity": proposal.get("vet_identity"),
                     "fidelity_identity": proposal.get("fidelity_identity"),
@@ -3756,6 +3924,13 @@ def _current_run_is_fresh(
     if model.get("status", {}).get("kind") != "runs":
         return False
     proposal = artifact.proposal
+    prompt_path = Path(__file__).with_name("prompts") / "claude_crawler_author_v2.txt"
+    try:
+        live_author_prompt = hash_bytes(prompt_path.read_bytes())
+    except OSError as exc:
+        raise DriverIntegrationError(f"author prompt bytes are unavailable: {exc}") from exc
+    if proposal.get("author", {}).get("prompt_sha256") != live_author_prompt:
+        return False
     facts = proposal.get("proposed_facts", {})
     for field in (
         "identity",
@@ -3795,8 +3970,7 @@ def _current_run_is_fresh(
         execution.get("current")
         and execution.get("env_generation") == environment.env_generation
         and execution.get("execution_identity") == _execution_identity(proposal, environment)
-        and model.get("provenance", {}).get("author_prompt_sha256")
-        == proposal.get("author", {}).get("prompt_sha256")
+        and model.get("provenance", {}).get("author_prompt_sha256") == live_author_prompt
     )
 
 

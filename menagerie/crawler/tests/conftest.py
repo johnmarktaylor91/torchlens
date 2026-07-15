@@ -51,6 +51,13 @@ def _checker_prompt_hash() -> str:
     return hash_bytes(path.read_bytes())
 
 
+def _author_prompt_hash() -> str:
+    """Return the exact frozen author prompt byte hash used by fixtures."""
+
+    path = Path(__file__).parents[1] / "prompts" / "claude_crawler_author_v2.txt"
+    return hash_bytes(path.read_bytes())
+
+
 def _model_facts(model: dict[str, Any]) -> dict[str, Any]:
     """Extract proposal fact roots from a synthetic canonical model."""
 
@@ -889,7 +896,7 @@ def make_author_proposal(stable_id: str = "m_example") -> dict[str, Any]:
             "provider": "anthropic",
             "model": "claude",
             "version": "test",
-            "prompt_sha256": HASH,
+            "prompt_sha256": _author_prompt_hash(),
         },
         "source_identity": HASH,
         "evidence_identity": HASH,

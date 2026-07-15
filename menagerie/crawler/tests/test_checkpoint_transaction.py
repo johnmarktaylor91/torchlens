@@ -34,6 +34,7 @@ from menagerie.crawler.driver import (
     _promote_accepted_code,
     _publish_licensed_paths,
     _rehydrate_canonical_artifact,
+    _validate_artifact_identities,
     default_driver_paths,
 )
 from menagerie.crawler.driver import (
@@ -296,6 +297,56 @@ def test_reconstruction_tampering_is_refused_by_staging_and_rehydration(
         checkpoint_module._derive_candidate_paths(tmp_path, crawler)
     with pytest.raises(DriverIntegrationError):
         _rehydrate_canonical_artifact(item, paths)
+
+
+def test_reconstructed_proposal_requires_current_author_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Canonical reconstruction cannot bypass live author-prompt staleness."""
+
+    snapshot = _snapshot(tmp_path)
+    paths = default_driver_paths(tmp_path, snapshot.root)
+    intake = snapshot.items[0]
+    item = WorkItem(
+        intake,
+        route_model(ModelRequirements(intake.stable_id, "pytorch")),
+    )
+    config = DriverConfig(review_checkpoint_at=None, progress_milestones=())
+    artifact = _normalize_artifact_modes(
+        CanonicalTypedAuthor().author(item, paths.work_root, config),
+        config,
+    )
+    _promote_and_publish_accepted_artifact(item, artifact, paths)
+    reconstructed = _rehydrate_canonical_artifact(item, paths)
+    assert reconstructed is not None
+    environment = EnvironmentBinding(
+        prefix=tmp_path / "env",
+        python_executable=Path(sys.executable),
+        family="core",
+        target="test",
+        env_generation="sha256:" + "a" * 64,
+        lock_sha256="sha256:" + "b" * 64,
+        resolved_export_sha256="sha256:" + "c" * 64,
+        packages_manifest_sha256="sha256:" + "d" * 64,
+        python_version="3.11",
+        compiler_identity="test",
+        sdk_identity="test",
+    )
+    prior_execution = _execution_identity(reconstructed.proposal, environment)
+    original_read_bytes = Path.read_bytes
+
+    def changed_author_prompt(path: Path) -> bytes:
+        """Return revised bytes only for the live frozen author prompt."""
+
+        value = original_read_bytes(path)
+        if path.name == "claude_crawler_author_v2.txt":
+            return value + b"\nRequire one more source-bound fact.\n"
+        return value
+
+    monkeypatch.setattr(Path, "read_bytes", changed_author_prompt)
+    with pytest.raises(DriverIntegrationError, match="current frozen prompt"):
+        _validate_artifact_identities(reconstructed, config)
+    assert _execution_identity(reconstructed.proposal, environment) != prior_execution
 
 
 def test_imported_helper_change_stales_cache_and_execution_identity(tmp_path: Path) -> None:
