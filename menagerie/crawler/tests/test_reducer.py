@@ -112,6 +112,20 @@ def test_clean_gate_and_mode_receipt_allow_run_award(tmp_path: Path) -> None:
         assert reducer.current_records["m_example"]["status"]["code"] == "runs"
 
 
+def test_cache_read_attempted_blocks_otherwise_valid_run(tmp_path: Path) -> None:
+    """Parent-observed cache-backed reads poison an otherwise complete receipt."""
+
+    paths = _paths(tmp_path)
+    stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
+    attempt = make_attempt()
+    attempt["policy_observation"]["cache_read_attempted"] = True
+    with CanonicalReducer(paths, stable_ids) as reducer:
+        reducer.append_gate(make_gate(stable_ids))
+        reducer.append_attempt(attempt)
+        with pytest.raises(ReductionError, match="clean successful worker receipt"):
+            reducer.append_model(make_model(accepted=True))
+
+
 def test_partition_duplicate_and_missing_are_rejected() -> None:
     """Current terminal rows must cover intake exactly once."""
 

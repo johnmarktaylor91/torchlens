@@ -189,8 +189,8 @@ def test_real_environment_interpreter_signals_sandbox_unavailable(
 
     assert str(captured.value) == FailureStage.SANDBOX_UNAVAILABLE.value
     stage, reason = _environment_failure(captured.value)
-    assert (stage, reason) == ("sandbox-unavailable", "sandbox-unavailable")
-    assert f"failed:{stage}" == "failed:sandbox-unavailable"
+    assert (stage, reason) == ("policy", "sandbox-unavailable-v1")
+    assert f"failed:{stage}" == "failed:policy"
     assert f"failed:{stage}" != "failed:runner"
 
 

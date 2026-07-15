@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 import sys
@@ -14,6 +15,7 @@ import pytest
 import menagerie.crawler.driver as driver_module
 import menagerie.crawler.reducer as reducer_module
 from menagerie.crawler.checker_dispatch import CheckerBackoffSignal
+from menagerie.crawler.cli import build_parser
 from menagerie.crawler.constants import (
     CheckerPauseReason,
     EnvironmentPhase,
@@ -39,6 +41,8 @@ from menagerie.crawler.driver import (
     WorkItem,
     _execution_identity,
     _environment_binding,
+    _parent_cache_read_attempted,
+    _RUNNER_EXECUTION_CLOSURE,
     _runner_identity,
     _receipt_envelope_error,
     _supervise_environment_worker,
@@ -196,6 +200,29 @@ class TerminalOutcomeAuthor(FakeAuthor):
             artifact.model_dir,
             terminal_status="skipped:no-description",
             terminal_detail="bounded search found no architecture description",
+        )
+
+
+class BothDeferredAuthor(FakeAuthor):
+    """Return one of each closed platform deferral for a two-model fixture."""
+
+    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+        """Return positive source evidence for the stable-ID-selected deferral."""
+
+        artifact = super().author(item, work_root, config)
+        status = "deferred:needs-cuda" if len(self.calls) == 1 else "deferred:needs-x86"
+        return AuthorArtifact(
+            artifact.proposal,
+            artifact.source_manifest,
+            artifact.model_dir,
+            terminal_status=status,
+            terminal_detail=f"source proves {status}",
+            defer_evidence={
+                "target_status": status,
+                "source_ids": ["source-1"],
+                "probe_attempt_ids": [],
+                "explanation": f"source proves {status}",
+            },
         )
 
 
@@ -824,6 +851,48 @@ def _test_environment(prefix: Path) -> EnvironmentBinding:
         compiler_identity="test-compiler",
         sdk_identity="test-sdk",
     )
+
+
+def test_runner_execution_manifest_covers_imports_schemas_and_assets() -> None:
+    """The maintained staleness closure fails closed on any local dependency omission."""
+
+    root = Path(driver_module.__file__).parent
+    discovered: set[str] = {"__init__.py"}
+    pending = ["worker.py", "worker_supervisor.py"]
+    while pending:
+        relative = pending.pop()
+        if relative in discovered:
+            continue
+        discovered.add(relative)
+        tree = ast.parse((root / relative).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom) or not node.module:
+                continue
+            prefix = "menagerie.crawler."
+            if not node.module.startswith(prefix):
+                continue
+            candidate = f"{node.module.removeprefix(prefix).replace('.', '/')}.py"
+            if (root / candidate).is_file():
+                pending.append(candidate)
+    maintained = set(_RUNNER_EXECUTION_CLOSURE)
+    assert discovered <= maintained
+    assert {path.relative_to(root).as_posix() for path in (root / "schemas").glob("*.json")} <= (
+        maintained
+    )
+    assert {
+        path.relative_to(root).as_posix()
+        for path in (root / "assets" / "standard").iterdir()
+        if path.is_file()
+    } <= maintained
+
+
+def test_parent_read_telemetry_sets_cache_attempt_for_closed_roots() -> None:
+    """A successful read below a forbidden cache root is recognized parent-side."""
+
+    assert _parent_cache_read_attempted(
+        {"checkpoint_paths": ["/home/test/.cache/huggingface/model.bin"]}
+    )
+    assert not _parent_cache_read_attempted({"checkpoint_paths": ["/usr/lib/python3.11/site.py"]})
 
 
 def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
@@ -1642,7 +1711,8 @@ def test_sandbox_unavailable_has_honest_terminal_and_null_environment(tmp_path: 
     assert result.status == "complete"
     paths = _paths(tmp_path, snapshot)
     models = scan_jsonl(paths.ledgers.models)
-    assert {record["status"]["code"] for record in models} == {"failed:sandbox-unavailable"}
+    assert {record["status"]["code"] for record in models} == {"failed:policy"}
+    assert {record["status"]["reason_code"] for record in models} == {"sandbox-unavailable-v1"}
     attempts = scan_jsonl(paths.ledgers.attempts)
     assert all(attempt["environment"] is None for attempt in attempts)
     assert all(attempt["identities"]["environment"] is None for attempt in attempts)
@@ -1694,6 +1764,73 @@ def test_cached_terminal_artifacts_follow_same_terminal_branch_on_resume(tmp_pat
     assert checker.metadata_calls == 0
     assert forward.calls == {}
     assert scan_jsonl(paths.ledgers.models) == first_models
+
+
+def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(tmp_path: Path) -> None:
+    """The Linux selector executes exactly both deferred rows and appends current revisions."""
+
+    snapshot = _snapshot(tmp_path, count=2)
+    first = _driver(tmp_path, snapshot, author=BothDeferredAuthor()).run()
+    assert first.status == "complete"
+    paths = _paths(tmp_path, snapshot)
+    deferred = scan_jsonl(paths.ledgers.models)
+    assert {record["status"]["code"] for record in deferred} == {
+        "deferred:needs-cuda",
+        "deferred:needs-x86",
+    }
+
+    linux_author = FakeAuthor()
+    linux_forward = FakeForward()
+    dependencies = DriverDependencies(
+        linux_author,
+        FakeChecker(),
+        linux_forward,
+        FakeEnvironments(tmp_path / "linux-envs"),
+        FakeNotifier(),
+        lambda: NOW,
+    )
+    linux = CrawlerDriver(
+        paths,
+        DriverConfig(
+            target="linux-x86_64-cuda",
+            only_status="deferred:*",
+            run_id="linux-handoff",
+            machine_id="linux-machine",
+            review_checkpoint_at=None,
+            progress_milestones=(),
+        ),
+        dependencies,
+        registry=load_environment_registry(target="linux-x86_64-cuda"),
+    )
+    result = linux.run()
+    assert result.status == "complete"
+    assert set(linux_author.calls) == {item.stable_id for item in snapshot.items}
+    assert set(linux_forward.calls) == {item.stable_id for item in snapshot.items}
+    revisions = scan_jsonl(paths.ledgers.models)
+    assert len(revisions) == 4
+    deferred_by_id = {record["stable_id"]: record for record in deferred}
+    current = CanonicalReducer(paths.ledgers, (item.stable_id for item in snapshot.items))
+    try:
+        assert {record["status"]["code"] for record in current.current_records.values()} == {"runs"}
+        assert all(
+            record["parent_revision"] == deferred_by_id[stable_id]["record_revision"]
+            for stable_id, record in current.current_records.items()
+        )
+    finally:
+        current.close()
+
+
+def test_linux_only_status_cli_and_config_are_closed() -> None:
+    """The handoff selector is parsed and rejects non-deferred or non-Linux use."""
+
+    args = build_parser().parse_args(
+        ["handoff-linux", "--intake", "/tmp/intake", "--only-status", "deferred:*"]
+    )
+    assert args.only_status == "deferred:*"
+    with pytest.raises(ValueError, match="closed deferred"):
+        DriverConfig(target="linux-x86_64-cuda", only_status="failed:*")
+    with pytest.raises(ValueError, match="Linux deferred handoff"):
+        DriverConfig(target="osx-arm64", only_status="deferred:*")
 
 
 def test_phase_filtered_run_is_not_global_complete(tmp_path: Path) -> None:

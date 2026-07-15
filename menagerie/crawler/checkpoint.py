@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import re
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -13,7 +16,7 @@ from menagerie.crawler.constants import (
     OperationalEventKind,
     OperationalEventStatus,
 )
-from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.intake import load_intake_snapshot
 from menagerie.crawler.licenses import (
     LicenseDecision,
@@ -114,6 +117,18 @@ class CheckpointSet:
     license_report: LicenseSweepReport
 
 
+@dataclass(frozen=True)
+class GeneratedMetadataDisposition:
+    """Hash-bound safe generated/package metadata provenance."""
+
+    staged_path: Path
+    content_sha256: str
+    byte_count: int
+    disposition: str
+    generator: str
+    provenance: str
+
+
 GitRunner = Callable[[Sequence[str], Path], GitCommandResult]
 ValidationCheck = Callable[[], None]
 
@@ -129,14 +144,21 @@ _ALLOWLIST_ROOTS = (
     PurePosixPath("menagerie/crawler/adapters"),
     PurePosixPath("menagerie/crawler/ports"),
     PurePosixPath("menagerie/crawler/patches"),
+    PurePosixPath("menagerie/crawler/reconstruction"),
+    PurePosixPath("menagerie/crawler/source_cas"),
 )
 _LICENSE_CANDIDATE_ROOTS = (
-    PurePosixPath("menagerie/crawler/records"),
-    PurePosixPath("menagerie/crawler/source_manifests"),
     PurePosixPath("menagerie/crawler/evidence"),
     PurePosixPath("menagerie/crawler/adapters"),
     PurePosixPath("menagerie/crawler/ports"),
     PurePosixPath("menagerie/crawler/patches"),
+    PurePosixPath("menagerie/crawler/source_cas"),
+)
+_GENERATED_METADATA_ROOTS = (
+    PurePosixPath("menagerie/crawler/records"),
+    PurePosixPath("menagerie/crawler/source_manifests"),
+    PurePosixPath("menagerie/crawler/reconstruction"),
+    PurePosixPath("menagerie/crawler/envs"),
 )
 _ALLOWLIST_SUFFIXES = frozenset(
     {
@@ -154,6 +176,7 @@ _ALLOWLIST_SUFFIXES = frozenset(
         ".py",
         ".rs",
         ".sha256",
+        ".source",
         ".toml",
         ".txt",
         ".yaml",
@@ -172,6 +195,14 @@ _SECRET_BYTE_MARKERS = (
     b"anthropic_api_key=",
 )
 _CANONICAL_MANIFEST_NAMES = ("public-manifest.jsonl", "private-manifest.jsonl")
+_GENERATED_METADATA_MANIFEST = "generated-metadata-manifest.jsonl"
+_SAFE_METADATA_DISPOSITIONS = frozenset({"safe-generated-metadata-v1", "safe-package-metadata-v1"})
+_PRIVATE_URL_MARKERS = (
+    b"git@",
+    b"ssh://",
+    b"https://private.",
+    b"http://private.",
+)
 _DERIVED_VIEW_PATHS = (
     Path("current-models/current.jsonl"),
     Path("release-models.jsonl"),
@@ -422,6 +453,7 @@ def create_checkpoint_set(
     mirrors: MirrorStore,
     mirror_manifests: Iterable[ArtifactManifest] = (),
     license_inventory: Iterable[LicensedArtifact] = (),
+    generated_metadata_inventory: Iterable[GeneratedMetadataDisposition] = (),
     expected_branch: str = CRAWLER_BRANCH,
     branch: Optional[str] = None,
     git_runner: Optional[GitRunner] = None,
@@ -497,7 +529,11 @@ def create_checkpoint_set(
         for manifest in mirror_manifests:
             mirrors.fetch(manifest)
         sweep_artifacts = _validate_candidate_license_coverage(
-            repo_root, candidates, requested_artifacts, inventory
+            repo_root,
+            candidates,
+            requested_artifacts,
+            inventory,
+            tuple(generated_metadata_inventory),
         )
         license_report = pre_public_merge_sweep(sweep_artifacts, mirrors)
     except PublicMergeRejected as exc:
@@ -599,6 +635,9 @@ def _create_canonical_checkpoint(
     canonical_records = (records_root or canonical_root / "records").resolve()
     _require_under_root(canonical_records, canonical_root / "records", "records root")
     snapshot = load_intake_snapshot(intake_root.resolve())
+    canonical_snapshot_root = canonical_records / "intake" / snapshot.snapshot_id
+    _copy_canonical_tree(snapshot.root, canonical_snapshot_root)
+    snapshot = load_intake_snapshot(canonical_snapshot_root)
     ledgers = default_ledger_paths(canonical_records)
     current = materialize_current(ledgers)
     consistency = checkpoint_consistency_report(
@@ -622,8 +661,14 @@ def _create_canonical_checkpoint(
     manifest_root = canonical_root / "mirrors"
     public_artifacts, license_inventory, mirror_manifests = _derive_mirror_facts(manifest_root)
     candidates = _derive_candidate_paths(root, canonical_root)
+    generated_inventory = _publish_generated_metadata_inventory(root, canonical_root, candidates)
+    candidates = _derive_candidate_paths(root, canonical_root)
     sweep_artifacts = _validate_candidate_license_coverage(
-        root, candidates, public_artifacts, license_inventory
+        root,
+        candidates,
+        public_artifacts,
+        license_inventory,
+        generated_inventory,
     )
     report = _validate_persisted_license_report(
         canonical_root / "license_reports", sweep_artifacts, mirror_store
@@ -642,6 +687,7 @@ def _create_canonical_checkpoint(
         mirrors=mirror_store,
         mirror_manifests=mirror_manifests,
         license_inventory=license_inventory,
+        generated_metadata_inventory=generated_inventory,
         expected_branch=expected_branch,
         branch=actual_branch,
         git_runner=runner,
@@ -795,6 +841,7 @@ def _validate_candidate_license_coverage(
     candidates: Sequence[Path],
     requested_artifacts: Sequence[LicensedArtifact],
     inventory: Sequence[LicensedArtifact],
+    generated_metadata_inventory: Sequence[GeneratedMetadataDisposition] = (),
 ) -> tuple[LicensedArtifact, ...]:
     """Bind every candidate code/excerpt file to one hash-bound decision.
 
@@ -859,6 +906,44 @@ def _validate_candidate_license_coverage(
             f"{[path.as_posix() for path in missing]}"
         )
 
+    generated_by_path = {
+        _normalize_path(disposition.staged_path): disposition
+        for disposition in generated_metadata_inventory
+    }
+    if len(generated_by_path) != len(generated_metadata_inventory):
+        raise RestrictedPublicArtifact(
+            "generated metadata inventory must contain exactly one disposition per path"
+        )
+    generated_candidates = tuple(
+        path
+        for path in candidates
+        if _is_generated_metadata(path) and (repo_root / path).stat().st_size > 0
+    )
+    missing_generated = tuple(
+        path
+        for path in generated_candidates
+        if path not in generated_by_path and (_is_package_metadata(path) or path not in by_path)
+    )
+    if missing_generated:
+        raise RestrictedPublicArtifact(
+            "checkpoint generated/package metadata lacks provenance disposition: "
+            f"{[path.as_posix() for path in missing_generated]}"
+        )
+    for path in generated_candidates:
+        if path not in generated_by_path and path in by_path and not _is_package_metadata(path):
+            continue
+        disposition = generated_by_path[path]
+        content = (repo_root / path).read_bytes()
+        if disposition.disposition not in _SAFE_METADATA_DISPOSITIONS:
+            raise RestrictedPublicArtifact(
+                f"unsafe generated metadata disposition for {path.as_posix()}"
+            )
+        if disposition.content_sha256 != hash_bytes(content):
+            raise RestrictedPublicArtifact(
+                f"generated metadata hash is stale for {path.as_posix()}"
+            )
+        _validate_generated_metadata_bytes(path, content)
+
     for path in license_candidates:
         artifact = by_path[path]
         candidate_digest = hash_bytes((repo_root / path).read_bytes())
@@ -917,6 +1002,43 @@ def _is_license_candidate(path: Path) -> bool:
     return any(pure == root or root in pure.parents for root in _LICENSE_CANDIDATE_ROOTS)
 
 
+def _is_generated_metadata(path: Path) -> bool:
+    """Return whether a path requires the explicit safe metadata disposition.
+
+    Parameters
+    ----------
+    path:
+        Normalized repository-relative checkpoint path.
+
+    Returns
+    -------
+    bool
+        True for generated facts and environment package metadata.
+    """
+
+    pure = PurePosixPath(path.as_posix())
+    return any(pure == root or root in pure.parents for root in _GENERATED_METADATA_ROOTS)
+
+
+def _is_package_metadata(path: Path) -> bool:
+    """Return whether a path is environment lock/export package metadata.
+
+    Parameters
+    ----------
+    path:
+        Normalized repository-relative candidate.
+
+    Returns
+    -------
+    bool
+        True only below the canonical environment root.
+    """
+
+    pure = PurePosixPath(path.as_posix())
+    root = PurePosixPath("menagerie/crawler/envs")
+    return pure == root or root in pure.parents
+
+
 def _validate_persisted_license_report(
     report_root: Path,
     public_artifacts: Sequence[LicensedArtifact],
@@ -957,6 +1079,139 @@ def _validate_persisted_license_report(
             "persisted license report does not match the freshly derived passing sweep"
         )
     return report
+
+
+def _copy_canonical_tree(source: Path, destination: Path) -> None:
+    """Durably copy immutable canonical facts without rewriting an existing tree.
+
+    Parameters
+    ----------
+    source, destination:
+        Verified source tree and deterministic repository destination.
+    """
+
+    source = source.resolve()
+    destination = destination.resolve()
+    if source == destination:
+        return
+    expected = {
+        path.relative_to(source): hash_bytes(path.read_bytes())
+        for path in source.rglob("*")
+        if path.is_file()
+    }
+    if destination.is_dir():
+        observed = {
+            path.relative_to(destination): hash_bytes(path.read_bytes())
+            for path in destination.rglob("*")
+            if path.is_file()
+        }
+        if observed != expected:
+            raise CheckpointValidationError("canonical immutable tree conflicts with source facts")
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    if temporary.exists():
+        shutil.rmtree(temporary)
+    shutil.copytree(source, temporary)
+    os.replace(temporary, destination)
+
+
+def _publish_generated_metadata_inventory(
+    repo_root: Path, canonical_root: Path, candidates: Sequence[Path]
+) -> tuple[GeneratedMetadataDisposition, ...]:
+    """Publish the complete hash-bound generated/package metadata inventory.
+
+    Parameters
+    ----------
+    repo_root, canonical_root, candidates:
+        Repository roots and the complete pre-publication candidate set.
+
+    Returns
+    -------
+    tuple[GeneratedMetadataDisposition, ...]
+        Canonical safe dispositions in path order.
+    """
+
+    dispositions: list[GeneratedMetadataDisposition] = []
+    for path in candidates:
+        if not _is_generated_metadata(path):
+            continue
+        content = (repo_root / path).read_bytes()
+        _validate_generated_metadata_bytes(path, content)
+        pure = PurePosixPath(path.as_posix())
+        package_metadata = PurePosixPath("menagerie/crawler/envs") in pure.parents
+        dispositions.append(
+            GeneratedMetadataDisposition(
+                staged_path=path,
+                content_sha256=hash_bytes(content),
+                byte_count=len(content),
+                disposition=(
+                    "safe-package-metadata-v1" if package_metadata else "safe-generated-metadata-v1"
+                ),
+                generator="menagerie.crawler.checkpoint.v1",
+                provenance=(
+                    "exact environment intent/lock/export package metadata"
+                    if package_metadata
+                    else "deterministic crawler canonical metadata"
+                ),
+            )
+        )
+    payloads = [
+        {
+            "staged_path": item.staged_path.as_posix(),
+            "content_sha256": item.content_sha256,
+            "byte_count": item.byte_count,
+            "disposition": item.disposition,
+            "generator": item.generator,
+            "provenance": item.provenance,
+        }
+        for item in dispositions
+    ]
+    manifest_path = canonical_root / "mirrors" / _GENERATED_METADATA_MANIFEST
+    data = b"".join(canonical_json_bytes(payload) + b"\n" for payload in payloads)
+    _atomic_write_bytes(manifest_path, data)
+    return tuple(dispositions)
+
+
+def _validate_generated_metadata_bytes(path: Path, content: bytes) -> None:
+    """Reject credentials and private fetch URLs in safe metadata candidates.
+
+    Parameters
+    ----------
+    path, content:
+        Candidate repository path and exact bytes.
+    """
+
+    lowered = content.lower()
+    if any(marker in lowered for marker in _SECRET_BYTE_MARKERS):
+        raise SecretBearingPath(f"generated metadata contains a credential marker: {path}")
+    if any(marker in lowered for marker in _PRIVATE_URL_MARKERS) or re.search(
+        rb"https?://[^/\s:@]+:[^/\s@]+@", lowered
+    ):
+        raise SecretBearingPath(f"generated metadata contains a private/credential URL: {path}")
+
+
+def _atomic_write_bytes(path: Path, data: bytes) -> None:
+    """Atomically replace one generated canonical file and fsync its directory.
+
+    Parameters
+    ----------
+    path, data:
+        Destination and exact bytes.
+    """
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with temporary.open("wb") as handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
+    descriptor = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def _derive_candidate_paths(repo_root: Path, canonical_root: Path) -> tuple[Path, ...]:

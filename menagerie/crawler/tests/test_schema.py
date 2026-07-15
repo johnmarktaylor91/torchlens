@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from menagerie.crawler.constants import TERMINAL_STATUS_CODES
+from menagerie.crawler.constants import FAILURE_REASON_CODES, TERMINAL_STATUS_CODES, FailureStage
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
 from menagerie.crawler.tests.conftest import (
     make_attempt,
@@ -42,6 +42,14 @@ def test_representative_records_validate(payload: dict[str, Any]) -> None:
     """
 
     validate_payload(payload)
+
+
+def test_sandbox_unavailability_uses_planned_policy_stage() -> None:
+    """Sandbox absence adds a versioned reason without expanding public failure stages."""
+
+    assert "sandbox-unavailable" not in {stage.value for stage in FailureStage}
+    assert "failed:sandbox-unavailable" not in TERMINAL_STATUS_CODES
+    assert "sandbox-unavailable-v1" in FAILURE_REASON_CODES["policy"]
 
 
 def test_unknown_fields_are_rejected(valid_model: dict[str, Any]) -> None:

@@ -747,6 +747,7 @@ class CanonicalReducer:
                     for key in (
                         "network_attempted",
                         "checkpoint_or_weight_read_attempted",
+                        "cache_read_attempted",
                         "write_outside_scratch_attempted",
                         "credentials_present",
                         "torchlens_import_attempted",

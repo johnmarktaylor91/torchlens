@@ -295,7 +295,6 @@
         "fidelity",
         "resource",
         "policy",
-        "sandbox-unavailable",
         "runner"
       ]
     },
@@ -366,7 +365,7 @@
         "protocol-violation",
         "ledger-corruption",
         "internal-error",
-        "sandbox-unavailable",
+        "sandbox-unavailable-v1",
         "effort-cap-exhausted"
       ]
     },

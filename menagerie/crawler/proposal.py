@@ -135,7 +135,20 @@ _NON_IMPLEMENTATION_CODE_NAMES = frozenset(
 _NON_IMPLEMENTATION_SOURCE_STEMS = frozenset({"metric", "metrics", "plot", "plots", "plotting"})
 _NON_IMPLEMENTATION_SOURCE_DIRS = frozenset({".github", "ci", "doc", "docs", "test", "tests"})
 _MODEL_ENTRY_METHODS = frozenset({"__call__", "apply", "call", "forward"})
-_MAX_TEXT_INVENTORY_BYTES = 8 * 1024**2
+_MAX_STREAM_INVENTORY_BYTES = 64 * 1024**2
+
+
+@dataclass(frozen=True)
+class _InventoryMember:
+    """One implementation-role archive member and its structural links."""
+
+    name: str
+    text: str
+    linked: bool
+    structured: bool
+    defined_symbols: frozenset[str]
+    referenced_symbols: frozenset[str]
+    imported_modules: frozenset[str]
 
 
 class ProposalValidationError(ValueError):
@@ -671,11 +684,26 @@ def _validate_code(
     if not isinstance(code_value, str) or not code_value.strip():
         raise ProposalValidationError(f"{rung.value} requires a staged code_path")
     candidate = Path(code_value)
-    resolved = (
-        candidate.resolve() if candidate.is_absolute() else (allowed_dir / candidate).resolve()
-    )
+    if candidate.is_absolute():
+        raise ProposalValidationError(
+            "implementation.code_path escapes repository-relative proposal identity"
+        )
+    resolved = (allowed_dir / candidate).resolve()
     if not resolved.is_relative_to(allowed_dir):
         raise ProposalValidationError("implementation.code_path escapes the model sandbox")
+    patches = implementation.get("patches", [])
+    if not isinstance(patches, list):
+        raise ProposalValidationError("implementation.patches must be a list")
+    for patch in patches:
+        if not isinstance(patch, Mapping) or not isinstance(patch.get("path"), str):
+            raise ProposalValidationError("implementation patch requires a relative path")
+        patch_path = Path(str(patch["path"]))
+        if patch_path.is_absolute():
+            raise ProposalValidationError(
+                "implementation patch paths must be repository-relative before proposal identity"
+            )
+        if not (allowed_dir / patch_path).resolve().is_relative_to(allowed_dir):
+            raise ProposalValidationError("implementation patch path escapes the model sandbox")
     try:
         code = resolved.read_bytes()
     except OSError as exc:
@@ -1204,50 +1232,227 @@ def _source_cas_contains_implementation(
     try:
         if zipfile.is_zipfile(path):
             with zipfile.ZipFile(path) as archive:
-                return any(
-                    not member.is_dir()
-                    and 0 < member.file_size <= _MAX_TEXT_INVENTORY_BYTES
-                    and _inventory_name_is_implementation(member.filename)
-                    and _code_bytes_are_relevant_implementation(
+                members = [
+                    _inventory_member(
                         member.filename,
-                        archive.read(member),
-                        source,
+                        _read_inventory_stream(archive.open(member), member.file_size),
                         linkage_terms,
                     )
                     for member in archive.infolist()
-                )
+                    if not member.is_dir()
+                    and member.file_size > 0
+                    and _inventory_name_is_implementation(member.filename)
+                ]
+                return _archive_inventory_has_implementation(members, linkage_terms)
         if tarfile.is_tarfile(path):
             with tarfile.open(path, mode="r:*") as archive:
+                tar_members: list[_InventoryMember] = []
                 for member in archive:
                     if (
                         not member.isfile()
-                        or not 0 < member.size <= _MAX_TEXT_INVENTORY_BYTES
+                        or member.size <= 0
                         or not _inventory_name_is_implementation(member.name)
                     ):
                         continue
                     extracted = archive.extractfile(member)
-                    if extracted is not None and _code_bytes_are_relevant_implementation(
-                        member.name,
-                        extracted.read(_MAX_TEXT_INVENTORY_BYTES + 1),
-                        source,
-                        linkage_terms,
-                    ):
-                        return True
-                return False
+                    if extracted is not None:
+                        tar_members.append(
+                            _inventory_member(
+                                member.name,
+                                _read_inventory_stream(extracted, member.size),
+                                linkage_terms,
+                            )
+                        )
+                return _archive_inventory_has_implementation(tar_members, linkage_terms)
         with path.open("rb") as handle:
-            content = handle.read(_MAX_TEXT_INVENTORY_BYTES + 1)
+            content = _read_inventory_stream(handle, path.stat().st_size)
     except (OSError, tarfile.TarError, zipfile.BadZipFile) as exc:
         raise ProposalValidationError(
             f"cannot inventory fetched source CAS object {path}: {exc}"
         ) from exc
-    if len(content) > _MAX_TEXT_INVENTORY_BYTES:
-        return False
     return _code_bytes_are_relevant_implementation(
         str(source.get("url") or path.name),
         content,
         source,
         linkage_terms,
     )
+
+
+def _read_inventory_stream(handle: Any, size: int) -> bytes:
+    """Read one bounded archive member incrementally for structural inspection.
+
+    Parameters
+    ----------
+    handle:
+        Binary member stream.
+    size:
+        Declared uncompressed byte count.
+
+    Returns
+    -------
+    bytes
+        Complete bounded member bytes, including members above the former 8 MiB cap.
+    """
+
+    if size > _MAX_STREAM_INVENTORY_BYTES:
+        raise ProposalValidationError(
+            f"source inventory member exceeds {_MAX_STREAM_INVENTORY_BYTES} byte safety bound"
+        )
+    chunks: list[bytes] = []
+    observed = 0
+    while True:
+        chunk = handle.read(1024**2)
+        if not chunk:
+            break
+        observed += len(chunk)
+        if observed > _MAX_STREAM_INVENTORY_BYTES:
+            raise ProposalValidationError("source inventory member exceeds safety bound")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _inventory_member(name: str, content: bytes, linkage_terms: frozenset[str]) -> _InventoryMember:
+    """Classify one implementation-role member and extract its explicit links.
+
+    Parameters
+    ----------
+    name, content, linkage_terms:
+        Archive locator, exact bytes, and model/family linkage terms.
+
+    Returns
+    -------
+    _InventoryMember
+        Whole-archive graph facts for one member.
+    """
+
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return _InventoryMember(name, "", False, False, frozenset(), frozenset(), frozenset())
+    context = re.sub(r"[^a-z0-9]+", "", f"{name} {text}".lower())
+    linked = any(term in context for term in linkage_terms)
+    defined: set[str] = set()
+    referenced: set[str] = set()
+    imported: set[str] = set()
+    structured = False
+    if Path(name).suffix.lower() in {".py", ".pyx", ""}:
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            tree = None
+        if tree is not None:
+            defined = {
+                node.name
+                for node in ast.walk(tree)
+                if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            referenced = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imported.update(alias.name for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imported.add(node.module)
+            structured = _python_has_model_structure(text, linkage_terms)
+    else:
+        definitions = re.findall(
+            r"\b(?:class|def|function|struct)\s+([A-Za-z_][A-Za-z0-9_]*)", text
+        )
+        defined.update(definitions)
+        referenced.update(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", text))
+        structured = bool(
+            definitions
+            and re.search(
+                r"\b(?:attention|conv(?:olution)?|embedding|forward|layer|lstm|module)\b",
+                text,
+                flags=re.IGNORECASE,
+            )
+        )
+    if Path(name).suffix.lower() == ".ipynb":
+        notebook_text = text.replace("\\n", "\n").replace('\\"', '"')
+        defined.update(
+            re.findall(r"\b(?:class|def|function)\s+([A-Za-z_][A-Za-z0-9_]*)", notebook_text)
+        )
+        referenced.update(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", notebook_text))
+        structured = bool(
+            re.search(r"\b(?:class|def)\s+[A-Za-z_]", notebook_text)
+            and re.search(r"\b(?:forward|call|apply)\s*\(", notebook_text)
+            and re.search(r"\breturn\b", notebook_text)
+        )
+    return _InventoryMember(
+        name,
+        text,
+        linked,
+        structured,
+        frozenset(defined),
+        frozenset(referenced),
+        frozenset(imported),
+    )
+
+
+def _archive_inventory_has_implementation(
+    members: Sequence[_InventoryMember], linkage_terms: frozenset[str]
+) -> bool:
+    """Follow bounded symbol/import links from identity files to model structure.
+
+    Parameters
+    ----------
+    members:
+        Every implementation-role file in the archive.
+    linkage_terms:
+        Specific normalized family/model terms.
+
+    Returns
+    -------
+    bool
+        True only when identity is structurally bound within the archive graph.
+    """
+
+    if not linkage_terms:
+        return False
+    for member in members:
+        linked_definitions = {
+            symbol
+            for symbol in member.defined_symbols
+            if any(
+                term in re.sub(r"[^a-z0-9]+", "", symbol.lower())
+                or re.sub(r"[^a-z0-9]+", "", symbol.lower()) in term
+                for term in linkage_terms
+            )
+        }
+        if member.linked and member.structured and linked_definitions:
+            return True
+
+    adjacency: dict[int, set[int]] = {index: set() for index in range(len(members))}
+    for left_index, left in enumerate(members):
+        for right_index, right in enumerate(members):
+            if left_index == right_index or not right.defined_symbols:
+                continue
+            module_name = Path(right.name).with_suffix("").as_posix().replace("/", ".")
+            symbol_link = bool(left.referenced_symbols & right.defined_symbols)
+            import_link = any(
+                imported == module_name
+                or imported.endswith(f".{module_name}")
+                or module_name.endswith(f".{imported}")
+                for imported in left.imported_modules
+            )
+            if symbol_link or import_link:
+                adjacency[left_index].add(right_index)
+
+    frontier = {index for index, member in enumerate(members) if member.linked}
+    visited = set(frontier)
+    for _depth in range(4):
+        frontier = {
+            neighbor
+            for index in frontier
+            for neighbor in adjacency[index]
+            if neighbor not in visited
+        }
+        visited.update(frontier)
+        if not frontier:
+            return False
+        if any(members[index].structured for index in frontier):
+            return True
+    return False
 
 
 def _cas_object_matches_digest(path: Path, digest: str) -> bool:
@@ -1455,7 +1660,7 @@ def _code_bytes_are_relevant_implementation(
         True only when the bytes are both model-like and linked to the claimed family.
     """
 
-    if not content or len(content) > _MAX_TEXT_INVENTORY_BYTES or not linkage_terms:
+    if not content or len(content) > _MAX_STREAM_INVENTORY_BYTES or not linkage_terms:
         return False
     try:
         text = content.decode("utf-8")

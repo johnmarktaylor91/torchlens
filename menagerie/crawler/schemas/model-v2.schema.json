@@ -2479,7 +2479,6 @@
         "fidelity",
         "resource",
         "policy",
-        "sandbox-unavailable",
         "runner"
       ]
     },
@@ -2504,7 +2503,6 @@
         "failed:fidelity",
         "failed:resource",
         "failed:policy",
-        "failed:sandbox-unavailable",
         "failed:runner"
       ]
     },

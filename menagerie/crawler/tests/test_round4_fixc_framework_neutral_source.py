@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -109,6 +110,97 @@ def test_irrelevant_code_archive_still_permits_r4(tmp_path: Path) -> None:
     )
 
     assert report.rung.value == "R4_REIMPLEMENT"
+
+
+def test_split_registry_to_model_symbol_refuses_r4(tmp_path: Path) -> None:
+    """Identity-bearing config linked to a separate executable model blocks R4."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _make_r4(proposal, manifest, tmp_path, _adapter_code())
+    _add_archive_source(
+        manifest,
+        tmp_path / "split-implementation.zip",
+        {
+            "configs/model.py": (
+                "from src.net import Net\n\nMODEL_REGISTRY = {'ExampleNet': Net}\n"
+            ),
+            "src/net.py": (
+                "class Net:\n"
+                "    def forward(self, value):\n"
+                "        hidden = self.encoder(value)\n"
+                "        return self.decoder(hidden)\n"
+            ),
+        },
+    )
+
+    with pytest.raises(ProposalValidationError, match="source code is available"):
+        validate_author_proposal(
+            proposal,
+            allowed_model_dir=tmp_path,
+            source_manifest=manifest,
+        )
+
+
+def test_unrelated_linked_generic_helper_does_not_block_r4(tmp_path: Path) -> None:
+    """A generic forward helper with only a prose identity mention is not an implementation."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _make_r4(proposal, manifest, tmp_path, _adapter_code())
+    _add_archive_source(
+        manifest,
+        tmp_path / "generic-helper.zip",
+        {
+            "utils/helper.py": (
+                "# Used by the ExampleNet documentation build.\n"
+                "class Helper:\n"
+                "    def forward(self, value):\n"
+                "        return normalize(value)\n"
+            )
+        },
+    )
+
+    report = validate_author_proposal(
+        proposal,
+        allowed_model_dir=tmp_path,
+        source_manifest=manifest,
+    )
+    assert report.rung.value == "R4_REIMPLEMENT"
+
+
+def test_large_notebook_is_streamed_and_structurally_inspected(tmp_path: Path) -> None:
+    """A model notebook above the former 8 MiB cap still blocks source-free R4."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _make_r4(proposal, manifest, tmp_path, _adapter_code())
+    notebook = {
+        "cells": [
+            {"cell_type": "markdown", "source": ["x" * (8 * 1024**2 + 1)]},
+            {
+                "cell_type": "code",
+                "source": [
+                    "class ExampleNet:\n",
+                    "    def forward(self, value):\n",
+                    "        hidden = self.encoder(value)\n",
+                    "        return self.decoder(hidden)\n",
+                ],
+            },
+        ],
+        "metadata": {},
+        "nbformat": 4,
+        "nbformat_minor": 5,
+    }
+    _add_archive_source(
+        manifest,
+        tmp_path / "large-notebook.zip",
+        {"notebooks/example_net.ipynb": json.dumps(notebook)},
+    )
+
+    with pytest.raises(ProposalValidationError, match="source code is available"):
+        validate_author_proposal(
+            proposal,
+            allowed_model_dir=tmp_path,
+            source_manifest=manifest,
+        )
 
 
 @pytest.mark.parametrize("missing_proof", ["negative-attempt", "bounded-report"])

@@ -118,9 +118,9 @@ def test_supervisor_fails_closed_when_no_os_sandbox_is_available(
     )
 
     assert result.worker_receipt is None
-    assert result.receipt_error == "failed:sandbox-unavailable"
+    assert result.receipt_error == "failed:policy"
     assert result.observation.exit_code is None
-    assert result.observation.stderr_tail == "failed:sandbox-unavailable\n"
+    assert result.observation.stderr_tail == "failed:policy\n"
 
 
 def test_python_tripwires_remain_as_secondary_audit(tmp_path: Path) -> None:

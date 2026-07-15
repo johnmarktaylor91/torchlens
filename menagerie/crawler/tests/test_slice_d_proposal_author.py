@@ -219,6 +219,42 @@ def test_out_of_path_code_and_write_are_rejected(tmp_path: Path) -> None:
         validate_author_proposal(proposal, allowed_model_dir=model_dir, source_manifest=manifest)
 
 
+def test_absolute_patch_path_is_rejected_before_proposal_identity(tmp_path: Path) -> None:
+    """Accepted patch locators must be repository-relative just like adapter paths."""
+
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    proposal, manifest = _ground_proposal(tmp_path)
+    _make_r4(
+        proposal,
+        manifest,
+        model_dir,
+        "def build_model() -> object:\n"
+        "    return object()\n\n"
+        "def make_dummy_call(seed: int, device: str) -> "
+        "tuple[tuple[()], dict[str, object]]:\n"
+        "    return (), {}\n",
+    )
+    patch = tmp_path / "outside.patch"
+    patch.write_text("diff --git a/a b/a\n", encoding="utf-8")
+    proposal["proposed_facts"]["implementation"]["patches"] = [
+        {
+            "path": str(patch.resolve()),
+            "sha256": hash_bytes(patch.read_bytes()),
+            "classification": "adapter-fix",
+            "semantic": False,
+            "rationale": "test path validation",
+            "evidence_ids": ["evidence-1"],
+        }
+    ]
+    with pytest.raises(ProposalValidationError, match="repository-relative"):
+        validate_author_proposal(
+            proposal,
+            allowed_model_dir=model_dir,
+            source_manifest=manifest,
+        )
+
+
 def test_r4_source_classification_does_not_trust_author_role(tmp_path: Path) -> None:
     """An implementation role without code bytes cannot fabricate a higher rung."""
 

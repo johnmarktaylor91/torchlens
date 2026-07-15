@@ -62,7 +62,7 @@ class FailureStage(StrEnum):
     FIDELITY = "fidelity"
     RESOURCE = "resource"
     POLICY = "policy"
-    SANDBOX_UNAVAILABLE = "sandbox-unavailable"
+    SANDBOX_UNAVAILABLE = "policy"
     RUNNER = "runner"
 
 
@@ -288,10 +288,10 @@ FAILURE_REASON_CODES: dict[str, frozenset[str]] = {
             "credentials-exposed",
             "torchlens-import",
             "opaque-code",
+            "sandbox-unavailable-v1",
             "effort-cap-exhausted",
         }
     ),
-    "sandbox-unavailable": frozenset({"sandbox-unavailable"}),
     "runner": frozenset(
         {
             "native-crash",

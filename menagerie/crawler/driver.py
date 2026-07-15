@@ -73,6 +73,16 @@ from menagerie.crawler.identity import (
     stable_hash,
 )
 from menagerie.crawler.intake import IntakeItem, IntakeSnapshot, load_intake_snapshot
+from menagerie.crawler.licenses import (
+    LicenseDecision,
+    LicenseEvidence,
+    LicenseEvidenceStatus,
+    LicensedArtifact,
+    RedistributionClass,
+    classify_redistribution,
+    pre_public_merge_sweep,
+    store_licensed_artifact,
+)
 from menagerie.crawler.metadata import (
     MetadataValidationError,
     canonical_meaningful_modes,
@@ -81,6 +91,7 @@ from menagerie.crawler.metadata import (
     validate_authored_facts_for_write,
 )
 from menagerie.crawler.models import JsonObject, LedgerPaths
+from menagerie.crawler.mirrors import ArtifactManifest, ArtifactOrigin, MirrorStore
 from menagerie.crawler.recordio import JsonlLedger, SingleWriterError, scan_jsonl
 from menagerie.crawler.reducer import CanonicalReducer, default_ledger_paths
 from menagerie.crawler.routing import (
@@ -103,6 +114,42 @@ from menagerie.crawler.worker_supervisor import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+_RUNNER_EXECUTION_CLOSURE = (
+    "__init__.py",
+    "constants.py",
+    "frameworks.py",
+    "identity.py",
+    "models.py",
+    "modes.py",
+    "policy.py",
+    "recipe.py",
+    "standard_inputs.py",
+    "worker.py",
+    "worker_supervisor.py",
+    "schemas/attempt-v2.schema.json",
+    "schemas/author-proposal-v2.schema.json",
+    "schemas/gate-v2.schema.json",
+    "schemas/model-v2.schema.json",
+    "schemas/operational-event-v1.schema.json",
+    "assets/standard/LICENSE.md",
+    "assets/standard/audio.csv",
+    "assets/standard/image.ppm",
+    "assets/standard/tabular.csv",
+    "assets/standard/text.txt",
+)
+_FORBIDDEN_CACHE_ROOT_NAMES = frozenset(
+    {
+        ".cache",
+        ".keras",
+        ".paddle",
+        ".torch",
+        "huggingface",
+        "huggingface-hub",
+        "torch-hub",
+        "transformers",
+    }
+)
 
 
 class DriverError(RuntimeError):
@@ -193,12 +240,22 @@ class DriverConfig:
     author_version: str = "current"
     checker_model: str = "codex"
     checker_version: str = "current"
+    only_status: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Validate checkpoint and milestone configuration."""
 
         if self.phase not in {None, "pytorch", "native-tail"}:
             raise ValueError("phase must be pytorch, native-tail, or omitted")
+        if self.only_status not in {
+            None,
+            "deferred:*",
+            "deferred:needs-cuda",
+            "deferred:needs-x86",
+        }:
+            raise ValueError("only_status must select one or both closed deferred statuses")
+        if self.only_status is not None and self.target != "linux-x86_64-cuda":
+            raise ValueError("only_status is reserved for the Linux deferred handoff")
         if self.review_checkpoint_at is not None and self.review_checkpoint_at < 0:
             raise ValueError("review_checkpoint_at cannot be negative")
         if any(value < 1 for value in self.progress_milestones):
@@ -236,6 +293,7 @@ class AuthorArtifact:
     terminal_detail: Optional[str] = None
     defer_evidence: Optional[JsonObject] = None
     campaign_root_work_id: Optional[str] = None
+    canonical_code_root: Optional[Path] = None
 
 
 @dataclass(frozen=True)
@@ -963,6 +1021,7 @@ class CrawlerDriver:
                             item.stable_id not in reducer.current_records
                             or reducer.current_records[item.stable_id]["status"]["kind"] == "runs"
                             or item.requeue_active
+                            or self.config.only_status is not None
                         )
                     )
                     if not phase_work:
@@ -980,6 +1039,7 @@ class CrawlerDriver:
                         if item.stable_id not in reducer.current_records
                         or reducer.current_records[item.stable_id]["status"]["kind"] == "runs"
                         or item.requeue_active
+                        or self.config.only_status is not None
                     )
                     if pause is not None:
                         mechanical_work = tuple(
@@ -1086,6 +1146,17 @@ class CrawlerDriver:
                     "native-tail cannot start while PyTorch workflow rows remain"
                 )
             work = tuple(item for item in work if item.route.phase.value == self.config.phase)
+        if self.config.only_status is not None:
+            selected = (
+                {"deferred:needs-cuda", "deferred:needs-x86"}
+                if self.config.only_status == "deferred:*"
+                else {self.config.only_status}
+            )
+            work = tuple(
+                item
+                for item in work
+                if current.get(item.stable_id, {}).get("status", {}).get("code") in selected
+            )
         return work
 
     def _consume_requeue_grants(
@@ -1248,6 +1319,15 @@ class CrawlerDriver:
 
         artifacts: dict[str, AuthorArtifact] = {}
         for item in work:
+            reconstructed = _rehydrate_canonical_artifact(item, self.paths)
+            if reconstructed is not None:
+                try:
+                    _validate_artifact_identities(reconstructed, self.config)
+                except DriverIntegrationError:
+                    reconstructed = None
+            if reconstructed is not None:
+                artifacts[item.stable_id] = reconstructed
+                continue
             cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
             if cache.is_file():
                 value = _read_json(cache)
@@ -1266,6 +1346,11 @@ class CrawlerDriver:
                         ),
                         campaign_root_work_id=str(
                             value.get("campaign_root_work_id") or value["proposal"]["work_id"]
+                        ),
+                        canonical_code_root=(
+                            Path(str(value["canonical_code_root"]))
+                            if value.get("canonical_code_root")
+                            else None
                         ),
                     ),
                     self.config,
@@ -1393,6 +1478,11 @@ class CrawlerDriver:
                 "terminal_detail": artifact.terminal_detail,
                 "defer_evidence": artifact.defer_evidence,
                 "campaign_root_work_id": artifact.campaign_root_work_id,
+                "canonical_code_root": (
+                    str(artifact.canonical_code_root)
+                    if artifact.canonical_code_root is not None
+                    else None
+                ),
             }
             cache_value["artifact_identity"] = _artifact_cache_identity(item, artifact, self.config)
             _write_json_atomic(cache, cache_value)
@@ -1560,7 +1650,11 @@ class CrawlerDriver:
                 raise DriverIntegrationError("metadata gate made no durable routing progress")
 
         for item in work:
-            if item.stable_id in reducer.current_records and not item.requeue_active:
+            if (
+                item.stable_id in reducer.current_records
+                and not item.requeue_active
+                and self.config.only_status is None
+            ):
                 continue
             artifact = artifacts[item.stable_id]
             rung = artifact.proposal["proposed_facts"]["source_resolution"]["rung"]
@@ -1568,7 +1662,11 @@ class CrawlerDriver:
                 artifacts[item.stable_id] = self._promote_artifact(item, artifact)
 
         for item in work:
-            if item.stable_id in reducer.current_records and not item.requeue_active:
+            if (
+                item.stable_id in reducer.current_records
+                and not item.requeue_active
+                and self.config.only_status is None
+            ):
                 continue
             artifact = artifacts[item.stable_id]
             skip_status = _r5_terminal_status(artifact)
@@ -1586,7 +1684,11 @@ class CrawlerDriver:
                 )
 
         for item in work:
-            if item.stable_id in reducer.current_records and not item.requeue_active:
+            if (
+                item.stable_id in reducer.current_records
+                and not item.requeue_active
+                and self.config.only_status is None
+            ):
                 continue
             artifact = artifacts[item.stable_id]
             if not _fidelity_required(artifact.proposal):
@@ -1652,9 +1754,12 @@ class CrawlerDriver:
     def _promote_artifact(self, item: WorkItem, artifact: AuthorArtifact) -> AuthorArtifact:
         """Promote accepted authored code and persist its canonical model root."""
 
-        promoted = _promote_accepted_code(artifact, self.paths)
-        if promoted.model_dir == artifact.model_dir:
-            return promoted
+        canonical_root = _canonical_crawler_root(self.paths)
+        promoted = (
+            _promote_and_publish_accepted_artifact(item, artifact, self.paths)
+            if canonical_root.name == "crawler" and canonical_root.parent.name == "menagerie"
+            else _promote_accepted_code(artifact, self.paths)
+        )
         cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
         value = _read_json(cache) if cache.is_file() else {}
         value.update(
@@ -1667,6 +1772,11 @@ class CrawlerDriver:
                 "terminal_detail": promoted.terminal_detail,
                 "defer_evidence": promoted.defer_evidence,
                 "campaign_root_work_id": promoted.campaign_root_work_id,
+                "canonical_code_root": (
+                    str(promoted.canonical_code_root)
+                    if promoted.canonical_code_root is not None
+                    else None
+                ),
             }
         )
         value["artifact_identity"] = _artifact_cache_identity(item, promoted, self.config)
@@ -1748,6 +1858,7 @@ class CrawlerDriver:
                     item
                     for item in by_intent[intent_name]
                     if item.stable_id not in reducer.current_records
+                    or self.config.only_status is not None
                 ]
                 if not pending:
                     raise
@@ -1830,7 +1941,7 @@ class CrawlerDriver:
                     )
                 except Exception as exc:  # noqa: BLE001 -- supervisor failure is model-local
                     stage, reason = (
-                        ("sandbox-unavailable", "sandbox-unavailable")
+                        ("policy", "sandbox-unavailable-v1")
                         if _is_sandbox_unavailable(exc)
                         else ("runner", "internal-error")
                     )
@@ -2720,13 +2831,13 @@ def _installed_package_manifest_bytes(prefix: Path, *, strict: bool) -> bytes:
 
 
 def _runner_identity() -> str:
-    """Hash exact worker and sandbox-supervisor implementation bytes."""
+    """Hash the maintained execution dependency closure and standard assets."""
 
     root = Path(__file__).parent
     return stable_hash(
         {
-            "worker": hash_bytes((root / "worker.py").read_bytes()),
-            "supervisor": hash_bytes((root / "worker_supervisor.py").read_bytes()),
+            relative: hash_bytes((root / relative).read_bytes())
+            for relative in _RUNNER_EXECUTION_CLOSURE
         }
     )
 
@@ -2748,6 +2859,23 @@ def _validate_artifact_identities(artifact: AuthorArtifact, config: DriverConfig
     facts = proposal.get("proposed_facts")
     if not isinstance(facts, Mapping):
         raise DriverIntegrationError("author proposal has no proposed_facts object")
+    implementation = facts.get("implementation")
+    if isinstance(implementation, Mapping):
+        code_value = implementation.get("code_path")
+        if isinstance(code_value, str) and Path(code_value).is_absolute():
+            raise DriverIntegrationError(
+                "absolute code path requires a fresh repository-relative proposal"
+            )
+        patches = implementation.get("patches", [])
+        if not isinstance(patches, list) or any(
+            not isinstance(patch, Mapping)
+            or not isinstance(patch.get("path"), str)
+            or Path(str(patch["path"])).is_absolute()
+            for patch in patches
+        ):
+            raise DriverIntegrationError(
+                "absolute/invalid patch path requires a fresh repository-relative proposal"
+            )
     try:
         identities = recompute_accepted_identities(
             facts,
@@ -2987,11 +3115,21 @@ def _artifact_cache_identity(item: WorkItem, artifact: AuthorArtifact, config: D
     code_value = implementation.get("code_path") if isinstance(implementation, Mapping) else None
     if isinstance(code_value, str):
         code_path = Path(code_value)
-        if not code_path.is_absolute():
-            code_path = artifact.model_dir / code_path
+        if code_path.is_absolute():
+            return "legacy-absolute-code-path"
+        code_path = artifact.model_dir / code_path
         if not code_path.is_file():
             return "invalid-code-path"
         code_digest = hash_bytes(code_path.read_bytes())
+    if isinstance(implementation, Mapping):
+        patches = implementation.get("patches", [])
+        if not isinstance(patches, list):
+            return "invalid-patch-path"
+        for patch in patches:
+            if not isinstance(patch, Mapping) or not isinstance(patch.get("path"), str):
+                return "invalid-patch-path"
+            if Path(str(patch["path"])).is_absolute():
+                return "legacy-absolute-patch-path"
     prompt_path = Path(__file__).with_name("prompts") / "claude_crawler_author_v2.txt"
     prompt_digest = hash_bytes(prompt_path.read_bytes())
     return stable_hash(
@@ -3007,6 +3145,7 @@ def _artifact_cache_identity(item: WorkItem, artifact: AuthorArtifact, config: D
                 "model": config.checker_model,
                 "version": config.checker_version,
             },
+            "target": config.target,
             "requeue": {
                 "grant_ids": list(item.explicit_grants),
                 "work_id": item.requeue_work_id,
@@ -3019,6 +3158,397 @@ def _artifact_cache_identity(item: WorkItem, artifact: AuthorArtifact, config: D
             },
         }
     )
+
+
+def _canonical_crawler_root(paths: DriverPaths) -> Path:
+    """Return the canonical ``menagerie/crawler`` root for driver ledgers.
+
+    Parameters
+    ----------
+    paths:
+        Bound driver paths.
+
+    Returns
+    -------
+    pathlib.Path
+        Canonical crawler root containing the records directory.
+    """
+
+    candidate = paths.ledgers.models.resolve().parent
+    while candidate.name != "records" and candidate != candidate.parent:
+        candidate = candidate.parent
+    if candidate.name != "records":
+        raise DriverIntegrationError("canonical model ledger is not below a records root")
+    return candidate.parent
+
+
+def _canonical_repo_root(canonical_root: Path) -> Path:
+    """Return the worktree root for canonical or isolated test layouts.
+
+    Parameters
+    ----------
+    canonical_root:
+        Crawler canonical root.
+
+    Returns
+    -------
+    pathlib.Path
+        Worktree root used for repository-relative manifests.
+    """
+
+    if canonical_root.name == "crawler" and canonical_root.parent.name == "menagerie":
+        return canonical_root.parents[1]
+    return canonical_root
+
+
+def _rehydrate_canonical_artifact(item: WorkItem, paths: DriverPaths) -> Optional[AuthorArtifact]:
+    """Reconstruct an accepted artifact before considering author/network lanes.
+
+    Parameters
+    ----------
+    item, paths:
+        Current intake work item and canonical driver paths.
+
+    Returns
+    -------
+    AuthorArtifact | None
+        Hash-verified canonical artifact, or ``None`` when none was published.
+    """
+
+    try:
+        canonical_root = _canonical_crawler_root(paths)
+    except DriverIntegrationError:
+        return None
+    prefix = item.stable_id.removeprefix("m_")[:2] or "__"
+    manifest_path = canonical_root / "reconstruction" / prefix / f"{item.stable_id}.json"
+    if not manifest_path.is_file():
+        return None
+    value = _read_json(manifest_path)
+    if (
+        value.get("schema_version") != "menagerie.crawler.reconstruction.v1"
+        or value.get("stable_id") != item.stable_id
+        or value.get("intake_item_sha256") != stable_hash(item.intake.to_dict())
+    ):
+        raise DriverIntegrationError(
+            f"canonical reconstruction identity is stale for {item.stable_id}"
+        )
+    proposal_value = value.get("proposal")
+    source_value = value.get("source_manifest")
+    if not isinstance(proposal_value, Mapping) or not isinstance(source_value, Mapping):
+        raise DriverIntegrationError("canonical reconstruction lacks proposal/source facts")
+    proposal = deepcopy(dict(proposal_value))
+    if proposal.get("proposal_sha256") != stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    ):
+        raise DriverIntegrationError("canonical reconstruction proposal digest changed")
+    implementation = proposal.get("proposed_facts", {}).get("implementation", {})
+    code_value = implementation.get("code_path") if isinstance(implementation, Mapping) else None
+    if isinstance(code_value, str) and Path(code_value).is_absolute():
+        return None
+    model_relative = Path(str(value["canonical_code_root"]))
+    if model_relative.is_absolute():
+        raise DriverIntegrationError(
+            "reconstruction canonical_code_root must be repository-relative"
+        )
+    repo_root = _canonical_repo_root(canonical_root)
+    intake_id = value.get("intake_snapshot_id")
+    if not isinstance(intake_id, str):
+        raise DriverIntegrationError("reconstruction intake snapshot identity is missing")
+    canonical_intake = canonical_root / "records" / "intake" / intake_id
+    if load_intake_snapshot(canonical_intake).snapshot_sha256 != value.get(
+        "intake_snapshot_sha256"
+    ):
+        raise DriverIntegrationError("reconstruction intake snapshot digest changed")
+    model_dir = (repo_root / model_relative).resolve()
+    source_manifest = deepcopy(dict(source_value))
+    sources = source_manifest.get("sources", [])
+    if not isinstance(sources, list):
+        raise DriverIntegrationError("reconstruction source manifest is malformed")
+    for source in sources:
+        if not isinstance(source, dict) or not isinstance(source.get("cas_path"), str):
+            raise DriverIntegrationError("reconstruction source row has no canonical CAS path")
+        relative = Path(str(source["cas_path"]))
+        if relative.is_absolute():
+            raise DriverIntegrationError(
+                "reconstruction source CAS path must be repository-relative"
+            )
+        resolved = (repo_root / relative).resolve()
+        if hash_bytes(resolved.read_bytes()) != source.get("content_sha256"):
+            raise DriverIntegrationError("reconstruction source CAS digest changed")
+        source["cas_path"] = str(resolved)
+    if isinstance(code_value, str):
+        code_path = (model_dir / code_value).resolve()
+        if not code_path.is_relative_to(model_dir) or hash_bytes(code_path.read_bytes()) != (
+            implementation.get("code_sha256")
+        ):
+            raise DriverIntegrationError("reconstruction accepted code digest changed")
+    return AuthorArtifact(
+        proposal=proposal,
+        source_manifest=source_manifest,
+        model_dir=model_dir,
+        campaign_root_work_id=str(value.get("campaign_root_work_id") or proposal["work_id"]),
+        canonical_code_root=model_dir if isinstance(code_value, str) else None,
+    )
+
+
+def _promote_and_publish_accepted_artifact(
+    item: WorkItem, artifact: AuthorArtifact, paths: DriverPaths
+) -> AuthorArtifact:
+    """Publish code, source CAS, reconstruction, and license inventory durably.
+
+    Parameters
+    ----------
+    item, artifact, paths:
+        Accepted gated artifact, its intake identity, and canonical roots.
+
+    Returns
+    -------
+    AuthorArtifact
+        Canonically rebound artifact safe for worker execution.
+    """
+
+    canonical_root = _canonical_crawler_root(paths)
+    repo_root = _canonical_repo_root(canonical_root)
+    proposal = artifact.proposal
+    facts = proposal.get("proposed_facts", {})
+    implementation = facts.get("implementation", {}) if isinstance(facts, Mapping) else {}
+    code_value = implementation.get("code_path") if isinstance(implementation, Mapping) else None
+    if isinstance(code_value, str) and Path(code_value).is_absolute():
+        raise DriverIntegrationError(
+            "legacy absolute accepted code path requires a fresh proposal and gate"
+        )
+    evidence, origin = _gated_code_license_evidence(proposal)
+    if classify_redistribution(evidence) is not RedistributionClass.PUBLIC_OK:
+        raise DriverIntegrationError(
+            "accepted-code promotion refuses restricted/unknown gated license evidence"
+        )
+    promoted = _promote_accepted_code(artifact, paths)
+    prefix = item.stable_id.removeprefix("m_")[:2] or "__"
+
+    canonical_sources: list[JsonObject] = []
+    source_paths: list[Path] = []
+    raw_sources = artifact.source_manifest.get("sources", [])
+    if not isinstance(raw_sources, list):
+        raise DriverIntegrationError("accepted source manifest must contain a source list")
+    for raw_source in raw_sources:
+        if not isinstance(raw_source, Mapping):
+            raise DriverIntegrationError("accepted source manifest row must be an object")
+        source = deepcopy(dict(raw_source))
+        cas_value = source.get("cas_path")
+        digest = source.get("content_sha256")
+        if not isinstance(cas_value, str) or not isinstance(digest, str):
+            raise DriverIntegrationError("accepted source manifest row is not reconstructable")
+        local_cas = Path(cas_value)
+        if hash_bytes(local_cas.read_bytes()) != digest:
+            raise DriverIntegrationError("accepted source CAS digest changed before promotion")
+        destination = canonical_root / "source_cas" / f"{digest.removeprefix('sha256:')}.source"
+        _atomic_promote_file(local_cas, destination)
+        source["cas_path"] = destination.relative_to(repo_root).as_posix()
+        canonical_sources.append(source)
+        source_paths.append(destination)
+    canonical_source_manifest: JsonObject = {
+        **{
+            key: deepcopy(value)
+            for key, value in artifact.source_manifest.items()
+            if key != "sources"
+        },
+        "sources": canonical_sources,
+        "manifest_sha256": stable_hash(canonical_sources),
+    }
+
+    intake_destination = canonical_root / "records" / "intake" / paths.intake_root.name
+    _atomic_promote_tree(paths.intake_root.resolve(), intake_destination)
+    source_manifest_path = canonical_root / "source_manifests" / prefix / f"{item.stable_id}.json"
+    _write_json_atomic(source_manifest_path, canonical_source_manifest)
+    code_root_relative = (
+        promoted.model_dir.relative_to(repo_root)
+        if promoted.canonical_code_root is not None
+        else canonical_root.relative_to(repo_root)
+    )
+    reconstruction = {
+        "schema_version": "menagerie.crawler.reconstruction.v1",
+        "stable_id": item.stable_id,
+        "proposal": proposal,
+        "proposal_sha256": proposal.get("proposal_sha256"),
+        "canonical_code_root": code_root_relative.as_posix(),
+        "source_manifest": canonical_source_manifest,
+        "source_manifest_path": source_manifest_path.relative_to(repo_root).as_posix(),
+        "intake_snapshot_id": paths.intake_root.name,
+        "intake_snapshot_sha256": load_intake_snapshot(paths.intake_root).snapshot_sha256,
+        "intake_item": item.intake.to_dict(),
+        "intake_item_sha256": stable_hash(item.intake.to_dict()),
+        "campaign_root_work_id": promoted.campaign_root_work_id or proposal["work_id"],
+    }
+    reconstruction_path = canonical_root / "reconstruction" / prefix / f"{item.stable_id}.json"
+    _write_json_atomic(reconstruction_path, reconstruction)
+
+    licensed_paths = [*source_paths]
+    if promoted.canonical_code_root is not None:
+        licensed_paths.extend(
+            path for path in promoted.canonical_code_root.rglob("*") if path.is_file()
+        )
+        patch_root = canonical_root / "patches" / prefix / item.stable_id
+        if patch_root.is_dir():
+            licensed_paths.extend(path for path in patch_root.rglob("*") if path.is_file())
+    _publish_licensed_paths(
+        repo_root,
+        canonical_root,
+        tuple(sorted(set(licensed_paths), key=str)),
+        evidence,
+        origin,
+    )
+
+    rebound_source = deepcopy(canonical_source_manifest)
+    for source in rebound_source["sources"]:
+        source["cas_path"] = str((repo_root / source["cas_path"]).resolve())
+    return replace(promoted, source_manifest=rebound_source)
+
+
+def _gated_code_license_evidence(
+    proposal: Mapping[str, Any],
+) -> tuple[tuple[LicenseEvidence, ...], ArtifactOrigin]:
+    """Derive public-compatible license evidence from current gated facts.
+
+    Parameters
+    ----------
+    proposal:
+        Independently accepted proposal.
+
+    Returns
+    -------
+    tuple[tuple[LicenseEvidence, ...], ArtifactOrigin]
+        Literal evidence and exact source origin for promotion.
+    """
+
+    facts = proposal.get("proposed_facts", {})
+    licenses = facts.get("licenses", {}) if isinstance(facts, Mapping) else {}
+    if not isinstance(licenses, Mapping) or licenses.get("redistribution_class") != (
+        "public-compatible"
+    ):
+        raise DriverIntegrationError(
+            "accepted-code promotion refuses restricted/unknown disposition"
+        )
+    code = licenses.get("code")
+    if not isinstance(code, Mapping) or code.get("status") not in {"declared", "custom"}:
+        raise DriverIntegrationError("accepted-code promotion requires explicit gated code license")
+    evidence_block = facts.get("evidence", {})
+    excerpts = evidence_block.get("excerpts", []) if isinstance(evidence_block, Mapping) else []
+    by_id = {
+        excerpt.get("evidence_id"): excerpt for excerpt in excerpts if isinstance(excerpt, Mapping)
+    }
+    findings: list[LicenseEvidence] = []
+    for evidence_id in code.get("evidence_ids", []):
+        excerpt = by_id.get(evidence_id)
+        if not isinstance(excerpt, Mapping):
+            raise DriverIntegrationError("gated code license references missing literal evidence")
+        findings.append(
+            LicenseEvidence(
+                evidence_id=str(evidence_id),
+                source_id=str(code.get("source_id")),
+                locator=str(code.get("locator")),
+                excerpt=str(excerpt.get("text")),
+                status=LicenseEvidenceStatus(str(code.get("status"))),
+                spdx=(str(code.get("spdx")) if code.get("spdx") != "NOASSERTION" else None),
+            )
+        )
+    if not findings:
+        raise DriverIntegrationError("accepted-code promotion requires literal license evidence")
+    sources = facts.get("source_resolution", {}).get("sources", [])
+    source = next(
+        (
+            value
+            for value in sources
+            if isinstance(value, Mapping) and value.get("source_id") == code.get("source_id")
+        ),
+        None,
+    )
+    if not isinstance(source, Mapping):
+        raise DriverIntegrationError("gated code license source has no exact origin")
+    return tuple(findings), ArtifactOrigin(str(source["url"]), str(source["revision"]))
+
+
+def _publish_licensed_paths(
+    repo_root: Path,
+    canonical_root: Path,
+    paths: Sequence[Path],
+    evidence: Sequence[LicenseEvidence],
+    origin: ArtifactOrigin,
+) -> None:
+    """Publish per-path license rows and regenerate the canonical sweep report.
+
+    Parameters
+    ----------
+    repo_root, canonical_root, paths, evidence, origin:
+        Repository roots, promoted files, and current gated license facts.
+    """
+
+    runtime = repo_root / ".crawl-local" / "mirrors"
+    mirrors = MirrorStore(runtime / "public", runtime / "private", runtime / "local")
+    manifest_root = canonical_root / "mirrors"
+    public_path = manifest_root / "public-manifest.jsonl"
+    private_path = manifest_root / "private-manifest.jsonl"
+    existing_rows = scan_jsonl(public_path, validate=False) if public_path.is_file() else []
+    rows_by_path = {str(row.get("staged_path")): dict(row) for row in existing_rows}
+    for path in paths:
+        relative = path.relative_to(repo_root)
+        artifact = store_licensed_artifact(
+            mirrors,
+            path.read_bytes(),
+            staged_path=relative,
+            origin=origin,
+            evidence=evidence,
+            media_type="text/x-python" if path.suffix == ".py" else "application/octet-stream",
+        )
+        if artifact.decision.redistribution_class is not RedistributionClass.PUBLIC_OK:
+            raise DriverIntegrationError("promotion license transaction refused non-public bytes")
+        row = {
+            "staged_path": relative.as_posix(),
+            "manifest": artifact.manifest.to_dict(),
+            "decision": artifact.decision.to_dict(),
+        }
+        previous = rows_by_path.get(relative.as_posix())
+        if previous is not None:
+            if (
+                previous.get("decision", {}).get("content_sha256")
+                != artifact.decision.content_sha256
+            ):
+                raise DriverIntegrationError("licensed path conflicts with canonical inventory")
+            continue
+        rows_by_path[relative.as_posix()] = row
+    ordered_rows = [rows_by_path[key] for key in sorted(rows_by_path)]
+    _write_jsonl_atomic(public_path, ordered_rows)
+    if not private_path.is_file():
+        _write_jsonl_atomic(private_path, [])
+    inventory = tuple(_licensed_artifact_from_row(row) for row in ordered_rows)
+    report = pre_public_merge_sweep(inventory, mirrors)
+    _write_jsonl_atomic(canonical_root / "license_reports" / "current.json", [report.to_dict()])
+
+
+def _licensed_artifact_from_row(row: Mapping[str, Any]) -> LicensedArtifact:
+    """Parse one driver-owned canonical public manifest row.
+
+    Parameters
+    ----------
+    row:
+        Persisted public manifest object.
+
+    Returns
+    -------
+    LicensedArtifact
+        Typed sweep input.
+    """
+
+    manifest = ArtifactManifest.from_dict(dict(row["manifest"]))
+    decision_raw = row["decision"]
+    if not isinstance(decision_raw, Mapping):
+        raise DriverIntegrationError("canonical license decision is malformed")
+    decision = LicenseDecision(
+        content_sha256=str(decision_raw["content_sha256"]),
+        redistribution_class=RedistributionClass(str(decision_raw["redistribution_class"])),
+        evidence_ids=tuple(str(value) for value in decision_raw.get("evidence_ids", [])),
+        rationale=str(decision_raw["rationale"]),
+    )
+    return LicensedArtifact(Path(str(row["staged_path"])), manifest, decision)
 
 
 def _promote_accepted_code(artifact: AuthorArtifact, paths: DriverPaths) -> AuthorArtifact:
@@ -3051,8 +3581,11 @@ def _promote_accepted_code(artifact: AuthorArtifact, paths: DriverPaths) -> Auth
         raise DriverIntegrationError("accepted typed adapter lacks a code path/digest")
     source_root = artifact.model_dir.resolve()
     source_code = Path(code_value)
-    if not source_code.is_absolute():
-        source_code = source_root / source_code
+    if source_code.is_absolute():
+        raise DriverIntegrationError(
+            "legacy absolute accepted code path requires a fresh proposal and gate"
+        )
+    source_code = source_root / source_code
     source_code = source_code.resolve()
     if source_root != source_code and source_root not in source_code.parents:
         raise DriverIntegrationError("accepted authored code escapes its model staging root")
@@ -3062,7 +3595,7 @@ def _promote_accepted_code(artifact: AuthorArtifact, paths: DriverPaths) -> Auth
     prefix = stable_id.removeprefix("m_")[:2] or "__"
     rung = str(facts.get("source_resolution", {}).get("rung"))
     root_name = "adapters" if rung in {"R1_LIBRARY", "R2_VENDOR"} else "ports"
-    canonical_root = paths.ledgers.models.parent.parent.parent
+    canonical_root = _canonical_crawler_root(paths)
     destination = canonical_root / root_name / prefix / stable_id
     _atomic_promote_tree(source_root, destination)
     promoted_code = destination / source_code.relative_to(source_root)
@@ -3075,16 +3608,20 @@ def _promote_accepted_code(artifact: AuthorArtifact, paths: DriverPaths) -> Auth
             if not isinstance(patch, Mapping) or not isinstance(patch.get("path"), str):
                 continue
             patch_path = Path(str(patch["path"]))
-            if not patch_path.is_absolute():
-                patch_path = source_root / patch_path
+            if patch_path.is_absolute():
+                raise DriverIntegrationError(
+                    "legacy absolute accepted patch path requires a fresh proposal and gate"
+                )
+            relative_patch = patch_path
+            patch_path = source_root / patch_path
             patch_path = patch_path.resolve()
             if source_root != patch_path and source_root not in patch_path.parents:
                 raise DriverIntegrationError("accepted patch escapes its model staging root")
             expected = patch.get("sha256")
             if not isinstance(expected, str) or hash_bytes(patch_path.read_bytes()) != expected:
                 raise DriverIntegrationError("accepted patch changed before canonical promotion")
-            _atomic_promote_file(patch_path, patch_root / patch_path.name)
-    return replace(artifact, model_dir=destination)
+            _atomic_promote_file(patch_path, patch_root / relative_patch)
+    return replace(artifact, model_dir=destination, canonical_code_root=destination)
 
 
 def _atomic_promote_tree(source: Path, destination: Path) -> None:
@@ -3189,11 +3726,19 @@ def _worker_request(
         }
     else:
         code_path = Path(str(implementation["code_path"]))
-        if not code_path.is_absolute():
-            code_path = artifact.model_dir / code_path
+        if code_path.is_absolute():
+            raise DriverIntegrationError(
+                "worker refuses a legacy absolute adapter path; re-propose and re-gate"
+            )
+        if artifact.canonical_code_root is None:
+            raise DriverIntegrationError("worker adapter has no canonical accepted-code root")
+        canonical_root = artifact.canonical_code_root.resolve()
+        code_path = (artifact.model_dir / code_path).resolve()
+        if not code_path.is_relative_to(canonical_root):
+            raise DriverIntegrationError("worker adapter path escapes canonical accepted-code root")
         recipe = {
             "kind": "typed-adapter",
-            "path": str(code_path.resolve()),
+            "path": str(code_path),
             "adapter_sha256": implementation["code_sha256"],
         }
     return {
@@ -3259,14 +3804,22 @@ def _attempts_from_supervised(
 
     proposal = artifact.proposal
     facts = proposal["proposed_facts"]
-    receipt = result.worker_receipt or {}
-    envelope_error = _receipt_envelope_error(result, proposal, execution_identity)
+    receipt = deepcopy(result.worker_receipt or {})
+    policy_value = receipt.get("policy_observation", {})
+    policy = dict(policy_value) if isinstance(policy_value, Mapping) else {}
+    policy["cache_read_attempted"] = bool(policy.get("cache_read_attempted")) or (
+        _parent_cache_read_attempted(policy)
+    )
+    receipt["policy_observation"] = policy
+    parent_result = SupervisedResult(result.observation, receipt or None, result.receipt_error)
+    envelope_error = _receipt_envelope_error(parent_result, proposal, execution_identity)
+    if policy.get("cache_read_attempted"):
+        envelope_error = "failed:policy-cache-read"
     effective_result = (
-        result
+        parent_result
         if envelope_error is None
         else SupervisedResult(result.observation, None, envelope_error)
     )
-    policy = receipt.get("policy_observation", {})
     per_mode = receipt.get("per_mode", {})
     receipt_modes = receipt.get("meaningful_modes", [])
     modes = tuple(
@@ -3436,6 +3989,35 @@ def _attempts_from_supervised(
     return tuple(attempts)
 
 
+def _parent_cache_read_attempted(policy: Mapping[str, Any]) -> bool:
+    """Detect forbidden cache roots in parent-owned successful-read telemetry.
+
+    Parameters
+    ----------
+    policy:
+        Receipt policy merged with parent-owned syscall path observations.
+
+    Returns
+    -------
+    bool
+        True when a recorded read path falls below a closed cache root.
+    """
+
+    paths = policy.get("checkpoint_paths", [])
+    if not isinstance(paths, list):
+        return False
+    for value in paths:
+        if not isinstance(value, str):
+            continue
+        parts = {part.lower() for part in Path(value).parts}
+        if parts & _FORBIDDEN_CACHE_ROOT_NAMES:
+            return True
+        normalized = value.replace("\\", "/").lower()
+        if "/.crawl-local/caches/" in normalized or "/caches/" in normalized:
+            return True
+    return False
+
+
 def _receipt_envelope_error(
     result: SupervisedResult,
     proposal: Mapping[str, Any],
@@ -3565,6 +4147,7 @@ def _supervised_failure(
     policy_reasons = (
         ("network_attempted", "network-attempt"),
         ("checkpoint_or_weight_read_attempted", "checkpoint-read"),
+        ("cache_read_attempted", "checkpoint-read"),
         ("write_outside_scratch_attempted", "write-outside-scratch"),
         ("credentials_present", "credentials-exposed"),
         ("torchlens_import_attempted", "torchlens-import"),
@@ -3608,10 +4191,10 @@ def _supervised_failure(
             details={"signal": observation.signal_number},
         )
     if result.worker_receipt is None:
-        if result.receipt_error == "failed:sandbox-unavailable":
+        if result.receipt_error in {"failed:policy", "failed:sandbox-unavailable"}:
             return _attempt_error_fields(
-                "sandbox-unavailable",
-                "sandbox-unavailable",
+                "policy",
+                "sandbox-unavailable-v1",
                 None,
                 "required operating-system sandbox is unavailable",
                 native_crash=False,
@@ -4076,6 +4659,7 @@ def _attempt_policy_satisfied(
             for key in (
                 "network_attempted",
                 "checkpoint_or_weight_read_attempted",
+                "cache_read_attempted",
                 "write_outside_scratch_attempted",
                 "credentials_present",
                 "torchlens_import_attempted",
@@ -5116,7 +5700,7 @@ def _environment_failure(exc: Exception) -> tuple[str, str]:
     """Map a typed environment-lifecycle exception to its closed failure reason."""
 
     if _is_sandbox_unavailable(exc):
-        return "sandbox-unavailable", "sandbox-unavailable"
+        return "policy", "sandbox-unavailable-v1"
     if isinstance(exc, EnvironmentProbeError):
         return "environment", "probe-failed"
     if isinstance(exc, EnvironmentSolveError):
@@ -5181,6 +5765,33 @@ def _write_json_atomic(path: Path, value: Mapping[str, Any]) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _write_jsonl_atomic(path: Path, values: Sequence[Mapping[str, Any]]) -> None:
+    """Atomically fsync deterministic JSONL rows.
+
+    Parameters
+    ----------
+    path, values:
+        Destination and complete ordered row set.
+    """
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    data = b"".join(canonical_json_bytes(value) + b"\n" for value in values)
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        descriptor = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
     finally:
         temporary.unlink(missing_ok=True)
 

@@ -341,6 +341,7 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
         review_checkpoint_at=args.review_checkpoint_at,
         progress_milestones=tuple(args.progress_milestones),
         notify_command=args.notify_command,
+        only_status=getattr(args, "only_status", None),
     )
     dependencies = DriverDependencies(
         author=CommandAuthorLane(author_command),

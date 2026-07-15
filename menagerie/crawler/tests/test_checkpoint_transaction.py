@@ -20,6 +20,15 @@ from menagerie.crawler.checkpoint import (
 from menagerie.crawler.cli import main
 from menagerie.crawler.constants import MODEL_SCHEMA_VERSION
 from menagerie.crawler.driver import AuthorArtifact, _promote_accepted_code, default_driver_paths
+from menagerie.crawler.driver import (
+    AuthorLane,
+    CrawlerDriver,
+    DriverConfig,
+    DriverDependencies,
+    EnvironmentBinding,
+    WorkItem,
+)
+from menagerie.crawler.envs import load_environment_registry
 from menagerie.crawler.identity import canonical_json_bytes
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
 from menagerie.crawler.licenses import (
@@ -30,8 +39,15 @@ from menagerie.crawler.licenses import (
     store_licensed_artifact,
 )
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
-from menagerie.crawler.recordio import JsonlLedger
+from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.tests.conftest import make_author_proposal, make_model
+from menagerie.crawler.tests.test_slice_f_driver import (
+    FakeChecker,
+    FakeEnvironments,
+    FakeForward,
+    FakeNotifier,
+    _refresh_proposal_identities,
+)
 from menagerie.crawler.tools.rebuild_views import rebuild_views
 
 
@@ -53,6 +69,100 @@ class RecordingGit:
         if command[:4] == ("git", "diff", "--cached", "--name-only"):
             return GitCommandResult(0, "\0".join(path.as_posix() for path in self.staged), "")
         return GitCommandResult(0, "", "")
+
+
+class CanonicalTypedAuthor(AuthorLane):
+    """Author one typed adapter plus exact fetched-source CAS bytes."""
+
+    def __init__(self) -> None:
+        """Initialize invocation telemetry."""
+
+        self.calls = 0
+
+    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+        """Return a repository-relative accepted-code proposal fixture."""
+
+        self.calls += 1
+        model_dir = work_root / item.stable_id / "author" / "model"
+        model_dir.mkdir(parents=True, exist_ok=True)
+        code_path = model_dir / "adapter.py"
+        code_path.write_text(
+            "def build_model() -> object:\n"
+            "    return object()\n\n"
+            "def make_dummy_call(seed: int, device: str) -> "
+            "tuple[tuple[object, ...], dict[str, object]]:\n"
+            "    return (), {}\n",
+            encoding="utf-8",
+        )
+        source_path = work_root / item.stable_id / "author" / "source-cas" / "source.bin"
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        source_path.write_bytes(b"exact public implementation source")
+        proposal = make_author_proposal(item.stable_id)
+        proposal["work_id"] = f"work-{item.stable_id}"
+        implementation = proposal["proposed_facts"]["implementation"]
+        implementation.update(
+            {
+                "recipe_type": "typed-adapter",
+                "code_path": "adapter.py",
+                "code_sha256": checkpoint_module.hash_bytes(code_path.read_bytes()),
+                "builder_symbol": "build_model",
+                "dummy_call_symbol": "make_dummy_call",
+                "library_recipe": None,
+            }
+        )
+        proposal["verified_hashes"]["code"] = implementation["code_sha256"]
+        proposal["proposed_facts"]["modes"]["meaningful_modes"] = ["train", "eval"]
+        proposal["proposed_facts"]["external_metadata"]["modes"]["meaningful_modes"] = [
+            "train",
+            "eval",
+        ]
+        _refresh_proposal_identities(
+            proposal,
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
+        source = {
+            "source_id": "source-1",
+            "url": "https://example.test/repository",
+            "revision": "abc123",
+            "content_sha256": checkpoint_module.hash_bytes(source_path.read_bytes()),
+            "byte_count": source_path.stat().st_size,
+            "media_type": "application/octet-stream",
+            "cas_path": str(source_path),
+        }
+        return AuthorArtifact(proposal, {"sources": [source]}, model_dir)
+
+
+class TypedFakeForward(FakeForward):
+    """Echo the exact accepted adapter digest in fake successful receipts."""
+
+    def forward(
+        self,
+        artifact: AuthorArtifact,
+        environment: EnvironmentBinding,
+        cold_runs: int,
+        work_root: Path,
+    ) -> Sequence[dict[str, Any]]:
+        """Return clean attempts rebound to typed adapter bytes."""
+
+        attempts = [
+            dict(value) for value in super().forward(artifact, environment, cold_runs, work_root)
+        ]
+        digest = artifact.proposal["proposed_facts"]["implementation"]["code_sha256"]
+        for attempt in attempts:
+            attempt["worker_receipt"] = dict(attempt["worker_receipt"])
+            attempt["worker_receipt"]["observed_adapter_sha256"] = digest
+        return attempts
+
+
+class DisabledAuthor(AuthorLane):
+    """Fail if clean-clone resume attempts the author/network lane."""
+
+    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+        """Raise because reconstruction must satisfy resume before authoring."""
+
+        del item, work_root, config
+        raise AssertionError("author/network lane must remain disabled on clean-clone resume")
 
 
 def _write_jsonl(path: Path, rows: Sequence[dict[str, Any]]) -> None:
@@ -378,3 +488,120 @@ def test_checkpoint_includes_promoted_code_and_exact_environment_for_clean_repro
     assert (clean / relative_code).read_bytes() == promoted_path.read_bytes()
     assert (clean / relative_lock).read_bytes() == lock_path.read_bytes()
     assert (clean / relative_export).read_bytes() == export_path.read_bytes()
+
+
+def test_driver_checkpoint_clean_clone_resume_without_author_or_network(tmp_path: Path) -> None:
+    """Production promotion checkpoints all facts needed for offline clean-clone resume."""
+
+    snapshot = _snapshot(tmp_path)
+    author = CanonicalTypedAuthor()
+    paths = default_driver_paths(tmp_path, snapshot.root)
+    driver = CrawlerDriver(
+        paths,
+        DriverConfig(
+            run_id="canonical-first-run",
+            machine_id="mac",
+            review_checkpoint_at=None,
+            progress_milestones=(),
+        ),
+        DriverDependencies(
+            author,
+            FakeChecker(),
+            TypedFakeForward(),
+            FakeEnvironments(tmp_path / "fake-envs"),
+            FakeNotifier(),
+            lambda: "2026-07-14T12:00:00Z",
+        ),
+        registry=load_environment_registry(target="osx-arm64"),
+    )
+    assert driver.run().status == "complete"
+    assert author.calls == 1
+
+    crawler = tmp_path / "menagerie" / "crawler"
+    rebuild_views(
+        snapshot.root / "items.jsonl",
+        crawler / "records",
+        crawler / "views",
+        tmp_path / ".crawl-local" / "checkpoint-state.sqlite",
+    )
+    mirrors = _mirrors(tmp_path)
+    checkpoint = create_canonical_checkpoint(
+        tmp_path,
+        snapshot.root,
+        mirrors=mirrors,
+        branch="menagerie/crawler-pipeline",
+        git_runner=RecordingGit(),
+    )
+    assert any(path.parts[-3] == "reconstruction" for path in checkpoint.paths)
+    assert any("source_cas" in path.parts for path in checkpoint.paths)
+    assert any("adapters" in path.parts for path in checkpoint.paths)
+
+    clean = tmp_path / "clean-clone"
+    for relative in checkpoint.paths:
+        destination = clean / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(tmp_path / relative, destination)
+    shutil.rmtree(tmp_path / ".crawl-local")
+
+    clean_intake = clean / "menagerie" / "crawler" / "records" / "intake" / snapshot.snapshot_id
+    clean_paths = default_driver_paths(clean, clean_intake)
+    forward = TypedFakeForward()
+    resumed = CrawlerDriver(
+        clean_paths,
+        DriverConfig(
+            run_id="clean-clone-resume",
+            machine_id="mac",
+            review_checkpoint_at=None,
+            progress_milestones=(),
+        ),
+        DriverDependencies(
+            DisabledAuthor(),
+            FakeChecker(),
+            forward,
+            FakeEnvironments(clean / "fake-envs"),
+            FakeNotifier(),
+            lambda: "2026-07-14T12:00:00Z",
+        ),
+        registry=load_environment_registry(target="osx-arm64"),
+    )
+    assert resumed.run().status == "complete"
+    assert forward.calls == {}
+
+
+def test_environment_metadata_gets_safe_provenance_and_rejects_private_url(
+    tmp_path: Path,
+) -> None:
+    """Locks/exports use the safe package-metadata class and reject private URLs."""
+
+    snapshot, mirrors = _clean_state(tmp_path)
+    env = tmp_path / "menagerie" / "crawler" / "envs" / "core"
+    lock = env / "locks" / "osx-arm64.lock"
+    lock.parent.mkdir(parents=True)
+    lock.write_text("https://conda.example.test/pkg.conda#sha256=abc\n", encoding="utf-8")
+    create_canonical_checkpoint(
+        tmp_path,
+        snapshot.root,
+        mirrors=mirrors,
+        branch="menagerie/crawler-pipeline",
+        git_runner=RecordingGit(),
+    )
+    generated = scan_jsonl(
+        tmp_path / "menagerie" / "crawler" / "mirrors" / "generated-metadata-manifest.jsonl",
+        validate=False,
+    )
+    row = next(value for value in generated if value["staged_path"].endswith("osx-arm64.lock"))
+    assert row["disposition"] == "safe-package-metadata-v1"
+    assert row["content_sha256"] == checkpoint_module.hash_bytes(lock.read_bytes())
+
+    lock.write_text(
+        "https://user:secret@private.example.test/pkg.conda\n",  # pragma: allowlist secret
+        encoding="utf-8",
+    )
+    with pytest.raises(checkpoint_module.SecretBearingPath, match="private/credential URL"):
+        create_canonical_checkpoint(
+            tmp_path,
+            snapshot.root,
+            mirrors=mirrors,
+            branch="menagerie/crawler-pipeline",
+            git_runner=RecordingGit(),
+        )
