@@ -1425,7 +1425,8 @@
             "package",
             "paper",
             "web-page",
-            "archive"
+            "archive",
+            "intake-snapshot"
           ],
           "description": "Mandatory record or status kind."
         },
@@ -1448,7 +1449,7 @@
           "description": "Mandatory exact location within the source."
         },
         "content_sha256": {
-          "$ref": "#/$defs/hash",
+          "$ref": "#/$defs/nullable_hash",
           "description": "Mandatory content sha256."
         },
         "byte_count": {
@@ -1476,7 +1477,38 @@
           "$ref": "#/$defs/nullable_hash",
           "description": "Mandatory mirror digest."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "intake-snapshot",
+                "description": "Select an immutable intake-snapshot status source."
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content_sha256": {
+                "type": "null",
+                "description": "Intake locators make no fetched-byte digest claim."
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "content_sha256": {
+                "$ref": "#/$defs/hash",
+                "description": "Fetched public sources require an exact content digest."
+              }
+            }
+          }
+        }
+      ]
     },
     "evidence": {
       "type": "object",
@@ -1754,10 +1786,44 @@
           "description": "Mandatory recipe revision."
         },
         "torchlens_import_static_check": {
-          "const": "passed",
+          "enum": [
+            "passed",
+            "not-applicable-no-code"
+          ],
           "description": "Mandatory torchlens import static check."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recipe_type": {
+                "const": "none",
+                "description": "Select terminal records with no executable recipe."
+              }
+            },
+            "required": [
+              "recipe_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "torchlens_import_static_check": {
+                "const": "not-applicable-no-code",
+                "description": "No-code terminal records cannot run the static import check."
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "torchlens_import_static_check": {
+                "const": "passed",
+                "description": "Executable implementations must pass the static import check."
+              }
+            }
+          }
+        }
+      ]
     },
     "library_recipe": {
       "type": "object",

@@ -1935,6 +1935,22 @@ def test_review_checkpoint_blocks_notifies_and_is_one_shot(tmp_path: Path) -> No
     assert [event["event_kind"] for event in final_events].count("review-signoff") == 1
 
 
+def test_clean_clone_can_sign_off_canonical_pending_review(tmp_path: Path) -> None:
+    """Canonical policy facts keep ``--after-review`` usable without runtime state."""
+
+    snapshot = _snapshot(tmp_path, count=3)
+    assert _driver(tmp_path, snapshot, review_at=1).run().status == "paused:review-checkpoint"
+    paths = _paths(tmp_path, snapshot)
+    shutil.rmtree(paths.runtime_root)
+
+    resumed = _driver(tmp_path, snapshot, review_at=1).run(after_review=True)
+    assert resumed.status == "complete"
+    canonical = scan_jsonl(paths.ledgers.models.parent / "operational" / "events.jsonl")
+    review = next(event for event in canonical if event["event_kind"] == "checkpoint-review")
+    signoff = next(event for event in canonical if event["event_kind"] == "review-signoff")
+    assert signoff["details"]["policy_key"] == review["details"]["policy_key"]
+
+
 def test_progress_milestones_fire_once_without_pausing(tmp_path: Path) -> None:
     """Every crossed milestone emits one event/message and resume does not re-fire it."""
 
@@ -2057,6 +2073,16 @@ def test_author_failure_terminalizes_one_model_and_later_models_continue(tmp_pat
     }
     assert models[failed_id]["status"]["code"] == "failed:runner"
     assert sum(record["status"]["code"] == "runs" for record in models.values()) == 19
+    source = models[failed_id]["source_resolution"]["sources"][0]
+    assert source["kind"] == "intake-snapshot"
+    assert source["url"] == "https://github.com/johnmarktaylor91/torchlens"
+    assert source["locator"].startswith("menagerie/crawler/records/intake/")
+    assert source["content_sha256"] is None
+    assert source["mirror_digest"] is None
+    assert (
+        models[failed_id]["implementation"]["torchlens_import_static_check"]
+        == "not-applicable-no-code"
+    )
 
 
 def test_mode_normalization_failure_terminalizes_and_continues(tmp_path: Path) -> None:
@@ -2930,6 +2956,38 @@ def test_notification_outbox_retries_identity_after_crash_before_delivery(
     assert delivery["status"] == "notification-delivered"
     assert delivery["details"]["notification_event_id"] == progress[0]["event_id"]
     assert delivery["details"]["idempotency_key"] == notifier.idempotency_keys[0]
+
+
+def test_notification_outbox_rehydrates_canonical_identity_after_runtime_loss(
+    tmp_path: Path,
+) -> None:
+    """A canonical undelivered identity remains retryable after `.crawl-local` loss."""
+
+    snapshot = _snapshot(tmp_path)
+
+    def kill_after_identity(boundary: str, stable_id: str) -> None:
+        """Stop after canonical identity publication and before delivery."""
+
+        del stable_id
+        if boundary == "after-notification-identity":
+            raise InjectedKill("after-notification-identity")
+
+    with pytest.raises(InjectedKill):
+        _driver(tmp_path, snapshot, boundary=kill_after_identity, milestones=(1,)).run()
+    paths = _paths(tmp_path, snapshot)
+    shutil.rmtree(paths.runtime_root)
+
+    notifier = FakeNotifier()
+    assert (
+        _driver(tmp_path, snapshot, notifier=notifier, milestones=(1,)).run().status == "complete"
+    )
+    assert len(notifier.messages) == 1
+    canonical = scan_jsonl(paths.ledgers.models.parent / "operational" / "events.jsonl")
+    assert any(
+        event["event_kind"] == "notification-delivery"
+        and event["status"] == "notification-delivered"
+        for event in canonical
+    )
 
 
 def test_command_notifier_timeout_is_short_and_nonblocking(tmp_path: Path) -> None:

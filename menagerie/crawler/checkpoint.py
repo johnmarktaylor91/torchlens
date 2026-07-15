@@ -13,10 +13,12 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
 
 from menagerie.crawler.constants import (
+    FAILURE_REASON_CODES,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
     OperationalEventKind,
     OperationalEventStatus,
 )
+from menagerie.crawler.envs import EnvironmentSpecError, load_environment_registry
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.intake import IntakeError, load_intake_snapshot
 from menagerie.crawler.licenses import (
@@ -220,6 +222,20 @@ _SECRET_BYTE_MARKERS = (
 )
 _CANONICAL_MANIFEST_NAMES = ("public-manifest.jsonl", "private-manifest.jsonl")
 _GENERATED_METADATA_MANIFEST = "generated-metadata-manifest.jsonl"
+_HASH_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
+_LOCK_HASH_PATTERN = re.compile(r"(?:#|sha256[=:])([0-9a-f]{64})(?:$|[&\s])")
+_EXTERNALLY_CONTROLLED_RECORD_FIELDS = frozenset(
+    {
+        "message",
+        "mode_error",
+        "observed_response",
+        "receipt_error",
+        "response_excerpt",
+        "stderr_tail",
+        "stdout_tail",
+        "traceback",
+    }
+)
 _SAFE_METADATA_DISPOSITIONS = frozenset(
     {
         "safe-composite-metadata-v1",
@@ -449,10 +465,27 @@ def record_review_signoff(
         context=context,
         created_at=created_at,
     )
+    canonical_path = _canonical_operational_path_for_runtime(ledger.path)
+    canonical_events = scan_jsonl(canonical_path) if canonical_path is not None else []
+    combined_by_id = {
+        str(record.get("event_id")): record for record in (*canonical_events, *ledger.records)
+    }
+    combined = tuple(combined_by_id.values())
+    signed_policy_keys = {
+        str(record.get("details", {}).get("policy_key"))
+        for record in combined
+        if record.get("event_kind") == OperationalEventKind.REVIEW_SIGNOFF.value
+        and isinstance(record.get("details"), Mapping)
+        and isinstance(record.get("details", {}).get("policy_key"), str)
+    }
     pending = [
         record
-        for record in ledger.records
+        for record in combined
         if record.get("event_kind") == OperationalEventKind.CHECKPOINT_REVIEW.value
+        and (
+            not isinstance(record.get("details"), Mapping)
+            or record.get("details", {}).get("policy_key") not in signed_policy_keys
+        )
     ]
     if pending:
         policy = pending[-1].get("details", {})
@@ -460,8 +493,7 @@ def record_review_signoff(
             for key in ("policy_key", "intake_snapshot_id", "review_threshold"):
                 if key in policy:
                     event["details"][key] = policy[key]
-    canonical_path = _canonical_operational_path_for_runtime(ledger.path)
-    if canonical_path is not None and pending:
+    if canonical_path is not None:
         append_canonical_operational_event(canonical_path, event)
     return record_operational_event(ledger, event)
 
@@ -617,6 +649,80 @@ def append_canonical_requeue_grant(path: Path, grant: Mapping[str, Any]) -> bool
     return True
 
 
+def build_canonical_requeue_grant(
+    path: Path,
+    *,
+    stable_id: str,
+    stage: str,
+    reason: str,
+    attempts: int,
+    granted_by: str,
+) -> JsonObject:
+    """Build the sole canonical requeue-grant schema and identity.
+
+    Parameters
+    ----------
+    path:
+        Canonical grant ledger used to allocate the next append generation.
+    stable_id, stage, reason, attempts, granted_by:
+        Validated operator authorization facts.
+
+    Returns
+    -------
+    dict[str, Any]
+        Exact grant payload accepted by driver rehydration.
+
+    Raises
+    ------
+    ValueError
+        If any operator-controlled grant fact is invalid.
+    """
+
+    if not stable_id.strip():
+        raise ValueError("stable_id must be non-empty")
+    records_root = path.parent.parent if path.parent.name == "operational" else None
+    snapshot_roots = (
+        sorted((records_root / "intake").iterdir())
+        if records_root is not None and (records_root / "intake").is_dir()
+        else []
+    )
+    intake_ids: set[str] = set()
+    for snapshot_root in snapshot_roots:
+        if snapshot_root.is_dir():
+            try:
+                intake_ids.update(
+                    item.stable_id for item in load_intake_snapshot(snapshot_root).items
+                )
+            except (OSError, KeyError, TypeError, ValueError, IntakeError) as exc:
+                raise ValueError(f"canonical intake snapshot is invalid: {snapshot_root}") from exc
+    if intake_ids and stable_id not in intake_ids:
+        raise ValueError(f"stable_id is absent from canonical intake snapshots: {stable_id}")
+    if stage not in FAILURE_REASON_CODES:
+        raise ValueError(f"unknown failure stage: {stage}")
+    if not reason.strip() or not granted_by.strip():
+        raise ValueError("reason and granted_by must be non-empty")
+    if not isinstance(attempts, int) or isinstance(attempts, bool) or attempts < 1:
+        raise ValueError("grant attempts must be a positive integer")
+    generation = len(scan_jsonl(path, validate=False)) + 1
+    identity = {
+        "generation": generation,
+        "stable_id": stable_id,
+        "stage": stage,
+        "reason": reason,
+        "attempts": attempts,
+        "granted_by": granted_by,
+    }
+    return {
+        "grant_id": stable_hash(identity),
+        "stable_id": stable_id,
+        "stage": stage,
+        "reason": reason,
+        "attempts": attempts,
+        "granted_by": granted_by,
+        "new_work_generation": generation,
+    }
+
+
 def _canonical_operational_path_for_runtime(runtime_path: Path) -> Optional[Path]:
     """Infer the canonical operational ledger paired with a disposable runtime ledger.
 
@@ -752,6 +858,159 @@ def create_checkpoint_set(
     return CheckpointSet(candidates, actual_branch, license_report)
 
 
+def _head_jsonl_paths(repo_root: Path, canonical_root: Path, runner: GitRunner) -> tuple[Path, ...]:
+    """Return canonical JSONL paths tracked by ``HEAD``.
+
+    Parameters
+    ----------
+    repo_root, canonical_root, runner:
+        Worktree roots and the non-interactive Git boundary.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Sorted repository-relative tracked JSONL paths.
+    """
+
+    relative_root = canonical_root.relative_to(repo_root).as_posix()
+    result = runner(["git", "ls-tree", "-r", "--name-only", "HEAD", "--", relative_root], repo_root)
+    if result.returncode != 0:
+        raise CheckpointValidationError(
+            f"cannot enumerate canonical JSONL history from HEAD: {result.stderr.strip()}"
+        )
+    return tuple(
+        sorted(
+            {
+                _normalize_path(Path(value))
+                for value in result.stdout.splitlines()
+                if value.endswith(".jsonl")
+            },
+            key=str,
+        )
+    )
+
+
+def _head_path_bytes(repo_root: Path, path: Path, runner: GitRunner) -> Optional[bytes]:
+    """Read exact UTF-8 JSONL bytes for one path from ``HEAD``.
+
+    Parameters
+    ----------
+    repo_root, path, runner:
+        Worktree root, normalized repository path, and Git boundary.
+
+    Returns
+    -------
+    bytes | None
+        Committed bytes, or ``None`` when the path is not tracked by ``HEAD``.
+    """
+
+    object_name = f"HEAD:{path.as_posix()}"
+    exists = runner(["git", "cat-file", "-e", object_name], repo_root)
+    if exists.returncode != 0:
+        return None
+    result = runner(["git", "show", object_name], repo_root)
+    if result.returncode != 0:
+        raise CheckpointValidationError(
+            f"cannot read committed canonical JSONL {path.as_posix()}: {result.stderr.strip()}"
+        )
+    return result.stdout.encode("utf-8")
+
+
+def _tail_recovery_is_evidenced(path: Path, committed: bytes, working: bytes) -> bool:
+    """Return whether a committed torn tail was narrowly and durably recovered.
+
+    Parameters
+    ----------
+    path, committed, working:
+        Absolute ledger path and committed/working bytes.
+
+    Returns
+    -------
+    bool
+        True only for exact prefix truncation backed by matching recovery evidence.
+    """
+
+    if not committed or committed.endswith(b"\n"):
+        return False
+    good_end = committed.rfind(b"\n") + 1
+    prefix = committed[:good_end]
+    tail = committed[good_end:]
+    if not working.startswith(prefix):
+        return False
+    evidence_path = path.with_suffix(f"{path.suffix}.recovery.jsonl")
+    try:
+        evidence = scan_jsonl(evidence_path, validate=False)
+    except Exception:
+        return False
+    return any(
+        row.get("byte_offset") == good_end
+        and row.get("byte_count") == len(tail)
+        and row.get("tail_sha256") == hash_bytes(tail)
+        for row in evidence
+    )
+
+
+def _validate_canonical_jsonl_append_only(
+    repo_root: Path,
+    canonical_root: Path,
+    candidates: Sequence[Path],
+    runner: GitRunner,
+) -> None:
+    """Prove every canonical ledger is an append-only extension of ``HEAD``.
+
+    Parameters
+    ----------
+    repo_root, canonical_root, candidates, runner:
+        Worktree roots, complete candidate set, and Git boundary.
+
+    Raises
+    ------
+    CheckpointValidationError
+        If committed history was deleted/rewritten or new lines are incomplete/invalid.
+    """
+
+    records_root = canonical_root.relative_to(repo_root) / "records"
+    mirrors_root = canonical_root.relative_to(repo_root) / "mirrors"
+
+    def is_append_only_path(path: Path) -> bool:
+        """Select canonical facts whose byte history is immutable."""
+
+        if path.suffix != ".jsonl":
+            return False
+        if path.name == _GENERATED_METADATA_MANIFEST:
+            return False
+        return path.is_relative_to(records_root) or (
+            path.is_relative_to(mirrors_root) and path.name in _CANONICAL_MANIFEST_NAMES
+        )
+
+    working_paths = {path for path in candidates if is_append_only_path(path)}
+    tracked_paths = {
+        path
+        for path in _head_jsonl_paths(repo_root, canonical_root, runner)
+        if is_append_only_path(path)
+    }
+    for relative in sorted(working_paths | tracked_paths, key=str):
+        absolute = repo_root / relative
+        if not absolute.is_file():
+            raise CheckpointValidationError(
+                f"tracked canonical JSONL was deleted: {relative.as_posix()}"
+            )
+        working = absolute.read_bytes()
+        committed = _head_path_bytes(repo_root, relative, runner)
+        if committed is not None and not working.startswith(committed):
+            if not _tail_recovery_is_evidenced(absolute, committed, working):
+                raise CheckpointValidationError(
+                    "canonical JSONL is not an append-only extension of HEAD: "
+                    f"{relative.as_posix()}"
+                )
+        try:
+            scan_jsonl(absolute)
+        except Exception as exc:
+            raise CheckpointValidationError(
+                f"canonical JSONL has incomplete or invalid appended lines: {relative.as_posix()}"
+            ) from exc
+
+
 def create_canonical_checkpoint(
     repo_root: Path,
     intake_root: Path,
@@ -864,7 +1123,11 @@ def _create_canonical_checkpoint(
     manifest_root = canonical_root / "mirrors"
     public_artifacts, license_inventory, mirror_manifests = _derive_mirror_facts(manifest_root)
     candidates = _derive_candidate_paths(root, canonical_root)
-    generated_inventory = _publish_generated_metadata_inventory(root, canonical_root, candidates)
+    _validate_canonical_jsonl_append_only(root, canonical_root, candidates, runner)
+    validated_environment_candidates = _validate_environment_candidates(canonical_root, candidates)
+    generated_inventory = _publish_generated_metadata_inventory(
+        root, canonical_root, candidates, validated_environment_candidates
+    )
     candidates = _derive_candidate_paths(root, canonical_root)
     sweep_artifacts = _validate_candidate_license_coverage(
         root,
@@ -884,7 +1147,13 @@ def _create_canonical_checkpoint(
     result = create_checkpoint_set(
         root,
         candidates,
-        ledger_paths=(ledgers.models, ledgers.attempts, ledgers.gates),
+        ledger_paths=(
+            ledgers.models,
+            ledgers.attempts,
+            ledgers.gates,
+            canonical_operational_ledger_path(ledgers.models),
+            canonical_requeue_grants_path(ledgers.models),
+        ),
         derived_view_checks=(view_check,),
         public_artifacts=sweep_artifacts,
         mirrors=mirror_store,
@@ -1319,15 +1588,187 @@ def _copy_canonical_tree(source: Path, destination: Path) -> None:
     os.replace(temporary, destination)
 
 
+def _validate_lock_package_hashes(path: Path, content: bytes) -> None:
+    """Require every concrete target-lock package entry to carry a SHA-256 hash.
+
+    Parameters
+    ----------
+    path, content:
+        Exact target-lock path and bytes.
+
+    Raises
+    ------
+    CheckpointValidationError
+        If the lock is not UTF-8, has no packages, or has an unhashed entry.
+    """
+
+    lowered = content.lower()
+    if any(marker in lowered for marker in _PRIVATE_URL_MARKERS) or re.search(
+        rb"https?://[^/\s:@]+:[^/\s@]+@", lowered
+    ):
+        raise SecretBearingPath(f"generated metadata contains a private/credential URL: {path}")
+    try:
+        lines = content.decode("utf-8").splitlines()
+    except UnicodeDecodeError as exc:
+        raise CheckpointValidationError(f"environment lock is not UTF-8: {path}") from exc
+    packages = [
+        line.strip()
+        for line in lines
+        if line.strip() and not line.lstrip().startswith(("#", "@EXPLICIT"))
+    ]
+    if not packages:
+        raise CheckpointValidationError(f"environment lock has no package entries: {path}")
+    invalid = [line for line in packages if _LOCK_HASH_PATTERN.search(line.lower()) is None]
+    if invalid:
+        raise CheckpointValidationError(
+            "environment lock package entry lacks a canonical SHA-256 artifact hash: "
+            f"{path} entry={invalid[0]!r}"
+        )
+
+
+def _validate_environment_candidates(
+    canonical_root: Path, candidates: Sequence[Path]
+) -> frozenset[Path]:
+    """Strictly validate the registry-derived environment candidate class.
+
+    Parameters
+    ----------
+    canonical_root, candidates:
+        Canonical crawler root and complete repository-relative checkpoint set.
+
+    Returns
+    -------
+    frozenset[pathlib.Path]
+        Environment candidates proven to be registry/lock metadata.
+
+    Raises
+    ------
+    CheckpointValidationError
+        If registry intent membership, lock hashes, export bytes, or probe contracts fail.
+    """
+
+    repo_root = canonical_root.parents[1]
+    env_root = canonical_root / "envs"
+    env_relative = env_root.relative_to(repo_root)
+    environment_candidates = frozenset(
+        path for path in candidates if path == env_relative or path.is_relative_to(env_relative)
+    )
+    if not environment_candidates:
+        return frozenset()
+    try:
+        baseline = load_environment_registry(env_root)
+    except (OSError, ValueError, EnvironmentSpecError) as exc:
+        raise CheckpointValidationError(f"environment registry is invalid: {exc}") from exc
+    registered = frozenset(baseline.intents)
+    for path in environment_candidates:
+        relative = path.relative_to(env_relative)
+        if (
+            len(relative.parts) > 1
+            and relative.parts[0] not in registered
+            and relative.parts[0] != "locks"
+        ):
+            raise CheckpointValidationError(
+                f"environment candidate is outside the registry: {path.as_posix()}"
+            )
+
+    target_names: set[str] = set()
+    for intent_name in registered:
+        lock_root = env_root / intent_name / "locks"
+        if not lock_root.is_dir():
+            continue
+        for path in lock_root.iterdir():
+            if path.name.endswith(".resolved.json"):
+                target_names.add(path.name.removesuffix(".resolved.json"))
+            elif path.name.endswith(".resolved.sha256"):
+                target_names.add(path.name.removesuffix(".resolved.sha256"))
+            elif path.suffix == ".lock":
+                target_names.add(path.stem)
+
+    attempt_rows: list[JsonObject] = []
+    for attempt_path in sorted((canonical_root / "records" / "attempts").glob("*.jsonl")):
+        attempt_rows.extend(scan_jsonl(attempt_path))
+
+    for target in sorted(target_names):
+        try:
+            registry = load_environment_registry(env_root, target=target)
+        except (OSError, ValueError, EnvironmentSpecError) as exc:
+            raise CheckpointValidationError(
+                f"environment registry cannot load target {target}: {exc}"
+            ) from exc
+        for intent in registry.intents.values():
+            lock = intent.lock
+            members_present = (
+                lock.lock_path.is_file(),
+                lock.export_path.is_file(),
+                lock.export_hash_path.is_file(),
+            )
+            if not any(members_present):
+                continue
+            if not all(members_present) or lock.status != "locked":
+                raise CheckpointValidationError(
+                    f"environment target artifacts are incomplete or stale: {intent.name}/{target}"
+                )
+            assert lock.lock_bytes is not None
+            assert lock.export_bytes is not None
+            _validate_lock_package_hashes(lock.lock_path, lock.lock_bytes)
+            if (
+                not isinstance(lock.declared_export_hash, str)
+                or _HASH_PATTERN.fullmatch(lock.declared_export_hash) is None
+                or hash_bytes(lock.export_bytes) != lock.declared_export_hash
+            ):
+                raise CheckpointValidationError(
+                    f"environment resolved-export digest is invalid: {intent.name}/{target}"
+                )
+            try:
+                resolved = json.loads(lock.export_bytes)
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise CheckpointValidationError(
+                    f"environment resolved export is not exact JSON: {intent.name}/{target}"
+                ) from exc
+            if not isinstance(resolved, (dict, list)):
+                raise CheckpointValidationError(
+                    f"environment resolved export has no package structure: {intent.name}/{target}"
+                )
+            if not intent.probes.imports or not intent.probes.export_checks:
+                raise CheckpointValidationError(
+                    f"environment probe contract is incomplete: {intent.name}/{target}"
+                )
+            lock_sha256 = hash_bytes(lock.lock_bytes)
+            attested = any(
+                isinstance(row.get("environment"), Mapping)
+                and row.get("environment", {}).get("family") == intent.name
+                and row.get("environment", {}).get("target") == target
+                and row.get("environment", {}).get("lock_sha256") == lock_sha256
+                and row.get("environment", {}).get("resolved_export_sha256")
+                == lock.declared_export_hash
+                and isinstance(row.get("environment", {}).get("compiler_identity"), str)
+                and bool(row.get("environment", {}).get("compiler_identity"))
+                and isinstance(row.get("environment", {}).get("sdk_identity"), str)
+                and bool(row.get("environment", {}).get("sdk_identity"))
+                and _HASH_PATTERN.fullmatch(str(row.get("identities", {}).get("environment", "")))
+                is not None
+                for row in attempt_rows
+            )
+            if not attested:
+                raise CheckpointValidationError(
+                    "environment target lacks a canonical compiler/SDK/probe-bound runtime "
+                    f"attestation: {intent.name}/{target}"
+                )
+    return environment_candidates
+
+
 def _publish_generated_metadata_inventory(
-    repo_root: Path, canonical_root: Path, candidates: Sequence[Path]
+    repo_root: Path,
+    canonical_root: Path,
+    candidates: Sequence[Path],
+    validated_environment_candidates: frozenset[Path],
 ) -> tuple[GeneratedMetadataDisposition, ...]:
     """Publish the complete hash-bound generated/package metadata inventory.
 
     Parameters
     ----------
-    repo_root, canonical_root, candidates:
-        Repository roots and the complete pre-publication candidate set.
+    repo_root, canonical_root, candidates, validated_environment_candidates:
+        Repository roots, complete candidate set, and strict environment validation result.
 
     Returns
     -------
@@ -1343,6 +1784,13 @@ def _publish_generated_metadata_inventory(
         has_excerpts = _validate_generated_metadata_bytes(path, content)
         pure = PurePosixPath(path.as_posix())
         package_metadata = PurePosixPath("menagerie/crawler/envs") in pure.parents
+        target_artifact = path.suffix == ".lock" or path.name.endswith(
+            (".resolved.json", ".resolved.sha256")
+        )
+        if package_metadata and path not in validated_environment_candidates:
+            raise CheckpointValidationError(
+                f"environment metadata was not derived from the validated registry: {path}"
+            )
         dispositions.append(
             GeneratedMetadataDisposition(
                 staged_path=path,
@@ -1357,7 +1805,9 @@ def _publish_generated_metadata_inventory(
                 ),
                 generator="menagerie.crawler.checkpoint.v1",
                 provenance=(
-                    "exact environment intent/lock/export package metadata"
+                    "strict target lock/export with canonical runtime toolchain/probe attestation"
+                    if package_metadata and target_artifact
+                    else "registry-derived environment intent and probe contract"
                     if package_metadata
                     else "deterministic crawler canonical metadata"
                 ),
@@ -1414,7 +1864,88 @@ def _validate_generated_metadata_bytes(path: Path, content: bytes) -> bool:
             "composite checkpoint metadata contains unknown/restricted embedded excerpts: "
             f"{path.as_posix()} dispositions={unsafe}"
         )
+    external_text = _externally_controlled_record_text(path, content)
+    if external_text:
+        raise RestrictedPublicArtifact(
+            "canonical record contains unredacted externally controlled text: "
+            f"{path.as_posix()} fields={list(external_text)}"
+        )
     return bool(excerpts)
+
+
+def _externally_controlled_record_text(path: Path, content: bytes) -> tuple[str, ...]:
+    """Find unredacted external stdio, traceback, exception, and response text.
+
+    Parameters
+    ----------
+    path, content:
+        Candidate generated-metadata path and exact bytes.
+
+    Returns
+    -------
+    tuple[str, ...]
+        JSON field paths whose values are neither hashes, local locators, nor licensed excerpts.
+    """
+
+    pure = PurePosixPath(path.as_posix())
+    records_root = PurePosixPath("menagerie/crawler/records")
+    if path.suffix not in {".json", ".jsonl"} or not (
+        pure == records_root or records_root in pure.parents
+    ):
+        return ()
+    try:
+        values = (
+            [json.loads(line) for line in content.decode("utf-8").splitlines() if line.strip()]
+            if path.suffix == ".jsonl"
+            else [json.loads(content.decode("utf-8"))]
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return ()
+    findings: list[str] = []
+
+    def is_safe_redaction(value: Any) -> bool:
+        """Return whether externally controlled text was replaced by bounded metadata."""
+
+        if value is None or value == "":
+            return True
+        if isinstance(value, str):
+            if _HASH_PATTERN.fullmatch(value) is not None:
+                return True
+            return bool(
+                "\n" not in value
+                and re.fullmatch(r"(?:\.crawl-local|menagerie/crawler)/[A-Za-z0-9._/:-]+", value)
+            )
+        if isinstance(value, Mapping):
+            return bool(
+                _HASH_PATTERN.fullmatch(str(value.get("text_sha256", "")))
+                and value.get("license_disposition") in _SAFE_EXCERPT_DISPOSITIONS
+                and isinstance(value.get("locator"), str)
+            )
+        return False
+
+    def visit(value: Any, location: str = "$") -> None:
+        """Collect unsafe values at externally controlled record fields."""
+
+        if isinstance(value, Mapping):
+            for key, nested in value.items():
+                nested_location = f"{location}.{key}"
+                failed_status_detail = (
+                    key == "detail"
+                    and location.endswith(".status")
+                    and value.get("kind") == "failed"
+                )
+                if (
+                    key in _EXTERNALLY_CONTROLLED_RECORD_FIELDS or failed_status_detail
+                ) and not is_safe_redaction(nested):
+                    findings.append(nested_location)
+                visit(nested, nested_location)
+        elif isinstance(value, list):
+            for index, nested in enumerate(value):
+                visit(nested, f"{location}[{index}]")
+
+    for index, value in enumerate(values):
+        visit(value, f"$[{index}]")
+    return tuple(findings)
 
 
 def _embedded_excerpts(path: Path, content: bytes) -> tuple[Mapping[str, Any], ...]:
@@ -1545,6 +2076,75 @@ def _resolve_reconstruction_reference(repo_root: Path, value: object, label: str
     return resolved
 
 
+def reconstruction_transaction_id(
+    stable_id: str,
+    proposal_sha256: str,
+    source_manifest: Mapping[str, Any],
+    intake_item_sha256: str,
+) -> str:
+    """Recompute the exact promotion transaction identity.
+
+    Parameters
+    ----------
+    stable_id, proposal_sha256, source_manifest, intake_item_sha256:
+        Exact producer inputs used by accepted-artifact promotion.
+
+    Returns
+    -------
+    str
+        Canonical SHA-256 transaction identity.
+    """
+
+    return stable_hash(
+        {
+            "stable_id": stable_id,
+            "proposal": proposal_sha256,
+            "source_manifest": dict(source_manifest),
+            "intake": intake_item_sha256,
+        }
+    )
+
+
+def canonical_reconstruction_source_manifest(
+    source_manifest: Mapping[str, Any], canonical_root: Path, repo_root: Path
+) -> JsonObject:
+    """Derive the durable source-manifest basis used by promotion and validation.
+
+    Parameters
+    ----------
+    source_manifest, canonical_root, repo_root:
+        Pre-promotion source facts and resolved canonical/worktree roots.
+
+    Returns
+    -------
+    dict[str, Any]
+        Canonical source facts with content-addressed repository locators.
+
+    Raises
+    ------
+    ReconstructionValidationError
+        If a source row has no canonical content digest.
+    """
+
+    sources = source_manifest.get("sources")
+    if not isinstance(sources, list):
+        raise ReconstructionValidationError("source manifest requires a source list")
+    canonical_sources: list[JsonObject] = []
+    for value in sources:
+        if not isinstance(value, Mapping) or not isinstance(value.get("content_sha256"), str):
+            raise ReconstructionValidationError("source manifest row has no content digest")
+        source = dict(value)
+        digest = str(source["content_sha256"]).removeprefix("sha256:")
+        destination = canonical_root / "source_cas" / f"{digest}.source"
+        source["cas_path"] = destination.relative_to(repo_root).as_posix()
+        canonical_sources.append(source)
+    return {
+        **{key: value for key, value in source_manifest.items() if key != "sources"},
+        "sources": canonical_sources,
+        "manifest_sha256": stable_hash(canonical_sources),
+    }
+
+
 def validate_canonical_reconstruction(
     reconstruction_path: Path,
     canonical_root: Path,
@@ -1586,11 +2186,10 @@ def validate_canonical_reconstruction(
     )
     manifest = _read_json_object(reconstruction_path, "canonical reconstruction")
     schema_version = manifest.get("schema_version")
-    if schema_version not in {
-        "menagerie.crawler.reconstruction.v1",
-        "menagerie.crawler.reconstruction.v2",
-    }:
-        raise ReconstructionValidationError("unsupported canonical reconstruction schema")
+    if schema_version != "menagerie.crawler.reconstruction.v2":
+        raise ReconstructionValidationError(
+            "canonical reconstruction requires committed reconstruction.v2"
+        )
     stable_id = manifest.get("stable_id")
     if (
         not isinstance(stable_id, str)
@@ -1616,33 +2215,22 @@ def validate_canonical_reconstruction(
     ):
         raise ReconstructionValidationError("canonical reconstruction proposal binding changed")
 
-    if schema_version == "menagerie.crawler.reconstruction.v2":
-        transaction_id = manifest.get("transaction_id")
-        if not isinstance(transaction_id, str) or not re.fullmatch(
-            r"sha256:[0-9a-f]{64}", transaction_id
-        ):
-            raise ReconstructionValidationError(
-                "canonical reconstruction transaction-id is invalid"
-            )
-        marker_path = reconstruction_path.with_name(f"{stable_id}.commit.json")
-        marker = _read_json_object(marker_path, "canonical reconstruction commit marker")
-        if (
-            set(marker)
-            != {
-                "schema_version",
-                "stable_id",
-                "transaction_id",
-                "proposal_sha256",
-            }
-            or marker.get("schema_version") != "menagerie.crawler.promotion-commit.v1"
-        ):
-            raise ReconstructionValidationError("canonical reconstruction marker schema is invalid")
-        if (
-            marker.get("stable_id") != stable_id
-            or marker.get("transaction_id") != transaction_id
-            or marker.get("proposal_sha256") != proposal_digest
-        ):
-            raise ReconstructionValidationError("canonical reconstruction commit marker is stale")
+    transaction_id = manifest.get("transaction_id")
+    if not isinstance(transaction_id, str) or _HASH_PATTERN.fullmatch(transaction_id) is None:
+        raise ReconstructionValidationError("canonical reconstruction transaction-id is invalid")
+    marker_path = reconstruction_path.with_name(f"{stable_id}.commit.json")
+    marker = _read_json_object(marker_path, "canonical reconstruction commit marker")
+    if (
+        set(marker)
+        != {
+            "schema_version",
+            "stable_id",
+            "transaction_id",
+            "proposal_sha256",
+        }
+        or marker.get("schema_version") != "menagerie.crawler.promotion-commit.v1"
+    ):
+        raise ReconstructionValidationError("canonical reconstruction marker schema is invalid")
 
     source_manifest_path = _resolve_reconstruction_reference(
         repo_root, manifest.get("source_manifest_path"), "source_manifest_path"
@@ -1703,13 +2291,29 @@ def validate_canonical_reconstruction(
     ):
         raise ReconstructionValidationError("canonical intake snapshot binding changed")
     matching_items = [item for item in snapshot_items if item.get("stable_id") == stable_id]
+    intake_item_sha256 = stable_hash(matching_items[0]) if len(matching_items) == 1 else None
     if (
         len(matching_items) != 1
         or manifest.get("intake_item") != matching_items[0]
-        or manifest.get("intake_item_sha256") != stable_hash(matching_items[0])
+        or manifest.get("intake_item_sha256") != intake_item_sha256
         or (expected_intake_item is not None and dict(expected_intake_item) != matching_items[0])
     ):
         raise ReconstructionValidationError("canonical reconstruction intake-item binding changed")
+    expected_transaction_id = reconstruction_transaction_id(
+        stable_id,
+        proposal_digest,
+        source_manifest,
+        str(intake_item_sha256),
+    )
+    if (
+        transaction_id != expected_transaction_id
+        or marker.get("stable_id") != stable_id
+        or marker.get("transaction_id") != expected_transaction_id
+        or marker.get("proposal_sha256") != proposal_digest
+    ):
+        raise ReconstructionValidationError(
+            "canonical reconstruction transaction basis or commit marker is stale"
+        )
 
     model_root = _resolve_reconstruction_reference(
         repo_root, manifest.get("canonical_code_root"), "canonical_code_root"
