@@ -1016,7 +1016,7 @@ class SupervisedForwardLane:
                         self.timeout_seconds,
                         self.rss_limit_bytes,
                         requested_mode=mode,
-                        diagnostics_root=work_root.parent / "diagnostics",
+                        diagnostics_root=_diagnostics_root_for_work_root(work_root),
                     )
                 )
         return tuple(attempts)
@@ -5833,6 +5833,27 @@ def _diagnostic_relative_path(diagnostics_root: Path, attempt_id: str) -> str:
     index = max(index for index, part in enumerate(resolved.parts) if part == ".crawl-local")
     relative_root = Path(*resolved.parts[index:])
     return (relative_root / f"{attempt_id}.json").as_posix()
+
+
+def _diagnostics_root_for_work_root(work_root: Path) -> Path:
+    """Return a campaign-local C-07 sidecar root below ``.crawl-local``.
+
+    Parameters
+    ----------
+    work_root:
+        Driver work-envelope root below its runtime directory.
+
+    Returns
+    -------
+    pathlib.Path
+        Production's sibling diagnostics directory, or an isolated nested
+        ``.crawl-local`` directory for an explicitly relocated dry-run runtime.
+    """
+
+    runtime_root = work_root.parent
+    if ".crawl-local" in runtime_root.resolve().parts:
+        return runtime_root / "diagnostics"
+    return runtime_root / ".crawl-local" / "diagnostics"
 
 
 def _redact_attempt_diagnostics(

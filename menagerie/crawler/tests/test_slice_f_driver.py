@@ -78,7 +78,11 @@ from menagerie.crawler.wakeup import (
     WakeupBackend,
     WakeupManager,
 )
-from menagerie.crawler.worker_supervisor import SupervisedResult, SupervisorObservation
+from menagerie.crawler.worker_supervisor import (
+    SupervisedResult,
+    SupervisorObservation,
+    parent_success_attestation_sha256,
+)
 
 
 class InjectedKill(RuntimeError):
@@ -1538,6 +1542,130 @@ def test_parent_accepts_one_requested_mode_from_dual_mode_receipt(tmp_path: Path
     assert attempts[0]["worker_receipt"]["constructor_seconds"] == 0.25
     assert attempts[0]["worker_receipt"]["forward_seconds"] == 0.5
     assert driver_module._attempt_policy_satisfied(attempts, proposal, 1)
+
+
+def test_supervised_success_round_trip_persists_attestation_and_awards_runs(
+    tmp_path: Path,
+) -> None:
+    """Driver-projected parent facts survive JSONL and earn a reducer run award."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    paths = _paths(tmp_path, snapshot)
+    driver = _driver(tmp_path, snapshot)
+    item = driver._ordered_work(snapshot, {})[0]
+    artifact = FakeAuthor().author(item, paths.work_root, driver.config)
+    proposal = artifact.proposal
+    environment = _test_environment(tmp_path / "env")
+    execution_identity = _execution_identity(proposal, environment)
+    templates = FakeForward().forward(artifact, environment, 1, paths.work_root)
+    projected: list[Mapping[str, Any]] = []
+    for index, template in enumerate(templates):
+        mode = str(template["mode"])
+        receipt = {
+            "receipt_version": "menagerie.crawler.worker-receipt.v1",
+            "stable_id": proposal["stable_id"],
+            "source_identity": proposal["source_identity"],
+            "recipe_revision": proposal["recipe_revision"],
+            "observed_recipe_revision": template["worker_receipt"]["observed_recipe_revision"],
+            "observed_adapter_sha256": template["worker_receipt"]["observed_adapter_sha256"],
+            "observed_code_manifest_sha256": template["worker_receipt"][
+                "observed_code_manifest_sha256"
+            ],
+            "observed_input_asset_sha256": template["worker_receipt"][
+                "observed_input_asset_sha256"
+            ],
+            "execution_identity": execution_identity,
+            "mode": mode,
+            "constructor_started": True,
+            "constructor_completed": True,
+            "input_completed": True,
+            "declared_meaningful_modes": ["train", "eval"],
+            "detected_meaningful_modes": ["train", "eval"],
+            "meaningful_modes": ["train", "eval"],
+            "per_mode": {
+                mode: {
+                    **template["worker_receipt"],
+                    "constructor_seconds": 0.25,
+                    "forward_seconds": 0.5,
+                    "error": None,
+                }
+            },
+            "policy_observation": template["policy_observation"],
+            "error": None,
+            "receipt_sha256": HASH,
+        }
+        completion_line = (
+            f'MENAGERIE_WORKER_COMPLETION_V1 {{"proof":"{HASH}","receipt_sha256":"{HASH}"}}'
+        )
+        completion_bytes = (completion_line + "\n").encode("utf-8")
+        wall_seconds = 0.10000000000000002 + index
+        cpu_seconds = 0.010000000000000002 + index
+        peak_rss_bytes = 128 + index
+        stdout_sha256 = hash_bytes(completion_bytes)
+        observation_values = {
+            "exit_code": 0,
+            "signal": None,
+            "wall_seconds": wall_seconds,
+            "cpu_seconds": cpu_seconds,
+            "peak_rss_bytes": peak_rss_bytes,
+            "stdout_sha256": stdout_sha256,
+            "stderr_sha256": HASH,
+        }
+        parent_attestation = parent_success_attestation_sha256(completion_line, observation_values)
+        observation = SupervisorObservation(
+            argv=("python", "-m", "menagerie.crawler.worker"),
+            cwd="/scratch",
+            exit_code=0,
+            signal_number=None,
+            wall_seconds=wall_seconds,
+            cpu_seconds=cpu_seconds,
+            peak_rss_bytes=peak_rss_bytes,
+            timed_out=False,
+            rss_exceeded=False,
+            stdout_sha256=stdout_sha256,
+            stdout_bytes=len(completion_bytes),
+            stdout_tail=completion_line,
+            stderr_sha256=HASH,
+            stderr_bytes=0,
+            stderr_tail="",
+            stdout_path="/logs/stdout",
+            stderr_path="/logs/stderr",
+            success_attestation_sha256=parent_attestation,
+            attested_receipt_sha256=HASH,
+        )
+        projected.extend(
+            driver_module._attempts_from_supervised(
+                artifact,
+                SupervisedResult(observation, receipt, None, parent_attestation),
+                environment,
+                execution_identity,
+                0,
+                10.0,
+                1024,
+                requested_mode=mode,
+                diagnostics_root=tmp_path / ".crawl-local" / "diagnostics",
+            )
+        )
+
+    gate = FakeChecker().check_metadata([artifact], paths.work_root, driver.config).gate
+    assert gate is not None
+    with CanonicalReducer(paths.ledgers, [item.stable_id]) as reducer:
+        reducer.append_gate(gate)
+        for attempt in projected:
+            reducer.append_attempt(attempt)
+        persisted = scan_jsonl(paths.ledgers.attempts)
+        assert len(persisted) == 2
+        assert all(reducer_module._parent_success_attestation_matches(value) for value in persisted)
+        model = driver_module._assemble_run_model(
+            item,
+            artifact,
+            persisted,
+            [gate],
+            driver.config,
+        )
+        appended = reducer.append_model(model)
+
+    assert appended.record["status"]["code"] == "runs"
 
 
 def test_attempt_policy_rejects_observed_asset_digest_mismatch() -> None:
