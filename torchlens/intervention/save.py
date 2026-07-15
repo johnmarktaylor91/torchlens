@@ -108,6 +108,41 @@ class LazyImportRef:
     trust_custom_callables: bool = False
     allowed_custom_callable_modules: tuple[str, ...] | None = None
 
+    def __setstate__(self, state: object) -> None:
+        """Force fail-closed trust on ANY unpickle reconstruction (self-defense).
+
+        A ``LazyImportRef`` is materialized in-process from a load call with a trust
+        context threaded through ``__init__``; it is NEVER a legitimate member of a
+        pickled ``metadata.pkl`` graph. If some path (a forged bundle, a
+        ``__reduce__`` gadget) reconstructs one via unpickle, its trust MUST NOT come
+        from the attacker-controlled pickled fields, or a crafted
+        ``LazyImportRef(import_path="os:system", trust_custom_callables=True)`` would
+        REDUCE-invoke ``os.system``. Pickle restores frozen-dataclass state by
+        bypassing ``__setattr__``, so this hook rebuilds the state with
+        ``object.__setattr__`` and HARD-FORCES ``trust_custom_callables=False`` and
+        ``allowed_custom_callable_modules=None`` regardless of the pickled values.
+        The ``import_path`` is preserved (inert until ``__call__``), but resolution
+        can now never be attacker-trusted -- the foreign resolver denies it.
+
+        This is scoped to the UNPICKLE path only: the normal in-process load path
+        constructs the reference through ``__init__`` (never ``__setstate__``), so a
+        legitimately-trusted intervention-spec load is unaffected.
+
+        Parameters
+        ----------
+        state:
+            Pickled instance state (the frozen dataclass ``__dict__``, or a
+            ``(dict, slots)`` 2-tuple), used only to recover ``import_path``.
+        """
+
+        payload: object = state
+        if isinstance(state, tuple) and state and isinstance(state[0], dict):
+            payload = state[0]
+        import_path = payload.get("import_path", "") if isinstance(payload, dict) else ""
+        object.__setattr__(self, "import_path", import_path if isinstance(import_path, str) else "")
+        object.__setattr__(self, "trust_custom_callables", False)
+        object.__setattr__(self, "allowed_custom_callable_modules", None)
+
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Resolve and call the referenced object under its captured trust gate.
 
