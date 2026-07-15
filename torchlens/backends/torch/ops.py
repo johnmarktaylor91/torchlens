@@ -92,6 +92,7 @@ from ...ir.container import (
     OutputPathComponent,
     TupleIndex,
     get_registered_container,
+    reconstruction_is_lossy,
 )
 from ...ir.container_registry import (
     ContainerLeafOccurrence,
@@ -1062,6 +1063,7 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
             type_module=module,
             type_qualname=qualname,
             child_specs=tuple(child_specs),
+            lossy_reconstruction=reconstruction_is_lossy(value, keys),
         )
     torch_fields = _torch_return_type_fields(value)
     if _is_namedtuple_instance(value) or torch_fields:
@@ -1109,6 +1111,7 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
             type_module=module,
             type_qualname=qualname,
             child_specs=tuple(child_specs),
+            lossy_reconstruction=reconstruction_is_lossy(value, fields),
         )
     if isinstance(value, Mapping):
         keys = tuple(value.keys())

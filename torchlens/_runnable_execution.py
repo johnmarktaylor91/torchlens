@@ -279,6 +279,9 @@ def _execute_loaded_sparse_transaction(
         descriptor, slot_values, witness_source_snapshots
     )
     unbound_state_escape_stale = _unbound_state_escape_stale(descriptor, slot_values)
+    container_reconstruction_lossy = _container_spec_reconstruction_lossy(
+        _output_container_spec(fork)
+    )
     numeric_attestation, attestation_check = _numeric_attestation_check(
         descriptor,
         prepared_state,
@@ -301,6 +304,7 @@ def _execute_loaded_sparse_transaction(
         host_rng_unreproduced=host_rng_unreproduced,
         tensor_derived_scalar_stale=tensor_derived_scalar_stale,
         unbound_state_escape_stale=unbound_state_escape_stale,
+        container_reconstruction_lossy=container_reconstruction_lossy,
     )
     path_faithfulness, mismatch = mark_trace_path_status(
         fork,
@@ -375,6 +379,11 @@ def run_live_trace(
             input_kwargs = dict(kwargs)
         fork.save_new_outs(model, input_args, input_kwargs=input_kwargs, random_seed=seed)
         output, faithful = _reconstruct_live_output(fork)
+        # A lossy output container (computed non-field/non-key state, __slots__, or a
+        # data-descriptor field) cannot be faithfully rebuilt, so it is UNVERIFIABLE here
+        # too -- never a false VERIFIED on the live-refresh provider.
+        if _container_spec_reconstruction_lossy(_output_container_spec(fork)):
+            faithful = False
         readiness = ReadinessReport(
             status=ReadinessStatus.READY,
             provider=RunProvider.LIVE,
@@ -1442,6 +1451,23 @@ def _output_container_spec(trace: Any) -> ContainerSpec | None:
     return None
 
 
+def _container_spec_reconstruction_lossy(spec: ContainerSpec | None) -> bool:
+    """Return whether ``spec`` (or any nested child) reconstructs lossily.
+
+    A dataclass / ``ModelOutput`` output whose live instance carried computed
+    non-field/non-key state, a ``__slots__`` layout, or a data-descriptor field is
+    flagged ``lossy_reconstruction`` at capture: the non-invoking rebuild cannot restore
+    that state and must NOT be blessed VERIFIED. Any lossy node anywhere in the output
+    container tree downgrades the whole run to UNVERIFIABLE.
+    """
+
+    if spec is None:
+        return False
+    if getattr(spec, "lossy_reconstruction", False):
+        return True
+    return any(_container_spec_reconstruction_lossy(child) for _, child in spec.child_specs)
+
+
 def _reconstruct_live_output(trace: Any) -> tuple[Any, bool]:
     """Reconstruct refreshed live output faithfully and report reconstruction fidelity.
 
@@ -2178,6 +2204,7 @@ def _path_faithfulness(
     host_rng_unreproduced: bool = False,
     tensor_derived_scalar_stale: bool = False,
     unbound_state_escape_stale: bool = False,
+    container_reconstruction_lossy: bool = False,
 ) -> tuple[PathFaithfulness, RunnableDiagnostic | None]:
     """Classify exact three-state path faithfulness after all honesty checks."""
 
@@ -2185,6 +2212,14 @@ def _path_faithfulness(
     if failed is not None:
         return PathFaithfulness.DIVERGED, failed.diagnostic
     if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
+        return PathFaithfulness.UNVERIFIABLE, None
+    if container_reconstruction_lossy:
+        # The output is a dataclass / ModelOutput whose live instance carried computed
+        # non-field/non-key state (e.g. a __post_init__ value derived from a tensor), a
+        # __slots__ layout, or a data-descriptor field. The non-invoking rebuild restores
+        # only captured fields/keys, so the replayed output differs from a fresh instance
+        # and the derived state cannot be safely recomputed. The honest ceiling is
+        # UNVERIFIABLE, never a false VERIFIED that drops that state silently.
         return PathFaithfulness.UNVERIFIABLE, None
     if host_rng_unreproduced:
         # A Python/NumPy-RNG control-flow capture replayed off its captured seed:
