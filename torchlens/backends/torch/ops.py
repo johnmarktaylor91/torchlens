@@ -181,27 +181,31 @@ is_inplace fallback). They mutate their target but log a reconstructed output te
 version-baseline signal is unavailable and the operator name is the honest mutation signature.
 """
 
-_INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_NAMES = frozenset(
-    {
-        "__iadd__",
-        "__isub__",
-        "__imul__",
-        "__itruediv__",
-        "__ifloordiv__",
-        "__imod__",
-        "__ipow__",
-        "__ilshift__",
-        "__irshift__",
-        "__iand__",
-        "__ixor__",
-        "__ior__",
-        "__imatmul__",
-    }
+_INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS = frozenset(
+    {"__index__", "__init__", "__init_subclass__", "__int__", "__invert__", "__iter__"}
 )
-"""In-place augmented-assignment dunders.
+"""Non-mutating ``__i*`` dunders excluded from augmented-assignment classification.
 
 Unary dunders such as ``__invert__`` intentionally stay out of this set.
 """
+
+
+def _is_inplace_augmented_assignment_dunder(name: str) -> bool:
+    """Return whether ``name`` denotes an in-place augmented-assignment dunder.
+
+    Parameters
+    ----------
+    name:
+        Function name recorded by the torch eager wrapper.
+
+    Returns
+    -------
+    bool
+        True for ``__i*`` mutation dunders except known non-mutating dunders.
+    """
+
+    return name.startswith("__i") and name not in _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS
+
 
 _LABEL_VERSION_SNAPSHOT: WeakIdKeyDictionary = WeakIdKeyDictionary()
 """Per-tensor ``_version`` at the moment TorchLens last labeled that tensor as an op output.
@@ -3809,7 +3813,7 @@ def _log_output_tensor_info(
         # non-tensor args, output index, and containing module.  Each unique
         # non-param operation is seen only once (pass_index=1).
         logged_func_name = fields_dict["func_name"]
-        is_inplace_output = logged_func_name in _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_NAMES or (
+        is_inplace_output = _is_inplace_augmented_assignment_dunder(logged_func_name) or (
             logged_func_name.endswith("_") and not logged_func_name.startswith("__")
         )
         equivalence_layer_type = f"{layer_type}_inplace" if is_inplace_output else layer_type
@@ -3869,7 +3873,7 @@ def _log_output_tensor_info(
         else:
             name = fields_dict["func_name"]
             name_mutating = (
-                name in _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_NAMES
+                _is_inplace_augmented_assignment_dunder(name)
                 or name in _SETTER_MUTATION_FUNC_NAMES
                 or (name.endswith("_") and not name.startswith("__"))
             )

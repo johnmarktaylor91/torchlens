@@ -161,6 +161,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     registry_id_by_key: dict[FunctionRegistryKey, str] = {}
     calls: list[RunnableCallDescriptor] = []
     producer_call_by_slot: dict[str, str] = {}
+    saw_unmodelled_host_write = False
     grouped_ops = _group_computational_ops(ops)
     for call_number, call_ops in grouped_ops:
         representative = call_ops[0]
@@ -221,7 +222,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             )
             continue
 
-        tensor_args, literal_args = _build_call_arguments(
+        tensor_args, literal_args, has_unmodelled_host_write = _build_call_arguments(
             representative,
             template,
             call_id=call_id,
@@ -231,6 +232,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             slot_drafts=slot_drafts,
             diagnostics=diagnostics,
         )
+        saw_unmodelled_host_write = saw_unmodelled_host_write or has_unmodelled_host_write
         output_slot_ids = tuple(slot_for_op[id(op)] for op in call_ops)
         for output_slot_id in output_slot_ids:
             producer_call_by_slot[output_slot_id] = call_id
@@ -318,6 +320,12 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # witnesses the drop, so keep the run honestly UNVERIFIABLE + NOT_APPLICABLE rather than
         # a false VERIFIED with the mutation gone. An in-place op on a LABELLED alias is graph-
         # connected (replayed) and is never recorded, so a normal model stays VERIFIED.
+        completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
+    if saw_unmodelled_host_write and completeness is WitnessCompleteness.COMPLETE:
+        # A surviving in-place op with a removed receiver came from a host alias such as
+        # ``buffer.data.add_(1.0)``. The sparse recipe can keep running by reconnecting the receiver
+        # to the cooked parent, but the original host write bypassed the ordinary labelled tensor
+        # path, so the descriptor cannot honestly prove full path fidelity.
         completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
     diagnostics.extend(_preflight_output_contracts(trace, ops))
     diagnostics = _deduplicate_diagnostics(diagnostics)
@@ -948,16 +956,29 @@ def _build_call_arguments(
     slot_for_op: Mapping[int, str],
     slot_drafts: dict[str, _SlotDraft],
     diagnostics: list[RunnableDiagnostic],
-) -> tuple[list[TensorArgumentRef], list[LiteralArgumentRef]]:
+) -> tuple[list[TensorArgumentRef], list[LiteralArgumentRef], bool]:
     """Build tensor and literal call leaves from one cooked argument template."""
 
     tensor_args: list[TensorArgumentRef] = []
     literal_args: list[LiteralArgumentRef] = []
     parameter_candidates = list(getattr(op, "_param_logs", ()) or ())
     non_tensor_positional = iter(getattr(op, "non_tensor_pos_args", ()) or ())
+    has_unmodelled_host_write = False
 
     for index, component in enumerate(template.args):
         path: tuple[str | int, ...] = ("args", index)
+        if _should_recover_removed_inplace_receiver(op, component, path):
+            if _append_first_parent_tensor_argument(
+                op,
+                path=path,
+                call_id=call_id,
+                op_by_alias=op_by_alias,
+                slot_for_op=slot_for_op,
+                slot_drafts=slot_drafts,
+                tensor_args=tensor_args,
+            ):
+                has_unmodelled_host_write = True
+                continue
         override = None
         if not _component_contains_tensor(component):
             override = next(non_tensor_positional, _NO_OVERRIDE)
@@ -995,7 +1016,94 @@ def _build_call_arguments(
             literal_args=literal_args,
             diagnostics=diagnostics,
         )
-    return tensor_args, literal_args
+    return tensor_args, literal_args, has_unmodelled_host_write
+
+
+def _should_recover_removed_inplace_receiver(
+    op: Any,
+    component: Any,
+    path: tuple[str | int, ...],
+) -> bool:
+    """Return whether an in-place receiver was removed as an unmodelled host alias.
+
+    Parameters
+    ----------
+    op:
+        Cooked op whose sparse call recipe is being built.
+    component:
+        Captured argument component at ``path``.
+    path:
+        Sparse argument path for ``component``.
+
+    Returns
+    -------
+    bool
+        True when an in-place call's receiver was formerly a ``ParentRef`` but
+        cleanup replaced it with an unsupported marker.
+    """
+
+    return (
+        path == ("args", 0)
+        and bool(getattr(op, "is_inplace", False))
+        and isinstance(component, Unsupported)
+        and component.reason == "removed_parent_ref"
+        and component.value_type == "ParentRef"
+    )
+
+
+def _append_first_parent_tensor_argument(
+    op: Any,
+    *,
+    path: tuple[str | int, ...],
+    call_id: str,
+    op_by_alias: Mapping[str, Any],
+    slot_for_op: Mapping[int, str],
+    slot_drafts: dict[str, _SlotDraft],
+    tensor_args: list[TensorArgumentRef],
+) -> bool:
+    """Append the first cooked parent as a recovered in-place receiver.
+
+    Parameters
+    ----------
+    op:
+        Cooked in-place op.
+    path:
+        Sparse argument path for the receiver.
+    call_id:
+        Sparse call identifier.
+    op_by_alias:
+        Lookup table from raw/final labels to cooked ops.
+    slot_for_op:
+        Lookup table from cooked op identity to tensor slot id.
+    slot_drafts:
+        Mutable tensor slot descriptors.
+    tensor_args:
+        Accumulator receiving tensor arguments.
+
+    Returns
+    -------
+    bool
+        True when the receiver was recovered and appended.
+    """
+
+    parents = tuple(str(parent) for parent in getattr(op, "parents", ()) or ())
+    if not parents:
+        return False
+    parent = op_by_alias.get(parents[0])
+    if parent is None:
+        return False
+    base_slot_id = slot_for_op.get(id(parent))
+    if base_slot_id is None:
+        return False
+    slot_id = _child_version_slot_id(parent, op, base_slot_id, slot_drafts)
+    _append_tensor_argument(
+        tensor_args,
+        path,
+        slot_id,
+        call_id=call_id,
+        slot_drafts=slot_drafts,
+    )
+    return True
 
 
 _NO_OVERRIDE = object()
