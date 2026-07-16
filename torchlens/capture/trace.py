@@ -937,6 +937,10 @@ def _record_runnable_input_tensor_sites(
     import torch as _torch
 
     sites: dict[int, tuple[object, tuple[str | int, ...]]] = {}
+    # (tensor, site) leaves so the completeness witness can additionally index model-input
+    # leaves by STORAGE identity (r31): a metadata read routed through a ``.data`` / ``.detach()``
+    # alias shares the leaf's storage but is a distinct object the id map above misses.
+    tensor_leaves: list[tuple[Any, tuple[object, tuple[str | int, ...]]]] = []
 
     def _walk(position: object, value: Any, path: tuple[str | int, ...]) -> None:
         """Descend one boundary value, indexing every tensor leaf by identity.
@@ -949,7 +953,9 @@ def _record_runnable_input_tensor_sites(
         """
 
         if isinstance(value, _torch.Tensor):
-            sites[id(value)] = (position, path)
+            site = (position, path)
+            sites[id(value)] = site
+            tensor_leaves.append((value, site))
             return
         if isinstance(value, tuple) and hasattr(value, "_fields"):
             for name in value._fields:
@@ -971,6 +977,9 @@ def _record_runnable_input_tensor_sites(
 
     if sites:
         trace.__dict__["_runnable_input_tensor_sites"] = sites
+        from ..backends.torch.completeness_witness import record_runnable_input_storage_sites
+
+        record_runnable_input_storage_sites(trace, tensor_leaves)
 
 
 def _record_runnable_module_training_modes(trace: "Trace", model: Any) -> None:

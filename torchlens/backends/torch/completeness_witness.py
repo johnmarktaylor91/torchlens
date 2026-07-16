@@ -394,8 +394,10 @@ If such a property can neither be wrapped nor its source recorded, its use must 
 """
 
 INPUT_METADATA_PREDICATE_FUNCS = frozenset({"is_contiguous", "stride", "storage_offset"})
-"""Tensor METADATA-PREDICATE **methods** whose result on a MODEL INPUT can steer unobserved
-Python control flow (r27-H2, extended r29-C1).
+"""Tensor LAYOUT-PREDICATE **methods** whose result on a MODEL INPUT can steer unobserved
+Python control flow (r27-H2, extended r29-C1). Special-cased (memory_format / full-stride
+recording) by :func:`_make_input_metadata_wrapper`; the broader host-value method surface is
+:data:`INPUT_METADATA_BOOL_METHODS`.
 
 ``x.is_contiguous()`` / ``x.stride()`` / ``x.storage_offset()`` return host values derived
 from the input's memory LAYOUT -- which the input contract does NOT check (only shape+dtype),
@@ -410,64 +412,262 @@ input before the executor's detach-clone.
 These reads emit no aten dispatch (pure metadata, deliberately excluded from the escape
 census -- see ``HOST_ESCAPE_OPERATORS``), so they are observed by the same scoped method
 patch as the invisible escapes, but with a DIFFERENT recording rule: only a read whose
-receiver is a MODEL-INPUT leaf tensor records a (site, predicate, observed value) fact,
-so a model that never reads input layout records nothing and can never over-trigger.
-``size``/``dim``/``numel``/``dtype`` derive from shape+dtype and stay covered by the
-existing input contract; they are deliberately NOT observed (a real model reads shapes
-constantly -- patching them buys no honesty and costs every capture).
-
-COVERAGE (the closed host-input-metadata-read class -- round-30 must find no other plain
-input-metadata accessor): layout methods here (``is_contiguous`` / ``stride`` /
-``storage_offset``); autograd/leaf PROPERTIES in ``INPUT_METADATA_PROPERTY_NAMES``
-(``requires_grad`` / ``grad_fn`` / ``is_leaf``); and raw storage GEOMETRY
-(``untyped_storage().nbytes()`` / ``.size()``), recorded as ``storage_nbytes`` at the
-``untyped_storage()`` / ``storage()`` exposure of a model-input leaf (see
-``_maybe_record_input_storage_geometry``). Reads on a DERIVED VIEW of an input leaf
-(``x.t().is_contiguous()``) are handled by fail-closed view attribution (see
-``_observe_input_metadata_read``). ``data_ptr`` / storage ``data_ptr`` already fail closed
-(r15/r16-C1); ``dtype`` / ``device`` / ``shape`` / ``numel`` are shape+dtype covered.
+receiver is a MODEL-INPUT leaf tensor (or a ``.data`` / ``.detach()`` storage-alias of one,
+r31) records a (site, predicate, observed value) fact, so a model that never reads input
+layout records nothing and can never over-trigger. ``size``/``dim``/``numel``/``dtype``
+derive from shape+dtype and stay covered by the existing input contract; they are
+deliberately NOT observed (a real model reads shapes constantly -- patching them buys no
+honesty and costs every capture).
 """
 
-INPUT_METADATA_PROPERTY_NAMES = frozenset({"requires_grad", "grad_fn", "is_leaf"})
-"""Tensor autograd/leaf getset PROPERTIES whose read on a MODEL INPUT is witnessed
-(r27-H2 ``requires_grad``; r29-C1 adds ``grad_fn`` / ``is_leaf``).
+INPUT_METADATA_BOOL_METHODS = frozenset(
+    {
+        "is_conj",
+        "is_neg",
+        "is_inference",
+        "is_pinned",
+        "is_shared",
+        "is_coalesced",
+        "_is_view",
+    }
+)
+"""Host-value-returning tensor-metadata **methods** (beyond the layout trio) NOT pinned by the
+shape+dtype input contract (r31, capability-driven accessor table).
 
-``x.requires_grad`` / ``x.grad_fn`` / ``x.is_leaf`` are non-callable getset descriptors (like
-``__cuda_array_interface__``) read by ``if x.requires_grad:`` / ``if x.grad_fn is not None:`` /
-``if x.is_leaf:`` control flow. The runnable executor detach-clones bound inputs, ERASING the
-runtime autograd state (a detached clone has ``requires_grad=False``, ``grad_fn=None``,
-``is_leaf=True``), so without these facts an autograd-branching model would falsely VERIFY for
-a runtime input whose autograd state differs. The scoped property patch records the observed
-value only for MODEL-INPUT receivers (``grad_fn`` is recorded as a PRESENCE bool -- the exact
-backward object is not comparable across runs) and must preserve descriptor SET semantics for
-the writable ``requires_grad`` (``x.requires_grad = True`` inside a forward still works);
-``grad_fn`` / ``is_leaf`` are read-only.
+Round-30 confirmed false VERIFIED via control flow steered on these accessors, each of which
+the shape+dtype contract does NOT pin, so a same-shape/same-dtype runtime input differing in
+the property silently replays the captured arm:
+
+* ``is_conj`` / ``is_neg`` -- the conjugate / negative dispatch bit set by ``x.conj()`` /
+  ``torch._neg_view(x)``; a same-shape non-conj/non-neg twin flips the branch.
+* ``is_inference`` -- whether the tensor was created under ``torch.inference_mode()``.
+* ``is_pinned`` / ``is_shared`` -- pinned-memory / shared-memory STORAGE placement.
+* ``is_coalesced`` -- sparse-tensor coalesced flag (raises on dense; recorded only on success).
+* ``_is_view`` -- whether the receiver is itself a view (structural, treated as autograd-family
+  for alias/view attribution -- ``.data`` / ``.detach()`` are always views, so it is recorded
+  only for the input LEAF, never a storage-alias).
+
+Each is a boolean method with no value-bearing args; the observer records ``bool(result)`` and
+re-checks it on the RAW runtime input. Feature-detected (``getattr``) at install time; an
+accessor absent on the running torch is simply skipped. Recorded ONLY for a model-input leaf
+(or, for the alias-safe subset, a ``.data`` / ``.detach()`` storage-alias), so a model that
+never reads them records nothing -- zero over-trigger by construction.
+
+DELIBERATELY EXCLUDED (shape+dtype-derived or already covered, would only add noise): ``size`` /
+``sym_size`` / ``numel`` / ``dim`` / ``ndimension`` / ``element_size`` / ``nelement`` /
+``is_contiguous`` variants already in the layout trio / ``is_floating_point`` / ``is_complex`` /
+``is_signed`` (dtype-derived). ``data_ptr`` / ``untyped_storage().data_ptr`` fail closed
+(r15/r16-C1). ``dtype`` / ``device`` / ``shape`` / ``layout`` are shape+dtype/device covered.
 """
+
+INPUT_METADATA_PROPERTY_NAMES = frozenset(
+    {"requires_grad", "grad_fn", "is_leaf", "retains_grad", "_base"}
+)
+"""Tensor autograd / structural getset PROPERTIES whose read on a MODEL INPUT is witnessed
+(r27-H2 ``requires_grad``; r29-C1 adds ``grad_fn`` / ``is_leaf``; r31 adds ``retains_grad`` /
+``_base``).
+
+``x.requires_grad`` / ``x.grad_fn`` / ``x.is_leaf`` / ``x.retains_grad`` / ``x._base`` are
+non-callable getset descriptors read by ``if x.requires_grad:`` / ``if x.grad_fn is not None:``
+/ ``if x.is_leaf:`` / ``if x.retains_grad:`` / ``if x._base is not None:`` control flow. The
+runnable executor detach-clones bound inputs, ERASING the runtime autograd state (a detached
+clone has ``requires_grad=False``, ``grad_fn=None``, ``is_leaf=True``, ``retains_grad=False``,
+``_base=None``), so without these facts an autograd-branching model would falsely VERIFY for a
+runtime input whose autograd state differs. The scoped property patch records the observed
+value only for MODEL-INPUT receivers (``grad_fn`` / ``_base`` as a PRESENCE bool -- the exact
+backward object / base tensor is not comparable across runs) and must preserve descriptor SET
+semantics for the writable ``requires_grad`` (``x.requires_grad = True`` inside a forward still
+works); ``grad_fn`` / ``is_leaf`` / ``retains_grad`` / ``_base`` are read-only.
+"""
+
+_INPUT_METADATA_PRESENCE_PROPERTY_NAMES = frozenset({"grad_fn", "_base"})
+"""Autograd/structural PROPERTIES recorded as a PRESENCE boolean (``value is not None``): the
+exact backward object (``grad_fn``) and base tensor (``_base``) are not comparable across runs,
+so only their presence witnesses the control decision."""
 
 INPUT_METADATA_GRAD_PROPERTY = "requires_grad"
 """Deprecated single-name alias retained for back-compat; see ``INPUT_METADATA_PROPERTY_NAMES``."""
 
-_INPUT_METADATA_VIEW_DOWNGRADE_NAMES = frozenset({"is_contiguous", "stride", "storage_offset"})
-"""LAYOUT predicates whose read on an input-derived VIEW fails closed (r29-C1, F5).
+# --- Accessor FAMILIES governing alias/view attribution (r31) -------------------------------
+#
+# A metadata read whose receiver is not the input leaf OBJECT itself is attributed by the
+# receiver's relationship to an input leaf, which differs per accessor family:
 
-Restricted to the layout family: torch's internal C++ layout reads bypass the Python method
-patch, so a Python-level layout read on an input view is genuine user control flow. The
-autograd family (``requires_grad`` / ``grad_fn`` / ``is_leaf``) is EXCLUDED because torch /
-TorchLens read those Python properties on input-derived views during ordinary autograd and
-escape bookkeeping, which would over-trigger the fail-closed downgrade.
-"""
+_INPUT_METADATA_LAYOUT_NAMES = frozenset({"is_contiguous", "stride", "storage_offset"})
+"""LAYOUT accessors: value DIFFERS between a leaf and a derived view (``x.t().stride()`` !=
+``x.stride()``), so a derived-view read fails closed (cannot be re-derived from the runtime
+leaf); a ``.data`` / ``.detach()`` storage-alias (identical geometry) records the leaf fact."""
+
+_INPUT_METADATA_ALIAS_SAFE_NAMES = _INPUT_METADATA_LAYOUT_NAMES | frozenset(
+    {"is_conj", "is_neg", "is_inference", "is_pinned", "is_shared", "is_coalesced"}
+)
+"""Accessors attributed by STORAGE IDENTITY (r31, hole A). A read on a tensor sharing an input
+leaf's storage with IDENTICAL geometry (``.data`` / ``.detach()``) records the leaf fact -- the
+value is provably equal to a direct leaf read; a storage-alias with DIFFERENT geometry (a
+derived view) fails closed. This closes the ``x.data.storage_offset()`` /
+``x.detach().is_contiguous()`` class the object-identity map missed."""
+
+_INPUT_METADATA_VIEW_FAIL_AUTOGRAD_NAMES = frozenset(
+    {"is_leaf", "retains_grad", "_base", "_is_view"}
+)
+"""AUTOGRAD / structural accessors whose read on a DERIVED VIEW of an input leaf fails closed
+(r31 hole C). On a ``.data`` / ``.detach()`` storage-alias these are CONSTANT (detached:
+``is_leaf=True``, ``retains_grad=False``, ``_base`` set, ``_is_view`` True), input-INDEPENDENT,
+no hole -- IGNORED. On a DERIVED VIEW (``x.view(-1).is_leaf``, ``retains_grad`` on a non-leaf
+view) the state is not re-derivable from the runtime leaf, so the read fails closed. The
+framework-vs-user discriminator is the ``_base``-in-sites linkage itself: TorchLens's own
+per-op capture bookkeeping NEVER reads THESE four accessors on any input-derived view
+(verified empirically -- zero internal reads), so a match is a genuine USER Python view read.
+Uses only the CHEAP ``_base`` attribute check -- no per-op storage-pointer cost."""
+
+_INPUT_METADATA_LEAF_ONLY_AUTOGRAD_NAMES = frozenset({"requires_grad", "grad_fn"})
+"""AUTOGRAD accessors witnessed ONLY on the input LEAF (object identity), never attributed to a
+view or alias (r31). TorchLens's OWN per-op capture bookkeeping reads ``output.grad_fn`` and
+``output.requires_grad`` on EVERY op output -- INCLUDING input-derived views (``x[i]`` /
+``x.view(-1)``) -- while logging is enabled and unmarked (verified: grad_fn ~30x, requires_grad
+~10x on input views for a trivial model). Those framework reads are indistinguishable at the
+Python descriptor from a genuine user view read, so BOTH a fail-closed view downgrade AND a
+leaf-attributed view record would over-trigger a normal model (a ``requires_grad``-oblivious
+model would spuriously DIVERGE on a ``requires_grad``-changed input). The LOCKED
+allowlist-by-construction principle forbids a spoofable stack-filename discriminator, and the
+per-op autograd reads live outside this witness surface (in ``backend.py``), so these two
+accessors stay LEAF-ONLY: a direct ``x.requires_grad`` / ``x.grad_fn`` leaf read is witnessed
+and diverges correctly; a read reached ONLY through a view is a documented residual. (``grad_fn``
+is not even view-invariant -- a view of a leaf has a ``ViewBackward`` grad_fn the leaf lacks --
+so a leaf record would be wrong regardless.)"""
+
+
+# Per-trace map from an input leaf's BASE-storage data pointer to the list of
+# ``(site, size, stride, storage_offset)`` geometries of the model-input leaves that own it.
+# Kept in a weak-keyed module table (NOT ``trace.__dict__``) so it never enters the portable
+# schema and needs no scrub allow-list entry (r31); dropped when the Trace is GC'd.
+_RUNNABLE_INPUT_STORAGE_SITES: "weakref.WeakKeyDictionary[Any, dict[int, list[Any]]]" = (
+    weakref.WeakKeyDictionary()
+)
+
+_ALIAS_EQUIVALENT = "equivalent"
+"""Storage-alias classification: shares an input leaf's storage with IDENTICAL geometry
+(``.data`` / ``.detach()``) -- a metadata read on it equals a direct leaf read."""
+
+_ALIAS_DERIVED_VIEW = "derived_view"
+"""Storage-alias classification: shares an input leaf's storage but with DIFFERENT geometry
+(a derived view the sparse replay never re-derives) -- fails closed."""
+
+
+def record_runnable_input_storage_sites(
+    trace: Any, tensor_leaves: "list[tuple[torch.Tensor, Any]]"
+) -> None:
+    """Index model-input TENSOR leaves by BASE-storage identity for alias-read witnessing (r31).
+
+    The object-identity map (``_runnable_input_tensor_sites``) misses a metadata read routed
+    through a ``.data`` / ``.detach()`` alias (or any derived view) of an input leaf: the alias
+    is a distinct Python object sharing the leaf's STORAGE but neither the leaf object nor a
+    ``_base``-linked view. This companion map lets :func:`_classify_input_storage_alias`
+    attribute such a read by storage identity + geometry. Storage pointers and geometry are
+    read under the internal-scalar-read marker so the live ``untyped_storage`` / ``data_ptr`` /
+    ``stride`` / ``storage_offset`` patches treat them as TorchLens-internal (no spurious
+    escape record, no fail-closed data_ptr trip). Runs only for runnable captures; stores no
+    tensors.
+    """
+
+    if not tensor_leaves:
+        return
+    storage_sites: dict[int, list[Any]] = {}
+    # ``pause_logging`` suppresses OP CAPTURE (``storage_offset`` / ``untyped_storage`` are
+    # torch-function-wrapped and would otherwise be logged as spurious ops, shifting call ids);
+    # ``internal_scalar_read`` marks the reads internal for the escape census / metadata patches.
+    with _state.pause_logging(), internal_scalar_read():
+        for tensor, site in tensor_leaves:
+            try:
+                ptr = tensor.untyped_storage().data_ptr()
+                geometry = (
+                    tuple(tensor.shape),
+                    tuple(int(v) for v in tensor.stride()),
+                    int(tensor.storage_offset()),
+                )
+            except (RuntimeError, AttributeError, TypeError, ValueError, NotImplementedError):
+                continue
+            storage_sites.setdefault(ptr, []).append((site, *geometry))
+    if storage_sites:
+        _RUNNABLE_INPUT_STORAGE_SITES[trace] = storage_sites
+
+
+def _classify_input_storage_alias(trace: Any, source: torch.Tensor) -> "tuple[str | None, Any]":
+    """Classify ``source`` against the input-leaf storage map (r31, holes A/C).
+
+    Returns ``(_ALIAS_EQUIVALENT, site)`` when ``source`` shares an input leaf's base storage
+    with IDENTICAL geometry (a ``.data`` / ``.detach()`` alias -- a metadata read on it equals a
+    direct leaf read), ``(_ALIAS_DERIVED_VIEW, site)`` when it shares the storage with DIFFERENT
+    geometry (a derived view the replay never re-derives), or ``(None, None)`` when it does not
+    alias any input leaf's storage (a genuine unrelated activation). Storage-pointer/geometry
+    reads run under the internal marker so the live patches stay pass-through and cannot recurse
+    back into observation.
+    """
+
+    storage_sites = _RUNNABLE_INPUT_STORAGE_SITES.get(trace)
+    if not storage_sites:
+        return (None, None)
+    # ``pause_logging`` so the ``untyped_storage`` / ``storage_offset`` reads below are not
+    # captured as spurious ops mid-forward; ``internal_scalar_read`` keeps them off the census.
+    with _state.pause_logging(), internal_scalar_read():
+        try:
+            ptr = source.untyped_storage().data_ptr()
+        except (RuntimeError, AttributeError, TypeError, NotImplementedError):
+            return (None, None)
+        candidates = storage_sites.get(ptr)
+        if not candidates:
+            return (None, None)
+        try:
+            geometry: Any = (
+                tuple(source.shape),
+                tuple(int(v) for v in source.stride()),
+                int(source.storage_offset()),
+            )
+        except (RuntimeError, TypeError, ValueError):
+            geometry = None
+    for site, size, stride, offset in candidates:
+        if geometry is not None and geometry == (size, stride, offset):
+            return (_ALIAS_EQUIVALENT, site)
+    return (_ALIAS_DERIVED_VIEW, candidates[0][0])
+
+
+def _input_base_tensor(source: torch.Tensor) -> "torch.Tensor | None":
+    """Return ``source._base`` read under the internal marker (r31).
+
+    ``_base`` is a witnessed getset PROPERTY replaced by a recording descriptor during a
+    runnable forward; reading it here for the view-linkage check must go under the
+    internal-scalar-read marker so the recording getter treats it as a TorchLens-internal read
+    (no recursion back into observation).
+    """
+
+    with _state.pause_logging(), internal_scalar_read():
+        try:
+            base = source._base
+        except (RuntimeError, AttributeError):
+            return None
+    return base if isinstance(base, torch.Tensor) else None
+
+
+def _record_input_metadata_read_at_site(trace: Any, site: Any, name: str, value: Any) -> None:
+    """Record one metadata-read fact against a resolved MODEL-INPUT leaf site.
+
+    Facts accumulate per input site into a runtime-only Trace stash the runnable producer
+    serializes as declared witness facts. A repeated read of the same predicate overwrites --
+    tensor metadata is stable across one forward, so the values are identical unless an in-place
+    layout change occurred, in which case the LAST observed value is the one nearest the branch.
+    """
+
+    facts = trace.__dict__.setdefault("_runnable_input_metadata_reads", {})
+    site_facts = facts.setdefault(site, {})
+    site_facts[name] = value
 
 
 def _record_input_metadata_read(trace: Any, source: torch.Tensor, name: str, value: Any) -> None:
-    """Record one metadata-predicate read fact against a MODEL-INPUT leaf site.
+    """Record one metadata-read fact against the model-input leaf that IS ``source`` (by identity).
 
-    The receiver is attributed via the identity map recorded at capture start
-    (``_record_runnable_input_tensor_sites``); a read on any other tensor records
-    nothing. Facts accumulate per input site into a runtime-only Trace stash the
-    runnable producer serializes as declared witness facts. A repeated read of the
-    same predicate overwrites -- tensor metadata is stable across one forward, so
-    the values are identical unless an in-place layout change occurred, in which
-    case the LAST observed value is the one nearest the steered branch.
+    The receiver is attributed via the object-identity map recorded at capture start
+    (``_record_runnable_input_tensor_sites``); a read on any other tensor records nothing here
+    (storage-alias attribution is handled by :func:`_observe_input_metadata_read`).
     """
 
     sites = trace.__dict__.get("_runnable_input_tensor_sites")
@@ -476,32 +676,33 @@ def _record_input_metadata_read(trace: Any, source: torch.Tensor, name: str, val
     site = sites.get(id(source))
     if site is None:
         return
-    facts = trace.__dict__.setdefault("_runnable_input_metadata_reads", {})
-    site_facts = facts.setdefault(site, {})
-    site_facts[name] = value
+    _record_input_metadata_read_at_site(trace, site, name, value)
 
 
 def _observe_input_metadata_read(trace: Any, source: torch.Tensor, name: str, value: Any) -> None:
-    """Attribute one metadata read to a model-input leaf, else fail closed on a derived view.
+    """Attribute one metadata read to a model-input leaf, an alias, or a fail-closed view (r31).
 
-    Three cases (r29-C1):
+    Cases, in order:
 
-    * The receiver IS a model-input leaf -> record a re-checkable (site, predicate, value)
-      fact via :func:`_record_input_metadata_read`.
-    * The receiver is a pure VIEW of a model-input leaf (``x.t()``, ``x[1:]``; its
-      ``_base`` collapses to the storage-owning input leaf) AND the predicate is a LAYOUT
-      read (``is_contiguous`` / ``stride`` / ``storage_offset``) -> the sparse replay never
-      re-derives that intermediate view, so its layout metadata cannot be re-verified at
-      run time; mark the run fail-closed (via ``_INPUT_METADATA_VIEW_READ``) so the producer
-      downgrades witness completeness to UNVERIFIABLE rather than blessing a possibly-wrong
-      replayed arm. Only PYTHON-level LAYOUT reads reach this patch as user control flow;
-      torch's internal C++ layout reads bypass it, so a layout-oblivious model that never
-      calls these accessors in Python records nothing and never downgrades. The AUTOGRAD
-      family (``requires_grad`` / ``grad_fn`` / ``is_leaf``) is DELIBERATELY excluded from
-      the view path: torch/TorchLens read those Python properties on input-derived views
-      during ordinary autograd/escape bookkeeping (e.g. ``x[i].item()``), so downgrading on
-      them would massively over-trigger; they are only witnessed on the input LEAF itself,
-      where the framework reads go through the C++ path and never hit the Python property.
+    * The receiver IS a model-input leaf (object identity) -> record a re-checkable
+      (site, predicate, value) fact.
+    * LEAF-ONLY AUTOGRAD (``requires_grad`` / ``grad_fn``): TorchLens's own per-op bookkeeping
+      reads these on input-derived views while logging is enabled (verified), indistinguishable
+      from a user view read, so a non-leaf read is IGNORED (leaf-only; documented residual).
+    * VIEW-FAIL AUTOGRAD / structural (``is_leaf`` / ``retains_grad`` / ``_base`` / ``_is_view``):
+      a read on a DERIVED VIEW of an input leaf (``retains_grad`` on a non-leaf view, r31 hole C)
+      is attributed by the CHEAP ``_base``-in-sites linkage and fails closed -- the view's state
+      is not re-derivable from the runtime leaf. A ``.data`` / ``.detach()`` storage-alias
+      (``_base`` None) is IGNORED (CONSTANT/detached, input-independent, no hole). These four are
+      NEVER read internally on an input view (verified), so a ``_base`` match is a genuine user
+      Python view read -- the framework-vs-user discriminator is the linkage itself.
+    * ALIAS-SAFE family (layout methods + ``is_conj`` / ``is_neg`` / ``is_inference`` /
+      ``is_pinned`` / ``is_shared`` / ``is_coalesced``): attributed by STORAGE IDENTITY. A read
+      on a ``.data`` / ``.detach()`` storage-alias with IDENTICAL geometry (r31 hole A) records
+      the leaf fact -- its value provably equals a direct leaf read. A storage-alias with
+      DIFFERENT geometry (a derived view, ``x.t().is_contiguous()``) fails closed. Only
+      Python-level reads reach this patch; torch's internal C++ layout reads bypass it, so a
+      layout-oblivious model records nothing.
     * Anything else (a genuinely new activation not aliasing an input) -> ignore.
     """
 
@@ -511,35 +712,57 @@ def _observe_input_metadata_read(trace: Any, source: torch.Tensor, name: str, va
     if id(source) in sites:
         _record_input_metadata_read(trace, source, name, value)
         return
-    if name not in _INPUT_METADATA_VIEW_DOWNGRADE_NAMES:
+    if name in _INPUT_METADATA_LEAF_ONLY_AUTOGRAD_NAMES:
+        # ``requires_grad`` / ``grad_fn`` are read by TorchLens's own per-op bookkeeping on
+        # input-derived views; witnessed on the LEAF only (see the set docstring).
         return
-    base = getattr(source, "_base", None)
-    if base is not None and id(base) in sites:
-        _INPUT_METADATA_VIEW_READ.add(trace)
+    if name in _INPUT_METADATA_VIEW_FAIL_AUTOGRAD_NAMES:
+        base = _input_base_tensor(source)
+        if base is not None and id(base) in sites:
+            _INPUT_METADATA_VIEW_READ.add(trace)
+        return
+    if name in _INPUT_METADATA_ALIAS_SAFE_NAMES:
+        kind, site = _classify_input_storage_alias(trace, source)
+        if kind == _ALIAS_EQUIVALENT:
+            _record_input_metadata_read_at_site(trace, site, name, value)
+        elif kind == _ALIAS_DERIVED_VIEW:
+            _INPUT_METADATA_VIEW_READ.add(trace)
+        else:
+            base = _input_base_tensor(source)
+            if base is not None and id(base) in sites:
+                _INPUT_METADATA_VIEW_READ.add(trace)
 
 
 def _maybe_record_input_storage_geometry(trace: Any, source: torch.Tensor, storage: Any) -> None:
-    """Witness raw storage GEOMETRY read off a model-input leaf (r29-C1, F4).
+    """Witness raw storage GEOMETRY read off a model-input leaf or an alias (r29-C1 F4; r31 A).
 
-    ``x.untyped_storage().nbytes()`` / ``.size()`` return the input's BASE storage byte
-    count, which the shape+dtype input contract does NOT pin: a same-shape input that is a
-    slice of a larger buffer has a larger storage than a freshly-allocated contiguous twin,
-    so a branch on storage geometry would silently replay the captured arm -- a false
-    VERIFIED. The byte count is recorded here at the ``untyped_storage()`` / ``storage()``
-    exposure of a model-input leaf and re-checked against the RAW runtime input. For a normal
-    contiguous input the storage byte count is exactly ``numel * element_size`` (already
-    shape+dtype pinned), so recording it can only ever DIVERGE on a genuinely different
+    ``x.untyped_storage().nbytes()`` / ``.size()`` return the input's BASE storage byte count,
+    which the shape+dtype input contract does NOT pin: a same-shape input that is a slice of a
+    larger buffer has a larger storage than a freshly-allocated contiguous twin, so a branch on
+    storage geometry would silently replay the captured arm -- a false VERIFIED. The byte count
+    is the base storage's, INVARIANT across every view/alias of the same input leaf, so it is
+    recorded against the leaf site for ANY input-storage-aliasing receiver -- the leaf itself,
+    a ``.data`` / ``.detach()`` alias (r31 hole A: ``x.data.untyped_storage().nbytes()``), or a
+    derived view (``x[k:].untyped_storage().nbytes()``) -- and re-checked against the RAW runtime
+    leaf. For a normal contiguous input the byte count is exactly ``numel * element_size``
+    (already shape+dtype pinned), so recording it can only ever DIVERGE on a genuinely different
     underlying buffer -- no over-trigger for ordinary inputs or read-only identity checks.
     """
 
     sites = trace.__dict__.get("_runnable_input_tensor_sites")
-    if not sites or id(source) not in sites:
+    if not sites:
         return
+    site = sites.get(id(source))
+    if site is None:
+        kind, aliased_site = _classify_input_storage_alias(trace, source)
+        if kind is None:
+            return
+        site = aliased_site
     try:
         nbytes = int(storage.nbytes())
     except (RuntimeError, AttributeError, TypeError, ValueError):
         return
-    _record_input_metadata_read(trace, source, "storage_nbytes", nbytes)
+    _record_input_metadata_read_at_site(trace, site, "storage_nbytes", nbytes)
 
 
 _HOST_ESCAPE_STATE_SOURCE_NAMES: "weakref.WeakKeyDictionary[Any, set[str]]" = (
@@ -1858,6 +2081,40 @@ def _make_input_metadata_wrapper(
     return wrapper
 
 
+def _make_input_metadata_bool_method(original: Any, state: _WitnessState, name: str) -> Any:
+    """Wrap a boolean host-value METHOD (``is_conj`` / ``is_neg`` / ``is_inference`` /
+    ``is_pinned`` / ``is_shared`` / ``is_coalesced`` / ``_is_view``) to record a MODEL-INPUT
+    metadata fact, then call through (r31).
+
+    The wrapper computes the original result first (byte-identical behavior; an accessor that
+    raises -- e.g. ``is_coalesced`` on a dense tensor -- propagates unchanged and records
+    nothing), then -- gated to the owner thread / active trace / logging-enabled window with
+    TorchLens's own marked internal reads excluded -- records ``bool(result)`` when the receiver
+    is a model-input leaf or an alias of one (see :func:`_observe_input_metadata_read`). These
+    accessors take no value-bearing arguments, so a call carrying args is passed through without
+    recording.
+    """
+
+    def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
+        result = original(self, *args, **kwargs)
+        if (
+            isinstance(self, torch.Tensor)
+            and not args
+            and not kwargs
+            and threading.get_ident() == state.owner_thread_id
+            and _state._logging_enabled
+            and _state._active_trace is state.trace
+            and not _internal_read_active()
+        ):
+            try:
+                _observe_input_metadata_read(state.trace, self, name, bool(result))
+            except (RuntimeError, TypeError, ValueError):
+                return result
+        return result
+
+    return wrapper
+
+
 def _make_input_metadata_grad_property(
     descriptor: Any, state: _WitnessState, name: str
 ) -> property:
@@ -1873,7 +2130,7 @@ def _make_input_metadata_grad_property(
     itself is not comparable across runs); the others as their boolean value.
     """
 
-    records_presence = name == "grad_fn"
+    records_presence = name in _INPUT_METADATA_PRESENCE_PROPERTY_NAMES
 
     def getter(self: torch.Tensor) -> Any:
         value = descriptor.__get__(self, torch.Tensor)
@@ -1974,6 +2231,20 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
         except (TypeError, AttributeError):
             continue
         metadata_originals[name] = original
+    # Model-input BOOLEAN metadata METHODS beyond the layout trio (r31): ``is_conj`` /
+    # ``is_neg`` / ``is_inference`` / ``is_pinned`` / ``is_shared`` / ``is_coalesced`` /
+    # ``_is_view``. Feature-detected (an accessor absent on the running torch is skipped) and
+    # gated to model-input receivers/aliases only; a model that never reads them records nothing.
+    bool_method_originals: dict[str, Any] = {}
+    for name in INPUT_METADATA_BOOL_METHODS:
+        original = getattr(torch.Tensor, name, None)
+        if original is None or not callable(original):
+            continue
+        try:
+            setattr(torch.Tensor, name, _make_input_metadata_bool_method(original, state, name))
+        except (TypeError, AttributeError):
+            continue
+        bool_method_originals[name] = original
     # ``requires_grad`` / ``grad_fn`` / ``is_leaf`` live as getset descriptors on the C BASE
     # class (``torch._C.TensorBase``), not in ``torch.Tensor.__dict__``; patching installs a
     # SHADOWING property on ``torch.Tensor`` itself, so restore must DELETE the shadow when the
@@ -2017,6 +2288,11 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
             except (TypeError, AttributeError):
                 pass
         for name, original in metadata_originals.items():
+            try:
+                setattr(torch.Tensor, name, original)
+            except (TypeError, AttributeError):
+                pass
+        for name, original in bool_method_originals.items():
             try:
                 setattr(torch.Tensor, name, original)
             except (TypeError, AttributeError):
