@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from enum import Enum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from menagerie.crawler.identity import stable_hash
@@ -115,6 +115,22 @@ class LicensedArtifact:
     staged_path: Path
     manifest: ArtifactManifest
     decision: LicenseDecision
+    artifact_role: Optional[str] = None
+    source_id: Optional[str] = None
+    fetch_recipe: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class AuthorizedArtifact:
+    """One exact artifact authorized by dependency-current gated facts."""
+
+    staged_path: Path
+    artifact_role: str
+    content_sha256: str
+    origin: ArtifactOrigin
+    decision: LicenseDecision
+    source_id: str
+    fetch_recipe: str
 
 
 @dataclass(frozen=True)
@@ -250,31 +266,33 @@ def recompute_license_decision(
     )
 
 
-def gated_license_decisions(
-    facts: Mapping[str, Any], content_sha256: str
-) -> tuple[tuple[LicenseDecision, ArtifactOrigin], ...]:
-    """Derive every exact per-path decision authorized by accepted model facts.
+def gated_authorized_artifacts(facts: Mapping[str, Any]) -> tuple[AuthorizedArtifact, ...]:
+    """Derive the closed artifact set authorized by accepted model facts.
 
     Parameters
     ----------
     facts:
         Reducer-admitted accepted model fact tree.
-    content_sha256:
-        Artifact digest to bind to each recomputed decision.
 
     Returns
     -------
-    tuple[tuple[LicenseDecision, ArtifactOrigin], ...]
-        Deterministic decision/origin pairs for code and per-source dispositions.
+    tuple[AuthorizedArtifact, ...]
+        Exact canonical paths, roles, digests, origins, and evidence-derived decisions
+        for source bytes, closed code-manifest members, and patches.
     """
 
+    stable_id = facts.get("stable_id")
     licenses = facts.get("licenses")
     evidence_block = facts.get("evidence")
     resolution = facts.get("source_resolution")
+    implementation = facts.get("implementation")
     if (
-        not isinstance(licenses, Mapping)
+        not isinstance(stable_id, str)
+        or not stable_id
+        or not isinstance(licenses, Mapping)
         or not isinstance(evidence_block, Mapping)
         or not isinstance(resolution, Mapping)
+        or not isinstance(implementation, Mapping)
     ):
         return ()
     excerpts = evidence_block.get("excerpts")
@@ -301,8 +319,12 @@ def gated_license_decisions(
     extra = licenses.get("source_dispositions")
     if isinstance(extra, list):
         dispositions.extend(value for value in extra if isinstance(value, Mapping))
-    result: list[tuple[LicenseDecision, ArtifactOrigin]] = []
-    for disposition in dispositions:
+
+    def binding(
+        disposition: Mapping[str, Any], content_sha256: str
+    ) -> tuple[LicenseDecision, ArtifactOrigin, str, str] | None:
+        """Return one exact decision/origin/source/fetch binding."""
+
         source_id = disposition.get("source_id")
         source = sources_by_id.get(str(source_id))
         evidence_ids = disposition.get("evidence_ids")
@@ -312,7 +334,7 @@ def gated_license_decisions(
             or not evidence_ids
             or any(str(value) not in excerpts_by_id for value in evidence_ids)
         ):
-            continue
+            return None
         findings: list[LicenseEvidence] = []
         try:
             for evidence_id in evidence_ids:
@@ -333,9 +355,133 @@ def gated_license_decisions(
                 )
             origin = ArtifactOrigin(str(source["url"]), str(source["revision"]))
         except (KeyError, TypeError, ValueError):
+            return None
+        fetch_recipe = source.get("fetch_recipe")
+        if not isinstance(fetch_recipe, str) or not fetch_recipe:
+            return None
+        return (
+            recompute_license_decision(content_sha256, findings),
+            origin,
+            str(source_id),
+            fetch_recipe,
+        )
+
+    result: list[AuthorizedArtifact] = []
+    for source_id, source in sources_by_id.items():
+        content_sha256 = source.get("content_sha256")
+        matches = [value for value in dispositions if value.get("source_id") == source_id]
+        if not isinstance(content_sha256, str) or len(matches) != 1:
             continue
-        result.append((recompute_license_decision(content_sha256, findings), origin))
+        bound = binding(matches[0], content_sha256)
+        if bound is None:
+            continue
+        decision, origin, bound_source_id, fetch_recipe = bound
+        digest = content_sha256.removeprefix("sha256:")
+        result.append(
+            AuthorizedArtifact(
+                staged_path=Path(f"menagerie/crawler/source_cas/{digest}.source"),
+                artifact_role="source",
+                content_sha256=content_sha256,
+                origin=origin,
+                decision=decision,
+                source_id=bound_source_id,
+                fetch_recipe=fetch_recipe,
+            )
+        )
+
+    code_manifest = implementation.get("code_manifest")
+    first_code_digest = (
+        code_manifest[0].get("sha256")
+        if isinstance(code_manifest, list)
+        and code_manifest
+        and isinstance(code_manifest[0], Mapping)
+        else None
+    )
+    code_disposition = code if isinstance(code, Mapping) else None
+    code_binding = (
+        binding(code_disposition, first_code_digest)
+        if code_disposition is not None and isinstance(first_code_digest, str)
+        else None
+    )
+    rung = str(resolution.get("rung"))
+    root_name = "adapters" if rung in {"R1_LIBRARY", "R2_VENDOR"} else "ports"
+    prefix = stable_id.removeprefix("m_")[:2] or "__"
+    if code_binding is not None and isinstance(code_manifest, list):
+        assert code_disposition is not None
+        _unused, origin, source_id, fetch_recipe = code_binding
+        for member in code_manifest:
+            if not isinstance(member, Mapping):
+                continue
+            relative = _safe_artifact_relative_path(member.get("path"))
+            member_digest = member.get("sha256")
+            if relative is None or not isinstance(member_digest, str):
+                continue
+            member_binding = binding(code_disposition, member_digest)
+            if member_binding is None:
+                continue
+            decision = member_binding[0]
+            result.append(
+                AuthorizedArtifact(
+                    staged_path=(
+                        Path("menagerie/crawler") / root_name / prefix / stable_id / relative
+                    ),
+                    artifact_role="code",
+                    content_sha256=member_digest,
+                    origin=origin,
+                    decision=decision,
+                    source_id=source_id,
+                    fetch_recipe=fetch_recipe,
+                )
+            )
+        patches = implementation.get("patches")
+        if isinstance(patches, list):
+            for patch in patches:
+                if not isinstance(patch, Mapping):
+                    continue
+                relative = _safe_artifact_relative_path(patch.get("path"))
+                patch_digest = patch.get("sha256")
+                if relative is None or not isinstance(patch_digest, str):
+                    continue
+                patch_binding = binding(code_disposition, patch_digest)
+                if patch_binding is None:
+                    continue
+                decision = patch_binding[0]
+                result.append(
+                    AuthorizedArtifact(
+                        staged_path=(
+                            Path("menagerie/crawler") / "patches" / prefix / stable_id / relative
+                        ),
+                        artifact_role="patch",
+                        content_sha256=patch_digest,
+                        origin=origin,
+                        decision=decision,
+                        source_id=source_id,
+                        fetch_recipe=fetch_recipe,
+                    )
+                )
     return tuple(result)
+
+
+def _safe_artifact_relative_path(value: object) -> Optional[Path]:
+    """Return one normalized safe artifact-relative path.
+
+    Parameters
+    ----------
+    value:
+        Candidate manifest path.
+
+    Returns
+    -------
+    pathlib.Path | None
+        Safe relative path, or ``None`` for absolute/traversing values.
+    """
+
+    if not isinstance(value, str) or not value:
+        return None
+    pure = PurePosixPath(value)
+    if pure.is_absolute() or ".." in pure.parts or not pure.parts:
+        return None
+    return Path(*pure.parts)
 
 
 def store_licensed_artifact(

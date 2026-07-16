@@ -17,9 +17,10 @@ from menagerie.crawler.checkpoint import (
 from menagerie.crawler.licenses import (
     LicenseEvidence,
     LicenseEvidenceStatus,
+    LicensedArtifact,
     store_licensed_artifact,
 )
-from menagerie.crawler.identity import canonical_json_bytes
+from menagerie.crawler.identity import canonical_json_bytes, hash_bytes
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
 from menagerie.crawler.status import checkpoint_consistency_report, completeness_report
 from menagerie.crawler.tests.conftest import make_model
@@ -265,6 +266,99 @@ def test_restricted_digest_is_refused_anywhere_in_full_candidate_set(tmp_path: P
             branch="menagerie/crawler-pipeline",
             git_runner=RecordingGit(),
         )
+
+
+def test_matching_origin_cannot_authorize_an_unrelated_public_digest(tmp_path: Path) -> None:
+    """A fresh matching-origin decision cannot mint authority for unrelated bytes."""
+
+    model = make_model("m_closed_map", accepted=True)
+    authorized_digest = hash_bytes(b"exact gated source bytes")
+    source = model["source_resolution"]["sources"][0]
+    source["content_sha256"] = authorized_digest
+    source["mirror_digest"] = authorized_digest
+    mirrors = _mirrors(tmp_path / "mirrors")
+    manufactured = store_licensed_artifact(
+        mirrors,
+        b"unrelated restricted bytes disguised by a permissive decision",
+        staged_path=Path("menagerie/crawler/source_cas/unrelated.source"),
+        origin=ArtifactOrigin(str(source["url"]), str(source["revision"])),
+        evidence=(
+            LicenseEvidence(
+                "evidence-1",
+                "source-1",
+                "LICENSE",
+                "Apache License 2.0",
+                LicenseEvidenceStatus.DECLARED,
+                "Apache-2.0",
+            ),
+        ),
+    )
+    manufactured = LicensedArtifact(
+        manufactured.staged_path,
+        manufactured.manifest,
+        manufactured.decision,
+        "source",
+        "source-1",
+        "https-get",
+    )
+
+    with pytest.raises(RestrictedPublicArtifact, match="closed dependency-current"):
+        checkpoint_module._validate_gated_license_decisions(
+            (manufactured,), {"m_closed_map": model}
+        )
+
+
+def test_missing_restricted_manifest_row_cannot_erase_restricted_signal() -> None:
+    """Every dependency-current restricted digest requires its exact private row."""
+
+    model = make_model("m_missing_private", accepted=True)
+    model["licenses"]["code"]["spdx"] = "GPL-3.0-only"
+    model["licenses"]["redistribution_class"] = "restricted-private"
+
+    with pytest.raises(RestrictedPublicArtifact, match="manifests are incomplete"):
+        checkpoint_module._validate_gated_license_decisions((), {"m_missing_private": model})
+
+
+def test_exact_restricted_private_row_is_checkpoint_authorized(tmp_path: Path) -> None:
+    """Checkpoint accepts an exact restricted row only on the private boundary."""
+
+    content = b"exact gated GPL source bytes"
+    digest = hash_bytes(content)
+    model = make_model("m_private_exact", accepted=True)
+    source = model["source_resolution"]["sources"][0]
+    source["content_sha256"] = digest
+    source["mirror_digest"] = digest
+    model["licenses"]["code"]["spdx"] = "GPL-3.0-only"
+    model["licenses"]["redistribution_class"] = "restricted-private"
+    mirrors = _mirrors(tmp_path / "mirrors")
+    artifact = store_licensed_artifact(
+        mirrors,
+        content,
+        staged_path=Path(f"menagerie/crawler/source_cas/{digest.removeprefix('sha256:')}.source"),
+        origin=ArtifactOrigin(str(source["url"]), str(source["revision"])),
+        evidence=(
+            LicenseEvidence(
+                "evidence-1",
+                "source-1",
+                "LICENSE",
+                "GPL version 3",
+                LicenseEvidenceStatus.DECLARED,
+                "GPL-3.0-only",
+            ),
+        ),
+    )
+    artifact = LicensedArtifact(
+        artifact.staged_path,
+        artifact.manifest,
+        artifact.decision,
+        "source",
+        "source-1",
+        "https-get",
+    )
+
+    assert checkpoint_module._validate_gated_license_decisions(
+        (artifact,), {"m_private_exact": model}
+    )
 
 
 @pytest.mark.parametrize(
