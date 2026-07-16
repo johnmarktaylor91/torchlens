@@ -370,8 +370,11 @@ def record_is_release_eligible(
         True only when current metadata, gates, execution, and family dependencies hold.
     """
 
+    projected = current_records.get(str(record.get("stable_id")))
     if (
-        record.get("status", {}).get("kind") != "runs"
+        not isinstance(projected, Mapping)
+        or projected.get("record_revision") != record.get("record_revision")
+        or record.get("status", {}).get("kind") != "runs"
         or record.get("authored_metadata_state") != "accepted"
         or record.get("status", {}).get("human_review", {}).get("required") is True
     ):

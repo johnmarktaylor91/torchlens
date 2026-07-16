@@ -37,6 +37,7 @@ from menagerie.crawler.checker_dispatch import (
 from menagerie.crawler.checkpoint import (
     FunnelSnapshot,
     ReconstructionValidationError,
+    StaleReconstructionError,
     append_canonical_operational_event,
     append_canonical_requeue_grant,
     canonical_reconstruction_source_manifest,
@@ -132,6 +133,7 @@ from menagerie.crawler.reducer import (
     _parent_success_attestation_matches,
     default_ledger_paths,
     expected_standard_asset,
+    intake_variant_bindings_from_rows,
     materialize_current,
     output_signature_error,
 )
@@ -5145,14 +5147,21 @@ def _rehydrate_canonical_artifact(item: WorkItem, paths: DriverPaths) -> Optiona
     if not manifest_path.is_file():
         return None
     try:
+        snapshot_rows = [value.to_dict() for value in load_intake_snapshot(paths.intake_root).items]
         validated = validate_canonical_reconstruction(
             manifest_path,
             canonical_root,
             expected_stable_id=item.stable_id,
             expected_intake_item=item.intake.to_dict(),
             canonical_gates=scan_jsonl(paths.ledgers.gates),
-            current_models=materialize_current(paths.ledgers),
+            current_models=materialize_current(
+                paths.ledgers,
+                intake_ids=(str(value["stable_id"]) for value in snapshot_rows),
+                intake_variant_bindings=intake_variant_bindings_from_rows(snapshot_rows),
+            ),
         )
+    except StaleReconstructionError:
+        return None
     except ReconstructionValidationError as exc:
         raise DriverIntegrationError(str(exc)) from exc
     value = validated.manifest

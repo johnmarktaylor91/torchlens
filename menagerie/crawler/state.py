@@ -120,7 +120,19 @@ def rebuild_state(
     model_records = scan_jsonl(ledgers.models)
     attempt_records = scan_jsonl(ledgers.attempts)
     gate_records = scan_jsonl(ledgers.gates)
-    current = _select_current(model_records)
+    from menagerie.crawler.reducer import (  # noqa: PLC0415
+        intake_variant_bindings_from_rows,
+        project_dependency_current,
+    )
+
+    current = project_dependency_current(
+        ledgers,
+        intake_ids=intake_rows,
+        intake_variant_bindings=intake_variant_bindings_from_rows(intake_rows.values()),
+        model_records=model_records,
+        attempt_records=attempt_records,
+        gate_records=gate_records,
+    ).current_records
     summary = RebuildSummary(
         intake_count=len(intake_rows),
         model_revision_count=len(model_records),

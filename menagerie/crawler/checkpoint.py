@@ -27,6 +27,10 @@ from menagerie.crawler.env_lifecycle import (
     parse_resolved_export,
 )
 from menagerie.crawler.envs import EnvironmentSpecError, load_environment_registry
+from menagerie.crawler.family_templates import (
+    FamilyTemplateError,
+    validate_size_variant_derivation,
+)
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.intake import IntakeError, load_intake_snapshot
 from menagerie.crawler.licenses import (
@@ -35,13 +39,21 @@ from menagerie.crawler.licenses import (
     LicensedArtifact,
     PublicMergeRejected,
     RedistributionClass,
+    gated_license_decisions,
     pre_public_merge_sweep,
 )
 from menagerie.crawler.mirrors import ArtifactManifest, MirrorStore
 from menagerie.crawler.models import AppendResult, JsonObject
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
-from menagerie.crawler.reducer import default_ledger_paths, materialize_current
+from menagerie.crawler.reducer import (
+    ReductionError,
+    default_ledger_paths,
+    intake_variant_bindings_from_rows,
+    materialize_current,
+    project_dependency_current,
+    validate_reconstruction_source_binding,
+)
 from menagerie.crawler.status import checkpoint_consistency_report
 from menagerie.crawler.tools.rebuild_views import rebuild_views
 from menagerie.crawler.wakeup import OperationalContext, record_operational_event
@@ -75,6 +87,10 @@ class RestrictedPublicArtifact(CheckpointValidationError):
 
 class ReconstructionValidationError(CheckpointValidationError):
     """Raised when a canonical reconstruction transaction is not reproducible."""
+
+
+class StaleReconstructionError(ReconstructionValidationError):
+    """Raised when a valid historical family reconstruction needs full-author fallback."""
 
 
 @dataclass(frozen=True)
@@ -1111,7 +1127,18 @@ def _create_canonical_checkpoint(
     _copy_canonical_tree(snapshot.root, canonical_snapshot_root)
     snapshot = load_intake_snapshot(canonical_snapshot_root)
     ledgers = default_ledger_paths(canonical_records)
-    current = materialize_current(ledgers)
+    intake_rows = [item.to_dict() for item in snapshot.items]
+    projection = project_dependency_current(
+        ledgers,
+        intake_ids=(str(row["stable_id"]) for row in intake_rows),
+        intake_variant_bindings=intake_variant_bindings_from_rows(intake_rows),
+    )
+    if projection.stale_reasons:
+        raise CheckpointValidationError(
+            "crawler checkpoint semantic replay rejected current rows: "
+            f"{dict(sorted(projection.stale_reasons.items()))}"
+        )
+    current = projection.current_records
     consistency = checkpoint_consistency_report(
         (item.stable_id for item in snapshot.items), current
     )
@@ -1132,9 +1159,12 @@ def _create_canonical_checkpoint(
     )
     manifest_root = canonical_root / "mirrors"
     public_artifacts, license_inventory, mirror_manifests = _derive_mirror_facts(manifest_root)
+    _validate_gated_license_decisions(license_inventory, current)
     candidates = _derive_candidate_paths(root, canonical_root)
     _validate_canonical_jsonl_append_only(root, canonical_root, candidates, runner)
-    validated_environment_candidates = _validate_environment_candidates(canonical_root, candidates)
+    validated_environment_candidates = _validate_environment_candidates(
+        canonical_root, candidates, current
+    )
     generated_inventory = _publish_generated_metadata_inventory(
         root, canonical_root, candidates, validated_environment_candidates
     )
@@ -1324,6 +1354,46 @@ def _licensed_artifact(payload: Mapping[str, Any]) -> LicensedArtifact:
     except (KeyError, TypeError, ValueError) as exc:
         raise CheckpointValidationError(f"invalid licensed mirror artifact: {exc}") from exc
     return LicensedArtifact(staged_path, manifest, decision)
+
+
+def _validate_gated_license_decisions(
+    artifacts: Sequence[LicensedArtifact],
+    current_models: Mapping[str, Mapping[str, Any]],
+) -> None:
+    """Recompute every public decision from reducer-admitted gated evidence.
+
+    Parameters
+    ----------
+    artifacts:
+        Complete canonical public/private mirror inventory.
+    current_models:
+        Dependency-current records that passed reducer semantic replay.
+
+    Raises
+    ------
+    CheckpointValidationError
+        If public bytes rely on a persisted self-attested classification.
+    """
+
+    accepted = tuple(
+        model
+        for model in current_models.values()
+        if model.get("authored_metadata_state") == "accepted"
+    )
+    for artifact in artifacts:
+        if artifact.manifest.mirror_class.value != "public":
+            continue
+        matches = {
+            (decision, origin)
+            for model in accepted
+            for decision, origin in gated_license_decisions(model, artifact.manifest.content_sha256)
+            if origin == artifact.manifest.origin
+        }
+        if not matches or all(decision != artifact.decision for decision, _origin in matches):
+            raise RestrictedPublicArtifact(
+                "public license decision does not recompute from canonical gated evidence: "
+                f"{artifact.staged_path.as_posix()}"
+            )
 
 
 def _validate_candidate_license_coverage(
@@ -1632,13 +1702,15 @@ def _validate_lock_package_hashes(path: Path, content: bytes) -> None:
 
 
 def _validate_environment_candidates(
-    canonical_root: Path, candidates: Sequence[Path]
+    canonical_root: Path,
+    candidates: Sequence[Path],
+    current_models: Mapping[str, Mapping[str, Any]],
 ) -> frozenset[Path]:
     """Strictly validate the registry-derived environment candidate class.
 
     Parameters
     ----------
-    canonical_root, candidates:
+    canonical_root, candidates, current_models:
         Canonical crawler root and complete repository-relative checkpoint set.
 
     Returns
@@ -1661,6 +1733,8 @@ def _validate_environment_candidates(
     attempt_rows: list[JsonObject] = []
     for attempt_path in sorted((canonical_root / "records" / "attempts").glob("*.jsonl")):
         attempt_rows.extend(scan_jsonl(attempt_path))
+    attempts_by_id = {str(row.get("attempt_id")): row for row in attempt_rows}
+    current_generation_attempt_ids: set[str] = set()
     if not environment_candidates:
         if any(isinstance(row.get("environment"), Mapping) for row in attempt_rows):
             raise CheckpointValidationError(
@@ -1775,12 +1849,32 @@ def _validate_environment_candidates(
                     and identities.get("environment") == generation
                 ):
                     attested = True
-                    break
+                    current_generation_attempt_ids.add(str(row.get("attempt_id")))
             if not attested:
                 raise CheckpointValidationError(
                     "environment target lacks a canonical compiler/SDK/probe-bound runtime "
                     f"attestation: {intent.name}/{target}"
                 )
+    for stable_id, model in current_models.items():
+        if model.get("status", {}).get("kind") != "runs":
+            continue
+        execution = model.get("execution")
+        if not isinstance(execution, Mapping):
+            raise CheckpointValidationError(f"current run has no execution block: {stable_id}")
+        accepted_ids = {str(value) for value in execution.get("accepted_attempt_ids", [])}
+        if not accepted_ids or not accepted_ids <= current_generation_attempt_ids:
+            raise CheckpointValidationError(
+                "current run was not executed entirely under the current environment generation: "
+                f"{stable_id}"
+            )
+        if any(
+            attempts_by_id[attempt_id].get("identities", {}).get("environment")
+            != execution.get("env_generation")
+            for attempt_id in accepted_ids
+        ):
+            raise CheckpointValidationError(
+                f"current run execution.env_generation is stale: {stable_id}"
+            )
     return environment_candidates
 
 
@@ -2293,6 +2387,16 @@ def validate_canonical_reconstruction(
         gates,
         models,
     ):
+        proposed_facts = proposal.get("proposed_facts")
+        website = proposed_facts.get("website") if isinstance(proposed_facts, Mapping) else None
+        if (
+            not isinstance(models.get(stable_id), Mapping)
+            and isinstance(website, Mapping)
+            and website.get("kind") == "size-variant-template"
+        ):
+            raise StaleReconstructionError(
+                "family reconstruction is stale; full-author fallback is required"
+            )
         raise ReconstructionValidationError(
             "canonical reconstruction is not anchored to an accepted gate or current proposal"
         )
@@ -2324,6 +2428,10 @@ def validate_canonical_reconstruction(
         sources
     ):
         raise ReconstructionValidationError("canonical source manifest digest changed")
+    try:
+        validate_reconstruction_source_binding(proposal, source_manifest, root)
+    except ReductionError as exc:
+        raise ReconstructionValidationError(str(exc)) from exc
     for source in sources:
         if not isinstance(source, Mapping):
             raise ReconstructionValidationError("canonical source manifest row is malformed")
@@ -2494,6 +2602,79 @@ def _reconstruction_has_canonical_anchor(
     current_gate_id = (
         current.get("accuracy_gate", {}).get("gate_id") if isinstance(current, Mapping) else None
     )
+    if isinstance(current, Mapping):
+        website = current.get("website")
+        intake_item = manifest.get("intake_item")
+        proposed_facts = proposal.get("proposed_facts")
+        representative_id = current.get("identity", {}).get("family_representative_id")
+        representative = current_models.get(str(representative_id))
+        derivation = current.get("family_variant_derivation")
+        variant_token = intake_item.get("variant") if isinstance(intake_item, Mapping) else None
+        family_variant = bool(
+            isinstance(website, Mapping)
+            and website.get("kind") == "size-variant-template"
+            and isinstance(intake_item, Mapping)
+            and intake_item.get("stable_id") == stable_id
+            and intake_item.get("variant_scope", "family") == "family"
+            and intake_item.get("family_representative_id") == representative_id
+            and isinstance(derivation, Mapping)
+            and isinstance(representative, Mapping)
+            and derivation.get("template_source_revision") == representative.get("record_revision")
+            and campaign_root == work_id
+            and proposal.get("proposal_id")
+            == stable_hash(
+                {
+                    "template_source_revision": representative.get("record_revision"),
+                    "stable_id": stable_id,
+                    "work_id": work_id,
+                }
+            )
+            and isinstance(proposed_facts, Mapping)
+            and all(
+                proposed_facts.get(field) == current.get(field)
+                for field in ("identity", "implementation", "input_contract")
+            )
+            and proposal.get("recipe_revision")
+            == current.get("implementation", {}).get("recipe_revision")
+            and proposal.get("evidence_identity")
+            == current.get("evidence", {}).get("evidence_identity")
+            and proposal.get("verified_hashes", {}).get("family_template")
+            == website.get("template_hash")
+        )
+        if family_variant:
+            assert isinstance(representative, Mapping)
+            try:
+                validate_size_variant_derivation(
+                    representative,
+                    current,
+                    str(representative_id),
+                    trusted_variant_token=str(variant_token),
+                )
+            except FamilyTemplateError:
+                family_variant = False
+        if family_variant:
+            assert isinstance(representative, Mapping)
+            representative_gate_id = representative.get("accuracy_gate", {}).get("gate_id")
+            if current_gate_id == representative_gate_id and current.get(
+                "accuracy_gate"
+            ) == representative.get("accuracy_gate"):
+                for gate in gates:
+                    if (
+                        gate.get("gate_id") != representative_gate_id
+                        or gate.get("gate_kind") != "metadata_batch"
+                    ):
+                        continue
+                    if any(
+                        isinstance(item, Mapping)
+                        and item.get("stable_id") == representative_id
+                        and item.get("verified_hashes", {}).get("source_manifest")
+                        == proposal.get("verified_hashes", {}).get("source_manifest")
+                        and item.get("verdict") == "accurate"
+                        and item.get("integrity", {}).get("verdict") == "accurate"
+                        and item.get("rung_check", {}).get("verdict") == "accurate"
+                        for item in gate.get("items", [])
+                    ):
+                        return True
     for gate in gates:
         if gate.get("gate_kind") != "metadata_batch":
             continue
@@ -2507,6 +2688,8 @@ def _reconstruction_has_canonical_anchor(
                 and item.get("work_id") == work_id
                 and item.get("campaign_root_work_id") == campaign_root
                 and item.get("verified_hashes", {}).get("proposal") == proposal_digest
+                and item.get("verified_hashes", {}).get("source_manifest")
+                == proposal.get("verified_hashes", {}).get("source_manifest")
                 and item.get("verdict") == "accurate"
                 and item.get("integrity", {}).get("verdict") == "accurate"
                 and item.get("rung_check", {}).get("verdict") == "accurate"

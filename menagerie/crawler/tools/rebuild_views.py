@@ -11,8 +11,12 @@ from typing import Iterable, Mapping, Optional, Sequence
 
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes
 from menagerie.crawler.models import JsonObject
-from menagerie.crawler.reducer import default_ledger_paths, materialize_current
-from menagerie.crawler.state import rebuild_state
+from menagerie.crawler.reducer import (
+    default_ledger_paths,
+    intake_variant_bindings_from_rows,
+    materialize_current,
+)
+from menagerie.crawler.state import _load_intake, rebuild_state
 from menagerie.crawler.status import funnel_counts, record_is_release_eligible
 
 
@@ -101,7 +105,12 @@ def rebuild_views(
 
     ledgers = default_ledger_paths(records_root)
     rebuild_state(database, intake, ledgers)
-    current_by_id = materialize_current(ledgers)
+    intake_rows = _load_intake(intake)
+    current_by_id = materialize_current(
+        ledgers,
+        intake_ids=intake_rows,
+        intake_variant_bindings=intake_variant_bindings_from_rows(intake_rows.values()),
+    )
     current: list[JsonObject] = [current_by_id[key] for key in sorted(current_by_id)]
     release = [record for record in current if record_is_release_eligible(record, current_by_id)]
     deferred = [

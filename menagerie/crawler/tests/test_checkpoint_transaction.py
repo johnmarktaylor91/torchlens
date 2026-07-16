@@ -22,7 +22,7 @@ from menagerie.crawler.checkpoint import (
     create_canonical_checkpoint,
 )
 from menagerie.crawler.cli import main
-from menagerie.crawler.constants import ATTEMPT_SCHEMA_VERSION, MODEL_SCHEMA_VERSION
+from menagerie.crawler.constants import ATTEMPT_SCHEMA_VERSION
 from menagerie.crawler.driver import (
     AuthorArtifact,
     DriverIntegrationError,
@@ -63,6 +63,7 @@ from menagerie.crawler.licenses import (
 )
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
+from menagerie.crawler.reducer import CanonicalReducer, default_ledger_paths
 from menagerie.crawler.routing import ModelRequirements, route_model
 from menagerie.crawler.tests.conftest import make_attempt, make_author_proposal, make_model
 from menagerie.crawler.tests.test_slice_f_driver import (
@@ -124,8 +125,13 @@ class CanonicalTypedAuthor(AuthorLane):
         proposal = make_author_proposal(item.stable_id)
         proposal["work_id"] = f"work-{item.stable_id}"
         implementation = proposal["proposed_facts"]["implementation"]
+        source_digest = checkpoint_module.hash_bytes(source_path.read_bytes())
         proposal["proposed_facts"]["source_resolution"]["sources"][0].update(
-            {"url": "https://example.test/repository", "revision": "abc123"}
+            {
+                "url": "https://example.test/repository",
+                "revision": "abc123",
+                "content_sha256": source_digest,
+            }
         )
         implementation.update(
             {
@@ -143,21 +149,26 @@ class CanonicalTypedAuthor(AuthorLane):
             "train",
             "eval",
         ]
+        source = {
+            "source_id": "source-1",
+            "url": "https://example.test/repository",
+            "revision": "abc123",
+            "content_sha256": source_digest,
+            "byte_count": source_path.stat().st_size,
+            "media_type": "application/octet-stream",
+            "cas_path": str(source_path),
+        }
+        source_manifest = {
+            "sources": [source],
+            "manifest_sha256": stable_hash([source]),
+        }
+        proposal["verified_hashes"]["source_manifest"] = source_manifest["manifest_sha256"]
         _refresh_proposal_identities(
             proposal,
             checker_model=config.checker_model,
             checker_version=config.checker_version,
         )
-        source = {
-            "source_id": "source-1",
-            "url": "https://example.test/repository",
-            "revision": "abc123",
-            "content_sha256": checkpoint_module.hash_bytes(source_path.read_bytes()),
-            "byte_count": source_path.stat().st_size,
-            "media_type": "application/octet-stream",
-            "cas_path": str(source_path),
-        }
-        return AuthorArtifact(proposal, {"sources": [source]}, model_dir)
+        return AuthorArtifact(proposal, source_manifest, model_dir)
 
 
 class TypedFakeForward(FakeForward):
@@ -368,6 +379,70 @@ def test_coherent_reconstruction_rewrite_without_canonical_anchor_is_refused(
         checkpoint_module._derive_candidate_paths(tmp_path, crawler)
     with pytest.raises(DriverIntegrationError, match="not anchored"):
         _rehydrate_canonical_artifact(item, paths)
+
+
+def test_reconstruction_source_rewrite_cannot_escape_anchored_proposal(
+    tmp_path: Path,
+) -> None:
+    """A coherently rehashed source transaction remains bound to gated source facts."""
+
+    snapshot = _snapshot(tmp_path)
+    paths = default_driver_paths(tmp_path, snapshot.root)
+    intake = snapshot.items[0]
+    item = WorkItem(intake, route_model(ModelRequirements(intake.stable_id, "pytorch")))
+    config = DriverConfig(review_checkpoint_at=None, progress_milestones=())
+    artifact = _normalize_artifact_modes(
+        CanonicalTypedAuthor().author(item, paths.work_root, config), config
+    )
+    _promote_and_publish_accepted_artifact(item, artifact, paths)
+    gate = FakeChecker().check_metadata((artifact,), paths.work_root, config).gate
+    assert gate is not None
+    with JsonlLedger(paths.ledgers.gates, gate["schema_version"]) as ledger:
+        ledger.append(gate)
+
+    crawler = tmp_path / "menagerie" / "crawler"
+    prefix = intake.stable_id.removeprefix("m_")[:2]
+    reconstruction_path = crawler / "reconstruction" / prefix / f"{intake.stable_id}.json"
+    marker_path = reconstruction_path.with_name(f"{intake.stable_id}.commit.json")
+    reconstruction = json.loads(reconstruction_path.read_text(encoding="utf-8"))
+    replacement = b"different already-public source bytes"
+    replacement_digest = checkpoint_module.hash_bytes(replacement)
+    replacement_path = (
+        crawler / "source_cas" / (f"{replacement_digest.removeprefix('sha256:')}.source")
+    )
+    replacement_path.write_bytes(replacement)
+    source = reconstruction["source_manifest"]["sources"][0]
+    source["content_sha256"] = replacement_digest
+    source["cas_path"] = replacement_path.relative_to(tmp_path).as_posix()
+    reconstruction["source_manifest"]["manifest_sha256"] = stable_hash(
+        reconstruction["source_manifest"]["sources"]
+    )
+    source_manifest_path = tmp_path / reconstruction["source_manifest_path"]
+    source_manifest_path.write_bytes(
+        canonical_json_bytes(reconstruction["source_manifest"]) + b"\n"
+    )
+    transaction_id = checkpoint_module.reconstruction_transaction_id(
+        intake.stable_id,
+        reconstruction["proposal_sha256"],
+        reconstruction["source_manifest"],
+        reconstruction["intake_item_sha256"],
+    )
+    reconstruction["transaction_id"] = transaction_id
+    marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    marker["transaction_id"] = transaction_id
+    reconstruction_path.write_bytes(canonical_json_bytes(reconstruction) + b"\n")
+    marker_path.write_bytes(canonical_json_bytes(marker) + b"\n")
+
+    with pytest.raises(
+        checkpoint_module.ReconstructionValidationError,
+        match="anchored proposal",
+    ):
+        checkpoint_module.validate_canonical_reconstruction(
+            reconstruction_path,
+            crawler,
+            canonical_gates=(gate,),
+            current_models={},
+        )
 
 
 def test_reconstructed_proposal_requires_current_author_prompt(
@@ -620,14 +695,14 @@ def _snapshot(root: Path, count: int = 1) -> IntakeSnapshot:
 
 
 def _clean_state(
-    root: Path, *, intake_count: int = 1, status_code: str = "runs"
+    root: Path, *, intake_count: int = 1, status_code: str = "failed:source"
 ) -> tuple[IntakeSnapshot, MirrorStore]:
     """Materialize a complete canonical mini-campaign and matching derived facts."""
 
     snapshot = _snapshot(root, intake_count)
     crawler = root / "menagerie" / "crawler"
     records = crawler / "records"
-    model = make_model(snapshot.items[0].stable_id, accepted=True, status_code=status_code)
+    model = make_model(snapshot.items[0].stable_id, accepted=False, status_code=status_code)
     if status_code != "runs":
         model["execution"]["current"] = False
         model["completeness"]["execution_current"] = False
@@ -638,10 +713,24 @@ def _clean_state(
         # A bare digest is not a retrievable diagnostic reference. Public failure
         # details are empty unless they carry the explicit local-sidecar shape.
         model["status"]["detail"] = None
-    with JsonlLedger(records / "models" / "current-shard.jsonl", MODEL_SCHEMA_VERSION) as ledger:
-        ledger.append(model)
-    _write_jsonl(records / "attempts" / "local.jsonl", [])
-    _write_jsonl(records / "gates" / "current-shard.jsonl", [])
+    ledgers = default_ledger_paths(records)
+    with CanonicalReducer(ledgers, (item.stable_id for item in snapshot.items)) as reducer:
+        if status_code.startswith("deferred:"):
+            attempt = make_attempt(snapshot.items[0].stable_id)
+            attempt["environment"] = None
+            attempt["identities"]["environment"] = None
+            attempt["identities"]["execution"] = None
+            attempt["worker_receipt"]["present"] = False
+            attempt["supervisor_observation"]["stdout_sha256"] = None
+            attempt["supervisor_observation"]["stderr_sha256"] = None
+            attempt["defer_evidence"] = {
+                "target_status": status_code,
+                "source_ids": ["source-1"],
+                "probe_attempt_ids": [],
+                "explanation": "source requires the deferred platform",
+            }
+            reducer.append_attempt(attempt)
+        reducer.append_model(model)
     rebuild_views(
         snapshot.root / "items.jsonl",
         records,
@@ -650,37 +739,7 @@ def _clean_state(
     )
     mirrors = _mirrors(root)
     artifacts: list[LicensedArtifact] = []
-    for relative_root in (Path("records"), Path("source_manifests"), Path("evidence")):
-        for path in sorted((crawler / relative_root).rglob("*")):
-            if not path.is_file() or path.stat().st_size == 0:
-                continue
-            artifacts.append(
-                store_licensed_artifact(
-                    mirrors,
-                    path.read_bytes(),
-                    staged_path=path.relative_to(root),
-                    origin=ArtifactOrigin("https://example.test/fixture", "v1"),
-                    evidence=(
-                        LicenseEvidence(
-                            f"license-{len(artifacts)}",
-                            "source-fixture",
-                            "LICENSE:1",
-                            "MIT License",
-                            LicenseEvidenceStatus.DECLARED,
-                            "MIT",
-                        ),
-                    ),
-                )
-            )
-    rows = [
-        {
-            "staged_path": artifact.staged_path.as_posix(),
-            "manifest": artifact.manifest.to_dict(),
-            "decision": artifact.decision.to_dict(),
-        }
-        for artifact in artifacts
-    ]
-    _write_jsonl(crawler / "mirrors" / "public-manifest.jsonl", rows)
+    _write_jsonl(crawler / "mirrors" / "public-manifest.jsonl", [])
     _write_jsonl(crawler / "mirrors" / "private-manifest.jsonl", [])
     report = pre_public_merge_sweep(artifacts, mirrors)
     _write_jsonl(crawler / "license_reports" / "current.json", [report.to_dict()])
@@ -996,10 +1055,10 @@ def test_clean_checkpoint_stages_only_derived_allowlist_and_never_pushes(tmp_pat
     assert all("push" not in command for command in git.commands)
 
 
-def test_checkpoint_includes_promoted_code_and_exact_environment_for_clean_reproduction(
+def test_checkpoint_rejects_self_attested_promoted_code_license(
     tmp_path: Path,
 ) -> None:
-    """Accepted code plus target lock/export survive checkpoint and a clean-tree copy."""
+    """Promoted code cannot use a license decision absent from current gated facts."""
 
     snapshot, mirrors = _clean_state(tmp_path)
     stable_id = snapshot.items[0].stable_id
@@ -1070,26 +1129,14 @@ def test_checkpoint_includes_promoted_code_and_exact_environment_for_clean_repro
         [report.to_dict()],
     )
 
-    result = create_canonical_checkpoint(
-        tmp_path,
-        snapshot.root,
-        mirrors=mirrors,
-        branch="menagerie/crawler-pipeline",
-        git_runner=RecordingGit(),
-    )
-    relative_code = promoted_path.relative_to(tmp_path)
-    relative_lock = lock_path.relative_to(tmp_path)
-    relative_export = export_path.relative_to(tmp_path)
-    assert {relative_code, relative_lock, relative_export} <= set(result.paths)
-
-    clean = tmp_path / "clean-clone"
-    for relative in result.paths:
-        destination = clean / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(tmp_path / relative, destination)
-    assert (clean / relative_code).read_bytes() == promoted_path.read_bytes()
-    assert (clean / relative_lock).read_bytes() == lock_path.read_bytes()
-    assert (clean / relative_export).read_bytes() == export_path.read_bytes()
+    with pytest.raises(RestrictedPublicArtifact, match="does not recompute"):
+        create_canonical_checkpoint(
+            tmp_path,
+            snapshot.root,
+            mirrors=mirrors,
+            branch="menagerie/crawler-pipeline",
+            git_runner=RecordingGit(),
+        )
 
 
 def test_driver_checkpoint_clean_clone_resume_without_author_or_network(tmp_path: Path) -> None:
@@ -1191,8 +1238,8 @@ def test_driver_checkpoint_clean_clone_resume_without_author_or_network(tmp_path
     assert forward.calls == {}
 
 
-def test_deferred_clean_clone_linux_handoff_never_reauthors(tmp_path: Path) -> None:
-    """A deferred envelope survives checkpoint and executes on Linux without authoring."""
+def test_deferred_ungated_promotion_cannot_checkpoint_public_code(tmp_path: Path) -> None:
+    """A pre-gate deferral cannot self-attest promoted code as public."""
 
     snapshot = _snapshot(tmp_path)
     paths = default_driver_paths(tmp_path, snapshot.root)
@@ -1219,59 +1266,14 @@ def test_deferred_clean_clone_linux_handoff_never_reauthors(tmp_path: Path) -> N
         crawler / "views",
         tmp_path / ".crawl-local" / "checkpoint-state.sqlite",
     )
-    checkpoint = create_canonical_checkpoint(
-        tmp_path,
-        snapshot.root,
-        mirrors=_mirrors(tmp_path),
-        branch="menagerie/crawler-pipeline",
-        git_runner=RecordingGit(),
-    )
-    clean = tmp_path / "clean-deferred"
-    for relative in checkpoint.paths:
-        destination = clean / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(tmp_path / relative, destination)
-    clean_envs = clean / "menagerie" / "crawler" / "envs"
-    if not clean_envs.exists():
-        shutil.copytree(DEFAULT_ENVS_ROOT, clean_envs)
-    _write_exact_environment_artifacts(clean_envs, "linux-x86_64-cuda")
-    shutil.rmtree(tmp_path / ".crawl-local")
-    clean_intake = clean / "menagerie" / "crawler" / "records" / "intake" / snapshot.snapshot_id
-    forward = TypedFakeForward()
-
-    class LinuxExactFakeEnvironments(FakeEnvironments):
-        """Create installed metadata equal to the Linux setup export."""
-
-        def run(self, intent: Any, *, use: Any) -> object:
-            """Materialize immutable package metadata before fake use."""
-
-            prefix = self.root / intent.name
-            metadata = prefix / "conda-meta"
-            metadata.mkdir(parents=True, exist_ok=True)
-            export = json.loads(intent.lock.export_path.read_bytes())
-            (metadata / "python.json").write_bytes(canonical_json_bytes(export["packages"][0]))
-            return super().run(intent, use=use)
-
-    resumed = CrawlerDriver(
-        default_driver_paths(clean, clean_intake),
-        DriverConfig(
-            target="linux-x86_64-cuda",
-            only_status="deferred:*",
-            review_checkpoint_at=None,
-            progress_milestones=(),
-        ),
-        DriverDependencies(
-            DisabledAuthor(),
-            FakeChecker(),
-            forward,
-            LinuxExactFakeEnvironments(clean / "linux-envs"),
-            FakeNotifier(),
-            lambda: "2026-07-14T12:00:00Z",
-        ),
-        registry=load_environment_registry(clean_envs, target="linux-x86_64-cuda"),
-    )
-    assert resumed.run().status == "complete"
-    assert set(forward.calls) == {snapshot.items[0].stable_id}
+    with pytest.raises(RestrictedPublicArtifact, match="does not recompute"):
+        create_canonical_checkpoint(
+            tmp_path,
+            snapshot.root,
+            mirrors=_mirrors(tmp_path),
+            branch="menagerie/crawler-pipeline",
+            git_runner=RecordingGit(),
+        )
 
 
 def test_environment_metadata_gets_safe_provenance_and_rejects_private_url(

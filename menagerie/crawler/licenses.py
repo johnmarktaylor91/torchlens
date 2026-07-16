@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Iterable, Optional, Sequence
+from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from menagerie.crawler.identity import stable_hash
 from menagerie.crawler.mirrors import (
@@ -213,6 +213,131 @@ def classify_redistribution(evidence: Sequence[LicenseEvidence]) -> Redistributi
     return RedistributionClass.UNKNOWN
 
 
+def recompute_license_decision(
+    content_sha256: str, evidence: Sequence[LicenseEvidence]
+) -> LicenseDecision:
+    """Recompute a hash-bound decision solely from canonical license evidence.
+
+    Parameters
+    ----------
+    content_sha256:
+        Exact artifact byte digest.
+    evidence:
+        Canonical gated literal license findings.
+
+    Returns
+    -------
+    LicenseDecision
+        Deterministic classification, evidence identities, and rationale.
+    """
+
+    redistribution = classify_redistribution(evidence)
+    rationale = {
+        RedistributionClass.PUBLIC_OK: "all applicable evidence is on the public SPDX allowlist",
+        RedistributionClass.RESTRICTED_PRIVATE: (
+            "license is restricted by policy or no license was found"
+        ),
+        RedistributionClass.UNKNOWN: (
+            "license disposition is unresolved; public redistribution denied"
+        ),
+        RedistributionClass.NOT_APPLICABLE: "artifact is not redistributable content",
+    }[redistribution]
+    return LicenseDecision(
+        content_sha256=content_sha256,
+        redistribution_class=redistribution,
+        evidence_ids=tuple(finding.evidence_id for finding in evidence),
+        rationale=rationale,
+    )
+
+
+def gated_license_decisions(
+    facts: Mapping[str, Any], content_sha256: str
+) -> tuple[tuple[LicenseDecision, ArtifactOrigin], ...]:
+    """Derive every exact per-path decision authorized by accepted model facts.
+
+    Parameters
+    ----------
+    facts:
+        Reducer-admitted accepted model fact tree.
+    content_sha256:
+        Artifact digest to bind to each recomputed decision.
+
+    Returns
+    -------
+    tuple[tuple[LicenseDecision, ArtifactOrigin], ...]
+        Deterministic decision/origin pairs for code and per-source dispositions.
+    """
+
+    licenses = facts.get("licenses")
+    evidence_block = facts.get("evidence")
+    resolution = facts.get("source_resolution")
+    if (
+        not isinstance(licenses, Mapping)
+        or not isinstance(evidence_block, Mapping)
+        or not isinstance(resolution, Mapping)
+    ):
+        return ()
+    excerpts = evidence_block.get("excerpts")
+    sources = resolution.get("sources")
+    if not isinstance(excerpts, list) or not isinstance(sources, list):
+        return ()
+    excerpts_by_id = {
+        str(value.get("evidence_id")): value
+        for value in excerpts
+        if isinstance(value, Mapping) and isinstance(value.get("evidence_id"), str)
+    }
+    sources_by_id = {
+        str(value.get("source_id")): value
+        for value in sources
+        if isinstance(value, Mapping) and isinstance(value.get("source_id"), str)
+    }
+    dispositions: list[Mapping[str, Any]] = []
+    code = licenses.get("code")
+    if isinstance(code, Mapping):
+        dispositions.append(code)
+    data = licenses.get("data")
+    if isinstance(data, Mapping) and data.get("source_id") is not None:
+        dispositions.append(data)
+    extra = licenses.get("source_dispositions")
+    if isinstance(extra, list):
+        dispositions.extend(value for value in extra if isinstance(value, Mapping))
+    result: list[tuple[LicenseDecision, ArtifactOrigin]] = []
+    for disposition in dispositions:
+        source_id = disposition.get("source_id")
+        source = sources_by_id.get(str(source_id))
+        evidence_ids = disposition.get("evidence_ids")
+        if (
+            not isinstance(source, Mapping)
+            or not isinstance(evidence_ids, list)
+            or not evidence_ids
+            or any(str(value) not in excerpts_by_id for value in evidence_ids)
+        ):
+            continue
+        findings: list[LicenseEvidence] = []
+        try:
+            for evidence_id in evidence_ids:
+                excerpt = excerpts_by_id[str(evidence_id)]
+                findings.append(
+                    LicenseEvidence(
+                        evidence_id=str(evidence_id),
+                        source_id=str(source_id),
+                        locator=str(disposition.get("locator") or excerpt.get("locator")),
+                        excerpt=str(excerpt.get("text")),
+                        status=LicenseEvidenceStatus(str(disposition.get("status"))),
+                        spdx=(
+                            str(disposition.get("spdx"))
+                            if disposition.get("spdx") not in {None, "NOASSERTION"}
+                            else None
+                        ),
+                    )
+                )
+            origin = ArtifactOrigin(str(source["url"]), str(source["revision"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        result.append((recompute_license_decision(content_sha256, findings), origin))
+    return tuple(result)
+
+
 def store_licensed_artifact(
     mirrors: MirrorStore,
     content: bytes,
@@ -259,20 +384,7 @@ def store_licensed_artifact(
         origin=origin,
         media_type=media_type,
     )
-    rationale = {
-        RedistributionClass.PUBLIC_OK: "all applicable evidence is on the public SPDX allowlist",
-        RedistributionClass.RESTRICTED_PRIVATE: (
-            "license is restricted by policy or no license was found"
-        ),
-        RedistributionClass.UNKNOWN: "license disposition is unresolved; public redistribution denied",
-        RedistributionClass.NOT_APPLICABLE: "artifact is not redistributable content",
-    }[redistribution]
-    decision = LicenseDecision(
-        content_sha256=manifest.content_sha256,
-        redistribution_class=redistribution,
-        evidence_ids=tuple(finding.evidence_id for finding in evidence),
-        rationale=rationale,
-    )
+    decision = recompute_license_decision(manifest.content_sha256, evidence)
     return LicensedArtifact(staged_path=staged_path, manifest=manifest, decision=decision)
 
 

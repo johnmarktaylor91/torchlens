@@ -540,6 +540,20 @@ def test_reducer_derives_release_and_rejects_pending_true_claim(tmp_path: Path) 
             reducer.append_model(model)
 
 
+def test_dependency_projection_replays_model_admission_for_persisted_rows(
+    tmp_path: Path,
+) -> None:
+    """A schema-valid direct ledger row cannot become reducer-current without its evidence."""
+
+    paths = _paths(tmp_path)
+    forged = make_model(accepted=True)
+    with JsonlLedger(paths.models, MODEL_SCHEMA_VERSION) as ledger:
+        ledger.append(forged)
+    with CanonicalReducer(paths, ["m_example"]) as reducer:
+        assert reducer.current_records == {}
+    assert materialize_current(paths) == {}
+
+
 def test_representative_supersession_stales_current_variant(tmp_path: Path) -> None:
     """A representative-only revision blocks completion and dependent publication."""
 
@@ -570,11 +584,12 @@ def test_representative_supersession_stales_current_variant(tmp_path: Path) -> N
         superseding["notes"] = "metadata-only representative re-vet"
         reducer.append_model(superseding)
 
-        raw_current = reducer.current_records
-        report = completeness_report(["m_rep", "m_variant"], raw_current)
-        assert report.incomplete_by_issue["stale_family_variant"] == ("m_variant",)
+        projected_current = reducer.current_records
+        assert "m_variant" not in projected_current
+        report = completeness_report(["m_rep", "m_variant"], projected_current)
+        assert report.partition.missing_ids == frozenset({"m_variant"})
         assert not report.complete
-        assert not record_is_release_eligible(raw_current["m_variant"], raw_current)
+        assert not record_is_release_eligible(variant, projected_current)
 
     materialized = materialize_current(paths)
     assert "m_rep" in materialized
