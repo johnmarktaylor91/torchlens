@@ -309,6 +309,24 @@ class _DeferredForeignCallable:
         )
 
 
+def _is_torch_owned(obj: Any) -> bool:
+    """Return whether a resolved object genuinely lives under the ``torch`` package.
+
+    Trust in the torch branch of ``find_class`` is decided by the RESOLVED object's
+    real ``__module__``, NEVER by the attacker-controlled pickled path. Pickle's
+    ``STACK_GLOBAL`` / ``GLOBAL`` resolution attribute-walks a DOTTED name off the
+    named module, so ``module="torch"`` with ``name="utils.collect_env.subprocess.Popen"``
+    escapes the torch package into stdlib ``subprocess`` and returns
+    ``subprocess.Popen`` (real module ``subprocess``) -- a ``type`` that a following
+    pickle ``REDUCE`` would INVOKE to spawn a process (RCE). Requiring the resolved
+    type's real module to be within ``torch`` denies that escape, mirroring the
+    ``_is_torchlens_owned`` real-module check.
+    """
+
+    owner = str(getattr(obj, "__module__", "") or "")
+    return owner == "torch" or owner.startswith("torch.")
+
+
 def _is_torchlens_owned(obj: Any) -> bool:
     """Return whether a resolved object genuinely lives under the ``torchlens`` package.
 
@@ -676,10 +694,28 @@ def _safe_load_from_bytes(data: bytes) -> Any:
     Raises
     ------
     pickle.UnpicklingError
-        If the nested weights-only load fails (including because it refused a
-        disallowed global).
+        If the running torch is affected by CVE-2025-32434 (so even
+        ``weights_only=True`` is a working RCE), or if the nested weights-only load
+        fails (including because it refused a disallowed global).
     """
 
+    # CVE-2025-32434: on torch <= 2.5.1, ``torch.load(..., weights_only=True)`` is
+    # ITSELF a remote-code-execution -- the pre-2.6 weights-only unpickler could be
+    # bypassed -- so forwarding attacker bytes into it is not a safe restricted
+    # load at all. Fail closed on any runtime that lacks the 2.6.0 fix (feature-
+    # detected via the named ``HAS_SAFE_WEIGHTS_ONLY_LOAD`` capability, surfaced in
+    # ``tl.compat.report()`` / ``doctor()``). Imported lazily to keep this early
+    # security front door free of import-order coupling (mirrors ``_safe_getattr``).
+    from ..utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
+
+    if not HAS_SAFE_WEIGHTS_ONLY_LOAD:
+        raise pickle.UnpicklingError(
+            "Refusing to reconstruct an embedded tensor during bundle metadata "
+            "unpickle: the running torch is affected by CVE-2025-32434 "
+            "(torch.load(weights_only=True) remote-code-execution, fixed in torch "
+            "2.6.0). Upgrade torch to >= 2.6 to load bundles that embed tensor "
+            "storages."
+        )
     try:
         return torch.load(io.BytesIO(data), weights_only=True)
     except Exception as exc:  # noqa: BLE001 -- fail closed, never re-exec unsafely
@@ -810,6 +846,23 @@ class SafeBundleUnpickler(pickle.Unpickler):
             if isinstance(obj, (torch.dtype, torch.layout, torch.memory_format)):
                 return obj
             if isinstance(obj, type):
+                # POSITIVELY require the RESOLVED type's real module to be within the
+                # torch package. A DOTTED pickled name attribute-walks OFF torch and
+                # can escape into stdlib -- e.g. ``torch`` /
+                # ``utils.collect_env.subprocess.Popen`` returns ``subprocess.Popen``
+                # (real module ``subprocess``), which a following ``REDUCE`` would
+                # INVOKE to spawn a process (RCE). ``_torch_type_denied`` (a name /
+                # module-prefix denylist) would NOT catch it -- ``Popen`` matches no
+                # token and ``subprocess`` no prefix -- so the escape is denied here
+                # by the positive real-module gate BEFORE the I/O-type denylist runs.
+                if not _is_torch_owned(obj):
+                    raise pickle.UnpicklingError(
+                        "Blocked non-torch-owned type resolved via the torch "
+                        f"namespace during bundle metadata unpickle: {module}.{name} "
+                        f"resolved to a type owned by "
+                        f"{str(getattr(obj, '__module__', '') or '')!r} (a dotted "
+                        "name that escapes the torch package is refused)."
+                    )
                 if _torch_type_denied(module, name, obj):
                     raise pickle.UnpicklingError(
                         "Blocked torch I/O / serialization type during bundle "
@@ -828,7 +881,22 @@ class SafeBundleUnpickler(pickle.Unpickler):
         ):
             obj = super().find_class(module, name)
             if isinstance(obj, type):
-                return obj
+                # As in the torch branch: a resolved TYPE is admitted only when its
+                # OWN real module is within a preview-array root. A DOTTED pickled
+                # name (e.g. ``mlx.core`` / ``...subprocess.Popen``) attribute-walks
+                # OFF the preview package and would otherwise return an escaped,
+                # unrelated (possibly code-exec) type unconditionally.
+                type_module = str(getattr(obj, "__module__", "") or "")
+                if any(
+                    type_module == root or type_module.startswith(root + ".")
+                    for root in _PREVIEW_ARRAY_MODULE_ROOTS
+                ):
+                    return obj
+                raise pickle.UnpicklingError(
+                    "Blocked non-preview-owned type resolved via a preview-backend "
+                    f"namespace during bundle metadata unpickle: {module}.{name} "
+                    f"resolved to a type owned by {type_module!r}."
+                )
             resolved_module = getattr(type(obj), "__module__", "") or ""
             if any(
                 resolved_module == root or resolved_module.startswith(root + ".")
@@ -913,7 +981,39 @@ class SafeBundleUnpickler(pickle.Unpickler):
         #    mirroring ``resolve_function_registry_key`` under trust. Importing the
         #    module executes its top-level code, so this is gated behind the flags.
         if self._custom_module_trusted(module):
-            return super().find_class(module, name)
+            obj = super().find_class(module, name)
+            # RE-ENFORCE the DENYLIST on the RESOLVED object's REAL module, NEVER the
+            # pickled string. A DOTTED ``name`` attribute-walks off the trusted module
+            # and can land on a callable from a DIFFERENT, denied module:
+            # ``module="some_trusted_mod"`` / ``name="os.system"`` resolves
+            # ``os.system`` (real module ``posix``) whenever the trusted module did
+            # ``import os``. ``_module_denied`` on the pickled ``module`` alone (step
+            # 1) never sees ``posix``; keying on resolved identity closes the walk. We
+            # re-enforce the DENYLIST (never hand back a dangerous callable, even under
+            # trust) but NOT the allowlist -- the allowlist governs which MODULE may be
+            # IMPORTED (already enforced), and a resolved ``__module__`` may legitimately
+            # differ from the imported module (e.g. a C-accelerator re-export).
+            resolved_owner = str(getattr(obj, "__module__", "") or module)
+            if _module_denied(resolved_owner):
+                raise pickle.UnpicklingError(
+                    "Blocked dangerous global (resolved real module "
+                    f"{resolved_owner!r}) during trusted bundle metadata unpickle: "
+                    f"{module}.{name}."
+                )
+            # A callable that walked back into the torch namespace via a dotted name
+            # must be a PURE forward op -- ``torch`` also hosts side-effecting builtins
+            # (``torch.from_file``) whose real module is the bare, non-denied
+            # ``"torch"``. Parity with ``runnable_load`` / the intervention resolver.
+            if callable(obj) and (resolved_owner == "torch" or resolved_owner.startswith("torch.")):
+                from ..utils._callable_safety import is_pure_forward_callable
+
+                if not is_pure_forward_callable(obj):
+                    raise pickle.UnpicklingError(
+                        "Blocked side-effecting torch callable (resolved real module "
+                        f"{resolved_owner!r}) reached via a dotted name during trusted "
+                        f"bundle metadata unpickle: {module}.{name}."
+                    )
+            return obj
         # 3. Default (untrusted): LOAD-TOLERATE as an inert deferred reference. The
         #    foreign module is NEVER imported here (import executes code); the recipe
         #    reference is preserved so the trace loads structurally, and any attempt

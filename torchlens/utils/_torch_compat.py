@@ -60,6 +60,7 @@ __all__ = [
     "HAS_FX_GRAPH_MODULE",
     "HAS_JIT_BUILTIN_TABLE",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
+    "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
     "HAS_TORCH_FUNC",
     "HAS_TORCH_VF",
@@ -640,6 +641,46 @@ def _probe_tensor_sequence_slot_fix() -> bool:
     return type_obj.tp_name == b"Tensor" and bool(type_obj.tp_as_sequence)
 
 
+def _probe_safe_weights_only_load() -> bool:
+    """Return whether ``torch.load(..., weights_only=True)`` is CVE-2025-32434-safe.
+
+    CVE-2025-32434 (critical, CVSS 9.3; affects torch <= 2.5.1, fixed in torch
+    2.6.0) is a remote-code-execution reachable through ``torch.load`` *itself*
+    even with ``weights_only=True``: the pre-2.6 weights-only unpickler could be
+    bypassed. TorchLens routes an embedded-tensor reconstruction through
+    ``torch.load(BytesIO, weights_only=True)`` (see
+    ``torchlens._io._safe_unpickle._safe_load_from_bytes``), so on an affected
+    runtime that "restricted" nested load is a working RCE and must fail closed.
+
+    The patched behavior is internal to the unpickler and has NO version-string-
+    free *behavioral* signature we can cheaply exercise, so -- consistent with this
+    module's feature-detect convention (never parse ``torch.__version__`` for a
+    behavioral branch) -- we probe the 2.6.0 serialization-hardening SURFACE that
+    shipped *in* the fix release: the public
+    ``torch.serialization.get_unsafe_globals_in_checkpoint`` inspection API plus the
+    rewritten ``torch._weights_only_unpickler.get_globals_in_pkl`` GLOBAL-opcode
+    handler. Both are ABSENT on every affected version (<= 2.5.1) and PRESENT on
+    2.6.0+ (verified against the v2.5.1 and v2.6.0 sources). Requiring BOTH is the
+    conservative, fail-closed direction: a false negative merely refuses an
+    embedded load on a safe torch, whereas admitting it on a vulnerable torch would
+    reopen the RCE.
+
+    Returns
+    -------
+    bool
+        ``True`` only when the running torch carries the CVE-2025-32434 fix.
+    """
+
+    try:
+        import torch._weights_only_unpickler as _weights_only_unpickler
+        import torch.serialization as _serialization
+    except Exception:  # pragma: no cover - defensive; both import on supported torch.
+        return False
+    return hasattr(_serialization, "get_unsafe_globals_in_checkpoint") and hasattr(
+        _weights_only_unpickler, "get_globals_in_pkl"
+    )
+
+
 HAS_VARIABLE_FUNCTIONS: bool = _probe_variable_functions()
 HAS_TORCH_VF: bool = _probe_torch_vf()
 HAS_TORCH_FUNC: bool = _probe_torch_func()
@@ -652,6 +693,7 @@ HAS_DEVICE_CONSTRUCTORS: bool = _probe_device_constructors()
 HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_accumulate_grad_class()
 HAS_FX_GRAPH_MODULE: bool = _probe_fx_graph_module()
 HAS_DYNAMO_OPTIMIZED_MODULE: bool = False
+HAS_SAFE_WEIGHTS_ONLY_LOAD: bool = _probe_safe_weights_only_load()
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
 _DYNAMO_OPTIMIZED_MODULE_PROBED: bool = False
@@ -670,6 +712,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_ACCUMULATE_GRAD_CLASS",
     "HAS_FX_GRAPH_MODULE",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
+    "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
 )
 

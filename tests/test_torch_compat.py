@@ -298,6 +298,9 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_ACCUMULATE_GRAD_CLASS": True,
         "HAS_FX_GRAPH_MODULE": True,
         "HAS_DYNAMO_OPTIMIZED_MODULE": True,
+        # CVE-2025-32434 fix presence (feature-detected; version-dependent, so mirror
+        # the live capability like AUTOCAST rather than hardcoding a boolean).
+        "HAS_SAFE_WEIGHTS_ONLY_LOAD": tc.HAS_SAFE_WEIGHTS_ONLY_LOAD,
         "HAS_TENSOR_SEQUENCE_SLOT_FIX": True,
         "AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED": tc.AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED,
     }
