@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 import json
 import shutil
 import subprocess
@@ -1035,97 +1034,111 @@ def test_runner_execution_manifest_is_compositional_by_selected_modality(
     assert _runner_identity("audio") != audio_before
 
 
-def test_award_closure_manifest_contains_transitive_run_validators() -> None:
-    """Tripwire every project callable reached by both run-award validators."""
+@pytest.mark.parametrize(
+    ("relative", "old", "new"),
+    (
+        (
+            "family_templates.py",
+            b'VETTED_TEXT_FIELDS = ("tagline", "description", "key_contribution", "voice_version")',
+            b'VETTED_TEXT_FIELDS = ("tagline", "description", "key_contribution", "voice_v2")',
+        ),
+        (
+            "metadata.py",
+            b'_CANONICAL_MODE_ORDER = ("train", "eval")',
+            b'_CANONICAL_MODE_ORDER = ("eval", "train")',
+        ),
+        (
+            "reducer.py",
+            b'    "fidelity",\n)',
+            b'    "fidelity_changed",\n)',
+        ),
+        (
+            "reducer.py",
+            b'    "audio": "audio.csv",',
+            b'    "audio": "changed-audio.csv",',
+        ),
+        (
+            "reducer.py",
+            b'_WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V1 "',
+            b'_WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V2 "',
+        ),
+        (
+            "schema.py",
+            b'SCHEMA_DIRECTORY = Path(__file__).with_name("schemas")',
+            b'SCHEMA_DIRECTORY = Path(__file__).with_name("changed-schemas")',
+        ),
+        (
+            "identity.py",
+            b'_HASH_PREFIX = "sha256:"',
+            b'_HASH_PREFIX = "sha257:"',
+        ),
+        (
+            "identity.py",
+            b"    return hash_bytes(canonical_json_bytes(value))\n",
+            b"    return hash_bytes(canonical_json_bytes([value]))\n",
+        ),
+        (
+            "recordio.py",
+            b'        return (version, record.get("attempt_id"))',
+            b'        return (version, "attempt", record.get("attempt_id"))',
+        ),
+        (
+            "intake.py",
+            b'for token in ("classic", "faithful", "fidelity", "slop")',
+            b'for token in ("classic", "faithful", "fidelity", "slop", "audit")',
+        ),
+        (
+            "constants.py",
+            b'MODEL_SCHEMA_VERSION = "menagerie.crawler.model.v2"',
+            b'MODEL_SCHEMA_VERSION = "menagerie.crawler.model.v3"',
+        ),
+    ),
+)
+def test_award_closure_tracks_transitive_loaded_award_bindings(
+    monkeypatch: pytest.MonkeyPatch,
+    relative: str,
+    old: bytes,
+    new: bytes,
+) -> None:
+    """Every load-bearing binding class changes the semantic closure identity."""
 
-    root = Path(driver_module.__file__).parent
-    manifest = {
-        (relative, symbol)
-        for relative, symbols in driver_module._AWARD_CLOSURE_SYMBOLS.items()
-        for symbol in symbols
-    }
-    roots = {
-        ("driver.py", "_attempt_policy_satisfied"),
-        ("reducer.py", "CanonicalReducer._validate_execution"),
-    }
-    pending = list(roots)
-    reached: set[tuple[str, str]] = set()
-    trees: dict[str, ast.Module] = {}
-    definitions: dict[str, dict[str, ast.AST]] = {}
-    imports: dict[str, dict[str, tuple[str, str]]] = {}
-    while pending:
-        relative, symbol = pending.pop()
-        if (relative, symbol) in reached:
-            continue
-        reached.add((relative, symbol))
-        if relative not in trees:
-            tree = ast.parse((root / relative).read_text(encoding="utf-8"))
-            module_definitions: dict[str, ast.AST] = {}
-            module_imports: dict[str, tuple[str, str]] = {}
-            for node in tree.body:
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    module_definitions[node.name] = node
-                elif isinstance(node, ast.ClassDef):
-                    for child in node.body:
-                        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                            module_definitions[f"{node.name}.{child.name}"] = child
-                elif isinstance(node, ast.ImportFrom) and node.module is not None:
-                    prefix = "menagerie.crawler."
-                    if node.module.startswith(prefix):
-                        imported_relative = (
-                            f"{node.module.removeprefix(prefix).replace('.', '/')}.py"
-                        )
-                        for imported_name in node.names:
-                            module_imports[imported_name.asname or imported_name.name] = (
-                                imported_relative,
-                                imported_name.name,
-                            )
-            trees[relative] = tree
-            definitions[relative] = module_definitions
-            imports[relative] = module_imports
-        definition = definitions[relative][symbol]
-        class_name = symbol.split(".", 1)[0] if "." in symbol else None
-        for call in (node for node in ast.walk(definition) if isinstance(node, ast.Call)):
-            if isinstance(call.func, ast.Name):
-                name = call.func.id
-                local = (relative, name)
-                resolved_import = imports[relative].get(name)
-                if name in definitions[relative]:
-                    pending.append(local)
-                elif resolved_import is not None and (root / resolved_import[0]).is_file():
-                    pending.append(resolved_import)
-            elif (
-                class_name is not None
-                and isinstance(call.func, ast.Attribute)
-                and isinstance(call.func.value, ast.Name)
-                and call.func.value.id == "self"
-            ):
-                local_method = (relative, f"{class_name}.{call.func.attr}")
-                if local_method[1] in definitions[relative]:
-                    pending.append(local_method)
-    assert reached <= manifest, sorted(reached - manifest)
-    assert {
-        ("metadata.py", "input_signature_matches_contract"),
-        ("metadata.py", "recompute_accepted_identities"),
-        ("metadata.py", "authored_fact_leaves"),
-        ("metadata.py", "canonical_meaningful_modes"),
-        ("reducer.py", "expected_standard_asset"),
-        ("reducer.py", "output_signature_error"),
-    } <= reached
-    assert {
-        ("metadata.py", "validate_authored_facts_for_write"),
-        ("gates.py", "route_metadata_gate"),
-        ("gates.py", "route_fidelity_gate"),
-        ("family_templates.py", "validate_size_variant"),
-        ("reducer.py", "CanonicalReducer.append_attempt"),
-        ("reducer.py", "CanonicalReducer.append_gate"),
-        ("reducer.py", "_validate_persisted_requeue_lineage"),
-        ("reducer.py", "_select_current"),
-        ("state.py", "_select_current"),
-        ("driver.py", "_matching_attempts"),
-        ("driver.py", "_worker_request"),
-        ("driver.py", "SupervisedForwardLane.forward"),
-    } <= manifest
+    before = driver_module._award_closure_identity()
+    original_read_bytes = Path.read_bytes
+
+    def changed_binding(path: Path) -> bytes:
+        """Mutate exactly one transitive award binding in the byte snapshot."""
+
+        value = original_read_bytes(path)
+        if path.name != relative:
+            return value
+        assert old in value
+        return value.replace(old, new, 1)
+
+    monkeypatch.setattr(Path, "read_bytes", changed_binding)
+    assert driver_module._award_closure_identity() != before
+
+
+def test_award_closure_ignores_comments_docstrings_and_formatting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-behavioral source text does not stale the award closure."""
+
+    before = driver_module._award_closure_identity()
+    original_read_bytes = Path.read_bytes
+
+    def nonsemantic_edit(path: Path) -> bytes:
+        """Apply comment, docstring, and whitespace-only edits to award code."""
+
+        value = original_read_bytes(path)
+        if path.name != "reducer.py":
+            return value
+        old = b'        """Enforce attempt/receipt and meaningful-mode rules for run awards.\n'
+        new = b'        """Document the run-award validator with different wording.\n'
+        assert old in value
+        return value.replace(old, new, 1) + b"\n# award review comment only\n"
+
+    monkeypatch.setattr(Path, "read_bytes", nonsemantic_edit)
+    assert driver_module._award_closure_identity() == before
 
 
 def test_award_validator_behavior_change_changes_closure_identity(
@@ -1492,6 +1505,91 @@ def test_parent_refuses_observed_adapter_digest_mismatch() -> None:
     )
 
 
+def test_detected_mode_expansion_is_award_blocking_revision_evidence(tmp_path: Path) -> None:
+    """A worker-discovered proposal gap is durable input-contract repair evidence."""
+
+    proposal = make_author_proposal("m_detected_mode_expansion")
+    proposal["proposed_facts"]["modes"]["meaningful_modes"] = ["eval"]
+    attempt = make_attempt("m_detected_mode_expansion", mode="eval")
+    receipt = {
+        "receipt_version": "menagerie.crawler.worker-receipt.v1",
+        "stable_id": proposal["stable_id"],
+        "source_identity": proposal["source_identity"],
+        "recipe_revision": proposal["recipe_revision"],
+        "observed_recipe_revision": proposal["recipe_revision"],
+        "observed_adapter_sha256": None,
+        "observed_code_manifest_sha256": None,
+        "observed_input_asset_sha256": driver_module._expected_input_asset_sha256(proposal),
+        "execution_identity": HASH,
+        "mode": "eval",
+        "constructor_started": True,
+        "constructor_completed": True,
+        "input_completed": True,
+        "declared_meaningful_modes": ["eval"],
+        "detected_meaningful_modes": ["train", "eval"],
+        "meaningful_modes": ["train", "eval"],
+        "per_mode": {"eval": {**attempt["worker_receipt"], "error": None}},
+        "policy_observation": attempt["policy_observation"],
+        "error": None,
+        "receipt_sha256": HASH,
+    }
+    observation = SupervisorObservation(
+        argv=("python", "worker.py"),
+        cwd="/scratch",
+        exit_code=0,
+        signal_number=None,
+        wall_seconds=0.1,
+        cpu_seconds=0.1,
+        peak_rss_bytes=1,
+        timed_out=False,
+        rss_exceeded=False,
+        stdout_sha256=HASH,
+        stdout_bytes=0,
+        stdout_tail="",
+        stderr_sha256=HASH,
+        stderr_bytes=0,
+        stderr_tail="",
+        stdout_path="/logs/stdout",
+        stderr_path="/logs/stderr",
+    )
+    result = SupervisedResult(observation, receipt, None, HASH)
+
+    assert (
+        _receipt_envelope_error(result, proposal, HASH, requested_mode="eval")
+        == "invalid-receipt:meaningful-mode-contract"
+    )
+    artifact = AuthorArtifact(proposal, {"sources": []}, tmp_path / "model")
+    projected = driver_module._attempts_from_supervised(
+        artifact,
+        result,
+        _test_environment(tmp_path / "env"),
+        HASH,
+        0,
+        10.0,
+        1024,
+        requested_mode="eval",
+        diagnostics_root=tmp_path / ".crawl-local" / "diagnostics",
+    )
+
+    assert len(projected) == 1
+    failure = projected[0]
+    with JsonlLedger(
+        tmp_path / "ledgers" / "attempts.jsonl", str(failure["schema_version"])
+    ) as ledger:
+        failure = ledger.append(failure).record
+    assert failure["result"] == "failed"
+    assert failure["stage"] == "input"
+    assert failure["mode"] is None
+    assert failure["error"]["reason_code"] == "contract-invalid"
+    assert failure["error"]["details"] == {
+        "route": "recipe-and-gate-revision-required",
+        "proposal_meaningful_modes": ["eval"],
+        "detected_meaningful_modes": ["train", "eval"],
+        "missing_proposal_modes": ["train"],
+    }
+    assert not driver_module._attempt_policy_satisfied(projected, proposal, 1)
+
+
 def test_parent_accepts_one_requested_mode_from_dual_mode_receipt(tmp_path: Path) -> None:
     """A fresh mode subprocess retains full metadata but completes only its request."""
 
@@ -1607,6 +1705,7 @@ def test_parent_accepts_one_requested_mode_from_dual_mode_receipt(tmp_path: Path
     )
     assert attempts[0]["worker_receipt"]["constructor_seconds"] == 0.25
     assert attempts[0]["worker_receipt"]["forward_seconds"] == 0.5
+    assert not driver_module._attempt_policy_satisfied(attempts[:1], proposal, 1)
     assert driver_module._attempt_policy_satisfied(attempts, proposal, 1)
 
 
