@@ -884,10 +884,107 @@ def _model_input_version_closure(descriptor: SparseRunDescriptor) -> set[str]:
     return closure
 
 
-def _descriptor_mutates_model_input(descriptor: SparseRunDescriptor) -> bool:
-    """Return whether any in-place call targets a model-input slot (or its version chain)."""
+_VIEW_OP_QUALNAMES = frozenset(
+    {
+        # Storage-sharing view ops whose output aliases an input tensor's storage (r29-C3, F2).
+        # Deliberately OVER-broad: some entries here also cover copy variants -- that only
+        # widens the fail-closed gate, which fires ONLY when runtime inputs actually alias, so
+        # a false positive here can never over-trigger an ordinary (non-aliased-input) run.
+        "__getitem__",
+        "getitem",
+        "select",
+        "slice",
+        "narrow",
+        "narrow_copy",
+        "view",
+        "view_as",
+        "_view",
+        "reshape",
+        "reshape_as",
+        "transpose",
+        "t",
+        "permute",
+        "squeeze",
+        "unsqueeze",
+        "expand",
+        "expand_as",
+        "broadcast_to",
+        "flatten",
+        "unflatten",
+        "ravel",
+        "unfold",
+        "diagonal",
+        "diagonal_scatter",
+        "movedim",
+        "moveaxis",
+        "swapaxes",
+        "swapdims",
+        "detach",
+        "as_strided",
+        "split",
+        "split_with_sizes",
+        "chunk",
+        "tensor_split",
+        "hsplit",
+        "vsplit",
+        "dsplit",
+        "unbind",
+        "real",
+        "imag",
+        "view_as_real",
+        "view_as_complex",
+        "adjoint",
+        "alias",
+        "contiguous",
+        "indices",
+        "values",
+    }
+)
+"""Torch op qualnames whose output can SHARE STORAGE with a tensor input (r29-C3, F2)."""
 
+
+def _model_input_storage_closure(descriptor: SparseRunDescriptor) -> set[str]:
+    """Model-input slots plus every slot reachable by version chains AND view-op lineage.
+
+    A view op (``a[0]``, ``a.t()``, ``a.narrow(...)``) produces an output that SHARES STORAGE
+    with its tensor input, so an in-place op on that view mutates the input's storage even
+    though the view slot has no ``version_of`` link to the input (r29-C3, F2-hon). The gate
+    that guards the input-aliasing fail-closed therefore follows both version chains and
+    view-producing lineage from the model-input slots: a slot enters the closure if it is a
+    model input, is versioned from a closure slot, or is the output of a view op whose tensor
+    argument is already in the closure.
+    """
+
+    reg_qualname = {
+        entry.registry_id: getattr(entry.key, "qualname", None)
+        for entry in descriptor.callable_registry
+    }
     closure = _model_input_version_closure(descriptor)
+    changed = True
+    while changed:
+        changed = False
+        for call in descriptor.calls:
+            if reg_qualname.get(call.registry_id) not in _VIEW_OP_QUALNAMES:
+                continue
+            if not any(arg.slot_id in closure for arg in call.tensor_arguments):
+                continue
+            for output_slot_id in call.output_slot_ids:
+                if output_slot_id not in closure:
+                    closure.add(output_slot_id)
+                    changed = True
+        # Re-follow version chains from any newly-added view outputs.
+        for slot in descriptor.tensor_slots:
+            if slot.version_of in closure and slot.slot_id not in closure:
+                closure.add(slot.slot_id)
+                changed = True
+    return closure
+
+
+def _descriptor_mutates_model_input(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether any in-place call targets a model-input slot, its version chain, or a
+    view derived from it (r29-C3, F2-hon)."""
+
+    closure = _model_input_storage_closure(descriptor)
     for call in descriptor.calls:
         if call.is_inplace and _mutation_target_slot_id(call) in closure:
             return True
@@ -903,6 +1000,39 @@ def _tensor_storage_key(value: torch.Tensor) -> int | None:
         return None
 
 
+def _tensor_storage_footprint(value: torch.Tensor) -> tuple[int, int, int] | None:
+    """Return ``(storage_ptr, start_byte, end_byte)`` spanned by a tensor's elements.
+
+    ``end_byte`` is exclusive and covers the highest linear storage index the tensor's
+    shape+stride reaches (r29-C3, F4). Two same-storage inputs whose byte spans do NOT
+    overlap (``a = base[:2]``, ``b = base[2:]``) share a base pointer but touch disjoint
+    memory, so an in-place mutation of one cannot reach the other -- keying aliasing on the
+    base pointer alone falsely diverges them. Overlap of the spans is the honest hazard test.
+    """
+
+    try:
+        storage_ptr = int(value.untyped_storage().data_ptr())
+        element_size = int(value.element_size())
+        offset_bytes = int(value.storage_offset()) * element_size
+        if value.numel() == 0:
+            return storage_ptr, offset_bytes, offset_bytes
+        max_linear_index = sum(
+            (int(dim) - 1) * int(stride) for dim, stride in zip(value.shape, value.stride())
+        )
+        end_byte = offset_bytes + (max_linear_index + 1) * element_size
+        return storage_ptr, offset_bytes, end_byte
+    except (RuntimeError, AttributeError, TypeError, ValueError):
+        return None
+
+
+def _footprints_overlap(left: tuple[int, int, int], right: tuple[int, int, int]) -> bool:
+    """Return whether two ``(storage_ptr, start, end)`` byte spans can touch shared memory."""
+
+    if left[0] != right[0]:
+        return False
+    return left[1] < right[2] and right[1] < left[2]
+
+
 def _input_alias_topology_checks(
     descriptor: SparseRunDescriptor,
     input_slots: Sequence[TensorSlotDescriptor],
@@ -911,42 +1041,48 @@ def _input_alias_topology_checks(
     """Fail closed on runtime input aliasing unreproducible against a de-aliased capture.
 
     Torch capture clones each model-input leaf before the forward, so aliasing between
-    input sites (``forward(a, b)`` with ``a is b``, or two views sharing storage) is LOST:
-    the recorded DAG / archive reflect distinct-input semantics. When any in-place call
-    mutates a model input, a runtime call whose inputs DO alias would propagate that
+    input sites (``forward(a, b)`` with ``a is b``, or two views whose storage spans
+    OVERLAP) is LOST: the recorded DAG / archive reflect distinct-input semantics. When any
+    in-place call mutates a model input (directly, via its version chain, or via a view
+    derived from it), a runtime call whose input byte spans OVERLAP would propagate that
     mutation between sites while the de-aliased replay (independent per-slot clones) would
     not -- a divergence from a fresh model on the given inputs that the replay would
-    otherwise falsely VERIFY. Such an aliased-input run is therefore failed closed. A run
-    with no in-place mutation of an input, or with no input aliasing, is unaffected (no
-    over-trigger): read-only aliasing is numerically irrelevant and stays VERIFIED.
+    otherwise falsely VERIFY. Such a run is failed closed. A run with no in-place mutation of
+    an input, or whose inputs merely share a base storage with DISJOINT byte spans
+    (``base[:2]`` / ``base[2:]``), is unaffected (no over-trigger): a mutation of one span
+    cannot reach the other, and read-only aliasing is numerically irrelevant.
     """
 
     if not _descriptor_mutates_model_input(descriptor):
         return ()
-    storage_to_slots: dict[int, list[str]] = {}
+    footprints: list[tuple[str, tuple[int, int, int]]] = []
     for slot in input_slots:
         value = raw_values.get(slot.slot_id)
         if not isinstance(value, torch.Tensor):
             continue
-        storage_key = _tensor_storage_key(value)
-        if storage_key is None:
+        footprint = _tensor_storage_footprint(value)
+        if footprint is None:
             continue
-        storage_to_slots.setdefault(storage_key, []).append(slot.slot_id)
-    aliased = {key: slots for key, slots in storage_to_slots.items() if len(slots) > 1}
-    if not aliased:
+        footprints.append((slot.slot_id, footprint))
+    overlapping: list[tuple[str, str]] = []
+    for i in range(len(footprints)):
+        for j in range(i + 1, len(footprints)):
+            if _footprints_overlap(footprints[i][1], footprints[j][1]):
+                overlapping.append((footprints[i][0], footprints[j][0]))
+    if not overlapping:
         return ()
     return (
         _contract_check(
             "input_alias_topology",
             False,
             RunnableErrorCode.INPUT_TREE_MISMATCH,
-            "Runtime model inputs alias (share storage) while an in-place op mutates a "
-            "model input; capture de-aliases inputs, so the recorded taken path cannot "
-            "reproduce the aliased mutation and must not be blessed VERIFIED.",
+            "Runtime model inputs alias (overlapping storage spans) while an in-place op "
+            "mutates a model input; capture de-aliases inputs, so the recorded taken path "
+            "cannot reproduce the aliased mutation and must not be blessed VERIFIED.",
             details=(
                 (
-                    "aliased_input_slot_groups",
-                    repr({key: sorted(slots) for key, slots in aliased.items()}),
+                    "overlapping_input_slot_pairs",
+                    repr(sorted(tuple(sorted(pair)) for pair in overlapping)),
                 ),
             ),
         ),
