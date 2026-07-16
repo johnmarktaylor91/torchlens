@@ -1761,7 +1761,14 @@ def _bind_call_outputs(
                 ),
             )
         )
-    checks.extend(_mutation_contract_checks(call, output, slot_values, before_versions))
+    state_slot_ids = frozenset(
+        slot.slot_id
+        for slot in descriptor.tensor_slots
+        if slot.role in {TensorSlotRole.PARAMETER, TensorSlotRole.BUFFER}
+    )
+    checks.extend(
+        _mutation_contract_checks(call, output, slot_values, before_versions, state_slot_ids)
+    )
     return tuple(checks)
 
 
@@ -1770,8 +1777,21 @@ def _mutation_contract_checks(
     output: Any,
     slot_values: Mapping[str, torch.Tensor],
     before_versions: Mapping[str, int],
+    state_slot_ids: frozenset[str] = frozenset(),
 ) -> tuple[ContractCheck, ...]:
-    """Validate recorded in-place aliasing and tensor-version expectations."""
+    """Validate recorded in-place aliasing and tensor-version expectations.
+
+    A NON-inplace call may legitimately bump the ``_version`` of a STATE buffer/parameter
+    slot -- a mode-sensitive norm layer (InstanceNorm/BatchNorm with
+    ``track_running_stats=True``) updates its ``running_mean``/``running_var`` running stats
+    inside the functional ``instance_norm``/``batch_norm`` call, which TorchLens does not
+    record as a separate in-place op (r29-C3, codex-F3). That running-stat update is a
+    declared-state side effect reproduced identically on a fresh replay from the captured
+    state, NOT the input/activation-tensor mutation this check guards against, so state slots
+    are excluded from the non-inplace ``changed`` set. Value correctness of the updated buffer
+    is separately enforced by state/output attestation, so this exclusion cannot mask a real
+    numeric divergence.
+    """
 
     changed = {
         slot_id
@@ -1779,14 +1799,15 @@ def _mutation_contract_checks(
         if slot_id in slot_values and slot_values[slot_id]._version != before
     }
     if not call.is_inplace:
+        non_state_changed = changed - state_slot_ids
         return (
             _contract_check(
                 f"mutation:{call.call_id}",
-                not changed,
+                not non_state_changed,
                 RunnableErrorCode.MUTATION_VERSION_MISMATCH,
                 f"Non-mutating call {call.call_id!r} changed an input tensor version.",
                 affected_op_labels=call.op_labels,
-                details=(("changed_slot_ids", repr(tuple(sorted(changed)))),),
+                details=(("changed_slot_ids", repr(tuple(sorted(non_state_changed)))),),
             ),
         )
     input_slot_id = _mutation_target_slot_id(call)
@@ -2952,11 +2973,14 @@ def _numeric_attestation_check(
     if any(member.field != "out" for member in layer.members):
         return NumericAttestationStatus.NOT_APPLICABLE, None
     raw_members = layer.members
-    if _has_journaled_buffer_activation_member(descriptor, raw_members):
-        # Repeated registered-buffer source slots for the same state entry are journal points, not
-        # immutable activation payloads. A pure journaled replay can be path-faithful while each
-        # selected buffer slot's bytes are only meaningful at that journal point; skip byte-exact
-        # activation attestation rather than raising a false mismatch on a valid replay.
+    if _has_journaled_buffer_activation_member(descriptor, layer, raw_members):
+        # Repeated registered-buffer slots for the same state entry whose archived bytes DIFFER
+        # from the capture-time state are journal points (a mode-sensitive norm layer updating
+        # its running stats mid-forward), not immutable activation payloads: each slot's bytes
+        # are only meaningful at that journal point, so skip byte-exact activation attestation
+        # rather than raising a false mismatch on a valid replay. A repeated buffer slot whose
+        # archived bytes EQUAL the capture state (a read-only running stat under eval) is stable,
+        # not journaled, and stays byte-attestable (r29-C4, codex-F2).
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if _has_out_mutated_activation_member(descriptor, raw_members):
         # An archived activation that later became an ``out=`` destination was
@@ -3270,25 +3294,41 @@ def _is_benign_downstream_nonreproducible(
 
 def _has_journaled_buffer_activation_member(
     descriptor: SparseRunDescriptor,
+    layer: Any,
     members: Sequence[ActivationPayloadMember],
 ) -> bool:
-    """Return whether selected activation payloads include journaled buffer slots.
+    """Return whether selected activation payloads include JOURNALED buffer slots.
+
+    A buffer state entry with multiple selected activation members is journaled only when at
+    least one member's ARCHIVED bytes DIFFER from the capture-time state digest -- i.e. the
+    buffer was actually WRITTEN mid-forward (a norm layer updating its running stats). When
+    every repeated member equals the capture state digest, the buffer is a STABLE read-only
+    source (running stats under eval, or an unwritten buffer read at several points), which is
+    fully byte-attestable and must NOT be suppressed (r29-C4, codex-F2). When the capture state
+    digest is unavailable for a repeated buffer name, fail closed (treat as journaled) rather
+    than risk a false mismatch.
 
     Parameters
     ----------
     descriptor:
         Sparse descriptor declaring tensor slot roles.
+    layer:
+        Activation payload layer descriptor carrying ``capture_state_digests``.
     members:
         Raw activation payload members selected for byte attestation.
 
     Returns
     -------
     bool
-        ``True`` when multiple selected buffer slots refer to the same state entry.
+        ``True`` when a repeated same-state buffer entry was actually journaled (written).
     """
 
     slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
-    seen_state_names: set[str] = set()
+    state_digests = {
+        item.state_dict_name: item.byte_digest
+        for item in getattr(layer, "capture_state_digests", ()) or ()
+    }
+    members_by_state: dict[str, list[ActivationPayloadMember]] = {}
     for member in members:
         slot = slots.get(member.slot_id)
         if slot is None or slot.role is not TensorSlotRole.BUFFER:
@@ -3296,10 +3336,14 @@ def _has_journaled_buffer_activation_member(
         binding = slot.state_binding
         if binding is None:
             continue
-        state_name = binding.state_dict_name
-        if state_name in seen_state_names:
+        members_by_state.setdefault(binding.state_dict_name, []).append(member)
+    for state_name, state_members in members_by_state.items():
+        if len(state_members) <= 1:
+            continue
+        if state_name not in state_digests:
             return True
-        seen_state_names.add(state_name)
+        if any(member.byte_digest != state_digests[state_name] for member in state_members):
+            return True
     return False
 
 
