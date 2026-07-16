@@ -230,6 +230,8 @@ def make_attempt(
             "parameter_count_trainable": 2,
             "native_framework": "pytorch",
             "delegated_method": "forward",
+            "constructor_seconds": 0.1,
+            "forward_seconds": 0.1,
         },
         "supervisor_observation": {
             "exit_code": 0,
@@ -727,6 +729,8 @@ def make_model(
         "observed": {
             "parameter_count_total": 2,
             "parameter_count_trainable": 2,
+            "native_framework": "pytorch",
+            "delegated_method": "forward",
             "output_signature": {
                 "tree": {"leaf": 0},
                 "leaves": [
@@ -741,14 +745,16 @@ def make_model(
                 ],
             },
             "input_kind": "standard-image",
-            "input_asset": "asset:test",
+            "input_asset": (
+                f"standard:image.ppm:{hash_bytes((ASSET_ROOT / 'image.ppm').read_bytes())}"
+            ),
             "input_note": "canonical test image",
             "constructor_seconds": 0.1,
             "forward_seconds": 0.1,
             "peak_rss_bytes": 128,
             "measurement_attempt_ids": [attempt_id],
-            "snippet": "ExampleNet()",
-            "snippet_sha256": HASH,
+            "snippet": "driver-owned isolated forward",
+            "snippet_sha256": stable_hash("driver-owned isolated forward"),
         },
         "modes": {
             "meaningful_modes": ["eval"],

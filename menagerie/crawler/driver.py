@@ -185,7 +185,9 @@ _RUNNER_IDENTITY_CACHE: dict[str, str] = {}
 _RUNNER_EXECUTION_CLOSURE = _RUNNER_COMMON_EXECUTION_CLOSURE
 _AWARD_CLOSURE_SYMBOLS = {
     "driver.py": (
+        "CrawlerDriver._run_environment_work",
         "CrawlerDriver._forward_and_reduce",
+        "CrawlerDriver._ensure_pending_run_anchors",
         "SupervisedForwardLane.forward",
         "_source_symbol_bytes",
         "_award_closure_from_bytes",
@@ -210,6 +212,18 @@ _AWARD_CLOSURE_SYMBOLS = {
         "_matching_attempts",
         "_attempt_policy_satisfied",
         "_assemble_run_model",
+        "_environment_binding",
+        "_installed_package_manifest_bytes",
+        "_observed_interpreter_facts",
+    ),
+    "env_lifecycle.py": (
+        "SequentialEnvironmentLifecycle.run",
+        "installed_package_inventory_bytes",
+        "materialized_environment_generation",
+        "parse_exact_lock",
+        "parse_probe_receipt_bytes",
+        "parse_resolved_export",
+        "validate_probe_receipts",
     ),
     "family_templates.py": (
         "instantiate_size_variant",
@@ -408,6 +422,7 @@ class DriverConfig:
     checker_model: str = "codex"
     checker_version: str = "current"
     only_status: Optional[str] = None
+    run_repair_max: int = 2
 
     def __post_init__(self) -> None:
         """Validate checkpoint and milestone configuration."""
@@ -429,6 +444,8 @@ class DriverConfig:
             raise ValueError("progress milestones must be positive")
         if len(set(self.progress_milestones)) != len(self.progress_milestones):
             raise ValueError("progress milestones must be unique")
+        if self.run_repair_max < 0:
+            raise ValueError("run_repair_max cannot be negative")
 
 
 @dataclass(frozen=True)
@@ -440,6 +457,7 @@ class WorkItem:
     explicit_grants: tuple[str, ...] = ()
     requeue_work_id: Optional[str] = None
     requeue_active: bool = False
+    discovery_source_url: Optional[str] = None
 
     @property
     def stable_id(self) -> str:
@@ -461,6 +479,57 @@ class WorkItem:
             self.intake.variant_scope == "family"
             and self.family_representative_id != self.stable_id
         )
+
+
+def _intake_discovery_urls(snapshot: IntakeSnapshot) -> dict[str, str]:
+    """Recover exact public lead URLs from immutable intake source rows.
+
+    Parameters
+    ----------
+    snapshot:
+        Verified immutable intake snapshot.
+
+    Returns
+    -------
+    dict[str, str]
+        Stable model IDs mapped to retained HTTP(S) discovery URLs.
+    """
+
+    filenames = {
+        "master_catalog": "master_catalog.jsonl",
+        "deferred": "deferred.jsonl",
+    }
+    rows_by_source: dict[str, dict[str, Mapping[str, Any]]] = {}
+    for discovery_source, filename in filenames.items():
+        path = snapshot.root / "sources" / filename
+        if not path.is_file():
+            continue
+        try:
+            rows = [
+                json.loads(line)
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+        except (OSError, json.JSONDecodeError) as exc:
+            raise DriverIntegrationError(
+                f"verified intake source is unreadable: {filename}"
+            ) from exc
+        if any(not isinstance(row, Mapping) for row in rows):
+            raise DriverIntegrationError(
+                f"verified intake source contains a non-object row: {filename}"
+            )
+        rows_by_source[discovery_source] = {
+            stable_hash(row): row for row in rows if isinstance(row, Mapping)
+        }
+    recovered: dict[str, str] = {}
+    for item in snapshot.items:
+        row = rows_by_source.get(item.discovery_source, {}).get(item.legacy_row_sha256)
+        if row is None:
+            continue
+        url = row.get("source_url")
+        if isinstance(url, str) and url.startswith(("http://", "https://")):
+            recovered[item.stable_id] = url
+    return recovered
 
 
 @dataclass(frozen=True)
@@ -494,6 +563,123 @@ class EnvironmentBinding:
     python_version: str
     compiler_identity: str
     sdk_identity: str
+
+
+def _quarantine_environment_payload(
+    environment: Optional[EnvironmentBinding],
+) -> Optional[JsonObject]:
+    """Serialize the exact observed environment used by a completed work set.
+
+    Parameters
+    ----------
+    environment:
+        Parent-observed environment generation, if creation reached use.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Canonical environment facts sufficient for the ordinary freshness predicate.
+    """
+
+    if environment is None:
+        return None
+    return {
+        "prefix": str(environment.prefix),
+        "python_executable": str(environment.python_executable),
+        "family": environment.family,
+        "target": environment.target,
+        "env_generation": environment.env_generation,
+        "lock_sha256": environment.lock_sha256,
+        "resolved_export_sha256": environment.resolved_export_sha256,
+        "packages_manifest_sha256": environment.packages_manifest_sha256,
+        "python_version": environment.python_version,
+        "compiler_identity": environment.compiler_identity,
+        "sdk_identity": environment.sdk_identity,
+    }
+
+
+def _environment_from_quarantine(details: Mapping[str, Any]) -> Optional[EnvironmentBinding]:
+    """Rehydrate a quarantine's exact parent-observed environment binding.
+
+    Parameters
+    ----------
+    details:
+        Canonical environment-cleanup event details.
+
+    Returns
+    -------
+    EnvironmentBinding | None
+        Exact binding, or ``None`` for a legacy/incomplete quarantine event.
+    """
+
+    value = details.get("environment")
+    required = (
+        "prefix",
+        "python_executable",
+        "family",
+        "target",
+        "env_generation",
+        "lock_sha256",
+        "resolved_export_sha256",
+        "packages_manifest_sha256",
+        "python_version",
+        "compiler_identity",
+        "sdk_identity",
+    )
+    if not isinstance(value, Mapping) or any(
+        not isinstance(value.get(key), str) for key in required
+    ):
+        return None
+    return EnvironmentBinding(
+        prefix=Path(str(value["prefix"])),
+        python_executable=Path(str(value["python_executable"])),
+        family=str(value["family"]),
+        target=str(value["target"]),
+        env_generation=str(value["env_generation"]),
+        lock_sha256=str(value["lock_sha256"]),
+        resolved_export_sha256=str(value["resolved_export_sha256"]),
+        packages_manifest_sha256=str(value["packages_manifest_sha256"]),
+        python_version=str(value["python_version"]),
+        compiler_identity=str(value["compiler_identity"]),
+        sdk_identity=str(value["sdk_identity"]),
+    )
+
+
+def _quarantine_work_identity(item: WorkItem, artifact: AuthorArtifact) -> JsonObject:
+    """Bind every non-environment input used by run freshness and quarantine reuse.
+
+    Parameters
+    ----------
+    item, artifact:
+        Exact scheduled intake/work generation and normalized proposal.
+
+    Returns
+    -------
+    dict[str, Any]
+        Closed work identity used only with an exact observed environment binding.
+    """
+
+    proposal = artifact.proposal
+    facts = proposal.get("proposed_facts", {})
+    external = facts.get("external_metadata") if isinstance(facts, Mapping) else None
+    modality = external.get("modality") if isinstance(external, Mapping) else None
+    return {
+        "stable_id": item.stable_id,
+        "intake_item_sha256": stable_hash(item.intake.to_dict()),
+        "work_id": proposal.get("work_id"),
+        "proposal_sha256": proposal.get("proposal_sha256"),
+        "source_identity": proposal.get("source_identity"),
+        "evidence_identity": proposal.get("evidence_identity"),
+        "recipe_revision": proposal.get("recipe_revision"),
+        "vet_identity": proposal.get("vet_identity"),
+        "fidelity_identity": proposal.get("fidelity_identity"),
+        "author_prompt": proposal.get("author", {}).get("prompt_sha256"),
+        "checker_prompt": _checker_prompt_hash(),
+        "runner_identity": _runner_identity(modality),
+        "award_closure": _award_closure_identity(),
+        "template_source_revision": artifact.template_source_revision,
+        "campaign_root_work_id": _artifact_lineage(artifact),
+    }
 
 
 @dataclass(frozen=True)
@@ -1380,6 +1566,8 @@ class CrawlerDriver:
 
         artifacts = self._ensure_authors(work, reducer, operational, state)
         eligible_work = tuple(item for item in work if item.stable_id in artifacts)
+        self._ensure_pending_run_anchors(eligible_work, artifacts, reducer, operational, state)
+        eligible_work = tuple(item for item in eligible_work if item.stable_id in artifacts)
         pause = self._ensure_gates(eligible_work, artifacts, reducer, operational, state)
         eligible_work = tuple(
             item
@@ -1404,7 +1592,7 @@ class CrawlerDriver:
                 award_run=True,
             )
             return pause
-        self._run_environment_work(
+        return self._run_environment_work(
             eligible_work,
             artifacts,
             reducer,
@@ -1412,7 +1600,54 @@ class CrawlerDriver:
             state,
             award_run=True,
         )
-        return None
+
+    def _ensure_pending_run_anchors(
+        self,
+        work: Sequence[WorkItem],
+        artifacts: dict[str, AuthorArtifact],
+        reducer: CanonicalReducer,
+        operational: JsonlLedger,
+        state: JsonObject,
+    ) -> None:
+        """Stage exact untrusted reconstruction.v2 anchors before checker backoff.
+
+        Parameters
+        ----------
+        work, artifacts:
+            Current scheduled items and mutable normalized artifact map.
+        reducer, operational, state:
+            Locked canonical stores used to terminalize one failed staging transaction.
+
+        Notes
+        -----
+        Only mechanical R1/R2 proposals can run with metadata pending. Their full proposal
+        remains explicitly untrusted in any pending model revision; this staging step creates
+        the existing reducer/checkpoint reconstruction shape but awards no authored metadata.
+        """
+
+        gates = scan_jsonl(self.paths.ledgers.gates)
+        for item in work:
+            artifact = artifacts.get(item.stable_id)
+            if artifact is None:
+                continue
+            facts = artifact.proposal.get("proposed_facts", {})
+            rung = (
+                facts.get("source_resolution", {}).get("rung")
+                if isinstance(facts, Mapping)
+                else None
+            )
+            if (
+                rung not in {"R1_LIBRARY", "R2_VENDOR"}
+                or _fidelity_required(artifact.proposal)
+                or _metadata_gate_accepted(gates, item.stable_id, artifact.proposal)
+            ):
+                continue
+            promoted = self._promote_or_terminalize(item, artifact, reducer, operational, state)
+            if promoted is None:
+                artifacts.pop(item.stable_id, None)
+                continue
+            artifacts[item.stable_id] = promoted
+            self._family_artifacts[item.stable_id] = promoted
 
     def _ordered_work(
         self,
@@ -1423,6 +1658,7 @@ class CrawlerDriver:
         """Route incomplete intake rows and enforce global phase order."""
 
         routes: list[tuple[IntakeItem, IntentRoute]] = []
+        discovery_urls = _intake_discovery_urls(snapshot)
         for item in snapshot.items:
             framework = _framework_from_intake(item)
             route = route_model(ModelRequirements(item.stable_id, framework))
@@ -1437,6 +1673,7 @@ class CrawlerDriver:
                 tuple(bindings.get(route.stable_id, {}).get("grant_ids", ())),
                 bindings.get(route.stable_id, {}).get("work_id"),
                 bool(bindings.get(route.stable_id, {}).get("active")),
+                discovery_urls.get(route.stable_id),
             )
             for route in ordered_routes
         )
@@ -2708,14 +2945,14 @@ class CrawlerDriver:
     def _run_environment_work(
         self,
         work: Sequence[WorkItem],
-        artifacts: Mapping[str, AuthorArtifact],
+        artifacts: dict[str, AuthorArtifact],
         reducer: CanonicalReducer,
         operational: JsonlLedger,
         state: JsonObject,
         *,
         award_run: bool,
-    ) -> None:
-        """Run grouped environments, optionally stopping after durable observations."""
+    ) -> Optional[str]:
+        """Run grouped environments and return a checker pause from mode repair."""
 
         by_intent: dict[str, list[WorkItem]] = defaultdict(list)
         for item in work:
@@ -2725,6 +2962,9 @@ class CrawlerDriver:
             use_entered = False
             use_completed = False
             observed_generation: Optional[str] = None
+            observed_environment: Optional[EnvironmentBinding] = None
+            completed_work: list[JsonObject] = []
+            repair_pause: Optional[str] = None
 
             def cleanup_artifact_identity() -> Optional[str]:
                 """Return the current committed setup-artifact identity, if complete."""
@@ -2742,15 +2982,81 @@ class CrawlerDriver:
 
             artifact_identity = cleanup_artifact_identity()
             canonical_events_path = canonical_operational_ledger_path(self.paths.ledgers.models)
-            quarantined = any(
-                event.get("event_kind") == OperationalEventKind.CAMPAIGN_HEALTH.value
-                and event.get("details", {}).get("disposition") == "environment-cleanup-quarantined"
-                and event.get("details", {}).get("intent") == intent.name
-                and event.get("details", {}).get("target") == intent.lock.target
-                and event.get("details", {}).get("artifact_identity") == artifact_identity
-                for event in scan_jsonl(canonical_events_path)
+            quarantine = next(
+                (
+                    event
+                    for event in reversed(scan_jsonl(canonical_events_path))
+                    if event.get("event_kind") == OperationalEventKind.CAMPAIGN_HEALTH.value
+                    and event.get("details", {}).get("disposition")
+                    == "environment-cleanup-quarantined"
+                    and event.get("details", {}).get("intent") == intent.name
+                    and event.get("details", {}).get("target") == intent.lock.target
+                    and event.get("details", {}).get("artifact_identity") == artifact_identity
+                ),
+                None,
             )
-            if quarantined:
+            if quarantine is not None:
+                details = quarantine.get("details", {})
+                quarantined_environment = _environment_from_quarantine(details)
+                completed = {
+                    str(entry.get("stable_id")): entry
+                    for entry in details.get("completed_work", [])
+                    if isinstance(entry, Mapping)
+                }
+                gates = scan_jsonl(self.paths.ledgers.gates)
+                unsatisfied: list[WorkItem] = []
+                for item in by_intent[intent_name]:
+                    current = reducer.current_records.get(item.stable_id)
+                    exact = completed.get(item.stable_id)
+                    fresh = bool(
+                        award_run
+                        and current is not None
+                        and quarantined_environment is not None
+                        and exact is not None
+                        and exact.get("record_revision") == current.get("record_revision")
+                        and exact.get("work_identity")
+                        == _quarantine_work_identity(item, artifacts[item.stable_id])
+                        and _current_run_is_fresh(
+                            current,
+                            artifacts[item.stable_id],
+                            quarantined_environment,
+                            gates,
+                            representative_model=(
+                                reducer.current_records.get(item.family_representative_id)
+                                if item.is_family_variant
+                                else None
+                            ),
+                        )
+                    )
+                    if not fresh:
+                        unsatisfied.append(item)
+                quarantine_failure = EnvironmentExactnessError(
+                    "environment generation is quarantined after incomplete cleanup"
+                )
+                for item in unsatisfied:
+                    attempt = _driver_failure_attempt(
+                        item,
+                        artifacts[item.stable_id],
+                        "environment",
+                        "build-failed",
+                        quarantine_failure,
+                        self.config,
+                        diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
+                        environment=intent.name,
+                        created_at=self.dependencies.clock(),
+                    )
+                    persisted = reducer.append_attempt(attempt).record
+                    self._terminalize(
+                        item,
+                        artifacts[item.stable_id],
+                        "failed:environment",
+                        "build-failed",
+                        str(quarantine_failure),
+                        (persisted,),
+                        reducer,
+                        operational,
+                        state,
+                    )
                 continue
 
             def use(
@@ -2761,7 +3067,8 @@ class CrawlerDriver:
             ) -> None:
                 """Process one intent's models while its sole environment exists."""
 
-                nonlocal observed_generation, use_entered, use_completed
+                nonlocal observed_environment, observed_generation, repair_pause, use_entered
+                nonlocal use_completed
                 use_entered = True
                 environment = _environment_binding(
                     intent,
@@ -2773,7 +3080,9 @@ class CrawlerDriver:
                         SequentialEnvironmentLifecycle,
                     ),
                 )
+                observed_environment = environment
                 observed_generation = environment.env_generation
+                gates = scan_jsonl(self.paths.ledgers.gates)
                 for item in items:
                     current = reducer.current_records.get(item.stable_id)
                     if (
@@ -2783,7 +3092,7 @@ class CrawlerDriver:
                             current,
                             artifacts[item.stable_id],
                             environment,
-                            scan_jsonl(self.paths.ledgers.gates),
+                            gates,
                             representative_model=(
                                 reducer.current_records.get(item.family_representative_id)
                                 if item.is_family_variant
@@ -2791,8 +3100,17 @@ class CrawlerDriver:
                             ),
                         )
                     ):
+                        completed_work.append(
+                            {
+                                "stable_id": item.stable_id,
+                                "record_revision": current["record_revision"],
+                                "work_identity": _quarantine_work_identity(
+                                    item, artifacts[item.stable_id]
+                                ),
+                            }
+                        )
                         continue
-                    self._forward_and_reduce(
+                    repair_pause = self._forward_and_reduce(
                         item,
                         artifacts[item.stable_id],
                         environment,
@@ -2801,6 +3119,22 @@ class CrawlerDriver:
                         state,
                         award_run=award_run,
                     )
+                    artifacts[item.stable_id] = self._family_artifacts.get(
+                        item.stable_id, artifacts[item.stable_id]
+                    )
+                    current = reducer.current_records.get(item.stable_id)
+                    if current is not None:
+                        completed_work.append(
+                            {
+                                "stable_id": item.stable_id,
+                                "record_revision": current["record_revision"],
+                                "work_identity": _quarantine_work_identity(
+                                    item, artifacts[item.stable_id]
+                                ),
+                            }
+                        )
+                    if repair_pause is not None:
+                        break
                 use_completed = True
 
             environment_failure: Exception | None = None
@@ -2821,6 +3155,11 @@ class CrawlerDriver:
                                 "target": intent.lock.target,
                                 "artifact_identity": cleanup_identity,
                                 "env_generation": observed_generation,
+                                "environment": _quarantine_environment_payload(
+                                    observed_environment
+                                ),
+                                "completed_work": completed_work,
+                                "completed_work_identity": stable_hash(completed_work),
                             }
                         )[7:31]
                         event = {
@@ -2842,6 +3181,11 @@ class CrawlerDriver:
                                 "target": intent.lock.target,
                                 "artifact_identity": cleanup_identity,
                                 "env_generation": observed_generation,
+                                "environment": _quarantine_environment_payload(
+                                    observed_environment
+                                ),
+                                "completed_work": completed_work,
+                                "completed_work_identity": stable_hash(completed_work),
                                 "failure_type": (
                                     f"{type(exc).__module__}.{type(exc).__qualname__}"
                                 ),
@@ -2860,15 +3204,10 @@ class CrawlerDriver:
                     environment_failure = None
                 break
             if environment_failure is None:
+                if repair_pause is not None:
+                    return repair_pause
                 continue
-            pending = [
-                item
-                for item in by_intent[intent_name]
-                if item.stable_id not in reducer.current_records
-                or self.config.only_status is not None
-            ]
-            if not pending:
-                raise environment_failure
+            pending = list(by_intent[intent_name])
             stage, reason = _environment_failure(environment_failure)
             for item in pending:
                 attempt = _driver_failure_attempt(
@@ -2894,6 +3233,7 @@ class CrawlerDriver:
                     operational,
                     state,
                 )
+        return None
 
     def _forward_and_reduce(
         self,
@@ -2905,8 +3245,8 @@ class CrawlerDriver:
         state: JsonObject,
         *,
         award_run: bool,
-    ) -> None:
-        """Append honest worker attempts, then let the reducer validate the run award."""
+    ) -> Optional[str]:
+        """Append honest worker attempts and return a checker pause from run repair."""
 
         execution_identity = _execution_identity(artifact.proposal, environment)
         attempts = _matching_attempts(
@@ -3007,6 +3347,100 @@ class CrawlerDriver:
                 all_attempts = _matching_model_attempts(
                     self.paths.ledgers.attempts, artifact.proposal
                 )
+                expansion = _detected_mode_expansion(all_attempts, artifact.proposal)
+                if expansion is not None:
+                    if not any(
+                        attempt.get("error", {}).get("details", {}).get("route")
+                        == "recipe-and-gate-revision-required"
+                        for attempt in all_attempts
+                        if isinstance(attempt.get("error"), Mapping)
+                    ):
+                        expansion_attempt = _driver_failure_attempt(
+                            item,
+                            artifact,
+                            "input",
+                            "contract-invalid",
+                            DriverIntegrationError(
+                                "worker detected meaningful modes absent from the gated proposal"
+                            ),
+                            self.config,
+                            diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
+                            environment=environment.family,
+                            created_at=self.dependencies.clock(),
+                        )
+                        expansion_attempt["attempt_id"] = stable_hash(
+                            {
+                                "work_id": artifact.proposal["work_id"],
+                                "route": "recipe-and-gate-revision-required",
+                                "detected_meaningful_modes": expansion["detected_meaningful_modes"],
+                            }
+                        )
+                        expansion_attempt["error"]["details"] = deepcopy(expansion)
+                        expansion_attempt["error"]["root_cause_fingerprint"] = stable_hash(
+                            expansion
+                        )
+                        persisted_expansion = reducer.append_attempt(expansion_attempt).record
+                        all_attempts = (*all_attempts, persisted_expansion)
+                    try:
+                        repaired = self._repair_author_for_detected_modes(
+                            item,
+                            artifact,
+                            expansion,
+                        )
+                    except Exception as exc:  # noqa: BLE001 -- bounded repair is model-local
+                        reason = (
+                            "protocol-violation"
+                            if isinstance(exc, DriverIntegrationError)
+                            and not self._is_infrastructure_error(exc)
+                            else "internal-error"
+                        )
+                        repair_failure = reducer.append_attempt(
+                            _driver_failure_attempt(
+                                item,
+                                artifact,
+                                "runner",
+                                reason,
+                                exc,
+                                self.config,
+                                diagnostics_root=_diagnostics_root_for_work_root(
+                                    self.paths.work_root
+                                ),
+                                environment=environment.family,
+                                created_at=self.dependencies.clock(),
+                            )
+                        ).record
+                        self._terminalize(
+                            item,
+                            artifact,
+                            "failed:runner",
+                            reason,
+                            str(exc),
+                            (*all_attempts, repair_failure),
+                            reducer,
+                            operational,
+                            state,
+                        )
+                        return None
+                    repaired_artifacts = {item.stable_id: repaired}
+                    pause = self._ensure_gates(
+                        (item,), repaired_artifacts, reducer, operational, state
+                    )
+                    current = reducer.current_records.get(item.stable_id)
+                    if current is not None and current.get("status", {}).get("kind") != "runs":
+                        return pause
+                    if pause is not None:
+                        return pause
+                    repaired = repaired_artifacts[item.stable_id]
+                    self._family_artifacts[item.stable_id] = repaired
+                    return self._forward_and_reduce(
+                        item,
+                        repaired,
+                        environment,
+                        reducer,
+                        operational,
+                        state,
+                        award_run=award_run,
+                    )
                 failure = next(
                     (
                         attempt
@@ -3048,10 +3482,10 @@ class CrawlerDriver:
                     operational,
                     state,
                 )
-                return
+                return None
             self.dependencies.boundary_hook("after-forward", item.stable_id)
         if not award_run:
-            return
+            return None
         gates = scan_jsonl(self.paths.ledgers.gates)
         representative_model = (
             reducer.current_records.get(item.family_representative_id)
@@ -3094,7 +3528,7 @@ class CrawlerDriver:
                 operational,
                 state,
             )
-            return
+            return None
         current_model = reducer.current_records.get(item.stable_id)
         model["parent_revision"] = (
             current_model["record_revision"] if current_model is not None else None
@@ -3113,6 +3547,7 @@ class CrawlerDriver:
         state["last_terminal_count"] = len(current_records)
         state["status"] = "running"
         _write_driver_state(self.paths.driver_state, state)
+        return None
 
     def _repair_author(
         self,
@@ -3192,6 +3627,108 @@ class CrawlerDriver:
         _write_json_atomic(cache, cache_value)
         del artifact
         return repaired
+
+    def _repair_author_for_detected_modes(
+        self,
+        item: WorkItem,
+        artifact: AuthorArtifact,
+        expansion: Mapping[str, Any],
+    ) -> AuthorArtifact:
+        """Request bounded proposal revisions until every detected mode is declared.
+
+        Parameters
+        ----------
+        item, artifact:
+            Current model and proposal generation that produced the observation.
+        expansion:
+            Typed worker observation naming the complete detected mode set.
+
+        Returns
+        -------
+        AuthorArtifact
+            A new identity-validated proposal covering the full detected set.
+
+        Raises
+        ------
+        DriverIntegrationError
+            If no revision satisfies the observation before the configured cap.
+        """
+
+        detected = canonical_meaningful_modes(
+            expansion.get("detected_meaningful_modes"),
+            field="detected_meaningful_modes",
+        )
+        repair_root = self.paths.work_root / item.stable_id / "repair"
+        existing = tuple(sorted(repair_root.glob("run-modes-generation-*.json")))
+        last_error: Optional[BaseException] = None
+        for generation in range(len(existing) + 1, self.config.run_repair_max + 1):
+            request = {
+                "stable_id": item.stable_id,
+                "generation": generation,
+                "gate_kind": "run_modes",
+                "route": "recipe-and-gate-revision-required",
+                "campaign_root_work_id": _artifact_lineage(artifact),
+                "proposal_sha256": artifact.proposal["proposal_sha256"],
+                "proposal_meaningful_modes": list(expansion.get("proposal_meaningful_modes", [])),
+                "detected_meaningful_modes": list(detected),
+                "missing_proposal_modes": list(expansion.get("missing_proposal_modes", [])),
+            }
+            repair_path = repair_root / f"run-modes-generation-{generation}.json"
+            if not repair_path.is_file():
+                _write_json_atomic(repair_path, request)
+            try:
+                repaired = self._retry_infrastructure_call(
+                    lambda: self.dependencies.author.author(item, self.paths.work_root, self.config)
+                )
+                repaired = _bind_requeue_artifact(item, repaired)
+                repaired = _normalize_artifact_modes(repaired, self.config)
+                if repaired.proposal.get("stable_id") != item.stable_id:
+                    raise DriverIntegrationError(
+                        "mode-repair proposal stable_id does not match intake"
+                    )
+                repaired_modes = canonical_meaningful_modes(
+                    repaired.proposal.get("proposed_facts", {})
+                    .get("modes", {})
+                    .get("meaningful_modes"),
+                    field="modes.meaningful_modes",
+                )
+                if not set(detected).issubset(repaired_modes):
+                    raise DriverIntegrationError(
+                        "mode-repair proposal does not cover every worker-detected mode"
+                    )
+                if repaired.proposal.get("work_id") == artifact.proposal.get("work_id"):
+                    raise DriverIntegrationError(
+                        "mode-repair proposal did not issue a new work identity"
+                    )
+                repaired = replace(
+                    repaired,
+                    campaign_root_work_id=_artifact_lineage(artifact),
+                )
+                _validate_artifact_identities(repaired, self.config)
+            except Exception as exc:  # noqa: BLE001 -- each generation consumes the bounded cap
+                last_error = exc
+                continue
+            cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
+            cache_value = {
+                "proposal": repaired.proposal,
+                "source_manifest": repaired.source_manifest,
+                "model_dir": str(repaired.model_dir),
+                "repair_generation": generation,
+                "repair_kind": "run_modes",
+                "campaign_root_work_id": repaired.campaign_root_work_id,
+                "canonical_code_root": (
+                    str(repaired.canonical_code_root)
+                    if repaired.canonical_code_root is not None
+                    else None
+                ),
+            }
+            cache_value["artifact_identity"] = _artifact_cache_identity(item, repaired, self.config)
+            _write_json_atomic(cache, cache_value)
+            return repaired
+        detail = f": {last_error}" if last_error is not None else ""
+        raise DriverIntegrationError(
+            f"detected-mode repair cap exhausted after {self.config.run_repair_max} revisions{detail}"
+        )
 
     def _terminalize_accuracy_gate(
         self,
@@ -4893,6 +5430,23 @@ def _current_run_is_fresh(
     if proposal.get("author", {}).get("prompt_sha256") != live_author_prompt:
         return False
     facts = proposal.get("proposed_facts", {})
+    if model.get("authored_metadata_state") == "pending":
+        untrusted = model.get("untrusted_attempt")
+        retained_proposal = untrusted.get("proposal") if isinstance(untrusted, Mapping) else None
+        pending_metadata_gate = _find_gate(
+            gates, str(proposal["stable_id"]), "metadata_batch", proposal
+        )
+        execution = model.get("execution", {})
+        return bool(
+            pending_metadata_gate is None
+            and retained_proposal == proposal
+            and facts.get("source_resolution", {}).get("rung") in {"R1_LIBRARY", "R2_VENDOR"}
+            and not _fidelity_required(proposal)
+            and execution.get("current")
+            and execution.get("env_generation") == environment.env_generation
+            and execution.get("execution_identity") == _execution_identity(proposal, environment)
+            and model.get("provenance", {}).get("author_prompt_sha256") == live_author_prompt
+        )
     if artifact.template_source_revision is not None:
         if (
             not _usable_family_representative(
@@ -7887,6 +8441,72 @@ def _matching_model_attempts(path: Path, proposal: Mapping[str, Any]) -> tuple[J
     )
 
 
+def _detected_mode_expansion(
+    attempts: Sequence[Mapping[str, Any]], proposal: Mapping[str, Any]
+) -> Optional[JsonObject]:
+    """Return the typed complete-mode repair route evidenced by worker receipts.
+
+    Parameters
+    ----------
+    attempts:
+        All durable attempts for the current proposal work identity.
+    proposal:
+        Exact proposal whose declared meaningful modes were executed.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Canonical repair details when receipts prove a strict mode expansion.
+    """
+
+    declared = canonical_meaningful_modes(
+        proposal.get("proposed_facts", {}).get("modes", {}).get("meaningful_modes"),
+        field="modes.meaningful_modes",
+    )
+    for attempt in reversed(attempts):
+        error = attempt.get("error")
+        details = error.get("details") if isinstance(error, Mapping) else None
+        if not isinstance(details, Mapping) or (
+            details.get("route") != "recipe-and-gate-revision-required"
+        ):
+            continue
+        detected = canonical_meaningful_modes(
+            details.get("detected_meaningful_modes"),
+            field="detected_meaningful_modes",
+        )
+        missing = tuple(mode for mode in detected if mode not in declared)
+        if missing:
+            return {
+                "route": "recipe-and-gate-revision-required",
+                "proposal_meaningful_modes": list(declared),
+                "detected_meaningful_modes": list(detected),
+                "missing_proposal_modes": list(missing),
+            }
+    observed_values = [
+        mode
+        for mode in ("train", "eval")
+        if any(
+            attempt.get("result") == "succeeded" and attempt.get("mode") == mode
+            for attempt in attempts
+        )
+    ]
+    if not observed_values:
+        return None
+    observed = canonical_meaningful_modes(
+        observed_values,
+        field="detected_meaningful_modes",
+    )
+    missing = tuple(mode for mode in observed if mode not in declared)
+    if not missing:
+        return None
+    return {
+        "route": "recipe-and-gate-revision-required",
+        "proposal_meaningful_modes": list(declared),
+        "detected_meaningful_modes": list(observed),
+        "missing_proposal_modes": list(missing),
+    }
+
+
 def _attempt_policy_satisfied(
     attempts: Sequence[Mapping[str, Any]], proposal: Mapping[str, Any], cold_runs: int
 ) -> bool:
@@ -8203,11 +8823,38 @@ def _redact_terminal_detail(
     return reference
 
 
-def _placeholder_facts(item: WorkItem, created_at: str) -> JsonObject:
-    """Build schema-complete unresolved facts without inventing an executable model."""
+def _placeholder_facts(
+    item: WorkItem,
+    created_at: str,
+    *,
+    source: Optional[Mapping[str, Any]] = None,
+) -> JsonObject:
+    """Build unresolved facts using only a retained exact model source, if any."""
 
-    source_id = "intake-discovery-record"
-    source_url = "https://github.com/johnmarktaylor91/torchlens"
+    exact_source = deepcopy(dict(source)) if isinstance(source, Mapping) else None
+    if exact_source is None and item.discovery_source_url is not None:
+        exact_source = {
+            "source_id": "intake-discovery-record",
+            "role": "documentation",
+            "kind": "intake-snapshot",
+            "url": item.discovery_source_url,
+            "revision_kind": "legacy-row-sha256",
+            "revision": item.intake.legacy_row_sha256,
+            "locator": f"natural-key:{item.intake.natural_key!r}",
+            "content_sha256": None,
+            "byte_count": 0,
+            "media_type": "application/json",
+            "retrieved_at": created_at,
+            "fetch_recipe": "immutable-intake-discovery-lead",
+            "mirror_class": "public",
+            "mirror_digest": None,
+        }
+    source_id = (
+        str(exact_source.get("source_id"))
+        if exact_source is not None
+        else ("missing-mandatory-link")
+    )
+    source_url = str(exact_source.get("url")) if exact_source is not None else None
     evidence_text = f"name={item.intake.name}; zoo={item.intake.zoo}; variant={item.intake.variant}"
     return {
         "identity": {
@@ -8244,35 +8891,16 @@ def _placeholder_facts(item: WorkItem, created_at: str) -> JsonObject:
             "search_report": {
                 "queries": [],
                 "places_checked": ["trusted intake snapshot"],
-                "links_checked": [source_url],
+                "links_checked": [source_url] if source_url is not None else [],
                 "languages_checked": [],
                 "archives_checked": [],
                 "started_at": created_at,
                 "finished_at": created_at,
                 "conclusion": "The model-local lane failed before source resolution completed.",
             },
-            "mandatory_link_status": "ok",
+            "mandatory_link_status": "ok" if exact_source is not None else "failed",
             "primary_source_id": source_id,
-            "sources": [
-                {
-                    "source_id": source_id,
-                    "role": "documentation",
-                    "kind": "intake-snapshot",
-                    "url": source_url,
-                    "revision_kind": "immutable-intake-item",
-                    "revision": item.intake.legacy_row_sha256,
-                    "locator": (
-                        f"menagerie/crawler/records/intake/*/items.jsonl#stable_id={item.stable_id}"
-                    ),
-                    "content_sha256": None,
-                    "byte_count": 0,
-                    "media_type": "application/x-ndjson",
-                    "retrieved_at": created_at,
-                    "fetch_recipe": "trusted-intake-snapshot",
-                    "mirror_class": "public",
-                    "mirror_digest": None,
-                }
-            ],
+            "sources": [exact_source] if exact_source is not None else [],
         },
         "evidence": {
             "excerpts": [
@@ -8373,6 +9001,8 @@ def _terminal_observation(attempts: Sequence[Mapping[str, Any]]) -> JsonObject:
     return {
         "parameter_count_total": int(receipt.get("parameter_count_total") or 0),
         "parameter_count_trainable": int(receipt.get("parameter_count_trainable") or 0),
+        "native_framework": receipt.get("native_framework"),
+        "delegated_method": receipt.get("delegated_method"),
         "output_signature": dict(output),
         "input_kind": str(receipt.get("input_kind") or "random-fallback"),
         "input_asset": receipt.get("input_asset"),
@@ -8432,7 +9062,29 @@ def _assemble_terminal_model(
         metadata_state = "accepted"
     else:
         metadata_state = "failed"
-        facts = _placeholder_facts(item, created_at)
+        raw_resolution = raw_facts.get("source_resolution", {})
+        raw_sources = (
+            raw_resolution.get("sources", []) if isinstance(raw_resolution, Mapping) else []
+        )
+        primary = (
+            raw_resolution.get("primary_source_id") if isinstance(raw_resolution, Mapping) else None
+        )
+        exact_source = next(
+            (
+                source
+                for source in raw_sources
+                if isinstance(source, Mapping)
+                and source.get("source_id") == primary
+                and str(source.get("url", "")).startswith(("http://", "https://"))
+            ),
+            None,
+        )
+        facts = _placeholder_facts(item, created_at, source=exact_source)
+        if exact_source is None:
+            original_status = status_code
+            status_code = "failed:source"
+            reason_code = "missing-mandatory-link"
+            detail = f"{original_status}: {detail or 'no exact public model source was retained'}"
 
     fidelity_gate = _find_gate(
         gates,
@@ -8489,6 +9141,19 @@ def _assemble_terminal_model(
     )
     metadata_gate_id = metadata_gate["gate_id"] if metadata_gate is not None else None
     metadata_verdict = metadata_item["verdict"] if metadata_item is not None else None
+    final_resolution = facts.get("source_resolution", {})
+    final_sources = (
+        final_resolution.get("sources", []) if isinstance(final_resolution, Mapping) else []
+    )
+    final_primary = (
+        final_resolution.get("primary_source_id") if isinstance(final_resolution, Mapping) else None
+    )
+    mandatory_source_present = bool(final_sources) and any(
+        isinstance(source, Mapping)
+        and source.get("source_id") == final_primary
+        and str(source.get("url", "")).startswith(("http://", "https://"))
+        for source in final_sources
+    )
     model: JsonObject = {
         "schema_version": "menagerie.crawler.model.v2",
         "stable_id": item.stable_id,
@@ -8628,7 +9293,7 @@ def _assemble_terminal_model(
         "scar_history": (["slop"] if facts["fidelity"].get("permanent_scar") else []),
         "completeness": {
             "schema_valid": True,
-            "mandatory_source_present": True,
+            "mandatory_source_present": mandatory_source_present,
             "source_read_fields_complete": metadata_accepted,
             "evidence_coverage_complete": metadata_accepted,
             "accuracy_gate_current": metadata_accepted,
@@ -8866,6 +9531,8 @@ def _assemble_run_model(
         "observed": {
             "parameter_count_total": first_receipt.get("parameter_count_total"),
             "parameter_count_trainable": first_receipt.get("parameter_count_trainable"),
+            "native_framework": first_receipt.get("native_framework"),
+            "delegated_method": first_receipt.get("delegated_method"),
             "output_signature": first_receipt["output_signature"],
             "input_kind": first_receipt["input_kind"],
             "input_asset": first_receipt.get("input_asset"),

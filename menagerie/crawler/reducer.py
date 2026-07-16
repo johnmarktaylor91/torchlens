@@ -1066,15 +1066,19 @@ class CanonicalReducer:
         resolution = model.get("source_resolution", {})
         sources = resolution.get("sources", [])
         primary = resolution.get("primary_source_id")
-        if not sources or not any(
+        exact_primary = bool(sources) and any(
             source.get("source_id") == primary
             and str(source.get("url", "")).startswith(("http://", "https://"))
             for source in sources
-        ):
+        )
+        source_failure = model.get("status", {}).get("code") == "failed:source"
+        if not source_failure and not exact_primary:
             raise ReductionError("missing mandatory exact public primary source link")
-        if model.get("status", {}).get("code") != "failed:source" and (
-            resolution.get("mandatory_link_status") != "ok"
+        if source_failure and resolution.get("mandatory_link_status") != (
+            "ok" if exact_primary else "failed"
         ):
+            raise ReductionError("failed:source mandatory-link status contradicts source evidence")
+        if not source_failure and resolution.get("mandatory_link_status") != "ok":
             raise ReductionError(
                 "non-source-failure terminal records require mandatory_link_status=ok"
             )
@@ -1623,9 +1627,18 @@ class CanonicalReducer:
             expected_issues = [] if metadata_accepted else ["authored-metadata-pending"]
         else:
             expected_issues = [status_code]
+        resolution = model.get("source_resolution", {})
+        sources = resolution.get("sources", []) if isinstance(resolution, Mapping) else []
+        primary = resolution.get("primary_source_id") if isinstance(resolution, Mapping) else None
+        mandatory_source_present = bool(sources) and any(
+            isinstance(source, Mapping)
+            and source.get("source_id") == primary
+            and str(source.get("url", "")).startswith(("http://", "https://"))
+            for source in sources
+        )
         expected: JsonObject = {
             "schema_valid": True,
-            "mandatory_source_present": True,
+            "mandatory_source_present": mandatory_source_present,
             "source_read_fields_complete": source_read_complete,
             "evidence_coverage_complete": evidence_complete,
             "accuracy_gate_current": accuracy_current,
@@ -1709,6 +1722,9 @@ class CanonicalReducer:
         except MetadataValidationError as exc:
             raise ReductionError(str(exc)) from exc
         input_contract = model.get("input_contract", {})
+        accepted_in_order = execution.get("accepted_attempt_ids", [])
+        if not isinstance(accepted_in_order, list) or len(accepted_in_order) != len(accepted):
+            raise ReductionError("accepted execution attempt IDs must be a unique ordered list")
         for attempt_id in accepted:
             attempt = attempts_by_id.get(attempt_id)
             if attempt is None:
@@ -1837,6 +1853,40 @@ class CanonicalReducer:
                 )
             ):
                 raise ReductionError(f"mode {mode} lacks a clean successful worker receipt")
+        meaningful_order = model.get("modes", {}).get("meaningful_modes", [])
+        if not isinstance(meaningful_order, list) or not meaningful_order:
+            raise ReductionError("observed facts require an ordered meaningful-mode set")
+        measurement_mode = str(meaningful_order[0])
+        measurement_reference = per_mode.get(measurement_mode, {})
+        measurement_attempt = attempts_by_id.get(measurement_reference.get("attempt_id"))
+        if measurement_attempt is None:
+            raise ReductionError("observed facts lack their designated measurement attempt")
+        measurement_receipt = measurement_attempt.get("worker_receipt", {})
+        measurement_supervisor = measurement_attempt.get("supervisor_observation", {})
+        observed = model.get("observed", {})
+        receipt_observations = {
+            "parameter_count_total": measurement_receipt.get("parameter_count_total"),
+            "parameter_count_trainable": measurement_receipt.get("parameter_count_trainable"),
+            "native_framework": measurement_receipt.get("native_framework"),
+            "delegated_method": measurement_receipt.get("delegated_method"),
+            "output_signature": measurement_receipt.get("output_signature"),
+            "input_kind": measurement_receipt.get("input_kind"),
+            "input_asset": measurement_receipt.get("input_asset"),
+            "input_note": measurement_receipt.get("input_note"),
+            "constructor_seconds": measurement_receipt.get("constructor_seconds"),
+            "forward_seconds": measurement_receipt.get("forward_seconds"),
+            "peak_rss_bytes": measurement_supervisor.get("peak_rss_bytes"),
+            "measurement_attempt_ids": accepted_in_order,
+        }
+        if not isinstance(observed, Mapping) or any(
+            observed.get(field) != value for field, value in receipt_observations.items()
+        ):
+            raise ReductionError("observed runtime facts contradict accepted worker receipts")
+        snippet = "driver-owned isolated forward"
+        if observed.get("snippet") != snippet or observed.get("snippet_sha256") != stable_hash(
+            snippet
+        ):
+            raise ReductionError("observed snippet is not the driver-owned mechanical recipe")
         rung = model.get("source_resolution", {}).get("rung")
         confirmation_policy = execution.get("confirmation_policy")
         if rung in {"R3_PORT", "R4_REIMPLEMENT"}:
