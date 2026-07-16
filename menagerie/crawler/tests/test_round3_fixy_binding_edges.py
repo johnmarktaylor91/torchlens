@@ -359,6 +359,7 @@ def test_parent_telemetry_integrity_failures_poison_closed(tmp_path: Path, failu
         audit.write_text('1 openat(AT_FDCWD, "/tmp/x", O_RDONLY) = 3\n', encoding="utf-8")
         status = audit.stat()
         expected_identity = (status.st_dev, status.st_ino)
+        audit.with_name(f"{audit.name}.anchor").hardlink_to(audit)
     if failure == "replaced":
         replacement = tmp_path / "replacement.log"
         replacement.write_text("1 +++ exited with 0 +++\n", encoding="utf-8")

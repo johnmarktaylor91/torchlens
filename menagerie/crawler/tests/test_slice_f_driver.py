@@ -7,6 +7,7 @@ import json
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -22,6 +23,7 @@ from menagerie.crawler.cli import build_parser, main as cli_main
 from menagerie.crawler.constants import (
     CheckerPauseReason,
     EnvironmentPhase,
+    OPERATIONAL_EVENT_SCHEMA_VERSION,
 )
 from menagerie.crawler.driver import (
     AuthorArtifact,
@@ -2625,6 +2627,55 @@ def test_scheduled_wake_live_lock_is_idempotent_success(tmp_path: Path) -> None:
     noops = [event for event in events if event["event_kind"] == "wake-noop-already-running"]
     assert len(noops) == 1
     assert noops[0]["details"]["wake_id"] == "wake-identity-1"
+
+
+def test_scheduled_wake_retries_live_canonical_ledger_writer(tmp_path: Path) -> None:
+    """A wake losing both locks waits for the tiny idempotent no-op append and exits zero."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    driver = _driver(tmp_path, snapshot)
+
+    class LockedDriverFactory:
+        """Return the same driver while its authoritative driver lock is live."""
+
+        def __call__(self, _args: argparse.Namespace) -> CrawlerDriver:
+            """Return the lock-contending driver."""
+
+            return driver
+
+    argv = [
+        "--repo-root",
+        str(tmp_path),
+        "run",
+        "--scheduled-wake",
+        "--scheduled-wake-id",
+        "wake-ledger-race",
+        "--scheduled-wake-at",
+        NOW,
+    ]
+    event_path = driver.paths.ledgers.models.parent / "operational" / "events.jsonl"
+    ledger = JsonlLedger(event_path, OPERATIONAL_EVENT_SCHEMA_VERSION)
+
+    def release_live_writer() -> None:
+        """Release the simulated driver's short canonical append lock."""
+
+        time.sleep(0.15)
+        ledger.close()
+
+    release = threading.Thread(target=release_live_writer)
+    release.start()
+    try:
+        with DriverLock(driver.paths.lock_path, {"pid": 1}):
+            assert cli_main(argv, driver_factory=LockedDriverFactory()) == 0
+            assert cli_main(argv, driver_factory=LockedDriverFactory()) == 0
+    finally:
+        ledger.close()
+        release.join(timeout=2)
+
+    events = scan_jsonl(event_path)
+    noops = [event for event in events if event["event_kind"] == "wake-noop-already-running"]
+    assert len(noops) == 1
+    assert noops[0]["event_id"] == "wake-noop-wake-ledger-race"
 
 
 def test_empty_milestones_and_missing_notifier_never_block(tmp_path: Path) -> None:
