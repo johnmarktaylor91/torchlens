@@ -117,6 +117,12 @@ _DENIED_FOREIGN_MODULES: frozenset[str] = frozenset(
         # Code execution / imports.
         "builtins",
         "importlib",
+        # The real import machinery behind ``importlib`` (r28, E-r28-1): under trust
+        # these expose ``_frozen_importlib:__import__``, ``_call_with_frames_removed``
+        # (a universal call gadget), and ``exec_module`` reachable via dotted walk.
+        # Prefix matching then also covers their submodules.
+        "_frozen_importlib",
+        "_frozen_importlib_external",
         "runpy",
         "code",
         "codeop",
@@ -165,6 +171,27 @@ def _module_denied(module: str) -> bool:
     return any(
         module == denied or module.startswith(denied + ".") for denied in _DENIED_FOREIGN_MODULES
     )
+
+
+def _name_has_dunder_walk(name: str) -> bool:
+    """Return whether a dotted pickled ``name`` walks through a dunder attribute.
+
+    Pickle protocol >= 4 attribute-walks a DOTTED ``name`` off the resolved module
+    (``STACK_GLOBAL``). Every escape from a value/callable object into a module's
+    globals / builtins / class / reduce machinery traverses a DUNDER attribute
+    segment: ``<func>.__globals__`` returns a module-globals MAPPING,
+    ``__builtins__`` the builtins, and ``__dict__`` / ``__class__`` / ``__reduce__``
+    / ``__subclasses__`` / ``__mro__`` / ``__base__`` the reflective pivots. A
+    LEGITIMATE pickled global name is a module-level class/function qualname -- at
+    most an ``Outer.Inner`` nested-class dotted qualname -- and NEVER contains a
+    dunder segment, so any dot-separated segment beginning with ``__`` is a walk
+    vector and is refused. Used to gate the trusted-foreign branch, where the
+    resolved-real-module denylist recheck is defeated by a resolved module-globals
+    mapping (a ``dict`` has no ``__module__``, so the recheck falls back to the
+    non-denied pickled module).
+    """
+
+    return any(segment.startswith("__") for segment in name.split("."))
 
 
 # torch I/O / serialization / packaging / jit TYPE denylist.
@@ -825,8 +852,35 @@ class SafeBundleUnpickler(pickle.Unpickler):
         # Pure torch tensor reconstruction helpers. ``_rebuild_*`` functions only
         # reassemble tensors from already-resolved (allowlisted) components; any
         # class they receive as an argument was itself gated through find_class.
+        #
+        # HARDENING (r28, A-R28-1 CRITICAL default-victim RCE): the prior fast-path
+        # returned ``super().find_class`` for ANY ``name`` starting with ``_rebuild``
+        # with NO further gate. Under pickle protocol >= 4 the pickled ``name`` is
+        # attribute-walked, so a DOTTED name such as
+        # ``_rebuild_tensor_v2.__globals__.get`` walks OFF the reconstructor function
+        # into ``torch._utils`` module globals and returns a REDUCE-invocable bound
+        # ``dict.get`` -> ``_import_dotted_name`` -> ``os.system`` -- a load-time RCE
+        # (fires at metadata unpickle, no ``.run()`` needed). This is the SAME
+        # dotted-walk escape class the r27 torch-type / preview branches close; the
+        # ``_rebuild`` branch was MISSED. Legit ``_rebuild_*`` reconstructor names NEVER
+        # contain a dot, so (a) refuse any DOTTED ``name`` BEFORE resolving (never
+        # trigger the walk), and (b) after resolving, positively require a torch-owned,
+        # non-type CALLABLE (the reconstructors are functions of ``torch._utils``).
         if module == "torch._utils" and name.startswith("_rebuild"):
-            return super().find_class(module, name)
+            if "." in name:
+                raise pickle.UnpicklingError(
+                    "Blocked dotted torch._utils._rebuild name during bundle metadata "
+                    f"unpickle: {module}.{name} (a dotted name attribute-walks off the "
+                    "reconstructor into module globals; legit _rebuild_* names have no dot)."
+                )
+            obj = super().find_class(module, name)
+            if not (callable(obj) and _is_torch_owned(obj) and not isinstance(obj, type)):
+                raise pickle.UnpicklingError(
+                    "Blocked non-torch-owned / non-callable torch._utils._rebuild "
+                    f"resolution during bundle metadata unpickle: {module}.{name} "
+                    f"(resolved to {str(getattr(obj, '__module__', '') or '')!r})."
+                )
+            return obj
 
         # torch package: admit value instances (dtype / layout / memory_format /
         # ``torch.Size`` etc.) and a resolved DATA ``type`` (tensor / Module /
@@ -981,7 +1035,31 @@ class SafeBundleUnpickler(pickle.Unpickler):
         #    mirroring ``resolve_function_registry_key`` under trust. Importing the
         #    module executes its top-level code, so this is gated behind the flags.
         if self._custom_module_trusted(module):
+            # DiD (r28, DiD-1): a DOTTED ``name`` under a TRUSTED module can
+            # attribute-walk into a module-globals MAPPING
+            # (``<trusted_mod>.<func>.__globals__``) whose real ``__module__`` is
+            # undefined, so the resolved-real-module denylist recheck below falls back
+            # to the (non-denied) pickled module and ADMITS it -- sidestepping the E2
+            # denylist recheck. Every such escape traverses a dunder attribute segment;
+            # legit foreign recipe names never do. Refuse a dunder-walk BEFORE resolving
+            # (never trigger the walk).
+            if _name_has_dunder_walk(name):
+                raise pickle.UnpicklingError(
+                    "Blocked dunder attribute-walk in a trusted foreign global during "
+                    f"bundle metadata unpickle: {module}.{name} (a dotted name walking "
+                    "into __globals__/__builtins__/__dict__ escapes the resolved-module "
+                    "denylist recheck)."
+                )
             obj = super().find_class(module, name)
+            # A resolved MAPPING (e.g. a module's ``__globals__`` / ``__dict__`` reached
+            # by a dotted walk that the dunder guard above did not already refuse) is
+            # never a legitimate foreign recipe callable/type, and its real
+            # ``__module__`` is undefined -- defeating the denylist recheck. Refuse it.
+            if isinstance(obj, dict):
+                raise pickle.UnpicklingError(
+                    "Blocked mapping (module globals) resolved via a dotted name during "
+                    f"trusted bundle metadata unpickle: {module}.{name}."
+                )
             # RE-ENFORCE the DENYLIST on the RESOLVED object's REAL module, NEVER the
             # pickled string. A DOTTED ``name`` attribute-walks off the trusted module
             # and can land on a callable from a DIFFERENT, denied module:

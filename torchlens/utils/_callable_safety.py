@@ -169,6 +169,12 @@ _DENIED_MODULES: frozenset[str] = frozenset(
         # Code execution / imports.
         "builtins",
         "importlib",
+        # The real import machinery behind ``importlib`` (r28, E-r28-1): under trust
+        # these expose ``_frozen_importlib:__import__``, ``_call_with_frames_removed``
+        # (a universal call gadget), and ``exec_module`` reachable via dotted walk.
+        # Prefix matching then also covers their submodules.
+        "_frozen_importlib",
+        "_frozen_importlib_external",
         "runpy",
         "code",
         "codeop",
