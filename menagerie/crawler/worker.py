@@ -29,6 +29,7 @@ from menagerie.crawler.modes import (
     classify_train_eval_divergence,
     detect_meaningful_modes,
     output_signature,
+    output_value_sha256,
 )
 from menagerie.crawler.policy import ExecutionPolicy, PolicyObservation, PolicyViolation
 from menagerie.crawler.recipe import LoadedRecipe, RecipeError, load_recipe
@@ -708,6 +709,7 @@ def _mode_receipt(
         "forward_completed": False,
         "forward_seconds": None,
         "output_signature": None,
+        "output_value_sha256": None,
         "parameter_count_total": total,
         "parameter_count_trainable": trainable,
         "native_framework": native_framework,
@@ -725,6 +727,7 @@ def _mode_receipt(
         receipt["forward_seconds"] = time.monotonic() - started
         receipt["forward_completed"] = True
         receipt["output_signature"] = output_signature(output)
+        receipt["output_value_sha256"] = output_value_sha256(output)
         return receipt, output
     except Exception as exc:  # noqa: BLE001 -- receipt must retain native failures
         receipt["forward_seconds"] = time.monotonic() - started

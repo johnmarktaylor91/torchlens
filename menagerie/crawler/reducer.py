@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from copy import deepcopy
 from dataclasses import dataclass
@@ -32,7 +33,7 @@ from menagerie.crawler.family_templates import (
     validate_size_variant,
     validate_size_variant_derivation,
 )
-from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.intake import (
     IntakeError,
     legacy_requires_fidelity_audit,
@@ -52,6 +53,47 @@ from menagerie.crawler.standard_inputs import ASSET_ROOT
 
 class ReductionError(ValueError):
     """Raised when a proposed canonical fact violates reducer invariants."""
+
+
+@dataclass(frozen=True)
+class ColdForwardPolicy:
+    """Reducer-owned cold-forward admission policy.
+
+    Parameters
+    ----------
+    confirmation_policy:
+        Canonical policy label persisted in a run record.
+    required_cold_forwards:
+        Exact number of independent forwards required for every meaningful mode.
+    """
+
+    confirmation_policy: str
+    required_cold_forwards: int
+
+
+def cold_forward_policy(stable_id: str, rung: object) -> ColdForwardPolicy:
+    """Derive the authoritative deterministic cold-forward policy for one run.
+
+    Parameters
+    ----------
+    stable_id:
+        Durable model identity used for reproducible canary membership.
+    rung:
+        Canonical source rung.
+
+    Returns
+    -------
+    ColdForwardPolicy
+        Two cold forwards for R3/R4 and for the deterministic two-percent R1/R2
+        canary; one cold forward for the remaining R1/R2 population.
+    """
+
+    if str(rung) in {"R3_PORT", "R4_REIMPLEMENT"}:
+        return ColdForwardPolicy("two-cold-r3-r4", 2)
+    canary_digest = hashlib.sha256(f"{stable_id}mechanical-canary-v1".encode("utf-8")).digest()
+    if int.from_bytes(canary_digest, "big") % 100 < 2:
+        return ColdForwardPolicy("mechanical-canary", 2)
+    return ColdForwardPolicy("single-mechanical", 1)
 
 
 @dataclass(frozen=True)
@@ -2012,15 +2054,21 @@ class CanonicalReducer:
         if execution.get("network_attempted") or execution.get("checkpoint_accessed"):
             raise ReductionError("policy-contaminated execution cannot earn runs")
         modes = model.get("modes", {})
-        meaningful = set(modes.get("meaningful_modes", []))
+        meaningful_order = tuple(str(mode) for mode in modes.get("meaningful_modes", []))
+        meaningful = set(meaningful_order)
         per_mode = modes.get("per_mode_run", {})
         if meaningful != set(per_mode):
             raise ReductionError("per_mode_run must cover exactly every meaningful mode")
         attempts_by_id = self._attempt_index()
         accepted = set(execution.get("accepted_attempt_ids", []))
         stable_id = model["stable_id"]
+        rung = model.get("source_resolution", {}).get("rung")
+        cold_policy = cold_forward_policy(str(stable_id), rung)
         signatures: dict[str, list[Any]] = {mode: [] for mode in meaningful}
         counts: dict[str, int] = {mode: 0 for mode in meaningful}
+        cold_indexes: dict[str, set[int]] = {mode: set() for mode in meaningful}
+        parent_witnesses: set[str] = set()
+        invocations: set[bytes] = set()
         accepted_work_ids: set[str] = set()
         implementation = model.get("implementation", {})
         evidence = model.get("evidence", {})
@@ -2108,6 +2156,21 @@ class CanonicalReducer:
             mode = str(attempt.get("mode"))
             observation = attempt.get("supervisor_observation", {})
             signature = receipt.get("output_signature")
+            retries = attempt.get("retries", {})
+            stage_attempt = retries.get("stage_attempt")
+            cold_index = stage_attempt - 1 if isinstance(stage_attempt, int) else -1
+            mode_index = meaningful_order.index(mode) if mode in meaningful_order else -1
+            expected_attempt_id = stable_hash(
+                {
+                    "work_id": attempt.get("work_id"),
+                    "execution_identity": execution.get("execution_identity"),
+                    "cold_index": cold_index,
+                    "mode": mode,
+                }
+            )
+            completion_line = observation.get("stdout_completion_line")
+            invocation = attempt.get("invocation", {})
+            argv = invocation.get("argv") if isinstance(invocation, Mapping) else None
             if (
                 mode not in meaningful
                 or attempt.get("result") != "succeeded"
@@ -2123,10 +2186,35 @@ class CanonicalReducer:
                     receipt.get("input_signature"), input_contract
                 )
                 or output_signature_error(signature) is not None
+                or (
+                    cold_policy.required_cold_forwards > 1
+                    and (
+                        cold_index < 0
+                        or attempt.get("attempt_no")
+                        != cold_index * len(meaningful_order) + mode_index + 1
+                        or attempt.get("attempt_id") != expected_attempt_id
+                        or not isinstance(completion_line, str)
+                        or not isinstance(argv, list)
+                        or any(not isinstance(value, str) for value in argv)
+                    )
+                )
             ):
                 raise ReductionError("accepted attempt lacks a complete zero-exit receipt")
             counts[mode] += 1
             signatures[mode].append(signature)
+            if cold_policy.required_cold_forwards > 1:
+                cold_indexes[mode].add(cold_index)
+                if completion_line in parent_witnesses:
+                    raise ReductionError("accepted cold forwards reuse a parent process witness")
+                parent_witnesses.add(completion_line)
+                invocation_bytes = canonical_json_bytes(argv)
+                if invocation_bytes in invocations:
+                    raise ReductionError(
+                        "accepted cold forwards reuse a scratch/request invocation"
+                    )
+                invocations.add(invocation_bytes)
+            else:
+                cold_indexes[mode].add(0)
         if len(accepted_work_ids) != 1:
             raise ReductionError("accepted attempts span multiple proposal work identities")
         if isinstance(pending_proposal, Mapping):
@@ -2228,20 +2316,24 @@ class CanonicalReducer:
             snippet
         ):
             raise ReductionError("observed snippet is not the driver-owned mechanical recipe")
-        rung = model.get("source_resolution", {}).get("rung")
         confirmation_policy = execution.get("confirmation_policy")
-        if rung in {"R3_PORT", "R4_REIMPLEMENT"}:
-            if confirmation_policy != "two-cold-r3-r4" or any(
-                counts[mode] < 2 for mode in meaningful
-            ):
-                raise ReductionError("R3/R4 runs require two cold accepted attempts")
-        elif confirmation_policy == "two-cold-r3-r4":
-            raise ReductionError("R1/R2 runs cannot claim the R3/R4 confirmation policy")
+        if confirmation_policy != cold_policy.confirmation_policy:
+            raise ReductionError("execution confirmation policy contradicts reducer policy")
+        expected_indexes = set(range(cold_policy.required_cold_forwards))
         if any(
-            any(signature != mode_signatures[0] for signature in mode_signatures[1:])
+            counts[mode] != cold_policy.required_cold_forwards
+            or cold_indexes[mode] != expected_indexes
+            for mode in meaningful
+        ):
+            raise ReductionError("accepted attempts do not satisfy reducer cold-forward policy")
+        if any(
+            any(
+                canonical_json_bytes(signature) != canonical_json_bytes(mode_signatures[0])
+                for signature in mode_signatures[1:]
+            )
             for mode_signatures in signatures.values()
         ):
-            raise ReductionError("cold-run output tree/shape/dtype signatures do not match")
+            raise ReductionError("non-deterministic cold-forward output signature")
 
     def _validate_deferral(self, model: Mapping[str, Any]) -> None:
         """Require positive source/probe evidence for either closed platform deferral.

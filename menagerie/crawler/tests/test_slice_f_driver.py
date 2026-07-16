@@ -438,10 +438,18 @@ class FakeForward(ForwardLane):
                 attempt_no += 1
                 attempt = make_attempt(
                     stable_id,
-                    attempt_id=(f"attempt-{stable_id}-{execution_identity[7:19]}-{cold}-{mode}"),
+                    attempt_id=stable_hash(
+                        {
+                            "work_id": artifact.proposal["work_id"],
+                            "execution_identity": execution_identity,
+                            "cold_index": cold,
+                            "mode": mode,
+                        }
+                    ),
                     mode=mode,
                 )
                 attempt["attempt_no"] = attempt_no
+                attempt["retries"]["stage_attempt"] = cold + 1
                 attempt["work_id"] = artifact.proposal["work_id"]
                 attempt.pop("ledger_seq", None)
                 attempt.pop("payload_sha256", None)
@@ -481,6 +489,32 @@ class FakeForward(ForwardLane):
                         "python": environment.python_version,
                         "compiler_identity": environment.compiler_identity,
                         "sdk_identity": environment.sdk_identity,
+                    }
+                )
+                attempt["invocation"]["argv"] = [
+                    "python",
+                    f"/scratch/cold-{cold + 1}/{mode}/request.json",
+                ]
+                completion_line = (
+                    "MENAGERIE_WORKER_COMPLETION_V1 "
+                    f'{{"proof":"{HASH}","receipt_sha256":"sha256:{attempt_no:064x}"}}'
+                )
+                completion_bytes = (completion_line + "\n").encode("utf-8")
+                observation = attempt["supervisor_observation"]
+                observation["stdout_completion_line"] = completion_line
+                observation["stdout_sha256"] = hash_bytes(completion_bytes)
+                observation["stdout_bytes"] = len(completion_bytes)
+                attempt["worker_receipt"]["receipt_sha256"] = stable_hash(
+                    {
+                        "version": "menagerie.crawler.parent-success-attestation.v1",
+                        "completion_line": completion_line,
+                        "exit_code": observation["exit_code"],
+                        "signal": observation["signal"],
+                        "wall_seconds": observation["wall_seconds"],
+                        "cpu_seconds": observation["cpu_seconds"],
+                        "peak_rss_bytes": observation["peak_rss_bytes"],
+                        "stdout_sha256": observation["stdout_sha256"],
+                        "stderr_sha256": observation["stderr_sha256"],
                     }
                 )
                 attempts.append(attempt)

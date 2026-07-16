@@ -56,6 +56,50 @@ _RUNTIME_SOURCE_SUFFIXES = frozenset(
         ".so",
     }
 )
+_MODEL_DATA_SUFFIXES = frozenset(
+    {
+        ".bin",
+        ".ckpt",
+        ".h5",
+        ".hdf5",
+        ".joblib",
+        ".mar",
+        ".msgpack",
+        ".npy",
+        ".npz",
+        ".onnx",
+        ".params",
+        ".pb",
+        ".pickle",
+        ".pkl",
+        ".pt",
+        ".pth",
+        ".safetensors",
+        ".tflite",
+        ".weights",
+    }
+)
+_PACKAGE_TEXT_DATA_SUFFIXES = frozenset(
+    {
+        ".cfg",
+        ".conf",
+        ".crt",
+        ".csv",
+        ".html",
+        ".ini",
+        ".json",
+        ".md",
+        ".pem",
+        ".rst",
+        ".toml",
+        ".tsv",
+        ".txt",
+        ".xml",
+        ".yaml",
+        ".yml",
+    }
+)
+_PACKAGE_BINARY_DATA_FLOOR_BYTES = 1024**2
 _RUNTIME_METADATA_NAMES = frozenset(
     {
         "INSTALLER",
@@ -421,9 +465,10 @@ def _runtime_static_path_allowed(path: Path) -> bool:
         return False
     name = path.name
     lowered_name = name.lower()
-    if path.suffix.lower() == ".pth" and any(
-        part in {"site-packages", "dist-packages"} for part in path.parts
-    ):
+    if path.suffix.lower() == ".pth" and path.parent.name in {
+        "site-packages",
+        "dist-packages",
+    }:
         try:
             with _ORIGINAL_IO_OPEN(path, "rb") as handle:
                 data = handle.read(1024**2 + 1)
@@ -602,9 +647,39 @@ def _runtime_package_data_paths(runtime_code_roots: Sequence[Path]) -> tuple[Pat
         paths.extend(
             path
             for path, _digest in _installed_package_record_entries(site_root)
-            if not _runtime_static_path_allowed(path)
+            if not _runtime_static_path_allowed(path) and not _runtime_model_data_path(path)
         )
     return tuple(dict.fromkeys(paths))
+
+
+def _runtime_model_data_path(path: Path) -> bool:
+    """Return whether package data is capable of carrying hidden model state.
+
+    Parameters
+    ----------
+    path:
+        Exact installed package-data path.
+
+    Returns
+    -------
+    bool
+        True for weight/checkpoint formats, extensionless payloads, and large
+        non-text package blobs. Explicit declared inputs are checked before this
+        classifier and therefore remain readable.
+    """
+
+    suffix = path.suffix.lower()
+    if suffix in _MODEL_DATA_SUFFIXES:
+        # A textual site-packages .pth file is Python import metadata, not a model
+        # checkpoint. _runtime_static_path_allowed performs that bounded proof.
+        return not (suffix == ".pth" and _runtime_static_path_allowed(path))
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return True
+    if not suffix:
+        return path.name not in _RUNTIME_METADATA_NAMES
+    return size >= _PACKAGE_BINARY_DATA_FLOOR_BYTES and suffix not in _PACKAGE_TEXT_DATA_SUFFIXES
 
 
 def _package_data_digest_matches(path: Path, expected_digest: str) -> bool:
@@ -655,6 +730,8 @@ def _runtime_code_path_allowed(path: Path, runtime_code_roots: Sequence[Path]) -
         return False
     if _runtime_static_path_allowed(path):
         return True
+    if _runtime_model_data_path(path):
+        return False
     for site_root in _runtime_site_roots(roots):
         if not path.is_relative_to(site_root):
             continue

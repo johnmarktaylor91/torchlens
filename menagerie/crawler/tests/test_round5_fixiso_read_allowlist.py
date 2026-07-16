@@ -15,7 +15,11 @@ import pytest
 
 from menagerie.crawler import worker_supervisor
 from menagerie.crawler.identity import compute_recipe_revision, hash_bytes
-from menagerie.crawler.policy import _runtime_code_path_allowed, detect_os_sandbox
+from menagerie.crawler.policy import (
+    _runtime_code_path_allowed,
+    _runtime_package_data_paths,
+    detect_os_sandbox,
+)
 from menagerie.crawler.worker_supervisor import (
     _read_path_is_allowed,
     SupervisedResult,
@@ -188,16 +192,26 @@ def test_hash_inventoried_package_data_and_declared_input_are_readable(tmp_path:
     runtime_code = package / "__init__.py"
     package_data = package / "cacert.pem"
     hidden_data = package / "weights.npz"
+    inventoried_weights = package / "bundled-weights.pth"
     declared_input = tmp_path / "declared-input.json"
     runtime_code.write_text("VALUE = 1\n", encoding="utf-8")
     package_data.write_bytes(b"public package certificate bundle")
     hidden_data.write_bytes(b"undeclared model data")
+    inventoried_weights.write_bytes(b"inventoried but undeclared model weights")
     declared_input.write_text('{"value": 1}\n', encoding="utf-8")
     digest = base64.urlsafe_b64encode(hashlib.sha256(package_data.read_bytes()).digest()).rstrip(
         b"="
     )
+    weight_digest = base64.urlsafe_b64encode(
+        hashlib.sha256(inventoried_weights.read_bytes()).digest()
+    ).rstrip(b"=")
     (dist_info / "RECORD").write_text(
-        f"demo_runtime/cacert.pem,sha256={digest.decode('ascii')},{package_data.stat().st_size}\n",
+        (
+            f"demo_runtime/cacert.pem,sha256={digest.decode('ascii')},"
+            f"{package_data.stat().st_size}\n"
+            f"demo_runtime/bundled-weights.pth,sha256={weight_digest.decode('ascii')},"
+            f"{inventoried_weights.stat().st_size}\n"
+        ),
         encoding="utf-8",
     )
 
@@ -205,12 +219,24 @@ def test_hash_inventoried_package_data_and_declared_input_are_readable(tmp_path:
     assert _runtime_code_path_allowed(runtime_code.resolve(), runtime_roots) is True
     assert _runtime_code_path_allowed(package_data.resolve(), runtime_roots) is True
     assert _runtime_code_path_allowed(hidden_data.resolve(), runtime_roots) is False
+    assert _runtime_code_path_allowed(inventoried_weights.resolve(), runtime_roots) is False
+    assert inventoried_weights.resolve() not in _runtime_package_data_paths(runtime_roots)
     assert (
         _read_path_is_allowed(
             str(declared_input),
             tmp_path,
             (),
             (declared_input,),
+            runtime_roots,
+        )
+        is True
+    )
+    assert (
+        _read_path_is_allowed(
+            str(inventoried_weights),
+            tmp_path,
+            (),
+            (inventoried_weights,),
             runtime_roots,
         )
         is True

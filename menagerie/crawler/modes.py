@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import inspect
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence
@@ -179,6 +180,74 @@ def _flatten(value: object) -> list[object]:
     if isinstance(value, (tuple, list)):
         return [leaf for item in value for leaf in _flatten(item)]
     return [value]
+
+
+def output_value_sha256(value: object) -> str:
+    """Hash exact output leaf values without retaining model payloads.
+
+    Parameters
+    ----------
+    value:
+        Arbitrary nested output whose structure is separately captured by
+        :func:`output_signature`.
+
+    Returns
+    -------
+    str
+        Domain-separated SHA-256 over ordered leaf types, shapes, dtypes, and bytes.
+    """
+
+    digest = hashlib.sha256(b"menagerie-output-values-v1\0")
+    for leaf in _flatten(value):
+        array = _to_numpy(leaf)
+        if array is not None:
+            contiguous = np.ascontiguousarray(array)
+            header = (f"array\0{contiguous.dtype.str}\0{tuple(contiguous.shape)!r}\0").encode(
+                "utf-8"
+            )
+            digest.update(header)
+            if contiguous.dtype.hasobject:
+                digest.update(repr(contiguous.tolist()).encode("utf-8"))
+            else:
+                digest.update(contiguous.tobytes(order="C"))
+            continue
+        leaf_type = f"{type(leaf).__module__}.{type(leaf).__qualname__}"
+        digest.update(f"python\0{leaf_type}\0{leaf!r}\0".encode("utf-8"))
+    return f"sha256:{digest.hexdigest()}"
+
+
+def classify_observed_mode_receipts(
+    train_receipt: Mapping[str, object], eval_receipt: Mapping[str, object]
+) -> Optional[DivergenceResult]:
+    """Classify independently captured train/eval receipt observations.
+
+    Parameters
+    ----------
+    train_receipt, eval_receipt:
+        Per-mode worker receipts carrying output structure and optional value digests.
+
+    Returns
+    -------
+    DivergenceResult | None
+        Mechanical classification, or ``None`` when equal structures lack the value
+        digests required to distinguish ``none`` from ``statistical``.
+    """
+
+    train_signature = train_receipt.get("output_signature")
+    eval_signature = eval_receipt.get("output_signature")
+    if train_signature != eval_signature:
+        return DivergenceResult(
+            "structural", "train and eval output trees, types, dtypes, or shapes differ"
+        )
+    train_values = train_receipt.get("output_value_sha256")
+    eval_values = eval_receipt.get("output_value_sha256")
+    if not isinstance(train_values, str) or not isinstance(eval_values, str):
+        return None
+    if train_values == eval_values:
+        return DivergenceResult("none", "train and eval output value digests match")
+    return DivergenceResult(
+        "statistical", "train and eval structures match but output value digests differ"
+    )
 
 
 def _leaf_equal(left: object, right: object) -> bool:

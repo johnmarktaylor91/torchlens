@@ -124,6 +124,7 @@ from menagerie.crawler.metadata import (
     recompute_accepted_identities,
     validate_authored_facts_for_write,
 )
+from menagerie.crawler.modes import classify_observed_mode_receipts
 from menagerie.crawler.models import JsonObject, LedgerPaths
 from menagerie.crawler.mirrors import ArtifactManifest, ArtifactOrigin, MirrorClass, MirrorStore
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
@@ -131,6 +132,7 @@ from menagerie.crawler.recordio import JsonlLedger, SingleWriterError, scan_json
 from menagerie.crawler.reducer import (
     CanonicalReducer,
     _parent_success_attestation_matches,
+    cold_forward_policy,
     default_ledger_paths,
     expected_standard_asset,
     intake_variant_bindings_from_rows,
@@ -1246,6 +1248,42 @@ def build_command_environment_lane(
     )
 
 
+def _forward_timeout_seconds(proposal: Mapping[str, Any], default_seconds: float) -> float:
+    """Return the bounded proposal-declared forward timeout.
+
+    Parameters
+    ----------
+    proposal:
+        Current author proposal.
+    default_seconds:
+        Normal lane timeout used when no override is declared.
+
+    Returns
+    -------
+    float
+        Effective parent-enforced timeout, never greater than 1,800 seconds.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If a declared override is not a positive bounded integer.
+    """
+
+    implementation = proposal.get("proposed_facts", {}).get("implementation", {})
+    declared = (
+        implementation.get("declared_timeout_seconds")
+        if isinstance(implementation, Mapping)
+        else None
+    )
+    if declared is None:
+        return default_seconds
+    if isinstance(declared, bool) or not isinstance(declared, int) or not 1 <= declared <= 1800:
+        raise DriverIntegrationError(
+            "implementation.declared_timeout_seconds must be an integer in [1, 1800]"
+        )
+    return float(declared)
+
+
 class SupervisedForwardLane:
     """Production forward lane backed by the isolated Slice-B worker supervisor."""
 
@@ -1276,13 +1314,18 @@ class SupervisedForwardLane:
         proposal = artifact.proposal
         stable_id = str(proposal["stable_id"])
         execution_identity = _execution_identity(proposal, environment)
+        rung = proposal.get("proposed_facts", {}).get("source_resolution", {}).get("rung")
+        reducer_policy = cold_forward_policy(stable_id, rung)
+        required_cold_runs = reducer_policy.required_cold_forwards
+        effective_timeout = _forward_timeout_seconds(proposal, self.timeout_seconds)
         attempts: list[JsonObject] = []
+        observed_receipts: dict[int, dict[str, Mapping[str, object]]] = defaultdict(dict)
         # These modes are gate-authoritative. A worker-discovered expansion is a
         # contract failure below and must be re-proposed/re-gated before it can run.
         modes = tuple(
             str(value) for value in proposal["proposed_facts"]["modes"]["meaningful_modes"]
         )
-        for cold_index in range(cold_runs):
+        for cold_index in range(required_cold_runs):
             for mode in modes:
                 root = work_root / stable_id / "forward" / f"cold-{cold_index + 1}" / mode
                 request_path = root / "request.json"
@@ -1301,7 +1344,7 @@ class SupervisedForwardLane:
                     receipt_path,
                     root / "supervisor",
                     environment.python_executable,
-                    timeout_seconds=self.timeout_seconds,
+                    timeout_seconds=effective_timeout,
                     rss_limit_bytes=self.rss_limit_bytes,
                     cwd=self.cwd,
                 )
@@ -1312,11 +1355,95 @@ class SupervisedForwardLane:
                         environment,
                         execution_identity,
                         cold_index,
-                        self.timeout_seconds,
+                        effective_timeout,
                         self.rss_limit_bytes,
                         requested_mode=mode,
                         diagnostics_root=_diagnostics_root_for_work_root(work_root),
                     )
+                )
+                raw_receipt = result.worker_receipt
+                raw_per_mode = (
+                    raw_receipt.get("per_mode") if isinstance(raw_receipt, Mapping) else None
+                )
+                raw_mode_receipt = (
+                    raw_per_mode.get(mode) if isinstance(raw_per_mode, Mapping) else None
+                )
+                if isinstance(raw_mode_receipt, Mapping):
+                    observed_receipts[cold_index][mode] = raw_mode_receipt
+
+        observation_failures: list[JsonObject] = []
+        for mode in modes:
+            signatures = [
+                observed_receipts[index][mode].get("output_signature")
+                for index in range(required_cold_runs)
+                if mode in observed_receipts[index]
+            ]
+            if len(signatures) == required_cold_runs and any(
+                signature != signatures[0] for signature in signatures[1:]
+            ):
+                observation_failures.append(
+                    {
+                        "kind": "cold-forward-nondeterminism",
+                        "mode": mode,
+                        "required_cold_forwards": required_cold_runs,
+                    }
+                )
+        declared_divergence = str(
+            proposal.get("proposed_facts", {}).get("modes", {}).get("train_eval_divergence", "none")
+        )
+        if set(modes) == {"train", "eval"}:
+            for cold_index in range(required_cold_runs):
+                per_mode = observed_receipts[cold_index]
+                if not {"train", "eval"}.issubset(per_mode):
+                    continue
+                divergence = classify_observed_mode_receipts(per_mode["train"], per_mode["eval"])
+                signatures_differ = per_mode["train"].get("output_signature") != per_mode[
+                    "eval"
+                ].get("output_signature")
+                contradicted = (
+                    (declared_divergence == "structural" and not signatures_differ)
+                    or (declared_divergence != "structural" and signatures_differ)
+                    or (divergence is not None and divergence.classification != declared_divergence)
+                )
+                if contradicted:
+                    observation_failures.append(
+                        {
+                            "kind": "train-eval-divergence-mismatch",
+                            "cold_index": cold_index,
+                            "declared": declared_divergence,
+                            "observed": (
+                                divergence.classification
+                                if divergence is not None
+                                else "signature-compatible"
+                            ),
+                        }
+                    )
+        elif declared_divergence != "none":
+            observation_failures.append(
+                {
+                    "kind": "single-mode-divergence-mismatch",
+                    "declared": declared_divergence,
+                }
+            )
+        if observation_failures:
+            failure = _attempt_error_fields(
+                "forward",
+                "confirmation-mismatch",
+                None,
+                "mechanical forward observations contradict the accepted run contract",
+                native_crash=False,
+                details={"observations": observation_failures},
+            )
+            failure["root_cause_fingerprint"] = stable_hash(failure)
+            for index, attempt in enumerate(attempts):
+                if attempt.get("result") != "succeeded":
+                    continue
+                attempt["result"] = "failed"
+                attempt["error"] = deepcopy(failure)
+                attempts[index] = _redact_attempt_diagnostics(
+                    attempt,
+                    None,
+                    _diagnostics_root_for_work_root(work_root),
                 )
         return tuple(attempts)
 
@@ -3264,7 +3391,7 @@ class CrawlerDriver:
             execution_identity,
         )
         rung = artifact.proposal.get("proposed_facts", {}).get("source_resolution", {}).get("rung")
-        cold_runs = 2 if rung in {"R3_PORT", "R4_REIMPLEMENT"} else 1
+        cold_runs = cold_forward_policy(item.stable_id, rung).required_cold_forwards
         if not _attempt_policy_satisfied(attempts, artifact.proposal, cold_runs):
             generated: tuple[Mapping[str, Any], ...]
             cache_identity = stable_hash(
@@ -10008,9 +10135,7 @@ def _assemble_run_model(
             "environment_id": first_attempt["environment"]["env_id"],
             "env_generation": first_attempt["identities"]["environment"],
             "accepted_attempt_ids": accepted_ids,
-            "confirmation_policy": (
-                "two-cold-r3-r4" if rung in {"R3_PORT", "R4_REIMPLEMENT"} else "single-mechanical"
-            ),
+            "confirmation_policy": cold_forward_policy(stable_id, rung).confirmation_policy,
             "network_attempted": any(
                 bool(attempt.get("policy_observation", {}).get("network_attempted"))
                 for attempt in clean_attempts
