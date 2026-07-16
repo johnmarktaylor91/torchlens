@@ -3,21 +3,51 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any, Iterable, Mapping, Optional, Sequence, Union
 
-from menagerie.crawler.authority import DependencyCurrencyProjection
+from menagerie.crawler.artifact_transactions import (
+    ArtifactEventKind,
+    ArtifactEventLedger,
+    StagedArtifact,
+    append_artifact_authorization,
+    derive_artifact_claims,
+    derive_publication_authorization_id,
+)
+from menagerie.crawler.authority import (
+    AuthorityContext,
+    AuthorityDerivationError,
+    DependencyCurrencyProjection,
+    DependencyState,
+    DependencyVector,
+    DependencyValue,
+    FamilyAuthority,
+    PublicationAuthorization,
+    TerminalProof,
+    derive_attempt_projection,
+    dependency_vector_projection,
+    derive_dependency_vector,
+    derive_family_authority,
+    derive_mode_summary,
+    derive_per_mode_run,
+    derive_terminal_observation,
+    derive_terminal_proof,
+    family_authority_projection,
+    mode_summary_projection,
+    validate_currency,
+)
 
 from menagerie.crawler.constants import (
-    ATTEMPT_SCHEMA_VERSION,
+    ATTEMPT_SCHEMA_VERSION_V3,
     CHECKER_PROMPT_NAME,
     FAILURE_REASON_CODES,
-    GATE_SCHEMA_VERSION,
-    MODEL_SCHEMA_VERSION,
+    GATE_SCHEMA_VERSION_V3,
+    MODEL_SCHEMA_VERSION_V3,
     TERMINAL_STATUS_CODES,
 )
 from menagerie.crawler.env_lifecycle import (
@@ -48,6 +78,8 @@ from menagerie.crawler.metadata import (
     validate_authored_facts_for_write,
 )
 from menagerie.crawler.models import AppendResult, JsonObject, LedgerPaths
+from menagerie.crawler.licenses import LicenseDecision, RedistributionClass
+from menagerie.crawler.mirrors import MirrorStore
 from menagerie.crawler.recordio import JsonlLedger, LedgerConflictError, scan_jsonl
 from menagerie.crawler.state import _select_current as _select_current_by_parent
 from menagerie.crawler.standard_inputs import ASSET_ROOT
@@ -132,6 +164,15 @@ class _ReplayLedger:
         copied = deepcopy(dict(record))
         self.records.append(copied)
         return AppendResult(copied, appended=True)
+
+
+class _ReplayArtifactLedger:
+    """Read-only artifact-event facade used during semantic projection replay."""
+
+    def __init__(self, records: Iterable[Mapping[str, Any]]) -> None:
+        """Retain immutable artifact events without acquiring another writer lock."""
+
+        self.events = tuple(records)
 
 
 _FACT_ROOTS = (
@@ -638,6 +679,24 @@ def _model_facts(model: Mapping[str, Any]) -> Mapping[str, Any]:
     return {field: model.get(field) for field in _FACT_ROOTS}
 
 
+def _authored_facts_for_vet(model: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Recover authored facts before a fidelity gate projected its verdict fields."""
+
+    facts = deepcopy(dict(_model_facts(model)))
+    fidelity = facts.get("fidelity")
+    if isinstance(fidelity, dict) and fidelity.get("gate_id") is not None:
+        fidelity.update(
+            {
+                "current": False,
+                "deviations": [],
+                "gate_id": None,
+                "permanent_scar": False,
+                "verdict": None,
+            }
+        )
+    return facts
+
+
 def _checker_prompt_hash() -> str:
     """Hash the exact current checker prompt bytes used for freshness."""
 
@@ -730,16 +789,14 @@ class CanonicalReducer:
     ----------
     ledgers:
         Paths to the three canonical append-only ledgers.
-    intake_ids:
-        Stable IDs in the trusted immutable intake snapshot.
+    context:
+        Mandatory active intake, contract, environment, and policy authority.
     """
 
     def __init__(
         self,
         ledgers: LedgerPaths,
-        intake_ids: Iterable[str],
-        *,
-        intake_variant_bindings: Optional[Mapping[str, tuple[str, str]]] = None,
+        context: AuthorityContext,
     ) -> None:
         """Acquire all canonical writer locks and load current facts.
 
@@ -747,30 +804,44 @@ class CanonicalReducer:
         ----------
         ledgers:
             Paths to canonical ledgers.
-        intake_ids:
-            Stable IDs in trusted intake.
-        intake_variant_bindings:
-            Trusted non-representative stable ID to exact representative ID and
-            intake variant token.
+        context:
+            Mandatory active authority shared by admission and every projection.
         """
 
         self.ledger_paths = ledgers
-        self.intake_ids = frozenset(intake_ids)
-        self.intake_variant_bindings = dict(intake_variant_bindings or {})
-        unknown_bindings = set(self.intake_variant_bindings) - self.intake_ids
+        self.context = context
+        self.intake_ids = frozenset(context.intake_by_stable_id)
+        self.intake_variant_bindings = {
+            stable_id: (
+                str(
+                    binding.get("representative_stable_id", binding.get("family_representative_id"))
+                ),
+                str(binding.get("variant_token", binding.get("variant", ""))),
+            )
+            for stable_id, binding in context.family_bindings.items()
+            if isinstance(binding, Mapping)
+            and binding.get("binding_state") != "ordinary"
+            and binding.get("representative_stable_id", binding.get("family_representative_id"))
+            not in {None, stable_id}
+        }
+        unknown_bindings = set(context.family_bindings) - self.intake_ids
         if unknown_bindings:
             raise ReductionError(
                 f"family variant bindings exist outside intake: {sorted(unknown_bindings)}"
             )
         opened: list[JsonlLedger] = []
         try:
-            self._models = JsonlLedger(ledgers.models, MODEL_SCHEMA_VERSION)
+            self._models = JsonlLedger(ledgers.models, MODEL_SCHEMA_VERSION_V3)
             opened.append(self._models)
-            self._attempts = JsonlLedger(ledgers.attempts, ATTEMPT_SCHEMA_VERSION)
+            self._attempts = JsonlLedger(ledgers.attempts, ATTEMPT_SCHEMA_VERSION_V3)
             opened.append(self._attempts)
-            self._gates = JsonlLedger(ledgers.gates, GATE_SCHEMA_VERSION)
+            self._gates = JsonlLedger(ledgers.gates, GATE_SCHEMA_VERSION_V3)
             opened.append(self._gates)
+            self._artifacts = ArtifactEventLedger(ledgers.artifacts)
         except Exception:
+            artifact_ledger = getattr(self, "_artifacts", None)
+            if artifact_ledger is not None:
+                artifact_ledger.close()
             for ledger in reversed(opened):
                 ledger.close()
             raise
@@ -822,7 +893,7 @@ class CanonicalReducer:
     def close(self) -> None:
         """Release every canonical writer lock idempotently."""
 
-        for ledger_name in ("_gates", "_attempts", "_models"):
+        for ledger_name in ("_artifacts", "_gates", "_attempts", "_models"):
             ledger = getattr(self, ledger_name, None)
             if ledger is not None:
                 ledger.close()
@@ -842,16 +913,22 @@ class CanonicalReducer:
         if cached is None or cached[0] != token:
             projection = project_dependency_current(
                 self.ledger_paths,
-                intake_ids=self.intake_ids,
-                intake_variant_bindings=self.intake_variant_bindings,
+                context=self.context,
                 model_records=self._models.records,
                 attempt_records=self._attempts.records,
                 gate_records=self._gates.records,
+                artifact_records=self._artifacts.events,
             )
             self._projection_cache = (token, projection)
         else:
             projection = cached[1]
         return deepcopy(projection.current_records)
+
+    @property
+    def artifact_ledger(self) -> ArtifactEventLedger:
+        """Return the reducer-owned artifact writer held in canonical lock order."""
+
+        return self._artifacts
 
     def _attempt_index(self) -> Mapping[str, Mapping[str, Any]]:
         """Return the shared immutable attempt-ID index for reducer validation."""
@@ -861,6 +938,43 @@ class CanonicalReducer:
             cached = {str(record.get("attempt_id")): record for record in self._attempts.records}
             self._attempt_index_cache = cached
         return cached
+
+    def update_context(self, context: AuthorityContext) -> None:
+        """Replace only runtime-current environment axes without changing intake roots.
+
+        Parameters
+        ----------
+        context:
+            Refreshed authority after exact environment materialization.
+
+        Raises
+        ------
+        ReductionError
+            If a caller attempts to change the active intake or contract roots
+            during one locked reducer lifetime.
+        """
+
+        stable_axes = (
+            "active_intake_snapshot_id",
+            "active_intake_snapshot_sha256",
+            "intake_by_stable_id",
+            "family_bindings",
+            "author_prompt_identity",
+            "author_model_identity",
+            "author_schema_identity",
+            "author_dispatcher_identity",
+            "checker_prompt_identity",
+            "checker_model_identity",
+            "checker_schema_identity",
+            "reducer_policy_identity",
+            "runner_policy_identity",
+            "terminal_policy_identity",
+            "publication_policy_identity",
+        )
+        if any(getattr(context, axis) != getattr(self.context, axis) for axis in stable_axes):
+            raise ReductionError("locked reducer context changed a non-environment authority axis")
+        self.context = context
+        self._projection_cache = None
 
     def _gate_index(self) -> Mapping[str, Mapping[str, Any]]:
         """Return the shared immutable gate-ID index for reducer validation."""
@@ -894,6 +1008,8 @@ class CanonicalReducer:
         """
 
         _validate_c07_diagnostic_fields(attempt, model=False)
+        if attempt.get("schema_version") != ATTEMPT_SCHEMA_VERSION_V3:
+            raise ReductionError("attempt appends require the current v3 authority contract")
         stable_id = attempt.get("stable_id")
         if stable_id is not None and stable_id not in self.intake_ids:
             raise ReductionError(f"attempt stable_id is outside intake: {stable_id}")
@@ -952,6 +1068,24 @@ class CanonicalReducer:
             or "observed_adapter_sha256" not in receipt
         ):
             raise ReductionError("successful worker receipt lacks current observed recipe bindings")
+        if attempt.get("result") == "succeeded":
+            raw_receipt = attempt.get("raw_award_receipt")
+            parent_attestation = attempt.get("parent_attestation")
+            if not isinstance(raw_receipt, Mapping) or not isinstance(parent_attestation, Mapping):
+                raise ReductionError("successful attempt lacks retained v3 raw proof")
+            try:
+                derive_attempt_projection(
+                    raw_receipt,
+                    parent_attestation,
+                    candidate_attempt=attempt,
+                )
+            except AuthorityDerivationError as exc:
+                raise ReductionError(str(exc)) from exc
+        elif any(
+            attempt.get(field) is not None
+            for field in ("raw_award_receipt", "raw_award_receipt_sha256")
+        ):
+            raise ReductionError("non-success attempt cannot retain award-eligible raw proof")
         result = self._attempts.append(attempt)
         if result.appended:
             self._attempt_index_cache = None
@@ -1047,6 +1181,8 @@ class CanonicalReducer:
             Idempotent append result.
         """
 
+        if gate.get("schema_version") != GATE_SCHEMA_VERSION_V3:
+            raise ReductionError("gate appends require the current v3 authority contract")
         items = gate.get("items", [])
         stable_ids = [item.get("stable_id") for item in items]
         if gate.get("batch_size") != len(items):
@@ -1078,6 +1214,641 @@ class CanonicalReducer:
             self._gate_index_cache = None
         return result
 
+    def _artifact_authority_inputs(self, model: Mapping[str, Any]) -> JsonObject:
+        """Resolve and validate one model's exact append-only artifact authority.
+
+        Parameters
+        ----------
+        model:
+            Candidate v3 model revision.
+
+        Returns
+        -------
+        dict[str, Any]
+            Latest event plus immutable reconstruction inputs when applicable.
+
+        Raises
+        ------
+        ReductionError
+            If the model names no exact transaction state or immutable bytes.
+        """
+
+        authority = model.get("artifact_authority")
+        if not isinstance(authority, Mapping):
+            raise ReductionError("model lacks its mandatory artifact authority block")
+        if authority.get("state") == DependencyState.NOT_APPLICABLE.value:
+            expected = {
+                "state": DependencyState.NOT_APPLICABLE.value,
+                "transaction_id": DependencyState.NOT_APPLICABLE.value,
+                "committed_event_id": DependencyState.NOT_APPLICABLE.value,
+                "authorization_id": DependencyState.NOT_APPLICABLE.value,
+                "reconstruction_sha256": DependencyState.NOT_APPLICABLE.value,
+                "claim_ids": [],
+            }
+            if dict(authority) != expected:
+                raise ReductionError("not-applicable artifact authority is not closed")
+            return {
+                "event": None,
+                "document": None,
+                "transaction_id": DependencyState.NOT_APPLICABLE,
+                "claim_ids": (),
+            }
+        transaction_id = authority.get("transaction_id")
+        events = [
+            event
+            for event in self._artifacts.events
+            if event.get("transaction_id") == transaction_id
+        ]
+        if not events:
+            raise ReductionError("model artifact transaction is absent from the append-only ledger")
+        latest = events[-1]
+        claims = tuple(sorted(str(value.get("claim_id")) for value in latest.get("claims", [])))
+        reconstruction = latest.get("reconstruction")
+        reconstruction_sha256: object = DependencyState.NOT_APPLICABLE.value
+        document: Optional[JsonObject] = None
+        if isinstance(reconstruction, Mapping):
+            reconstruction_sha256 = reconstruction.get("sha256")
+            path_value = reconstruction.get("path")
+            if not isinstance(path_value, str):
+                raise ReductionError("artifact reconstruction lacks its immutable path")
+            canonical_root = _production_canonical_root(self.ledger_paths)
+            if canonical_root is not None:
+                repository_root = canonical_root.parents[1]
+                path = (repository_root / path_value).resolve()
+                try:
+                    raw = path.read_bytes()
+                    parsed = json.loads(raw)
+                except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                    raise ReductionError("artifact reconstruction bytes are unavailable") from exc
+                if hash_bytes(raw) != reconstruction_sha256 or not isinstance(parsed, dict):
+                    raise ReductionError("artifact reconstruction digest changed")
+                document = parsed
+        expected_authority: JsonObject = {
+            "state": latest.get("event_kind"),
+            "transaction_id": transaction_id,
+            "committed_event_id": latest.get("artifact_event_id"),
+            "authorization_id": latest.get("authorization_id")
+            or DependencyState.PENDING_UNTRUSTED.value,
+            "reconstruction_sha256": reconstruction_sha256,
+            "claim_ids": list(claims),
+        }
+        if dict(authority) != expected_authority:
+            raise ReductionError("model artifact authority contradicts the latest ledger event")
+        return {
+            "event": latest,
+            "document": document,
+            "transaction_id": str(transaction_id),
+            "claim_ids": claims,
+        }
+
+    def _model_work_id(self, model: Mapping[str, Any], artifact_inputs: Mapping[str, Any]) -> str:
+        """Resolve one exact work generation from all model authority references.
+
+        Parameters
+        ----------
+        model, artifact_inputs:
+            Candidate model and its resolved artifact transaction.
+
+        Returns
+        -------
+        str
+            Unique work identity shared by attempts, gates, proposal, and custody.
+        """
+
+        stable_id = str(model.get("stable_id"))
+        work_ids: set[str] = set()
+        referenced_attempts = set(_record_attempt_ids(model))
+        for attempt in self._attempts.records:
+            if (
+                attempt.get("attempt_id") in referenced_attempts
+                and attempt.get("stable_id") == stable_id
+                and isinstance(attempt.get("work_id"), str)
+            ):
+                work_ids.add(str(attempt["work_id"]))
+        event = artifact_inputs.get("event")
+        if isinstance(event, Mapping) and isinstance(event.get("work_id"), str):
+            work_ids.add(str(event["work_id"]))
+        for block_name in ("accuracy_gate", "fidelity"):
+            gate_id = model.get(block_name, {}).get("gate_id")
+            found = self._gate_item(gate_id, stable_id)
+            if found is not None and isinstance(found[1].get("work_id"), str):
+                work_ids.add(str(found[1]["work_id"]))
+        retained = model.get("untrusted_attempt")
+        proposal = retained.get("proposal") if isinstance(retained, Mapping) else None
+        if isinstance(proposal, Mapping) and isinstance(proposal.get("work_id"), str):
+            work_ids.add(str(proposal["work_id"]))
+        if len(work_ids) != 1:
+            raise ReductionError(
+                f"model authority does not resolve one work identity: {sorted(work_ids)}"
+            )
+        return next(iter(work_ids))
+
+    def _derive_model_authority(
+        self, model: Mapping[str, Any]
+    ) -> tuple[TerminalProof, FamilyAuthority, JsonObject, JsonObject]:
+        """Derive terminal, family, dependency, mode, and artifact projections.
+
+        Parameters
+        ----------
+        model:
+            Candidate current v3 model revision.
+
+        Returns
+        -------
+        tuple[TerminalProof, FamilyAuthority, dict[str, Any], dict[str, Any]]
+            Exact proof objects plus the derived vector and artifact inputs.
+        """
+
+        artifact_inputs = self._artifact_authority_inputs(model)
+        stable_id = str(model.get("stable_id"))
+        work_id = self._model_work_id(model, artifact_inputs)
+        meaningful_modes = tuple(
+            str(value) for value in model.get("modes", {}).get("meaningful_modes", ())
+        )
+        event = artifact_inputs.get("event")
+        document = artifact_inputs.get("document")
+        source_manifest: Sequence[Mapping[str, Any]] = ()
+        evidence_excerpts: Sequence[Mapping[str, Any]] = ()
+        source_resolution: Optional[Mapping[str, Any]] = None
+        source_manifest_identity: Optional[str] = None
+        evidence_identity: Optional[str] = None
+        license_identity: Optional[str] = None
+        if isinstance(event, Mapping):
+            source_manifest_identity = str(event.get("source_manifest_identity"))
+        if isinstance(document, Mapping):
+            manifest = document.get("source_manifest")
+            raw_sources = manifest.get("sources") if isinstance(manifest, Mapping) else None
+            if isinstance(raw_sources, list):
+                source_manifest = tuple(
+                    value for value in raw_sources if isinstance(value, Mapping)
+                )
+            author_result = document.get("author_result")
+            payload = author_result.get("payload") if isinstance(author_result, Mapping) else None
+            if isinstance(payload, Mapping):
+                evidence_identity = payload.get("evidence_identity")
+                license_identity = payload.get("license_identity")
+            proposal = document.get("proposal")
+            facts = proposal.get("proposed_facts") if isinstance(proposal, Mapping) else None
+            if isinstance(facts, Mapping):
+                source_resolution_value = facts.get("source_resolution")
+                evidence = facts.get("evidence")
+                if isinstance(source_resolution_value, Mapping):
+                    source_resolution = source_resolution_value
+                excerpts = evidence.get("excerpts") if isinstance(evidence, Mapping) else None
+                if isinstance(excerpts, list):
+                    evidence_excerpts = tuple(
+                        value for value in excerpts if isinstance(value, Mapping)
+                    )
+                if evidence_identity is None and isinstance(evidence, Mapping):
+                    evidence_identity = evidence.get("evidence_identity")
+                if license_identity is None:
+                    licenses = facts.get("licenses")
+                    if isinstance(licenses, Mapping):
+                        license_identity = stable_hash(licenses)
+        if source_resolution is None:
+            candidate_resolution = model.get("source_resolution")
+            if isinstance(candidate_resolution, Mapping):
+                source_resolution = candidate_resolution
+        if not source_manifest and isinstance(source_resolution, Mapping):
+            candidate_sources = source_resolution.get("sources")
+            if isinstance(candidate_sources, list):
+                source_manifest = tuple(
+                    value for value in candidate_sources if isinstance(value, Mapping)
+                )
+        if not evidence_excerpts:
+            evidence = model.get("evidence")
+            excerpts = evidence.get("excerpts") if isinstance(evidence, Mapping) else None
+            if isinstance(excerpts, list):
+                evidence_excerpts = tuple(value for value in excerpts if isinstance(value, Mapping))
+            if evidence_identity is None and isinstance(evidence, Mapping):
+                evidence_identity = evidence.get("evidence_identity")
+        if license_identity is None:
+            for gate in self._gates.records:
+                for item in gate.get("items", []):
+                    if item.get("stable_id") != stable_id or item.get("work_id") != work_id:
+                        continue
+                    terminal = item.get("terminal_disposition")
+                    if isinstance(terminal, Mapping):
+                        license_identity = terminal.get("license_identity")
+                        evidence_identity = terminal.get("evidence_identity", evidence_identity)
+        try:
+            terminal_proof = derive_terminal_proof(
+                stable_id,
+                work_id,
+                str(model.get("status", {}).get("code")),
+                attempts=self._attempts.records,
+                gates=self._gates.records,
+                source_manifest=source_manifest,
+                evidence_excerpts=evidence_excerpts,
+                source_resolution=source_resolution,
+                source_manifest_identity=source_manifest_identity,
+                evidence_identity=(
+                    str(evidence_identity) if evidence_identity is not None else None
+                ),
+                license_identity=(str(license_identity) if license_identity is not None else None),
+                meaningful_modes=meaningful_modes,
+                proof_rule_identity=self.context.terminal_policy_identity,
+            )
+            representative: Optional[Mapping[str, Any]] = None
+            binding = self.context.family_bindings.get(stable_id)
+            if isinstance(binding, Mapping):
+                representative_id = binding.get(
+                    "representative_stable_id", binding.get("family_representative_id")
+                )
+                if isinstance(representative_id, str) and representative_id != stable_id:
+                    representative = self._validation_current_records().get(representative_id)
+            family_authority = derive_family_authority(
+                self.context,
+                stable_id,
+                representative_record=representative,
+            )
+        except AuthorityDerivationError as exc:
+            raise ReductionError(str(exc)) from exc
+
+        relevant = tuple(
+            attempt
+            for attempt in self._attempts.records
+            if attempt.get("stable_id") == stable_id and attempt.get("work_id") == work_id
+        )
+        expected_per_mode = derive_per_mode_run(
+            relevant,
+            stable_id=stable_id,
+            work_id=work_id,
+            meaningful_modes=meaningful_modes,
+        )
+        if model.get("modes", {}).get("per_mode_run") != expected_per_mode:
+            raise ReductionError("model per_mode_run contradicts reducer-derived attempt authority")
+        by_mode = {
+            str(attempt.get("mode")): attempt
+            for attempt in relevant
+            if attempt.get("attempt_id")
+            in {value["attempt_id"] for value in expected_per_mode.values()}
+            and attempt.get("result") == "succeeded"
+        }
+        try:
+            mode_projection = mode_summary_projection(
+                derive_mode_summary(by_mode.get("train"), by_mode.get("eval"))
+            )
+        except AuthorityDerivationError as exc:
+            raise ReductionError(str(exc)) from exc
+        for field, expected in mode_projection.items():
+            if model.get("modes", {}).get(field) != expected:
+                raise ReductionError(f"modes.{field} contradicts reducer-derived mode authority")
+        if model.get("status", {}).get("kind") != "runs":
+            expected_observed = derive_terminal_observation(
+                self._attempts.records,
+                stable_id=stable_id,
+                work_id=work_id,
+            )
+            if model.get("observed") != expected_observed:
+                raise ReductionError("terminal observed facts contradict reducer-derived authority")
+
+        checker_gate: DependencyValue = terminal_proof.gate_id
+        if checker_gate == DependencyState.NOT_APPLICABLE:
+            accuracy_gate = model.get("accuracy_gate", {}).get("gate_id")
+            checker_gate = (
+                accuracy_gate
+                if isinstance(accuracy_gate, str) and accuracy_gate
+                else DependencyState.PENDING_UNTRUSTED
+                if model.get("authored_metadata_state") == "pending"
+                else DependencyState.NOT_APPLICABLE
+            )
+        environment_id: Optional[str] = None
+        env_generation = model.get("execution", {}).get("env_generation")
+        proof_attempt_ids = set(terminal_proof.decisive_attempt_ids) | {
+            attempt_id for _mode, attempt_id in terminal_proof.per_mode_attempt_ids
+        }
+        proof_environment_generations = {
+            attempt.get("identities", {}).get("environment")
+            for attempt in self._attempts.records
+            if attempt.get("attempt_id") in proof_attempt_ids
+            and isinstance(attempt.get("identities", {}).get("environment"), str)
+        }
+        if len(proof_environment_generations) > 1:
+            raise ReductionError("terminal proof spans multiple environment generations")
+        proof_environment_generation = next(iter(proof_environment_generations), None)
+        if proof_environment_generation is not None:
+            if env_generation != proof_environment_generation:
+                raise ReductionError("model environment generation contradicts its attempt proof")
+            environment_id = next(
+                (
+                    name
+                    for name, generation in self.context.environment_generations.items()
+                    if generation == proof_environment_generation
+                ),
+                None,
+            )
+            if environment_id is None:
+                raise ReductionError("model environment generation is absent from active context")
+        elif model.get("status", {}).get("kind") == "runs":
+            raise ReductionError("runs proof has no environment generation")
+        accepted_ids = (
+            model.get("execution", {}).get("accepted_attempt_ids", [])
+            if model.get("status", {}).get("kind") == "runs"
+            else model.get("status", {}).get("attempt_ids", [])
+        )
+        proposal_identity: DependencyValue = DependencyState.NOT_APPLICABLE
+        author_result_identity: DependencyValue = DependencyState.NOT_APPLICABLE
+        if isinstance(event, Mapping):
+            event_proposal = event.get("proposal_id")
+            event_result = event.get("author_result_id")
+            if isinstance(event_proposal, str) and event_proposal:
+                proposal_identity = event_proposal
+            if isinstance(event_result, str) and event_result:
+                author_result_identity = event_result
+        candidate_recipe = model.get("implementation", {}).get("recipe_revision")
+        recipe_revision: DependencyValue = (
+            candidate_recipe
+            if isinstance(candidate_recipe, str)
+            else DependencyState.NOT_APPLICABLE
+        )
+        try:
+            vector = derive_dependency_vector(
+                self.context,
+                stable_id=stable_id,
+                terminal_proof=terminal_proof,
+                source_manifest_identity=(
+                    source_manifest_identity or DependencyState.NOT_APPLICABLE
+                ),
+                proposal_identity=proposal_identity,
+                author_result_identity=author_result_identity,
+                checker_gate_identity=checker_gate,
+                recipe_revision=recipe_revision,
+                environment_id=environment_id,
+                accepted_attempt_ids=accepted_ids,
+                artifact_transaction_id=artifact_inputs["transaction_id"],
+                artifact_claim_ids=artifact_inputs["claim_ids"],
+                family_authority=family_authority,
+            )
+        except AuthorityDerivationError as exc:
+            raise ReductionError(str(exc)) from exc
+        vector_projection = dependency_vector_projection(vector)
+        return terminal_proof, family_authority, vector_projection, artifact_inputs
+
+    def _validate_derived_model_authority(self, model: Mapping[str, Any]) -> None:
+        """Require exact reducer-derived proof, family, and dependency projections.
+
+        Parameters
+        ----------
+        model:
+            Candidate v3 model revision.
+
+        Raises
+        ------
+        ReductionError
+            If any copied driver projection differs from replayed authority.
+        """
+
+        terminal_proof, family_authority, vector, _artifact_inputs = self._derive_model_authority(
+            model
+        )
+        if model.get("family_authority") != family_authority_projection(family_authority):
+            raise ReductionError("model family authority contradicts trusted intake")
+        if model.get("dependency_vector") != vector:
+            raise ReductionError("model dependency vector contradicts reducer derivation")
+        status = model.get("status")
+        if not isinstance(status, Mapping):
+            raise ReductionError("model status is malformed")
+        if status.get("code") != terminal_proof.status_code:
+            raise ReductionError("model status code contradicts its terminal proof")
+        if terminal_proof.status_code.startswith("failed:") and (
+            status.get("stage") != terminal_proof.failure_stage
+            or status.get("reason_code") != terminal_proof.reason_code
+            or status.get("root_cause_fingerprint") != terminal_proof.root_cause_fingerprint
+        ):
+            raise ReductionError("failed status fields contradict its decisive proof")
+        stale_reason = validate_currency(
+            self.context,
+            model,
+            terminal_proof=terminal_proof,
+            family_authority=family_authority,
+        )
+        if stale_reason is not None:
+            raise ReductionError(stale_reason)
+
+    def prepare_model(self, model: Mapping[str, Any]) -> JsonObject:
+        """Project one driver candidate exclusively from reducer-owned authority.
+
+        Parameters
+        ----------
+        model:
+            Structurally assembled candidate without copied authority fields.
+
+        Returns
+        -------
+        dict[str, Any]
+            Candidate with exact artifact, mode, family, and dependency projections.
+        """
+
+        candidate = deepcopy(dict(model))
+        stable_id = str(candidate.get("stable_id"))
+        events = [event for event in self._artifacts.events if event.get("stable_id") == stable_id]
+        referenced_attempt_ids = {
+            str(value) for value in candidate.get("status", {}).get("attempt_ids", [])
+        }
+        referenced_work_ids = {
+            str(attempt.get("work_id"))
+            for attempt in self._attempts.records
+            if attempt.get("attempt_id") in referenced_attempt_ids
+            and isinstance(attempt.get("work_id"), str)
+        }
+        untrusted = candidate.get("untrusted_attempt")
+        proposal = untrusted.get("proposal") if isinstance(untrusted, Mapping) else None
+        if isinstance(proposal, Mapping) and isinstance(proposal.get("work_id"), str):
+            referenced_work_ids.add(str(proposal["work_id"]))
+        if len(referenced_work_ids) == 1:
+            exact_work_id = next(iter(referenced_work_ids))
+            exact_events = [event for event in events if event.get("work_id") == exact_work_id]
+            if exact_events:
+                events = exact_events
+        if not events:
+            candidate["artifact_authority"] = {
+                "state": DependencyState.NOT_APPLICABLE.value,
+                "transaction_id": DependencyState.NOT_APPLICABLE.value,
+                "committed_event_id": DependencyState.NOT_APPLICABLE.value,
+                "authorization_id": DependencyState.NOT_APPLICABLE.value,
+                "reconstruction_sha256": DependencyState.NOT_APPLICABLE.value,
+                "claim_ids": [],
+            }
+        else:
+            latest = events[-1]
+            reconstruction = latest.get("reconstruction")
+            candidate["artifact_authority"] = {
+                "state": latest["event_kind"],
+                "transaction_id": latest["transaction_id"],
+                "committed_event_id": latest["artifact_event_id"],
+                "authorization_id": latest.get("authorization_id")
+                or DependencyState.PENDING_UNTRUSTED.value,
+                "reconstruction_sha256": (
+                    reconstruction.get("sha256")
+                    if isinstance(reconstruction, Mapping)
+                    else DependencyState.NOT_APPLICABLE.value
+                ),
+                "claim_ids": sorted(str(value["claim_id"]) for value in latest.get("claims", [])),
+            }
+        artifact_inputs = self._artifact_authority_inputs(candidate)
+        work_id = self._model_work_id(candidate, artifact_inputs)
+        meaningful_modes = tuple(
+            str(value) for value in candidate.get("modes", {}).get("meaningful_modes", ())
+        )
+        relevant = tuple(
+            attempt
+            for attempt in self._attempts.records
+            if attempt.get("stable_id") == stable_id and attempt.get("work_id") == work_id
+        )
+        per_mode = derive_per_mode_run(
+            relevant,
+            stable_id=stable_id,
+            work_id=work_id,
+            meaningful_modes=meaningful_modes,
+        )
+        modes = candidate.get("modes")
+        if not isinstance(modes, dict):
+            raise ReductionError("model modes must be mutable during authority projection")
+        modes["per_mode_run"] = per_mode
+        by_mode = {
+            str(attempt.get("mode")): attempt
+            for attempt in relevant
+            if attempt.get("attempt_id") in {value["attempt_id"] for value in per_mode.values()}
+            and attempt.get("result") == "succeeded"
+        }
+        try:
+            modes.update(
+                mode_summary_projection(
+                    derive_mode_summary(by_mode.get("train"), by_mode.get("eval"))
+                )
+            )
+        except AuthorityDerivationError as exc:
+            raise ReductionError(str(exc)) from exc
+        if candidate.get("status", {}).get("kind") != "runs":
+            candidate["observed"] = derive_terminal_observation(
+                relevant,
+                stable_id=stable_id,
+                work_id=work_id,
+            )
+        terminal_proof, family_authority, vector, _ = self._derive_model_authority(candidate)
+        candidate["family_authority"] = family_authority_projection(family_authority)
+        candidate["dependency_vector"] = vector
+        status = candidate.get("status")
+        if not isinstance(status, dict):
+            raise ReductionError("model status must be mutable during authority projection")
+        status["code"] = terminal_proof.status_code
+        status["kind"] = terminal_proof.status_code.split(":", 1)[0]
+        if terminal_proof.status_code.startswith("failed:"):
+            status["stage"] = terminal_proof.failure_stage
+            status["reason_code"] = terminal_proof.reason_code
+            status["root_cause_fingerprint"] = terminal_proof.root_cause_fingerprint
+        return candidate
+
+    def authorize_publication(
+        self,
+        model: Mapping[str, Any],
+        staged: StagedArtifact,
+        accepted_gate_item: Mapping[str, Any],
+        decisions: Mapping[Any, LicenseDecision],
+        mirrors: MirrorStore,
+        *,
+        terminal: bool = False,
+    ) -> PublicationAuthorization:
+        """Derive and append the sole artifact publication capability.
+
+        Parameters
+        ----------
+        model:
+            Structurally complete candidate whose proof/vector can be replayed.
+        staged:
+            Exact private-custody transaction.
+        accepted_gate_item:
+            Independently accepted v3 gate item.
+        decisions:
+            Exact claim-keyed license decisions.
+        mirrors:
+            Separated physical mirror store.
+        terminal:
+            Whether the gate authorizes a terminal private/public commitment.
+
+        Returns
+        -------
+        PublicationAuthorization
+            Frozen capability already committed to the artifact ledger.
+        """
+
+        prepared = self.prepare_model(model)
+        raw_vector = dict(prepared["dependency_vector"])
+        raw_vector["accepted_attempt_ids"] = tuple(raw_vector["accepted_attempt_ids"])
+        raw_vector["artifact_claim_ids"] = ()
+        provisional = DependencyVector(**raw_vector)
+        gate_id = str(accepted_gate_item.get("gate_id") or "")
+        if not gate_id:
+            gate_id = next(
+                (
+                    str(gate["gate_id"])
+                    for gate in reversed(self._gates.records)
+                    if accepted_gate_item in gate.get("items", [])
+                ),
+                "",
+            )
+        if not gate_id:
+            raise ReductionError("accepted artifact gate item has no owning gate")
+        authorization_id = derive_publication_authorization_id(
+            staged,
+            accepted_gate_id=gate_id,
+            accepted_gate_item_sha256=stable_hash(accepted_gate_item),
+            dependency_vector=provisional,
+            decisions=decisions,
+            publication_policy_identity=self.context.publication_policy_identity,
+        )
+        claims = derive_artifact_claims(
+            staged,
+            accepted_gate_id=gate_id,
+            authorization_id=authorization_id,
+            decisions=decisions,
+            mirrors=mirrors,
+        )
+        final_vector = replace(
+            provisional,
+            artifact_claim_ids=tuple(claim.claim_id for claim in claims),
+        )
+        public_object_ids = tuple(
+            claim.object_id
+            for claim in claims
+            if claim.license_disposition == RedistributionClass.PUBLIC_OK.value
+        )
+        private_object_ids = tuple(
+            claim.object_id
+            for claim in claims
+            if claim.license_disposition != RedistributionClass.PUBLIC_OK.value
+        )
+        authorization = PublicationAuthorization(
+            authorization_id=authorization_id,
+            stable_id=str(staged.event["stable_id"]),
+            work_id=str(staged.event["work_id"]),
+            transaction_id=staged.transaction_id,
+            accepted_gate_id=gate_id,
+            accepted_gate_item_sha256=stable_hash(accepted_gate_item),
+            dependency_vector=final_vector,
+            claim_ids=tuple(claim.claim_id for claim in claims),
+            public_object_ids=public_object_ids,
+            private_object_ids=private_object_ids,
+            publication_policy_identity=self.context.publication_policy_identity,
+        )
+        append_artifact_authorization(
+            staged,
+            authorization,
+            claims,
+            accepted_gate_item=accepted_gate_item,
+            event_kind=(
+                ArtifactEventKind.TERMINAL_AUTHORIZED
+                if terminal
+                else ArtifactEventKind.PUBLICATION_AUTHORIZED
+            ),
+            context=self.context,
+            mirrors=mirrors,
+            ledger=self._artifacts,
+        )
+        self._projection_cache = None
+        return authorization
+
     def append_model(self, model: Mapping[str, Any]) -> AppendResult:
         """Validate and append a full canonical model revision.
 
@@ -1098,6 +1869,8 @@ class CanonicalReducer:
         """
 
         candidate = deepcopy(dict(model))
+        if candidate.get("schema_version") != MODEL_SCHEMA_VERSION_V3:
+            raise ReductionError("model appends require the current v3 authority contract")
         _validate_c07_diagnostic_fields(candidate, model=True)
         stable_id = candidate.get("stable_id")
         if stable_id not in self.intake_ids:
@@ -1167,20 +1940,11 @@ class CanonicalReducer:
             )
         self._validate_status(candidate)
         self._validate_source(candidate)
+        self._validate_derived_model_authority(candidate)
         self._validate_family_template(candidate)
         self._validate_gates(candidate)
-        self._validate_deferral(candidate)
-        self._validate_terminal_evidence(candidate)
         self._validate_execution(candidate)
         self._validate_completeness(candidate)
-        if not semantic_replay:
-            _validate_projection_artifacts(
-                self.ledger_paths,
-                candidate,
-                self._attempts.records,
-                self._gates.records,
-                self._validation_current_records(),
-            )
         try:
             result = self._models.append(candidate)
         except LedgerConflictError as exc:
@@ -1321,10 +2085,7 @@ class CanonicalReducer:
         rung = model.get("source_resolution", {}).get("rung")
         status_kind = model.get("status", {}).get("kind")
         metadata_state = model.get("authored_metadata_state")
-        website = model.get("website")
-        family_variant = bool(
-            isinstance(website, Mapping) and website.get("kind") == "size-variant-template"
-        )
+        family_variant = stable_id in self.intake_variant_bindings
         representative_id = str(model.get("identity", {}).get("family_representative_id", ""))
         representative = (
             self._validation_current_records().get(representative_id) if family_variant else None
@@ -1376,7 +2137,7 @@ class CanonicalReducer:
                 raise ReductionError(
                     "authored metadata gate is missing, stale, inaccurate, or has a blocked rung check"
                 )
-            facts = _model_facts(model)
+            facts = _authored_facts_for_vet(model)
             if family_variant:
                 representative_accuracy = (
                     representative.get("accuracy_gate", {})
@@ -1398,6 +2159,7 @@ class CanonicalReducer:
                         checker_prompt_hash=_checker_prompt_hash(),
                         checker_model=str(gate.get("checker", {}).get("model")),
                         checker_version=str(gate.get("checker", {}).get("version")),
+                        schema_version=MODEL_SCHEMA_VERSION_V3,
                     )
                 except MetadataValidationError as exc:
                     raise ReductionError(str(exc)) from exc
@@ -1416,6 +2178,7 @@ class CanonicalReducer:
                         checker_prompt_hash=_checker_prompt_hash(),
                         checker_model=str(gate.get("checker", {}).get("model")),
                         checker_version=str(gate.get("checker", {}).get("version")),
+                        schema_version=MODEL_SCHEMA_VERSION_V3,
                     )
                 except MetadataValidationError as exc:
                     raise ReductionError(str(exc)) from exc
@@ -1425,7 +2188,28 @@ class CanonicalReducer:
                     or item.get("vet_identity") != identities.vet
                     or accuracy.get("vet_identity") != identities.vet
                 ):
-                    raise ReductionError("accepted source/evidence/recipe/vet identities are stale")
+                    stale = [
+                        name
+                        for name, actual, expected in (
+                            (
+                                "evidence",
+                                model.get("evidence", {}).get("evidence_identity"),
+                                identities.evidence,
+                            ),
+                            (
+                                "recipe",
+                                model.get("implementation", {}).get("recipe_revision"),
+                                identities.recipe,
+                            ),
+                            ("gate-vet", item.get("vet_identity"), identities.vet),
+                            ("model-vet", accuracy.get("vet_identity"), identities.vet),
+                        )
+                        if actual != expected
+                    ]
+                    raise ReductionError(
+                        "accepted source/evidence/recipe/vet identities are stale: "
+                        + ", ".join(stale)
+                    )
         fidelity = model.get("fidelity", {})
         legacy_flags = model.get("intake", {}).get("preserved_legacy_flags", [])
         required = (
@@ -1454,6 +2238,7 @@ class CanonicalReducer:
                         checker_prompt_hash=_checker_prompt_hash(),
                         checker_model=str(gate.get("checker", {}).get("model")),
                         checker_version=str(gate.get("checker", {}).get("version")),
+                        schema_version=MODEL_SCHEMA_VERSION_V3,
                     )
                 except MetadataValidationError as exc:
                     raise ReductionError(str(exc)) from exc
@@ -1550,19 +2335,15 @@ class CanonicalReducer:
         model_modes = model.get("modes")
         if not isinstance(proposed_modes, Mapping) or not isinstance(model_modes, Mapping):
             raise ReductionError("pending metadata run modes are incomplete")
-        for field in (
-            "meaningful_modes",
-            "train_eval_divergence",
-            "divergence_evidence",
-        ):
-            if model_modes.get(field) != proposed_modes.get(field):
-                raise ReductionError(f"pending metadata run changed mechanical modes.{field}")
+        if model_modes.get("meaningful_modes") != proposed_modes.get("meaningful_modes"):
+            raise ReductionError("pending metadata run changed authored meaningful modes")
         try:
             identities = recompute_accepted_identities(
                 proposed_facts,
                 checker_prompt_hash=_checker_prompt_hash(),
                 checker_model=str(accuracy.get("checker_model")),
                 checker_version=str(accuracy.get("checker_version")),
+                schema_version=MODEL_SCHEMA_VERSION_V3,
             )
         except MetadataValidationError as exc:
             raise ReductionError(str(exc)) from exc
@@ -1616,6 +2397,7 @@ class CanonicalReducer:
             validated = validate_canonical_reconstruction(
                 reconstruction,
                 canonical_root,
+                authority_context=self.context,
                 expected_stable_id=stable_id,
                 canonical_gates=self._gates.records,
                 current_models=candidate_current,
@@ -1720,15 +2502,17 @@ class CanonicalReducer:
         return True
 
     def _validate_family_template(self, model: Mapping[str, Any]) -> None:
-        """Mechanically compare a claimed size variant with its exact current representative."""
+        """Validate the trusted-intake family branch before record-shaped hints."""
 
-        website = model.get("website")
-        if not isinstance(website, Mapping) or website.get("kind") != "size-variant-template":
-            return
         stable_id = str(model.get("stable_id", ""))
+        website = model.get("website")
         binding = self.intake_variant_bindings.get(stable_id)
         if binding is None:
-            raise ReductionError("family variant lacks its trusted intake derivation binding")
+            if isinstance(website, Mapping) and website.get("kind") == "size-variant-template":
+                raise ReductionError("ordinary intake item cannot claim family variant authority")
+            return
+        if not isinstance(website, Mapping) or website.get("kind") != "size-variant-template":
+            raise ReductionError("trusted family variant cannot omit its structural template")
         trusted_representative_id, trusted_variant_token = binding
         representative_id = model.get("identity", {}).get("family_representative_id")
         if (
@@ -1742,12 +2526,17 @@ class CanonicalReducer:
         ):
             raise ReductionError("family variant representative is not a usable accepted record")
         try:
+            terminal_variant = model.get("status", {}).get("kind") != "runs"
             validate_size_variant(
                 representative,
                 model,
                 str(representative_id),
-                parameter_count_total=model.get("observed", {}).get("parameter_count_total"),
-                input_contract=model.get("input_contract", {}),
+                parameter_count_total=(
+                    None
+                    if terminal_variant
+                    else model.get("observed", {}).get("parameter_count_total")
+                ),
+                input_contract=(None if terminal_variant else model.get("input_contract", {})),
             )
             validate_size_variant_derivation(
                 representative,
@@ -2093,6 +2882,7 @@ class CanonicalReducer:
                 checker_prompt_hash=_checker_prompt_hash(),
                 checker_model=str(model.get("accuracy_gate", {}).get("checker_model")),
                 checker_version=str(model.get("accuracy_gate", {}).get("checker_version")),
+                schema_version=MODEL_SCHEMA_VERSION_V3,
             )
         except MetadataValidationError as exc:
             raise ReductionError(str(exc)) from exc
@@ -2124,6 +2914,10 @@ class CanonicalReducer:
                 receipt.get("observed_input_asset_sha256"),
                 receipt.get("input_asset"),
             )
+            raw_receipt = attempt.get("raw_award_receipt")
+            expected_observed_manifest = expected_manifest_digest
+            if expected_observed_manifest is None and isinstance(raw_receipt, Mapping):
+                expected_observed_manifest = raw_receipt.get("code_manifest_identity")
             if (
                 identities.get("source") != accepted_identities.source
                 or identities.get("recipe") != accepted_identities.recipe
@@ -2134,7 +2928,7 @@ class CanonicalReducer:
                 or identities.get("checker_prompt") != _checker_prompt_hash()
                 or receipt.get("observed_recipe_revision") != accepted_identities.recipe
                 or receipt.get("observed_adapter_sha256") != implementation.get("code_sha256")
-                or receipt.get("observed_code_manifest_sha256") != expected_manifest_digest
+                or receipt.get("observed_code_manifest_sha256") != expected_observed_manifest
                 or observed_asset_pair
                 not in {(None, None), (expected_asset_digest, expected_asset_id)}
             ):
@@ -2162,7 +2956,6 @@ class CanonicalReducer:
                 or attempt.get("result") != "succeeded"
                 or observation.get("exit_code") != 0
                 or observation.get("signal") is not None
-                or not _parent_success_attestation_matches(attempt)
                 or not receipt.get("constructor_started")
                 or not receipt.get("constructor_completed")
                 or not receipt.get("input_completed")
@@ -2207,10 +3000,7 @@ class CanonicalReducer:
             if str(pending_proposal.get("work_id")) not in accepted_work_ids:
                 raise ReductionError("pending run proposal is stale for the accepted work identity")
         else:
-            website = model.get("website")
-            family_variant = bool(
-                isinstance(website, Mapping) and website.get("kind") == "size-variant-template"
-            )
+            family_variant = str(stable_id) in self.intake_variant_bindings
             if family_variant:
                 representative_id = str(
                     model.get("identity", {}).get("family_representative_id", "")
@@ -2482,11 +3272,11 @@ def _canonical_intake_rows(ledgers: LedgerPaths) -> dict[str, JsonObject]:
 def _replay_reducer(
     ledgers: LedgerPaths,
     *,
-    intake_ids: Iterable[str],
-    intake_variant_bindings: Mapping[str, tuple[str, str]],
+    context: AuthorityContext,
     prior_model_records: Sequence[Mapping[str, Any]],
     attempt_records: Sequence[Mapping[str, Any]],
     gate_records: Sequence[Mapping[str, Any]],
+    artifact_records: Sequence[Mapping[str, Any]],
     raw_prior_current: Mapping[str, Mapping[str, Any]],
     dependency_current: Mapping[str, Mapping[str, Any]],
     attempt_index: Mapping[str, Mapping[str, Any]],
@@ -2496,9 +3286,9 @@ def _replay_reducer(
 
     Parameters
     ----------
-    ledgers, intake_ids, intake_variant_bindings:
-        Canonical authority inputs used by ordinary reducer admission.
-    prior_model_records, attempt_records, gate_records:
+    ledgers, context:
+        Canonical paths and mandatory active authority.
+    prior_model_records, attempt_records, gate_records, artifact_records:
         Hash-validated append-only history.
     raw_prior_current, dependency_current:
         Raw parent-lineage state and already dependency-current representatives.
@@ -2514,11 +3304,23 @@ def _replay_reducer(
     replay: Any = CanonicalReducer.__new__(CanonicalReducer)
     replay.ledger_paths = ledgers
     replay._semantic_replay = True
-    replay.intake_ids = frozenset(intake_ids)
-    replay.intake_variant_bindings = dict(intake_variant_bindings)
+    replay.context = context
+    replay.intake_ids = frozenset(context.intake_by_stable_id)
+    replay.intake_variant_bindings = {
+        stable_id: (
+            str(binding.get("representative_stable_id", binding.get("family_representative_id"))),
+            str(binding.get("variant_token", binding.get("variant", ""))),
+        )
+        for stable_id, binding in context.family_bindings.items()
+        if isinstance(binding, Mapping)
+        and binding.get("binding_state") != "ordinary"
+        and binding.get("representative_stable_id", binding.get("family_representative_id"))
+        not in {None, stable_id}
+    }
     replay._models = _ReplayLedger(prior_model_records)
     replay._attempts = _ReplayLedger(attempt_records)
     replay._gates = _ReplayLedger(gate_records)
+    replay._artifacts = _ReplayArtifactLedger(artifact_records)
     replay._current = {stable_id: record for stable_id, record in raw_prior_current.items()}
     replay._validation_current = dependency_current
     replay._attempt_index_cache = attempt_index
@@ -2655,159 +3457,14 @@ def validate_reconstruction_source_binding(
         raise ReductionError("anchored proposal lacks its verified source-manifest identity")
 
 
-def _recompute_live_execution_identity(
-    record: Mapping[str, Any],
-    proposal: Mapping[str, Any],
-    attempts: Sequence[Mapping[str, Any]],
-) -> None:
-    """Recompute runner/award closure and execution identity from current code bytes.
-
-    Parameters
-    ----------
-    record, proposal, attempts:
-        Current run, its canonical proposal, and accepted attempt evidence.
-
-    Raises
-    ------
-    ReductionError
-        If the current runner, award closure, prompt, or environment changes identity.
-    """
-
-    if record.get("status", {}).get("kind") != "runs":
-        return
-    from menagerie.crawler.driver import (  # noqa: PLC0415
-        EnvironmentBinding,
-        _execution_identity,
-    )
-
-    accepted_ids = record.get("execution", {}).get("accepted_attempt_ids", [])
-    attempts_by_id = {str(value.get("attempt_id")): value for value in attempts}
-    accepted = [attempts_by_id.get(str(attempt_id)) for attempt_id in accepted_ids]
-    if not accepted or any(value is None for value in accepted):
-        raise ReductionError("current run lacks accepted attempts for execution replay")
-    first = accepted[0]
-    assert first is not None
-    environment = first.get("environment")
-    identities = first.get("identities")
-    if not isinstance(environment, Mapping) or not isinstance(identities, Mapping):
-        raise ReductionError("current run lacks environment facts for execution replay")
-    host = first.get("host")
-    if not isinstance(host, Mapping):
-        raise ReductionError("current run lacks execution-host facts for identity replay")
-    host_os = host.get("os")
-    architecture = host.get("architecture")
-    target = environment.get("target")
-    if not all(isinstance(value, str) and value for value in (host_os, architecture, target)):
-        raise ReductionError("current run has incomplete execution-host identity facts")
-    for value in accepted[1:]:
-        assert value is not None
-        candidate_environment = value.get("environment")
-        candidate_host = value.get("host")
-        candidate_identities = value.get("identities")
-        if (
-            not isinstance(candidate_environment, Mapping)
-            or not isinstance(candidate_host, Mapping)
-            or not isinstance(candidate_identities, Mapping)
-            or candidate_environment.get("target") != target
-            or candidate_host.get("os") != host_os
-            or candidate_host.get("architecture") != architecture
-            or candidate_identities.get("environment") != identities.get("environment")
-        ):
-            raise ReductionError("accepted attempts disagree on historical host/environment facts")
-    binding = EnvironmentBinding(
-        prefix=Path("."),
-        python_executable=Path("python"),
-        family=str(environment.get("family")),
-        target=str(environment.get("target")),
-        env_generation=str(identities.get("environment")),
-        lock_sha256=str(environment.get("lock_sha256")),
-        resolved_export_sha256=str(environment.get("resolved_export_sha256")),
-        packages_manifest_sha256=str(environment.get("packages_manifest_sha256")),
-        python_version=str(environment.get("python")),
-        compiler_identity=str(environment.get("compiler_identity")),
-        sdk_identity=str(environment.get("sdk_identity")),
-    )
-    try:
-        expected = _execution_identity(
-            proposal,
-            binding,
-            host_os=str(host_os),
-            machine_class=str(architecture),
-        )
-    except (KeyError, OSError, TypeError, ValueError) as exc:
-        raise ReductionError("current execution dependencies cannot be recomputed") from exc
-    execution = record.get("execution", {})
-    if execution.get("execution_identity") != expected or any(
-        value is None or value.get("identities", {}).get("execution") != expected
-        for value in accepted
-    ):
-        raise ReductionError("runner/award closure or execution identity is stale")
-
-
-def _validate_projection_artifacts(
-    ledgers: LedgerPaths,
-    record: Mapping[str, Any],
-    attempts: Sequence[Mapping[str, Any]],
-    gates: Sequence[Mapping[str, Any]],
-    dependency_current: Mapping[str, Mapping[str, Any]],
-) -> None:
-    """Validate canonical reconstruction, proposal, and live execution authority.
-
-    Parameters
-    ----------
-    ledgers, record, attempts, gates:
-        Exact canonical records and evidence histories.
-    dependency_current:
-        Already projected representative authority for this record.
-
-    Raises
-    ------
-    ReductionError
-        If any production reconstruction/proposal/execution dependency is stale.
-    """
-
-    canonical_root = _production_canonical_root(ledgers)
-    if canonical_root is None:
-        return
-    from menagerie.crawler.checkpoint import (  # noqa: PLC0415
-        ReconstructionValidationError,
-        validate_canonical_reconstruction,
-    )
-
-    stable_id = str(record.get("stable_id"))
-    prefix = stable_id.removeprefix("m_")[:2] or "__"
-    reconstruction = canonical_root / "reconstruction" / prefix / f"{stable_id}.json"
-    reconstruction_required = record.get("status", {}).get("kind") == "runs"
-    if not reconstruction_required and not reconstruction.is_file():
-        return
-    try:
-        validated = validate_canonical_reconstruction(
-            reconstruction,
-            canonical_root,
-            expected_stable_id=stable_id,
-            canonical_gates=gates,
-            current_models={**dependency_current, stable_id: record},
-        )
-    except (OSError, ReconstructionValidationError) as exc:
-        raise ReductionError(
-            "current record lacks valid proposal/reconstruction authority"
-        ) from exc
-    retained = record.get("untrusted_attempt")
-    retained_proposal = retained.get("proposal") if isinstance(retained, Mapping) else None
-    if retained_proposal is not None and retained_proposal != validated.proposal:
-        raise ReductionError("current record proposal differs from canonical reconstruction")
-    if reconstruction_required:
-        _recompute_live_execution_identity(record, validated.proposal, attempts)
-
-
 def project_dependency_current(
     ledgers: LedgerPaths,
     *,
-    intake_ids: Optional[Iterable[str]] = None,
-    intake_variant_bindings: Optional[Mapping[str, tuple[str, str]]] = None,
+    context: AuthorityContext,
     model_records: Optional[Sequence[Mapping[str, Any]]] = None,
     attempt_records: Optional[Sequence[Mapping[str, Any]]] = None,
     gate_records: Optional[Sequence[Mapping[str, Any]]] = None,
+    artifact_records: Optional[Sequence[Mapping[str, Any]]] = None,
 ) -> DependencyCurrencyProjection:
     """Project the one authoritative current view from current dependency bytes.
 
@@ -2815,9 +3472,9 @@ def project_dependency_current(
     ----------
     ledgers:
         Canonical ledger paths and records-root identity.
-    intake_ids, intake_variant_bindings:
-        Optional trusted intake authority. Callers with an intake snapshot must pass it.
-    model_records, attempt_records, gate_records:
+    context:
+        Mandatory active authority shared with every reducer consumer.
+    model_records, attempt_records, gate_records, artifact_records:
         Optional already scanned rows used by the live reducer without another disk read.
 
     Returns
@@ -2831,30 +3488,13 @@ def project_dependency_current(
         tuple(attempt_records) if attempt_records is not None else scan_jsonl(ledgers.attempts)
     )
     gates = tuple(gate_records) if gate_records is not None else scan_jsonl(ledgers.gates)
+    artifacts = (
+        tuple(artifact_records)
+        if artifact_records is not None
+        else tuple(scan_jsonl(ledgers.artifacts))
+    )
     _validate_persisted_requeue_lineage(models, ledgers, attempts, gates)
     raw_current = _select_current(models)
-    canonical_intake = _canonical_intake_rows(ledgers) if intake_ids is None else {}
-    trusted_ids = (
-        frozenset(intake_ids)
-        if intake_ids is not None
-        else frozenset(canonical_intake)
-        or frozenset(
-            {
-                *(str(record.get("stable_id")) for record in models),
-                *(
-                    str(item.get("stable_id"))
-                    for gate in gates
-                    for item in gate.get("items", [])
-                    if isinstance(item, Mapping)
-                ),
-            }
-        )
-    )
-    bindings = dict(
-        intake_variant_bindings
-        if intake_variant_bindings is not None
-        else intake_variant_bindings_from_rows(canonical_intake.values())
-    )
     by_revision = {str(record.get("record_revision")): index for index, record in enumerate(models)}
     attempts_by_id = {str(record.get("attempt_id")): record for record in attempts}
     gates_by_id = {str(record.get("gate_id")): record for record in gates}
@@ -2868,6 +3508,9 @@ def project_dependency_current(
     cursor = 0
     for stable_id, record in ordered_current:
         try:
+            currency_error = validate_currency(context, record)
+            if currency_error is not None:
+                raise ReductionError(currency_error)
             index = by_revision[str(record.get("record_revision"))]
             while cursor < index:
                 prior = models[cursor]
@@ -2876,11 +3519,11 @@ def project_dependency_current(
                 cursor += 1
             replay = _replay_reducer(
                 ledgers,
-                intake_ids=trusted_ids,
-                intake_variant_bindings=bindings,
+                context=context,
                 prior_model_records=prior_models_by_stable_id.get(stable_id, ()),
                 attempt_records=attempts,
                 gate_records=gates,
+                artifact_records=artifacts,
                 raw_prior_current=prior_current,
                 dependency_current=current,
                 attempt_index=attempts_by_id,
@@ -2896,7 +3539,6 @@ def project_dependency_current(
             family_error = family_variant_currency_error(record, current)
             if family_error is not None:
                 raise ReductionError(family_error)
-            _validate_projection_artifacts(ledgers, record, attempts, gates, current)
             current[stable_id] = deepcopy(dict(record))
         except (KeyError, ReductionError, TypeError, ValueError) as exc:
             stale[stable_id] = str(exc)
@@ -2906,8 +3548,7 @@ def project_dependency_current(
 def materialize_current(
     ledgers: LedgerPaths,
     *,
-    intake_ids: Optional[Iterable[str]] = None,
-    intake_variant_bindings: Optional[Mapping[str, tuple[str, str]]] = None,
+    context: AuthorityContext,
 ) -> Mapping[str, JsonObject]:
     """Read and deterministically materialize current model revisions.
 
@@ -2925,8 +3566,7 @@ def materialize_current(
 
     return project_dependency_current(
         ledgers,
-        intake_ids=intake_ids,
-        intake_variant_bindings=intake_variant_bindings,
+        context=context,
     ).current_records
 
 

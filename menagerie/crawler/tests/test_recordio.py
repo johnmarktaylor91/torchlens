@@ -31,7 +31,7 @@ def test_append_is_persisted_and_idempotent(tmp_path: Path) -> None:
     payload = make_attempt()
     payload.pop("ledger_seq")
     payload.pop("payload_sha256")
-    with JsonlLedger(path, ATTEMPT_SCHEMA_VERSION) as ledger:
+    with JsonlLedger(path, ATTEMPT_SCHEMA_VERSION_V3) as ledger:
         first = ledger.append(payload)
         replay = ledger.append(payload)
         assert first.appended
@@ -50,9 +50,9 @@ def test_single_writer_lock_is_exclusive(tmp_path: Path) -> None:
     """
 
     path = tmp_path / "attempts.jsonl"
-    with JsonlLedger(path, ATTEMPT_SCHEMA_VERSION):
+    with JsonlLedger(path, ATTEMPT_SCHEMA_VERSION_V3):
         with pytest.raises(SingleWriterError):
-            JsonlLedger(path, ATTEMPT_SCHEMA_VERSION)
+            JsonlLedger(path, ATTEMPT_SCHEMA_VERSION_V3)
 
 
 def test_torn_tail_is_evidenced_before_truncation(tmp_path: Path) -> None:
@@ -65,7 +65,7 @@ def test_torn_tail_is_evidenced_before_truncation(tmp_path: Path) -> None:
     """
 
     path = tmp_path / "attempts.jsonl"
-    with JsonlLedger(path, ATTEMPT_SCHEMA_VERSION) as ledger:
+    with JsonlLedger(path, ATTEMPT_SCHEMA_VERSION_V3) as ledger:
         ledger.append(make_attempt())
     with path.open("ab") as handle:
         handle.write(b'{"schema_version":"menagerie.crawler.attempt.v2"')
@@ -102,6 +102,15 @@ def test_v3_writer_reads_v2_history_but_appends_only_v3(tmp_path: Path) -> None:
 
     path = tmp_path / "mixed-attempts.jsonl"
     legacy = make_attempt()
+    legacy["schema_version"] = ATTEMPT_SCHEMA_VERSION
+    for field in (
+        "execution_read_manifest_identity",
+        "raw_award_receipt",
+        "raw_award_receipt_sha256",
+        "parent_attestation",
+        "unattested_partial",
+    ):
+        legacy.pop(field)
     with JsonlLedger(path, ATTEMPT_SCHEMA_VERSION) as ledger:
         ledger.append(legacy)
 

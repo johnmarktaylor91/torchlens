@@ -9,14 +9,15 @@ import sys
 from pathlib import Path
 from typing import Iterable, Mapping, Optional, Sequence
 
+from menagerie.crawler.authority import AuthorityContext, build_authority_context
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes
+from menagerie.crawler.intake import load_intake_snapshot
 from menagerie.crawler.models import JsonObject
 from menagerie.crawler.reducer import (
     default_ledger_paths,
-    intake_variant_bindings_from_rows,
     materialize_current,
 )
-from menagerie.crawler.state import _load_intake, rebuild_state
+from menagerie.crawler.state import rebuild_state
 from menagerie.crawler.status import funnel_counts, record_is_release_eligible
 
 
@@ -82,7 +83,12 @@ def _atomic_write(path: Path, data: bytes) -> None:
 
 
 def rebuild_views(
-    intake: Path, records_root: Path, views_root: Path, database: Path
+    intake: Path,
+    records_root: Path,
+    views_root: Path,
+    database: Path,
+    *,
+    context: AuthorityContext,
 ) -> dict[str, str]:
     """Rebuild current, release, deferred, and summary views.
 
@@ -96,6 +102,8 @@ def rebuild_views(
         Disposable derived-view root.
     database:
         Disposable SQLite state rebuilt during this operation.
+    context:
+        Mandatory active authority shared by state and view projection.
 
     Returns
     -------
@@ -104,13 +112,8 @@ def rebuild_views(
     """
 
     ledgers = default_ledger_paths(records_root)
-    rebuild_state(database, intake, ledgers)
-    intake_rows = _load_intake(intake)
-    current_by_id = materialize_current(
-        ledgers,
-        intake_ids=intake_rows,
-        intake_variant_bindings=intake_variant_bindings_from_rows(intake_rows.values()),
-    )
+    rebuild_state(database, intake, ledgers, context=context)
+    current_by_id = materialize_current(ledgers, context=context)
     current: list[JsonObject] = [current_by_id[key] for key in sorted(current_by_id)]
     release = [record for record in current if record_is_release_eligible(record, current_by_id)]
     deferred = [
@@ -152,7 +155,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     args = build_parser().parse_args(argv)
     try:
-        digests = rebuild_views(args.intake, args.records_root, args.views_root, args.database)
+        snapshot = load_intake_snapshot(args.intake.parent)
+        context = build_authority_context(
+            active_intake_snapshot_id=snapshot.snapshot_id,
+            active_intake_snapshot_sha256=snapshot.snapshot_sha256,
+            intake_rows=(item.to_dict() for item in snapshot.items),
+            author_model="claude-sonnet",
+            author_version="current",
+            checker_model="codex",
+            checker_version="current",
+        )
+        digests = rebuild_views(
+            args.intake,
+            args.records_root,
+            args.views_root,
+            args.database,
+            context=context,
+        )
     except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
         print(f"view rebuild failed: {exc}", file=sys.stderr)
         return 1

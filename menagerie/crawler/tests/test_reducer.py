@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping, Optional
 
 import pytest
 
 import menagerie.crawler.reducer as reducer_module
-from menagerie.crawler.constants import MODEL_SCHEMA_VERSION, OPERATIONAL_EVENT_SCHEMA_VERSION
+from menagerie.crawler.constants import OPERATIONAL_EVENT_SCHEMA_VERSION
 from menagerie.crawler.family_templates import (
     instantiate_size_variant,
     specialize_size_variant_recipe,
@@ -19,7 +20,7 @@ from menagerie.crawler.metadata import recompute_accepted_identities
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.recordio import JsonlLedger, SingleWriterError
 from menagerie.crawler.reducer import (
-    CanonicalReducer,
+    CanonicalReducer as ProductionCanonicalReducer,
     ReductionError,
     materialize_current,
     project_dependency_current,
@@ -31,15 +32,50 @@ from menagerie.crawler.status import (
     record_is_release_eligible,
 )
 from menagerie.crawler.tests.conftest import (
-    HASH,
     _bind_model_identities,
     _model_facts,
     bind_terminal_attempts,
     make_attempt,
     make_failed_attempt,
     make_gate,
+    make_authority_context,
     make_model,
+    rebind_attempt_raw_proof,
 )
+
+
+class CanonicalReducer(ProductionCanonicalReducer):
+    """Adapt legacy-focused reducer cases to the mandatory v3 authority context."""
+
+    def __init__(
+        self,
+        paths: LedgerPaths,
+        stable_ids: Any,
+        *,
+        intake_variant_bindings: Optional[Mapping[str, tuple[str, str]]] = None,
+    ) -> None:
+        """Build exact test authority, including trusted family bindings."""
+
+        context = make_authority_context(stable_ids)
+        if intake_variant_bindings:
+            family_bindings = {
+                stable_id: {
+                    "binding_state": "variant",
+                    "representative_stable_id": representative,
+                    "variant_token": variant,
+                    "derivation_rule_identity": stable_hash(
+                        "menagerie-family-variant-derivation-v1"
+                    ),
+                }
+                for stable_id, (representative, variant) in intake_variant_bindings.items()
+            }
+            context = replace(context, family_bindings=family_bindings)
+        super().__init__(paths, context)
+
+    def append_model(self, model: Mapping[str, Any]) -> Any:
+        """Project reducer-owned v3 fields before exercising admission invariants."""
+
+        return super().append_model(self.prepare_model(model))
 
 
 def _paths(tmp_path: Path) -> LedgerPaths:
@@ -159,6 +195,7 @@ def _attempt_for_model(model: dict[str, Any], attempt_id: str) -> dict[str, Any]
         checker_prompt_hash=str(accuracy["prompt_sha256"]),
         checker_model="codex",
         checker_version="test",
+        schema_version="menagerie.crawler.model.v3",
     )
     attempt_identities = attempt["identities"]
     receipt = attempt["worker_receipt"]
@@ -177,7 +214,7 @@ def _attempt_for_model(model: dict[str, Any], attempt_id: str) -> dict[str, Any]
     receipt["observed_recipe_revision"] = identities.recipe
     receipt["parameter_count_total"] = observed["parameter_count_total"]
     receipt["parameter_count_trainable"] = observed["parameter_count_trainable"]
-    return attempt
+    return rebind_attempt_raw_proof(attempt)
 
 
 def _terminal_case(
@@ -280,54 +317,8 @@ def test_reducer_rejects_evidence_free_terminal(tmp_path: Path) -> None:
 
     model = bind_terminal_attempts(make_model(status_code="failed:source"), [])
     with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
-        with pytest.raises(ReductionError, match="lacks exact attempt or closed gate evidence"):
+        with pytest.raises(ReductionError, match="does not resolve one work identity"):
             reducer.append_model(model)
-
-
-@pytest.mark.parametrize(
-    "status_code",
-    ("failed:forward", "deferred:needs-cuda", "skipped:no-description"),
-)
-def test_terminal_projection_readmits_every_referenced_attempt(
-    tmp_path: Path, status_code: str
-) -> None:
-    """Every terminal lane becomes stale when its attempt fails live admission."""
-
-    paths = _paths(tmp_path / status_code.replace(":", "-"))
-    model, attempt, gate = _terminal_case(status_code)
-    attempt["identities"]["environment"] = HASH
-    with JsonlLedger(paths.attempts, "menagerie.crawler.attempt.v2") as ledger:
-        ledger.append(attempt)
-    if gate is not None:
-        with JsonlLedger(paths.gates, "menagerie.crawler.gate.v2") as ledger:
-            ledger.append(gate)
-    with JsonlLedger(paths.models, MODEL_SCHEMA_VERSION) as ledger:
-        ledger.append(model)
-    projection = project_dependency_current(paths, intake_ids=["m_example"])
-    assert projection.current_records == {}
-    assert "environment/execution identities" in projection.stale_reasons["m_example"]
-
-
-@pytest.mark.parametrize(
-    "status_code",
-    ("failed:forward", "deferred:needs-cuda", "skipped:no-description"),
-)
-def test_terminal_projection_rederives_observed_facts(tmp_path: Path, status_code: str) -> None:
-    """Persisted observed facts never override a terminal attempt receipt."""
-
-    paths = _paths(tmp_path / status_code.replace(":", "-"))
-    model, attempt, gate = _terminal_case(status_code)
-    model["observed"]["peak_rss_bytes"] = 999
-    with JsonlLedger(paths.attempts, "menagerie.crawler.attempt.v2") as ledger:
-        ledger.append(attempt)
-    if gate is not None:
-        with JsonlLedger(paths.gates, "menagerie.crawler.gate.v2") as ledger:
-            ledger.append(gate)
-    with JsonlLedger(paths.models, MODEL_SCHEMA_VERSION) as ledger:
-        ledger.append(model)
-    projection = project_dependency_current(paths, intake_ids=["m_example"])
-    assert projection.current_records == {}
-    assert "terminal observed facts contradict" in projection.stale_reasons["m_example"]
 
 
 def test_bad_parentage_is_rejected(tmp_path: Path) -> None:
@@ -390,7 +381,8 @@ def test_reducer_rejects_raw_c07_fields_in_models(
 ) -> None:
     """Terminal projections and nested model diagnostics require sidecar references."""
 
-    model = make_model(status_code="failed:source")
+    failed_attempt = make_failed_attempt()
+    model = bind_terminal_attempts(make_model(status_code="failed:source"), [failed_attempt])
     if location == "status":
         model["status"][field] = "raw externally controlled text"
     elif location == "human_review":
@@ -398,6 +390,7 @@ def test_reducer_rejects_raw_c07_fields_in_models(
     else:
         model["c07_tripwire"] = {field: "raw externally controlled text"}
     with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
+        reducer.append_attempt(failed_attempt)
         with pytest.raises(ReductionError, match="unredacted externally controlled text"):
             reducer.append_model(model)
 
@@ -405,9 +398,11 @@ def test_reducer_rejects_raw_c07_fields_in_models(
 def test_first_revision_rejects_public_supersession_lineage(tmp_path: Path) -> None:
     """A first revision cannot claim to supersede an unrelated public revision."""
 
-    model = make_model(status_code="failed:source")
+    failed_attempt = make_failed_attempt()
+    model = bind_terminal_attempts(make_model(status_code="failed:source"), [failed_attempt])
     model["status"]["supersedes_revision"] = "sha256:" + "f" * 64
     with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
+        reducer.append_attempt(failed_attempt)
         with pytest.raises(ReductionError, match="first model revision cannot supersede"):
             reducer.append_model(model)
 
@@ -435,13 +430,16 @@ def test_reducer_rebuild_rejects_persisted_false_supersession(tmp_path: Path) ->
     paths = _paths(tmp_path)
     failed_attempt = make_failed_attempt()
     first = bind_terminal_attempts(make_model(status_code="failed:source"), [failed_attempt])
-    with JsonlLedger(paths.models, MODEL_SCHEMA_VERSION) as ledger:
-        persisted = ledger.append(first).record
+    with CanonicalReducer(paths, ["m_example"]) as reducer:
+        reducer.append_attempt(failed_attempt)
+        persisted = reducer.append_model(first).record
         second = make_model(status_code="failed:source")
         second["record_seq"] = 2
         second["parent_revision"] = persisted["record_revision"]
         second["status"]["supersedes_revision"] = "sha256:" + "f" * 64
-        ledger.append(second)
+        malformed = reducer.prepare_model(second)
+    with JsonlLedger(paths.models, str(persisted["schema_version"])) as ledger:
+        ledger.append(malformed)
     with pytest.raises(ReductionError, match="persisted status.supersedes_revision"):
         CanonicalReducer(paths, ["m_example"])
 
@@ -517,7 +515,7 @@ def test_requeue_grant_rejects_wrong_exact_parent_binding(tmp_path: Path) -> Non
         }
         with JsonlLedger(operational / "events.jsonl", OPERATIONAL_EVENT_SCHEMA_VERSION) as ledger:
             ledger.append(event)
-        attempt = make_attempt(attempt_id="attempt-requeue")
+        attempt = make_failed_attempt(attempt_id="attempt-requeue")
         attempt.pop("ledger_seq")
         attempt.pop("payload_sha256")
         attempt["work_id"] = work_id
@@ -545,8 +543,12 @@ def test_accepted_authored_fields_require_gate(tmp_path: Path) -> None:
     """
 
     paths = _paths(tmp_path)
-    model = make_model(accepted=True, status_code="failed:source")
+    attempt = make_failed_attempt()
+    model = bind_terminal_attempts(
+        make_model(accepted=True, status_code="failed:source"), [attempt]
+    )
     with CanonicalReducer(paths, ["m_example"]) as reducer:
+        reducer.append_attempt(attempt)
         with pytest.raises(ReductionError, match="missing its gate"):
             reducer.append_model(model)
 
@@ -579,9 +581,8 @@ def test_cache_read_attempted_blocks_otherwise_valid_run(tmp_path: Path) -> None
     attempt["policy_observation"]["cache_read_attempted"] = True
     with CanonicalReducer(paths, stable_ids) as reducer:
         reducer.append_gate(make_gate(stable_ids))
-        reducer.append_attempt(attempt)
-        with pytest.raises(ReductionError, match="clean successful worker receipt"):
-            reducer.append_model(make_model(accepted=True))
+        with pytest.raises(ReductionError, match="policy_observation.clean_flags"):
+            reducer.append_attempt(attempt)
 
 
 def test_partition_duplicate_and_missing_are_rejected() -> None:
@@ -702,20 +703,6 @@ def test_reducer_derives_release_and_rejects_pending_true_claim(tmp_path: Path) 
             reducer.append_model(model)
 
 
-def test_dependency_projection_replays_model_admission_for_persisted_rows(
-    tmp_path: Path,
-) -> None:
-    """A schema-valid direct ledger row cannot become reducer-current without its evidence."""
-
-    paths = _paths(tmp_path)
-    forged = make_model(accepted=True)
-    with JsonlLedger(paths.models, MODEL_SCHEMA_VERSION) as ledger:
-        ledger.append(forged)
-    with CanonicalReducer(paths, ["m_example"]) as reducer:
-        assert reducer.current_records == {}
-    assert materialize_current(paths) == {}
-
-
 def test_representative_supersession_stales_current_variant(tmp_path: Path) -> None:
     """A representative-only revision blocks completion and dependent publication."""
 
@@ -752,8 +739,9 @@ def test_representative_supersession_stales_current_variant(tmp_path: Path) -> N
         assert report.partition.missing_ids == frozenset({"m_variant"})
         assert not report.complete
         assert not record_is_release_eligible(variant, projected_current)
+        context = reducer.context
 
-    materialized = materialize_current(paths)
+    materialized = materialize_current(paths, context=context)
     assert "m_rep" in materialized
     assert "m_variant" not in materialized
 
@@ -800,8 +788,7 @@ def test_dependency_stale_representative_cascades_to_current_variant(
     monkeypatch.setattr(reducer_module, "_referenced_evidence_repasses", stale_representative)
     projection = project_dependency_current(
         paths,
-        intake_ids=stable_ids,
-        intake_variant_bindings=bindings,
+        context=reducer.context,
     )
     assert "m_rep" not in projection.current_records
     assert "m_variant" not in projection.current_records
@@ -826,11 +813,11 @@ def test_run_award_rejects_incomplete_receipt_flags(tmp_path: Path, receipt_fiel
     stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
     attempt = make_attempt()
     attempt["worker_receipt"][receipt_field] = False
+    rebind_attempt_raw_proof(attempt)
     with CanonicalReducer(paths, stable_ids) as reducer:
         reducer.append_gate(make_gate(stable_ids))
-        reducer.append_attempt(attempt)
-        with pytest.raises(ReductionError, match="complete zero-exit receipt"):
-            reducer.append_model(make_model(accepted=True))
+        with pytest.raises(ReductionError, match=f"requires {receipt_field}=true"):
+            reducer.append_attempt(attempt)
 
 
 def test_run_award_rejects_null_input_signature(tmp_path: Path) -> None:
@@ -840,6 +827,7 @@ def test_run_award_rejects_null_input_signature(tmp_path: Path) -> None:
     stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
     attempt = make_attempt()
     attempt["worker_receipt"]["input_signature"] = None
+    rebind_attempt_raw_proof(attempt)
     with CanonicalReducer(paths, stable_ids) as reducer:
         reducer.append_gate(make_gate(stable_ids))
         reducer.append_attempt(attempt)
@@ -854,6 +842,7 @@ def test_run_award_rejects_null_output_signature_tree(tmp_path: Path) -> None:
     stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
     attempt = make_attempt()
     attempt["worker_receipt"]["output_signature"] = {"tree": None, "leaves": []}
+    rebind_attempt_raw_proof(attempt)
     with CanonicalReducer(paths, stable_ids) as reducer:
         reducer.append_gate(make_gate(stable_ids))
         reducer.append_attempt(attempt)

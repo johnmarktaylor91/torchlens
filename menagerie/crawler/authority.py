@@ -356,6 +356,132 @@ class DependencyCurrencyProjection:
         )
 
 
+def build_authority_context(
+    *,
+    active_intake_snapshot_id: str,
+    active_intake_snapshot_sha256: str,
+    intake_rows: Iterable[Mapping[str, Any]],
+    author_model: str,
+    author_version: str,
+    checker_model: str,
+    checker_version: str,
+    environment_generations: Optional[Mapping[str, str]] = None,
+) -> AuthorityContext:
+    """Build the one production authority context from exact shipped bytes.
+
+    Parameters
+    ----------
+    active_intake_snapshot_id, active_intake_snapshot_sha256:
+        Canonically validated active intake identity.
+    intake_rows:
+        Full trusted intake rows.
+    author_model, author_version, checker_model, checker_version:
+        Configured author/checker identities.
+    environment_generations:
+        Exact currently materialized environment generations keyed by name.
+
+    Returns
+    -------
+    AuthorityContext
+        Mandatory context shared by every reducer and projection consumer.
+    """
+
+    package_root = Path(__file__).parent
+    rows = tuple(dict(row) for row in intake_rows)
+    intake_by_stable_id = {str(row["stable_id"]): row for row in rows}
+    if len(intake_by_stable_id) != len(rows):
+        raise AuthorityDerivationError("active intake contains duplicate stable IDs")
+    family_bindings: dict[str, JsonObject] = {}
+    for stable_id, row in intake_by_stable_id.items():
+        representative = str(row.get("family_representative_id") or stable_id)
+        if row.get("variant_scope", "family") == "family" and representative != stable_id:
+            family_bindings[stable_id] = {
+                "binding_state": "variant",
+                "representative_stable_id": representative,
+                "variant_token": str(row.get("variant", "")),
+                "derivation_rule_identity": stable_hash("menagerie-family-variant-derivation-v1"),
+            }
+
+    def content_identity(relative: str) -> str:
+        """Hash one exact shipped authority file."""
+
+        try:
+            return hash_bytes((package_root / relative).read_bytes())
+        except OSError as exc:
+            raise AuthorityDerivationError(
+                f"authority component is unavailable: {relative}"
+            ) from exc
+
+    from menagerie.crawler.constants import (  # noqa: PLC0415
+        AUTHOR_PROMPT_NAME,
+        CHECKER_PROMPT_NAME,
+    )
+
+    author_prompt = content_identity(f"prompts/{AUTHOR_PROMPT_NAME}.txt")
+    checker_prompt = content_identity(f"prompts/{CHECKER_PROMPT_NAME}.txt")
+    author_identity = stable_hash(
+        {
+            "provider": "anthropic",
+            "model": author_model,
+            "version": author_version,
+            "prompt_sha256": author_prompt,
+        }
+    )
+    checker_identity = stable_hash(
+        {
+            "provider": "openai",
+            "model": checker_model,
+            "version": checker_version,
+            "prompt_sha256": checker_prompt,
+        }
+    )
+    reducer_policy = stable_hash(
+        {
+            "reducer": content_identity("reducer.py"),
+            "metadata": content_identity("metadata.py"),
+            "gates": content_identity("gates.py"),
+        }
+    )
+    runner_policy = stable_hash(
+        {
+            "worker": content_identity("worker.py"),
+            "supervisor": content_identity("worker_supervisor.py"),
+            "policy": content_identity("policy.py"),
+        }
+    )
+    terminal_policy = stable_hash(
+        {
+            "authority": content_identity("authority.py"),
+            "gate_schema": content_identity("schemas/gate-v3.schema.json"),
+        }
+    )
+    publication_policy = stable_hash(
+        {
+            "transactions": content_identity("artifact_transactions.py"),
+            "artifact_schema": content_identity("schemas/artifact-event-v1.schema.json"),
+            "licenses": content_identity("licenses.py"),
+        }
+    )
+    return AuthorityContext(
+        active_intake_snapshot_id=active_intake_snapshot_id,
+        active_intake_snapshot_sha256=active_intake_snapshot_sha256,
+        intake_by_stable_id=intake_by_stable_id,
+        family_bindings=family_bindings,
+        author_prompt_identity=author_prompt,
+        author_model_identity=author_identity,
+        author_schema_identity=content_identity("schemas/author-result-v3.schema.json"),
+        author_dispatcher_identity=content_identity("author_dispatch.py"),
+        checker_prompt_identity=checker_prompt,
+        checker_model_identity=checker_identity,
+        checker_schema_identity=content_identity("schemas/gate-v3.schema.json"),
+        environment_generations=dict(environment_generations or {}),
+        reducer_policy_identity=reducer_policy,
+        runner_policy_identity=runner_policy,
+        terminal_policy_identity=terminal_policy,
+        publication_policy_identity=publication_policy,
+    )
+
+
 def _require_nonempty_string(value: object, field: str) -> str:
     """Return one required non-empty string.
 
@@ -1044,6 +1170,63 @@ def derive_mode_summary(
         compared_fields=compared_fields,
         evidence_sha256=stable_hash(payload),
     )
+
+
+def mode_summary_projection(summary: ModeSummary) -> JsonObject:
+    """Render one reducer-derived mode summary into the model-v3 mode fields.
+
+    Parameters
+    ----------
+    summary:
+        Authenticated structured mode comparison.
+
+    Returns
+    -------
+    dict[str, Any]
+        Canonical classification and a stable JSON evidence string retaining
+        comparison state, exact attempts, and compared fields.
+    """
+
+    evidence = {
+        "comparison_state": summary.comparison_state,
+        "train_attempt_id": summary.train_attempt_id,
+        "eval_attempt_id": summary.eval_attempt_id,
+        "compared_fields": list(summary.compared_fields),
+        "evidence_sha256": summary.evidence_sha256,
+    }
+    return {
+        "train_eval_divergence": summary.classification,
+        "divergence_evidence": json.dumps(
+            evidence,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+    }
+
+
+def dependency_vector_projection(vector: DependencyVector) -> JsonObject:
+    """Render a frozen dependency vector into its canonical schema mapping.
+
+    Parameters
+    ----------
+    vector:
+        Reducer-derived closed dependency vector.
+
+    Returns
+    -------
+    dict[str, Any]
+        JSON-compatible vector with typed states encoded by their stable values.
+    """
+
+    payload = asdict(vector)
+    payload["accepted_attempt_ids"] = list(vector.accepted_attempt_ids)
+    payload["artifact_claim_ids"] = [str(value) for value in vector.artifact_claim_ids]
+    for key, value in tuple(payload.items()):
+        if isinstance(value, DependencyState):
+            payload[key] = value.value
+    return payload
 
 
 def _attempt_order(attempt: Mapping[str, Any]) -> tuple[int, int, str]:

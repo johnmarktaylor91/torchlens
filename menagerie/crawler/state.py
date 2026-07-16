@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Union
 
 from menagerie.crawler.identity import canonical_json_bytes
+from menagerie.crawler.authority import AuthorityContext
 from menagerie.crawler.models import JsonObject, LedgerPaths, RebuildSummary
 from menagerie.crawler.recordio import LedgerCorruptionError, scan_jsonl
 
@@ -93,7 +94,11 @@ def _select_current(records: Iterable[Mapping[str, Any]]) -> dict[str, JsonObjec
 
 
 def rebuild_state(
-    database_path: Union[str, Path], intake: IntakeSource, ledgers: LedgerPaths
+    database_path: Union[str, Path],
+    intake: IntakeSource,
+    ledgers: LedgerPaths,
+    *,
+    context: AuthorityContext,
 ) -> RebuildSummary:
     """Atomically rebuild the disposable SQLite queue/current-state view.
 
@@ -105,6 +110,8 @@ def rebuild_state(
         Trusted intake snapshot or stable-ID iterable.
     ledgers:
         Canonical model/attempt/gate JSONL paths.
+    context:
+        Mandatory active authority used by the shared currency projection.
 
     Returns
     -------
@@ -120,15 +127,11 @@ def rebuild_state(
     model_records = scan_jsonl(ledgers.models)
     attempt_records = scan_jsonl(ledgers.attempts)
     gate_records = scan_jsonl(ledgers.gates)
-    from menagerie.crawler.reducer import (  # noqa: PLC0415
-        intake_variant_bindings_from_rows,
-        project_dependency_current,
-    )
+    from menagerie.crawler.reducer import project_dependency_current  # noqa: PLC0415
 
     current = project_dependency_current(
         ledgers,
-        intake_ids=intake_rows,
-        intake_variant_bindings=intake_variant_bindings_from_rows(intake_rows.values()),
+        context=context,
         model_records=model_records,
         attempt_records=attempt_records,
         gate_records=gate_records,

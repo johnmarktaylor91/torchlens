@@ -57,7 +57,6 @@ from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import (
     ReductionError,
     default_ledger_paths,
-    intake_variant_bindings_from_rows,
     materialize_current,
     project_dependency_current,
     validate_reconstruction_source_binding,
@@ -257,7 +256,7 @@ _GENERATED_METADATA_MANIFEST = "generated-metadata-manifest.jsonl"
 _HASH_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
 _LOCK_HASH_PATTERN = re.compile(r"(?:#|sha256[=:])([0-9a-f]{64})(?:$|[&\s])")
 _DIAGNOSTIC_REDACTION_MARKER = "externally-controlled-text-v1"
-_WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V1 "
+_WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V3 "
 _EXTERNALLY_CONTROLLED_RECORD_FIELDS = frozenset(
     {
         "message",
@@ -1093,9 +1092,9 @@ def create_canonical_checkpoint(
     repo_root: Path,
     intake_root: Path,
     *,
+    authority_context: AuthorityContext,
     records_root: Optional[Path] = None,
     mirrors: Optional[MirrorStore] = None,
-    authority_context: Optional[AuthorityContext] = None,
     expected_branch: str = CRAWLER_BRANCH,
     branch: Optional[str] = None,
     git_runner: Optional[GitRunner] = None,
@@ -1113,9 +1112,7 @@ def create_canonical_checkpoint(
     mirrors:
         Optional separated byte stores. Defaults to the conventional runtime mirror roots.
     authority_context:
-        Mandatory active trust roots when an ``artifact-event.v1`` transaction
-        exists. Legacy checkpoints without artifact events remain readable until
-        the Phase-2 driver/reducer switch.
+        Mandatory active trust roots shared by projection and artifact validation.
     expected_branch, branch, git_runner:
         Branch policy and deterministic Git injection accepted by ``create_checkpoint_set``.
 
@@ -1153,7 +1150,7 @@ def _create_canonical_checkpoint(
     *,
     records_root: Optional[Path],
     mirrors: Optional[MirrorStore],
-    authority_context: Optional[AuthorityContext],
+    authority_context: AuthorityContext,
     expected_branch: str,
     branch: Optional[str],
     git_runner: Optional[GitRunner],
@@ -1187,11 +1184,9 @@ def _create_canonical_checkpoint(
     _copy_canonical_tree(snapshot.root, canonical_snapshot_root)
     snapshot = load_intake_snapshot(canonical_snapshot_root)
     ledgers = default_ledger_paths(canonical_records)
-    intake_rows = [item.to_dict() for item in snapshot.items]
     projection = project_dependency_current(
         ledgers,
-        intake_ids=(str(row["stable_id"]) for row in intake_rows),
-        intake_variant_bindings=intake_variant_bindings_from_rows(intake_rows),
+        context=authority_context,
     )
     if projection.stale_reasons:
         raise CheckpointValidationError(
@@ -1211,7 +1206,12 @@ def _create_canonical_checkpoint(
         )
 
     views_root = canonical_root / "views"
-    view_check = _derived_view_check(snapshot.root / "items.jsonl", canonical_records, views_root)
+    view_check = _derived_view_check(
+        snapshot.root / "items.jsonl",
+        canonical_records,
+        views_root,
+        authority_context,
+    )
     mirror_store = mirrors or MirrorStore(
         root / ".crawl-local" / "mirrors" / "public",
         root / ".crawl-local" / "mirrors" / "private",
@@ -1219,18 +1219,14 @@ def _create_canonical_checkpoint(
     )
     artifact_ledgers = tuple(sorted((canonical_records / "artifacts").glob("*.jsonl")))
     has_artifact_events = any(path.stat().st_size > 0 for path in artifact_ledgers)
+    if (
+        authority_context.active_intake_snapshot_id != snapshot.snapshot_id
+        or authority_context.active_intake_snapshot_sha256 != snapshot.snapshot_sha256
+    ):
+        raise CheckpointValidationError(
+            "checkpoint AuthorityContext differs from the active intake snapshot"
+        )
     if has_artifact_events:
-        if authority_context is None:
-            raise CheckpointValidationError(
-                "artifact-event checkpoint validation requires the active AuthorityContext"
-            )
-        if (
-            authority_context.active_intake_snapshot_id != snapshot.snapshot_id
-            or authority_context.active_intake_snapshot_sha256 != snapshot.snapshot_sha256
-        ):
-            raise CheckpointValidationError(
-                "artifact checkpoint AuthorityContext differs from the active intake snapshot"
-            )
         try:
             validate_artifact_checkpoint(
                 artifact_ledgers,
@@ -1255,7 +1251,7 @@ def _create_canonical_checkpoint(
         if artifact.decision.redistribution_class
         in {RedistributionClass.RESTRICTED_PRIVATE, RedistributionClass.UNKNOWN}
     )
-    candidates = _derive_candidate_paths(root, canonical_root)
+    candidates = _derive_candidate_paths(root, canonical_root, authority_context)
     _validate_canonical_jsonl_append_only(root, canonical_root, candidates, runner)
     if has_artifact_events:
         _validate_artifact_reconstruction_append_only(root, artifact_ledgers, candidates, runner)
@@ -1265,7 +1261,7 @@ def _create_canonical_checkpoint(
     generated_inventory = _publish_generated_metadata_inventory(
         root, canonical_root, candidates, validated_environment_candidates
     )
-    candidates = _derive_candidate_paths(root, canonical_root)
+    candidates = _derive_candidate_paths(root, canonical_root, authority_context)
     sweep_artifacts = _validate_candidate_license_coverage(
         root,
         candidates,
@@ -1328,14 +1324,17 @@ def _require_under_root(path: Path, root: Path, label: str) -> None:
 
 
 def _derived_view_check(
-    intake_path: Path, records_root: Path, committed_views_root: Path
+    intake_path: Path,
+    records_root: Path,
+    committed_views_root: Path,
+    authority_context: AuthorityContext,
 ) -> ValidationCheck:
     """Build an exact isolated view comparison closure.
 
     Parameters
     ----------
-    intake_path, records_root, committed_views_root:
-        Canonical inputs and committed derived-view destination.
+    intake_path, records_root, committed_views_root, authority_context:
+        Canonical inputs, committed view destination, and active authority.
 
     Returns
     -------
@@ -1350,7 +1349,11 @@ def _derived_view_check(
             temporary_root = Path(temporary)
             rebuilt_root = temporary_root / "views"
             digests = rebuild_views(
-                intake_path, records_root, rebuilt_root, temporary_root / "state.sqlite"
+                intake_path,
+                records_root,
+                rebuilt_root,
+                temporary_root / "state.sqlite",
+                context=authority_context,
             )
             expected_digest_keys = {"current", "release", "deferred", "status"}
             if set(digests) != expected_digest_keys:
@@ -2291,9 +2294,11 @@ def _externally_controlled_record_text(path: Path, content: bytes) -> tuple[str,
             return False
         return bool(
             isinstance(payload, Mapping)
-            and set(payload) == {"proof", "receipt_sha256"}
-            and _HASH_PATTERN.fullmatch(str(payload.get("proof", "")))
-            and _HASH_PATTERN.fullmatch(str(payload.get("receipt_sha256", "")))
+            and set(payload) == {"raw_award_receipt_sha256", "request_nonce", "request_sha256"}
+            and _HASH_PATTERN.fullmatch(str(payload.get("raw_award_receipt_sha256", "")))
+            and isinstance(payload.get("request_nonce"), str)
+            and bool(payload.get("request_nonce"))
+            and _HASH_PATTERN.fullmatch(str(payload.get("request_sha256", "")))
         )
 
     def visit(value: Any, location: str = "$") -> None:
@@ -2524,8 +2529,8 @@ def validate_canonical_reconstruction(
     reconstruction_path: Path,
     canonical_root: Path,
     *,
+    authority_context: AuthorityContext,
     expected_stable_id: Optional[str] = None,
-    expected_intake_item: Optional[Mapping[str, Any]] = None,
     canonical_gates: Optional[Sequence[Mapping[str, Any]]] = None,
     current_models: Optional[Mapping[str, Mapping[str, Any]]] = None,
 ) -> ValidatedReconstruction:
@@ -2543,8 +2548,8 @@ def validate_canonical_reconstruction(
         Canonical ``menagerie/crawler`` root.
     expected_stable_id:
         Optional caller-owned model identity.
-    expected_intake_item:
-        Optional caller-owned immutable intake row.
+    authority_context:
+        Mandatory active intake and dependency authority.
     canonical_gates, current_models:
         Optional preloaded append-only gate ledger and materialized current records.
 
@@ -2601,7 +2606,7 @@ def validate_canonical_reconstruction(
     models = (
         current_models
         if current_models is not None
-        else materialize_current(default_ledger_paths(root / "records"))
+        else materialize_current(default_ledger_paths(root / "records"), context=authority_context)
     )
     if not _reconstruction_has_canonical_anchor(
         manifest,
@@ -2726,7 +2731,7 @@ def validate_canonical_reconstruction(
         len(matching_items) != 1
         or manifest.get("intake_item") != matching_items[0]
         or manifest.get("intake_item_sha256") != intake_item_sha256
-        or (expected_intake_item is not None and dict(expected_intake_item) != matching_items[0])
+        or authority_context.intake_by_stable_id.get(stable_id) != matching_items[0]
     ):
         raise ReconstructionValidationError("canonical reconstruction intake-item binding changed")
     expected_transaction_id = reconstruction_transaction_id(
@@ -3059,13 +3064,17 @@ def _reconstruction_has_canonical_anchor(
     return False
 
 
-def _derive_candidate_paths(repo_root: Path, canonical_root: Path) -> tuple[Path, ...]:
+def _derive_candidate_paths(
+    repo_root: Path,
+    canonical_root: Path,
+    authority_context: AuthorityContext,
+) -> tuple[Path, ...]:
     """Derive the complete checkpoint set solely from canonical public roots.
 
     Parameters
     ----------
-    repo_root, canonical_root:
-        Git worktree and canonical crawler roots.
+    repo_root, canonical_root, authority_context:
+        Git worktree, canonical crawler root, and mandatory active authority.
 
     Returns
     -------
@@ -3088,7 +3097,9 @@ def _derive_candidate_paths(repo_root: Path, canonical_root: Path) -> tuple[Path
                 paths.add(path.relative_to(repo_root))
     reconstruction_root = canonical_root / "reconstruction"
     canonical_gates = _canonical_gate_rows(canonical_root / "records")
-    current_models = materialize_current(default_ledger_paths(canonical_root / "records"))
+    current_models = materialize_current(
+        default_ledger_paths(canonical_root / "records"), context=authority_context
+    )
     for reconstruction in reconstruction_root.rglob("*.json"):
         if reconstruction.name.endswith(".commit.json"):
             continue
@@ -3100,6 +3111,7 @@ def _derive_candidate_paths(repo_root: Path, canonical_root: Path) -> tuple[Path
         validate_canonical_reconstruction(
             reconstruction,
             canonical_root,
+            authority_context=authority_context,
             canonical_gates=canonical_gates,
             current_models=current_models,
         )

@@ -26,6 +26,8 @@ from typing import Any, BinaryIO, Callable, Iterator, Mapping, Optional, Sequenc
 from menagerie.crawler.authority import (
     ExecutionReadManifest,
     WorkerLease as WorkerLease,
+    completion_line_for_raw_award_receipt,
+    derive_parent_attestation,
 )
 from menagerie.crawler.constants import (
     DEFAULT_FORWARD_TIMEOUT_SECONDS,
@@ -1081,8 +1083,8 @@ def _verified_worker_completion(
         return None
     if not lines:
         return None
-    v2 = request_nonce is not None or request_sha256 is not None
-    prefix = _WORKER_COMPLETION_V2_PREFIX if v2 else _WORKER_COMPLETION_PREFIX
+    v3 = request_nonce is not None or request_sha256 is not None
+    prefix = "MENAGERIE_WORKER_COMPLETION_V3 " if v3 else _WORKER_COMPLETION_PREFIX
     if not lines[-1].startswith(prefix):
         return None
     try:
@@ -1091,28 +1093,27 @@ def _verified_worker_completion(
         return None
     if not isinstance(value, Mapping):
         return None
-    receipt_key = "raw_award_receipt_sha256" if v2 else "receipt_sha256"
+    receipt_key = "raw_award_receipt_sha256" if v3 else "receipt_sha256"
     receipt_sha256 = value.get(receipt_key)
+    if not isinstance(receipt_sha256, str):
+        return None
+    if v3:
+        if (
+            set(value) != {"raw_award_receipt_sha256", "request_nonce", "request_sha256"}
+            or value.get("request_nonce") != request_nonce
+            or value.get("request_sha256") != request_sha256
+            or json.dumps(value, sort_keys=True, separators=(",", ":")) != lines[-1][len(prefix) :]
+        ):
+            return None
+        return {receipt_key: receipt_sha256, "completion_line": lines[-1]}
     proof = value.get("proof")
-    if not isinstance(receipt_sha256, str) or not isinstance(proof, str):
+    if not isinstance(proof, str):
         return None
     proof_payload: dict[str, Any] = {
-        "version": (
-            "menagerie.crawler.worker-completion.v2"
-            if v2
-            else "menagerie.crawler.worker-completion.v1"
-        ),
+        "version": "menagerie.crawler.worker-completion.v1",
         "challenge": challenge,
         receipt_key: receipt_sha256,
     }
-    if v2:
-        if (
-            value.get("request_nonce") != request_nonce
-            or value.get("request_sha256") != request_sha256
-        ):
-            return None
-        proof_payload["request_nonce"] = request_nonce
-        proof_payload["request_sha256"] = request_sha256
     expected = stable_hash(proof_payload)
     if proof != expected:
         return None
@@ -3264,12 +3265,6 @@ def supervise_worker(
             request_nonce=request_nonce,
             request_sha256=request_sha256,
         )
-        parent_attestation = build_parent_attestation(
-            request_nonce=request_nonce,
-            request_sha256=request_sha256,
-            completion=completion,
-            observation=observation,
-        )
         raw_receipt_value = receipt.get("raw_award_receipt") if receipt is not None else None
         raw_digest_value = receipt.get("raw_award_receipt_sha256") if receipt is not None else None
         raw_receipt = dict(raw_receipt_value) if isinstance(raw_receipt_value, Mapping) else None
@@ -3284,8 +3279,26 @@ def supervise_worker(
             and raw_receipt.get("execution_identity") == execution_read_manifest.execution_identity
             and raw_receipt.get("code_manifest_identity")
             == execution_read_manifest.code_manifest_identity
-            and parent_attestation.get("named_raw_award_receipt_sha256") == raw_digest
+            and completion is not None
+            and completion.get("raw_award_receipt_sha256") == raw_digest
+            and completion.get("completion_line")
+            == completion_line_for_raw_award_receipt(raw_receipt)
         )
+        success_parent_attestation: Optional[dict[str, Any]] = None
+        if association_clean:
+            started_at = observation.started_at
+            finished_at = observation.finished_at
+            if not isinstance(started_at, str) or not isinstance(finished_at, str):
+                association_clean = False
+            else:
+                assert completion is not None
+                success_parent_attestation = derive_parent_attestation(
+                    raw_receipt,
+                    str(completion["completion_line"]),
+                    observation.to_dict(),
+                    started_at=started_at,
+                    finished_at=finished_at,
+                )
         if not association_clean:
             raw_receipt = None
             raw_digest = None
@@ -3306,10 +3319,14 @@ def supervise_worker(
             observation=observation,
             worker_receipt=receipt,
             receipt_error=receipt_error,
-            success_attestation_sha256=str(parent_attestation["attestation_sha256"]),
+            success_attestation_sha256=(
+                str(success_parent_attestation["attestation_sha256"])
+                if success_parent_attestation is not None
+                else None
+            ),
             raw_award_receipt=raw_receipt,
             raw_award_receipt_sha256=raw_digest,
-            parent_attestation=parent_attestation,
+            parent_attestation=success_parent_attestation,
             unattested_partial=partial,
         )
     success_attestation = observation.success_attestation_sha256

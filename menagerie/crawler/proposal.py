@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence, Union
 
-from menagerie.crawler.constants import AUTHOR_PROPOSAL_SCHEMA_VERSION, SourceRung
+from menagerie.crawler.constants import AUTHOR_PROPOSAL_SCHEMA_VERSION_V3, SourceRung
 from menagerie.crawler.evidence import (
     EvidenceValidationError,
     evidence_ids,
@@ -200,14 +200,14 @@ def validate_author_proposal(
     source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
     required_claims: Optional[Iterable[str]] = None,
     cas_root: Union[str, Path, None] = None,
-    expected_schema_version: str = AUTHOR_PROPOSAL_SCHEMA_VERSION,
+    expected_schema_version: str = AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
 ) -> ProposalValidationReport:
     """Validate one complete author proposal without modifying it.
 
     Parameters
     ----------
     proposal:
-        Complete ``author-proposal.v2`` object.
+        Complete ``author-proposal.v3`` object.
     allowed_model_dir:
         Only directory in which staged typed code may reside or write.
     source_manifest:
@@ -218,8 +218,7 @@ def validate_author_proposal(
     cas_root:
         Optional source CAS root.
     expected_schema_version:
-        Exact proposal discriminator required by the caller. The legacy default
-        remains only until the Phase-2 hub switches to ``author-proposal.v3``.
+        Exact current proposal discriminator required by the caller.
 
     Returns
     -------

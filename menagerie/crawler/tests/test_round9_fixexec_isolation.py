@@ -32,7 +32,6 @@ from menagerie.crawler.proposal import (
 from menagerie.crawler.reducer import (
     CanonicalReducer,
     ReductionError,
-    _parent_success_attestation_matches,
     expected_standard_asset,
 )
 from menagerie.crawler.schema import validate_payload
@@ -40,8 +39,10 @@ from menagerie.crawler.standard_inputs import InputSpec
 from menagerie.crawler.tests.conftest import (
     make_attempt,
     make_author_proposal,
+    make_authority_context,
     make_gate,
     make_model,
+    rebind_attempt_raw_proof,
 )
 from menagerie.crawler.worker import WorkerRequest, run_worker
 from menagerie.crawler.worker_supervisor import (
@@ -270,9 +271,6 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
         record_path, canonical_json_bytes(forged) + b"\n"
     )
 
-    honest_success = make_attempt("m_honest_success")
-    assert _parent_success_attestation_matches(honest_success)
-
 
 def test_reducer_rejects_dirty_nonreference_accepted_attempt(tmp_path: Path) -> None:
     """Every accepted attempt is policy-checked, not only the per-mode reference."""
@@ -290,12 +288,11 @@ def test_reducer_rejects_dirty_nonreference_accepted_attempt(tmp_path: Path) -> 
     dirty["policy_observation"]["credentials_present"] = True
     model = make_model(accepted=True, attempt_id="attempt-clean")
     model["execution"]["accepted_attempt_ids"] = ["attempt-clean", "attempt-dirty"]
-    with CanonicalReducer(paths, stable_ids) as reducer:
+    with CanonicalReducer(paths, make_authority_context(stable_ids)) as reducer:
         reducer.append_gate(make_gate(stable_ids))
         reducer.append_attempt(clean)
-        reducer.append_attempt(dirty)
-        with pytest.raises(ReductionError, match="clean successful worker receipt"):
-            reducer.append_model(model)
+        with pytest.raises(ReductionError, match="policy_observation.clean_flags"):
+            reducer.append_attempt(dirty)
 
 
 def test_random_fallback_receipt_can_earn_run_with_known_modality(tmp_path: Path) -> None:
@@ -311,13 +308,14 @@ def test_random_fallback_receipt_can_earn_run_with_known_modality(tmp_path: Path
     attempt["worker_receipt"]["observed_input_asset_sha256"] = None
     attempt["worker_receipt"]["input_asset"] = None
     attempt["worker_receipt"]["input_kind"] = "random-fallback"
+    rebind_attempt_raw_proof(attempt)
     model = make_model(accepted=True)
     model["observed"]["input_asset"] = None
     model["observed"]["input_kind"] = "random-fallback"
-    with CanonicalReducer(paths, stable_ids) as reducer:
+    with CanonicalReducer(paths, make_authority_context(stable_ids)) as reducer:
         reducer.append_gate(make_gate(stable_ids))
         reducer.append_attempt(attempt)
-        assert reducer.append_model(model).appended
+        assert reducer.append_model(reducer.prepare_model(model)).appended
 
 
 def test_missing_standard_asset_raises_reduction_error_not_oserror(

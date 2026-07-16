@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from typing import Optional, Protocol, Sequence
 
+from menagerie.crawler.authority import build_authority_context
 from menagerie.crawler.checkpoint import (
     CheckpointError,
     append_canonical_requeue_grant,
@@ -19,7 +20,6 @@ from menagerie.crawler.checkpoint import (
     create_canonical_checkpoint,
 )
 from menagerie.crawler.constants import (
-    OPERATIONAL_EVENT_SCHEMA_VERSION,
     OperationalEventStatus,
 )
 from menagerie.crawler.doctor import DoctorConfig, DoctorError, DoctorProbes, run_doctor
@@ -43,13 +43,11 @@ from menagerie.crawler.driver import (
 from menagerie.crawler.envs import load_environment_registry
 from menagerie.crawler.intake import create_intake_snapshot, load_intake_snapshot
 from menagerie.crawler.recordio import SingleWriterError
-from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
+from menagerie.crawler.recordio import scan_jsonl
 from menagerie.crawler.reducer import materialize_current
 from menagerie.crawler.routing import ModelRequirements, phase_routes, route_model
 from menagerie.crawler.status import funnel_counts, partition_report, wakeup_status
 from menagerie.crawler.wakeup import (
-    OperationalContext,
-    WakeupManager,
     reduce_wake_episodes,
     write_fire_intent,
 )
@@ -239,8 +237,6 @@ def _add_driver_config_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--notify-command")
     parser.add_argument("--run-id", default="crawler-run")
     parser.add_argument("--scheduled-wake", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--scheduled-wake-id", help=argparse.SUPPRESS)
-    parser.add_argument("--scheduled-wake-at", help=argparse.SUPPRESS)
     parser.add_argument("--wake-episode-id", help=argparse.SUPPRESS)
     parser.add_argument(
         "--author-command",
@@ -332,36 +328,6 @@ def _driver_command(args: argparse.Namespace, factory: DriverFactory) -> int:
     episode_id = raw_episode_id if isinstance(raw_episode_id, str) else None
     if scheduled_wake and episode_id is None:
         raise ValueError("scheduled wake callbacks require --wake-episode-id")
-    if scheduled_wake:
-        if episode_id is None:
-            raise AssertionError("validated wake episode identity was lost")
-        fired_at = utc_now()
-        try:
-            should_resume = _prepare_scheduled_wake(driver, episode_id, fired_at)
-        except DriverLockError:
-            _record_scheduled_wake_intent(driver, episode_id, fired_at)
-            print(
-                json.dumps(
-                    {
-                        "status": OperationalEventStatus.WAKE_NOOP_ALREADY_RUNNING.value,
-                        "episode_id": episode_id,
-                    },
-                    sort_keys=True,
-                )
-            )
-            return EXIT_OK
-        if not should_resume:
-            print(
-                json.dumps(
-                    {
-                        "status": OperationalEventStatus.WAKEUP_FIRED.value,
-                        "episode_id": episode_id,
-                        "resumed": False,
-                    },
-                    sort_keys=True,
-                )
-            )
-            return EXIT_OK
     try:
         result: DriverResult = driver.run(after_review=after_review)
     except DriverLockError:
@@ -389,55 +355,6 @@ def _driver_command(args: argparse.Namespace, factory: DriverFactory) -> int:
     return EXIT_PAUSED if result.paused_reason is not None else EXIT_OK
 
 
-def _prepare_scheduled_wake(driver: CrawlerDriver, episode_id: str, fired_at: str) -> bool:
-    """Record callback fire/resume/deactivation before continuing the driver.
-
-    Parameters
-    ----------
-    driver:
-        Driver whose authoritative lock and canonical paths define the callback scope.
-    episode_id, fired_at:
-        Exact frozen episode identity and actual callback timestamp.
-
-    Returns
-    -------
-    bool
-        True only when the callback durably resumed the active episode.
-    """
-
-    path = canonical_operational_ledger_path(driver.paths.ledgers.models)
-    owner = {
-        "pid": os.getpid(),
-        "run_id": driver.config.run_id,
-        "command": "wake-callback",
-        "episode_id": episode_id,
-    }
-    with DriverLock(driver.paths.lock_path, owner):
-        with JsonlLedger(path, OPERATIONAL_EVENT_SCHEMA_VERSION) as ledger:
-            projection = reduce_wake_episodes(ledger.records)
-            try:
-                state = projection.episodes[episode_id]
-            except KeyError as exc:
-                raise ValueError(
-                    f"scheduled callback names unknown wake episode: {episode_id}"
-                ) from exc
-            manager = WakeupManager(
-                driver.paths.runtime_root / "wakeups",
-                ledger,
-                state.episode.callback_argv,
-                backend=state.backend,
-            )
-            context = OperationalContext(
-                driver.config.run_id,
-                driver.config.machine_id,
-                {"models": 0},
-                None,
-            )
-            manager.ingest_fire_intents(context=context, created_at=fired_at)
-            result = manager.handle_fire(episode_id, fired_at=fired_at, context=context)
-            return result.should_resume
-
-
 def _record_scheduled_wake_intent(driver: CrawlerDriver, episode_id: str, fired_at: str) -> None:
     """Fsync one idempotent fire intent when the live driver owns its lock.
 
@@ -455,7 +372,7 @@ def _record_scheduled_wake_intent(driver: CrawlerDriver, episode_id: str, fired_
         episode = projection.episodes[episode_id].episode
     except KeyError as exc:
         raise ValueError(f"scheduled callback names unknown wake episode: {episode_id}") from exc
-    write_fire_intent(driver.paths.runtime_root / "wakeups", episode, fired_at=fired_at)
+    write_fire_intent(driver.paths.wakeup_root, episode, fired_at=fired_at)
 
 
 def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
@@ -486,6 +403,9 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
         progress_milestones=tuple(args.progress_milestones),
         notify_command=args.notify_command,
         only_status=getattr(args, "only_status", None),
+        wake_episode_id=(
+            str(args.wake_episode_id) if bool(getattr(args, "scheduled_wake", False)) else None
+        ),
     )
     dependencies = DriverDependencies(
         author=CommandAuthorLane(author_command),
@@ -554,10 +474,22 @@ def _checkpoint_command(args: argparse.Namespace) -> int:
     }
     try:
         with DriverLock(args.repo_root / ".crawl-local" / "locks" / "driver.lock", owner):
+            snapshot = load_intake_snapshot(args.intake)
+            defaults = DriverConfig()
+            context = build_authority_context(
+                active_intake_snapshot_id=snapshot.snapshot_id,
+                active_intake_snapshot_sha256=snapshot.snapshot_sha256,
+                intake_rows=(item.to_dict() for item in snapshot.items),
+                author_model=defaults.author_model,
+                author_version=defaults.author_version,
+                checker_model=defaults.checker_model,
+                checker_version=defaults.checker_version,
+            )
             result = create_canonical_checkpoint(
                 args.repo_root,
                 args.intake,
                 records_root=args.records_root,
+                authority_context=context,
             )
     except SingleWriterError as exc:
         raise DriverLockError(str(exc)) from exc

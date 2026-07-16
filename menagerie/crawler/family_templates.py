@@ -306,12 +306,17 @@ def family_variant_currency_error(
         if variant.get("schema_version") == MODEL_SCHEMA_VERSION_V3:
             authority = _family_authority_from_model(variant)
             validate_family_variant_authority(representative, variant, authority)
+        terminal_variant = variant.get("status", {}).get("kind") != "runs"
         validate_size_variant(
             representative,
             variant,
             representative_id,
-            parameter_count_total=variant.get("observed", {}).get("parameter_count_total"),
-            input_contract=variant.get("input_contract", {}),
+            parameter_count_total=(
+                None
+                if terminal_variant
+                else variant.get("observed", {}).get("parameter_count_total")
+            ),
+            input_contract=(None if terminal_variant else variant.get("input_contract", {})),
         )
         validate_size_variant_derivation(
             representative,

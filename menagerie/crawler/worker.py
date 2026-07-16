@@ -21,6 +21,7 @@ from typing import Any, Mapping, Optional, Sequence, Union
 
 import numpy as np
 
+from menagerie.crawler.authority import completion_line_for_raw_award_receipt
 from menagerie.crawler.constants import RunMode
 from menagerie.crawler.frameworks import NativeForwardAdapter
 from menagerie.crawler.identity import (
@@ -308,6 +309,10 @@ def _observe_request_bytes(
             and expected_manifest != request.code_manifest_identity
         ):
             errors.append("typed-adapter code manifest differs from the request association")
+    elif request.protocol_version == "menagerie.crawler.worker-request.v3":
+        # Declarative execution has no authored code members. Its observed code
+        # capability is the request-bound canonical empty-manifest identity.
+        observed_manifest = request.code_manifest_identity
 
     selected_asset = (
         request.standard_input_asset
@@ -945,9 +950,6 @@ def _raw_award_receipt(
         "native_framework": mode_observation.get("native_framework"),
         "delegated_method": mode_observation.get("delegated_method"),
     }
-    observation["receipt_sha256"] = stable_hash(
-        {key: value for key, value in observation.items() if key != "receipt_sha256"}
-    )
     return {
         "receipt_version": "menagerie.crawler.raw-award-receipt.v3",
         "request_nonce": request.request_nonce,
@@ -1349,30 +1351,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if isinstance(item, Mapping)
         )
         success = receipt.get("error") is None and succeeded
-    if (
-        success
-        and completion_challenge
-        and request.protocol_version == "menagerie.crawler.worker-request.v3"
-    ):
-        raw_digest = receipt.get("raw_award_receipt_sha256")
-        completion = {
-            "request_nonce": request.request_nonce,
-            "request_sha256": request.request_sha256,
-            "raw_award_receipt_sha256": raw_digest,
-            "proof": stable_hash(
-                {
-                    "version": "menagerie.crawler.worker-completion.v2",
-                    "challenge": completion_challenge,
-                    "request_nonce": request.request_nonce,
-                    "request_sha256": request.request_sha256,
-                    "raw_award_receipt_sha256": raw_digest,
-                }
-            ),
-        }
-        os.write(
-            1,
-            _WORKER_COMPLETION_V2_PREFIX.encode("ascii") + canonical_json_bytes(completion) + b"\n",
-        )
+    if success and request.protocol_version == "menagerie.crawler.worker-request.v3":
+        assert isinstance(raw_receipt, Mapping)
+        completion_line = completion_line_for_raw_award_receipt(raw_receipt)
+        os.write(1, completion_line.encode("utf-8") + b"\n")
     elif success and completion_challenge:
         completion = {
             "receipt_sha256": receipt.get("receipt_sha256"),

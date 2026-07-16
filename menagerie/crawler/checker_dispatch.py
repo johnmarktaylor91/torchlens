@@ -9,7 +9,7 @@ from typing import Any, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.constants import (
     CHECKER_PROMPT_NAME,
-    GATE_SCHEMA_VERSION,
+    GATE_SCHEMA_VERSION_V3,
     METADATA_BATCH_MAX,
     METADATA_BATCH_MIN,
     METADATA_FINAL_TAIL_MIN,
@@ -149,6 +149,41 @@ def build_fidelity_envelope(
     )
 
 
+def build_terminal_disposition_envelope(
+    item: Mapping[str, Any],
+    *,
+    gate_round: int,
+    output_path: Union[str, Path],
+    checker_model: str,
+    checker_version: str,
+    request_nonce: str,
+) -> JsonObject:
+    """Build one exact typed terminal-recommendation checker envelope.
+
+    Parameters
+    ----------
+    item:
+        Complete author-result/source/evidence/license pack.
+    gate_round, output_path, checker_model, checker_version, request_nonce:
+        Fresh checker request bindings.
+
+    Returns
+    -------
+    dict[str, Any]
+        Hash-bound terminal-disposition envelope.
+    """
+
+    return _build_envelope(
+        GateKind.TERMINAL_DISPOSITION,
+        [item],
+        gate_round=gate_round,
+        output_path=output_path,
+        checker_model=checker_model,
+        checker_version=checker_version,
+        request_nonce=request_nonce,
+    )
+
+
 def validate_checker_result(
     result_path: Union[str, Path], envelope: Mapping[str, Any]
 ) -> JsonObject:
@@ -181,7 +216,7 @@ def validate_checker_result(
         raise CheckerDispatchError("checker result is not at the exact atomic output path")
     result = _read_json_object(path)
     try:
-        validate_payload(result, GATE_SCHEMA_VERSION)
+        validate_payload(result, GATE_SCHEMA_VERSION_V3)
     except PayloadValidationError as exc:
         raise CheckerDispatchError(str(exc)) from exc
     if result.get("gate_kind") != envelope.get("gate_kind"):
@@ -359,6 +394,23 @@ def _build_envelope(
         if any(field not in item for field in required):
             raise CheckerDispatchError("checker item is missing identity/hash bindings")
         verified_hashes = item.get("verified_hashes")
+        if gate_kind is GateKind.TERMINAL_DISPOSITION:
+            if not isinstance(verified_hashes, Mapping):
+                raise CheckerDispatchError("terminal checker item lacks verified hashes")
+            if not isinstance(item.get("author_result"), Mapping):
+                raise CheckerDispatchError("terminal checker item lacks its author result")
+            if not isinstance(item.get("source_manifest"), Mapping):
+                raise CheckerDispatchError("terminal checker item lacks its source manifest")
+            if not isinstance(item.get("evidence_pack"), Mapping):
+                raise CheckerDispatchError("terminal checker item lacks its evidence pack")
+            stable_id = str(item["stable_id"])
+            if not stable_id or stable_id in seen:
+                raise CheckerDispatchError(
+                    "checker envelope stable IDs must be non-empty and unique"
+                )
+            seen.add(stable_id)
+            normalized_items.append(dict(item))
+            continue
         proposal = item.get("proposal")
         if not isinstance(proposal, Mapping):
             raise CheckerDispatchError("checker item proposal must be a complete object")
@@ -377,7 +429,7 @@ def _build_envelope(
         normalized_items.append(dict(item))
     prompt_sha256 = hash_bytes(_read_prompt())
     body: JsonObject = {
-        "envelope_version": "menagerie.crawler.checker-envelope.v2",
+        "envelope_version": "menagerie.crawler.checker-envelope.v3",
         "gate_kind": gate_kind.value,
         "gate_round": gate_round,
         "request_nonce": request_nonce,
@@ -395,7 +447,7 @@ def _build_envelope(
         "items": normalized_items,
         "required_output_path": str(Path(output_path).resolve()),
         "allowed_output_root": str(Path(output_path).resolve().parent),
-        "required_result_schema": GATE_SCHEMA_VERSION,
+        "required_result_schema": GATE_SCHEMA_VERSION_V3,
         "final_tail": final_tail,
     }
     return {**body, "envelope_sha256": stable_hash(body)}
@@ -449,6 +501,20 @@ def _validate_item_decision(result_item: Mapping[str, Any], gate_kind: GateKind)
 
     verdict = AccuracyVerdict(str(result_item.get("verdict")))
     integrity = _required_mapping(result_item.get("integrity"), "integrity")
+    if gate_kind is GateKind.TERMINAL_DISPOSITION:
+        terminal = _required_mapping(
+            result_item.get("terminal_disposition"), "terminal_disposition"
+        )
+        expected_verdict = {
+            "accepted": AccuracyVerdict.ACCURATE,
+            "rejected": AccuracyVerdict.INACCURATE,
+            "cannot-verify": AccuracyVerdict.CANNOT_VERIFY,
+        }[str(terminal.get("verdict"))]
+        if verdict is not expected_verdict or integrity.get("verdict") != verdict.value:
+            raise CheckerDispatchError(
+                "terminal top-level/integrity verdicts contradict the disposition"
+            )
+        return
     checks = result_item.get("field_checks")
     fidelity = _required_mapping(result_item.get("fidelity"), "fidelity")
     if not isinstance(checks, list) or not checks:

@@ -17,6 +17,21 @@ import pytest
 import menagerie.crawler.checkpoint as checkpoint_module
 import menagerie.crawler.driver as driver_module
 import menagerie.crawler.reducer as reducer_module
+from menagerie.crawler.artifact_transactions import StagedArtifact
+from menagerie.crawler.author_dispatch import (
+    DeferRecommendation,
+    ProposedAuthorResult,
+    SkipRecommendation,
+    build_author_envelope,
+    validate_author_result,
+)
+from menagerie.crawler.authority import (
+    AuthorityContext,
+    build_authority_context,
+    completion_line_for_raw_award_receipt,
+    derive_parent_attestation,
+    raw_award_receipt_sha256,
+)
 from menagerie.crawler.checker_dispatch import CheckerBackoffSignal
 from menagerie.crawler.checkpoint import (
     _externally_controlled_record_text,
@@ -26,6 +41,7 @@ from menagerie.crawler.cli import build_parser, main as cli_main
 from menagerie.crawler.constants import (
     CheckerPauseReason,
     EnvironmentPhase,
+    MODEL_SCHEMA_VERSION_V3,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
 )
 from menagerie.crawler.driver import (
@@ -75,11 +91,10 @@ from menagerie.crawler.fetcher import fetch_targets as controlled_fetch_targets
 from menagerie.crawler.metadata import authored_fact_leaves, recompute_accepted_identities
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.policy import SandboxUnavailableError
+from menagerie.crawler.proposal import DEFAULT_GATED_CLAIMS
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import (
     CanonicalReducer,
-    ReductionError,
-    _recompute_live_execution_identity,
 )
 from menagerie.crawler.status import assert_partition
 from menagerie.crawler.tests.conftest import (
@@ -89,6 +104,8 @@ from menagerie.crawler.tests.conftest import (
     make_author_proposal,
     make_gate,
     make_model,
+    make_proposed_artifact,
+    rebind_attempt_raw_proof,
 )
 from menagerie.crawler.wakeup import (
     OperationalContext,
@@ -99,7 +116,7 @@ from menagerie.crawler.wakeup import (
 from menagerie.crawler.worker_supervisor import (
     SupervisedResult,
     SupervisorObservation,
-    parent_success_attestation_sha256,
+    build_parent_attestation,
 )
 
 
@@ -121,14 +138,18 @@ def _refresh_proposal_identities(
         checker_prompt_hash=driver_module._checker_prompt_hash(),
         checker_model=checker_model,
         checker_version=checker_version,
+        schema_version=MODEL_SCHEMA_VERSION_V3,
     )
     facts["evidence"]["evidence_identity"] = identities.evidence
     facts["implementation"]["recipe_revision"] = identities.recipe
+    if facts.get("fidelity", {}).get("required"):
+        facts["fidelity"]["fidelity_identity"] = identities.fidelity
     identities = recompute_accepted_identities(
         facts,
         checker_prompt_hash=driver_module._checker_prompt_hash(),
         checker_model=checker_model,
         checker_version=checker_version,
+        schema_version=MODEL_SCHEMA_VERSION_V3,
     )
     proposal.update(
         {
@@ -144,6 +165,120 @@ def _refresh_proposal_identities(
     )
 
 
+def _rebind_fake_author_result(artifact: AuthorArtifact) -> AuthorArtifact:
+    """Rebind a deliberately mutated fake proposal into its typed v3 result envelope."""
+
+    result = artifact.author_result
+    assert isinstance(result, driver_module.ProposedAuthorResult)
+    manifest_identity = stable_hash(artifact.source_manifest["sources"])
+    artifact.source_manifest["manifest_sha256"] = manifest_identity
+    artifact.proposal["source_manifest_identity"] = manifest_identity
+    artifact.proposal["verified_hashes"]["source_manifest"] = manifest_identity
+    artifact.proposal["proposal_sha256"] = stable_hash(
+        {key: value for key, value in artifact.proposal.items() if key != "proposal_sha256"}
+    )
+    raw_result = dict(result.binding.raw_result)
+    raw_result["result_id"] = stable_hash(
+        {
+            "stable_id": artifact.proposal["stable_id"],
+            "proposal_sha256": artifact.proposal["proposal_sha256"],
+        }
+    )
+    raw_result["work_id"] = artifact.proposal["work_id"]
+    raw_result["campaign_id"] = artifact.proposal["campaign_id"]
+    raw_result["source_manifest_identity"] = manifest_identity
+    raw_result["payload"] = {"arm": "PROPOSED", "proposal": artifact.proposal}
+    raw_result["result_sha256"] = stable_hash(
+        {key: value for key, value in raw_result.items() if key != "result_sha256"}
+    )
+    binding = replace(
+        result.binding,
+        result_id=str(raw_result["result_id"]),
+        result_sha256=str(raw_result["result_sha256"]),
+        work_id=str(artifact.proposal["work_id"]),
+        campaign_id=str(artifact.proposal["campaign_id"]),
+        source_manifest_identity=manifest_identity,
+        raw_result=raw_result,
+    )
+    return replace(
+        artifact,
+        author_result=driver_module.ProposedAuthorResult(
+            binding, artifact.proposal, result.validation_report
+        ),
+    )
+
+
+def _terminal_fake_author_result(
+    artifact: AuthorArtifact, *, platform: Optional[str] = None, status_code: Optional[str] = None
+) -> AuthorArtifact:
+    """Convert a proposed fake result into one schema-valid terminal union arm."""
+
+    result = artifact.author_result
+    assert isinstance(result, ProposedAuthorResult)
+    evidence_identity = stable_hash({"evidence_ids": ["evidence-1"]})
+    license_identity = stable_hash({"license": "restricted-private"})
+    payload: dict[str, Any]
+    if platform is not None:
+        payload = {
+            "arm": "DEFER_RECOMMENDATION",
+            "platform": platform,
+            "source_ids": ["source-1"],
+            "evidence_ids": ["evidence-1"],
+            "evidence_identity": evidence_identity,
+            "license_identity": license_identity,
+            "recommendation_sha256": HASH,
+        }
+    else:
+        assert status_code is not None
+        payload = {
+            "arm": "SKIP_RECOMMENDATION",
+            "status_code": status_code,
+            "source_ids": ["source-1"],
+            "evidence_ids": ["evidence-1"],
+            "evidence_identity": evidence_identity,
+            "search_report_identity": stable_hash({"search": "bounded-complete"}),
+            "license_identity": license_identity,
+            "recommendation_sha256": HASH,
+        }
+    payload["recommendation_sha256"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "recommendation_sha256"}
+    )
+    raw_result = dict(result.binding.raw_result)
+    raw_result["kind"] = payload["arm"]
+    raw_result["payload"] = payload
+    raw_result["result_sha256"] = stable_hash(
+        {key: value for key, value in raw_result.items() if key != "result_sha256"}
+    )
+    binding = replace(
+        result.binding,
+        result_sha256=str(raw_result["result_sha256"]),
+        raw_result=raw_result,
+    )
+    recommendation = (
+        DeferRecommendation(
+            binding,
+            str(platform),
+            ("source-1",),
+            ("evidence-1",),
+            evidence_identity,
+            license_identity,
+            str(payload["recommendation_sha256"]),
+        )
+        if platform is not None
+        else SkipRecommendation(
+            binding,
+            str(status_code),
+            ("source-1",),
+            ("evidence-1",),
+            evidence_identity,
+            str(payload["search_report_identity"]),
+            license_identity,
+            str(payload["recommendation_sha256"]),
+        )
+    )
+    return replace(artifact, author_result=recommendation)
+
+
 class FakeAuthor(AuthorLane):
     """Return complete synthetic proposals without a live author session."""
 
@@ -152,23 +287,131 @@ class FakeAuthor(AuthorLane):
 
         self.calls: dict[str, int] = {}
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+    def author(
+        self,
+        item: WorkItem,
+        work_root: Path,
+        config: DriverConfig,
+        context: AuthorityContext,
+    ) -> AuthorArtifact:
         """Return one accepted two-mode proposal."""
 
         self.calls[item.stable_id] = self.calls.get(item.stable_id, 0) + 1
         proposal = make_author_proposal(item.stable_id)
-        proposal["work_id"] = f"work-{item.stable_id}"
+        proposal["work_id"] = item.active_work_id
+        proposal["campaign_id"] = (
+            f"campaign-{item.active_work_id}"
+            if item.requeue_work_id is not None or item.refresh_work_id is not None
+            else f"campaign-{item.stable_id}"
+        )
+        proposal["intake_snapshot_id"] = context.active_intake_snapshot_id
+        proposal["intake_snapshot_sha256"] = context.active_intake_snapshot_sha256
+        proposal["intake_item_sha256"] = stable_hash(context.intake_by_stable_id[item.stable_id])
+        proposal["dispatcher_identity"] = context.author_dispatcher_identity
+        proposal["author"].update(
+            {
+                "model": config.author_model,
+                "version": config.author_version,
+                "prompt_sha256": context.author_prompt_identity,
+            }
+        )
         facts = proposal["proposed_facts"]
+        facts["identity"].update(
+            {
+                "canonical_name": item.intake.name,
+                "variant": item.intake.variant,
+                "family_representative_id": item.family_representative_id,
+            }
+        )
         facts["modes"]["meaningful_modes"] = ["train", "eval"]
         facts["external_metadata"]["modes"]["meaningful_modes"] = ["train", "eval"]
+        facts["evidence"]["excerpts"][0]["supports"] = sorted(
+            set(facts["evidence"]["excerpts"][0]["supports"])
+            | set(DEFAULT_GATED_CLAIMS)
+            | {"external_metadata.citation"}
+        )
+        evidence_text = (
+            "Example Model introduced ExampleNet in TestConf 2020 by A. Author at Example Lab "
+            "in the US. ExampleNet is an official PyTorch library CNN architecture for supervised "
+            "computer vision classification in machine learning. This modern ExampleNet family "
+            "uses vision modality and has the example and cnn keywords. It is a small "
+            "source-grounded example network whose grounded contribution uses the Apache-2.0 "
+            "license. It runs in PyTorch train and eval modes with no train eval divergence. "
+            "The input contract is one small RGB image and the output is class scores."
+        )
+        excerpt = facts["evidence"]["excerpts"][0]
+        excerpt.update(
+            {
+                "locator": f"bytes:0-{len(evidence_text.encode())}",
+                "text": evidence_text,
+                "text_sha256": hash_bytes(evidence_text.encode()),
+            }
+        )
+        model_dir = work_root / item.stable_id / "fake-model"
+        model_dir.mkdir(parents=True, exist_ok=True)
+        source_bytes = evidence_text.encode()
+        source_path = work_root / item.stable_id / "author" / "source-cas" / "source.bin"
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        source_path.write_bytes(source_bytes)
+        source = facts["source_resolution"]["sources"][0]
+        source.update(
+            {
+                "content_sha256": hash_bytes(source_bytes),
+                "byte_count": len(source_bytes),
+            }
+        )
+        source_manifest_row = dict(source)
+        source_manifest_row["cas_path"] = str(source_path)
+        source_manifest = {"sources": [source_manifest_row]}
+        source_manifest["manifest_sha256"] = stable_hash(source_manifest["sources"])
+        proposal["source_manifest_identity"] = source_manifest["manifest_sha256"]
+        proposal["verified_hashes"]["source_manifest"] = source_manifest["manifest_sha256"]
         _refresh_proposal_identities(
             proposal,
             checker_model=config.checker_model,
             checker_version=config.checker_version,
         )
-        model_dir = work_root / item.stable_id / "fake-model"
-        model_dir.mkdir(parents=True, exist_ok=True)
-        return AuthorArtifact(proposal, {"sources": []}, model_dir)
+        raw_result = {
+            "schema_version": "menagerie.crawler.author-result.v3",
+            "result_id": stable_hash(
+                {
+                    "stable_id": item.stable_id,
+                    "proposal_sha256": proposal["proposal_sha256"],
+                }
+            ),
+            "result_sha256": HASH,
+            "kind": "PROPOSED",
+            "stable_id": item.stable_id,
+            "work_id": proposal["work_id"],
+            "campaign_id": proposal["campaign_id"],
+            "created_at": NOW,
+            "author_identity": context.author_model_identity,
+            "prompt_identity": context.author_prompt_identity,
+            "dispatcher_identity": context.author_dispatcher_identity,
+            "source_manifest_identity": source_manifest["manifest_sha256"],
+            "intake_snapshot_id": context.active_intake_snapshot_id,
+            "intake_snapshot_sha256": context.active_intake_snapshot_sha256,
+            "intake_item_sha256": proposal["intake_item_sha256"],
+            "payload": {"arm": "PROPOSED", "proposal": proposal},
+        }
+        raw_result["result_sha256"] = stable_hash(
+            {key: value for key, value in raw_result.items() if key != "result_sha256"}
+        )
+        result_path = work_root / item.stable_id / "author" / "result.json"
+        result_path.write_bytes(canonical_json_bytes(raw_result) + b"\n")
+        envelope = build_author_envelope(
+            context=context,
+            work_id=str(proposal["work_id"]),
+            stable_id=item.stable_id,
+            campaign_id=str(proposal["campaign_id"]),
+            created_at=NOW,
+            untrusted_hints=item.intake.to_dict(),
+            source_manifest=source_manifest,
+            allowed_model_dir=model_dir,
+            output_path=result_path,
+        )
+        result = validate_author_result(result_path, envelope, cas_root=source_path.parent)
+        return AuthorArtifact(result, source_manifest, model_dir)
 
 
 class OneModelAuthorFailure(FakeAuthor):
@@ -181,12 +424,14 @@ class OneModelAuthorFailure(FakeAuthor):
         self.failed_id = failed_id
         self.message = message
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+    def author(
+        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
+    ) -> AuthorArtifact:
         """Raise for one item and author every later item normally."""
 
         if item.stable_id == self.failed_id:
             raise RuntimeError(self.message)
-        return super().author(item, work_root, config)
+        return super().author(item, work_root, config, context)
 
 
 class OneModelModeNormalizationFailure(FakeAuthor):
@@ -198,12 +443,15 @@ class OneModelModeNormalizationFailure(FakeAuthor):
         super().__init__()
         self.failed_id = failed_id
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+    def author(
+        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
+    ) -> AuthorArtifact:
         """Corrupt one mode declaration after producing an otherwise complete artifact."""
 
-        artifact = super().author(item, work_root, config)
+        artifact = super().author(item, work_root, config, context)
         if item.stable_id == self.failed_id:
             artifact.proposal["proposed_facts"]["modes"]["meaningful_modes"] = ["invalid"]
+            return _rebind_fake_author_result(artifact)
         return artifact
 
 
@@ -216,21 +464,25 @@ class OneModelRepairFailure(FakeAuthor):
         super().__init__()
         self.failed_id = failed_id
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+    def author(
+        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
+    ) -> AuthorArtifact:
         """Fail the selected model's repair while authoring every other generation."""
 
         if item.stable_id == self.failed_id and self.calls.get(item.stable_id) == 1:
             raise RuntimeError("synthetic repair author failure")
-        return super().author(item, work_root, config)
+        return super().author(item, work_root, config, context)
 
 
 class DisabledAuthor(AuthorLane):
     """Fail if a reconstruction-capable path re-enters authoring."""
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+    def author(
+        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
+    ) -> AuthorArtifact:
         """Raise because canonical handoff facts must be consumed first."""
 
-        del item, work_root, config
+        del item, work_root, config, context
         raise AssertionError("author lane must remain disabled")
 
 
@@ -243,56 +495,29 @@ class TerminalOutcomeAuthor(FakeAuthor):
         super().__init__()
         self._index = 0
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+    def author(
+        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
+    ) -> AuthorArtifact:
         """Return a driver-consumable terminal outcome artifact."""
 
-        artifact = super().author(item, work_root, config)
+        artifact = super().author(item, work_root, config, context)
         self._index += 1
         if self._index == 1:
-            return AuthorArtifact(
-                artifact.proposal,
-                artifact.source_manifest,
-                artifact.model_dir,
-                terminal_status="deferred:needs-cuda",
-                terminal_detail="source proves an unavoidable CUDA operator",
-                defer_evidence={
-                    "target_status": "deferred:needs-cuda",
-                    "source_ids": ["source-1"],
-                    "probe_attempt_ids": [],
-                    "explanation": "source proves an unavoidable CUDA operator",
-                },
-            )
-        artifact.proposal["proposed_facts"]["source_resolution"]["rung"] = "R5_SKIP"
-        _refresh_proposal_identities(artifact.proposal)
-        return AuthorArtifact(
-            artifact.proposal,
-            artifact.source_manifest,
-            artifact.model_dir,
-            terminal_detail="bounded search found no architecture description",
-        )
+            return _terminal_fake_author_result(artifact, platform="cuda")
+        return _terminal_fake_author_result(artifact, status_code="skipped:no-description")
 
 
 class BothDeferredAuthor(FakeAuthor):
     """Return one of each closed platform deferral for a two-model fixture."""
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+    def author(
+        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
+    ) -> AuthorArtifact:
         """Return positive source evidence for the stable-ID-selected deferral."""
 
-        artifact = super().author(item, work_root, config)
-        status = "deferred:needs-cuda" if len(self.calls) == 1 else "deferred:needs-x86"
-        return AuthorArtifact(
-            artifact.proposal,
-            artifact.source_manifest,
-            artifact.model_dir,
-            terminal_status=status,
-            terminal_detail=f"source proves {status}",
-            defer_evidence={
-                "target_status": status,
-                "source_ids": ["source-1"],
-                "probe_attempt_ids": [],
-                "explanation": f"source proves {status}",
-            },
-        )
+        artifact = super().author(item, work_root, config, context)
+        platform = "cuda" if len(self.calls) == 1 else "x86"
+        return _terminal_fake_author_result(artifact, platform=platform)
 
 
 class FakeChecker(CheckerLane):
@@ -350,7 +575,9 @@ class FakeChecker(CheckerLane):
                     "reason": "supported",
                     "required_repair": None,
                 }
-                for field in authored_fact_leaves(proposal["proposed_facts"])
+                for field in authored_fact_leaves(
+                    proposal["proposed_facts"], schema_version=MODEL_SCHEMA_VERSION_V3
+                )
             ]
         gate["checker"].update(
             {
@@ -390,6 +617,61 @@ class FakeChecker(CheckerLane):
         selected_rung = artifact.proposal["proposed_facts"]["source_resolution"]["rung"]
         item["rung_check"]["selected_rung"] = selected_rung
         item["rung_check"]["highest_applicable"] = selected_rung
+        gate["checker"].update(
+            {
+                "model": config.checker_model,
+                "version": config.checker_version,
+                "prompt_sha256": driver_module._checker_prompt_hash(),
+            }
+        )
+        return CheckerOutcome(gate=gate)
+
+    def check_terminal(
+        self, artifact: AuthorArtifact, work_root: Path, config: DriverConfig
+    ) -> CheckerOutcome:
+        """Return one exact accepted terminal-disposition gate."""
+
+        del work_root
+        result = artifact.author_result
+        assert isinstance(result, (DeferRecommendation, SkipRecommendation))
+        binding = result.binding
+        predicate = (
+            f"needs-{result.platform}"
+            if isinstance(result, DeferRecommendation)
+            else result.status_code.split(":", 1)[1]
+        )
+        kind = (
+            "DEFER_RECOMMENDATION"
+            if isinstance(result, DeferRecommendation)
+            else "SKIP_RECOMMENDATION"
+        )
+        gate = make_gate(
+            [binding.stable_id],
+            gate_id=f"gate-terminal-{binding.stable_id}",
+            gate_kind="terminal_disposition",
+        )
+        gate.pop("ledger_seq", None)
+        gate.pop("payload_sha256", None)
+        gate["dispatcher_identity"] = binding.dispatcher_identity
+        item = gate["items"][0]
+        item["work_id"] = binding.work_id
+        item["campaign_root_work_id"] = binding.campaign_id
+        if isinstance(result, SkipRecommendation):
+            item["rung_check"]["selected_rung"] = "R5_SKIP"
+            item["rung_check"]["highest_applicable"] = "R5_SKIP"
+        item["terminal_disposition"] = {
+            "author_result_id": binding.result_id,
+            "author_result_sha256": binding.result_sha256,
+            "kind": kind,
+            "predicate": predicate,
+            "verdict": "accepted",
+            "source_manifest_identity": binding.source_manifest_identity,
+            "source_ids": list(result.source_ids),
+            "evidence_identity": result.evidence_identity,
+            "evidence_ids": list(result.evidence_ids),
+            "license_identity": result.license_identity,
+            "findings": [],
+        }
         gate["checker"].update(
             {
                 "model": config.checker_model,
@@ -480,7 +762,12 @@ class FakeForward(ForwardLane):
                 attempt["worker_receipt"]["observed_recipe_revision"] = artifact.proposal[
                     "recipe_revision"
                 ]
-                attempt["worker_receipt"]["observed_adapter_sha256"] = None
+                attempt["worker_receipt"]["observed_adapter_sha256"] = (
+                    driver_module._expected_adapter_sha256(artifact.proposal)
+                )
+                attempt["worker_receipt"]["observed_code_manifest_sha256"] = (
+                    driver_module._expected_code_manifest_sha256(artifact.proposal)
+                )
                 attempt["environment"].update(
                     {
                         "family": environment.family,
@@ -498,28 +785,7 @@ class FakeForward(ForwardLane):
                     "python",
                     f"/scratch/cold-{cold + 1}/{mode}/request.json",
                 ]
-                completion_line = (
-                    "MENAGERIE_WORKER_COMPLETION_V1 "
-                    f'{{"proof":"{HASH}","receipt_sha256":"sha256:{attempt_no:064x}"}}'
-                )
-                completion_bytes = (completion_line + "\n").encode("utf-8")
-                observation = attempt["supervisor_observation"]
-                observation["stdout_completion_line"] = completion_line
-                observation["stdout_sha256"] = hash_bytes(completion_bytes)
-                observation["stdout_bytes"] = len(completion_bytes)
-                attempt["worker_receipt"]["receipt_sha256"] = stable_hash(
-                    {
-                        "version": "menagerie.crawler.parent-success-attestation.v1",
-                        "completion_line": completion_line,
-                        "exit_code": observation["exit_code"],
-                        "signal": observation["signal"],
-                        "wall_seconds": observation["wall_seconds"],
-                        "cpu_seconds": observation["cpu_seconds"],
-                        "peak_rss_bytes": observation["peak_rss_bytes"],
-                        "stdout_sha256": observation["stdout_sha256"],
-                        "stderr_sha256": observation["stderr_sha256"],
-                    }
-                )
+                rebind_attempt_raw_proof(attempt)
                 attempts.append(attempt)
         return attempts
 
@@ -547,6 +813,7 @@ class FamilyCountForward(FakeForward):
         for attempt in attempts:
             attempt["worker_receipt"]["parameter_count_total"] = count
             attempt["worker_receipt"]["parameter_count_trainable"] = count
+            rebind_attempt_raw_proof(attempt)
         return attempts
 
 
@@ -589,16 +856,33 @@ class OneModelForwardFailure(FakeForward):
             "root_cause_fingerprint": HASH,
             "details": {"mode": failed["mode"]},
         }
+        failed["raw_award_receipt"] = None
+        failed["raw_award_receipt_sha256"] = None
+        parent_attestation = dict(failed["parent_attestation"])
+        parent_attestation["completion_line_sha256"] = None
+        parent_attestation["named_raw_award_receipt_sha256"] = None
+        parent_attestation["attestation_sha256"] = stable_hash(
+            {key: value for key, value in parent_attestation.items() if key != "attestation_sha256"}
+        )
+        failed["parent_attestation"] = parent_attestation
+        failed["unattested_partial"] = {
+            "state": "unattested-partial",
+            "stage": "forward",
+            "reason_code": "mode-run",
+            "diagnostic_sha256": None,
+        }
         return attempts
 
 
 class EvalOnlyAuthor(FakeAuthor):
     """Declare one canonical eval-only recipe for every synthetic model."""
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+    def author(
+        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
+    ) -> AuthorArtifact:
         """Return an eval-only proposal with all dependent identities rebound."""
 
-        artifact = super().author(item, work_root, config)
+        artifact = super().author(item, work_root, config, context)
         facts = artifact.proposal["proposed_facts"]
         facts["modes"]["meaningful_modes"] = ["eval"]
         facts["external_metadata"]["modes"]["meaningful_modes"] = ["eval"]
@@ -607,55 +891,63 @@ class EvalOnlyAuthor(FakeAuthor):
             checker_model=config.checker_model,
             checker_version=config.checker_version,
         )
-        return artifact
+        return _rebind_fake_author_result(artifact)
 
 
 class DetectedModeRepairAuthor(FakeAuthor):
     """Revise an eval-only first proposal to the complete detected mode set."""
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+    def author(
+        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
+    ) -> AuthorArtifact:
         """Return eval-only initially and a new dual-mode work identity on repair."""
 
-        artifact = super().author(item, work_root, config)
+        artifact = super().author(item, work_root, config, context)
         generation = self.calls[item.stable_id]
         facts = artifact.proposal["proposed_facts"]
         if generation == 1:
             facts["modes"]["meaningful_modes"] = ["eval"]
             facts["external_metadata"]["modes"]["meaningful_modes"] = ["eval"]
-        artifact.proposal["work_id"] = f"work-{item.stable_id}-mode-generation-{generation}"
+        if generation > 1:
+            artifact.proposal["work_id"] = f"work-{item.stable_id}-mode-generation-{generation}"
         _refresh_proposal_identities(
             artifact.proposal,
             checker_model=config.checker_model,
             checker_version=config.checker_version,
         )
-        return artifact
+        return _rebind_fake_author_result(artifact)
 
 
 class ModeRepairCapAuthor(EvalOnlyAuthor):
     """Issue fresh work identities that never cover a detected train mode."""
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+    def author(
+        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
+    ) -> AuthorArtifact:
         """Return a new eval-only proposal for every bounded repair generation."""
 
-        artifact = super().author(item, work_root, config)
-        artifact.proposal["work_id"] = (
-            f"work-{item.stable_id}-unrepaired-{self.calls[item.stable_id]}"
-        )
+        artifact = super().author(item, work_root, config, context)
+        if self.calls[item.stable_id] > 1:
+            artifact.proposal["work_id"] = (
+                f"work-{item.stable_id}-unrepaired-{self.calls[item.stable_id]}"
+            )
         _refresh_proposal_identities(
             artifact.proposal,
             checker_model=config.checker_model,
             checker_version=config.checker_version,
         )
-        return artifact
+        return _rebind_fake_author_result(artifact)
 
 
 class ReverseModeAuthor(FakeAuthor):
     """Author the complete mode set in noncanonical eval/train order."""
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+    def author(
+        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
+    ) -> AuthorArtifact:
         """Return a reverse-ordered proposal for driver canonicalization."""
 
-        artifact = super().author(item, work_root, config)
+        artifact = super().author(item, work_root, config, context)
         facts = artifact.proposal["proposed_facts"]
         facts["modes"]["meaningful_modes"] = ["eval", "train"]
         facts["external_metadata"]["modes"]["meaningful_modes"] = ["eval", "train"]
@@ -664,7 +956,7 @@ class ReverseModeAuthor(FakeAuthor):
             checker_model=config.checker_model,
             checker_version=config.checker_version,
         )
-        return artifact
+        return _rebind_fake_author_result(artifact)
 
 
 class OneModelModeExpansion(FakeForward):
@@ -793,26 +1085,31 @@ class LineageInaccurateChecker(InaccurateChecker):
 class RepairingIdentityAuthor(FakeAuthor):
     """Issue a new exact proposal/work identity on every bounded repair."""
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+    def author(
+        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
+    ) -> AuthorArtifact:
         """Change authored bytes and proposal identity while preserving the model campaign."""
 
-        artifact = super().author(item, work_root, config)
+        artifact = super().author(item, work_root, config, context)
         generation = self.calls[item.stable_id]
-        artifact.proposal["work_id"] = f"work-{item.stable_id}-generation-{generation}"
+        if generation > 1:
+            artifact.proposal["work_id"] = f"work-{item.stable_id}-generation-{generation}"
         artifact.proposal["proposed_facts"]["website"]["description"] += (
             f" Repair generation {generation}."
         )
         _refresh_proposal_identities(artifact.proposal)
-        return artifact
+        return _rebind_fake_author_result(artifact)
 
 
 class FidelityAuthor(FakeAuthor):
     """Mark every proposal as an R3 port requiring fidelity review."""
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+    def author(
+        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
+    ) -> AuthorArtifact:
         """Return a complete proposal with required fidelity enabled."""
 
-        artifact = super().author(item, work_root, config)
+        artifact = super().author(item, work_root, config, context)
         fidelity_identity = HASH
         artifact.proposal["fidelity_identity"] = fidelity_identity
         facts = artifact.proposal["proposed_facts"]
@@ -828,21 +1125,24 @@ class FidelityAuthor(FakeAuthor):
             }
         )
         _refresh_proposal_identities(artifact.proposal)
-        return artifact
+        return _rebind_fake_author_result(artifact)
 
 
 class ChangedInputAuthor(FakeAuthor):
     """Return a new source/input-bound recipe generation for resume tests."""
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+    def author(
+        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
+    ) -> AuthorArtifact:
         """Change source, recipe, and dummy-input dependencies together."""
 
-        artifact = super().author(item, work_root, config)
+        artifact = super().author(item, work_root, config, context)
         facts = artifact.proposal["proposed_facts"]
         facts["source_resolution"]["sources"][0]["revision"] = "changed-revision"
+        artifact.source_manifest["sources"][0]["revision"] = "changed-revision"
         facts["input_contract"]["args"][0]["shape"] = [1, 3, 9, 9]
         _refresh_proposal_identities(artifact.proposal)
-        return artifact
+        return _rebind_fake_author_result(artifact)
 
 
 class RejectingFidelityChecker(FakeChecker):
@@ -978,7 +1278,8 @@ class FakePauseScheduler(UsagePauseScheduler):
             operational,
             ["python", "-m", "menagerie.crawler", "run", "--resume"],
             backend=WakeupBackend.CRON,
-            activator=lambda _spec: None,
+            installer=lambda _spec: None,
+            verifier=lambda _spec: True,
         )
         manager.record_pause_and_schedule(
             provider="openai",
@@ -1009,6 +1310,21 @@ def _snapshot(tmp_path: Path, count: int = 10) -> IntakeSnapshot:
     )
     _write_jsonl(deferred, [])
     return create_intake_snapshot(master, deferred, tmp_path / "intake")
+
+
+def _test_authority_context(snapshot: IntakeSnapshot, config: DriverConfig) -> AuthorityContext:
+    """Build the exact authority context used by a synthetic driver run."""
+
+    return build_authority_context(
+        active_intake_snapshot_id=snapshot.snapshot_id,
+        active_intake_snapshot_sha256=snapshot.snapshot_sha256,
+        intake_rows=(item.to_dict() for item in snapshot.items),
+        author_model=config.author_model,
+        author_version=config.author_version,
+        checker_model=config.checker_model,
+        checker_version=config.checker_version,
+        environment_generations={"env-test": HASH},
+    )
 
 
 def _family_snapshot(tmp_path: Path) -> tuple[IntakeSnapshot, str, tuple[str, ...]]:
@@ -1264,7 +1580,12 @@ def test_env_observation_binding_changes_award_closure_and_execution_identity(
     snapshot = _snapshot(tmp_path, count=1)
     driver = _driver(tmp_path, snapshot)
     item = driver._ordered_work(snapshot, {})[0]
-    artifact = FakeAuthor().author(item, driver.paths.work_root, driver.config)
+    artifact = FakeAuthor().author(
+        item,
+        driver.paths.work_root,
+        driver.config,
+        _test_authority_context(snapshot, driver.config),
+    )
     environment = _test_environment(tmp_path / "env")
     before_closure = driver_module._award_closure_identity()
     before_execution = _execution_identity(artifact.proposal, environment)
@@ -1333,13 +1654,24 @@ def test_mode_requests_reuse_one_accepted_input_seed_and_manifest(tmp_path: Path
     snapshot = _snapshot(tmp_path, count=1)
     driver = _driver(tmp_path, snapshot)
     item = driver._ordered_work(snapshot, {})[0]
-    artifact = FakeAuthor().author(item, driver.paths.work_root, driver.config)
+    artifact = FakeAuthor().author(
+        item,
+        driver.paths.work_root,
+        driver.config,
+        _test_authority_context(snapshot, driver.config),
+    )
+    environment_root = tmp_path / "env"
+    environment_root.mkdir()
+    execution_manifest = driver_module._compile_worker_read_manifest(
+        artifact, _test_environment(environment_root), HASH
+    )
     requests = [
         _worker_request(
             artifact,
             tmp_path / f"scratch-{cold}-{mode}",
             tmp_path / f"receipt-{cold}-{mode}.json",
             HASH,
+            execution_manifest,
             cold,
             mode,
         )
@@ -1349,7 +1681,8 @@ def test_mode_requests_reuse_one_accepted_input_seed_and_manifest(tmp_path: Path
     assert {request["mode"] for request in requests} == {"train", "eval"}
     assert {request["seed"] for request in requests} == {0}
     assert {request["input_seed"] for request in requests} == {0}
-    assert len({stable_hash(request["input_manifest"]) for request in requests}) == 1
+    assert len({request["input_identity"] for request in requests}) == 1
+    assert len({request["execution_read_manifest_identity"] for request in requests}) == 1
 
 
 def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
@@ -1601,7 +1934,7 @@ def test_command_checker_lane_validates_real_proposal_digest_binding(tmp_path: P
 
     stable_id = "m_checker_contract"
     proposal = make_author_proposal(stable_id)
-    artifact = AuthorArtifact(proposal, {"sources": []}, tmp_path / "model")
+    artifact = make_proposed_artifact(proposal, {"sources": []}, model_dir=tmp_path / "model")
     script = r"""
 import json
 import sys
@@ -1758,14 +2091,27 @@ def test_detected_mode_expansion_is_award_blocking_revision_evidence(tmp_path: P
         stderr_tail="",
         stdout_path="/logs/stdout",
         stderr_path="/logs/stderr",
+        started_at=NOW,
+        finished_at=NOW,
     )
-    result = SupervisedResult(observation, receipt, None, HASH)
+    result = SupervisedResult(
+        observation,
+        receipt,
+        None,
+        HASH,
+        parent_attestation=build_parent_attestation(
+            request_nonce="nonce-detected-mode",
+            request_sha256=HASH,
+            completion=None,
+            observation=observation,
+        ),
+    )
 
     assert (
         _receipt_envelope_error(result, proposal, HASH, requested_mode="eval")
         == "invalid-receipt:meaningful-mode-contract"
     )
-    artifact = AuthorArtifact(proposal, {"sources": []}, tmp_path / "model")
+    artifact = make_proposed_artifact(proposal, {"sources": []}, model_dir=tmp_path / "model")
     projected = driver_module._attempts_from_supervised(
         artifact,
         result,
@@ -1802,73 +2148,98 @@ def test_parent_accepts_one_requested_mode_from_dual_mode_receipt(tmp_path: Path
 
     proposal = make_author_proposal("m_dual_mode_receipt")
     proposal["proposed_facts"]["modes"]["meaningful_modes"] = ["train", "eval"]
-    attempt = make_attempt("m_dual_mode_receipt", mode="train")
-    mode_receipt = {
-        **attempt["worker_receipt"],
-        "error": None,
-        "constructor_seconds": 0.25,
-        "forward_seconds": 0.5,
-    }
-    receipt = {
-        "receipt_version": "menagerie.crawler.worker-receipt.v1",
-        "stable_id": proposal["stable_id"],
-        "source_identity": proposal["source_identity"],
-        "recipe_revision": proposal["recipe_revision"],
-        "observed_recipe_revision": proposal["recipe_revision"],
-        "observed_adapter_sha256": None,
-        "observed_code_manifest_sha256": None,
-        "observed_input_asset_sha256": driver_module._expected_input_asset_sha256(proposal),
-        "execution_identity": HASH,
-        "mode": "train",
-        "constructor_started": True,
-        "constructor_completed": True,
-        "input_completed": True,
-        "declared_meaningful_modes": ["train", "eval"],
-        "detected_meaningful_modes": ["train", "eval"],
-        "meaningful_modes": ["train", "eval"],
-        "per_mode": {"train": mode_receipt},
-        "policy_observation": attempt["policy_observation"],
-        "error": None,
-        "receipt_sha256": HASH,
-    }
-    completion_line = (
-        f'MENAGERIE_WORKER_COMPLETION_V1 {{"proof":"{HASH}","receipt_sha256":"{HASH}"}}'
-    )
-    completion_bytes = (completion_line + "\n").encode("utf-8")
-    observation = SupervisorObservation(
-        argv=("python", "worker.py"),
-        cwd="/scratch",
-        exit_code=0,
-        signal_number=None,
-        wall_seconds=0.1,
-        cpu_seconds=0.1,
-        peak_rss_bytes=1,
-        timed_out=False,
-        rss_exceeded=False,
-        stdout_sha256=hash_bytes(completion_bytes),
-        stdout_bytes=len(completion_bytes),
-        stdout_tail=completion_line,
-        stderr_sha256=HASH,
-        stderr_bytes=0,
-        stderr_tail="",
-        stdout_path="/logs/stdout",
-        stderr_path="/logs/stderr",
-    )
+    _refresh_proposal_identities(proposal)
 
-    parent_attestation = stable_hash(
-        {
-            "version": "menagerie.crawler.parent-success-attestation.v1",
-            "completion_line": completion_line,
-            "exit_code": observation.exit_code,
-            "signal": observation.signal_number,
-            "wall_seconds": observation.wall_seconds,
-            "cpu_seconds": observation.cpu_seconds,
-            "peak_rss_bytes": observation.peak_rss_bytes,
-            "stdout_sha256": observation.stdout_sha256,
-            "stderr_sha256": observation.stderr_sha256,
+    def supervised_result(mode: str) -> SupervisedResult:
+        """Build one complete v3 raw receipt and parent attestation for a mode."""
+
+        base = make_attempt("m_dual_mode_receipt", mode=mode)
+        mode_receipt = {
+            **base["worker_receipt"],
+            "observed_recipe_revision": proposal["recipe_revision"],
+            "observed_adapter_sha256": driver_module._expected_adapter_sha256(proposal),
+            "observed_code_manifest_sha256": driver_module._expected_code_manifest_sha256(proposal),
+            "observed_input_asset_sha256": driver_module._expected_input_asset_sha256(proposal),
+            "error": None,
+            "constructor_seconds": 0.25,
+            "forward_seconds": 0.5,
         }
-    )
-    train_result = SupervisedResult(observation, receipt, None, parent_attestation)
+        receipt = {
+            "receipt_version": "menagerie.crawler.worker-receipt.v1",
+            "stable_id": proposal["stable_id"],
+            "source_identity": proposal["source_identity"],
+            "recipe_revision": proposal["recipe_revision"],
+            "observed_recipe_revision": proposal["recipe_revision"],
+            "observed_adapter_sha256": None,
+            "observed_code_manifest_sha256": driver_module._expected_code_manifest_sha256(proposal),
+            "observed_input_asset_sha256": driver_module._expected_input_asset_sha256(proposal),
+            "execution_identity": HASH,
+            "mode": mode,
+            "constructor_started": True,
+            "constructor_completed": True,
+            "input_completed": True,
+            "declared_meaningful_modes": ["train", "eval"],
+            "detected_meaningful_modes": ["train", "eval"],
+            "meaningful_modes": ["train", "eval"],
+            "per_mode": {mode: mode_receipt},
+            "policy_observation": base["policy_observation"],
+            "error": None,
+            "receipt_sha256": HASH,
+        }
+        raw_receipt = {
+            "receipt_version": "menagerie.crawler.raw-award-receipt.v3",
+            "request_nonce": f"nonce-{mode}",
+            "request_sha256": HASH,
+            "stable_id": proposal["stable_id"],
+            "work_id": proposal["work_id"],
+            "execution_identity": HASH,
+            "recipe_revision": proposal["recipe_revision"],
+            "code_manifest_identity": driver_module._expected_code_manifest_sha256(proposal),
+            "input_identity": HASH,
+            "requested_mode": mode,
+            "observation": mode_receipt,
+        }
+        completion_line = completion_line_for_raw_award_receipt(raw_receipt)
+        completion_bytes = (completion_line + "\n").encode()
+        observation = SupervisorObservation(
+            argv=("python", "worker.py"),
+            cwd="/scratch",
+            exit_code=0,
+            signal_number=None,
+            wall_seconds=0.1,
+            cpu_seconds=0.1,
+            peak_rss_bytes=1,
+            timed_out=False,
+            rss_exceeded=False,
+            stdout_sha256=hash_bytes(completion_bytes),
+            stdout_bytes=len(completion_bytes),
+            stdout_tail=completion_line,
+            stderr_sha256=hash_bytes(b""),
+            stderr_bytes=0,
+            stderr_tail="",
+            stdout_path="/logs/stdout",
+            stderr_path="/logs/stderr",
+            started_at=NOW,
+            finished_at=NOW,
+        )
+        parent_attestation = derive_parent_attestation(
+            raw_receipt,
+            completion_line,
+            observation.to_dict(),
+            started_at=NOW,
+            finished_at=NOW,
+        )
+        return SupervisedResult(
+            observation,
+            receipt,
+            None,
+            str(parent_attestation["attestation_sha256"]),
+            raw_receipt,
+            raw_award_receipt_sha256(raw_receipt),
+            parent_attestation,
+        )
+
+    train_result = supervised_result("train")
     assert (
         _receipt_envelope_error(
             train_result,
@@ -1878,14 +2249,10 @@ def test_parent_accepts_one_requested_mode_from_dual_mode_receipt(tmp_path: Path
         )
         is None
     )
-    eval_attempt = make_attempt("m_dual_mode_receipt", mode="eval")
-    eval_receipt = {
-        **receipt,
-        "mode": "eval",
-        "per_mode": {"eval": {**eval_attempt["worker_receipt"], "error": None}},
-    }
     environment = _test_environment(Path("/tmp/dual-mode-env"))
-    artifact = AuthorArtifact(proposal, {"sources": []}, Path("/tmp/dual-mode-model"))
+    artifact = make_proposed_artifact(
+        proposal, {"sources": []}, model_dir=Path("/tmp/dual-mode-model")
+    )
     attempts = (
         *driver_module._attempts_from_supervised(
             artifact,
@@ -1900,7 +2267,7 @@ def test_parent_accepts_one_requested_mode_from_dual_mode_receipt(tmp_path: Path
         ),
         *driver_module._attempts_from_supervised(
             artifact,
-            SupervisedResult(observation, eval_receipt, None, parent_attestation),
+            supervised_result("eval"),
             environment,
             HASH,
             0,
@@ -1925,109 +2292,23 @@ def test_supervised_success_round_trip_persists_attestation_and_awards_runs(
     paths = _paths(tmp_path, snapshot)
     driver = _driver(tmp_path, snapshot)
     item = driver._ordered_work(snapshot, {})[0]
-    artifact = FakeAuthor().author(item, paths.work_root, driver.config)
-    proposal = artifact.proposal
-    environment = _test_environment(tmp_path / "env")
-    execution_identity = _execution_identity(proposal, environment)
-    templates = FakeForward().forward(artifact, environment, 1, paths.work_root)
-    projected: list[Mapping[str, Any]] = []
-    for index, template in enumerate(templates):
-        mode = str(template["mode"])
-        receipt = {
-            "receipt_version": "menagerie.crawler.worker-receipt.v1",
-            "stable_id": proposal["stable_id"],
-            "source_identity": proposal["source_identity"],
-            "recipe_revision": proposal["recipe_revision"],
-            "observed_recipe_revision": template["worker_receipt"]["observed_recipe_revision"],
-            "observed_adapter_sha256": template["worker_receipt"]["observed_adapter_sha256"],
-            "observed_code_manifest_sha256": template["worker_receipt"][
-                "observed_code_manifest_sha256"
-            ],
-            "observed_input_asset_sha256": template["worker_receipt"][
-                "observed_input_asset_sha256"
-            ],
-            "execution_identity": execution_identity,
-            "mode": mode,
-            "constructor_started": True,
-            "constructor_completed": True,
-            "input_completed": True,
-            "declared_meaningful_modes": ["train", "eval"],
-            "detected_meaningful_modes": ["train", "eval"],
-            "meaningful_modes": ["train", "eval"],
-            "per_mode": {
-                mode: {
-                    **template["worker_receipt"],
-                    "constructor_seconds": 0.25,
-                    "forward_seconds": 0.5,
-                    "error": None,
-                }
-            },
-            "policy_observation": template["policy_observation"],
-            "error": None,
-            "receipt_sha256": HASH,
-        }
-        completion_line = (
-            f'MENAGERIE_WORKER_COMPLETION_V1 {{"proof":"{HASH}","receipt_sha256":"{HASH}"}}'
+    artifact = FakeAuthor().author(
+        item, paths.work_root, driver.config, _test_authority_context(snapshot, driver.config)
+    )
+    context = _test_authority_context(snapshot, driver.config)
+    with CanonicalReducer(paths.ledgers, context) as reducer:
+        artifact = driver._stage_author_result(item, artifact, reducer)
+        projected = FakeForward().forward(
+            artifact, _test_environment(tmp_path / "env"), 1, paths.work_root
         )
-        completion_bytes = (completion_line + "\n").encode("utf-8")
-        wall_seconds = 0.10000000000000002 + index
-        cpu_seconds = 0.010000000000000002 + index
-        peak_rss_bytes = 128 + index
-        stdout_sha256 = hash_bytes(completion_bytes)
-        observation_values = {
-            "exit_code": 0,
-            "signal": None,
-            "wall_seconds": wall_seconds,
-            "cpu_seconds": cpu_seconds,
-            "peak_rss_bytes": peak_rss_bytes,
-            "stdout_sha256": stdout_sha256,
-            "stderr_sha256": HASH,
-        }
-        parent_attestation = parent_success_attestation_sha256(completion_line, observation_values)
-        observation = SupervisorObservation(
-            argv=("python", "-m", "menagerie.crawler.worker"),
-            cwd="/scratch",
-            exit_code=0,
-            signal_number=None,
-            wall_seconds=wall_seconds,
-            cpu_seconds=cpu_seconds,
-            peak_rss_bytes=peak_rss_bytes,
-            timed_out=False,
-            rss_exceeded=False,
-            stdout_sha256=stdout_sha256,
-            stdout_bytes=len(completion_bytes),
-            stdout_tail=completion_line,
-            stderr_sha256=HASH,
-            stderr_bytes=0,
-            stderr_tail="",
-            stdout_path="/logs/stdout",
-            stderr_path="/logs/stderr",
-            success_attestation_sha256=parent_attestation,
-            attested_receipt_sha256=HASH,
-        )
-        projected.extend(
-            driver_module._attempts_from_supervised(
-                artifact,
-                SupervisedResult(observation, receipt, None, parent_attestation),
-                environment,
-                execution_identity,
-                0,
-                10.0,
-                1024,
-                requested_mode=mode,
-                diagnostics_root=tmp_path / ".crawl-local" / "diagnostics",
-            )
-        )
-
-    gate = FakeChecker().check_metadata([artifact], paths.work_root, driver.config).gate
-    assert gate is not None
-    with CanonicalReducer(paths.ledgers, [item.stable_id]) as reducer:
+        gate = FakeChecker().check_metadata([artifact], paths.work_root, driver.config).gate
+        assert gate is not None
         reducer.append_gate(gate)
         for attempt in projected:
             reducer.append_attempt(attempt)
         persisted = scan_jsonl(paths.ledgers.attempts)
         assert len(persisted) == 2
-        assert all(reducer_module._parent_success_attestation_matches(value) for value in persisted)
+        assert all(driver_module._attempt_has_current_raw_authority(value) for value in persisted)
         model = driver_module._assemble_run_model(
             item,
             artifact,
@@ -2035,7 +2316,8 @@ def test_supervised_success_round_trip_persists_attestation_and_awards_runs(
             [gate],
             driver.config,
         )
-        appended = reducer.append_model(model)
+        driver._authorize_and_publish_artifact(artifact, model, [gate], reducer)
+        appended = reducer.append_model(reducer.prepare_model(model))
 
     assert appended.record["status"]["code"] == "runs"
 
@@ -2078,6 +2360,9 @@ def _driver(
         lambda: NOW,
         boundary,
         pause_scheduler,
+        (lambda _definition: None) if pause_scheduler is not None else None,
+        (lambda _definition: True) if pause_scheduler is not None else None,
+        (lambda _definition: None) if pause_scheduler is not None else None,
     )
     return CrawlerDriver(
         _paths(tmp_path, snapshot),
@@ -2096,7 +2381,7 @@ def _driver(
 
 
 def test_family_representative_once_templates_variants_that_still_run(tmp_path: Path) -> None:
-    """Acceptance 18: one metadata session seeds independently executed size variants."""
+    """One author result seeds variants that each pass the full write gate and execution."""
 
     snapshot, representative_id, variant_ids = _family_snapshot(tmp_path)
     author = FakeAuthor()
@@ -2114,11 +2399,11 @@ def test_family_representative_once_templates_variants_that_still_run(tmp_path: 
 
     assert result.status == "complete"
     assert author.calls == {representative_id: 1}
-    assert checker.metadata_calls == 1
+    assert checker.metadata_calls == 2
     assert checker.fidelity_calls == 0
     assert forward.calls == {stable_id: 1 for stable_id in counts}
     paths = _paths(tmp_path, snapshot)
-    assert len(scan_jsonl(paths.ledgers.gates)) == 1
+    assert len(scan_jsonl(paths.ledgers.gates)) == 2
     current = {model["stable_id"]: model for model in scan_jsonl(paths.ledgers.models)}
     representative = current[representative_id]
     assert representative["website"]["kind"] == "family-representative"
@@ -2264,26 +2549,26 @@ def test_family_variant_reconstruction_rewrite_cannot_replace_gated_derivation(
     )
 
 
-def test_family_variant_falls_back_to_full_author_when_representative_fails(
+def test_family_variant_fails_closed_when_representative_has_no_authority(
     tmp_path: Path,
 ) -> None:
-    """An unusable representative yields bounded full-author fallbacks, not a wait loop."""
+    """A failed representative cannot silently turn trusted variants into ordinary models."""
 
     snapshot, representative_id, variant_ids = _family_snapshot(tmp_path)
     author = OneModelAuthorFailure(representative_id)
     checker = FakeChecker()
-    result = _driver(tmp_path, snapshot, author=author, checker=checker).run()
+    with pytest.raises(
+        DriverIntegrationError,
+        match="trusted family variant has no usable representative authority",
+    ):
+        _driver(tmp_path, snapshot, author=author, checker=checker).run()
 
-    assert result.status == "terminal-partition-complete"
-    assert author.calls == {variant_id: 1 for variant_id in variant_ids}
-    current = {
-        model["stable_id"]: model for model in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
-    }
-    assert current[representative_id]["status"]["kind"] == "failed"
-    assert all(current[variant_id]["status"]["kind"] == "runs" for variant_id in variant_ids)
-    assert all(
-        current[variant_id]["budget"]["author_sessions_used"] == 1 for variant_id in variant_ids
-    )
+    assert author.calls == {}
+    current = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    assert len(current) == 1
+    assert current[0]["stable_id"] == representative_id
+    assert current[0]["status"]["kind"] == "failed"
+    assert variant_ids
 
 
 def test_family_variant_template_failure_terminalizes_its_own_lane(tmp_path: Path) -> None:
@@ -2387,7 +2672,12 @@ def test_checker_prompt_bytes_stale_gate_and_execution_identity(
     author = FakeAuthor()
     driver = _driver(tmp_path, snapshot, author=author)
     item = driver._ordered_work(snapshot, {})[0]
-    artifact = author.author(item, driver.paths.work_root, driver.config)
+    artifact = author.author(
+        item,
+        driver.paths.work_root,
+        driver.config,
+        _test_authority_context(snapshot, driver.config),
+    )
     outcome = FakeChecker().check_metadata([artifact], driver.paths.work_root, driver.config)
     assert outcome.gate is not None
     environment = _test_environment(tmp_path / "env")
@@ -2418,7 +2708,12 @@ def test_award_closure_change_stales_execution_and_current_run(
     author = FakeAuthor()
     driver = _driver(tmp_path, snapshot, author=author)
     item = driver._ordered_work(snapshot, {})[0]
-    artifact = author.author(item, driver.paths.work_root, driver.config)
+    artifact = author.author(
+        item,
+        driver.paths.work_root,
+        driver.config,
+        _test_authority_context(snapshot, driver.config),
+    )
     environment = _test_environment(tmp_path / "env")
     gate_outcome = FakeChecker().check_metadata([artifact], driver.paths.work_root, driver.config)
     assert gate_outcome.gate is not None
@@ -2442,55 +2737,6 @@ def test_award_closure_change_stales_execution_and_current_run(
     assert not driver_module._current_run_is_fresh(
         model, artifact, environment, [gate_outcome.gate]
     )
-
-
-def test_historical_execution_replay_uses_recorded_host_identity(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A Mac execution remains current when replay is reviewed on Linux."""
-
-    snapshot = _snapshot(tmp_path, count=1)
-    driver = _driver(tmp_path, snapshot)
-    item = driver._ordered_work(snapshot, {})[0]
-    artifact = FakeAuthor().author(item, driver.paths.work_root, driver.config)
-    environment = _test_environment(tmp_path / "env")
-    gate_outcome = FakeChecker().check_metadata([artifact], driver.paths.work_root, driver.config)
-    assert gate_outcome.gate is not None
-    attempts = list(FakeForward().forward(artifact, environment, 1, driver.paths.work_root))
-    mac_identity = _execution_identity(
-        artifact.proposal,
-        environment,
-        host_os="darwin",
-        machine_class="arm64",
-    )
-    for attempt in attempts:
-        attempt["host"] = {
-            **attempt["host"],
-            "os": "darwin",
-            "architecture": "arm64",
-        }
-        attempt["identities"] = {
-            **attempt["identities"],
-            "execution": mac_identity,
-        }
-    model = driver_module._assemble_run_model(
-        item,
-        artifact,
-        attempts,
-        [gate_outcome.gate],
-        driver.config,
-    )
-    monkeypatch.setattr(driver_module.sys, "platform", "linux")
-    monkeypatch.setattr(driver_module.platform, "machine", lambda: "x86_64")
-    _recompute_live_execution_identity(model, artifact.proposal, attempts)
-
-    monkeypatch.setattr(
-        driver_module,
-        "_award_closure_identity",
-        lambda: "sha256:" + "f" * 64,
-    )
-    with pytest.raises(ReductionError, match="execution identity is stale"):
-        _recompute_live_execution_identity(model, artifact.proposal, attempts)
 
 
 def test_checker_prompt_change_invalidates_author_cache_and_reauthors(
@@ -2559,7 +2805,8 @@ def test_only_driver_awards_runs_after_gate_receipts_and_both_modes(tmp_path: Pa
     author = FakeAuthor()
     item_driver = _driver(tmp_path, snapshot, author=author, checker=checker)
     work = item_driver._ordered_work(snapshot, {})
-    artifacts = [author.author(item, paths.work_root, item_driver.config) for item in work]
+    context = _test_authority_context(snapshot, item_driver.config)
+    artifacts = [author.author(item, paths.work_root, item_driver.config, context) for item in work]
     artifact = artifacts[0]
     gate = checker.check_metadata(artifacts, paths.work_root, item_driver.config).gate
     assert gate is not None
@@ -2568,7 +2815,7 @@ def test_only_driver_awards_runs_after_gate_receipts_and_both_modes(tmp_path: Pa
     attempts = FakeForward().forward(
         artifact, _test_environment(tmp_path / "env"), 1, paths.work_root
     )
-    with CanonicalReducer(paths.ledgers, [item.stable_id for item in snapshot.items]) as reducer:
+    with CanonicalReducer(paths.ledgers, context) as reducer:
         reducer.append_gate(gate)
         for attempt in attempts:
             reducer.append_attempt(attempt)
@@ -2624,7 +2871,7 @@ def test_quota_pause_awards_pending_runs_then_metadata_supersedes(tmp_path: Path
     """A quota pause awards proven R1/R2 runs and recovery supersedes their metadata."""
 
     snapshot = _snapshot(tmp_path)
-    scheduler = FakePauseScheduler(tmp_path / "wakeups")
+    scheduler = FakePauseScheduler(_paths(tmp_path, snapshot).wakeup_root)
     forward = FakeForward()
     result = _driver(
         tmp_path,
@@ -2653,7 +2900,12 @@ def test_quota_pause_awards_pending_runs_then_metadata_supersedes(tmp_path: Path
     ]
 
     resumed_forward = FakeForward()
-    resumed = _driver(tmp_path, snapshot, forward=resumed_forward).run()
+    resumed = _driver(
+        tmp_path,
+        snapshot,
+        forward=resumed_forward,
+        pause_scheduler=scheduler,
+    ).run()
     assert resumed.status == "complete"
     assert resumed_forward.calls == {}
     revisions = scan_jsonl(paths.ledgers.models)
@@ -2757,7 +3009,8 @@ def test_runtime_mode_expansion_terminalizes_only_after_repair_cap(tmp_path: Pat
     model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[-1]
 
     assert result.status == "complete"
-    assert model["status"]["code"] == "failed:runner"
+    assert model["status"]["code"] == "failed:source"
+    assert model["status"]["reason_code"] == "identity-unresolved"
     assert model["status"]["reason_code"] == "protocol-violation"
     assert author.calls == {stable_id: 3}
     repair_requests = sorted(
@@ -2934,11 +3187,12 @@ def test_scheduled_wake_live_lock_is_idempotent_success(tmp_path: Path) -> None:
     event_path = canonical_operational_ledger_path(driver.paths.ledgers.models)
     with JsonlLedger(event_path, OPERATIONAL_EVENT_SCHEMA_VERSION) as ledger:
         scheduled = WakeupManager(
-            driver.paths.runtime_root / "wakeups",
+            driver.paths.wakeup_root,
             ledger,
             ["python", "-m", "menagerie.crawler", "run", "--resume"],
             backend=WakeupBackend.CRON,
-            activator=lambda _definition: None,
+            installer=lambda _definition: None,
+            verifier=lambda _definition: True,
         ).record_pause_and_schedule(
             provider="openai",
             observed_response="quota exhausted",
@@ -2957,7 +3211,7 @@ def test_scheduled_wake_live_lock_is_idempotent_success(tmp_path: Path) -> None:
     with DriverLock(driver.paths.lock_path, {"pid": 1}):
         assert cli_main(argv, driver_factory=factory) == 0
         assert cli_main(argv, driver_factory=factory) == 0
-    intents = tuple((driver.paths.runtime_root / "wakeups" / "fire-intents").glob("*/*.json"))
+    intents = tuple((driver.paths.wakeup_root / "fire-intents").glob("*/*.json"))
     assert len(intents) == 1
     assert all(
         event["event_kind"] != "wake-noop-already-running" for event in scan_jsonl(event_path)
@@ -2973,19 +3227,21 @@ def test_scheduled_wake_not_before_guard_does_not_run_driver(tmp_path: Path) -> 
     class GuardedDriverFactory:
         """Return a driver that must not run before the episode guard."""
 
-        def __call__(self, _args: argparse.Namespace) -> CrawlerDriver:
+        def __call__(self, args: argparse.Namespace) -> CrawlerDriver:
             """Return the guarded driver."""
 
+            driver.config = replace(driver.config, wake_episode_id=str(args.wake_episode_id))
             return driver
 
     event_path = canonical_operational_ledger_path(driver.paths.ledgers.models)
     with JsonlLedger(event_path, OPERATIONAL_EVENT_SCHEMA_VERSION) as ledger:
         scheduled = WakeupManager(
-            driver.paths.runtime_root / "wakeups",
+            driver.paths.wakeup_root,
             ledger,
             ["python", "-m", "menagerie.crawler", "run", "--resume"],
             backend=WakeupBackend.CRON,
-            activator=lambda _definition: None,
+            installer=lambda _definition: None,
+            verifier=lambda _definition: True,
         ).record_pause_and_schedule(
             provider="openai",
             observed_response="quota exhausted",
@@ -3025,11 +3281,12 @@ def test_live_driver_ingests_scheduled_wake_intent_without_deactivation(tmp_path
     context = OperationalContext("driver-run", "test-machine", {"models": 1}, None)
     with JsonlLedger(event_path, OPERATIONAL_EVENT_SCHEMA_VERSION) as ledger:
         manager = WakeupManager(
-            driver.paths.runtime_root / "wakeups",
+            driver.paths.wakeup_root,
             ledger,
             ["python", "-m", "menagerie.crawler", "run", "--resume"],
             backend=WakeupBackend.CRON,
-            activator=lambda _definition: None,
+            installer=lambda _definition: None,
+            verifier=lambda _definition: True,
         )
         scheduled = manager.record_pause_and_schedule(
             provider="openai",
@@ -3050,11 +3307,12 @@ def test_live_driver_ingests_scheduled_wake_intent_without_deactivation(tmp_path
         assert cli_main(argv, driver_factory=LockedDriverFactory()) == 0
     with JsonlLedger(event_path, OPERATIONAL_EVENT_SCHEMA_VERSION) as ledger:
         manager = WakeupManager(
-            driver.paths.runtime_root / "wakeups",
+            driver.paths.wakeup_root,
             ledger,
             scheduled.episode.callback_argv,
             backend=WakeupBackend.CRON,
-            activator=lambda _definition: None,
+            installer=lambda _definition: None,
+            verifier=lambda _definition: True,
         )
         assert manager.ingest_fire_intents(context=context, created_at=NOW) == 1
         assert manager.projection.episodes[scheduled.episode.episode_id].active
@@ -3139,7 +3397,7 @@ def test_author_failure_without_source_is_honest_and_later_models_continue(
         for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
     }
     assert models[failed_id]["status"]["code"] == "failed:source"
-    assert models[failed_id]["status"]["reason_code"] == "missing-mandatory-link"
+    assert models[failed_id]["status"]["reason_code"] == "identity-unresolved"
     assert sum(record["status"]["code"] == "runs" for record in models.values()) == 19
     assert models[failed_id]["source_resolution"]["sources"] == []
     assert models[failed_id]["source_resolution"]["mandatory_link_status"] == "failed"
@@ -3213,7 +3471,7 @@ def test_mode_normalization_failure_terminalizes_and_continues(tmp_path: Path) -
         author=OneModelModeNormalizationFailure(failed_id),
     ).run()
 
-    assert result.status == "complete"
+    assert result.status == "terminal-partition-complete"
     models = {
         record["stable_id"]: record
         for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
@@ -3249,16 +3507,15 @@ def test_repair_author_failure_terminalizes_and_continues(tmp_path: Path) -> Non
 
 
 def test_checker_contract_failure_terminalizes_batch(tmp_path: Path) -> None:
-    """An invalid checker envelope records failed:accuracy-gate for every batch item."""
+    """An invalid checker envelope records a same-stage runner protocol failure."""
 
     snapshot = _snapshot(tmp_path)
     result = _driver(tmp_path, snapshot, checker=FailingMetadataChecker()).run()
-    # The requested human-review queue is active campaign work after terminalization.
-    assert result.status == "terminal-partition-complete"
+    assert result.status == "complete"
     models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
-    assert {record["status"]["code"] for record in models} == {"failed:accuracy-gate"}
-    assert {record["status"]["reason_code"] for record in models} == {"checker-contract-invalid"}
-    assert all(record["status"]["human_review"]["required"] for record in models)
+    assert {record["status"]["code"] for record in models} == {"failed:runner"}
+    assert {record["status"]["reason_code"] for record in models} == {"protocol-violation"}
+    assert all(not record["status"]["human_review"]["required"] for record in models)
 
 
 def test_human_requeue_consumes_grant_and_supersedes_failed_gate(tmp_path: Path) -> None:
@@ -3267,7 +3524,7 @@ def test_human_requeue_consumes_grant_and_supersedes_failed_gate(tmp_path: Path)
     snapshot = _snapshot(tmp_path)
     paths = _paths(tmp_path, snapshot)
     assert (
-        _driver(tmp_path, snapshot, checker=FailingMetadataChecker()).run().status
+        _driver(tmp_path, snapshot, checker=InaccurateChecker()).run().status
         == "terminal-partition-complete"
     )
     stable_id = snapshot.items[0].stable_id
@@ -3349,9 +3606,14 @@ def test_human_requeue_consumes_grant_and_supersedes_failed_gate(tmp_path: Path)
     )
 
     shutil.rmtree(paths.runtime_root)
-    with CanonicalReducer(
-        paths.ledgers, [intake.stable_id for intake in snapshot.items]
-    ) as rebuilt:
+    context = _test_authority_context(snapshot, _driver(tmp_path, snapshot).config)
+    context = replace(
+        context,
+        environment_generations={
+            "core": str(revisions[-1]["dependency_vector"]["environment_generation"])
+        },
+    )
+    with CanonicalReducer(paths.ledgers, context) as rebuilt:
         assert rebuilt.current_records[stable_id]["budget"]["explicit_grants"] == [grant_id]
 
 
@@ -3421,14 +3683,14 @@ def test_post_use_teardown_failure_preserves_pending_run_award(tmp_path: Path) -
         snapshot,
         checker=FakeChecker(quota=True),
         environments=environments,
-        pause_scheduler=FakePauseScheduler(tmp_path),
+        pause_scheduler=FakePauseScheduler(paths.wakeup_root),
     ).run()
     second = _driver(
         tmp_path,
         snapshot,
         checker=FakeChecker(quota=True),
         environments=environments,
-        pause_scheduler=FakePauseScheduler(tmp_path),
+        pause_scheduler=FakePauseScheduler(paths.wakeup_root),
     ).run()
 
     assert first.status == second.status == "paused:usage-limit"
@@ -3451,20 +3713,11 @@ def test_post_use_teardown_failure_preserves_pending_run_award(tmp_path: Path) -
 
 
 def test_checker_backoff_sees_driver_owned_mechanical_anchor_first(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
     """Pending R1/R2 execution starts only after its reconstruction transaction."""
 
     order: list[str] = []
-    original_promote = CrawlerDriver._promote_artifact
-
-    def tracking_promote(
-        driver: CrawlerDriver, item: WorkItem, artifact: AuthorArtifact
-    ) -> AuthorArtifact:
-        """Record the exact point at which the pending anchor is staged."""
-
-        order.append(f"anchor:{item.stable_id}")
-        return original_promote(driver, item, artifact)
 
     class BackoffAfterAnchor(FakeChecker):
         """Pause only after observing the driver-owned staging call."""
@@ -3478,7 +3731,8 @@ def test_checker_backoff_sees_driver_owned_mechanical_anchor_first(
             """Return quota backoff after the anchor-order assertion."""
 
             del work_root, config
-            assert order == [f"anchor:{artifacts[0].proposal['stable_id']}"]
+            assert artifacts[0].staged is not None
+            order.append(f"anchor:{artifacts[0].proposal['stable_id']}")
             return CheckerOutcome(
                 backoff=CheckerBackoffSignal(
                     CheckerPauseReason.QUOTA_EXHAUSTED,
@@ -3488,13 +3742,12 @@ def test_checker_backoff_sees_driver_owned_mechanical_anchor_first(
                 )
             )
 
-    monkeypatch.setattr(CrawlerDriver, "_promote_artifact", tracking_promote)
     snapshot = _snapshot(tmp_path, count=1)
     result = _driver(
         tmp_path,
         snapshot,
         checker=BackoffAfterAnchor(),
-        pause_scheduler=FakePauseScheduler(tmp_path),
+        pause_scheduler=FakePauseScheduler(_paths(tmp_path, snapshot).wakeup_root),
     ).run()
     model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[0]
 
@@ -3524,7 +3777,7 @@ def test_quarantine_terminalizes_new_work_identity_once_without_resume_loop(
     _write_jsonl(deferred, [])
     first_snapshot = create_intake_snapshot(master, deferred, tmp_path / "intake-first")
     environments = TeardownFailingEnvironments(tmp_path / "fake-envs")
-    pause_scheduler = FakePauseScheduler(tmp_path)
+    pause_scheduler = FakePauseScheduler(_paths(tmp_path, first_snapshot).wakeup_root)
     assert (
         _driver(
             tmp_path,
@@ -3546,19 +3799,19 @@ def test_quarantine_terminalizes_new_work_identity_once_without_resume_loop(
         ],
     )
     second_snapshot = create_intake_snapshot(master, deferred, tmp_path / "intake-second")
-    for _ in range(2):
-        assert (
-            _driver(
-                tmp_path,
-                second_snapshot,
-                checker=FakeChecker(quota=True),
-                environments=environments,
-                pause_scheduler=pause_scheduler,
-            )
-            .run()
-            .status
-            == "paused:usage-limit"
+    statuses = [
+        _driver(
+            tmp_path,
+            second_snapshot,
+            checker=FakeChecker(quota=True),
+            environments=environments,
+            pause_scheduler=pause_scheduler,
         )
+        .run()
+        .status
+        for _ in range(2)
+    ]
+    assert statuses == ["paused:usage-limit", "complete"]
 
     models = scan_jsonl(_paths(tmp_path, second_snapshot).ledgers.models)
     second_id = next(item.stable_id for item in second_snapshot.items if item.name == "Second")
@@ -3594,7 +3847,12 @@ def test_stale_forward_cache_work_id_regenerates_without_campaign_failure(tmp_pa
     author = FakeAuthor()
     driver = _driver(tmp_path, snapshot, author=author)
     item = driver._ordered_work(snapshot, {})[0]
-    artifact = author.author(item, driver.paths.work_root, driver.config)
+    artifact = author.author(
+        item,
+        driver.paths.work_root,
+        driver.config,
+        _test_authority_context(snapshot, driver.config),
+    )
     intent = driver.registry.intents[item.route.intent]
     prefix = tmp_path / "fake-envs" / intent.name
     prefix.mkdir(parents=True, exist_ok=True)
@@ -3650,13 +3908,19 @@ def test_transient_author_and_checker_infrastructure_retry_without_terminals(
             super().__init__()
             self.attempts = 0
 
-        def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+        def author(
+            self,
+            item: WorkItem,
+            work_root: Path,
+            config: DriverConfig,
+            context: AuthorityContext,
+        ) -> AuthorArtifact:
             """Fail the first process invocation only."""
 
             self.attempts += 1
             if self.attempts == 1:
                 raise FileNotFoundError("synthetic missing author CLI")
-            return super().author(item, work_root, config)
+            return super().author(item, work_root, config, context)
 
     class FlakyChecker(FakeChecker):
         """Raise one transport error before returning a valid metadata gate."""
@@ -3693,75 +3957,60 @@ def test_transient_author_and_checker_infrastructure_retry_without_terminals(
     assert [record["status"]["code"] for record in models] == ["runs"]
 
 
-def test_promotion_failure_terminalizes_model_and_continues_tail(
+def test_publication_failure_resumes_from_committed_authorization(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A deterministic publication error cannot block later accepted models."""
+    """A failed public write resumes from its committed capability without an award."""
 
     snapshot = _snapshot(tmp_path, count=2)
     failed_id = snapshot.items[0].stable_id
-    original = driver_module._promote_accepted_code
+    original = driver_module.publish_authorized_artifact
 
-    def fail_one_promotion(artifact: AuthorArtifact, paths: DriverPaths) -> AuthorArtifact:
-        """Fail publication for one stable ID and preserve the normal tail path."""
+    def fail_one_publication(staged: StagedArtifact, authorization: Any, **kwargs: Any) -> Any:
+        """Fail the authorized writer for one stable ID and preserve the tail."""
 
-        if artifact.proposal["stable_id"] == failed_id:
-            raise DriverIntegrationError("synthetic deterministic promotion failure")
-        return original(artifact, paths)
+        if staged.event["stable_id"] == failed_id:
+            raise DriverIntegrationError("synthetic deterministic publication failure")
+        return original(staged, authorization, **kwargs)
 
-    monkeypatch.setattr(driver_module, "_promote_accepted_code", fail_one_promotion)
-    result = _driver(tmp_path, snapshot).run()
+    monkeypatch.setattr(driver_module, "publish_authorized_artifact", fail_one_publication)
+    with pytest.raises(DriverIntegrationError, match="synthetic deterministic publication"):
+        _driver(tmp_path, snapshot).run()
 
-    assert result.status == "complete"
-    models = {
-        record["stable_id"]: record
-        for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
-    }
-    assert models[failed_id]["status"]["code"] == "failed:runner"
-    assert models[failed_id]["status"]["reason_code"] == "protocol-violation"
+    paths = _paths(tmp_path, snapshot)
+    assert not scan_jsonl(paths.ledgers.models)
+    first_events = scan_jsonl(paths.ledgers.artifacts)
     assert any(
-        stable_id != failed_id and record["status"]["code"] == "runs"
-        for stable_id, record in models.items()
+        event["stable_id"] == failed_id and event["event_kind"] == "publication-authorized"
+        for event in first_events
+    )
+    assert not any(
+        event["stable_id"] == failed_id and event["event_kind"] == "published"
+        for event in first_events
     )
 
+    monkeypatch.setattr(driver_module, "publish_authorized_artifact", original)
+    result = _driver(tmp_path, snapshot).run()
+    assert result.status == "complete"
+    assert {
+        record["stable_id"]: record["status"]["code"] for record in scan_jsonl(paths.ledgers.models)
+    } == {item.stable_id: "runs" for item in snapshot.items}
 
-def test_private_deferral_avoids_public_promotion(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+
+def test_private_deferral_avoids_public_promotion(tmp_path: Path) -> None:
     """A valid private disposition remains private while entering its terminal lane."""
 
     snapshot = _snapshot(tmp_path, count=1)
-    driver = _driver(tmp_path, snapshot)
-    item = driver._ordered_work(snapshot, {})[0]
-    base = FakeAuthor().author(item, driver.paths.work_root, driver.config)
-    base.proposal["proposed_facts"]["licenses"]["redistribution_class"] = "restricted-private"
-    artifact = AuthorArtifact(
-        base.proposal,
-        base.source_manifest,
-        base.model_dir,
-        terminal_status="deferred:needs-cuda",
-        terminal_detail="private source proves an unavoidable CUDA operator",
-        defer_evidence={
-            "target_status": "deferred:needs-cuda",
-            "source_ids": ["source-1"],
-            "probe_attempt_ids": [],
-            "explanation": "private source proves an unavoidable CUDA operator",
-        },
-    )
+    result = _driver(tmp_path, snapshot, author=TerminalOutcomeAuthor()).run()
 
-    def reject_publication(*_args: Any, **_kwargs: Any) -> AuthorArtifact:
-        """Trip if private bytes reach either public promotion function."""
-
-        raise AssertionError("private deferral reached public promotion")
-
-    monkeypatch.setattr(driver_module, "_promote_accepted_code", reject_publication)
-    monkeypatch.setattr(
-        driver_module,
-        "_promote_and_publish_accepted_artifact",
-        reject_publication,
-    )
-
-    assert driver._promote_artifact(item, artifact) is artifact
+    assert result.status == "complete"
+    paths = _paths(tmp_path, snapshot)
+    assert scan_jsonl(paths.ledgers.models)[0]["status"]["code"] == "deferred:needs-cuda"
+    event_kinds = {event["event_kind"] for event in scan_jsonl(paths.ledgers.artifacts)}
+    assert {"staged-private", "terminal-authorized", "private-committed"} <= event_kinds
+    assert "public-committed" not in event_kinds
+    public_root = paths.runtime_root / "mirrors" / "public"
+    assert not public_root.exists() or not any(public_root.rglob("*"))
 
 
 def test_transient_fidelity_checker_infrastructure_retries(tmp_path: Path) -> None:
@@ -3835,11 +4084,17 @@ def test_skip_and_evidenced_deferral_use_driver_terminalization(tmp_path: Path) 
         "deferred:needs-cuda",
         "skipped:no-description",
     }
-    deferral_attempt = next(
-        record for record in scan_jsonl(paths.ledgers.attempts) if record["defer_evidence"]
-    )
-    assert deferral_attempt["defer_evidence"]["target_status"] == "deferred:needs-cuda"
-    assert deferral_attempt["result"] == "observed"
+    assert scan_jsonl(paths.ledgers.attempts) == []
+    assert {gate["gate_kind"] for gate in scan_jsonl(paths.ledgers.gates)} == {
+        "terminal_disposition"
+    }
+    artifact_events = scan_jsonl(paths.ledgers.artifacts)
+    assert {event["event_kind"] for event in artifact_events} >= {
+        "staged-private",
+        "private-committed",
+        "terminal-authorized",
+    }
+    assert all(event["event_kind"] != "public-committed" for event in artifact_events)
 
 
 def test_cached_terminal_artifacts_follow_same_terminal_branch_on_resume(tmp_path: Path) -> None:
@@ -3880,7 +4135,7 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(tmp_path: 
         "deferred:needs-x86",
     }
 
-    linux_author = DisabledAuthor()
+    linux_author = FakeAuthor()
     linux_forward = FakeForward()
     dependencies = DriverDependencies(
         linux_author,
@@ -3905,19 +4160,17 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(tmp_path: 
     )
     result = linux.run()
     assert result.status == "complete"
+    assert set(linux_author.calls) == {item.stable_id for item in snapshot.items}
     assert set(linux_forward.calls) == {item.stable_id for item in snapshot.items}
     revisions = scan_jsonl(paths.ledgers.models)
     assert len(revisions) == 4
     deferred_by_id = {record["stable_id"]: record for record in deferred}
-    current = CanonicalReducer(paths.ledgers, (item.stable_id for item in snapshot.items))
-    try:
-        assert {record["status"]["code"] for record in current.current_records.values()} == {"runs"}
-        assert all(
-            record["parent_revision"] == deferred_by_id[stable_id]["record_revision"]
-            for stable_id, record in current.current_records.items()
-        )
-    finally:
-        current.close()
+    superseding = revisions[-len(snapshot.items) :]
+    assert {record["status"]["code"] for record in superseding} == {"runs"}
+    assert all(
+        record["parent_revision"] == deferred_by_id[str(record["stable_id"])]["record_revision"]
+        for record in superseding
+    )
 
 
 def test_linux_only_status_cli_and_config_are_closed() -> None:

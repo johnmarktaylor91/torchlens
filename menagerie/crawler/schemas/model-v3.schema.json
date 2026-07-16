@@ -816,11 +816,13 @@
           "description": "Mandatory meaningful modes."
         },
         "train_eval_divergence": {
-          "enum": [
-            "none",
-            "statistical",
-            "structural"
-          ],
+      "enum": [
+        "none",
+        "statistical",
+        "structural",
+        "unverifiable",
+        "not-applicable"
+      ],
           "description": "Mandatory train eval divergence."
         }
       }
@@ -2519,7 +2521,9 @@
           "enum": [
             "none",
             "statistical",
-            "structural"
+            "structural",
+            "unverifiable",
+            "not-applicable"
           ],
           "description": "Mandatory train eval divergence."
         },

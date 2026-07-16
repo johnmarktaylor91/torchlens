@@ -28,7 +28,7 @@ from menagerie.crawler.mirrors import (
     RetentionClass,
 )
 from menagerie.crawler.status import checkpoint_consistency_report, completeness_report
-from menagerie.crawler.tests.conftest import make_model
+from menagerie.crawler.tests.conftest import make_authority_context, make_model
 from menagerie.crawler.tests.test_checkpoint_transaction import RecordingGit, _clean_state
 
 
@@ -61,7 +61,7 @@ def test_external_record_traceback_and_stdio_are_license_sensitive() -> None:
     """Generated JSON cannot auto-attest unclassified third-party source text."""
 
     record = {
-        "schema_version": "menagerie.crawler.attempt.v2",
+        "schema_version": "menagerie.crawler.attempt.v3",
         "supervisor": {
             "stdout_tail": "restricted source bytes printed by dependency",
             "stderr_tail": "",
@@ -106,9 +106,10 @@ def test_checkpoint_accepts_only_explicit_local_diagnostic_redactions() -> None:
             "stdout_tail": redaction,
             "stderr_tail": "",
             "stdout_completion_line": (
-                "MENAGERIE_WORKER_COMPLETION_V1 "
-                f'{{"proof":"sha256:{"c" * 64}",'
-                f'"receipt_sha256":"sha256:{"d" * 64}"}}'
+                "MENAGERIE_WORKER_COMPLETION_V3 "
+                f'{{"raw_award_receipt_sha256":"sha256:{"c" * 64}",'
+                '"request_nonce":"nonce-test",'
+                f'"request_sha256":"sha256:{"d" * 64}"}}'
             ),
         },
         "error": None,
@@ -477,6 +478,11 @@ def test_canonical_checkpoint_accepts_honest_terminal_nonruns(
         tmp_path,
         snapshot.root,
         mirrors=mirrors,
+        authority_context=make_authority_context(
+            (item.stable_id for item in snapshot.items),
+            snapshot_id=snapshot.snapshot_id,
+            snapshot_sha256=snapshot.snapshot_sha256,
+        ),
         branch="menagerie/crawler-pipeline",
         git_runner=RecordingGit(),
     )

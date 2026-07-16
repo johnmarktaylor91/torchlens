@@ -1288,6 +1288,46 @@ def _staged_from_event(event: Mapping[str, Any]) -> StagedArtifact:
     )
 
 
+def staged_artifact_for_result(
+    ledger: ArtifactEventLedger,
+    *,
+    stable_id: str,
+    work_id: str,
+    author_result_id: str,
+) -> Optional[StagedArtifact]:
+    """Recover exact private custody for an append-only anchored author result.
+
+    Parameters
+    ----------
+    ledger:
+        Validated canonical artifact-event ledger.
+    stable_id, work_id, author_result_id:
+        Exact immutable result association to recover.
+
+    Returns
+    -------
+    StagedArtifact | None
+        Typed custody handle for the unique staged event, if present.
+
+    Raises
+    ------
+    ArtifactTransitionError
+        If the ledger contains multiple staged roots for the same result binding.
+    """
+
+    matches = tuple(
+        event
+        for event in ledger.events
+        if event.get("event_kind") == ArtifactEventKind.STAGED_PRIVATE.value
+        and event.get("stable_id") == stable_id
+        and event.get("work_id") == work_id
+        and event.get("author_result_id") == author_result_id
+    )
+    if len(matches) > 1:
+        raise ArtifactTransitionError("author result has multiple private-custody roots")
+    return _staged_from_event(matches[0]) if matches else None
+
+
 def stage_private_artifact(
     artifacts: Sequence[ArtifactInput],
     *,
@@ -2378,8 +2418,9 @@ def validate_artifact_checkpoint(
     Raises
     ------
     ArtifactCheckpointError
-        If a transaction is incomplete, a reconstruction is mutable/missing, an
-        object or claim conflicts, or physical inventory has an orphan.
+        If a finalized transaction is incomplete, a reconstruction is mutable/missing,
+        an object or claim conflicts, or physical inventory has an orphan. A sole
+        ``staged-private`` event is durable pending custody and is checkpoint-valid.
     """
 
     events = _load_events(artifact_ledger_paths)
@@ -2390,6 +2431,22 @@ def validate_artifact_checkpoint(
     custody_claims: dict[ArtifactClaimId, ArtifactClaim] = {}
     accepted_claims: dict[ArtifactClaimId, ArtifactClaim] = {}
     for transaction_id, chain in by_transaction.items():
+        if len(chain) == 1 and chain[0]["event_kind"] == ArtifactEventKind.STAGED_PRIVATE.value:
+            for row in chain[0]["objects"]:
+                obj = _parse_object(row)
+                if obj.mirror_class != MirrorClass.PRIVATE.value:
+                    raise ArtifactCheckpointError(
+                        f"pending custody object is not private: {obj.object_id}"
+                    )
+                previous_object = object_rows.setdefault(obj.object_id, obj)
+                if previous_object != obj:
+                    raise ArtifactCheckpointError(f"intrinsic object collision: {obj.object_id}")
+            for row in chain[0]["claims"]:
+                claim = _parse_claim(row)
+                previous_claim = custody_claims.setdefault(claim.claim_id, claim)
+                if previous_claim != claim:
+                    raise ArtifactCheckpointError(f"custody claim collision: {claim.claim_id}")
+            continue
         if len(chain) != 4 or chain[-1]["event_kind"] not in {
             ArtifactEventKind.PUBLISHED.value,
             ArtifactEventKind.PRIVATE_COMMITTED.value,

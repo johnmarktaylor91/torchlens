@@ -14,7 +14,6 @@ import pytest
 from menagerie.crawler import worker_supervisor
 from menagerie.crawler.constants import FailureStage
 from menagerie.crawler.driver import (
-    AuthorArtifact,
     EnvironmentBinding,
     _attempt_policy_satisfied,
     _attempts_from_supervised,
@@ -24,7 +23,7 @@ from menagerie.crawler.driver import (
 from menagerie.crawler.identity import compute_recipe_revision, hash_bytes
 from menagerie.crawler.policy import SandboxUnavailableError, detect_os_sandbox
 from menagerie.crawler.proposal import ProposalValidationError, validate_author_proposal
-from menagerie.crawler.tests.conftest import HASH, make_author_proposal
+from menagerie.crawler.tests.conftest import HASH, make_author_proposal, make_proposed_artifact
 from menagerie.crawler.tests.test_slice_d_proposal_author import _ground_proposal, _make_r4
 from menagerie.crawler.worker_supervisor import supervise_worker
 
@@ -138,7 +137,7 @@ def test_caught_os_sandbox_denial_poisons_successful_forward_receipt(tmp_path: P
         compiler_identity="test-compiler",
         sdk_identity="test-sdk",
     )
-    artifact = AuthorArtifact(proposal, {"sources": []}, tmp_path)
+    artifact = make_proposed_artifact(proposal, {"sources": []}, tmp_path)
     attempts = _attempts_from_supervised(
         artifact,
         result,

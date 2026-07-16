@@ -36,6 +36,8 @@ from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.reducer import CanonicalReducer, ReductionError
 from menagerie.crawler.tests.conftest import (
     HASH,
+    make_authority_context,
+    make_attempt,
     make_author_proposal,
     make_gate,
     make_model,
@@ -528,8 +530,9 @@ def test_reducer_refuses_run_award_with_inaccurate_rung_check(tmp_path: Path) ->
         }
     )
 
-    with CanonicalReducer(_ledger_paths(tmp_path), stable_ids) as reducer:
+    with CanonicalReducer(_ledger_paths(tmp_path), make_authority_context(stable_ids)) as reducer:
+        reducer.append_attempt(make_attempt())
         reducer.append_gate(metadata_gate)
         reducer.append_gate(fidelity_gate)
         with pytest.raises(ReductionError, match="rung check"):
-            reducer.append_model(model)
+            reducer.append_model(reducer.prepare_model(model))

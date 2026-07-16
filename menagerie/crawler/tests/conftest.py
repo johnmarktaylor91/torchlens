@@ -8,18 +8,30 @@ from typing import Any, Optional
 
 import pytest
 
+from menagerie.crawler.author_dispatch import AuthorResultBinding, ProposedAuthorResult
+from menagerie.crawler.authority import (
+    AuthorityContext,
+    build_authority_context,
+    completion_line_for_raw_award_receipt,
+    derive_parent_attestation,
+    raw_award_receipt_sha256,
+)
 from menagerie.crawler.constants import (
-    ATTEMPT_SCHEMA_VERSION,
-    AUTHOR_PROPOSAL_SCHEMA_VERSION,
-    GATE_SCHEMA_VERSION,
-    MODEL_SCHEMA_VERSION,
+    ATTEMPT_SCHEMA_VERSION_V3 as ATTEMPT_SCHEMA_VERSION,
+    AUTHOR_PROPOSAL_SCHEMA_VERSION_V3 as AUTHOR_PROPOSAL_SCHEMA_VERSION,
+    AUTHOR_PROMPT_NAME,
+    CHECKER_PROMPT_NAME,
+    GATE_SCHEMA_VERSION_V3 as GATE_SCHEMA_VERSION,
+    MODEL_SCHEMA_VERSION_V3 as MODEL_SCHEMA_VERSION,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
+    SourceRung,
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.metadata import (
     authored_fact_leaves,
     recompute_accepted_identities,
 )
+from menagerie.crawler.proposal import ProposalValidationReport
 from menagerie.crawler.standard_inputs import ASSET_ROOT
 
 HASH = "sha256:" + "a" * 64
@@ -44,17 +56,51 @@ _FACT_KEYS = (
 )
 
 
+def make_authority_context(
+    stable_ids: Any,
+    *,
+    snapshot_id: str = "snapshot-test",
+    snapshot_sha256: str = HASH,
+) -> AuthorityContext:
+    """Build the mandatory production-shaped authority context for tests.
+
+    Parameters
+    ----------
+    stable_ids:
+        Iterable of stable model identifiers admitted by the synthetic intake.
+    snapshot_id, snapshot_sha256:
+        Exact synthetic or materialized intake snapshot identity.
+
+    Returns
+    -------
+    AuthorityContext
+        Context derived from exact shipped contract bytes and synthetic intake rows.
+    """
+
+    rows = tuple({"stable_id": str(stable_id)} for stable_id in stable_ids)
+    return build_authority_context(
+        active_intake_snapshot_id=snapshot_id,
+        active_intake_snapshot_sha256=snapshot_sha256,
+        intake_rows=rows,
+        author_model="claude",
+        author_version="test",
+        checker_model="codex",
+        checker_version="test",
+        environment_generations={"env-test": HASH},
+    )
+
+
 def _checker_prompt_hash() -> str:
     """Return the exact frozen checker prompt byte hash used by fixtures."""
 
-    path = Path(__file__).parents[1] / "prompts" / "codex_accuracy_checker_v2.txt"
+    path = Path(__file__).parents[1] / "prompts" / f"{CHECKER_PROMPT_NAME}.txt"
     return hash_bytes(path.read_bytes())
 
 
 def _author_prompt_hash() -> str:
     """Return the exact frozen author prompt byte hash used by fixtures."""
 
-    path = Path(__file__).parents[1] / "prompts" / "claude_crawler_author_v2.txt"
+    path = Path(__file__).parents[1] / "prompts" / f"{AUTHOR_PROMPT_NAME}.txt"
     return hash_bytes(path.read_bytes())
 
 
@@ -72,6 +118,7 @@ def _bind_model_identities(model: dict[str, Any]) -> None:
         checker_prompt_hash=_checker_prompt_hash(),
         checker_model="codex",
         checker_version="test",
+        schema_version=MODEL_SCHEMA_VERSION,
     )
     model["evidence"]["evidence_identity"] = identities.evidence
     model["implementation"]["recipe_revision"] = identities.recipe
@@ -82,6 +129,7 @@ def _bind_model_identities(model: dict[str, Any]) -> None:
         checker_prompt_hash=_checker_prompt_hash(),
         checker_model="codex",
         checker_version="test",
+        schema_version=MODEL_SCHEMA_VERSION,
     )
     model["implementation"]["recipe_revision"] = identities.recipe
     model["accuracy_gate"]["vet_identity"] = identities.vet
@@ -184,7 +232,7 @@ def make_attempt(
             "receipt_sha256": HASH,
             "observed_recipe_revision": HASH,
             "observed_adapter_sha256": None,
-            "observed_code_manifest_sha256": None,
+            "observed_code_manifest_sha256": HASH,
             "observed_input_asset_sha256": hash_bytes((ASSET_ROOT / "image.ppm").read_bytes()),
             "constructor_started": True,
             "constructor_completed": True,
@@ -270,6 +318,7 @@ def make_attempt(
         checker_prompt_hash=_checker_prompt_hash(),
         checker_model="codex",
         checker_version="test",
+        schema_version=MODEL_SCHEMA_VERSION,
     )
     model["identities"].update(
         {
@@ -279,10 +328,23 @@ def make_attempt(
             "checker_prompt": _checker_prompt_hash(),
         }
     )
-    model["worker_receipt"]["observed_recipe_revision"] = identities.recipe
-    completion_line = (
-        f'MENAGERIE_WORKER_COMPLETION_V1 {{"proof":"{HASH}","receipt_sha256":"{HASH}"}}'
-    )
+    receipt = model["worker_receipt"]
+    receipt["receipt_sha256"] = None
+    receipt["observed_recipe_revision"] = identities.recipe
+    raw_receipt = {
+        "receipt_version": "menagerie.crawler.raw-award-receipt.v3",
+        "request_nonce": f"nonce-{attempt_id}",
+        "request_sha256": HASH,
+        "stable_id": stable_id,
+        "work_id": f"work-{stable_id}",
+        "execution_identity": execution_identity,
+        "recipe_revision": identities.recipe,
+        "code_manifest_identity": HASH,
+        "input_identity": hash_bytes((ASSET_ROOT / "image.ppm").read_bytes()),
+        "requested_mode": mode,
+        "observation": deepcopy(receipt),
+    }
+    completion_line = completion_line_for_raw_award_receipt(raw_receipt)
     completion_bytes = (completion_line + "\n").encode("utf-8")
     observation = model["supervisor_observation"]
     observation["stdout_sha256"] = hash_bytes(completion_bytes)
@@ -290,17 +352,19 @@ def make_attempt(
     # The public record keeps only the parent-attested TorchLens marker; arbitrary
     # worker stdout belongs in the gitignored local diagnostic sidecar.
     observation["stdout_completion_line"] = completion_line
-    model["worker_receipt"]["receipt_sha256"] = stable_hash(
+    model.update(
         {
-            "version": "menagerie.crawler.parent-success-attestation.v1",
-            "completion_line": completion_line,
-            "exit_code": observation["exit_code"],
-            "signal": observation["signal"],
-            "wall_seconds": observation["wall_seconds"],
-            "cpu_seconds": observation["cpu_seconds"],
-            "peak_rss_bytes": observation["peak_rss_bytes"],
-            "stdout_sha256": observation["stdout_sha256"],
-            "stderr_sha256": observation["stderr_sha256"],
+            "execution_read_manifest_identity": HASH,
+            "raw_award_receipt": raw_receipt,
+            "raw_award_receipt_sha256": raw_award_receipt_sha256(raw_receipt),
+            "parent_attestation": derive_parent_attestation(
+                raw_receipt,
+                completion_line,
+                observation,
+                started_at=NOW,
+                finished_at=NOW,
+            ),
+            "unattested_partial": None,
         }
     )
     return model
@@ -397,6 +461,62 @@ def make_failed_attempt(
             "stderr_bytes": 0,
             "full_log_local_path": "driver-observed",
         }
+    )
+    attempt["raw_award_receipt"] = None
+    attempt["raw_award_receipt_sha256"] = None
+    parent_attestation = {
+        "attestation_version": "menagerie.crawler.parent-attestation.v2",
+        "request_nonce": f"driver-{attempt_id}",
+        "request_sha256": HASH,
+        "completion_line_sha256": None,
+        "named_raw_award_receipt_sha256": None,
+        "exit_code": None,
+        "signal": None,
+        "timed_out": False,
+        "rss_exceeded": False,
+        "peak_rss_bytes": 0,
+        "stdout_sha256": hash_bytes(b""),
+        "stderr_sha256": hash_bytes(b""),
+        "started_at": NOW,
+        "finished_at": NOW,
+    }
+    parent_attestation["attestation_sha256"] = stable_hash(parent_attestation)
+    attempt["parent_attestation"] = parent_attestation
+    attempt["unattested_partial"] = None
+    return attempt
+
+
+def rebind_attempt_raw_proof(attempt: dict[str, Any]) -> dict[str, Any]:
+    """Rebuild exact raw receipt and parent proof after a test mutates an attempt."""
+
+    receipt = attempt["worker_receipt"]
+    raw_receipt = {
+        "receipt_version": "menagerie.crawler.raw-award-receipt.v3",
+        "request_nonce": f"nonce-{attempt['attempt_id']}",
+        "request_sha256": HASH,
+        "stable_id": attempt["stable_id"],
+        "work_id": attempt["work_id"],
+        "execution_identity": attempt["identities"]["execution"],
+        "recipe_revision": attempt["identities"]["recipe"],
+        "code_manifest_identity": receipt["observed_code_manifest_sha256"],
+        "input_identity": receipt["observed_input_asset_sha256"] or HASH,
+        "requested_mode": attempt["mode"],
+        "observation": deepcopy(receipt),
+    }
+    line = completion_line_for_raw_award_receipt(raw_receipt)
+    completion_bytes = (line + "\n").encode("utf-8")
+    supervisor = attempt["supervisor_observation"]
+    supervisor["stdout_completion_line"] = line
+    supervisor["stdout_sha256"] = hash_bytes(completion_bytes)
+    supervisor["stdout_bytes"] = len(completion_bytes)
+    attempt["raw_award_receipt"] = raw_receipt
+    attempt["raw_award_receipt_sha256"] = raw_award_receipt_sha256(raw_receipt)
+    attempt["parent_attestation"] = derive_parent_attestation(
+        raw_receipt,
+        line,
+        supervisor,
+        started_at=str(attempt["started_at"]),
+        finished_at=str(attempt["finished_at"]),
     )
     return attempt
 
@@ -500,7 +620,9 @@ def make_gate(
                         "reason": "supported",
                         "required_repair": None,
                     }
-                    for field in authored_fact_leaves(_model_facts(model))
+                    for field in authored_fact_leaves(
+                        _model_facts(model), schema_version=MODEL_SCHEMA_VERSION
+                    )
                 ],
                 "fidelity": {
                     "required": fidelity_required,
@@ -520,6 +642,7 @@ def make_gate(
                 "unsupported_claims": [],
                 "required_repairs": [],
                 "confidence": "high",
+                "terminal_disposition": None,
             }
         )
     proposal = {
@@ -541,6 +664,8 @@ def make_gate(
         },
         "items": items,
         "result_envelope_sha256": HASH,
+        "author_result_schema_identity": HASH,
+        "dispatcher_identity": HASH,
     }
     return proposal
 
@@ -592,7 +717,7 @@ def make_model(
     Returns
     -------
     dict[str, Any]
-        Complete model.v2 payload.
+        Complete model.v3 payload with syntactically valid reducer-owned authority fields.
     """
 
     source = {
@@ -993,8 +1118,53 @@ def make_model(
                 else [status_code]
             ),
         },
+        "dependency_vector": {
+            "intake_snapshot_id": "snapshot-1",
+            "intake_snapshot_sha256": HASH,
+            "intake_item_sha256": HASH,
+            "author_result_schema_identity": "pending-untrusted",
+            "author_dispatcher_identity": "pending-untrusted",
+            "author_prompt_identity": "pending-untrusted",
+            "checker_prompt_identity": "pending-untrusted",
+            "terminal_rule_identity": "pending-untrusted",
+            "status_proof_identity": "pending-untrusted",
+            "source_manifest_identity": "pending-untrusted",
+            "proposal_identity": "pending-untrusted",
+            "author_result_identity": "pending-untrusted",
+            "checker_gate_identity": "pending-untrusted",
+            "recipe_revision": HASH,
+            "runner_identity": "pending-untrusted",
+            "award_closure_identity": "pending-untrusted",
+            "environment_generation": HASH,
+            "artifact_transaction_id": "not-applicable",
+            "representative_revision": "not-applicable",
+            "publication_policy_identity": "pending-untrusted",
+            "accepted_attempt_ids": [attempt_id],
+            "artifact_claim_ids": [],
+        },
+        "artifact_authority": {
+            "state": "not-applicable",
+            "transaction_id": "not-applicable",
+            "committed_event_id": "not-applicable",
+            "authorization_id": "not-applicable",
+            "reconstruction_sha256": "not-applicable",
+            "claim_ids": [],
+        },
+        "family_authority": {
+            "binding_state": "ordinary",
+            "representative_stable_id": stable_id,
+            "representative_revision": "not-applicable",
+            "representative_gate_id": "not-applicable",
+            "representative_proposal_id": "not-applicable",
+            "variant_token": "not-applicable",
+            "template_source_revision": "not-applicable",
+            "derivation_rule_identity": "not-applicable",
+        },
     }
     if accepted:
+        model["evidence"]["excerpts"][0]["supports"] = list(
+            authored_fact_leaves(_model_facts(model), schema_version=MODEL_SCHEMA_VERSION)
+        )
         _bind_model_identities(model)
     return model
 
@@ -1010,7 +1180,7 @@ def make_author_proposal(stable_id: str = "m_example") -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        Complete author-proposal.v2 payload.
+        Complete author-proposal.v3 payload.
     """
 
     model = make_model(stable_id, accepted=True)
@@ -1035,7 +1205,13 @@ def make_author_proposal(stable_id: str = "m_example") -> dict[str, Any]:
         "proposal_id": "proposal-1",
         "proposal_sha256": HASH,
         "work_id": f"work-{stable_id}",
+        "campaign_id": f"campaign-{stable_id}",
         "stable_id": stable_id,
+        "intake_snapshot_id": "snapshot-test",
+        "intake_snapshot_sha256": HASH,
+        "intake_item_sha256": stable_hash({"stable_id": stable_id}),
+        "source_manifest_identity": HASH,
+        "dispatcher_identity": HASH,
         "created_at": NOW,
         "author": {
             "provider": "anthropic",
@@ -1062,6 +1238,7 @@ def make_author_proposal(stable_id: str = "m_example") -> dict[str, Any]:
         checker_prompt_hash=_checker_prompt_hash(),
         checker_model="codex",
         checker_version="current",
+        schema_version=MODEL_SCHEMA_VERSION,
     )
     proposal.update(
         {
@@ -1076,6 +1253,39 @@ def make_author_proposal(stable_id: str = "m_example") -> dict[str, Any]:
         {key: value for key, value in proposal.items() if key != "proposal_sha256"}
     )
     return proposal
+
+
+def make_proposed_artifact(
+    proposal: dict[str, Any], source_manifest: dict[str, Any], model_dir: Path
+) -> Any:
+    """Wrap an injected proposal in the mandatory typed author-result arm."""
+
+    from menagerie.crawler.driver import AuthorArtifact  # noqa: PLC0415
+
+    raw_result = {
+        "result_id": f"result-{proposal['stable_id']}",
+        "result_sha256": HASH,
+        "stable_id": proposal["stable_id"],
+        "work_id": proposal["work_id"],
+        "campaign_id": proposal.get("campaign_id", proposal["work_id"]),
+        "author_identity": HASH,
+        "prompt_identity": HASH,
+        "dispatcher_identity": HASH,
+        "source_manifest_identity": source_manifest.get("manifest_sha256", HASH),
+        "intake_snapshot_id": proposal.get("intake_snapshot_id", "snapshot-test"),
+        "intake_snapshot_sha256": proposal.get("intake_snapshot_sha256", HASH),
+        "intake_item_sha256": proposal.get("intake_item_sha256", HASH),
+        "created_at": proposal.get("created_at", NOW),
+    }
+    binding = AuthorResultBinding(raw_result=raw_result, **raw_result)
+    report = ProposalValidationReport(
+        stable_id=str(proposal["stable_id"]),
+        rung=SourceRung(str(proposal["proposed_facts"]["source_resolution"]["rung"])),
+        code_path=None,
+        supported_claims=frozenset(),
+    )
+    result = ProposedAuthorResult(binding=binding, proposal=proposal, validation_report=report)
+    return AuthorArtifact(result, source_manifest, model_dir)
 
 
 def make_operational_event() -> dict[str, Any]:
