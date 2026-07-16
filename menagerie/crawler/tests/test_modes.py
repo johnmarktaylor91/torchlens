@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+import numpy as np
 import torch
 
 from menagerie.crawler.constants import RunMode
@@ -60,6 +63,18 @@ class _ShapeBranchModel(torch.nn.Module):
         return value if self.training else value[:, :1]
 
 
+@dataclass(frozen=True)
+class _StablePayload:
+    """Supported structured output used by the stable-encoding fixture."""
+
+    label: str
+    values: tuple[int, ...]
+
+
+class _AddressBearingOutput:
+    """Unsupported output whose default repr contains a process address."""
+
+
 def test_modes_classify_none_statistical_and_structural() -> None:
     """Captured outputs distinguish equality, value drift, and shape drift."""
 
@@ -110,12 +125,26 @@ def test_independent_mode_receipts_recover_all_divergence_classes() -> None:
             "output_value_sha256": output_value_sha256(value),
         }
 
-    assert classify_observed_mode_receipts(receipt(train), receipt(equal)).classification == "none"
-    assert (
-        classify_observed_mode_receipts(receipt(train), receipt(drifted)).classification
-        == "statistical"
-    )
-    assert (
-        classify_observed_mode_receipts(receipt(train), receipt(reshaped)).classification
-        == "structural"
-    )
+    equal_result = classify_observed_mode_receipts(receipt(train), receipt(equal))
+    drifted_result = classify_observed_mode_receipts(receipt(train), receipt(drifted))
+    reshaped_result = classify_observed_mode_receipts(receipt(train), receipt(reshaped))
+    assert equal_result is not None and equal_result.classification == "none"
+    assert drifted_result is not None and drifted_result.classification == "statistical"
+    assert reshaped_result is not None and reshaped_result.classification == "structural"
+
+
+def test_output_value_digest_is_stable_for_supported_structures_and_endianness() -> None:
+    """Mapping order, dataclasses, and machine byte order do not perturb the digest."""
+
+    little = np.array([1, 2, 3], dtype="<i4")
+    big = np.array([1, 2, 3], dtype=">i4")
+    left = {"array": little, "payload": _StablePayload("x", (1, 2))}
+    right = {"payload": _StablePayload("x", (1, 2)), "array": big}
+    assert output_value_sha256(left) == output_value_sha256(right)
+
+
+def test_output_value_digest_rejects_object_arrays_and_unsupported_leaves() -> None:
+    """No address-bearing repr or Python object-array fallback enters a stable digest."""
+
+    assert output_value_sha256(_AddressBearingOutput()) is None
+    assert output_value_sha256(np.array([_AddressBearingOutput()], dtype=object)) is None

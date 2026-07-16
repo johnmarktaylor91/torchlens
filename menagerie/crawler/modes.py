@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import inspect
-from dataclasses import dataclass
+import struct
+from dataclasses import dataclass, fields, is_dataclass
 from typing import Any, Mapping, Optional, Sequence
 
 import numpy as np
@@ -156,8 +157,8 @@ def _to_numpy(value: object) -> Optional[np.ndarray[Any, Any]]:
             return np.asarray(numpy_method())
         except (TypeError, ValueError, RuntimeError):
             return None
-    if isinstance(current, np.ndarray):
-        return current
+    if isinstance(current, (np.ndarray, np.generic)):
+        return np.asarray(current)
     return None
 
 
@@ -182,8 +183,188 @@ def _flatten(value: object) -> list[object]:
     return [value]
 
 
-def output_value_sha256(value: object) -> str:
-    """Hash exact output leaf values without retaining model payloads.
+class _UnstableOutputValue(TypeError):
+    """Raised internally when an output has no process-independent encoding."""
+
+
+def _frame(tag: bytes, payload: bytes) -> bytes:
+    """Frame one stable output value without ambiguous concatenation.
+
+    Parameters
+    ----------
+    tag:
+        Closed semantic type tag.
+    payload:
+        Stable value bytes.
+
+    Returns
+    -------
+    bytes
+        Length-delimited type and payload bytes.
+    """
+
+    return struct.pack(">I", len(tag)) + tag + struct.pack(">Q", len(payload)) + payload
+
+
+def _type_name(value: object) -> str:
+    """Return the stable qualified Python type name for a structured value.
+
+    Parameters
+    ----------
+    value:
+        Value whose type participates in an encoding.
+
+    Returns
+    -------
+    str
+        Module-qualified type name.
+    """
+
+    return f"{type(value).__module__}.{type(value).__qualname__}"
+
+
+def _stable_array_bytes(array: np.ndarray[Any, Any]) -> bytes:
+    """Encode a non-object NumPy array in canonical little-endian C order.
+
+    Parameters
+    ----------
+    array:
+        Array converted from a supported tensor or supplied directly.
+
+    Returns
+    -------
+    bytes
+        Versioned dtype, shape, and exact value bytes.
+
+    Raises
+    ------
+    _UnstableOutputValue
+        If the array contains Python objects.
+    """
+
+    if array.dtype.hasobject:
+        raise _UnstableOutputValue("object arrays have no stable output encoding")
+    contiguous = np.ascontiguousarray(array)
+    byteorder = contiguous.dtype.byteorder
+    if byteorder == ">" or (byteorder == "=" and not np.little_endian):
+        contiguous = contiguous.byteswap().view(contiguous.dtype.newbyteorder("<"))
+    elif byteorder == "=":
+        contiguous = contiguous.view(contiguous.dtype.newbyteorder("<"))
+    dtype = contiguous.dtype.str.encode("ascii")
+    shape = b"".join(struct.pack(">q", int(dimension)) for dimension in contiguous.shape)
+    payload = (
+        _frame(b"dtype", dtype)
+        + _frame(b"rank", struct.pack(">I", contiguous.ndim))
+        + _frame(b"shape", shape)
+        + _frame(b"data", contiguous.tobytes(order="C"))
+    )
+    return _frame(b"array-v2", payload)
+
+
+def _stable_output_bytes(value: object, active: set[int]) -> bytes:
+    """Recursively encode one explicitly supported output value.
+
+    Parameters
+    ----------
+    value:
+        Output value or nested child.
+    active:
+        Object identities on the active recursion path.
+
+    Returns
+    -------
+    bytes
+        Process-independent type-tagged bytes.
+
+    Raises
+    ------
+    _UnstableOutputValue
+        If a leaf is unsupported, cyclic, or otherwise unstable.
+    """
+
+    array = _to_numpy(value)
+    if array is not None:
+        return _stable_array_bytes(array)
+    if value is None:
+        return _frame(b"none", b"")
+    if isinstance(value, bool):
+        return _frame(b"bool", b"1" if value else b"0")
+    if isinstance(value, int):
+        return _frame(b"int", str(value).encode("ascii"))
+    if isinstance(value, float):
+        return _frame(b"float64", struct.pack(">d", value))
+    if isinstance(value, complex):
+        return _frame(b"complex128", struct.pack(">dd", value.real, value.imag))
+    if isinstance(value, str):
+        return _frame(b"utf8", value.encode("utf-8"))
+    if isinstance(value, bytes):
+        return _frame(b"bytes", value)
+
+    identity = id(value)
+    if identity in active:
+        raise _UnstableOutputValue("cyclic outputs have no stable output encoding")
+    active.add(identity)
+    try:
+        if is_dataclass(value) and not isinstance(value, type):
+            encoded_fields = b"".join(
+                _frame(
+                    field.name.encode("utf-8"),
+                    _stable_output_bytes(getattr(value, field.name), active),
+                )
+                for field in fields(value)
+            )
+            return _frame(
+                b"dataclass-v1",
+                _frame(b"type", _type_name(value).encode("utf-8"))
+                + _frame(b"fields", encoded_fields),
+            )
+        named_fields = getattr(type(value), "_fields", None)
+        if (
+            isinstance(value, tuple)
+            and isinstance(named_fields, tuple)
+            and all(isinstance(name, str) for name in named_fields)
+        ):
+            encoded_fields = b"".join(
+                _frame(name.encode("utf-8"), _stable_output_bytes(getattr(value, name), active))
+                for name in named_fields
+            )
+            return _frame(
+                b"namedtuple-v1",
+                _frame(b"type", _type_name(value).encode("utf-8"))
+                + _frame(b"fields", encoded_fields),
+            )
+        if isinstance(value, Mapping):
+            encoded_items: list[tuple[bytes, bytes]] = []
+            for key, child in value.items():
+                encoded_key = _stable_output_bytes(key, active)
+                encoded_items.append((encoded_key, _stable_output_bytes(child, active)))
+            encoded_items.sort(key=lambda item: item[0])
+            if any(
+                encoded_items[index - 1][0] == encoded_items[index][0]
+                for index in range(1, len(encoded_items))
+            ):
+                raise _UnstableOutputValue("mapping keys collide under stable output encoding")
+            payload = b"".join(
+                _frame(b"key", key) + _frame(b"value", child) for key, child in encoded_items
+            )
+            return _frame(b"mapping-v1", payload)
+        if isinstance(value, tuple):
+            return _frame(
+                b"tuple-v1",
+                b"".join(_frame(b"item", _stable_output_bytes(child, active)) for child in value),
+            )
+        if isinstance(value, list):
+            return _frame(
+                b"list-v1",
+                b"".join(_frame(b"item", _stable_output_bytes(child, active)) for child in value),
+            )
+    finally:
+        active.remove(identity)
+    raise _UnstableOutputValue(f"unsupported output leaf type: {_type_name(value)}")
+
+
+def output_value_sha256(value: object) -> Optional[str]:
+    """Hash exact output values using a versioned stable encoder.
 
     Parameters
     ----------
@@ -193,26 +374,17 @@ def output_value_sha256(value: object) -> str:
 
     Returns
     -------
-    str
-        Domain-separated SHA-256 over ordered leaf types, shapes, dtypes, and bytes.
+    str | None
+        Domain-separated SHA-256, or ``None`` when any leaf lacks an explicitly
+        supported process-independent representation.
     """
 
-    digest = hashlib.sha256(b"menagerie-output-values-v1\0")
-    for leaf in _flatten(value):
-        array = _to_numpy(leaf)
-        if array is not None:
-            contiguous = np.ascontiguousarray(array)
-            header = (f"array\0{contiguous.dtype.str}\0{tuple(contiguous.shape)!r}\0").encode(
-                "utf-8"
-            )
-            digest.update(header)
-            if contiguous.dtype.hasobject:
-                digest.update(repr(contiguous.tolist()).encode("utf-8"))
-            else:
-                digest.update(contiguous.tobytes(order="C"))
-            continue
-        leaf_type = f"{type(leaf).__module__}.{type(leaf).__qualname__}"
-        digest.update(f"python\0{leaf_type}\0{leaf!r}\0".encode("utf-8"))
+    try:
+        encoded = _stable_output_bytes(value, set())
+    except _UnstableOutputValue:
+        return None
+    digest = hashlib.sha256(b"menagerie-output-values-v2\0")
+    digest.update(encoded)
     return f"sha256:{digest.hexdigest()}"
 
 
@@ -274,7 +446,9 @@ def _leaf_equal(left: object, right: object) -> bool:
             return bool(equality)
     except (TypeError, ValueError, RuntimeError):
         pass
-    return repr(left) == repr(right)
+    left_digest = output_value_sha256(left)
+    right_digest = output_value_sha256(right)
+    return left_digest is not None and left_digest == right_digest
 
 
 def classify_train_eval_divergence(
