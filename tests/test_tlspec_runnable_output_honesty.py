@@ -298,14 +298,24 @@ def test_r7_nonreconstructable_class_output_is_unverifiable_or_rejected(
 
 @pytest.mark.parametrize("kind", ["namedtuple", "dataclass", "hf_model_output"])
 def test_r7_reconstructable_class_output_round_trips_verified(kind: str, tmp_path: Path) -> None:
-    """Class outputs with replay-safe metadata rebuild exactly without divergence."""
+    """Class outputs with replay-safe metadata rebuild exactly without divergence.
+
+    r27-B2: a custom-``__init__`` ``hf_model_output`` (``_R7ModelOutput`` defines its OWN
+    ``__init__``) is honest fail-closed to UNVERIFIABLE -- its constructor cannot be proven
+    side-effect-free from the type without INVOKING it (the RCE surface). The output still
+    RECONSTRUCTS faithfully; only the honesty verdict is downgraded. ``namedtuple`` / ``dataclass``
+    outputs (no custom constructor to distrust) stay VERIFIED.
+    """
 
     model = _R7ContainerOutputModel(kind, 7)
     x = torch.tensor([1.0, 2.0])
     result = _roundtrip(model, x, tmp_path / f"{kind}_faithful.tlspec")
     live = model(x)
 
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    if kind == "hf_model_output":
+        assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    else:
+        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert type(result.output) is type(live)
     assert result.output.meta == 7
     assert torch.equal(result.output.value, live.value)
