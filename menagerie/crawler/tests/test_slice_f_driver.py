@@ -7,7 +7,6 @@ import json
 import shutil
 import subprocess
 import sys
-import threading
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -19,7 +18,10 @@ import menagerie.crawler.checkpoint as checkpoint_module
 import menagerie.crawler.driver as driver_module
 import menagerie.crawler.reducer as reducer_module
 from menagerie.crawler.checker_dispatch import CheckerBackoffSignal
-from menagerie.crawler.checkpoint import _externally_controlled_record_text
+from menagerie.crawler.checkpoint import (
+    _externally_controlled_record_text,
+    canonical_operational_ledger_path,
+)
 from menagerie.crawler.cli import build_parser, main as cli_main
 from menagerie.crawler.constants import (
     CheckerPauseReason,
@@ -92,6 +94,7 @@ from menagerie.crawler.wakeup import (
     OperationalContext,
     WakeupBackend,
     WakeupManager,
+    reduce_wake_episodes,
 )
 from menagerie.crawler.worker_supervisor import (
     SupervisedResult,
@@ -2641,7 +2644,10 @@ def test_quota_pause_awards_pending_runs_then_metadata_supersedes(tmp_path: Path
     assert len(attempts) == 2 * len(snapshot.items)
     assert set(forward.calls) == {item.stable_id for item in snapshot.items}
     events = scan_jsonl(paths.operational_ledger)
-    assert [event["event_kind"] for event in events] == ["usage-pause", "wakeup"]
+    assert [event["event_kind"] for event in events] == [
+        "usage-pause",
+        "wakeup-installed",
+    ]
 
     resumed_forward = FakeForward()
     resumed = _driver(tmp_path, snapshot, forward=resumed_forward).run()
@@ -2907,7 +2913,7 @@ def test_driver_failure_diagnostics_are_sidecar_only_and_checkpoint_safe(
 
 
 def test_scheduled_wake_live_lock_is_idempotent_success(tmp_path: Path) -> None:
-    """A scheduled wake records one canonical no-op and exits zero under a live lock."""
+    """A lock-contended scheduled wake fsyncs one bucket intent and exits zero."""
 
     snapshot = _snapshot(tmp_path, count=1)
     driver = _driver(tmp_path, snapshot)
@@ -2922,30 +2928,84 @@ def test_scheduled_wake_live_lock_is_idempotent_success(tmp_path: Path) -> None:
 
     factory = LockedDriverFactory()
 
+    event_path = canonical_operational_ledger_path(driver.paths.ledgers.models)
+    with JsonlLedger(event_path, OPERATIONAL_EVENT_SCHEMA_VERSION) as ledger:
+        scheduled = WakeupManager(
+            driver.paths.runtime_root / "wakeups",
+            ledger,
+            ["python", "-m", "menagerie.crawler", "run", "--resume"],
+            backend=WakeupBackend.CRON,
+            activator=lambda _definition: None,
+        ).record_pause_and_schedule(
+            provider="openai",
+            observed_response="quota exhausted",
+            reset_at=NOW,
+            context=OperationalContext("driver-run", "test-machine", {"models": 1}, None),
+            created_at=NOW,
+        )
     argv = [
         "--repo-root",
         str(tmp_path),
         "run",
         "--scheduled-wake",
-        "--scheduled-wake-id",
-        "wake-identity-1",
-        "--scheduled-wake-at",
-        NOW,
+        "--wake-episode-id",
+        scheduled.episode.episode_id,
     ]
     with DriverLock(driver.paths.lock_path, {"pid": 1}):
         assert cli_main(argv, driver_factory=factory) == 0
         assert cli_main(argv, driver_factory=factory) == 0
-    events = scan_jsonl(
-        paths := driver.paths.ledgers.models.parent / "operational" / "events.jsonl"
+    intents = tuple((driver.paths.runtime_root / "wakeups" / "fire-intents").glob("*/*.json"))
+    assert len(intents) == 1
+    assert all(
+        event["event_kind"] != "wake-noop-already-running" for event in scan_jsonl(event_path)
     )
-    assert paths.is_file()
-    noops = [event for event in events if event["event_kind"] == "wake-noop-already-running"]
-    assert len(noops) == 1
-    assert noops[0]["details"]["wake_id"] == "wake-identity-1"
 
 
-def test_scheduled_wake_retries_live_canonical_ledger_writer(tmp_path: Path) -> None:
-    """A wake losing both locks waits for the tiny idempotent no-op append and exits zero."""
+def test_scheduled_wake_not_before_guard_does_not_run_driver(tmp_path: Path) -> None:
+    """An early recurring callback remains active and exits before driver work."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    driver = _driver(tmp_path, snapshot)
+
+    class GuardedDriverFactory:
+        """Return a driver that must not run before the episode guard."""
+
+        def __call__(self, _args: argparse.Namespace) -> CrawlerDriver:
+            """Return the guarded driver."""
+
+            return driver
+
+    event_path = canonical_operational_ledger_path(driver.paths.ledgers.models)
+    with JsonlLedger(event_path, OPERATIONAL_EVENT_SCHEMA_VERSION) as ledger:
+        scheduled = WakeupManager(
+            driver.paths.runtime_root / "wakeups",
+            ledger,
+            ["python", "-m", "menagerie.crawler", "run", "--resume"],
+            backend=WakeupBackend.CRON,
+            activator=lambda _definition: None,
+        ).record_pause_and_schedule(
+            provider="openai",
+            observed_response="quota exhausted",
+            reset_at="2099-01-01T00:00:00Z",
+            context=OperationalContext("driver-run", "test-machine", {"models": 1}, None),
+            created_at=NOW,
+        )
+    argv = [
+        "--repo-root",
+        str(tmp_path),
+        "run",
+        "--scheduled-wake",
+        "--wake-episode-id",
+        scheduled.episode.episode_id,
+    ]
+    assert cli_main(argv, driver_factory=GuardedDriverFactory()) == 0
+    assert scan_jsonl(driver.paths.ledgers.models) == []
+    projection = reduce_wake_episodes(scan_jsonl(event_path))
+    assert projection.episodes[scheduled.episode.episode_id].active
+
+
+def test_live_driver_ingests_scheduled_wake_intent_without_deactivation(tmp_path: Path) -> None:
+    """The single writer turns a contention intent into visible fire/no-op facts."""
 
     snapshot = _snapshot(tmp_path, count=1)
     driver = _driver(tmp_path, snapshot)
@@ -2958,39 +3018,48 @@ def test_scheduled_wake_retries_live_canonical_ledger_writer(tmp_path: Path) -> 
 
             return driver
 
+    event_path = canonical_operational_ledger_path(driver.paths.ledgers.models)
+    context = OperationalContext("driver-run", "test-machine", {"models": 1}, None)
+    with JsonlLedger(event_path, OPERATIONAL_EVENT_SCHEMA_VERSION) as ledger:
+        manager = WakeupManager(
+            driver.paths.runtime_root / "wakeups",
+            ledger,
+            ["python", "-m", "menagerie.crawler", "run", "--resume"],
+            backend=WakeupBackend.CRON,
+            activator=lambda _definition: None,
+        )
+        scheduled = manager.record_pause_and_schedule(
+            provider="openai",
+            observed_response="quota exhausted",
+            reset_at=NOW,
+            context=context,
+            created_at=NOW,
+        )
     argv = [
         "--repo-root",
         str(tmp_path),
         "run",
         "--scheduled-wake",
-        "--scheduled-wake-id",
-        "wake-ledger-race",
-        "--scheduled-wake-at",
-        NOW,
+        "--wake-episode-id",
+        scheduled.episode.episode_id,
     ]
-    event_path = driver.paths.ledgers.models.parent / "operational" / "events.jsonl"
-    ledger = JsonlLedger(event_path, OPERATIONAL_EVENT_SCHEMA_VERSION)
-
-    def release_live_writer() -> None:
-        """Release the simulated driver's short canonical append lock."""
-
-        time.sleep(0.15)
-        ledger.close()
-
-    release = threading.Thread(target=release_live_writer)
-    release.start()
-    try:
-        with DriverLock(driver.paths.lock_path, {"pid": 1}):
-            assert cli_main(argv, driver_factory=LockedDriverFactory()) == 0
-            assert cli_main(argv, driver_factory=LockedDriverFactory()) == 0
-    finally:
-        ledger.close()
-        release.join(timeout=2)
-
-    events = scan_jsonl(event_path)
-    noops = [event for event in events if event["event_kind"] == "wake-noop-already-running"]
-    assert len(noops) == 1
-    assert noops[0]["event_id"] == "wake-noop-wake-ledger-race"
+    with DriverLock(driver.paths.lock_path, {"pid": 1}):
+        assert cli_main(argv, driver_factory=LockedDriverFactory()) == 0
+    with JsonlLedger(event_path, OPERATIONAL_EVENT_SCHEMA_VERSION) as ledger:
+        manager = WakeupManager(
+            driver.paths.runtime_root / "wakeups",
+            ledger,
+            scheduled.episode.callback_argv,
+            backend=WakeupBackend.CRON,
+            activator=lambda _definition: None,
+        )
+        assert manager.ingest_fire_intents(context=context, created_at=NOW) == 1
+        assert manager.projection.episodes[scheduled.episode.episode_id].active
+    kinds = [event["event_kind"] for event in scan_jsonl(event_path)]
+    assert kinds.count("wakeup-fired") == 1
+    assert kinds.count("wake-noop-already-running") == 1
+    assert "usage-resume" not in kinds
+    assert "wakeup-deactivated" not in kinds
 
 
 def test_empty_milestones_and_missing_notifier_never_block(tmp_path: Path) -> None:
