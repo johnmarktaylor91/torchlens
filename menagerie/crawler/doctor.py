@@ -19,7 +19,12 @@ from menagerie.crawler.policy import (
     build_safe_environment,
     static_source_check,
 )
-from menagerie.crawler.wakeup import WakeupConfigurationError, detect_wakeup_backend
+from menagerie.crawler.recordio import scan_jsonl
+from menagerie.crawler.wakeup import (
+    WakeupConfigurationError,
+    detect_wakeup_backend,
+    inspect_wakeup_definitions,
+)
 
 GIB = 1024**3
 
@@ -107,7 +112,7 @@ class DoctorProbes(Protocol):
         ...
 
     def wakeup_available(self) -> bool:
-        """Return whether a ruled one-shot wakeup backend exists."""
+        """Return whether a recurring backend and all active projections are healthy."""
 
         ...
 
@@ -255,13 +260,24 @@ class SystemDoctorProbes:
         return {"offline": offline, "socket": socket_ok, "write-audit": write_ok}
 
     def wakeup_available(self) -> bool:
-        """Feature-detect a ruled one-shot scheduler backend."""
+        """Verify a ruled recurring backend and every active episode projection."""
 
         try:
-            detect_wakeup_backend()
-        except WakeupConfigurationError:
+            backend = detect_wakeup_backend()
+            events = scan_jsonl(
+                self.config.repo_root
+                / "menagerie"
+                / "crawler"
+                / "records"
+                / "operational"
+                / "events.jsonl"
+            )
+            inspection = inspect_wakeup_definitions(
+                self.config.runtime_root / "wakeups", events, backend
+            )
+        except (OSError, WakeupConfigurationError):
             return False
-        return True
+        return inspection.healthy
 
     def torchlens_import_violations(self) -> tuple[str, ...]:
         """Statically scan every execution adapter/port Python source."""
@@ -332,7 +348,13 @@ def run_doctor(config: DoctorConfig, probes: DoctorProbes | None = None) -> Doct
             tripwires.get(name) is True,
             "tripwire self-test failed",
         )
-    _record(checks, failures, "wakeup", active.wakeup_available(), "no wakeup mechanism available")
+    _record(
+        checks,
+        failures,
+        "wakeup",
+        active.wakeup_available(),
+        "recurring backend unavailable or active wake episode needs repair",
+    )
     violations = active.torchlens_import_violations()
     _record(
         checks,

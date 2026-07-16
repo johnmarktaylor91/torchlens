@@ -13,6 +13,7 @@ from menagerie.crawler.models import (
     JsonObject,
     PartitionReport,
 )
+from menagerie.crawler.wakeup import reduce_wake_episodes, render_wakeup_status
 
 
 class PartitionError(ValueError):
@@ -21,6 +22,23 @@ class PartitionError(ValueError):
 
 class StatusCompletenessError(ValueError):
     """Raised when a terminal status omits its closed required evidence."""
+
+
+def wakeup_status(events: Sequence[Mapping[str, Any]]) -> JsonObject:
+    """Render usage-pause episode state from canonical operational events.
+
+    Parameters
+    ----------
+    events:
+        Canonical operational events in ledger order.
+
+    Returns
+    -------
+    dict[str, Any]
+        Active/history wake status from the shared episode reducer.
+    """
+
+    return render_wakeup_status(reduce_wake_episodes(events))
 
 
 def _records(

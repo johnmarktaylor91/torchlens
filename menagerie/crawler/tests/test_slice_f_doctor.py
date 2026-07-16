@@ -105,6 +105,7 @@ def test_doctor_passes_clean_preflight(tmp_path: Path) -> None:
             {"offline": True, "socket": False, "write-audit": True},
             "policy:socket",
         ),
+        ("wakeup_ok", False, "wakeup"),
         ("violations", ("adapters/bad.py",), "torchlens-import-ban"),
     ],
 )
