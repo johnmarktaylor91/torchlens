@@ -565,16 +565,29 @@ def _runtime_input_metadata_value(value: torch.Tensor, name: str) -> Any:
     """Evaluate one recorded metadata predicate on the RAW bound runtime input.
 
     Evaluated on the user-provided tensor BEFORE the defensive detach-clone, which
-    erases ``requires_grad`` and may normalize layout -- the capture-time read saw the
-    forward's real input, so the comparison must too.
+    erases the autograd state (``requires_grad`` / ``grad_fn`` / ``is_leaf``) and resets
+    ``storage_offset`` -- the capture-time read saw the forward's real input, so the
+    comparison must too. ``grad_fn`` is compared as a PRESENCE boolean (the exact backward
+    object is not comparable across runs), mirroring the capture-time recording.
     """
 
-    if name == "is_contiguous":
-        return bool(value.is_contiguous())
-    if name == "stride":
-        return [int(v) for v in value.stride()]
-    if name == "requires_grad":
-        return bool(value.requires_grad)
+    try:
+        if name == "is_contiguous":
+            return bool(value.is_contiguous())
+        if name == "stride":
+            return [int(v) for v in value.stride()]
+        if name == "storage_offset":
+            return int(value.storage_offset())
+        if name == "requires_grad":
+            return bool(value.requires_grad)
+        if name == "grad_fn":
+            return bool(value.grad_fn is not None)
+        if name == "is_leaf":
+            return bool(value.is_leaf)
+        if name == "storage_nbytes":
+            return int(value.untyped_storage().nbytes())
+    except (RuntimeError, AttributeError, TypeError, ValueError):
+        return None
     return None
 
 
