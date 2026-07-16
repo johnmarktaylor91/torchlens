@@ -183,15 +183,23 @@ def _name_has_dunder_walk(name: str) -> bool:
     ``__builtins__`` the builtins, and ``__dict__`` / ``__class__`` / ``__reduce__``
     / ``__subclasses__`` / ``__mro__`` / ``__base__`` the reflective pivots. A
     LEGITIMATE pickled global name is a module-level class/function qualname -- at
-    most an ``Outer.Inner`` nested-class dotted qualname -- and NEVER contains a
-    dunder segment, so any dot-separated segment beginning with ``__`` is a walk
-    vector and is refused. Used to gate the trusted-foreign branch, where the
-    resolved-real-module denylist recheck is defeated by a resolved module-globals
-    mapping (a ``dict`` has no ``__module__``, so the recheck falls back to the
-    non-denied pickled module).
+    most an ``Outer.Inner`` nested-class dotted qualname -- so any dunder segment is
+    a walk vector and is refused, EXCEPT a small allowlist of provably-inert
+    introspection dunders (``__name__`` / ``__doc__`` / ``__qualname__``) that
+    resolve to a plain ``str``/``None`` and cannot pivot into globals/builtins/reduce
+    machinery. (A trusted appliance recipe legitimately reads e.g.
+    ``torchlens.neuro.__name__``; the resolved-mapping backstop below still catches
+    any dict/globals escape the name check does not.) Used to gate the trusted-foreign
+    branch, where the resolved-real-module denylist recheck is defeated by a resolved
+    module-globals mapping (a ``dict`` has no ``__module__``, so the recheck falls back
+    to the non-denied pickled module).
     """
 
-    return any(segment.startswith("__") for segment in name.split("."))
+    inert_introspection_dunders = {"__name__", "__doc__", "__qualname__"}
+    return any(
+        segment.startswith("__") and segment not in inert_introspection_dunders
+        for segment in name.split(".")
+    )
 
 
 # torch I/O / serialization / packaging / jit TYPE denylist.

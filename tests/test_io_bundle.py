@@ -1158,7 +1158,10 @@ def test_unified_load_rejects_symlinked_bundle_path(tmp_path: Path) -> None:
     link_path = tmp_path / "bundle_link.tlspec"
     link_path.symlink_to(bundle_path, target_is_directory=True)
 
-    with pytest.raises(TorchLensIOError, match="Refusing symlinked bundle path"):
+    # r29 F-r28-1: a symlinked bundle path is now rejected earlier, at
+    # format-detection, so match the symlink-refusal point-agnostically -- the
+    # assertion still verifies a symlinked bundle directory is refused.
+    with pytest.raises(TorchLensIOError, match="Refusing symlinked"):
         load(link_path)
 
 
