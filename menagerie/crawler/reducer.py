@@ -14,6 +14,14 @@ from menagerie.crawler.constants import (
     MODEL_SCHEMA_VERSION,
     TERMINAL_STATUS_CODES,
 )
+from menagerie.crawler.env_lifecycle import (
+    EnvironmentExactnessError,
+    EnvironmentProbeError,
+    materialized_environment_generation,
+    parse_probe_receipt_bytes,
+    parse_resolved_export,
+)
+from menagerie.crawler.envs import EnvironmentSpecError, load_environment_registry
 from menagerie.crawler.family_templates import FamilyTemplateError, validate_size_variant
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.intake import legacy_requires_fidelity_audit
@@ -593,12 +601,90 @@ class CanonicalReducer:
             raise ReductionError("observed environment facts require exact artifact digests")
         elif observation.get("stdout_sha256") is None or observation.get("stderr_sha256") is None:
             raise ReductionError("an observed subprocess requires exact stream-byte digests")
+        if environment is not None:
+            self._validate_environment_generation(attempt)
         if attempt.get("result") == "succeeded" and (
             receipt.get("observed_recipe_revision") != identities.get("recipe")
             or "observed_adapter_sha256" not in receipt
         ):
             raise ReductionError("successful worker receipt lacks current observed recipe bindings")
         return self._attempts.append(attempt)
+
+    def _validate_environment_generation(self, attempt: Mapping[str, Any]) -> None:
+        """Recompute production environment identity from committed exact artifacts.
+
+        Parameters
+        ----------
+        attempt:
+            Candidate attempt carrying observed environment and generation facts.
+
+        Raises
+        ------
+        ReductionError
+            If a canonical campaign attempt is not backed by exact committed bytes.
+        """
+
+        records_root = self.ledger_paths.models.parent.parent
+        canonical_root = records_root.parent
+        production_layout = (
+            records_root.name == "records"
+            and canonical_root.name == "crawler"
+            and canonical_root.parent.name == "menagerie"
+        )
+        if not production_layout:
+            return
+        environment = attempt.get("environment")
+        identities = attempt.get("identities")
+        if not isinstance(environment, Mapping) or not isinstance(identities, Mapping):
+            raise ReductionError("environment generation facts are malformed")
+        family = environment.get("family")
+        target = environment.get("target")
+        if not isinstance(family, str) or not isinstance(target, str):
+            raise ReductionError("environment generation lacks family/target")
+        try:
+            registry = load_environment_registry(canonical_root / "envs", target=target)
+            intent = registry.intents[family]
+            lock_bytes = intent.lock.lock_path.read_bytes()
+            export_bytes = intent.lock.export_path.read_bytes()
+            export_hash = intent.lock.export_hash_path.read_text(encoding="utf-8").strip()
+            receipt_path = intent.lock.lock_path.with_name(f"{target}.probes.json")
+            probe_results = parse_probe_receipt_bytes(intent.probes, receipt_path.read_bytes())
+            package_bytes = parse_resolved_export(export_bytes)
+            generation = materialized_environment_generation(
+                intent,
+                lock_bytes=lock_bytes,
+                export_bytes=export_bytes,
+                package_bytes=package_bytes,
+                python_version=str(environment.get("python")),
+                compiler_identity=str(environment.get("compiler_identity")),
+                sdk_identity=str(environment.get("sdk_identity")),
+                probe_results=probe_results,
+            )
+        except (
+            KeyError,
+            OSError,
+            UnicodeError,
+            EnvironmentSpecError,
+            EnvironmentExactnessError,
+            EnvironmentProbeError,
+        ) as exc:
+            raise ReductionError(
+                "observed environment lacks exact committed generation artifacts"
+            ) from exc
+        if (
+            environment.get("lock_sha256") != hash_bytes(lock_bytes)
+            or environment.get("resolved_export_sha256") != hash_bytes(export_bytes)
+            or environment.get("packages_manifest_sha256") != hash_bytes(package_bytes)
+            or export_hash != hash_bytes(export_bytes)
+            or identities.get("environment") != generation
+        ):
+            raise ReductionError(
+                "observed environment generation is stale or self-attested: "
+                f"expected={generation}, observed={identities.get('environment')}, "
+                f"lock={environment.get('lock_sha256') == hash_bytes(lock_bytes)}, "
+                f"export={environment.get('resolved_export_sha256') == hash_bytes(export_bytes)}, "
+                f"packages={environment.get('packages_manifest_sha256') == hash_bytes(package_bytes)}"
+            )
 
     def append_gate(self, gate: Mapping[str, Any]) -> AppendResult:
         """Append one immutable checker gate after intake/integrity checks.
@@ -1038,6 +1124,7 @@ class CanonicalReducer:
             or proposal.get("stable_id") != model.get("stable_id")
         ):
             raise ReductionError("pending metadata run proposal identity is stale")
+        self._validate_pending_reconstruction_anchor(model, proposal)
         proposed_facts = proposal.get("proposed_facts")
         if not isinstance(proposed_facts, Mapping):
             raise ReductionError("pending metadata run proposal facts are incomplete")
@@ -1079,6 +1166,57 @@ class CanonicalReducer:
             or model.get("implementation", {}).get("recipe_revision") != identities.recipe
         ):
             raise ReductionError("pending metadata mechanical identities are stale")
+
+    def _validate_pending_reconstruction_anchor(
+        self, model: Mapping[str, Any], proposal: Mapping[str, Any]
+    ) -> None:
+        """Bind a production pending run to its exact canonical reconstruction.
+
+        Parameters
+        ----------
+        model, proposal:
+            Candidate pending model and its explicitly retained untrusted proposal.
+
+        Raises
+        ------
+        ReductionError
+            If canonical reconstruction bytes do not match the proposal being appended.
+        """
+
+        records_root = self.ledger_paths.models.parent.parent
+        canonical_root = records_root.parent
+        production_layout = (
+            records_root.name == "records"
+            and canonical_root.name == "crawler"
+            and canonical_root.parent.name == "menagerie"
+        )
+        if not production_layout:
+            return
+        from menagerie.crawler.checkpoint import (  # noqa: PLC0415
+            ReconstructionValidationError,
+            validate_canonical_reconstruction,
+        )
+
+        stable_id = str(model.get("stable_id"))
+        prefix = stable_id.removeprefix("m_")[:2] or "__"
+        reconstruction = canonical_root / "reconstruction" / prefix / f"{stable_id}.json"
+        candidate_current = {**self._current, stable_id: dict(model)}
+        try:
+            validated = validate_canonical_reconstruction(
+                reconstruction,
+                canonical_root,
+                expected_stable_id=stable_id,
+                canonical_gates=self._gates.records,
+                current_models=candidate_current,
+            )
+        except (OSError, ReconstructionValidationError) as exc:
+            raise ReductionError(
+                "pending metadata run lacks an exact canonical reconstruction anchor"
+            ) from exc
+        if validated.proposal != dict(proposal):
+            raise ReductionError(
+                "pending metadata run proposal differs from canonical reconstruction"
+            )
 
     def _is_fidelity_repair_failure(self, model: Mapping[str, Any]) -> bool:
         """Return whether a runner terminal is an evidenced fidelity-repair failure.

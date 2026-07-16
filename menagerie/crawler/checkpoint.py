@@ -18,6 +18,14 @@ from menagerie.crawler.constants import (
     OperationalEventKind,
     OperationalEventStatus,
 )
+from menagerie.crawler.env_lifecycle import (
+    EnvironmentExactnessError,
+    EnvironmentProbeError,
+    materialized_environment_generation,
+    parse_exact_lock,
+    parse_probe_receipt_bytes,
+    parse_resolved_export,
+)
 from menagerie.crawler.envs import EnvironmentSpecError, load_environment_registry
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.intake import IntakeError, load_intake_snapshot
@@ -1265,12 +1273,20 @@ def _derive_mirror_facts(
     public_artifacts: list[LicensedArtifact] = []
     license_inventory: list[LicensedArtifact] = []
     manifests: list[ArtifactManifest] = []
+    seen_paths: dict[Path, str] = {}
     for name in _CANONICAL_MANIFEST_NAMES:
         path = manifest_root / name
         if not path.is_file():
             raise CheckpointValidationError(f"missing canonical mirror manifest: {path}")
         for row in scan_jsonl(path, validate=False):
             artifact = _licensed_artifact(row)
+            digest = artifact.decision.content_sha256
+            previous = seen_paths.get(artifact.staged_path)
+            if previous is not None:
+                raise CheckpointValidationError(
+                    "canonical mirror manifests contain a duplicate staged path"
+                )
+            seen_paths[artifact.staged_path] = digest
             license_inventory.append(artifact)
             manifests.append(artifact.manifest)
             if name == "public-manifest.jsonl":
@@ -1610,22 +1626,9 @@ def _validate_lock_package_hashes(path: Path, content: bytes) -> None:
     ):
         raise SecretBearingPath(f"generated metadata contains a private/credential URL: {path}")
     try:
-        lines = content.decode("utf-8").splitlines()
-    except UnicodeDecodeError as exc:
-        raise CheckpointValidationError(f"environment lock is not UTF-8: {path}") from exc
-    packages = [
-        line.strip()
-        for line in lines
-        if line.strip() and not line.lstrip().startswith(("#", "@EXPLICIT"))
-    ]
-    if not packages:
-        raise CheckpointValidationError(f"environment lock has no package entries: {path}")
-    invalid = [line for line in packages if _LOCK_HASH_PATTERN.search(line.lower()) is None]
-    if invalid:
-        raise CheckpointValidationError(
-            "environment lock package entry lacks a canonical SHA-256 artifact hash: "
-            f"{path} entry={invalid[0]!r}"
-        )
+        parse_exact_lock(content)
+    except EnvironmentExactnessError as exc:
+        raise CheckpointValidationError(f"invalid exact environment lock {path}: {exc}") from exc
 
 
 def _validate_environment_candidates(
@@ -1655,7 +1658,14 @@ def _validate_environment_candidates(
     environment_candidates = frozenset(
         path for path in candidates if path == env_relative or path.is_relative_to(env_relative)
     )
+    attempt_rows: list[JsonObject] = []
+    for attempt_path in sorted((canonical_root / "records" / "attempts").glob("*.jsonl")):
+        attempt_rows.extend(scan_jsonl(attempt_path))
     if not environment_candidates:
+        if any(isinstance(row.get("environment"), Mapping) for row in attempt_rows):
+            raise CheckpointValidationError(
+                "observed environments require committed exact registry artifacts"
+            )
         return frozenset()
     try:
         baseline = load_environment_registry(env_root)
@@ -1685,10 +1695,8 @@ def _validate_environment_candidates(
                 target_names.add(path.name.removesuffix(".resolved.sha256"))
             elif path.suffix == ".lock":
                 target_names.add(path.stem)
-
-    attempt_rows: list[JsonObject] = []
-    for attempt_path in sorted((canonical_root / "records" / "attempts").glob("*.jsonl")):
-        attempt_rows.extend(scan_jsonl(attempt_path))
+            elif path.name.endswith(".probes.json"):
+                target_names.add(path.name.removesuffix(".probes.json"))
 
     for target in sorted(target_names):
         try:
@@ -1703,6 +1711,7 @@ def _validate_environment_candidates(
                 lock.lock_path.is_file(),
                 lock.export_path.is_file(),
                 lock.export_hash_path.is_file(),
+                lock.lock_path.with_name(f"{target}.probes.json").is_file(),
             )
             if not any(members_present):
                 continue
@@ -1722,35 +1731,51 @@ def _validate_environment_candidates(
                     f"environment resolved-export digest is invalid: {intent.name}/{target}"
                 )
             try:
-                resolved = json.loads(lock.export_bytes)
-            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                package_bytes = parse_resolved_export(lock.export_bytes)
+                probe_results = parse_probe_receipt_bytes(
+                    intent.probes,
+                    lock.lock_path.with_name(f"{target}.probes.json").read_bytes(),
+                )
+            except (OSError, EnvironmentExactnessError, EnvironmentProbeError) as exc:
                 raise CheckpointValidationError(
-                    f"environment resolved export is not exact JSON: {intent.name}/{target}"
+                    f"environment exact export/probe facts are invalid: {intent.name}/{target}"
                 ) from exc
-            if not isinstance(resolved, (dict, list)):
-                raise CheckpointValidationError(
-                    f"environment resolved export has no package structure: {intent.name}/{target}"
-                )
-            if not intent.probes.imports or not intent.probes.export_checks:
-                raise CheckpointValidationError(
-                    f"environment probe contract is incomplete: {intent.name}/{target}"
-                )
             lock_sha256 = hash_bytes(lock.lock_bytes)
-            attested = any(
-                isinstance(row.get("environment"), Mapping)
-                and row.get("environment", {}).get("family") == intent.name
-                and row.get("environment", {}).get("target") == target
-                and row.get("environment", {}).get("lock_sha256") == lock_sha256
-                and row.get("environment", {}).get("resolved_export_sha256")
-                == lock.declared_export_hash
-                and isinstance(row.get("environment", {}).get("compiler_identity"), str)
-                and bool(row.get("environment", {}).get("compiler_identity"))
-                and isinstance(row.get("environment", {}).get("sdk_identity"), str)
-                and bool(row.get("environment", {}).get("sdk_identity"))
-                and _HASH_PATTERN.fullmatch(str(row.get("identities", {}).get("environment", "")))
-                is not None
-                for row in attempt_rows
-            )
+            attested = False
+            for row in attempt_rows:
+                environment = row.get("environment")
+                identities = row.get("identities")
+                if (
+                    not isinstance(environment, Mapping)
+                    or not isinstance(identities, Mapping)
+                    or environment.get("family") != intent.name
+                    or environment.get("target") != target
+                    or not isinstance(environment.get("python"), str)
+                    or not isinstance(environment.get("compiler_identity"), str)
+                    or not isinstance(environment.get("sdk_identity"), str)
+                ):
+                    continue
+                try:
+                    generation = materialized_environment_generation(
+                        intent,
+                        lock_bytes=lock.lock_bytes,
+                        export_bytes=lock.export_bytes,
+                        package_bytes=package_bytes,
+                        python_version=str(environment["python"]),
+                        compiler_identity=str(environment["compiler_identity"]),
+                        sdk_identity=str(environment["sdk_identity"]),
+                        probe_results=probe_results,
+                    )
+                except (EnvironmentExactnessError, EnvironmentProbeError):
+                    continue
+                if (
+                    environment.get("lock_sha256") == lock_sha256
+                    and environment.get("resolved_export_sha256") == lock.declared_export_hash
+                    and environment.get("packages_manifest_sha256") == hash_bytes(package_bytes)
+                    and identities.get("environment") == generation
+                ):
+                    attested = True
+                    break
             if not attested:
                 raise CheckpointValidationError(
                     "environment target lacks a canonical compiler/SDK/probe-bound runtime "
@@ -2184,6 +2209,8 @@ def validate_canonical_reconstruction(
     *,
     expected_stable_id: Optional[str] = None,
     expected_intake_item: Optional[Mapping[str, Any]] = None,
+    canonical_gates: Optional[Sequence[Mapping[str, Any]]] = None,
+    current_models: Optional[Mapping[str, Mapping[str, Any]]] = None,
 ) -> ValidatedReconstruction:
     """Validate a canonical reconstruction transaction without side effects.
 
@@ -2201,6 +2228,8 @@ def validate_canonical_reconstruction(
         Optional caller-owned model identity.
     expected_intake_item:
         Optional caller-owned immutable intake row.
+    canonical_gates, current_models:
+        Optional preloaded append-only gate ledger and materialized current records.
 
     Returns
     -------
@@ -2247,6 +2276,26 @@ def validate_canonical_reconstruction(
         or manifest.get("proposal_sha256") != proposal_digest
     ):
         raise ReconstructionValidationError("canonical reconstruction proposal binding changed")
+    gates = (
+        tuple(canonical_gates)
+        if canonical_gates is not None
+        else _canonical_gate_rows(root / "records")
+    )
+    models = (
+        current_models
+        if current_models is not None
+        else materialize_current(default_ledger_paths(root / "records"))
+    )
+    if not _reconstruction_has_canonical_anchor(
+        manifest,
+        proposal,
+        proposal_digest,
+        gates,
+        models,
+    ):
+        raise ReconstructionValidationError(
+            "canonical reconstruction is not anchored to an accepted gate or current proposal"
+        )
 
     transaction_id = manifest.get("transaction_id")
     if not isinstance(transaction_id, str) or _HASH_PATTERN.fullmatch(transaction_id) is None:
@@ -2385,6 +2434,87 @@ def validate_canonical_reconstruction(
     return ValidatedReconstruction(manifest, proposal, source_manifest, model_root)
 
 
+def _canonical_gate_rows(records_root: Path) -> tuple[JsonObject, ...]:
+    """Load all append-only canonical gate rows below a records root.
+
+    Parameters
+    ----------
+    records_root:
+        Canonical records directory.
+
+    Returns
+    -------
+    tuple[dict[str, Any], ...]
+        Gate rows in deterministic shard and ledger order.
+    """
+
+    rows: list[JsonObject] = []
+    for path in sorted((records_root / "gates").glob("*.jsonl")):
+        rows.extend(scan_jsonl(path))
+    return tuple(rows)
+
+
+def _reconstruction_has_canonical_anchor(
+    manifest: Mapping[str, Any],
+    proposal: Mapping[str, Any],
+    proposal_digest: str,
+    gates: Sequence[Mapping[str, Any]],
+    current_models: Mapping[str, Mapping[str, Any]],
+) -> bool:
+    """Return whether immutable canonical history names this exact reconstruction.
+
+    Parameters
+    ----------
+    manifest, proposal, proposal_digest:
+        Reconstruction transaction facts.
+    gates, current_models:
+        Append-only accepted gate rows and current model revisions.
+
+    Returns
+    -------
+    bool
+        True for an exact accepted gate anchor or explicitly recorded pending proposal.
+    """
+
+    stable_id = proposal.get("stable_id")
+    work_id = proposal.get("work_id")
+    campaign_root = manifest.get("campaign_root_work_id")
+    current = current_models.get(str(stable_id))
+    if isinstance(current, Mapping):
+        untrusted = current.get("untrusted_attempt")
+        recorded = untrusted.get("proposal") if isinstance(untrusted, Mapping) else None
+        if (
+            isinstance(untrusted, Mapping)
+            and isinstance(recorded, Mapping)
+            and dict(recorded) == dict(proposal)
+            and untrusted.get("proposal_sha256") == proposal_digest
+            and campaign_root == work_id
+        ):
+            return True
+    current_gate_id = (
+        current.get("accuracy_gate", {}).get("gate_id") if isinstance(current, Mapping) else None
+    )
+    for gate in gates:
+        if gate.get("gate_kind") != "metadata_batch":
+            continue
+        if current_gate_id is not None and gate.get("gate_id") != current_gate_id:
+            continue
+        for item in gate.get("items", []):
+            if not isinstance(item, Mapping):
+                continue
+            if (
+                item.get("stable_id") == stable_id
+                and item.get("work_id") == work_id
+                and item.get("campaign_root_work_id") == campaign_root
+                and item.get("verified_hashes", {}).get("proposal") == proposal_digest
+                and item.get("verdict") == "accurate"
+                and item.get("integrity", {}).get("verdict") == "accurate"
+                and item.get("rung_check", {}).get("verdict") == "accurate"
+            ):
+                return True
+    return False
+
+
 def _derive_candidate_paths(repo_root: Path, canonical_root: Path) -> tuple[Path, ...]:
     """Derive the complete checkpoint set solely from canonical public roots.
 
@@ -2399,6 +2529,13 @@ def _derive_candidate_paths(repo_root: Path, canonical_root: Path) -> tuple[Path
         Sorted repository-relative files accepted by the checkpoint allowlist.
     """
 
+    for manifest_path in sorted((canonical_root / "records" / "intake").glob("*/manifest.json")):
+        try:
+            load_intake_snapshot(manifest_path.parent)
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError, IntakeError) as exc:
+            raise CheckpointValidationError(
+                f"canonical intake snapshot is invalid: {manifest_path.parent}"
+            ) from exc
     paths: set[Path] = set()
     for allowed_root in _ALLOWLIST_ROOTS:
         absolute_root = repo_root / Path(allowed_root.as_posix())
@@ -2406,10 +2543,17 @@ def _derive_candidate_paths(repo_root: Path, canonical_root: Path) -> tuple[Path
             if path.is_file() and path.suffix in _ALLOWLIST_SUFFIXES:
                 paths.add(path.relative_to(repo_root))
     reconstruction_root = canonical_root / "reconstruction"
+    canonical_gates = _canonical_gate_rows(canonical_root / "records")
+    current_models = materialize_current(default_ledger_paths(canonical_root / "records"))
     for reconstruction in reconstruction_root.rglob("*.json"):
         if reconstruction.name.endswith(".commit.json"):
             continue
-        validate_canonical_reconstruction(reconstruction, canonical_root)
+        validate_canonical_reconstruction(
+            reconstruction,
+            canonical_root,
+            canonical_gates=canonical_gates,
+            current_models=current_models,
+        )
     if not paths:
         raise CheckpointValidationError(
             f"no canonical checkpoint facts found under {canonical_root}"

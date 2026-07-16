@@ -47,6 +47,11 @@ from menagerie.crawler.driver import (
     WorkItem,
 )
 from menagerie.crawler.envs import DEFAULT_ENVS_ROOT, load_environment_registry
+from menagerie.crawler.env_lifecycle import (
+    materialized_environment_generation,
+    parse_probe_receipt_bytes,
+    parse_resolved_export,
+)
 from menagerie.crawler.identity import canonical_json_bytes, stable_hash
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
 from menagerie.crawler.licenses import (
@@ -316,6 +321,55 @@ def test_reconstruction_tampering_is_refused_by_staging_and_rehydration(
         _rehydrate_canonical_artifact(item, paths)
 
 
+def test_coherent_reconstruction_rewrite_without_canonical_anchor_is_refused(
+    tmp_path: Path,
+) -> None:
+    """Rehashing a rewritten proposal and marker cannot replace append-only gate authority."""
+
+    snapshot = _snapshot(tmp_path)
+    paths = default_driver_paths(tmp_path, snapshot.root)
+    intake = snapshot.items[0]
+    item = WorkItem(intake, route_model(ModelRequirements(intake.stable_id, "pytorch")))
+    config = DriverConfig(review_checkpoint_at=None, progress_milestones=())
+    artifact = _normalize_artifact_modes(
+        CanonicalTypedAuthor().author(item, paths.work_root, config), config
+    )
+    _promote_and_publish_accepted_artifact(item, artifact, paths)
+    gate = FakeChecker().check_metadata((artifact,), paths.work_root, config).gate
+    assert gate is not None
+    with JsonlLedger(paths.ledgers.gates, gate["schema_version"]) as ledger:
+        ledger.append(gate)
+
+    crawler = tmp_path / "menagerie" / "crawler"
+    prefix = intake.stable_id.removeprefix("m_")[:2]
+    reconstruction_path = crawler / "reconstruction" / prefix / f"{intake.stable_id}.json"
+    marker_path = reconstruction_path.with_name(f"{intake.stable_id}.commit.json")
+    reconstruction = json.loads(reconstruction_path.read_text(encoding="utf-8"))
+    rewritten = reconstruction["proposal"]
+    rewritten["work_id"] = "coherently-rewritten-work"
+    rewritten["proposal_sha256"] = stable_hash(
+        {key: value for key, value in rewritten.items() if key != "proposal_sha256"}
+    )
+    reconstruction["proposal_sha256"] = rewritten["proposal_sha256"]
+    transaction_id = checkpoint_module.reconstruction_transaction_id(
+        intake.stable_id,
+        rewritten["proposal_sha256"],
+        reconstruction["source_manifest"],
+        reconstruction["intake_item_sha256"],
+    )
+    reconstruction["transaction_id"] = transaction_id
+    marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    marker["transaction_id"] = transaction_id
+    marker["proposal_sha256"] = rewritten["proposal_sha256"]
+    reconstruction_path.write_bytes(canonical_json_bytes(reconstruction) + b"\n")
+    marker_path.write_bytes(canonical_json_bytes(marker) + b"\n")
+
+    with pytest.raises(checkpoint_module.ReconstructionValidationError, match="not anchored"):
+        checkpoint_module._derive_candidate_paths(tmp_path, crawler)
+    with pytest.raises(DriverIntegrationError, match="not anchored"):
+        _rehydrate_canonical_artifact(item, paths)
+
+
 def test_reconstructed_proposal_requires_current_author_prompt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -334,6 +388,10 @@ def test_reconstructed_proposal_requires_current_author_prompt(
         config,
     )
     _promote_and_publish_accepted_artifact(item, artifact, paths)
+    gate = FakeChecker().check_metadata((artifact,), paths.work_root, config).gate
+    assert gate is not None
+    with JsonlLedger(paths.ledgers.gates, gate["schema_version"]) as ledger:
+        ledger.append(gate)
     reconstructed = _rehydrate_canonical_artifact(item, paths)
     assert reconstructed is not None
     environment = EnvironmentBinding(
@@ -447,18 +505,94 @@ def _append_environment_attestation(
     """Append one canonical attempt binding target lock, toolchain, and passed probes."""
 
     attempt = make_attempt(stable_id)
+    env_root = records_root.parent / "envs"
+    intent = load_environment_registry(env_root, target=target).intents[family]
+    assert intent.lock.lock_bytes is not None
+    assert intent.lock.export_bytes is not None
+    package_bytes = parse_resolved_export(intent.lock.export_bytes)
+    probe_results = parse_probe_receipt_bytes(
+        intent.probes,
+        intent.lock.lock_path.with_name(f"{target}.probes.json").read_bytes(),
+    )
+    generation = materialized_environment_generation(
+        intent,
+        lock_bytes=intent.lock.lock_bytes,
+        export_bytes=intent.lock.export_bytes,
+        package_bytes=package_bytes,
+        python_version=str(attempt["environment"]["python"]),
+        compiler_identity=str(attempt["environment"]["compiler_identity"]),
+        sdk_identity=str(attempt["environment"]["sdk_identity"]),
+        probe_results=probe_results,
+    )
     attempt["environment"].update(
         {
             "family": family,
             "target": target,
             "lock_sha256": lock_sha256,
             "resolved_export_sha256": export_sha256,
+            "packages_manifest_sha256": checkpoint_module.hash_bytes(package_bytes),
         }
     )
+    attempt["identities"]["environment"] = generation
     with JsonlLedger(
         records_root / "attempts" / "environment-attestation.jsonl", ATTEMPT_SCHEMA_VERSION
     ) as ledger:
         ledger.append(attempt)
+
+
+def _write_exact_environment_artifacts(env_root: Path, target: str) -> tuple[Path, Path]:
+    """Write one canonical lock/export/probe fixture for the core intent.
+
+    Parameters
+    ----------
+    env_root, target:
+        Copied environment registry root and exact target basename.
+
+    Returns
+    -------
+    tuple[pathlib.Path, pathlib.Path]
+        Lock and resolved-export paths.
+    """
+
+    locks = env_root / "core" / "locks"
+    locks.mkdir(parents=True, exist_ok=True)
+    artifact_sha256 = "sha256:" + "a" * 64
+    artifact_url = "https://conda.example.test/core.conda"
+    lock = locks / f"{target}.lock"
+    export = locks / f"{target}.resolved.json"
+    lock.write_text(f"{artifact_url}#{artifact_sha256.removeprefix('sha256:')}\n", encoding="utf-8")
+    export.write_bytes(
+        canonical_json_bytes(
+            {
+                "packages": [
+                    {
+                        "name": "python",
+                        "version": "3.11",
+                        "build": "h1_0",
+                        "url": artifact_url,
+                        "sha256": artifact_sha256,
+                    }
+                ]
+            }
+        )
+        + b"\n"
+    )
+    (locks / f"{target}.resolved.sha256").write_text(
+        f"{checkpoint_module.hash_bytes(export.read_bytes())}\n", encoding="utf-8"
+    )
+    intent = load_environment_registry(env_root, target=target).intents["core"]
+    names = [
+        *(f"import:{name}" for name in intent.probes.imports),
+        *(f"export:{check.module}:{check.attribute}" for check in intent.probes.export_checks),
+        *(f"source-build:{build.name}" for build in intent.probes.source_build),
+    ]
+    (locks / f"{target}.probes.json").write_bytes(
+        canonical_json_bytes(
+            {"probes": [{"name": name, "passed": True, "detail": "ok"} for name in names]}
+        )
+        + b"\n"
+    )
+    return lock, export
 
 
 def _mirrors(root: Path) -> MirrorStore:
@@ -812,6 +946,33 @@ def test_promotion_uses_exact_per_source_license_and_origin(tmp_path: Path) -> N
         _gated_path_license_bindings(proposal, source_manifest)
 
 
+def test_public_license_rows_append_in_arrival_order_and_preserve_prefix(tmp_path: Path) -> None:
+    """A later lexically earlier path extends, rather than rewrites, canonical history."""
+
+    proposal = make_author_proposal("m_license_order")
+    binding = _gated_path_license_bindings(proposal, {"sources": []})["__code__"]
+    canonical_root = tmp_path / "menagerie" / "crawler"
+    late = canonical_root / "adapters" / "z.py"
+    early = canonical_root / "adapters" / "a.py"
+    late.parent.mkdir(parents=True)
+    late.write_text("late arrival", encoding="utf-8")
+    early.write_text("early lexical path", encoding="utf-8")
+
+    _publish_licensed_paths(tmp_path, canonical_root, ((late, *binding),))
+    manifest = canonical_root / "mirrors" / "public-manifest.jsonl"
+    committed_prefix = manifest.read_bytes()
+    _publish_licensed_paths(tmp_path, canonical_root, ((early, *binding),))
+    extended = manifest.read_bytes()
+    assert extended.startswith(committed_prefix)
+    assert [row["staged_path"] for row in scan_jsonl(manifest, validate=False)] == [
+        late.relative_to(tmp_path).as_posix(),
+        early.relative_to(tmp_path).as_posix(),
+    ]
+
+    _publish_licensed_paths(tmp_path, canonical_root, ((early, *binding),))
+    assert manifest.read_bytes() == extended
+
+
 def test_clean_checkpoint_stages_only_derived_allowlist_and_never_pushes(tmp_path: Path) -> None:
     """Clean canonical state stages every derived fact, no runtime state, and never pushes."""
 
@@ -866,16 +1027,7 @@ def test_checkpoint_includes_promoted_code_and_exact_environment_for_clean_repro
 
     crawler_envs = tmp_path / "menagerie" / "crawler" / "envs"
     shutil.copytree(DEFAULT_ENVS_ROOT, crawler_envs)
-    env_root = crawler_envs / "core"
-    lock_path = env_root / "locks" / "linux-x86_64-cuda.lock"
-    export_path = env_root / "locks" / "linux-x86_64-cuda.resolved.json"
-    export_hash_path = env_root / "locks" / "linux-x86_64-cuda.resolved.sha256"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    lock_path.write_bytes(b"https://conda.example.test/core.conda#sha256=" + b"a" * 64 + b"\n")
-    export_path.write_bytes(b'{"python":"3.11","torch":"test"}\n')
-    export_hash_path.write_text(
-        f"{checkpoint_module.hash_bytes(export_path.read_bytes())}\n", encoding="utf-8"
-    )
+    lock_path, export_path = _write_exact_environment_artifacts(crawler_envs, "linux-x86_64-cuda")
     _append_environment_attestation(
         tmp_path / "menagerie" / "crawler" / "records",
         stable_id,
@@ -946,6 +1098,25 @@ def test_driver_checkpoint_clean_clone_resume_without_author_or_network(tmp_path
     snapshot = _snapshot(tmp_path)
     author = CanonicalTypedAuthor()
     paths = default_driver_paths(tmp_path, snapshot.root)
+    crawler_envs = tmp_path / "menagerie" / "crawler" / "envs"
+    shutil.copytree(DEFAULT_ENVS_ROOT, crawler_envs)
+    _write_exact_environment_artifacts(crawler_envs, "osx-arm64")
+    registry = load_environment_registry(crawler_envs, target="osx-arm64")
+
+    class ExactFakeEnvironments(FakeEnvironments):
+        """Materialize installed metadata matching the canonical test export."""
+
+        def run(self, intent: Any, *, use: Any) -> object:
+            """Write immutable installed metadata before invoking the fake lifecycle."""
+
+            prefix = self.root / intent.name
+            metadata = prefix / "conda-meta"
+            metadata.mkdir(parents=True, exist_ok=True)
+            export = json.loads(intent.lock.export_path.read_bytes())
+            (metadata / "python.json").write_bytes(canonical_json_bytes(export["packages"][0]))
+            return super().run(intent, use=use)
+
+    environments = ExactFakeEnvironments(tmp_path / "fake-envs")
     driver = CrawlerDriver(
         paths,
         DriverConfig(
@@ -958,11 +1129,11 @@ def test_driver_checkpoint_clean_clone_resume_without_author_or_network(tmp_path
             author,
             FakeChecker(),
             TypedFakeForward(),
-            FakeEnvironments(tmp_path / "fake-envs"),
+            environments,
             FakeNotifier(),
             lambda: "2026-07-14T12:00:00Z",
         ),
-        registry=load_environment_registry(target="osx-arm64"),
+        registry=registry,
     )
     assert driver.run().status == "complete"
     assert author.calls == 1
@@ -1008,11 +1179,13 @@ def test_driver_checkpoint_clean_clone_resume_without_author_or_network(tmp_path
             DisabledAuthor(),
             FakeChecker(),
             forward,
-            FakeEnvironments(clean / "fake-envs"),
+            ExactFakeEnvironments(clean / "fake-envs"),
             FakeNotifier(),
             lambda: "2026-07-14T12:00:00Z",
         ),
-        registry=load_environment_registry(target="osx-arm64"),
+        registry=load_environment_registry(
+            clean / "menagerie" / "crawler" / "envs", target="osx-arm64"
+        ),
     )
     assert resumed.run().status == "complete"
     assert forward.calls == {}
@@ -1058,9 +1231,27 @@ def test_deferred_clean_clone_linux_handoff_never_reauthors(tmp_path: Path) -> N
         destination = clean / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(tmp_path / relative, destination)
+    clean_envs = clean / "menagerie" / "crawler" / "envs"
+    if not clean_envs.exists():
+        shutil.copytree(DEFAULT_ENVS_ROOT, clean_envs)
+    _write_exact_environment_artifacts(clean_envs, "linux-x86_64-cuda")
     shutil.rmtree(tmp_path / ".crawl-local")
     clean_intake = clean / "menagerie" / "crawler" / "records" / "intake" / snapshot.snapshot_id
     forward = TypedFakeForward()
+
+    class LinuxExactFakeEnvironments(FakeEnvironments):
+        """Create installed metadata equal to the Linux setup export."""
+
+        def run(self, intent: Any, *, use: Any) -> object:
+            """Materialize immutable package metadata before fake use."""
+
+            prefix = self.root / intent.name
+            metadata = prefix / "conda-meta"
+            metadata.mkdir(parents=True, exist_ok=True)
+            export = json.loads(intent.lock.export_path.read_bytes())
+            (metadata / "python.json").write_bytes(canonical_json_bytes(export["packages"][0]))
+            return super().run(intent, use=use)
+
     resumed = CrawlerDriver(
         default_driver_paths(clean, clean_intake),
         DriverConfig(
@@ -1073,11 +1264,11 @@ def test_deferred_clean_clone_linux_handoff_never_reauthors(tmp_path: Path) -> N
             DisabledAuthor(),
             FakeChecker(),
             forward,
-            FakeEnvironments(clean / "linux-envs"),
+            LinuxExactFakeEnvironments(clean / "linux-envs"),
             FakeNotifier(),
             lambda: "2026-07-14T12:00:00Z",
         ),
-        registry=load_environment_registry(target="linux-x86_64-cuda"),
+        registry=load_environment_registry(clean_envs, target="linux-x86_64-cuda"),
     )
     assert resumed.run().status == "complete"
     assert set(forward.calls) == {snapshot.items[0].stable_id}
@@ -1091,16 +1282,7 @@ def test_environment_metadata_gets_safe_provenance_and_rejects_private_url(
     snapshot, mirrors = _clean_state(tmp_path)
     crawler_envs = tmp_path / "menagerie" / "crawler" / "envs"
     shutil.copytree(DEFAULT_ENVS_ROOT, crawler_envs)
-    env = crawler_envs / "core"
-    lock = env / "locks" / "osx-arm64.lock"
-    export = env / "locks" / "osx-arm64.resolved.json"
-    export_hash = env / "locks" / "osx-arm64.resolved.sha256"
-    lock.parent.mkdir(parents=True, exist_ok=True)
-    lock.write_text(f"https://conda.example.test/pkg.conda#sha256={'a' * 64}\n", encoding="utf-8")
-    export.write_text('{"python":"3.11"}\n', encoding="utf-8")
-    export_hash.write_text(
-        f"{checkpoint_module.hash_bytes(export.read_bytes())}\n", encoding="utf-8"
-    )
+    lock, export = _write_exact_environment_artifacts(crawler_envs, "osx-arm64")
     with pytest.raises(CheckpointValidationError, match="compiler/SDK/probe-bound"):
         create_canonical_checkpoint(
             tmp_path,

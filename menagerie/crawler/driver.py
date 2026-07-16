@@ -67,12 +67,20 @@ from menagerie.crawler.envs import (
     load_environment_registry,
 )
 from menagerie.crawler.env_lifecycle import (
+    ArtifactReceipt,
     DiskRecoveryError,
+    EnvironmentExactnessError,
     EnvironmentProbeError,
     EnvironmentSolveError,
     ProbeResult,
     SequentialEnvironmentLifecycle,
     SolveResult,
+    installed_package_inventory_bytes,
+    materialized_environment_generation,
+    parse_exact_lock,
+    parse_probe_receipt_bytes,
+    parse_resolved_export,
+    validate_probe_receipts,
 )
 from menagerie.crawler.effort import EffortTracker, StageCap
 from menagerie.crawler.fetcher import FetchTarget, fetch_targets
@@ -85,7 +93,6 @@ from menagerie.crawler.family_templates import (
 from menagerie.crawler.gates import emit_gate_records, route_fidelity_gate, route_metadata_gate
 from menagerie.crawler.identity import (
     canonical_json_bytes,
-    compute_env_generation,
     compute_execution_identity,
     hash_bytes,
     stable_hash,
@@ -122,6 +129,7 @@ from menagerie.crawler.reducer import (
     _parent_success_attestation_matches,
     default_ledger_paths,
     expected_standard_asset,
+    materialize_current,
     output_signature_error,
 )
 from menagerie.crawler.routing import (
@@ -882,7 +890,7 @@ class CommandEnvironmentBackend:
         self.command = tuple(command)
 
     def solve(self, environment_file: Path, target: str) -> SolveResult:
-        """Request an on-target solve and read the exact reported artifacts."""
+        """Request a solve and verify every lock digest from materialized bytes."""
 
         payload = self._json_action("solve", str(environment_file), target)
         lock_path = Path(str(payload.get("lock_path", "")))
@@ -891,17 +899,60 @@ class CommandEnvironmentBackend:
             raise DriverIntegrationError(
                 "environment solve wrapper must return lock_path and resolved_export_path"
             )
+        lock_bytes = lock_path.read_bytes()
+        export_bytes = export_path.read_bytes()
+        try:
+            lock_receipts = parse_exact_lock(lock_bytes)
+            parse_resolved_export(export_bytes)
+        except EnvironmentExactnessError as exc:
+            raise DriverIntegrationError(str(exc)) from exc
+        raw_artifacts = payload.get("artifacts")
+        if not isinstance(raw_artifacts, list):
+            raise DriverIntegrationError(
+                "environment solve wrapper must return materialized artifact receipts"
+            )
+        receipts: list[ArtifactReceipt] = []
+        for value in raw_artifacts:
+            if not isinstance(value, Mapping):
+                raise DriverIntegrationError("environment artifact receipt must be an object")
+            url = value.get("url")
+            path_value = value.get("path")
+            declared = value.get("sha256")
+            if not all(isinstance(item, str) and item for item in (url, path_value, declared)):
+                raise DriverIntegrationError(
+                    "environment artifact receipt requires url, path, and sha256"
+                )
+            artifact_path = Path(str(path_value))
+            if not artifact_path.is_file():
+                raise DriverIntegrationError(
+                    f"environment artifact is not materialized: {artifact_path}"
+                )
+            observed = hash_bytes(artifact_path.read_bytes())
+            if observed != declared:
+                raise DriverIntegrationError(
+                    f"environment artifact digest mismatch: {artifact_path}"
+                )
+            receipts.append(ArtifactReceipt(str(url), observed))
+        if tuple(receipts) != lock_receipts:
+            raise DriverIntegrationError(
+                "materialized artifact receipts do not exactly match the solved lock"
+            )
         return SolveResult(
-            lock_bytes=lock_path.read_bytes(),
-            resolved_export_bytes=export_path.read_bytes(),
+            lock_bytes=lock_bytes,
+            resolved_export_bytes=export_bytes,
             elapsed_seconds=float(payload.get("elapsed_seconds", 0.0)),
             artifact_bytes=int(payload.get("artifact_bytes", 0)),
+            artifact_receipts=tuple(receipts),
         )
 
-    def create(self, lock_file: Path, prefix: Path) -> None:
-        """Create one immutable environment prefix from the exact lock."""
+    def create(self, lock_file: Path, prefix: Path) -> bytes:
+        """Create one prefix and derive its inventory from installed metadata."""
 
         self._checked_action("create", str(lock_file), str(prefix))
+        try:
+            return installed_package_inventory_bytes(prefix)
+        except EnvironmentExactnessError as exc:
+            raise DriverIntegrationError(str(exc)) from exc
 
     def probe(self, prefix: Path, probes: IntentProbes) -> Sequence[ProbeResult]:
         """Run declared canaries and return typed per-probe observations."""
@@ -921,15 +972,26 @@ class CommandEnvironmentBackend:
         values = payload.get("results")
         if not isinstance(values, list):
             raise DriverIntegrationError("environment probe wrapper returned no results")
-        return tuple(
-            ProbeResult(
-                name=str(value["name"]),
-                passed=bool(value["passed"]),
-                detail=str(value["detail"]),
+        results: list[ProbeResult] = []
+        for value in values:
+            if (
+                not isinstance(value, Mapping)
+                or not isinstance(value.get("name"), str)
+                or not isinstance(value.get("passed"), bool)
+                or not isinstance(value.get("detail"), str)
+            ):
+                raise DriverIntegrationError("environment probe receipt is malformed")
+            results.append(
+                ProbeResult(
+                    name=str(value["name"]),
+                    passed=bool(value["passed"]),
+                    detail=str(value["detail"]),
+                )
             )
-            for value in values
-            if isinstance(value, Mapping)
-        )
+        try:
+            return validate_probe_receipts(probes, results)
+        except EnvironmentProbeError as exc:
+            raise DriverIntegrationError(str(exc)) from exc
 
     def remove(self, prefix: Path) -> None:
         """Remove only the named environment and its dedicated state."""
@@ -2615,6 +2677,34 @@ class CrawlerDriver:
             intent = self.registry.intents[intent_name]
             use_entered = False
             use_completed = False
+            observed_generation: Optional[str] = None
+
+            def cleanup_artifact_identity() -> Optional[str]:
+                """Return the current committed setup-artifact identity, if complete."""
+
+                receipt_path = intent.lock.lock_path.with_name(f"{intent.lock.target}.probes.json")
+                paths = (
+                    intent.lock.lock_path,
+                    intent.lock.export_path,
+                    intent.lock.export_hash_path,
+                    receipt_path,
+                )
+                if not all(path.is_file() for path in paths):
+                    return None
+                return stable_hash({path.name: hash_bytes(path.read_bytes()) for path in paths})
+
+            artifact_identity = cleanup_artifact_identity()
+            canonical_events_path = canonical_operational_ledger_path(self.paths.ledgers.models)
+            quarantined = any(
+                event.get("event_kind") == OperationalEventKind.CAMPAIGN_HEALTH.value
+                and event.get("details", {}).get("disposition") == "environment-cleanup-quarantined"
+                and event.get("details", {}).get("intent") == intent.name
+                and event.get("details", {}).get("target") == intent.lock.target
+                and event.get("details", {}).get("artifact_identity") == artifact_identity
+                for event in scan_jsonl(canonical_events_path)
+            )
+            if quarantined:
+                continue
 
             def use(
                 prefix: Path,
@@ -2624,7 +2714,7 @@ class CrawlerDriver:
             ) -> None:
                 """Process one intent's models while its sole environment exists."""
 
-                nonlocal use_entered, use_completed
+                nonlocal observed_generation, use_entered, use_completed
                 use_entered = True
                 environment = _environment_binding(
                     intent,
@@ -2636,6 +2726,7 @@ class CrawlerDriver:
                         SequentialEnvironmentLifecycle,
                     ),
                 )
+                observed_generation = environment.env_generation
                 for item in items:
                     current = reducer.current_records.get(item.stable_id)
                     if (
@@ -2675,7 +2766,44 @@ class CrawlerDriver:
                     raise
                 except Exception as exc:  # noqa: BLE001 -- lifecycle phase decides ownership
                     if use_completed:
-                        raise
+                        cleanup_identity = cleanup_artifact_identity()
+                        event_identity = stable_hash(
+                            {
+                                "disposition": "environment-cleanup-quarantined",
+                                "intent": intent.name,
+                                "target": intent.lock.target,
+                                "artifact_identity": cleanup_identity,
+                                "env_generation": observed_generation,
+                            }
+                        )[7:31]
+                        event = {
+                            "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+                            "event_id": f"environment-cleanup-{event_identity}",
+                            "created_at": self.dependencies.clock(),
+                            "event_kind": OperationalEventKind.CAMPAIGN_HEALTH.value,
+                            "status": OperationalEventStatus.RUNNER_FAILED.value,
+                            "provider": None,
+                            "observed_response": None,
+                            "reset_at": None,
+                            "queued_work_counts": {"models": 0},
+                            "current_environment": intent.name,
+                            "run_id": self.config.run_id,
+                            "machine_id": self.config.machine_id,
+                            "details": {
+                                "disposition": "environment-cleanup-quarantined",
+                                "intent": intent.name,
+                                "target": intent.lock.target,
+                                "artifact_identity": cleanup_identity,
+                                "env_generation": observed_generation,
+                                "failure_type": (
+                                    f"{type(exc).__module__}.{type(exc).__qualname__}"
+                                ),
+                            },
+                        }
+                        append_canonical_operational_event(canonical_events_path, event)
+                        operational.append(event)
+                        environment_failure = None
+                        break
                     if use_entered:
                         raise
                     environment_failure = exc
@@ -3652,55 +3780,88 @@ def _environment_binding(
 ) -> EnvironmentBinding:
     """Bind exact lifecycle, probe, package, and interpreter observations."""
 
+    fallback_artifact_hash = hash_bytes(b"test-environment-artifact")
+    fallback_url = "https://example.test/test-environment.conda"
+    fallback_lock = f"{fallback_url}#{fallback_artifact_hash.removeprefix('sha256:')}\n".encode()
+    fallback_export = (
+        canonical_json_bytes(
+            {
+                "packages": [
+                    {
+                        "name": "test-environment",
+                        "version": "1",
+                        "build": "test_0",
+                        "url": fallback_url,
+                        "sha256": fallback_artifact_hash,
+                    }
+                ]
+            }
+        )
+        + b"\n"
+    )
     lock_bytes = _required_artifact_bytes(
-        intent.lock.lock_path, b"test-lock", strict=strict, label="lock"
+        intent.lock.lock_path, fallback_lock, strict=strict, label="lock"
     )
     export_bytes = _required_artifact_bytes(
-        intent.lock.export_path, b"test-export", strict=strict, label="resolved export"
+        intent.lock.export_path, fallback_export, strict=strict, label="resolved export"
     )
     package_bytes = _installed_package_manifest_bytes(prefix, strict=strict)
+    if not strict and package_bytes == b"test-packages":
+        package_bytes = fallback_export
+    if strict:
+        try:
+            parse_exact_lock(lock_bytes)
+            declared_packages = parse_resolved_export(export_bytes)
+        except EnvironmentExactnessError as exc:
+            raise DriverIntegrationError(str(exc)) from exc
+        if declared_packages != package_bytes:
+            raise DriverIntegrationError(
+                "created-prefix packages do not match the declared resolved export"
+            )
+        export_hash_path = intent.lock.export_hash_path
+        try:
+            declared_export_hash = export_hash_path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise DriverIntegrationError(
+                f"environment resolved-export digest is missing: {export_hash_path}"
+            ) from exc
+        if declared_export_hash != hash_bytes(export_bytes):
+            raise DriverIntegrationError("environment resolved-export digest is stale")
     interpreter = prefix / "bin" / "python"
     if strict and not interpreter.is_file():
         raise DriverIntegrationError(f"environment interpreter is missing: {interpreter}")
     if not interpreter.is_file():
         interpreter = Path(sys.executable)
-    python_version, compiler_identity, sdk_identity, interpreter_facts = (
+    python_version, compiler_identity, sdk_identity, _interpreter_facts = (
         _observed_interpreter_facts(interpreter)
     )
     lock_sha256 = hash_bytes(lock_bytes)
     export_sha256 = hash_bytes(export_bytes)
     packages_sha256 = hash_bytes(package_bytes)
-    probe_intent = {
-        "imports": list(intent.probes.imports),
-        "export_checks": [vars(value) for value in intent.probes.export_checks],
-        "source_build": [vars(value) for value in intent.probes.source_build],
-    }
-    observed_probes = [
-        {"name": result.name, "passed": result.passed, "detail": result.detail}
-        for result in probe_results
-    ]
-    platform_facts = {
-        "target": intent.lock.target,
-        "python": python_version,
-        "compiler": compiler_identity,
-        "sdk": sdk_identity,
-        "interpreter_facts_sha256": hash_bytes(interpreter_facts),
-        "packages_manifest_sha256": packages_sha256,
-    }
-    generation = compute_env_generation(
-        {
-            "name": intent.name,
-            "framework": intent.framework,
-            "target": intent.lock.target,
-            "channels": list(intent.channels),
-            "dependencies": list(intent.dependencies),
-            "probe_intent": probe_intent,
-        },
-        lock_sha256,
-        export_sha256,
-        platform_facts,
-        observed_probes,
-    )
+    try:
+        observed_probes = validate_probe_receipts(intent.probes, probe_results)
+        if strict:
+            receipt_path = intent.lock.lock_path.with_name(f"{intent.lock.target}.probes.json")
+            durable_probes = parse_probe_receipt_bytes(
+                intent.probes,
+                _required_artifact_bytes(receipt_path, b"", strict=True, label="probe receipt"),
+            )
+            if durable_probes != observed_probes:
+                raise DriverIntegrationError(
+                    "lifecycle probe receipts differ from the committed receipt artifact"
+                )
+        generation = materialized_environment_generation(
+            intent,
+            lock_bytes=lock_bytes,
+            export_bytes=export_bytes,
+            package_bytes=package_bytes,
+            python_version=python_version,
+            compiler_identity=compiler_identity,
+            sdk_identity=sdk_identity,
+            probe_results=observed_probes,
+        )
+    except (EnvironmentExactnessError, EnvironmentProbeError) as exc:
+        raise DriverIntegrationError(str(exc)) from exc
     return EnvironmentBinding(
         prefix=prefix.resolve(),
         python_executable=interpreter.absolute(),
@@ -3794,21 +3955,11 @@ def _required_artifact_bytes(path: Path, fallback: bytes, *, strict: bool, label
 def _installed_package_manifest_bytes(prefix: Path, *, strict: bool) -> bytes:
     """Return deterministic bytes derived only from actual installed package metadata."""
 
-    explicit = prefix / "packages-manifest.json"
-    if explicit.is_file() and explicit.stat().st_size:
-        return explicit.read_bytes()
-    metadata = sorted((prefix / "conda-meta").glob("*.json"))
-    if metadata:
-        framed = bytearray()
-        for path in metadata:
-            data = path.read_bytes()
-            framed.extend(len(path.name.encode("utf-8")).to_bytes(8, "big"))
-            framed.extend(path.name.encode("utf-8"))
-            framed.extend(len(data).to_bytes(8, "big"))
-            framed.extend(data)
-        return bytes(framed)
-    if strict:
-        raise DriverIntegrationError(f"environment package manifest is missing below {prefix}")
+    try:
+        return installed_package_inventory_bytes(prefix)
+    except EnvironmentExactnessError as exc:
+        if strict:
+            raise DriverIntegrationError(str(exc)) from exc
     return b"test-packages"
 
 
@@ -4732,6 +4883,8 @@ def _rehydrate_canonical_artifact(item: WorkItem, paths: DriverPaths) -> Optiona
             canonical_root,
             expected_stable_id=item.stable_id,
             expected_intake_item=item.intake.to_dict(),
+            canonical_gates=scan_jsonl(paths.ledgers.gates),
+            current_models=materialize_current(paths.ledgers),
         )
     except ReconstructionValidationError as exc:
         raise DriverIntegrationError(str(exc)) from exc
@@ -5302,45 +5455,71 @@ def _publish_licensed_paths(
     manifest_root = canonical_root / "mirrors"
     public_path = manifest_root / "public-manifest.jsonl"
     private_path = manifest_root / "private-manifest.jsonl"
-    existing_rows = scan_jsonl(public_path, validate=False) if public_path.is_file() else []
-    rows_by_path = {str(row.get("staged_path")): dict(row) for row in existing_rows}
-    seen_paths: set[Path] = set()
-    for path, evidence, origin in paths:
-        relative = path.relative_to(repo_root)
-        if relative in seen_paths:
-            raise DriverIntegrationError("promotion path has ambiguous license bindings")
-        seen_paths.add(relative)
-        artifact = store_licensed_artifact(
-            mirrors,
-            path.read_bytes(),
-            staged_path=relative,
-            origin=origin,
-            evidence=evidence,
-            media_type="text/x-python" if path.suffix == ".py" else "application/octet-stream",
-        )
-        if artifact.decision.redistribution_class is not RedistributionClass.PUBLIC_OK:
-            raise DriverIntegrationError("promotion license transaction refused non-public bytes")
-        row = {
-            "staged_path": relative.as_posix(),
-            "manifest": artifact.manifest.to_dict(),
-            "decision": artifact.decision.to_dict(),
-        }
-        previous = rows_by_path.get(relative.as_posix())
-        if previous is not None:
-            if (
-                previous.get("decision", {}).get("content_sha256")
-                != artifact.decision.content_sha256
-            ):
-                raise DriverIntegrationError("licensed path conflicts with canonical inventory")
-            continue
-        rows_by_path[relative.as_posix()] = row
-    ordered_rows = [rows_by_path[key] for key in sorted(rows_by_path)]
-    _write_jsonl_atomic(public_path, ordered_rows)
-    if not private_path.is_file():
-        _write_jsonl_atomic(private_path, [])
-    inventory = tuple(_licensed_artifact_from_row(row) for row in ordered_rows)
-    report = pre_public_merge_sweep(inventory, mirrors)
-    _write_jsonl_atomic(canonical_root / "license_reports" / "current.json", [report.to_dict()])
+    lock_path = runtime.parent / "locks" / "license-manifest.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+b") as lock_handle:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        existing_rows = scan_jsonl(public_path, validate=False) if public_path.is_file() else []
+        rows_by_path: dict[str, JsonObject] = {}
+        for raw_row in existing_rows:
+            row = dict(raw_row)
+            staged_path = row.get("staged_path")
+            if not isinstance(staged_path, str) or staged_path in rows_by_path:
+                raise DriverIntegrationError(
+                    "canonical public license inventory contains a duplicate path"
+                )
+            rows_by_path[staged_path] = row
+        seen_paths: set[Path] = set()
+        additions: list[JsonObject] = []
+        for path, evidence, origin in paths:
+            relative = path.relative_to(repo_root)
+            if relative in seen_paths:
+                raise DriverIntegrationError("promotion path has ambiguous license bindings")
+            seen_paths.add(relative)
+            artifact = store_licensed_artifact(
+                mirrors,
+                path.read_bytes(),
+                staged_path=relative,
+                origin=origin,
+                evidence=evidence,
+                media_type=(
+                    "text/x-python" if path.suffix == ".py" else "application/octet-stream"
+                ),
+            )
+            if artifact.decision.redistribution_class is not RedistributionClass.PUBLIC_OK:
+                raise DriverIntegrationError(
+                    "promotion license transaction refused non-public bytes"
+                )
+            row = {
+                "staged_path": relative.as_posix(),
+                "manifest": artifact.manifest.to_dict(),
+                "decision": artifact.decision.to_dict(),
+            }
+            previous = rows_by_path.get(relative.as_posix())
+            if previous is not None:
+                previous_manifest = previous.get("manifest")
+                if isinstance(previous_manifest, Mapping):
+                    row["manifest"]["verified_at"] = previous_manifest.get("verified_at")
+                if previous != row:
+                    raise DriverIntegrationError(
+                        "licensed path conflicts with its immutable canonical row"
+                    )
+                continue
+            rows_by_path[relative.as_posix()] = row
+            additions.append(row)
+        arrival_rows = [*existing_rows, *additions]
+        inventory = tuple(_licensed_artifact_from_row(row) for row in arrival_rows)
+        report = pre_public_merge_sweep(inventory, mirrors)
+        if additions:
+            public_path.parent.mkdir(parents=True, exist_ok=True)
+            with public_path.open("ab") as handle:
+                for row in additions:
+                    handle.write(canonical_json_bytes(row) + b"\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+        if not private_path.is_file():
+            _write_jsonl_atomic(private_path, [])
+        _write_jsonl_atomic(canonical_root / "license_reports" / "current.json", [report.to_dict()])
 
 
 def _licensed_artifact_from_row(row: Mapping[str, Any]) -> LicensedArtifact:
