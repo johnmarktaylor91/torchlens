@@ -27,6 +27,7 @@ from types import ModuleType
 from typing import Any, IO, Literal, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.authority import ExecutionReadManifest as ExecutionReadManifest
+from menagerie.crawler.identity import hash_bytes, stable_hash
 
 _CREDENTIAL_MARKERS = (
     "SECRET",
@@ -101,6 +102,13 @@ _PACKAGE_TEXT_DATA_SUFFIXES = frozenset(
     }
 )
 _PACKAGE_BINARY_DATA_FLOOR_BYTES = 1024**2
+_EXECUTION_CODE_SUFFIXES_BY_KIND = {
+    "native-library": frozenset({".a", ".dylib", ".pyd", ".so"}),
+    "native-source": frozenset({".c", ".cc", ".cpp", ".cu", ".cuh", ".h", ".hpp"}),
+    "python-bytecode": frozenset({".pyc"}),
+    "python-source": frozenset({".py", ".pyi", ".pyx"}),
+}
+_RUNTIME_SUPPORT_KINDS = frozenset({"runtime-file", "runtime-root"})
 _RUNTIME_METADATA_NAMES = frozenset(
     {
         "INSTALLER",
@@ -122,6 +130,7 @@ _SYSTEM_RUNTIME_CODE_ROOTS = (
     Path("/usr/lib64"),
 )
 _PARENT_ALLOWED_READ_PATHS_ENV = "MENAGERIE_PARENT_ALLOWED_READ_PATHS"
+_PARENT_STANDARD_INPUT_ASSET_ENV = "MENAGERIE_PARENT_STANDARD_INPUT_ASSET"
 _SPECIAL_READ_ROOTS = (Path("/dev"), Path("/proc"), Path("/sys"))
 _SYSTEM_READ_FILES = frozenset(
     {
@@ -492,6 +501,64 @@ def _runtime_static_path_allowed(path: Path) -> bool:
     return path.suffix.lower() in _RUNTIME_SOURCE_SUFFIXES or ".so." in lowered_name
 
 
+def _runtime_import_metadata_path_allowed(path: Path) -> bool:
+    """Return whether a path is closed interpreter/import metadata, not model data.
+
+    Parameters
+    ----------
+    path:
+        Candidate path, which may be a normal missing-file probe.
+
+    Returns
+    -------
+    bool
+        True only for fixed metadata names and interpreter path-hook probes.
+    """
+
+    name = path.name
+    lowered_name = name.lower()
+    return bool(
+        (
+            name in _RUNTIME_METADATA_NAMES
+            and (
+                name in {"pybuilddir.txt", "pyvenv.cfg"}
+                or any(part.endswith((".dist-info", ".egg-info")) for part in path.parts)
+            )
+        )
+        or (lowered_name.startswith("__editable__.") and lowered_name.endswith(".__path_hook__"))
+        or (
+            lowered_name.startswith("python")
+            and lowered_name.endswith(".zip")
+            and "lib" in path.parts
+        )
+        or (lowered_name.startswith("python") and lowered_name.endswith("._pth"))
+    )
+
+
+def _runtime_native_code_path_allowed(path: Path, runtime_code_roots: Sequence[Path]) -> bool:
+    """Return whether a path is a native loader/code candidate under runtime roots.
+
+    Parameters
+    ----------
+    path:
+        Existing or normally probed native-library path.
+    runtime_code_roots:
+        Trusted interpreter/runtime roots.
+
+    Returns
+    -------
+    bool
+        True only for native code suffixes beneath a trusted runtime root.
+    """
+
+    lowered_name = path.name.lower()
+    native_suffix = path.suffix.lower() in {".a", ".dylib", ".pyd", ".so"}
+    if not native_suffix and ".so." not in lowered_name:
+        return False
+    roots = tuple(root.resolve() for root in runtime_code_roots)
+    return any(path == root or root in path.parents for root in roots)
+
+
 def _runtime_site_roots(runtime_code_roots: Sequence[Path]) -> tuple[Path, ...]:
     """Return installed-package roots reachable from bounded runtime roots.
 
@@ -665,8 +732,8 @@ def _runtime_model_data_path(path: Path) -> bool:
     -------
     bool
         True for weight/checkpoint formats, extensionless payloads, and large
-        non-text package blobs. Explicit declared inputs are checked before this
-        classifier and therefore remain readable.
+        package blobs including text-like suffixes. Only the compiled manifest's
+        exact standard input asset may bypass this classifier.
     """
 
     suffix = path.suffix.lower()
@@ -680,7 +747,239 @@ def _runtime_model_data_path(path: Path) -> bool:
         return True
     if not suffix:
         return path.name not in _RUNTIME_METADATA_NAMES
-    return size >= _PACKAGE_BINARY_DATA_FLOOR_BYTES and suffix not in _PACKAGE_TEXT_DATA_SUFFIXES
+    return size >= _PACKAGE_BINARY_DATA_FLOOR_BYTES
+
+
+def _regular_unaliased_file(path: Path) -> bool:
+    """Return whether a capability path is one real, unaliased regular file.
+
+    Parameters
+    ----------
+    path:
+        Candidate capability path.
+
+    Returns
+    -------
+    bool
+        True only for an absolute non-symlink regular file with one hard link.
+    """
+
+    if not path.is_absolute() or path.is_symlink():
+        return False
+    try:
+        status = path.stat()
+    except OSError:
+        return False
+    return path.is_file() and status.st_nlink == 1 and path.resolve() == path
+
+
+def _validated_digest(value: str, *, field: str) -> str:
+    """Validate and return one canonical SHA-256 identity.
+
+    Parameters
+    ----------
+    value:
+        Candidate digest.
+    field:
+        Field name used in diagnostics.
+
+    Returns
+    -------
+    str
+        Validated digest.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is not a canonical crawler SHA-256 identity.
+    """
+
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None:
+        raise ValueError(f"{field} must be a canonical sha256 identity")
+    return value
+
+
+def _manifest_identity_payload(
+    *,
+    stable_id: str,
+    work_id: str,
+    execution_identity: str,
+    code_manifest_identity: str,
+    code_members: Sequence[tuple[Path, str, str]],
+    standard_input_asset: Optional[tuple[Path, str, str]],
+    runtime_support: Sequence[tuple[Path, str]],
+) -> dict[str, Any]:
+    """Build the canonical semantic payload for an execution read manifest.
+
+    Parameters
+    ----------
+    stable_id, work_id, execution_identity, code_manifest_identity:
+        Exact trusted request and implementation identities.
+    code_members:
+        Verified implementation members as path, digest, and closed source kind.
+    standard_input_asset:
+        Optional exact driver-selected asset as path, digest, and asset identifier.
+    runtime_support:
+        Trusted interpreter support paths and closed support kinds.
+
+    Returns
+    -------
+    dict[str, Any]
+        JSON-compatible identity payload.
+    """
+
+    return {
+        "version": "menagerie.crawler.execution-read-manifest.v1",
+        "stable_id": stable_id,
+        "work_id": work_id,
+        "execution_identity": execution_identity,
+        "code_manifest_identity": code_manifest_identity,
+        "code_members": [
+            {"path": str(path), "sha256": digest, "kind": kind}
+            for path, digest, kind in code_members
+        ],
+        "standard_input_asset": (
+            None
+            if standard_input_asset is None
+            else {
+                "path": str(standard_input_asset[0]),
+                "sha256": standard_input_asset[1],
+                "asset_id": standard_input_asset[2],
+            }
+        ),
+        "runtime_support": [{"path": str(path), "kind": kind} for path, kind in runtime_support],
+    }
+
+
+def compile_execution_read_manifest(
+    *,
+    stable_id: str,
+    work_id: str,
+    execution_identity: str,
+    code_manifest_identity: str,
+    code_members: Sequence[tuple[Path, str, str]],
+    standard_input_asset: Optional[tuple[Path, str, str]] = None,
+    runtime_support: Sequence[tuple[Path, str]] = (),
+) -> ExecutionReadManifest:
+    """Compile the sole semantic read capability for one worker request.
+
+    Parameters
+    ----------
+    stable_id, work_id, execution_identity, code_manifest_identity:
+        Exact trusted request and accepted implementation identities.
+    code_members:
+        Accepted implementation closure as path, digest, and closed source kind.
+    standard_input_asset:
+        Optional exact driver-selected standard asset. Author fields are never
+        accepted by this API.
+    runtime_support:
+        Trusted interpreter/runtime paths discovered by driver policy.
+
+    Returns
+    -------
+    ExecutionReadManifest
+        Frozen digest-bound capability.
+
+    Raises
+    ------
+    ValueError
+        If a member is aliased, has a forbidden kind/suffix, or fails its digest.
+    """
+
+    if not stable_id or not work_id:
+        raise ValueError("execution manifest identities must be non-empty")
+    _validated_digest(execution_identity, field="execution_identity")
+    _validated_digest(code_manifest_identity, field="code_manifest_identity")
+    normalized_code: list[tuple[Path, str, str]] = []
+    seen_paths: set[Path] = set()
+    for raw_path, digest, kind in code_members:
+        path = raw_path.absolute()
+        suffixes = _EXECUTION_CODE_SUFFIXES_BY_KIND.get(kind)
+        if suffixes is None or path.suffix.lower() not in suffixes:
+            raise ValueError(f"execution code member has forbidden kind/suffix: {path}")
+        if _runtime_model_data_path(path) or not _regular_unaliased_file(path):
+            raise ValueError(f"execution code member is aliased or model-data-shaped: {path}")
+        _validated_digest(digest, field="code member digest")
+        if hash_bytes(path.read_bytes()) != digest:
+            raise ValueError(f"execution code member digest mismatch: {path}")
+        if kind == "python-source":
+            static_source_check(path)
+        if path in seen_paths:
+            raise ValueError(f"duplicate execution code member: {path}")
+        seen_paths.add(path)
+        normalized_code.append((path, digest, kind))
+    normalized_code.sort(key=lambda item: str(item[0]))
+
+    normalized_asset: Optional[tuple[Path, str, str]] = None
+    if standard_input_asset is not None:
+        raw_path, digest, asset_id = standard_input_asset
+        path = raw_path.absolute()
+        if not asset_id or not _regular_unaliased_file(path):
+            raise ValueError("standard input asset must be an unaliased regular file")
+        _validated_digest(digest, field="standard input asset digest")
+        if hash_bytes(path.read_bytes()) != digest:
+            raise ValueError("standard input asset digest mismatch")
+        normalized_asset = (path, digest, asset_id)
+
+    normalized_runtime: list[tuple[Path, str]] = []
+    for raw_path, kind in runtime_support:
+        path = raw_path.absolute()
+        if kind not in _RUNTIME_SUPPORT_KINDS:
+            raise ValueError(f"unknown runtime support kind: {kind}")
+        if path == Path("/") or path.is_symlink() or not path.exists() or path.resolve() != path:
+            raise ValueError(f"unsafe runtime support path: {path}")
+        if kind == "runtime-file" and not path.is_file():
+            raise ValueError(f"runtime-file support is not a file: {path}")
+        if kind == "runtime-root" and not path.is_dir():
+            raise ValueError(f"runtime-root support is not a directory: {path}")
+        normalized_runtime.append((path, kind))
+    normalized_runtime = sorted(set(normalized_runtime), key=lambda item: (str(item[0]), item[1]))
+    payload = _manifest_identity_payload(
+        stable_id=stable_id,
+        work_id=work_id,
+        execution_identity=execution_identity,
+        code_manifest_identity=code_manifest_identity,
+        code_members=normalized_code,
+        standard_input_asset=normalized_asset,
+        runtime_support=normalized_runtime,
+    )
+    return ExecutionReadManifest(
+        manifest_id=stable_hash(payload),
+        stable_id=stable_id,
+        work_id=work_id,
+        execution_identity=execution_identity,
+        code_manifest_identity=code_manifest_identity,
+        code_members=tuple(normalized_code),
+        standard_input_asset=normalized_asset,
+        runtime_support=tuple(normalized_runtime),
+    )
+
+
+def verify_execution_read_manifest(manifest: ExecutionReadManifest) -> None:
+    """Re-verify a compiled execution manifest immediately before spawn.
+
+    Parameters
+    ----------
+    manifest:
+        Frozen trusted capability to verify.
+
+    Raises
+    ------
+    ValueError
+        If its identity, bytes, paths, aliases, or closed kinds changed.
+    """
+
+    rebuilt = compile_execution_read_manifest(
+        stable_id=manifest.stable_id,
+        work_id=manifest.work_id,
+        execution_identity=manifest.execution_identity,
+        code_manifest_identity=manifest.code_manifest_identity,
+        code_members=manifest.code_members,
+        standard_input_asset=manifest.standard_input_asset,
+        runtime_support=manifest.runtime_support,
+    )
+    if rebuilt != manifest:
+        raise ValueError("execution read manifest identity mismatch")
 
 
 def _package_data_digest_matches(path: Path, expected_digest: str) -> bool:
@@ -1242,6 +1541,7 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
         scratch_root: Path,
         *additional_write_roots: Path,
         allowed_read_paths: Sequence[Path] = (),
+        standard_input_asset: Optional[Path] = None,
     ) -> None:
         """Initialize inactive tripwires.
 
@@ -1253,6 +1553,9 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
             Explicit additional writable roots.
         allowed_read_paths:
             Exact source/input paths that model construction may read.
+        standard_input_asset:
+            Exact trusted standard asset allowed to bypass only the model-data
+            classifier. Author-selected paths must never be supplied here.
         """
 
         self.allowed_roots = tuple(
@@ -1274,6 +1577,18 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
                 path.resolve() for path in (*allowed_read_paths, *parent_allowed_read_paths)
             )
         )
+        parent_standard_asset = os.environ.get(_PARENT_STANDARD_INPUT_ASSET_ENV)
+        standard_asset_candidates = [standard_input_asset]
+        if parent_standard_asset:
+            standard_asset_candidates.append(Path(parent_standard_asset))
+        normalized_assets = {
+            path.resolve() for path in standard_asset_candidates if path is not None
+        }
+        if len(normalized_assets) > 1:
+            raise PolicyViolation(
+                "checkpoint-read", "conflicting parent and worker standard input assets"
+            )
+        self.standard_input_asset = next(iter(normalized_assets), None)
         self.environment_search_paths = frozenset(
             Path(value).resolve() for value in sys.path if isinstance(value, str) and value
         )
@@ -1422,6 +1737,17 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
             return True
         if any(candidate == root or root in candidate.parents for root in _SPECIAL_READ_ROOTS):
             return True
+        if _runtime_import_metadata_path_allowed(candidate):
+            return True
+        try:
+            if candidate.is_dir():
+                return True
+        except OSError:
+            pass
+        if _runtime_native_code_path_allowed(candidate, self.runtime_code_roots):
+            return True
+        if _runtime_model_data_path(candidate) and candidate != self.standard_input_asset:
+            return False
         if any(
             candidate == allowed or allowed in candidate.parents
             for allowed in self.allowed_read_paths

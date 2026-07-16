@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import fcntl
 import json
 import os
 import re
@@ -13,13 +14,19 @@ import shutil
 import stat
 import subprocess
 import sys
+import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
-from typing import Any, BinaryIO, Mapping, Optional, Sequence
+from typing import Any, BinaryIO, Callable, Iterator, Mapping, Optional, Sequence
 
-from menagerie.crawler.authority import WorkerLease as WorkerLease
+from menagerie.crawler.authority import (
+    ExecutionReadManifest,
+    WorkerLease as WorkerLease,
+)
 from menagerie.crawler.constants import (
     DEFAULT_FORWARD_TIMEOUT_SECONDS,
     STDIO_TAIL_MAX_CHARS,
@@ -28,14 +35,20 @@ from menagerie.crawler.constants import (
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.policy import (
     _PARENT_ALLOWED_READ_PATHS_ENV,
+    _PARENT_STANDARD_INPUT_ASSET_ENV,
+    _MODEL_DATA_SUFFIXES,
     SandboxUnavailableError,
     _linux_runtime_code_roots,
     _linux_runtime_read_paths,
     _runtime_code_path_allowed,
+    _runtime_import_metadata_path_allowed,
+    _runtime_model_data_path,
+    _runtime_native_code_path_allowed,
     _runtime_package_data_paths,
     build_safe_environment,
     detect_os_sandbox,
     generate_macos_sandbox_profile,
+    verify_execution_read_manifest,
     wrap_with_os_sandbox,
 )
 
@@ -99,6 +112,11 @@ _MACOS_AUDIT_COMPLETION_MARKER = "MENAGERIE_MACOS_SANDBOX_AUDIT_COMPLETE_V1"
 _MACOS_AUDIT_SENTINEL_PREFIX = "/private/var/empty/.menagerie-seatbelt-audit-"
 _PARENT_COMPLETION_CHALLENGE_ENV = "MENAGERIE_PARENT_COMPLETION_CHALLENGE"
 _WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V1 "
+_WORKER_COMPLETION_V2_PREFIX = "MENAGERIE_WORKER_COMPLETION_V2 "
+_REQUEST_SHA256_ENV = "MENAGERIE_WORKER_REQUEST_SHA256"
+_READ_MANIFEST_ID_ENV = "MENAGERIE_EXECUTION_READ_MANIFEST_ID"
+_WORKER_LOCK_FD_ENV = "MENAGERIE_WORKER_LOCK_FD"
+_LIFECYCLE_FD_ENV = "MENAGERIE_WORKER_LIFECYCLE_FD"
 
 
 @dataclass(frozen=True)
@@ -143,6 +161,9 @@ class SupervisorObservation:
     failed_read_probe_paths: tuple[str, ...] = ()
     success_attestation_sha256: Optional[str] = None
     attested_receipt_sha256: Optional[str] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    shutdown_requested: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible parent observation.
@@ -174,6 +195,9 @@ class SupervisorObservation:
             "failed_read_probe_paths": list(self.failed_read_probe_paths),
             "success_attestation_sha256": self.success_attestation_sha256,
             "attested_receipt_sha256": self.attested_receipt_sha256,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "shutdown_requested": self.shutdown_requested,
         }
 
 
@@ -197,6 +221,10 @@ class SupervisedResult:
     worker_receipt: Optional[dict[str, Any]]
     receipt_error: Optional[str]
     success_attestation_sha256: Optional[str] = None
+    raw_award_receipt: Optional[dict[str, Any]] = None
+    raw_award_receipt_sha256: Optional[str] = None
+    parent_attestation: Optional[dict[str, Any]] = None
+    unattested_partial: Optional[dict[str, Any]] = None
 
 
 @dataclass(frozen=True)
@@ -249,15 +277,636 @@ class SandboxDenialObservation:
         )
 
 
-def _child_limit(rss_limit_bytes: int) -> None:
-    """Apply a fail-closed child address-space limit before exec.
+@dataclass
+class WorkerLeaseHandle:
+    """Parent-side descriptors for one frozen ``WorkerLease`` contract.
+
+    Parameters
+    ----------
+    lease:
+        Exact durable lease metadata.
+    lock_path, record_path:
+        Kernel lock and fsynced local metadata paths.
+    lock_fd:
+        Open locked descriptor transferred to the child at spawn.
+    lifecycle_read_fd, lifecycle_write_fd:
+        Parent-death pipe. The child watches the read end; the parent owns the
+        write end until supervision ends.
+    """
+
+    lease: WorkerLease
+    lock_path: Path
+    record_path: Path
+    lock_fd: Optional[int]
+    lifecycle_read_fd: Optional[int]
+    lifecycle_write_fd: Optional[int]
+
+
+@dataclass(frozen=True)
+class WorkerLeaseRecovery:
+    """Bounded startup reconciliation result for one durable worker lease."""
+
+    state: str
+    lease: Optional[WorkerLease]
+    detail: str
+    lock_held: bool
+    reaped: bool
+
+
+def _utc_now() -> str:
+    """Return a canonical RFC 3339 UTC timestamp.
+
+    Returns
+    -------
+    str
+        Current UTC timestamp with a ``Z`` suffix.
+    """
+
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _worker_lease_mapping(lease: WorkerLease) -> dict[str, Any]:
+    """Serialize the frozen worker lease without inventing another contract.
+
+    Parameters
+    ----------
+    lease:
+        Frozen lease metadata.
+
+    Returns
+    -------
+    dict[str, Any]
+        JSON-compatible exact field mapping.
+    """
+
+    return {
+        "lease_id": lease.lease_id,
+        "nonce": lease.nonce,
+        "run_id": lease.run_id,
+        "stable_id": lease.stable_id,
+        "work_id": lease.work_id,
+        "request_identity": lease.request_identity,
+        "execution_identity": lease.execution_identity,
+        "boot_id": lease.boot_id,
+        "driver_pid": lease.driver_pid,
+        "driver_start_token": lease.driver_start_token,
+        "child_pid": lease.child_pid,
+        "child_start_token": lease.child_start_token,
+        "child_pgid": lease.child_pgid,
+        "receipt_path": str(lease.receipt_path),
+        "opened_at": lease.opened_at,
+        "deadline_at": lease.deadline_at,
+    }
+
+
+def _worker_lease_from_mapping(value: Mapping[str, Any]) -> WorkerLease:
+    """Parse exact durable metadata into the frozen worker lease type.
+
+    Parameters
+    ----------
+    value:
+        Decoded lease record.
+
+    Returns
+    -------
+    WorkerLease
+        Validated frozen contract.
+
+    Raises
+    ------
+    ValueError
+        If fields are missing, extra, or have invalid primitive types.
+    """
+
+    expected = {
+        "lease_id",
+        "nonce",
+        "run_id",
+        "stable_id",
+        "work_id",
+        "request_identity",
+        "execution_identity",
+        "boot_id",
+        "driver_pid",
+        "driver_start_token",
+        "child_pid",
+        "child_start_token",
+        "child_pgid",
+        "receipt_path",
+        "opened_at",
+        "deadline_at",
+    }
+    if set(value) != expected:
+        raise ValueError("worker lease record fields do not match the frozen contract")
+    string_fields = (
+        "lease_id",
+        "nonce",
+        "run_id",
+        "stable_id",
+        "work_id",
+        "request_identity",
+        "execution_identity",
+        "boot_id",
+        "driver_start_token",
+        "receipt_path",
+        "opened_at",
+        "deadline_at",
+    )
+    if any(not isinstance(value[field], str) or not value[field] for field in string_fields):
+        raise ValueError("worker lease string fields must be non-empty")
+    try:
+        opened_at = datetime.fromisoformat(str(value["opened_at"]).replace("Z", "+00:00"))
+        deadline_at = datetime.fromisoformat(str(value["deadline_at"]).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("worker lease timestamps must be RFC 3339") from exc
+    if opened_at.tzinfo is None or deadline_at.tzinfo is None or deadline_at <= opened_at:
+        raise ValueError("worker lease deadline must be after its UTC open time")
+    if not isinstance(value["driver_pid"], int) or value["driver_pid"] <= 0:
+        raise ValueError("worker lease driver_pid must be positive")
+    for field_name in ("child_pid", "child_pgid"):
+        item = value[field_name]
+        if item is not None and (not isinstance(item, int) or item <= 0):
+            raise ValueError(f"worker lease {field_name} must be null or positive")
+    child_token = value["child_start_token"]
+    if child_token is not None and (not isinstance(child_token, str) or not child_token):
+        raise ValueError("worker lease child_start_token must be null or non-empty")
+    return WorkerLease(
+        lease_id=str(value["lease_id"]),
+        nonce=str(value["nonce"]),
+        run_id=str(value["run_id"]),
+        stable_id=str(value["stable_id"]),
+        work_id=str(value["work_id"]),
+        request_identity=str(value["request_identity"]),
+        execution_identity=str(value["execution_identity"]),
+        boot_id=str(value["boot_id"]),
+        driver_pid=int(value["driver_pid"]),
+        driver_start_token=str(value["driver_start_token"]),
+        child_pid=value["child_pid"],
+        child_start_token=child_token,
+        child_pgid=value["child_pgid"],
+        receipt_path=Path(str(value["receipt_path"])),
+        opened_at=str(value["opened_at"]),
+        deadline_at=str(value["deadline_at"]),
+    )
+
+
+def _atomic_write_worker_lease(path: Path, lease: WorkerLease) -> None:
+    """Atomically fsync one exact worker lease record.
+
+    Parameters
+    ----------
+    path:
+        Gitignored local lease record.
+    lease:
+        Frozen metadata to persist.
+    """
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with temporary.open("wb") as handle:
+        handle.write(canonical_json_bytes(_worker_lease_mapping(lease)) + b"\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
+    descriptor = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def current_boot_id() -> str:
+    """Return a stable identifier for the current host boot.
+
+    Returns
+    -------
+    str
+        Linux boot UUID or a hash of the platform boot-time record.
+
+    Raises
+    ------
+    RuntimeError
+        If the platform exposes no verifiable boot identity.
+    """
+
+    linux_boot = Path("/proc/sys/kernel/random/boot_id")
+    try:
+        value = linux_boot.read_text(encoding="ascii").strip()
+    except OSError:
+        value = ""
+    if value:
+        return value
+    try:
+        completed = subprocess.run(
+            ("sysctl", "-n", "kern.boottime"),
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        raise RuntimeError("cannot establish the current boot identity") from None
+    return stable_hash({"boot": completed.stdout.strip()})
+
+
+def process_start_token(pid: int) -> Optional[str]:
+    """Return an OS process-start token resistant to PID reuse.
+
+    Parameters
+    ----------
+    pid:
+        Process identifier to inspect.
+
+    Returns
+    -------
+    str | None
+        Kernel start ticks on Linux, normalized ``ps`` start time elsewhere, or
+        ``None`` when the process cannot be verified.
+    """
+
+    try:
+        stat_text = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
+    except OSError:
+        stat_text = ""
+    if stat_text:
+        closing = stat_text.rfind(")")
+        fields = stat_text[closing + 2 :].split() if closing >= 0 else []
+        if len(fields) > 19:
+            return f"linux-start-ticks:{fields[19]}"
+    try:
+        completed = subprocess.run(
+            ("ps", "-o", "lstart=", "-p", str(pid)),
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    value = " ".join(completed.stdout.split())
+    return None if not value else f"ps-lstart:{value}"
+
+
+def open_worker_lease(
+    lock_path: Path,
+    record_path: Path,
+    lease: WorkerLease,
+    *,
+    on_lock_acquired: Optional[Callable[[WorkerLease], None]] = None,
+) -> WorkerLeaseHandle:
+    """Acquire the single-execution kernel lock and persist its exact lease.
+
+    Parameters
+    ----------
+    lock_path, record_path:
+        Worker kernel-lock and durable local metadata paths.
+    lease:
+        Frozen pre-spawn lease with child identity fields unset.
+    on_lock_acquired:
+        Single-writer callback invoked while the kernel lock is held but before
+        the lease record is fsynced. The driver uses this exact boundary to append
+        ``worker-lease-opened`` in the frozen lock order.
+
+    Returns
+    -------
+    WorkerLeaseHandle
+        Parent descriptors ready for explicit child inheritance.
+
+    Raises
+    ------
+    RuntimeError
+        If another execution process owns the worker lock.
+    ValueError
+        If the lease is inconsistent with this boot or pre-spawn state.
+    """
+
+    if (
+        lease.child_pid is not None
+        or lease.child_start_token is not None
+        or lease.child_pgid is not None
+    ):
+        raise ValueError("new worker lease must not contain child identity")
+    if lease.boot_id != current_boot_id():
+        raise ValueError("new worker lease boot identity is stale")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        os.close(descriptor)
+        raise RuntimeError("worker lock is already held") from exc
+    if on_lock_acquired is not None:
+        try:
+            on_lock_acquired(lease)
+        except Exception:
+            os.close(descriptor)
+            raise
+    read_fd, write_fd = os.pipe()
+    try:
+        _atomic_write_worker_lease(record_path, lease)
+    except Exception:
+        os.close(read_fd)
+        os.close(write_fd)
+        os.close(descriptor)
+        raise
+    return WorkerLeaseHandle(
+        lease=lease,
+        lock_path=lock_path,
+        record_path=record_path,
+        lock_fd=descriptor,
+        lifecycle_read_fd=read_fd,
+        lifecycle_write_fd=write_fd,
+    )
+
+
+def clear_worker_lease(handle: WorkerLeaseHandle) -> None:
+    """Release parent descriptors and durably clear a closed lease record.
+
+    Parameters
+    ----------
+    handle:
+        Lease handle whose child has exited and whose operational closure event has
+        already been appended by the single writer.
+    """
+
+    for attribute in ("lifecycle_read_fd", "lifecycle_write_fd", "lock_fd"):
+        descriptor = getattr(handle, attribute)
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+            setattr(handle, attribute, None)
+    handle.record_path.unlink(missing_ok=True)
+    descriptor = os.open(handle.record_path.parent, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _read_worker_lease(path: Path) -> WorkerLease:
+    """Read one exact local lease record.
+
+    Parameters
+    ----------
+    path:
+        Durable metadata path.
+
+    Returns
+    -------
+    WorkerLease
+        Parsed frozen lease.
+    """
+
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, Mapping):
+        raise ValueError("worker lease record must be an object")
+    return _worker_lease_from_mapping(value)
+
+
+def _deadline_timestamp(value: str) -> float:
+    """Parse one lease deadline as a UTC epoch timestamp.
+
+    Parameters
+    ----------
+    value:
+        RFC 3339 timestamp.
+
+    Returns
+    -------
+    float
+        POSIX timestamp.
+    """
+
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+
+
+def reconcile_worker_lease(
+    lock_path: Path,
+    record_path: Path,
+    *,
+    timeout_seconds: float = 30.0,
+    poll_seconds: float = 0.05,
+) -> WorkerLeaseRecovery:
+    """Reconcile a prior child-held lease before any new work admission.
+
+    Parameters
+    ----------
+    lock_path, record_path:
+        Worker kernel lock and durable metadata paths.
+    timeout_seconds:
+        Bounded recovery wall time. This never extends the recorded lease deadline.
+    poll_seconds:
+        Poll cadence while waiting for a verified child or lock release.
+
+    Returns
+    -------
+    WorkerLeaseRecovery
+        Closed reconciliation state for operational-event and attempt assembly.
+    """
+
+    if timeout_seconds <= 0 or poll_seconds <= 0:
+        raise ValueError("worker lease recovery bounds must be positive")
+    lease: Optional[WorkerLease]
+    try:
+        lease = _read_worker_lease(record_path) if record_path.exists() else None
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        lease = None
+        parse_error = f"corrupt-worker-lease:{type(exc).__name__}"
+    else:
+        parse_error = ""
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            lock_free = False
+        else:
+            lock_free = True
+        if lock_free:
+            if lease is None:
+                state = "none" if not parse_error else "failed-closed"
+                return WorkerLeaseRecovery(
+                    state, None, parse_error or "no-open-lease", False, False
+                )
+            if lease.boot_id != current_boot_id():
+                state = "stale-boot"
+            elif lease.child_pid is None:
+                state = "never-started"
+            elif lease.receipt_path.exists():
+                state = "completed-before-recovery"
+            else:
+                state = "released-without-receipt"
+            return WorkerLeaseRecovery(state, lease, state, False, False)
+        if lease is None:
+            return WorkerLeaseRecovery(
+                "failed-closed",
+                None,
+                parse_error or "held-lock-without-verifiable-lease",
+                True,
+                False,
+            )
+        if lease.boot_id != current_boot_id():
+            return WorkerLeaseRecovery(
+                "failed-closed", lease, "held-lock-from-stale-boot", True, False
+            )
+        if lease.child_pid is None or lease.child_start_token is None or lease.child_pgid is None:
+            return WorkerLeaseRecovery(
+                "failed-closed", lease, "held-lock-without-child-identity", True, False
+            )
+        if process_start_token(lease.child_pid) != lease.child_start_token:
+            return WorkerLeaseRecovery(
+                "failed-closed", lease, "child-start-token-mismatch", True, False
+            )
+        try:
+            observed_pgid = os.getpgid(lease.child_pid)
+        except ProcessLookupError:
+            observed_pgid = None
+        if observed_pgid != lease.child_pgid or lease.child_pgid != lease.child_pid:
+            return WorkerLeaseRecovery(
+                "failed-closed", lease, "child-process-group-mismatch", True, False
+            )
+        recovery_deadline = min(
+            time.monotonic() + timeout_seconds,
+            time.monotonic() + max(0.0, _deadline_timestamp(lease.deadline_at) - time.time()),
+        )
+        while time.monotonic() < recovery_deadline:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                time.sleep(min(poll_seconds, max(0.0, recovery_deadline - time.monotonic())))
+                continue
+            return WorkerLeaseRecovery(
+                "completed-before-recovery", lease, "verified-child-exited", False, False
+            )
+        if time.time() < _deadline_timestamp(lease.deadline_at):
+            return WorkerLeaseRecovery(
+                "active", lease, "verified-child-still-within-lease-deadline", True, False
+            )
+        if process_start_token(lease.child_pid) != lease.child_start_token:
+            return WorkerLeaseRecovery(
+                "failed-closed", lease, "child-identity-changed-before-reap", True, False
+            )
+        try:
+            observed_pgid = os.getpgid(lease.child_pid)
+        except ProcessLookupError:
+            observed_pgid = None
+        if observed_pgid != lease.child_pgid:
+            return WorkerLeaseRecovery(
+                "failed-closed", lease, "child-group-changed-before-reap", True, False
+            )
+        try:
+            os.killpg(lease.child_pgid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        release_deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < release_deadline:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                time.sleep(poll_seconds)
+                continue
+            return WorkerLeaseRecovery("reaped", lease, "verified-child-reaped", False, True)
+        return WorkerLeaseRecovery(
+            "failed-closed", lease, "verified-child-lock-did-not-release", True, False
+        )
+    finally:
+        os.close(descriptor)
+
+
+@contextmanager
+def shutdown_signal_handlers(shutdown_event: threading.Event) -> Iterator[None]:
+    """Install SIGTERM/SIGINT handlers that only set a shutdown event.
+
+    Parameters
+    ----------
+    shutdown_event:
+        Driver-owned event threaded into worker supervision.
+
+    Yields
+    ------
+    None
+        Control while the handlers are installed. Prior handlers are restored.
+    """
+
+    if threading.current_thread() is not threading.main_thread():
+        raise RuntimeError("shutdown signal handlers require the main thread")
+
+    def request_shutdown(signum: int, frame: Any) -> None:
+        """Set the shutdown event without performing signal-unsafe work.
+
+        Parameters
+        ----------
+        signum, frame:
+            Standard Python signal-handler arguments.
+        """
+
+        del signum, frame
+        shutdown_event.set()
+
+    previous = {signum: signal.getsignal(signum) for signum in (signal.SIGTERM, signal.SIGINT)}
+    try:
+        for signum in previous:
+            signal.signal(signum, request_shutdown)
+        yield
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+
+
+def _child_limit(
+    rss_limit_bytes: int,
+    lease_record_path: Optional[Path] = None,
+    lease: Optional[WorkerLease] = None,
+) -> None:
+    """Apply limits, parent-death defense, and trusted lease bootstrap.
 
     Parameters
     ----------
     rss_limit_bytes:
         Requested memory cap in bytes.
+    lease_record_path, lease:
+        Optional exact durable lease filled with child identity before model import.
     """
 
+    if sys.platform.startswith("linux"):
+        libc = ctypes.CDLL(None, use_errno=True)
+        if libc.prctl(1, signal.SIGKILL) != 0:  # PR_SET_PDEATHSIG
+            os._exit(126)
+        if os.getppid() == 1:
+            os._exit(126)
+    if lease_record_path is not None and lease is not None:
+        child_pid = os.getpid()
+        child_pgid = os.getpgrp()
+        if child_pgid != child_pid:
+            os._exit(126)
+        child_token = process_start_token(child_pid)
+        if child_token is None:
+            os._exit(126)
+        active_lease = WorkerLease(
+            lease_id=lease.lease_id,
+            nonce=lease.nonce,
+            run_id=lease.run_id,
+            stable_id=lease.stable_id,
+            work_id=lease.work_id,
+            request_identity=lease.request_identity,
+            execution_identity=lease.execution_identity,
+            boot_id=lease.boot_id,
+            driver_pid=lease.driver_pid,
+            driver_start_token=lease.driver_start_token,
+            child_pid=child_pid,
+            child_start_token=child_token,
+            child_pgid=child_pgid,
+            receipt_path=lease.receipt_path,
+            opened_at=lease.opened_at,
+            deadline_at=lease.deadline_at,
+        )
+        try:
+            _atomic_write_worker_lease(lease_record_path, active_lease)
+        except Exception:
+            os._exit(126)
     if rss_limit_bytes > 0:
         resource.setrlimit(resource.RLIMIT_AS, (rss_limit_bytes, rss_limit_bytes))
         if sys.platform == "darwin" and hasattr(resource, "RLIMIT_DATA"):
@@ -400,7 +1049,13 @@ def _tail(data: bytes) -> str:
     return data.decode("utf-8", errors="replace")[-STDIO_TAIL_MAX_CHARS:]
 
 
-def _verified_worker_completion(stdout: bytes, challenge: str) -> Optional[dict[str, str]]:
+def _verified_worker_completion(
+    stdout: bytes,
+    challenge: str,
+    *,
+    request_nonce: Optional[str] = None,
+    request_sha256: Optional[str] = None,
+) -> Optional[dict[str, str]]:
     """Verify the final normal-completion line against a parent-only challenge.
 
     Parameters
@@ -409,6 +1064,9 @@ def _verified_worker_completion(stdout: bytes, challenge: str) -> Optional[dict[
         Exact worker stdout bytes observed by the parent.
     challenge:
         Fresh challenge removed from the worker environment before model code runs.
+    request_nonce, request_sha256:
+        Exact v3 request association. Supplying both requires the v2 completion
+        protocol; omitting both retains only legacy-untrusted diagnostics.
 
     Returns
     -------
@@ -421,28 +1079,96 @@ def _verified_worker_completion(stdout: bytes, challenge: str) -> Optional[dict[
         lines = stdout.decode("utf-8", errors="strict").splitlines()
     except UnicodeDecodeError:
         return None
-    if not lines or not lines[-1].startswith(_WORKER_COMPLETION_PREFIX):
+    if not lines:
+        return None
+    v2 = request_nonce is not None or request_sha256 is not None
+    prefix = _WORKER_COMPLETION_V2_PREFIX if v2 else _WORKER_COMPLETION_PREFIX
+    if not lines[-1].startswith(prefix):
         return None
     try:
-        value = json.loads(lines[-1][len(_WORKER_COMPLETION_PREFIX) :])
+        value = json.loads(lines[-1][len(prefix) :])
     except json.JSONDecodeError:
         return None
     if not isinstance(value, Mapping):
         return None
-    receipt_sha256 = value.get("receipt_sha256")
+    receipt_key = "raw_award_receipt_sha256" if v2 else "receipt_sha256"
+    receipt_sha256 = value.get(receipt_key)
     proof = value.get("proof")
     if not isinstance(receipt_sha256, str) or not isinstance(proof, str):
         return None
-    expected = stable_hash(
-        {
-            "version": "menagerie.crawler.worker-completion.v1",
-            "challenge": challenge,
-            "receipt_sha256": receipt_sha256,
-        }
-    )
+    proof_payload: dict[str, Any] = {
+        "version": (
+            "menagerie.crawler.worker-completion.v2"
+            if v2
+            else "menagerie.crawler.worker-completion.v1"
+        ),
+        "challenge": challenge,
+        receipt_key: receipt_sha256,
+    }
+    if v2:
+        if (
+            value.get("request_nonce") != request_nonce
+            or value.get("request_sha256") != request_sha256
+        ):
+            return None
+        proof_payload["request_nonce"] = request_nonce
+        proof_payload["request_sha256"] = request_sha256
+    expected = stable_hash(proof_payload)
     if proof != expected:
         return None
-    return {"receipt_sha256": receipt_sha256, "completion_line": lines[-1]}
+    return {
+        receipt_key: receipt_sha256,
+        "completion_line": lines[-1],
+    }
+
+
+def build_parent_attestation(
+    *,
+    request_nonce: str,
+    request_sha256: str,
+    completion: Optional[Mapping[str, str]],
+    observation: SupervisorObservation,
+) -> dict[str, Any]:
+    """Build the frozen v2 parent attestation from parent-observed facts.
+
+    Parameters
+    ----------
+    request_nonce, request_sha256:
+        Exact launched request association.
+    completion:
+        Challenge-verified completion payload, or ``None`` when normal completion
+        was not witnessed.
+    observation:
+        Complete parent-owned process observation.
+
+    Returns
+    -------
+    dict[str, Any]
+        Closed parent attestation with its canonical self-hash.
+    """
+
+    completion_line = None if completion is None else completion.get("completion_line")
+    raw_digest = None if completion is None else completion.get("raw_award_receipt_sha256")
+    payload: dict[str, Any] = {
+        "attestation_version": "menagerie.crawler.parent-attestation.v2",
+        "request_nonce": request_nonce,
+        "request_sha256": request_sha256,
+        "completion_line_sha256": (
+            None if completion_line is None else hash_bytes(completion_line.encode("utf-8"))
+        ),
+        "named_raw_award_receipt_sha256": raw_digest,
+        "exit_code": observation.exit_code,
+        "signal": observation.signal_number,
+        "timed_out": observation.timed_out,
+        "rss_exceeded": observation.rss_exceeded,
+        "peak_rss_bytes": observation.peak_rss_bytes,
+        "stdout_sha256": observation.stdout_sha256,
+        "stderr_sha256": observation.stderr_sha256,
+        "started_at": observation.started_at,
+        "finished_at": observation.finished_at,
+    }
+    payload["attestation_sha256"] = stable_hash(payload)
+    return payload
 
 
 def parent_success_attestation_sha256(completion_line: str, observation: Mapping[str, Any]) -> str:
@@ -579,18 +1305,23 @@ def _parent_owned_audit_path(
     raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
 
 
-def _request_allowed_read_paths(argv: Sequence[str]) -> tuple[Path, ...]:
-    """Derive exact executable/source/input paths from a worker argv and request.
+def _request_allowed_read_paths(
+    argv: Sequence[str], manifest: Optional[ExecutionReadManifest] = None
+) -> tuple[Path, ...]:
+    """Return parent bootstrap files plus one compiled read capability.
 
     Parameters
     ----------
     argv:
         Original unsandboxed command vector.
+    manifest:
+        Frozen trusted capability compiled outside author-controlled request data.
 
     Returns
     -------
     tuple[pathlib.Path, ...]
-        Parent-verified paths allowed as runtime source or standard input.
+        Parent-verified paths allowed as bootstrap, implementation, standard input,
+        or exact runtime files.
     """
 
     allowed: list[Path] = []
@@ -605,82 +1336,33 @@ def _request_allowed_read_paths(argv: Sequence[str]) -> tuple[Path, ...]:
         return tuple(dict.fromkeys(allowed))
     if request_path.is_file():
         allowed.append(request_path)
-    try:
-        request = json.loads(request_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return tuple(dict.fromkeys(allowed))
-    if not isinstance(request, Mapping):
-        return tuple(dict.fromkeys(allowed))
-    standard_asset = _request_standard_asset(request)
-    if standard_asset is not None and standard_asset.is_file():
-        allowed.append(standard_asset)
-    recipe = request.get("recipe")
-    if isinstance(recipe, Mapping):
-        adapter_path = recipe.get("path")
-        if isinstance(adapter_path, str) and adapter_path:
-            resolved_adapter = Path(adapter_path).resolve()
-            if resolved_adapter.is_file():
-                allowed.append(resolved_adapter)
-            for directory in (resolved_adapter.parent, *resolved_adapter.parents[:4]):
-                sidecar = directory / "driver-author-artifact.json"
-                if sidecar.is_file():
-                    allowed.append(sidecar)
-                    break
-    input_manifest = request.get("input_manifest")
-    if isinstance(input_manifest, Mapping):
-        model_root_value = input_manifest.get("validated_model_root")
-        input_path_value = input_manifest.get("validated_input_code_path")
-        if isinstance(model_root_value, str) and isinstance(input_path_value, str):
-            model_root = Path(model_root_value)
-            input_path = Path(input_path_value)
-            if (
-                model_root.is_absolute()
-                and model_root.is_dir()
-                and input_path.is_absolute()
-                and input_path.is_file()
-                and input_path.resolve().is_relative_to(model_root.resolve())
-            ):
-                allowed.append(input_path)
-    # input_contract is author-authored. Its code_path and scalar leaves are never
-    # promoted into a parent read grant; accepted adapter closure bytes already cover
-    # every executable model-local helper the worker may load.
+    if manifest is None:
+        try:
+            request = json.loads(request_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            request = None
+        recipe = request.get("recipe") if isinstance(request, Mapping) else None
+        if isinstance(recipe, Mapping):
+            legacy_paths = [recipe.get("path")]
+            members = recipe.get("code_manifest")
+            if isinstance(members, list):
+                legacy_paths.extend(
+                    member.get("path") for member in members if isinstance(member, Mapping)
+                )
+            for path_value in legacy_paths:
+                if isinstance(path_value, str) and path_value:
+                    path = Path(path_value).resolve()
+                    if path.is_file():
+                        allowed.append(path)
+    if manifest is not None:
+        verify_execution_read_manifest(manifest)
+        allowed.extend(path for path, _digest, _kind in manifest.code_members)
+        if manifest.standard_input_asset is not None:
+            allowed.append(manifest.standard_input_asset[0])
+        allowed.extend(path for path, kind in manifest.runtime_support if kind == "runtime-file")
     return tuple(
         dict.fromkeys(path.resolve() for path in allowed if path.is_absolute() and path.is_file())
     )
-
-
-def _request_standard_asset(request: Mapping[str, Any]) -> Optional[Path]:
-    """Return the one bundled standard asset selected by a worker request.
-
-    Parameters
-    ----------
-    request:
-        Parsed immutable worker request.
-
-    Returns
-    -------
-    pathlib.Path | None
-        Exact possible standard-input asset, or ``None`` for random-only modalities.
-    """
-
-    modality_value = request.get("modality")
-    modalities: tuple[str, ...]
-    if isinstance(modality_value, str):
-        modalities = (modality_value.strip().lower(),)
-    elif isinstance(modality_value, list):
-        modalities = tuple(str(value).strip().lower() for value in modality_value)
-    else:
-        modalities = ()
-    asset_root = Path(__file__).with_name("assets") / "standard"
-    if any(value in {"vision", "image", "computer-vision", "video"} for value in modalities):
-        return asset_root / "image.ppm"
-    if any(value in {"language", "text", "nlp"} for value in modalities):
-        return asset_root / "text.txt"
-    if any(value in {"audio", "speech"} for value in modalities):
-        return asset_root / "audio.csv"
-    if any(value in {"tabular", "recsys"} for value in modalities):
-        return asset_root / "tabular.csv"
-    return None
 
 
 def _runtime_read_roots(argv: Sequence[str], cwd: Path) -> tuple[Path, ...]:
@@ -846,6 +1528,7 @@ def _read_path_is_allowed(
     runtime_code_roots: Sequence[Path],
     *,
     directory_only: bool = False,
+    standard_input_asset: Optional[Path] = None,
 ) -> bool:
     """Return whether a kernel-level read belongs to the closed runtime allowlist.
 
@@ -863,6 +1546,9 @@ def _read_path_is_allowed(
         Environment and verified-source roots limited to runtime-code reads.
     directory_only:
         Whether the traced open explicitly required a directory descriptor.
+    standard_input_asset:
+        Exact trusted standard asset. It is the only model-data-shaped path that
+        may bypass the deny-first classifier.
 
     Returns
     -------
@@ -886,7 +1572,7 @@ def _read_path_is_allowed(
         return True
     if any(candidate == root or root in candidate.parents for root in roots):
         return True
-    if any(candidate == path or path in candidate.parents for path in allowed):
+    if _runtime_import_metadata_path_allowed(candidate):
         return True
     if directory_only and any(
         candidate == root or root in candidate.parents for root in runtime_roots
@@ -896,13 +1582,20 @@ def _read_path_is_allowed(
         candidate.name == "locale-archive" or candidate.name.startswith("LC_")
     ):
         return True
-    if candidate.name == "gconv-modules.cache" and "gconv" in candidate.parts:
-        return True
     try:
         if candidate.is_dir():
             return True
     except OSError:
         pass
+    if _runtime_native_code_path_allowed(candidate, runtime_roots):
+        return True
+    standard_asset = None if standard_input_asset is None else standard_input_asset.resolve()
+    if _runtime_model_data_path(candidate) and candidate != standard_asset:
+        return False
+    if any(candidate == path or path in candidate.parents for path in allowed):
+        return True
+    if candidate.name == "gconv-modules.cache" and "gconv" in candidate.parts:
+        return True
     return _runtime_code_path_allowed(candidate, runtime_code_roots)
 
 
@@ -1012,6 +1705,7 @@ def _parse_linux_denial_audit(
     expected_identity: Optional[tuple[int, int]] = None,
     allowed_read_paths: Sequence[Path] = (),
     runtime_code_roots: Sequence[Path] = (),
+    standard_input_asset: Optional[Path] = None,
 ) -> SandboxDenialObservation:
     """Parse Linux syscall telemetry into closed worker policy observations.
 
@@ -1029,6 +1723,8 @@ def _parse_linux_denial_audit(
         Explicit source/input paths authorized for model execution.
     runtime_code_roots:
         Environment and verified-source roots limited to runtime-code reads.
+    standard_input_asset:
+        Exact trusted standard asset allowed through deny-first model-data checks.
 
     Returns
     -------
@@ -1086,15 +1782,31 @@ def _parse_linux_denial_audit(
                     allowed_read_paths,
                     runtime_code_roots,
                     directory_only="O_DIRECTORY" in line,
+                    standard_input_asset=standard_input_asset,
                 )
                 if allowed:
                     continue
                 result = _read_only_open_result(line)
                 if result is None:
                     return _telemetry_failure_observation("unparsable-open-result")
-                checkpoint_paths.append(path_text)
                 if result < 0:
                     failed_read_probe_paths.append(path_text)
+                    candidate = _resolved_trace_path(path_text, cwd)
+                    loader_probe = (
+                        "O_DIRECTORY" in line
+                        or candidate.suffix.lower()
+                        in {
+                            ".a",
+                            ".dylib",
+                            ".pyd",
+                            ".so",
+                        }
+                        or ".so." in candidate.name.lower()
+                    )
+                    if not loader_probe or candidate.suffix.lower() in _MODEL_DATA_SUFFIXES:
+                        checkpoint_paths.append(path_text)
+                else:
+                    checkpoint_paths.append(path_text)
             continue
         if syscall in {"readlinkat", "name_to_handle_at"}:
             paths = _decoded_trace_paths(line)
@@ -1104,6 +1816,7 @@ def _parse_linux_denial_audit(
                 write_roots,
                 allowed_read_paths,
                 runtime_code_roots,
+                standard_input_asset=standard_input_asset,
             ):
                 checkpoint_paths.append(paths[0])
             continue
@@ -1122,6 +1835,7 @@ def _parse_linux_denial_audit(
                     write_roots,
                     allowed_read_paths,
                     runtime_code_roots,
+                    standard_input_asset=standard_input_asset,
                 )
             ):
                 checkpoint_paths.append(descriptor_path_text)
@@ -1138,6 +1852,7 @@ def _parse_linux_denial_audit(
                     write_roots,
                     allowed_read_paths,
                     runtime_code_roots,
+                    standard_input_asset=standard_input_asset,
                 )
             ):
                 checkpoint_paths.append(descriptor_path_text)
@@ -1739,13 +2454,23 @@ def _poison_receipt_for_policy_failure(
         loaded = json.loads(receipt_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return False
-    if not isinstance(loaded, dict) or loaded.get("receipt_version") != (
-        "menagerie.crawler.worker-receipt.v1"
-    ):
+    if not isinstance(loaded, dict):
         return False
-    payload = {key: value for key, value in loaded.items() if key != "receipt_sha256"}
-    if loaded.get("receipt_sha256") != stable_hash(payload):
-        return False
+    v3_result = loaded.get("result_version") == "menagerie.crawler.worker-result.v3"
+    if v3_result:
+        result_payload = {key: value for key, value in loaded.items() if key != "result_sha256"}
+        if loaded.get("result_sha256") != stable_hash(result_payload):
+            return False
+        diagnostic = loaded.get("diagnostic")
+        if not isinstance(diagnostic, Mapping):
+            return False
+        payload = dict(diagnostic)
+    else:
+        if loaded.get("receipt_version") != "menagerie.crawler.worker-receipt.v1":
+            return False
+        payload = {key: value for key, value in loaded.items() if key != "receipt_sha256"}
+        if loaded.get("receipt_sha256") != stable_hash(payload):
+            return False
     policy_value = payload.get("policy_observation")
     if not isinstance(policy_value, Mapping):
         return False
@@ -1792,7 +2517,16 @@ def _poison_receipt_for_policy_failure(
             else:
                 per_mode[str(mode)] = mode_value
         payload["per_mode"] = per_mode
-    record = {**payload, "receipt_sha256": stable_hash(payload)}
+    if v3_result:
+        record_payload = {
+            "result_version": "menagerie.crawler.worker-result.v3",
+            "raw_award_receipt": None,
+            "raw_award_receipt_sha256": None,
+            "diagnostic": payload,
+        }
+        record = {**record_payload, "result_sha256": stable_hash(record_payload)}
+    else:
+        record = {**payload, "receipt_sha256": stable_hash(payload)}
     _atomic_rewrite_receipt(receipt_path, record)
     return True
 
@@ -1838,7 +2572,9 @@ def _caught_policy_reason(receipt: Mapping[str, Any]) -> Optional[str]:
         Closed policy reason, or ``None`` for a clean observation.
     """
 
-    policy = receipt.get("policy_observation")
+    diagnostic = receipt.get("diagnostic")
+    source = diagnostic if isinstance(diagnostic, Mapping) else receipt
+    policy = source.get("policy_observation")
     if not isinstance(policy, Mapping):
         return None
     reasons = (
@@ -1889,6 +2625,12 @@ def run_isolated_subprocess(
     base_environment: Optional[Mapping[str, str]] = None,
     additional_write_roots: Sequence[Path] = (),
     worker_completion_challenge: Optional[str] = None,
+    execution_read_manifest: Optional[ExecutionReadManifest] = None,
+    shutdown_event: Optional[threading.Event] = None,
+    worker_lease_handle: Optional[WorkerLeaseHandle] = None,
+    request_nonce: Optional[str] = None,
+    request_sha256: Optional[str] = None,
+    on_lease_started: Optional[Callable[[WorkerLease], None]] = None,
 ) -> SupervisorObservation:
     """Launch a fresh credential-scrubbed subprocess inside an OS sandbox.
 
@@ -1911,6 +2653,18 @@ def run_isolated_subprocess(
     worker_completion_challenge:
         Fresh parent secret used only for the standard worker's normal-completion
         attestation. Generic isolated subprocesses leave this unset.
+    execution_read_manifest:
+        Frozen out-of-band read capability. Author-authored request paths never
+        participate in sandbox grants.
+    shutdown_event:
+        Driver-owned signal event polled during supervision.
+    worker_lease_handle:
+        Child-inherited kernel lock and lifecycle descriptors for standard workers.
+    request_nonce, request_sha256:
+        Exact v3 request association required for the v2 completion protocol.
+    on_lease_started:
+        Single-writer callback invoked after trusted child bootstrap has fsynced
+        PID/start-token/PGID and before model execution is polled.
 
     Returns
     -------
@@ -1927,6 +2681,10 @@ def run_isolated_subprocess(
         raise ValueError("argv must contain non-empty NUL-free strings")
     if timeout_seconds <= 0:
         raise ValueError("timeout_seconds must be positive")
+    if (request_nonce is None) != (request_sha256 is None):
+        raise ValueError("request nonce and digest must be supplied together")
+    if execution_read_manifest is not None:
+        verify_execution_read_manifest(execution_read_manifest)
     scratch_root.mkdir(parents=True, exist_ok=True)
     write_roots = (scratch_root.resolve(), *(path.resolve() for path in additional_write_roots))
     for root in write_roots:
@@ -1936,8 +2694,26 @@ def run_isolated_subprocess(
     safe_environment = build_safe_environment(scratch_root, base_environment=base_environment)
     if worker_completion_challenge is not None:
         safe_environment[_PARENT_COMPLETION_CHALLENGE_ENV] = worker_completion_challenge
+    if request_sha256 is not None:
+        safe_environment[_REQUEST_SHA256_ENV] = request_sha256
+    if execution_read_manifest is not None:
+        safe_environment[_READ_MANIFEST_ID_ENV] = execution_read_manifest.manifest_id
+        if execution_read_manifest.standard_input_asset is not None:
+            safe_environment[_PARENT_STANDARD_INPUT_ASSET_ENV] = str(
+                execution_read_manifest.standard_input_asset[0]
+            )
+    inherited_fds: tuple[int, ...] = ()
+    if worker_lease_handle is not None:
+        if worker_lease_handle.lock_fd is None or worker_lease_handle.lifecycle_read_fd is None:
+            raise ValueError("worker lease descriptors are already closed")
+        inherited_fds = (
+            worker_lease_handle.lock_fd,
+            worker_lease_handle.lifecycle_read_fd,
+        )
+        safe_environment[_WORKER_LOCK_FD_ENV] = str(worker_lease_handle.lock_fd)
+        safe_environment[_LIFECYCLE_FD_ENV] = str(worker_lease_handle.lifecycle_read_fd)
     working_directory = (cwd or Path.cwd()).resolve()
-    allowed_read_paths = _request_allowed_read_paths(argv)
+    allowed_read_paths = _request_allowed_read_paths(argv, execution_read_manifest)
     safe_environment[_PARENT_ALLOWED_READ_PATHS_ENV] = json.dumps(
         [str(path) for path in allowed_read_paths],
         ensure_ascii=True,
@@ -1951,7 +2727,18 @@ def run_isolated_subprocess(
     linux_runtime_read_paths: tuple[Path, ...] = ()
     macos_runtime_read_roots: tuple[Path, ...] = ()
     if sandbox.kind == "sandbox-exec":
-        macos_runtime_read_roots = _runtime_read_roots(argv, working_directory)
+        discovered_roots = _runtime_read_roots(argv, working_directory)
+        if execution_read_manifest is None:
+            macos_runtime_read_roots = discovered_roots
+        else:
+            declared_runtime_roots = tuple(
+                path
+                for path, kind in execution_read_manifest.runtime_support
+                if kind == "runtime-root"
+            )
+            macos_runtime_read_roots = tuple(
+                dict.fromkeys((*discovered_roots[:-1], *declared_runtime_roots))
+            )
         runtime_package_data_paths = _runtime_package_data_paths(macos_runtime_read_roots)
         profile_path = scratch_root / "worker-sandbox.sb"
         profile_path.write_text(
@@ -1963,7 +2750,23 @@ def run_isolated_subprocess(
             encoding="utf-8",
         )
     elif sandbox.kind == "bubblewrap":
-        linux_runtime_code_roots = _linux_runtime_code_roots(argv, working_directory)
+        discovered_roots = _linux_runtime_code_roots(argv, working_directory)
+        if execution_read_manifest is None:
+            linux_runtime_code_roots = discovered_roots
+        else:
+            declared_runtime_roots = tuple(
+                path
+                for path, kind in execution_read_manifest.runtime_support
+                if kind == "runtime-root"
+            )
+            linux_runtime_code_roots = tuple(
+                dict.fromkeys(
+                    (
+                        *(root for root in discovered_roots if root != working_directory),
+                        *declared_runtime_roots,
+                    )
+                )
+            )
         linux_runtime_read_paths = _linux_runtime_read_paths(argv)
     sandboxed_argv = wrap_with_os_sandbox(
         sandbox,
@@ -1978,7 +2781,7 @@ def run_isolated_subprocess(
     macos_audit_channel: Optional[_MacOSAuditChannel] = None
     success_attestation_path: Optional[Path] = None
     success_attestation_identity: Optional[tuple[int, int]] = None
-    if worker_completion_challenge is not None:
+    if worker_completion_challenge is not None and request_nonce is None:
         success_attestation_path, success_attestation_identity = _parent_owned_audit_path(
             scratch_root,
             write_roots,
@@ -2008,8 +2811,10 @@ def run_isolated_subprocess(
         )
     usage_before = resource.getrusage(resource.RUSAGE_CHILDREN)
     started = time.monotonic()
+    started_at = _utc_now()
     timed_out = False
     rss_exceeded = False
+    shutdown_requested = False
     peak_rss = 0
     try:
         with stdout_path.open("wb") as stdout_handle, stderr_path.open("wb") as stderr_handle:
@@ -2023,8 +2828,31 @@ def run_isolated_subprocess(
                 shell=False,
                 start_new_session=True,
                 close_fds=True,
-                preexec_fn=partial(_child_limit, rss_limit_bytes),
+                pass_fds=inherited_fds,
+                preexec_fn=partial(
+                    _child_limit,
+                    rss_limit_bytes,
+                    (worker_lease_handle.record_path if worker_lease_handle is not None else None),
+                    worker_lease_handle.lease if worker_lease_handle is not None else None,
+                ),
             )
+            if worker_lease_handle is not None:
+                if worker_lease_handle.lock_fd is not None:
+                    os.close(worker_lease_handle.lock_fd)
+                    worker_lease_handle.lock_fd = None
+                if worker_lease_handle.lifecycle_read_fd is not None:
+                    os.close(worker_lease_handle.lifecycle_read_fd)
+                    worker_lease_handle.lifecycle_read_fd = None
+                try:
+                    worker_lease_handle.lease = _read_worker_lease(worker_lease_handle.record_path)
+                except (OSError, ValueError, json.JSONDecodeError):
+                    _kill_process_group(process)
+                else:
+                    if on_lease_started is not None:
+                        try:
+                            on_lease_started(worker_lease_handle.lease)
+                        except Exception:
+                            _kill_process_group(process)
             if macos_audit_channel is not None:
                 macos_audit_channel.worker_pid = process.pid
             while True:
@@ -2037,6 +2865,10 @@ def run_isolated_subprocess(
                     break
                 if process.poll() is not None:
                     break
+                if shutdown_event is not None and shutdown_event.is_set():
+                    shutdown_requested = True
+                    _kill_process_group(process)
+                    break
                 if elapsed >= timeout_seconds:
                     timed_out = True
                     _kill_process_group(process)
@@ -2044,6 +2876,9 @@ def run_isolated_subprocess(
                 time.sleep(0.01)
             process.wait()
     finally:
+        if worker_lease_handle is not None and worker_lease_handle.lifecycle_write_fd is not None:
+            os.close(worker_lease_handle.lifecycle_write_fd)
+            worker_lease_handle.lifecycle_write_fd = None
         if macos_audit_channel is not None:
             _finish_macos_denial_audit(macos_audit_channel)
     wall_seconds = time.monotonic() - started
@@ -2076,6 +2911,12 @@ def run_isolated_subprocess(
             expected_identity=denial_audit_identity,
             allowed_read_paths=(*allowed_read_paths, *linux_runtime_read_paths),
             runtime_code_roots=linux_runtime_code_roots,
+            standard_input_asset=(
+                None
+                if execution_read_manifest is None
+                or execution_read_manifest.standard_input_asset is None
+                else execution_read_manifest.standard_input_asset[0]
+            ),
         )
     _poison_receipts_in_roots(additional_write_roots, denial)
     parent_observation = {
@@ -2088,7 +2929,12 @@ def run_isolated_subprocess(
         "stderr_sha256": hash_bytes(stderr),
     }
     completion = (
-        _verified_worker_completion(stdout, worker_completion_challenge)
+        _verified_worker_completion(
+            stdout,
+            worker_completion_challenge,
+            request_nonce=request_nonce,
+            request_sha256=request_sha256,
+        )
         if worker_completion_challenge is not None
         and exit_code == 0
         and signal_number is None
@@ -2103,12 +2949,15 @@ def run_isolated_subprocess(
         and success_attestation_path is not None
         and success_attestation_identity is not None
     ):
+        named_receipt_sha256 = completion.get(
+            "raw_award_receipt_sha256", completion.get("receipt_sha256")
+        )
         success_attestation_sha256 = parent_success_attestation_sha256(
             completion["completion_line"], parent_observation
         )
         attestation = {
             "version": "menagerie.crawler.parent-success-attestation.v1",
-            "receipt_sha256": completion["receipt_sha256"],
+            "receipt_sha256": named_receipt_sha256,
             "completion_line": completion["completion_line"],
             "observation": parent_observation,
             "attestation_sha256": success_attestation_sha256,
@@ -2122,7 +2971,7 @@ def run_isolated_subprocess(
                     handle.write(canonical_json_bytes(attestation) + b"\n")
                     handle.flush()
                     os.fsync(handle.fileno())
-                attested_receipt_sha256 = completion["receipt_sha256"]
+                attested_receipt_sha256 = named_receipt_sha256
             else:
                 success_attestation_sha256 = None
         except OSError:
@@ -2148,6 +2997,9 @@ def run_isolated_subprocess(
         failed_read_probe_paths=denial.failed_read_probe_paths,
         success_attestation_sha256=success_attestation_sha256,
         attested_receipt_sha256=attested_receipt_sha256,
+        started_at=started_at,
+        finished_at=_utc_now(),
+        shutdown_requested=shutdown_requested,
     )
 
 
@@ -2179,6 +3031,7 @@ def _sandbox_unavailable_observation(
     stderr = f"{status}\n".encode("utf-8")
     stdout_path.write_bytes(stdout)
     stderr_path.write_bytes(stderr)
+    timestamp = _utc_now()
     return SupervisorObservation(
         argv=tuple(argv),
         cwd=str(working_directory),
@@ -2197,6 +3050,8 @@ def _sandbox_unavailable_observation(
         stderr_tail=_tail(stderr),
         stdout_path=str(stdout_path),
         stderr_path=str(stderr_path),
+        started_at=timestamp,
+        finished_at=timestamp,
     )
 
 
@@ -2222,6 +3077,21 @@ def _load_receipt(path: Path) -> tuple[Optional[dict[str, Any]], Optional[str]]:
         return None, f"invalid-receipt:{type(exc).__name__}"
     if not isinstance(value, dict):
         return None, "invalid-receipt:not-an-object"
+    if value.get("result_version") == "menagerie.crawler.worker-result.v3":
+        claimed_result_hash = value.get("result_sha256")
+        result_payload = {key: item for key, item in value.items() if key != "result_sha256"}
+        if claimed_result_hash != stable_hash(result_payload):
+            return None, "invalid-receipt:result-hash-mismatch"
+        raw_receipt = value.get("raw_award_receipt")
+        raw_digest = value.get("raw_award_receipt_sha256")
+        if (raw_receipt is None) != (raw_digest is None):
+            return None, "invalid-receipt:partial-raw-award-receipt"
+        if raw_receipt is not None:
+            if not isinstance(raw_receipt, Mapping) or raw_digest != stable_hash(raw_receipt):
+                return None, "invalid-receipt:raw-award-hash-mismatch"
+        if not isinstance(value.get("diagnostic"), Mapping):
+            return None, "invalid-receipt:missing-diagnostic"
+        return value, None
     claimed_hash = value.get("receipt_sha256")
     payload = {key: item for key, item in value.items() if key != "receipt_sha256"}
     if claimed_hash != stable_hash(payload):
@@ -2237,6 +3107,10 @@ def supervise_worker(
     timeout_seconds: float = DEFAULT_FORWARD_TIMEOUT_SECONDS,
     rss_limit_bytes: int = 12 * 1024**3,
     cwd: Optional[Path] = None,
+    execution_read_manifest: Optional[ExecutionReadManifest] = None,
+    worker_lease_handle: Optional[WorkerLeaseHandle] = None,
+    shutdown_event: Optional[threading.Event] = None,
+    on_lease_started: Optional[Callable[[WorkerLease], None]] = None,
 ) -> SupervisedResult:
     """Launch the standard worker and attach only a verified atomic receipt.
 
@@ -2250,6 +3124,14 @@ def supervise_worker(
         Parent resource caps.
     cwd:
         Source working directory.
+    execution_read_manifest:
+        Frozen out-of-band read capability for the v3 protocol.
+    worker_lease_handle:
+        Open child-inherited worker lease. Required by fully integrated v3 callers.
+    shutdown_event:
+        Driver-owned event polled during supervision.
+    on_lease_started:
+        Single-writer callback for the durable ``worker-lease-started`` event.
 
     Returns
     -------
@@ -2257,6 +3139,66 @@ def supervise_worker(
         Parent observation plus an optional verified child receipt.
     """
 
+    request_bytes = request_path.read_bytes()
+    request_sha256 = hash_bytes(request_bytes)
+    try:
+        request_value = json.loads(request_bytes)
+    except json.JSONDecodeError as exc:
+        raise ValueError("worker request is not valid JSON") from exc
+    if not isinstance(request_value, Mapping):
+        raise ValueError("worker request must be an object")
+    request_nonce: Optional[str] = None
+    if execution_read_manifest is not None:
+        verify_execution_read_manifest(execution_read_manifest)
+        if request_value.get("protocol_version") != "menagerie.crawler.worker-request.v3":
+            raise ValueError("compiled execution manifests require worker-request.v3")
+        request_nonce_value = request_value.get("request_nonce")
+        if not isinstance(request_nonce_value, str) or not request_nonce_value:
+            raise ValueError("v3 worker request requires a nonce")
+        request_nonce = request_nonce_value
+        expected_association = {
+            "stable_id": execution_read_manifest.stable_id,
+            "work_id": execution_read_manifest.work_id,
+            "execution_identity": execution_read_manifest.execution_identity,
+            "code_manifest_identity": execution_read_manifest.code_manifest_identity,
+            "execution_read_manifest_identity": execution_read_manifest.manifest_id,
+        }
+        mismatches = [
+            field
+            for field, expected in expected_association.items()
+            if request_value.get(field) != expected
+        ]
+        if mismatches:
+            raise ValueError(
+                "worker request differs from execution manifest: " + ",".join(mismatches)
+            )
+        input_contract = request_value.get("input_contract")
+        if isinstance(input_contract, Mapping) and input_contract.get("code_path") is not None:
+            raise ValueError("v3 execution forbids input_contract.code_path")
+        if request_value.get("input_manifest") is not None:
+            raise ValueError("v3 execution forbids legacy input_manifest grants")
+        expected_asset = execution_read_manifest.standard_input_asset
+        request_asset = request_value.get("standard_input_asset")
+        expected_asset_value = (
+            None
+            if expected_asset is None
+            else {"asset_id": expected_asset[2], "sha256": expected_asset[1]}
+        )
+        if request_asset != expected_asset_value:
+            raise ValueError("worker request standard asset differs from execution manifest")
+        if worker_lease_handle is not None:
+            lease = worker_lease_handle.lease
+            if (
+                lease.nonce != request_nonce
+                or lease.stable_id != execution_read_manifest.stable_id
+                or lease.work_id != execution_read_manifest.work_id
+                or lease.request_identity != request_sha256
+                or lease.execution_identity != execution_read_manifest.execution_identity
+                or lease.receipt_path.resolve() != receipt_path.resolve()
+            ):
+                raise ValueError("worker lease differs from the exact v3 request")
+    elif worker_lease_handle is not None:
+        raise ValueError("worker lease inheritance requires an execution read manifest")
     receipt_path.unlink(missing_ok=True)
     argv = (
         sys.executable,
@@ -2278,16 +3220,98 @@ def supervise_worker(
             cwd=working_directory,
             additional_write_roots=(receipt_path.parent,),
             worker_completion_challenge=completion_challenge,
+            execution_read_manifest=execution_read_manifest,
+            shutdown_event=shutdown_event,
+            worker_lease_handle=worker_lease_handle,
+            request_nonce=request_nonce,
+            request_sha256=request_sha256 if request_nonce is not None else None,
+            on_lease_started=on_lease_started,
         )
     except SandboxUnavailableError:
         observation = _sandbox_unavailable_observation(argv, scratch_root, working_directory)
         status = f"failed:{FailureStage.SANDBOX_UNAVAILABLE.value}"
+        if execution_read_manifest is not None and request_nonce is not None:
+            parent_attestation = build_parent_attestation(
+                request_nonce=request_nonce,
+                request_sha256=request_sha256,
+                completion=None,
+                observation=observation,
+            )
+            return SupervisedResult(
+                observation=observation,
+                worker_receipt=None,
+                receipt_error=status,
+                success_attestation_sha256=str(parent_attestation["attestation_sha256"]),
+                parent_attestation=parent_attestation,
+                unattested_partial={
+                    "state": "unattested-partial",
+                    "stage": "policy",
+                    "reason_code": "sandbox-unavailable-v1",
+                    "diagnostic_sha256": None,
+                },
+            )
         return SupervisedResult(observation, None, status)
     receipt, receipt_error = _load_receipt(receipt_path)
     caught_policy_reason = _caught_policy_reason(receipt) if receipt is not None else None
     if caught_policy_reason is not None:
         _poison_receipt_for_policy_failure(receipt_path, caught_policy_reason)
         receipt, receipt_error = _load_receipt(receipt_path)
+    if execution_read_manifest is not None and request_nonce is not None:
+        stdout = Path(observation.stdout_path).read_bytes()
+        completion = _verified_worker_completion(
+            stdout,
+            completion_challenge,
+            request_nonce=request_nonce,
+            request_sha256=request_sha256,
+        )
+        parent_attestation = build_parent_attestation(
+            request_nonce=request_nonce,
+            request_sha256=request_sha256,
+            completion=completion,
+            observation=observation,
+        )
+        raw_receipt_value = receipt.get("raw_award_receipt") if receipt is not None else None
+        raw_digest_value = receipt.get("raw_award_receipt_sha256") if receipt is not None else None
+        raw_receipt = dict(raw_receipt_value) if isinstance(raw_receipt_value, Mapping) else None
+        raw_digest = raw_digest_value if isinstance(raw_digest_value, str) else None
+        association_clean = bool(
+            raw_receipt is not None
+            and raw_digest == stable_hash(raw_receipt)
+            and raw_receipt.get("request_nonce") == request_nonce
+            and raw_receipt.get("request_sha256") == request_sha256
+            and raw_receipt.get("stable_id") == execution_read_manifest.stable_id
+            and raw_receipt.get("work_id") == execution_read_manifest.work_id
+            and raw_receipt.get("execution_identity") == execution_read_manifest.execution_identity
+            and raw_receipt.get("code_manifest_identity")
+            == execution_read_manifest.code_manifest_identity
+            and parent_attestation.get("named_raw_award_receipt_sha256") == raw_digest
+        )
+        if not association_clean:
+            raw_receipt = None
+            raw_digest = None
+            if receipt_error is None:
+                receipt_error = "missing-or-mismatched-v3-attestation"
+        partial = None
+        if raw_receipt is None:
+            diagnostic = receipt.get("diagnostic") if receipt is not None else None
+            partial = {
+                "state": "unattested-partial",
+                "stage": "forward",
+                "reason_code": "protocol-violation",
+                "diagnostic_sha256": (
+                    stable_hash(diagnostic) if isinstance(diagnostic, Mapping) else None
+                ),
+            }
+        return SupervisedResult(
+            observation=observation,
+            worker_receipt=receipt,
+            receipt_error=receipt_error,
+            success_attestation_sha256=str(parent_attestation["attestation_sha256"]),
+            raw_award_receipt=raw_receipt,
+            raw_award_receipt_sha256=raw_digest,
+            parent_attestation=parent_attestation,
+            unattested_partial=partial,
+        )
     success_attestation = observation.success_attestation_sha256
     if receipt is not None and observation.attested_receipt_sha256 != receipt.get("receipt_sha256"):
         success_attestation = None
