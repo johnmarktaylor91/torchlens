@@ -8,6 +8,7 @@ import os
 import shlex
 import shutil
 import sys
+import time
 from pathlib import Path
 from typing import Optional, Protocol, Sequence
 
@@ -54,6 +55,8 @@ EXIT_ERROR = 1
 EXIT_USAGE = 2
 EXIT_LOCKED = 3
 EXIT_PAUSED = 4
+_WAKE_NOOP_APPEND_TIMEOUT_SECONDS = 10.0
+_WAKE_NOOP_APPEND_RETRY_SECONDS = 0.05
 
 
 class DriverFactory(Protocol):
@@ -384,9 +387,16 @@ def _record_scheduled_wake_noop(driver: CrawlerDriver, wake_id: str, wake_at: st
             "authoritative_driver_lock_live": True,
         },
     }
-    append_canonical_operational_event(
-        canonical_operational_ledger_path(driver.paths.ledgers.models), event
-    )
+    path = canonical_operational_ledger_path(driver.paths.ledgers.models)
+    deadline = time.monotonic() + _WAKE_NOOP_APPEND_TIMEOUT_SECONDS
+    while True:
+        try:
+            append_canonical_operational_event(path, event)
+            return
+        except SingleWriterError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(_WAKE_NOOP_APPEND_RETRY_SECONDS)
 
 
 def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:

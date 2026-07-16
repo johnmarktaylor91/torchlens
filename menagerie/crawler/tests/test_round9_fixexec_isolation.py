@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+import menagerie.crawler.worker_supervisor as supervisor_module
 from menagerie.crawler.checkpoint import _externally_controlled_record_text
 from menagerie.crawler.constants import RunMode
 from menagerie.crawler.driver import _redact_attempt_diagnostics, _supervised_failure
@@ -50,6 +51,7 @@ from menagerie.crawler.worker_supervisor import (
     _macos_denial_audit,
     _parse_linux_denial_audit,
     _request_allowed_read_paths,
+    SupervisorObservation,
     supervise_worker,
 )
 
@@ -455,7 +457,46 @@ def test_macos_denial_parser_scopes_pid_and_ignores_other_denial_classes() -> No
     assert denied.poisoned is True
 
 
-def test_macos_audit_finish_drains_delayed_denial_before_completion(tmp_path: Path) -> None:
+def test_macos_descendant_denial_scopes_by_parent_owned_runtime_root(tmp_path: Path) -> None:
+    """A first descendant-only denial is scoped without admitting unrelated host noise."""
+
+    runtime_root = tmp_path / "environment"
+    runtime_root.mkdir()
+    telemetry = (
+        json.dumps(
+            {
+                "processID": 999,
+                "processImagePath": "/Applications/Other.app/Contents/MacOS/other",
+                "eventMessage": "Sandbox: other(999) deny network-outbound 203.0.113.2",
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "processID": 44,
+                "processImagePath": str(runtime_root / "bin" / "python"),
+                "eventMessage": "Sandbox: child(44) deny network-outbound 203.0.113.1",
+            }
+        )
+        + "\n"
+        + _MACOS_AUDIT_COMPLETION_MARKER
+        + "\n"
+    ).encode("utf-8")
+
+    observation = _macos_denial_audit(
+        telemetry,
+        expected_process_ids=(42,),
+        expected_process_roots=(runtime_root,),
+    )
+
+    assert observation.network_attempted is True
+    assert len(observation.socket_targets) == 1
+    assert "203.0.113.1" in observation.socket_targets[0]
+
+
+def test_macos_audit_finish_drains_delayed_denial_before_completion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A deny delivered just after worker exit is drained before the marker is written."""
 
     class _CollectorProcess:
@@ -492,6 +533,19 @@ def test_macos_audit_finish_drains_delayed_denial_before_completion(tmp_path: Pa
         worker_pid=42,
     )
 
+    def observed_post_exit_sentinel(_channel: _MacOSAuditChannel, phase: str) -> bool:
+        """Model a parent sentinel delivered after the delayed worker denial."""
+
+        assert phase == "post-exit"
+        time.sleep(0.25)
+        return True
+
+    monkeypatch.setattr(
+        supervisor_module,
+        "_emit_macos_audit_sentinel",
+        observed_post_exit_sentinel,
+    )
+
     def delayed_denial() -> None:
         """Append one unified-log record after the worker's observed exit."""
 
@@ -520,6 +574,113 @@ def test_macos_audit_finish_drains_delayed_denial_before_completion(tmp_path: Pa
     observation = _macos_denial_audit(path.read_bytes(), expected_process_ids=(42,))
     assert observation.checkpoint_or_weight_read_attempted is True
     assert any("delayed.bin" in value for value in observation.checkpoint_paths)
+
+
+def test_macos_missing_post_exit_sentinel_is_telemetry_poison(tmp_path: Path) -> None:
+    """A collector without a provable post-exit delivery boundary cannot read clean."""
+
+    class _CollectorProcess:
+        """Minimal completed log-stream process fixture."""
+
+        def terminate(self) -> None:
+            """Accept collector shutdown."""
+
+        def wait(self, timeout: float | None = None) -> int:
+            """Return the conventional SIGTERM status."""
+
+            del timeout
+            return -15
+
+    path = tmp_path / "macos-seatbelt.ndjson"
+    handle = path.open("wb")
+    status = path.stat()
+    channel = _MacOSAuditChannel(
+        path,
+        (status.st_dev, status.st_ino),
+        _CollectorProcess(),  # type: ignore[arg-type]
+        handle,
+        worker_pid=42,
+    )
+
+    _finish_macos_denial_audit(channel)
+    observation = _macos_denial_audit(path.read_bytes(), expected_process_ids=(42,))
+
+    assert observation.poisoned is True
+    assert observation.telemetry_failure == "empty"
+
+
+def test_supervisor_poisons_caught_dirty_policy_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A caught child tripwire cannot retain a successful atomic receipt or attestation."""
+
+    receipt_path = tmp_path / "result" / "receipt.json"
+    request_path = tmp_path / "request.json"
+    request_path.write_text("{}", encoding="utf-8")
+
+    def dirty_success(
+        _argv: object,
+        scratch_root: Path,
+        **_kwargs: object,
+    ) -> SupervisorObservation:
+        """Write a caught-network receipt while reporting a normal child exit."""
+
+        policy = {
+            "network_attempted": True,
+            "socket_targets": ["caught.example:443"],
+            "checkpoint_or_weight_read_attempted": False,
+            "checkpoint_paths": [],
+            "write_outside_scratch_attempted": False,
+            "write_paths": [],
+            "credentials_present": False,
+            "torchlens_import_attempted": False,
+            "cache_read_attempted": False,
+        }
+        payload = {
+            "receipt_version": "menagerie.crawler.worker-receipt.v1",
+            "policy_observation": policy,
+            "error": None,
+            "per_mode": {"eval": {"forward_completed": True, "error": None}},
+        }
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        receipt_path.write_text(
+            json.dumps({**payload, "receipt_sha256": stable_hash(payload)}), encoding="utf-8"
+        )
+        scratch_root.mkdir(parents=True, exist_ok=True)
+        stdout_path = scratch_root / "stdout.log"
+        stderr_path = scratch_root / "stderr.log"
+        stdout_path.write_bytes(b"")
+        stderr_path.write_bytes(b"")
+        return SupervisorObservation(
+            argv=(sys.executable,),
+            cwd=str(tmp_path),
+            exit_code=0,
+            signal_number=None,
+            wall_seconds=0.1,
+            cpu_seconds=0.1,
+            peak_rss_bytes=1,
+            timed_out=False,
+            rss_exceeded=False,
+            stdout_sha256=hash_bytes(b""),
+            stdout_bytes=0,
+            stdout_tail="",
+            stderr_sha256=hash_bytes(b""),
+            stderr_bytes=0,
+            stderr_tail="",
+            stdout_path=str(stdout_path),
+            stderr_path=str(stderr_path),
+            success_attestation_sha256="a" * 64,
+            attested_receipt_sha256=stable_hash(payload),
+        )
+
+    monkeypatch.setattr(supervisor_module, "run_isolated_subprocess", dirty_success)
+    result = supervise_worker(request_path, receipt_path, tmp_path / "scratch")
+
+    assert result.worker_receipt is not None
+    assert result.worker_receipt["error"]["reason_code"] == "network-attempt"
+    assert result.worker_receipt["per_mode"]["eval"]["error"]["reason_code"] == ("network-attempt")
+    assert result.receipt_error == "missing-parent-success-attestation"
+    assert result.success_attestation_sha256 is None
 
 
 def test_declarative_revision_fallback_binds_executed_payload(tmp_path: Path) -> None:

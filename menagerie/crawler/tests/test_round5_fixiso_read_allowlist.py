@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import shutil
 import site
@@ -13,8 +15,12 @@ import pytest
 
 from menagerie.crawler import worker_supervisor
 from menagerie.crawler.identity import compute_recipe_revision, hash_bytes
-from menagerie.crawler.policy import detect_os_sandbox
-from menagerie.crawler.worker_supervisor import SupervisedResult, supervise_worker
+from menagerie.crawler.policy import _runtime_code_path_allowed, detect_os_sandbox
+from menagerie.crawler.worker_supervisor import (
+    _read_path_is_allowed,
+    SupervisedResult,
+    supervise_worker,
+)
 
 
 def _tiny_adapter(constructor_body: str) -> str:
@@ -168,6 +174,50 @@ def _assert_linux_enforcement_or_closed(result: SupervisedResult) -> bool:
     assert result.worker_receipt is None
     assert result.receipt_error == "failed:sandbox-unavailable"
     return False
+
+
+def test_hash_inventoried_package_data_and_declared_input_are_readable(tmp_path: Path) -> None:
+    """Only RECORD-bound package data joins code and declared inputs in the read closure."""
+
+    prefix = tmp_path / "environment"
+    site_packages = prefix / "lib" / "python3.11" / "site-packages"
+    package = site_packages / "demo_runtime"
+    dist_info = site_packages / "demo_runtime-1.0.dist-info"
+    package.mkdir(parents=True)
+    dist_info.mkdir()
+    runtime_code = package / "__init__.py"
+    package_data = package / "cacert.pem"
+    hidden_data = package / "weights.npz"
+    declared_input = tmp_path / "declared-input.json"
+    runtime_code.write_text("VALUE = 1\n", encoding="utf-8")
+    package_data.write_bytes(b"public package certificate bundle")
+    hidden_data.write_bytes(b"undeclared model data")
+    declared_input.write_text('{"value": 1}\n', encoding="utf-8")
+    digest = base64.urlsafe_b64encode(hashlib.sha256(package_data.read_bytes()).digest()).rstrip(
+        b"="
+    )
+    (dist_info / "RECORD").write_text(
+        f"demo_runtime/cacert.pem,sha256={digest.decode('ascii')},{package_data.stat().st_size}\n",
+        encoding="utf-8",
+    )
+
+    runtime_roots = (prefix, tmp_path / "verified-source")
+    assert _runtime_code_path_allowed(runtime_code.resolve(), runtime_roots) is True
+    assert _runtime_code_path_allowed(package_data.resolve(), runtime_roots) is True
+    assert _runtime_code_path_allowed(hidden_data.resolve(), runtime_roots) is False
+    assert (
+        _read_path_is_allowed(
+            str(declared_input),
+            tmp_path,
+            (),
+            (declared_input,),
+            runtime_roots,
+        )
+        is True
+    )
+
+    package_data.write_bytes(b"tampered package data")
+    assert _runtime_code_path_allowed(package_data.resolve(), runtime_roots) is False
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux semantic-read regression")

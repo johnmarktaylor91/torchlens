@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import ast
+import base64
 import builtins
+import csv
+import hashlib
 import importlib.abc
 import importlib.machinery
 import io
@@ -98,6 +101,7 @@ _SAFE_INHERITED_KEYS = (
     "WINDIR",
     "TMPDIR",
 )
+_ORIGINAL_IO_OPEN = io.open
 
 SandboxKind = Literal["sandbox-exec", "bubblewrap"]
 
@@ -396,25 +400,20 @@ def _linux_runtime_read_paths(argv: Sequence[str]) -> tuple[Path, ...]:
     return tuple(dict.fromkeys((executable, *_linux_dynamic_runtime_files(executable))))
 
 
-def _runtime_code_path_allowed(path: Path, runtime_code_roots: Sequence[Path]) -> bool:
-    """Return whether a path is an inventoried kind of runtime code or metadata.
+def _runtime_static_path_allowed(path: Path) -> bool:
+    """Return whether a path has a closed runtime-code or import-metadata kind.
 
     Parameters
     ----------
     path:
-        Resolved candidate path.
-    runtime_code_roots:
-        Environment and verified-source roots containing importable code.
+        Resolved candidate path already proven beneath a runtime root.
 
     Returns
     -------
     bool
-        True only for code-bearing suffixes or fixed import metadata below a root.
+        True only for code-bearing suffixes and fixed import metadata.
     """
 
-    roots = tuple(root.resolve() for root in runtime_code_roots)
-    if not any(path == root or root in path.parents for root in roots):
-        return False
     try:
         if path.is_dir():
             return True
@@ -426,7 +425,8 @@ def _runtime_code_path_allowed(path: Path, runtime_code_roots: Sequence[Path]) -
         part in {"site-packages", "dist-packages"} for part in path.parts
     ):
         try:
-            data = path.read_bytes()
+            with _ORIGINAL_IO_OPEN(path, "rb") as handle:
+                data = handle.read(1024**2 + 1)
         except OSError:
             return False
         return len(data) <= 1024**2 and b"\x00" not in data
@@ -444,6 +444,223 @@ def _runtime_code_path_allowed(path: Path, runtime_code_roots: Sequence[Path]) -
     if lowered_name.startswith("python") and lowered_name.endswith(".zip") and "lib" in path.parts:
         return True
     return path.suffix.lower() in _RUNTIME_SOURCE_SUFFIXES or ".so." in lowered_name
+
+
+def _runtime_site_roots(runtime_code_roots: Sequence[Path]) -> tuple[Path, ...]:
+    """Return installed-package roots reachable from bounded runtime roots.
+
+    Parameters
+    ----------
+    runtime_code_roots:
+        Environment and verified-source roots containing importable code.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Existing ``site-packages`` and ``dist-packages`` roots only.
+    """
+
+    roots = tuple(dict.fromkeys(root.resolve() for root in runtime_code_roots))
+    return _cached_runtime_site_roots(roots)
+
+
+@lru_cache(maxsize=32)
+def _cached_runtime_site_roots(runtime_code_roots: tuple[Path, ...]) -> tuple[Path, ...]:
+    """Discover package roots once for one immutable runtime-root tuple.
+
+    Parameters
+    ----------
+    runtime_code_roots:
+        Resolved environment and verified-source roots.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Existing installed-package roots.
+    """
+
+    candidates: list[Path] = []
+    for root in runtime_code_roots:
+        for index, part in enumerate(root.parts):
+            if part in {"site-packages", "dist-packages"}:
+                candidates.append(Path(*root.parts[: index + 1]))
+                break
+        if root.name in {"site-packages", "dist-packages"}:
+            candidates.append(root)
+        for pattern in ("lib/python*/site-packages", "lib/python*/dist-packages"):
+            try:
+                candidates.extend(path for path in root.glob(pattern) if path.is_dir())
+            except OSError:
+                continue
+    return tuple(dict.fromkeys(path.resolve() for path in candidates if path.is_dir()))
+
+
+@lru_cache(maxsize=32)
+def _installed_package_record_entries(site_root: Path) -> tuple[tuple[Path, str], ...]:
+    """Load exact SHA-256-listed installed files from one distribution root.
+
+    Parameters
+    ----------
+    site_root:
+        Resolved ``site-packages`` or ``dist-packages`` directory.
+
+    Returns
+    -------
+    tuple[tuple[pathlib.Path, str], ...]
+        Exact regular-file paths and URL-safe base64 SHA-256 values.
+    """
+
+    entries: dict[Path, str] = {}
+    try:
+        records = tuple(sorted(site_root.glob("*.dist-info/RECORD"), key=lambda path: str(path)))
+    except OSError:
+        return ()
+    for record in records:
+        try:
+            with _ORIGINAL_IO_OPEN(record, "r", encoding="utf-8", newline="") as handle:
+                rows = tuple(csv.reader(handle))
+        except (OSError, UnicodeDecodeError, csv.Error):
+            continue
+        for row in rows:
+            if len(row) < 2 or not row[1].startswith("sha256="):
+                continue
+            candidate = (site_root / Path(row[0])).resolve()
+            if not candidate.is_relative_to(site_root):
+                continue
+            entries[candidate] = row[1].removeprefix("sha256=")
+    return tuple(entries.items())
+
+
+@lru_cache(maxsize=4096)
+def _installed_package_digest_for_path(site_root: Path, path: Path) -> Optional[str]:
+    """Return the owning distribution's exact digest for one package-data path.
+
+    Parameters
+    ----------
+    site_root:
+        Resolved installed-package root.
+    path:
+        Exact candidate beneath that root.
+
+    Returns
+    -------
+    str | None
+        URL-safe base64 SHA-256, or ``None`` when no owning distribution records it.
+    """
+
+    try:
+        relative = path.relative_to(site_root).as_posix()
+    except ValueError:
+        return None
+    top_level = Path(relative).parts[0]
+    normalized_top_level = re.sub(r"[-_.]+", "-", top_level).lower()
+    try:
+        distributions = tuple(site_root.glob("*.dist-info"))
+    except OSError:
+        return None
+    records: list[Path] = []
+    for distribution in distributions:
+        distribution_name = distribution.name.removesuffix(".dist-info").rsplit("-", 1)[0]
+        normalized_distribution = re.sub(r"[-_.]+", "-", distribution_name).lower()
+        owns_top_level = normalized_distribution == normalized_top_level
+        top_level_path = distribution / "top_level.txt"
+        if not owns_top_level and top_level_path.is_file():
+            try:
+                with _ORIGINAL_IO_OPEN(top_level_path, "r", encoding="utf-8") as handle:
+                    owns_top_level = top_level in {line.strip() for line in handle if line.strip()}
+            except (OSError, UnicodeDecodeError):
+                owns_top_level = False
+        if owns_top_level:
+            records.append(distribution / "RECORD")
+    for record in records:
+        try:
+            with _ORIGINAL_IO_OPEN(record, "r", encoding="utf-8", newline="") as handle:
+                for row in csv.reader(handle):
+                    if len(row) >= 2 and row[0] == relative and row[1].startswith("sha256="):
+                        return row[1].removeprefix("sha256=")
+        except (OSError, UnicodeDecodeError, csv.Error):
+            continue
+    return None
+
+
+def _runtime_package_data_paths(runtime_code_roots: Sequence[Path]) -> tuple[Path, ...]:
+    """Return exact hash-inventoried non-code package-data paths.
+
+    Parameters
+    ----------
+    runtime_code_roots:
+        Environment and verified-source roots containing importable code.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Installed regular files whose distribution ``RECORD`` carries a SHA-256.
+    """
+
+    paths: list[Path] = []
+    for site_root in _runtime_site_roots(runtime_code_roots):
+        paths.extend(
+            path
+            for path, _digest in _installed_package_record_entries(site_root)
+            if not _runtime_static_path_allowed(path)
+        )
+    return tuple(dict.fromkeys(paths))
+
+
+def _package_data_digest_matches(path: Path, expected_digest: str) -> bool:
+    """Return whether installed package data still matches its recorded SHA-256.
+
+    Parameters
+    ----------
+    path:
+        Exact installed package-data file.
+    expected_digest:
+        URL-safe base64 digest from the owning distribution ``RECORD``.
+
+    Returns
+    -------
+    bool
+        True only when current bytes match the immutable installation inventory.
+    """
+
+    try:
+        digest = hashlib.sha256()
+        with _ORIGINAL_IO_OPEN(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError:
+        return False
+    observed = base64.urlsafe_b64encode(digest.digest()).rstrip(b"=").decode("ascii")
+    return observed == expected_digest
+
+
+def _runtime_code_path_allowed(path: Path, runtime_code_roots: Sequence[Path]) -> bool:
+    """Return whether a path is inventoried runtime code, metadata, or package data.
+
+    Parameters
+    ----------
+    path:
+        Resolved candidate path.
+    runtime_code_roots:
+        Environment and verified-source roots containing importable code.
+
+    Returns
+    -------
+    bool
+        True only for closed code/import kinds or hash-inventoried package data below a root.
+    """
+
+    roots = tuple(root.resolve() for root in runtime_code_roots)
+    if not any(path == root or root in path.parents for root in roots):
+        return False
+    if _runtime_static_path_allowed(path):
+        return True
+    for site_root in _runtime_site_roots(roots):
+        if not path.is_relative_to(site_root):
+            continue
+        expected_digest = _installed_package_digest_for_path(site_root, path)
+        return expected_digest is not None and _package_data_digest_matches(path, expected_digest)
+    return False
 
 
 def _linux_minimal_read_mounts(
