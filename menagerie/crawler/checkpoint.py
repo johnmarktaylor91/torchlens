@@ -12,6 +12,13 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Collection, Iterable, Mapping, Optional, Sequence
 
+from menagerie.crawler.artifact_transactions import (
+    ARTIFACT_RECONSTRUCTION_SCHEMA_VERSION,
+    ArtifactCheckpointError,
+    artifact_reconstruction_paths,
+    validate_artifact_checkpoint,
+)
+from menagerie.crawler.authority import AuthorityContext
 from menagerie.crawler.constants import (
     FAILURE_REASON_CODES,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
@@ -1042,12 +1049,53 @@ def _validate_canonical_jsonl_append_only(
             ) from exc
 
 
+def _validate_artifact_reconstruction_append_only(
+    repo_root: Path,
+    artifact_ledger_paths: Sequence[Path],
+    candidates: Sequence[Path],
+    runner: GitRunner,
+) -> None:
+    """Prove every ledger-named reconstruction is immutable against ``HEAD``.
+
+    Parameters
+    ----------
+    repo_root, artifact_ledger_paths, candidates, runner:
+        Worktree root, complete artifact shards, checkpoint candidate set, and
+        non-interactive Git boundary.
+
+    Raises
+    ------
+    CheckpointValidationError
+        If a named reconstruction is absent from the checkpoint set or rewrites
+        bytes already committed at the same immutable path.
+    """
+
+    candidate_set = set(candidates)
+    for absolute in artifact_reconstruction_paths(artifact_ledger_paths, repo_root):
+        try:
+            relative = _normalize_path(absolute.resolve().relative_to(repo_root.resolve()))
+        except ValueError as exc:
+            raise CheckpointValidationError(
+                f"artifact reconstruction escapes repository: {absolute}"
+            ) from exc
+        if relative not in candidate_set or not absolute.is_file():
+            raise CheckpointValidationError(
+                f"ledger-named reconstruction is absent from checkpoint: {relative.as_posix()}"
+            )
+        committed = _head_path_bytes(repo_root, relative, runner)
+        if committed is not None and absolute.read_bytes() != committed:
+            raise CheckpointValidationError(
+                f"ledger-named reconstruction is not immutable against HEAD: {relative.as_posix()}"
+            )
+
+
 def create_canonical_checkpoint(
     repo_root: Path,
     intake_root: Path,
     *,
     records_root: Optional[Path] = None,
     mirrors: Optional[MirrorStore] = None,
+    authority_context: Optional[AuthorityContext] = None,
     expected_branch: str = CRAWLER_BRANCH,
     branch: Optional[str] = None,
     git_runner: Optional[GitRunner] = None,
@@ -1064,6 +1112,10 @@ def create_canonical_checkpoint(
         Optional canonical records root; defaults inside the crawler tree.
     mirrors:
         Optional separated byte stores. Defaults to the conventional runtime mirror roots.
+    authority_context:
+        Mandatory active trust roots when an ``artifact-event.v1`` transaction
+        exists. Legacy checkpoints without artifact events remain readable until
+        the Phase-2 driver/reducer switch.
     expected_branch, branch, git_runner:
         Branch policy and deterministic Git injection accepted by ``create_checkpoint_set``.
 
@@ -1084,6 +1136,7 @@ def create_canonical_checkpoint(
             intake_root,
             records_root=records_root,
             mirrors=mirrors,
+            authority_context=authority_context,
             expected_branch=expected_branch,
             branch=branch,
             git_runner=git_runner,
@@ -1100,6 +1153,7 @@ def _create_canonical_checkpoint(
     *,
     records_root: Optional[Path],
     mirrors: Optional[MirrorStore],
+    authority_context: Optional[AuthorityContext],
     expected_branch: str,
     branch: Optional[str],
     git_runner: Optional[GitRunner],
@@ -1108,7 +1162,8 @@ def _create_canonical_checkpoint(
 
     Parameters
     ----------
-    repo_root, intake_root, records_root, mirrors, expected_branch, branch, git_runner:
+    repo_root, intake_root, records_root, mirrors, authority_context,
+    expected_branch, branch, git_runner:
         Fully normalized transaction inputs documented by ``create_canonical_checkpoint``.
 
     Returns
@@ -1162,6 +1217,30 @@ def _create_canonical_checkpoint(
         root / ".crawl-local" / "mirrors" / "private",
         root / ".crawl-local" / "mirrors" / "local",
     )
+    artifact_ledgers = tuple(sorted((canonical_records / "artifacts").glob("*.jsonl")))
+    has_artifact_events = any(path.stat().st_size > 0 for path in artifact_ledgers)
+    if has_artifact_events:
+        if authority_context is None:
+            raise CheckpointValidationError(
+                "artifact-event checkpoint validation requires the active AuthorityContext"
+            )
+        if (
+            authority_context.active_intake_snapshot_id != snapshot.snapshot_id
+            or authority_context.active_intake_snapshot_sha256 != snapshot.snapshot_sha256
+        ):
+            raise CheckpointValidationError(
+                "artifact checkpoint AuthorityContext differs from the active intake snapshot"
+            )
+        try:
+            validate_artifact_checkpoint(
+                artifact_ledgers,
+                context=authority_context,
+                mirrors=mirror_store,
+                canonical_root=canonical_root,
+                repository_root=root,
+            )
+        except ArtifactCheckpointError as exc:
+            raise CheckpointValidationError(str(exc)) from exc
     manifest_root = canonical_root / "mirrors"
     public_artifacts, license_inventory, mirror_manifests = _derive_mirror_facts(manifest_root)
     promoted_model_ids = _committed_promotion_model_ids(canonical_root)
@@ -1178,6 +1257,8 @@ def _create_canonical_checkpoint(
     )
     candidates = _derive_candidate_paths(root, canonical_root)
     _validate_canonical_jsonl_append_only(root, canonical_root, candidates, runner)
+    if has_artifact_events:
+        _validate_artifact_reconstruction_append_only(root, artifact_ledgers, candidates, runner)
     validated_environment_candidates = _validate_environment_candidates(
         canonical_root, candidates, current
     )
@@ -1208,6 +1289,7 @@ def _create_canonical_checkpoint(
             ledgers.models,
             ledgers.attempts,
             ledgers.gates,
+            *artifact_ledgers,
             canonical_operational_ledger_path(ledgers.models),
             canonical_requeue_grants_path(ledgers.models),
         ),
@@ -3009,6 +3091,11 @@ def _derive_candidate_paths(repo_root: Path, canonical_root: Path) -> tuple[Path
     current_models = materialize_current(default_ledger_paths(canonical_root / "records"))
     for reconstruction in reconstruction_root.rglob("*.json"):
         if reconstruction.name.endswith(".commit.json"):
+            continue
+        payload = _read_json_object(reconstruction, "canonical reconstruction")
+        if payload.get("schema_version") == ARTIFACT_RECONSTRUCTION_SCHEMA_VERSION:
+            # The caller validates v1 documents from the independent artifact
+            # ledger plus mandatory AuthorityContext before candidate derivation.
             continue
         validate_canonical_reconstruction(
             reconstruction,

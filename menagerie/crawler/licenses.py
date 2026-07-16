@@ -7,7 +7,8 @@ from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
-from menagerie.crawler.identity import stable_hash
+from menagerie.crawler.authority import ArtifactClaim, MirrorObject
+from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.mirrors import (
     ArtifactManifest,
     ArtifactOrigin,
@@ -593,6 +594,133 @@ def pre_public_merge_sweep(
     }
     report = LicenseSweepReport(
         artifact_count=len(ordered),
+        public_ok_count=public_ok,
+        violations=tuple(violations),
+        report_sha256=stable_hash(digest_payload),
+    )
+    if violations:
+        raise PublicMergeRejected(report)
+    return report
+
+
+def pre_public_claim_sweep(
+    objects: Sequence[MirrorObject],
+    claims: Sequence[ArtifactClaim],
+    mirrors: MirrorStore,
+) -> LicenseSweepReport:
+    """Validate normalized public objects against independent accepted claims.
+
+    Unlike the legacy path-keyed sweep, this validator permits many model claims
+    over one intrinsic object while retaining each claim's independent gate and
+    license lineage.  A restricted claim over identical bytes cannot authorize a
+    public object; at least one exact accepted public-compatible claim must name
+    that public object ID.
+
+    Parameters
+    ----------
+    objects:
+        Complete intrinsic object inventory derived from artifact events.
+    claims:
+        Complete accepted model-specific claim inventory.
+    mirrors:
+        Physical mirror roots used for exact byte reverification.
+
+    Returns
+    -------
+    LicenseSweepReport
+        Passing deterministic normalized-object report.
+
+    Raises
+    ------
+    PublicMergeRejected
+        If a public object lacks accepted public authority or any public bytes
+        differ from their intrinsic inventory.
+    """
+
+    objects_by_id: dict[str, MirrorObject] = {}
+    violations: list[str] = []
+    for obj in objects:
+        previous_object = objects_by_id.setdefault(str(obj.object_id), obj)
+        if previous_object != obj:
+            violations.append(f"{obj.object_id}: conflicting intrinsic object inventory")
+    claims_by_id: dict[str, ArtifactClaim] = {}
+    for claim in claims:
+        previous_claim = claims_by_id.setdefault(str(claim.claim_id), claim)
+        if previous_claim != claim:
+            violations.append(f"{claim.claim_id}: conflicting artifact claim inventory")
+        claimed_object = objects_by_id.get(str(claim.object_id))
+        if claimed_object is None:
+            violations.append(f"{claim.claim_id}: references an absent intrinsic object")
+            continue
+        expected_class = (
+            MirrorClass.PUBLIC.value
+            if claim.license_disposition == RedistributionClass.PUBLIC_OK.value
+            else MirrorClass.PRIVATE.value
+        )
+        if claimed_object.mirror_class != expected_class:
+            violations.append(
+                f"{claim.claim_id}: {claim.license_disposition} claim references "
+                f"{claimed_object.mirror_class} object"
+            )
+
+    public_objects = tuple(
+        sorted(
+            (obj for obj in objects_by_id.values() if obj.mirror_class == MirrorClass.PUBLIC.value),
+            key=lambda value: str(value.object_id),
+        )
+    )
+    public_ok = 0
+    for obj in public_objects:
+        accepted = tuple(
+            claim
+            for claim in claims_by_id.values()
+            if claim.object_id == obj.object_id
+            and claim.license_disposition == RedistributionClass.PUBLIC_OK.value
+            and str(claim.gate_id) not in {"", "pending-untrusted", "not-applicable"}
+            and str(claim.authorization_id) not in {"", "pending-untrusted", "not-applicable"}
+        )
+        if not accepted:
+            violations.append(f"{obj.object_id}: public object lacks an accepted public claim")
+            continue
+        try:
+            path = mirrors.address(obj.content_sha256, MirrorClass.PUBLIC)
+            expected_key = path.relative_to(mirrors.root(MirrorClass.PUBLIC)).as_posix()
+            content = path.read_bytes()
+        except (OSError, RuntimeError) as exc:
+            violations.append(f"{obj.object_id}: public object is not retrievable: {exc}")
+            continue
+        if obj.object_key != expected_key:
+            violations.append(f"{obj.object_id}: public object key is not canonical")
+            continue
+        if len(content) != obj.byte_count or hash_bytes(content) != obj.content_sha256:
+            violations.append(f"{obj.object_id}: public object bytes changed")
+            continue
+        public_ok += 1
+    digest_payload = {
+        "objects": [
+            {
+                "object_id": str(obj.object_id),
+                "mirror_class": obj.mirror_class,
+                "content_sha256": obj.content_sha256,
+                "byte_count": obj.byte_count,
+                "media_type": obj.media_type,
+                "object_key": obj.object_key,
+            }
+            for obj in sorted(objects_by_id.values(), key=lambda value: str(value.object_id))
+        ],
+        "claims": [
+            {
+                "claim_id": str(claim.claim_id),
+                "object_id": str(claim.object_id),
+                "stable_id": claim.stable_id,
+                "license_disposition": claim.license_disposition,
+            }
+            for claim in sorted(claims_by_id.values(), key=lambda value: str(value.claim_id))
+        ],
+        "violations": violations,
+    }
+    report = LicenseSweepReport(
+        artifact_count=len(public_objects),
         public_ok_count=public_ok,
         violations=tuple(violations),
         report_sha256=stable_hash(digest_payload),

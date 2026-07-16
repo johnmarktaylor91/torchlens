@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterator, Mapping, Optional
 
 from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.models import JsonObject
@@ -343,6 +343,37 @@ class MirrorStore:
                 f"mirror size mismatch: expected {manifest.byte_count}, got {len(content)}"
             )
         return content
+
+    def iter_objects(
+        self, mirror_class: Optional[MirrorClass] = None
+    ) -> Iterator[tuple[MirrorClass, str]]:
+        """Enumerate every physical object in deterministic key order.
+
+        Enumeration deliberately returns physical ``(class, object_key)`` pairs,
+        not manifest claims.  Callers must join these facts to independently
+        derived :class:`~menagerie.crawler.authority.MirrorObject` inventory
+        rows before trusting media type, size, or provenance.
+
+        Parameters
+        ----------
+        mirror_class:
+            Optional single store class.  Omission enumerates public, private,
+            and local stores in enum order.
+
+        Yields
+        ------
+        tuple[MirrorClass, str]
+            Physical mirror class and root-relative POSIX object key.
+        """
+
+        classes = (mirror_class,) if mirror_class is not None else tuple(MirrorClass)
+        for selected in classes:
+            root = self.root(selected)
+            if not root.exists():
+                continue
+            for path in sorted(root.rglob("*"), key=lambda value: value.as_posix()):
+                if path.is_file():
+                    yield selected, path.relative_to(root).as_posix()
 
     def verify_manifest(self, manifest: ArtifactManifest) -> None:
         """Validate origin, retention, and canonical hash address.
