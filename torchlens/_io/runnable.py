@@ -2400,10 +2400,21 @@ _INPUT_METADATA_FACT_NAMES = frozenset(
         "grad_fn",
         "is_leaf",
         "storage_nbytes",
+        "retains_grad",
+        "_base",
+        "_is_view",
+        "is_conj",
+        "is_neg",
+        "is_inference",
+        "is_pinned",
+        "is_shared",
+        "is_coalesced",
     }
 )
 """Metadata predicates the capture-time observer records for model-input receivers (r27-H2,
-extended r29-C1 with ``storage_offset`` / ``grad_fn`` / ``is_leaf`` / ``storage_nbytes``)."""
+extended r29-C1 with ``storage_offset`` / ``grad_fn`` / ``is_leaf`` / ``storage_nbytes``; r31
+adds the capability-driven surface ``retains_grad`` / ``_base`` / ``_is_view`` / ``is_conj`` /
+``is_neg`` / ``is_inference`` / ``is_pinned`` / ``is_shared`` / ``is_coalesced``)."""
 
 
 def _input_metadata_witnesses(

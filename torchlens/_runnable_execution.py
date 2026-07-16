@@ -584,9 +584,27 @@ def _runtime_input_metadata_value(value: torch.Tensor, name: str) -> Any:
             return bool(value.grad_fn is not None)
         if name == "is_leaf":
             return bool(value.is_leaf)
+        if name == "retains_grad":
+            return bool(value.retains_grad)
+        if name == "_base":
+            return bool(value._base is not None)
+        if name == "_is_view":
+            return bool(value._is_view())
+        if name == "is_conj":
+            return bool(value.is_conj())
+        if name == "is_neg":
+            return bool(value.is_neg())
+        if name == "is_inference":
+            return bool(value.is_inference())
+        if name == "is_pinned":
+            return bool(value.is_pinned())
+        if name == "is_shared":
+            return bool(value.is_shared())
+        if name == "is_coalesced":
+            return bool(value.is_coalesced())
         if name == "storage_nbytes":
             return int(value.untyped_storage().nbytes())
-    except (RuntimeError, AttributeError, TypeError, ValueError):
+    except (RuntimeError, AttributeError, TypeError, ValueError, NotImplementedError):
         return None
     return None
 
