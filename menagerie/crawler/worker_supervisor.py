@@ -19,6 +19,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any, BinaryIO, Mapping, Optional, Sequence
 
+from menagerie.crawler.authority import WorkerLease as WorkerLease
 from menagerie.crawler.constants import (
     DEFAULT_FORWARD_TIMEOUT_SECONDS,
     STDIO_TAIL_MAX_CHARS,

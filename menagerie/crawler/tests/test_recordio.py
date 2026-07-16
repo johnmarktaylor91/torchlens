@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from menagerie.crawler.constants import ATTEMPT_SCHEMA_VERSION
+from menagerie.crawler.constants import ATTEMPT_SCHEMA_VERSION, ATTEMPT_SCHEMA_VERSION_V3
 from menagerie.crawler.recordio import (
     JsonlLedger,
     LedgerCorruptionError,
@@ -14,6 +14,7 @@ from menagerie.crawler.recordio import (
     recover_torn_tail,
     scan_jsonl,
 )
+from menagerie.crawler.schema import PayloadValidationError
 from menagerie.crawler.tests.conftest import make_attempt
 
 
@@ -88,3 +89,67 @@ def test_complete_malformed_line_is_never_recovered(tmp_path: Path) -> None:
     path.write_bytes(b"not-json\n")
     with pytest.raises(LedgerCorruptionError):
         recover_torn_tail(path)
+
+
+def test_v3_writer_reads_v2_history_but_appends_only_v3(tmp_path: Path) -> None:
+    """Mixed immutable attempt history is readable without enabling legacy appends.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    path = tmp_path / "mixed-attempts.jsonl"
+    legacy = make_attempt()
+    with JsonlLedger(path, ATTEMPT_SCHEMA_VERSION) as ledger:
+        ledger.append(legacy)
+
+    current = make_attempt()
+    current["schema_version"] = ATTEMPT_SCHEMA_VERSION_V3
+    current["attempt_id"] = "attempt-v3"
+    current["execution_read_manifest_identity"] = "sha256:" + "e" * 64
+    current["raw_award_receipt"] = {
+        "receipt_version": "menagerie.crawler.raw-award-receipt.v3",
+        "request_nonce": "nonce-v3",
+        "request_sha256": "sha256:" + "1" * 64,
+        "stable_id": current["stable_id"],
+        "work_id": current["work_id"],
+        "execution_identity": current["identities"]["execution"],
+        "recipe_revision": current["identities"]["recipe"],
+        "code_manifest_identity": "sha256:" + "2" * 64,
+        "input_identity": "sha256:" + "3" * 64,
+        "requested_mode": current["mode"],
+        "observation": current["worker_receipt"],
+    }
+    current["raw_award_receipt_sha256"] = "sha256:" + "4" * 64
+    current["parent_attestation"] = {
+        "attestation_version": "menagerie.crawler.parent-attestation.v2",
+        "request_nonce": "nonce-v3",
+        "request_sha256": "sha256:" + "1" * 64,
+        "completion_line_sha256": "sha256:" + "5" * 64,
+        "named_raw_award_receipt_sha256": "sha256:" + "4" * 64,
+        "exit_code": 0,
+        "signal": None,
+        "timed_out": False,
+        "rss_exceeded": False,
+        "peak_rss_bytes": 1,
+        "stdout_sha256": "sha256:" + "6" * 64,
+        "stderr_sha256": "sha256:" + "7" * 64,
+        "started_at": current["started_at"],
+        "finished_at": current["finished_at"],
+        "attestation_sha256": "sha256:" + "8" * 64,
+    }
+    current["unattested_partial"] = None
+    current.pop("ledger_seq")
+    current.pop("payload_sha256")
+
+    with JsonlLedger(path, ATTEMPT_SCHEMA_VERSION_V3) as ledger:
+        assert [row["schema_version"] for row in ledger.records] == [ATTEMPT_SCHEMA_VERSION]
+        ledger.append(current)
+        with pytest.raises(PayloadValidationError):
+            ledger.append(legacy)
+    assert [row["schema_version"] for row in scan_jsonl(path)] == [
+        ATTEMPT_SCHEMA_VERSION,
+        ATTEMPT_SCHEMA_VERSION_V3,
+    ]

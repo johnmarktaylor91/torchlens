@@ -12,14 +12,33 @@ from pathlib import Path
 from typing import Any, Iterator, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.constants import (
+    ARTIFACT_EVENT_SCHEMA_VERSION,
     ATTEMPT_SCHEMA_VERSION,
+    ATTEMPT_SCHEMA_VERSION_V3,
     GATE_SCHEMA_VERSION,
+    GATE_SCHEMA_VERSION_V3,
     MODEL_SCHEMA_VERSION,
+    MODEL_SCHEMA_VERSION_V3,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
 )
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, payload_hash
 from menagerie.crawler.models import AppendResult, JsonObject, TailRecoveryEvidence
-from menagerie.crawler.schema import PayloadValidationError, validate_payload
+from menagerie.crawler.schema import SCHEMA_FILES, PayloadValidationError, validate_payload
+
+_SCHEMA_READ_VERSIONS: dict[str, frozenset[str]] = {
+    MODEL_SCHEMA_VERSION: frozenset({MODEL_SCHEMA_VERSION}),
+    MODEL_SCHEMA_VERSION_V3: frozenset({MODEL_SCHEMA_VERSION, MODEL_SCHEMA_VERSION_V3}),
+    ATTEMPT_SCHEMA_VERSION: frozenset({ATTEMPT_SCHEMA_VERSION}),
+    ATTEMPT_SCHEMA_VERSION_V3: frozenset({ATTEMPT_SCHEMA_VERSION, ATTEMPT_SCHEMA_VERSION_V3}),
+    GATE_SCHEMA_VERSION: frozenset({GATE_SCHEMA_VERSION}),
+    GATE_SCHEMA_VERSION_V3: frozenset({GATE_SCHEMA_VERSION, GATE_SCHEMA_VERSION_V3}),
+    ARTIFACT_EVENT_SCHEMA_VERSION: frozenset({ARTIFACT_EVENT_SCHEMA_VERSION}),
+    OPERATIONAL_EVENT_SCHEMA_VERSION: frozenset({OPERATIONAL_EVENT_SCHEMA_VERSION}),
+}
+
+_MODEL_SCHEMA_VERSIONS = frozenset({MODEL_SCHEMA_VERSION, MODEL_SCHEMA_VERSION_V3})
+_ATTEMPT_SCHEMA_VERSIONS = frozenset({ATTEMPT_SCHEMA_VERSION, ATTEMPT_SCHEMA_VERSION_V3})
+_GATE_SCHEMA_VERSIONS = frozenset({GATE_SCHEMA_VERSION, GATE_SCHEMA_VERSION_V3})
 
 
 class LedgerError(RuntimeError):
@@ -103,15 +122,17 @@ def _identity_key(record: Mapping[str, Any]) -> tuple[Any, ...]:
     """
 
     version = record.get("schema_version")
-    if version == MODEL_SCHEMA_VERSION:
+    if version in _MODEL_SCHEMA_VERSIONS:
         revision = record.get("record_revision")
         if revision is not None:
             return (version, record.get("stable_id"), revision)
         return (version, record.get("stable_id"), record.get("record_seq"))
-    if version == ATTEMPT_SCHEMA_VERSION:
+    if version in _ATTEMPT_SCHEMA_VERSIONS:
         return (version, record.get("attempt_id"))
-    if version == GATE_SCHEMA_VERSION:
+    if version in _GATE_SCHEMA_VERSIONS:
         return (version, record.get("gate_id"))
+    if version == ARTIFACT_EVENT_SCHEMA_VERSION:
+        return (version, record.get("artifact_event_id"))
     return (version, record.get("event_id") or record.get("proposal_id"))
 
 
@@ -130,7 +151,7 @@ def _verify_hash(record: Mapping[str, Any]) -> None:
     """
 
     digest_field = (
-        "record_revision" if record.get("schema_version") == MODEL_SCHEMA_VERSION else None
+        "record_revision" if record.get("schema_version") in _MODEL_SCHEMA_VERSIONS else None
     )
     if digest_field is None and "payload_sha256" in record:
         digest_field = "payload_sha256"
@@ -187,12 +208,7 @@ def scan_jsonl(path: Union[str, Path], *, validate: bool = True) -> list[JsonObj
                     f"non-object JSON record at {ledger_path}:{line_number}"
                 )
             try:
-                if validate and decoded.get("schema_version") in {
-                    MODEL_SCHEMA_VERSION,
-                    ATTEMPT_SCHEMA_VERSION,
-                    GATE_SCHEMA_VERSION,
-                    OPERATIONAL_EVENT_SCHEMA_VERSION,
-                }:
+                if validate and decoded.get("schema_version") in SCHEMA_FILES:
                     validate_payload(decoded)
                 _verify_hash(decoded)
             except (PayloadValidationError, LedgerCorruptionError) as exc:
@@ -291,7 +307,8 @@ class JsonlLedger:
     path:
         JSONL ledger path.
     schema_version:
-        Exact schema accepted by this ledger.
+        Current schema accepted for append. Its declared compatible immutable
+        history versions are accepted on read.
     recover_tail:
         Whether startup may evidence and truncate a torn final line.
     """
@@ -313,6 +330,12 @@ class JsonlLedger:
 
         self.path = Path(path)
         self.schema_version = schema_version
+        try:
+            self.read_schema_versions = _SCHEMA_READ_VERSIONS[schema_version]
+        except KeyError as exc:
+            raise ValueError(
+                f"schema is not a canonical ledger version: {schema_version!r}"
+            ) from exc
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock_path = self.path.with_suffix(f"{self.path.suffix}.lock")
         self._lock_handle = self._lock_path.open("a+b")
@@ -326,10 +349,11 @@ class JsonlLedger:
         self.recovery_evidence = recover_torn_tail(self.path) if recover_tail else None
         self._records = scan_jsonl(self.path)
         for record in self._records:
-            if record.get("schema_version") != self.schema_version:
+            if record.get("schema_version") not in self.read_schema_versions:
                 self.close()
                 raise LedgerCorruptionError(
-                    f"wrong schema {record.get('schema_version')!r} in {self.path}"
+                    f"schema {record.get('schema_version')!r} is not readable by "
+                    f"current writer {self.schema_version!r} in {self.path}"
                 )
         self._closed = False
 
@@ -427,7 +451,7 @@ class JsonlLedger:
                 raise LedgerConflictError(
                     f"conflicting replay for immutable identity {proposed_key!r}"
                 )
-        if self.schema_version == MODEL_SCHEMA_VERSION:
+        if self.schema_version in _MODEL_SCHEMA_VERSIONS:
             for existing in self._records:
                 if (
                     existing["stable_id"] == record.get("stable_id")

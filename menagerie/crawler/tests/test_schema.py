@@ -10,7 +10,17 @@ from typing import Any
 import pytest
 
 from menagerie.crawler.constants import FAILURE_REASON_CODES, TERMINAL_STATUS_CODES, FailureStage
-from menagerie.crawler.schema import PayloadValidationError, validate_payload
+from menagerie.crawler.schema import (
+    OWNERSHIP_ANNOTATED_SCHEMA_VERSIONS,
+    SCHEMA_FILES,
+    PayloadValidationError,
+    SchemaOwnershipError,
+    author_gated_schema_paths,
+    load_schema,
+    owned_schema_leaves,
+    owned_schema_leaves_from_schema,
+    validate_payload,
+)
 from menagerie.crawler.tests.conftest import (
     make_attempt,
     make_author_proposal,
@@ -164,6 +174,36 @@ def test_schema_properties_have_nonempty_descriptions() -> None:
     schema_root = Path(__file__).parents[1] / "schemas"
     for schema_path in schema_root.glob("*.json"):
         assert_descriptions(json.loads(schema_path.read_text()), schema_path.name)
+
+
+def test_all_bundled_schema_contracts_load() -> None:
+    """Every registered v2/v3 and event schema is a valid Draft 2020-12 schema."""
+
+    for schema_version in SCHEMA_FILES:
+        assert load_schema(schema_version)["properties"]["schema_version"]
+
+
+def test_v3_schema_leaf_ownership_is_complete_and_exhaustive() -> None:
+    """Every normalized v3 leaf has exactly one schema-declared authority owner."""
+
+    for schema_version in OWNERSHIP_ANNOTATED_SCHEMA_VERSIONS:
+        owned = owned_schema_leaves(schema_version)
+        assert owned
+        assert len({leaf.path for leaf in owned}) == len(owned)
+        assert author_gated_schema_paths(schema_version).issubset({leaf.path for leaf in owned})
+
+
+def test_schema_leaf_ownership_rejects_a_new_unclassified_leaf() -> None:
+    """A newly allowed nested leaf cannot ship without an explicit owner annotation."""
+
+    schema = deepcopy(load_schema("menagerie.crawler.author-result.v3"))
+    payload_schema = schema["$defs"]["blocked_payload"]
+    payload_schema["properties"]["unclassified_canary"] = {
+        "type": "string",
+        "description": "Synthetic CI canary that deliberately has no authority owner.",
+    }
+    with pytest.raises(SchemaOwnershipError, match="missing"):
+        owned_schema_leaves_from_schema(schema)
 
 
 def test_split_skip_reasons_require_vague_text_and_sufficiency_gap(

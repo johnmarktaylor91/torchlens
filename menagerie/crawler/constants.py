@@ -10,6 +10,37 @@ GATE_SCHEMA_VERSION = "menagerie.crawler.gate.v2"
 AUTHOR_PROPOSAL_SCHEMA_VERSION = "menagerie.crawler.author-proposal.v2"
 OPERATIONAL_EVENT_SCHEMA_VERSION = "menagerie.crawler.operational-event.v1"
 
+# Round-14 contracts are additive during the interface freeze. Existing producers
+# continue to emit v2 until the authority kernel switches atomically; v3 writers
+# use these explicit current-version discriminators and may read immutable v2 history.
+MODEL_SCHEMA_VERSION_V3 = "menagerie.crawler.model.v3"
+ATTEMPT_SCHEMA_VERSION_V3 = "menagerie.crawler.attempt.v3"
+GATE_SCHEMA_VERSION_V3 = "menagerie.crawler.gate.v3"
+AUTHOR_PROPOSAL_SCHEMA_VERSION_V3 = "menagerie.crawler.author-proposal.v3"
+AUTHOR_RESULT_SCHEMA_VERSION = "menagerie.crawler.author-result.v3"
+ARTIFACT_EVENT_SCHEMA_VERSION = "menagerie.crawler.artifact-event.v1"
+
+CURRENT_SCHEMA_VERSIONS = frozenset(
+    {
+        MODEL_SCHEMA_VERSION_V3,
+        ATTEMPT_SCHEMA_VERSION_V3,
+        GATE_SCHEMA_VERSION_V3,
+        AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
+        AUTHOR_RESULT_SCHEMA_VERSION,
+        ARTIFACT_EVENT_SCHEMA_VERSION,
+        OPERATIONAL_EVENT_SCHEMA_VERSION,
+    }
+)
+
+LEGACY_UNTRUSTED_SCHEMA_VERSIONS = frozenset(
+    {
+        MODEL_SCHEMA_VERSION,
+        ATTEMPT_SCHEMA_VERSION,
+        GATE_SCHEMA_VERSION,
+        AUTHOR_PROPOSAL_SCHEMA_VERSION,
+    }
+)
+
 AUTHOR_PROMPT_NAME = "claude_crawler_author_v2"
 CHECKER_PROMPT_NAME = "codex_accuracy_checker_v2"
 
@@ -81,6 +112,7 @@ class GateKind(StrEnum):
 
     METADATA_BATCH = "metadata_batch"
     FIDELITY = "fidelity"
+    TERMINAL_DISPOSITION = "terminal_disposition"
 
 
 class AccuracyVerdict(StrEnum):
@@ -345,6 +377,19 @@ class OperationalEventKind(StrEnum):
     PROGRESS_NOTIFICATION = "progress-notification"
     NOTIFICATION_DELIVERY = "notification-delivery"
     REQUEUE_GRANT_CONSUMED = "requeue-grant-consumed"
+    WORKER_LEASE_OPENED = "worker-lease-opened"
+    WORKER_LEASE_STARTED = "worker-lease-started"
+    WORKER_LEASE_CLOSED = "worker-lease-closed"
+    WORKER_LEASE_REAPED = "worker-lease-reaped"
+    ORPHAN_WORKER_RECOVERED = "orphan-worker-recovered"
+    WAKEUP_INSTALLED = "wakeup-installed"
+    WAKEUP_REPAIRED = "wakeup-repaired"
+    WAKEUP_FIRED = "wakeup-fired"
+    WAKEUP_DEACTIVATED = "wakeup-deactivated"
+    WAKEUP_HEALTH_DEGRADED = "wakeup-health-degraded"
+    WAKEUP_FAILED = "wakeup-failed"
+    CAMPAIGN_COMPLETED = "campaign-completed"
+    OPERATOR_CANCELLED = "operator-cancelled"
 
 
 class OperationalEventStatus(StrEnum):
@@ -366,6 +411,19 @@ class OperationalEventStatus(StrEnum):
     NOTIFICATION_DELIVERED = "notification-delivered"
     NOTIFICATION_FAILED = "notification-failed"
     REQUEUE_GRANT_CONSUMED = "requeue-grant-consumed"
+    WORKER_LEASE_OPEN = "worker-lease-open"
+    WORKER_LEASE_ACTIVE = "worker-lease-active"
+    WORKER_LEASE_CLOSED = "worker-lease-closed"
+    WORKER_LEASE_REAPED = "worker-lease-reaped"
+    ORPHAN_WORKER_RECOVERED = "orphan-worker-recovered"
+    WAKEUP_INSTALLED = "wakeup-installed"
+    WAKEUP_REPAIRED = "wakeup-repaired"
+    WAKEUP_DEACTIVATED = "wakeup-deactivated"
+    WAKEUP_HEALTH_DEGRADED = "wakeup-health-degraded"
+    WAKEUP_FAILED = "wakeup-failed"
+    CAMPAIGN_COMPLETED = "campaign-completed"
+    OPERATOR_CANCELLED = "operator-cancelled"
+    TERMINATED = "paused:terminated"
 
 
 # Slice-F scheduler configuration defaults.  The earlier names remain the

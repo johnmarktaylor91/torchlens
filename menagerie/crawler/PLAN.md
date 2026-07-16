@@ -84,9 +84,10 @@ The implementation must preserve all of the following.
     wakeups are scheduled, and an OS lock plus idempotent work identities prevent duplicate crawls.
 16. The driver never invokes a shell for model work. It passes an argv vector to a credential-
     scrubbed subprocess with offline flags, empty caches, and a socket-attempt tripwire.
-17. This is deliberately not a distributed system. There are no leases, heartbeats, spool queues,
-    ULID event segments, or multi-worker arbitration. One single-writer driver and one execution
-    worker at a time are the supported mini topology.
+17. This is deliberately not a distributed system. There are no heartbeats, spool queues, ULID event
+    segments, or multi-worker arbitration. One single-writer driver and one execution worker at a time
+    are the supported mini topology. A child-held kernel `worker.lock` is the no-double-worker authority;
+    its durable `WorkerLease` metadata exists only for bounded recovery and visibility.
 
 ## 3. Architecture and authority boundaries
 
@@ -121,9 +122,9 @@ do not restart research.
 
 | Component | May | Must never |
 | --- | --- | --- |
-| Python driver/reducer | derive work, manage one env, validate hashes, invoke worker, append ledgers, award terminal status, materialize views | invent a worker receipt; synthesize a per-model result from a batch exit; edit third-party source silently |
-| Execution worker | build one model, make one dummy call, invoke `forward` in every meaningful train/eval mode, write one atomic receipt per mode under scratch | access network/checkpoints; touch ledgers; write outside scratch; import TorchLens |
-| Claude author | use WebSearch + Exa to research and ground sources; choose a rung; stage our adapter/port/patch; author evidence and metadata; recommend defer/skip/failure | write canonical records; declare `runs`; install packages; edit outside its staging root; self-approve accuracy/fidelity |
+| Python driver/reducer | construct one mandatory `AuthorityContext`; derive work, dependency vectors, terminal proofs, family authority, and publication authorizations; append the four fact ledgers; materialize the shared currency projection | invent a receipt/proof/dependency; treat v2 as current authority; publish without `PublicationAuthorization`; synthesize per-model facts from a batch exit |
+| Execution worker | build one model, invoke explicit `forward` in every meaningful mode, write one atomic raw receipt per mode, and hold inherited `worker.lock` for its lifetime | access network/checkpoints; touch ledgers; write outside scratch; import TorchLens; derive read grants from author fields |
+| Claude author | research and ground sources; choose a rung; stage adapter/port/patch bytes into private custody; author evidence and metadata; emit one typed recommendation | write canonical records; award `runs` or a terminal; publish bytes; install packages; self-approve accuracy/fidelity |
 | Codex checker | read the exact frozen pack, optionally corroborate with web research, verify claims, write one gate envelope | edit code, proposal, evidence, queues, envs, or records; repair its own finding |
 | Supervisor | launch bounded author/check sessions, checkpoint, commit at ruled cadence, escalate hard cases | poll live subprocesses with tokens; hand-edit ledgers; push |
 
@@ -149,12 +150,15 @@ mechanical R1/R2 source/template path     one rich Claude author session
         +----------> deterministic proposal/evidence/hash validation
                                                |
                                                v
+                                 universal private content-addressed custody
+                                               |
+                                               v
                                       fresh Codex gate result.json
                                                |
                           inaccurate/cannot-verify -> bounded same-pack repair
                                                |
                                                v
-                                 single writer accepts gated authored facts
+                      reducer derives terminal/publication authorization and claims
                                                |
                                                v
                                  exact locked thick-env assignment
@@ -174,11 +178,19 @@ verdict is current; a successful forward meanwhile is reported as `forward_obser
 
 ### 4.1 Canonical facts
 
-Canonical truth consists of three append-only JSONL ledgers using the exact schemas in section 5:
+Canonical truth consists of four append-only JSONL fact ledgers using the exact schemas in section 5:
 
-- `records/models/<shard>.jsonl`: accepted `model.v2` full revisions and terminal revisions;
-- `records/attempts/<machine>-<env>.jsonl`: immutable `attempt.v2` facts; and
-- `records/gates/<shard>.jsonl`: immutable `gate.v2` checker decisions.
+- `records/models/<shard>.jsonl`: immutable `model.v2` history and current `model.v3` revisions;
+- `records/attempts/<machine>-<env>.jsonl`: immutable `attempt.v2` history and `attempt.v3` facts;
+- `records/gates/<shard>.jsonl`: immutable `gate.v2` history and current `gate.v3` decisions; and
+- `records/artifacts/<shard>.jsonl`: immutable `artifact-event.v1` custody, authorization,
+  reconstruction, and publication transitions.
+
+Reads are discriminator-aware: each row is validated against the exact schema it names. V3 writers may
+read mixed v2/v3 prefixes but append only their declared current version. V2 rows remain byte-for-byte
+immutable **legacy-untrusted** history. No migration or compatibility adapter may synthesize a missing
+v3 receipt, gate, family binding, license authorization, dependency, claim, or reconstruction anchor.
+Such a row projects stale with an exact reason and its stable ID is re-admitted.
 
 Single-writer operation means ordinary append-only JSONL is sufficient. Each append is one complete
 UTF-8 line, written under the process lock, flushed, and `fsync`ed. The line contains a payload hash and
@@ -187,10 +199,12 @@ its byte offset and hash into a recovery report before the driver truncates only
 valid preceding facts are never rewritten. A malformed complete line is a hard `failed:runner` campaign
 error, not silently skipped.
 
-Current truth is deterministic: highest accepted `record_seq` for a stable ID wins only if revision
-parentage is valid. Two different payloads claiming the same stable ID and revision are a hard conflict.
-Byte-identical replay is idempotent. SQLite, queue snapshots, cursors, dashboards, and release JSON are
-derived and disposable.
+Current truth is deterministic: `DependencyCurrencyProjection(current_records, stale_reasons,
+stale_stable_ids)` is derived from the mandatory active `AuthorityContext`; every status, state,
+checkpoint, reconstruction, report, and view consumes that exact object. Highest sequence alone never
+establishes currency. Two different payloads claiming the same stable ID and revision are a hard
+conflict. Byte-identical replay is idempotent. SQLite, queue snapshots, cursors, dashboards, mirror
+manifests, reconstruction indexes, and release JSON are derived and disposable.
 
 Agent and checker outputs are not ledgers. Each writes
 `<allowed_output_root>/result.json.tmp`, flushes and `fsync`s it, then atomically renames it to
@@ -221,11 +235,32 @@ Changing any byte causes the reducer to stop treating dependent attempts or verd
 facts remain history. An environment-generation change requires re-execution of all accepted models in
 that env; the previous success is not current.
 
+`model.v3.dependency_vector` is closed and stage-sensitive. Every axis is an exact identity or the typed
+state `not-applicable`/`pending-untrusted`; `null` never means “not checked.” It binds intake,
+author-result schema/dispatcher, applicable prompts, terminal rule/status proof, present proposal/result/
+source-manifest identities, and every applicable gate, recipe, runner/award closure, environment,
+accepted attempt, artifact transaction/claim, representative revision, and publication policy. The
+reducer derives and compares it; the driver cannot author it.
+
 ## 5. Versioned schemas
 
-All three JSON Schemas set `additionalProperties: false`, define every enum, and require RFC 3339 UTC
+All canonical JSON Schemas set `additionalProperties: false`, define every enum, and require RFC 3339 UTC
 timestamps and `sha256:<64 lowercase hex>` hashes. The field lists below are normative; the JSON Schema
 files are the executable expression of them.
+
+### 5.0 Round-14 interface freeze and schema ownership
+
+The current contract discriminators are `attempt.v3`, `model.v3`, `author-proposal.v3`,
+`author-result.v3`, `gate.v3`, `artifact-event.v1`, and `operational-event.v1`. Sections 5.1--5.3 retain
+the v2 shapes because those rows remain readable immutable history; they are not current authority.
+The executable v3 files add the closed raw receipt/parent attestation, mandatory dependency and artifact/
+family authority, discriminated author recommendation, and terminal-disposition gate shapes.
+
+Every normalized collection-item leaf in author, attempt, model, and gate v3 has exactly one schema-owned
+classification: `author-gated`, `worker-observed`, `parent-observed`, `reducer-derived`,
+`trusted-intake`, or `untrusted-history`. The schema-derived registry is the only source for authored-leaf
+policy, vet identity, canonical assembly, variant inheritance, and exact checker field coverage. CI
+expands schema references and fails on every missing, extraneous, unknown, or multiply owned leaf.
 
 ### 5.1 `model.v2`
 
@@ -1071,6 +1106,12 @@ the two-cold-forwards policy without changing its consistency requirement.
 
 ### 12.5 Driver-only award rule
 
+Locked derivation rule: no run-award or terminal-deciding field is admissible unless the reducer derives
+it from retained parent-attested raw evidence or resolves it to an append-only fact and re-checks the
+specific status-proving predicate. Existence, nonemptiness, or subset membership never suffices. The
+frozen `TerminalProof` and `DependencyVector` are the only driver/reducer boundary values for these
+decisions; locally shaped mappings are forbidden.
+
 The reducer awards `runs` only when all applicable predicates are true:
 
 ```text
@@ -1113,6 +1154,13 @@ records PID, process start time, boot ID, run ID, target, and command. A wakeup 
 successfully after appending/printing an idempotent `wake-noop-already-running` event. Stale PID metadata is
 not enough to break a live kernel lock.
 
+Before worker spawn the driver also acquires `.crawl-local/locks/worker.lock` in the fixed order
+`driver.lock -> canonical ledgers -> worker.lock`, appends `worker-lease-opened`, and fsyncs a
+`WorkerLease`. The trusted bootstrap fills child PID/start-token/PGID and transfers the open lock
+description to the child before model import. The child-held kernel lock, not PID metadata, excludes
+replacement execution. Startup reconciles held/free leases against boot ID, PID start token, process
+group, raw receipt, and the bounded deadline; it never guesses a PID or promotes an unattested receipt.
+
 ### 13.2 Default effort caps
 
 - mechanical execution: two recipe/input attempts per env generation;
@@ -1144,13 +1192,17 @@ blocking again at the same checkpoint.
 
 `progress_milestones` defaults to `[2000, 3000, 5000, 10000, 15000, 20000]` and may be empty. Crossing a
 configured value appends exactly one `progress-notification` event with the completed count and funnel,
-notifies JMT, and continues immediately. Persisted operational events make both review and milestone
-delivery idempotent across resume.
+notifies JMT, and continues immediately. Persisted operational events make review and milestone attempts
+idempotent across resume.
 
 Both policies use `notify_command`. Its default resolves `send-to-jmt.sh` from `PATH`,
 `~/scripts`, or `~/bin`, and otherwise uses log-only delivery. Notification text is a single plain-ASCII
 summary line. A missing or failing notifier is recorded in the driver log and never crashes, pauses, or
 blocks campaign progress.
+
+External notification delivery is explicitly **at-least-once**. Each notification carries a durable
+idempotency key that recipients may use for deduplication; no process claims exactly-once delivery across
+a crash between external delivery and the canonical delivery event.
 
 ## 14. Unattended operation and usage-limit self-wake
 
@@ -1164,13 +1216,18 @@ When the Claude dispatcher reports a usage limit, the driver:
 2. appends an operational event with status `paused:usage-limit`, provider, observed limit response,
    exact `reset_at`, queued work counts, and current env;
 3. leaves mechanical execution running if it does not need Claude; otherwise exits cleanly;
-4. installs or updates a one-shot macOS `launchd` wakeup at the actual reset timestamp, with jitter no
-   greater than 60 seconds—not a blind five-hour timer; and
-5. on wake, reacquires the driver lock, appends `resumed:usage-limit`, rebuilds state, and continues the
-   first unsatisfied identity.
+4. appends a durable `WakeEpisode` and installs or repairs a recurring macOS `launchd` definition with a
+   callback-side `not_before` guard and a fixed 5--15 minute cadence (default 15 minutes); and
+5. on each wake, records an idempotent `(episode_id, time_bucket)` fire, reconciles the driver lock and
+   durable episode state, and continues until a matching resume, campaign completion, or explicit
+   operator cancellation fact exists.
 
-The Linux implementation uses the same wake contract through a one-shot systemd timer, with cron as a
-documented fallback. Wake installation and removal are idempotent.
+Linux renders the same episode as a persistent recurring systemd timer, with recurring cron as fallback.
+No backend catch-up behavior is authority. Startup, the live driver, status/doctor, and the callback
+reconcile active episodes against OS definitions and visibly reinstall missing/mismatched definitions.
+Lock contention writes a gitignored fsynced fire intent and never deactivates the episode. Repeated
+installation failure is visible `failed:runner`; a health threshold records `wakeup-health-degraded` but
+never disables or lengthens the bounded recurrence.
 
 ### Codex rate/quota limit
 

@@ -59,7 +59,20 @@
         "review-signoff",
         "progress-notification",
         "notification-delivery",
-        "requeue-grant-consumed"
+        "requeue-grant-consumed",
+        "worker-lease-opened",
+        "worker-lease-started",
+        "worker-lease-closed",
+        "worker-lease-reaped",
+        "orphan-worker-recovered",
+        "wakeup-installed",
+        "wakeup-repaired",
+        "wakeup-fired",
+        "wakeup-deactivated",
+        "wakeup-health-degraded",
+        "wakeup-failed",
+        "campaign-completed",
+        "operator-cancelled"
       ],
       "description": "Mandatory operational event kind."
     },
@@ -80,7 +93,20 @@
         "progress-recorded",
         "notification-delivered",
         "notification-failed",
-        "requeue-grant-consumed"
+        "requeue-grant-consumed",
+        "worker-lease-open",
+        "worker-lease-active",
+        "worker-lease-closed",
+        "worker-lease-reaped",
+        "orphan-worker-recovered",
+        "wakeup-installed",
+        "wakeup-repaired",
+        "wakeup-deactivated",
+        "wakeup-health-degraded",
+        "wakeup-failed",
+        "campaign-completed",
+        "operator-cancelled",
+        "paused:terminated"
       ],
       "description": "Mandatory closed current disposition."
     },

@@ -10,6 +10,8 @@ from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any, Iterable, Mapping, Optional, Sequence, Union
 
+from menagerie.crawler.authority import DependencyCurrencyProjection
+
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION,
     CHECKER_PROMPT_NAME,
@@ -94,22 +96,6 @@ def cold_forward_policy(stable_id: str, rung: object) -> ColdForwardPolicy:
     if int.from_bytes(canary_digest, "big") % 100 < 2:
         return ColdForwardPolicy("mechanical-canary", 2)
     return ColdForwardPolicy("single-mechanical", 1)
-
-
-@dataclass(frozen=True)
-class DependencyCurrencyProjection:
-    """Authoritative dependency-current projection over canonical model revisions.
-
-    Parameters
-    ----------
-    current_records:
-        Highest revisions that re-pass reducer admission and every live dependency.
-    stale_reasons:
-        Stable-ID keyed fail-closed reasons for excluded highest revisions.
-    """
-
-    current_records: Mapping[str, JsonObject]
-    stale_reasons: Mapping[str, str]
 
 
 class _ReplayLedger:

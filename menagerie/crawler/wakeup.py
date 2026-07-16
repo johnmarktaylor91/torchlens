@@ -14,6 +14,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Mapping, Optional, Sequence
 
+from menagerie.crawler.authority import WakeEpisode as WakeEpisode
 from menagerie.crawler.constants import (
     OPERATIONAL_EVENT_SCHEMA_VERSION,
     OperationalEventKind,

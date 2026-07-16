@@ -1,0 +1,4179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/model-v3.schema.json",
+  "title": "Menagerie crawler model revision v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "stable_id",
+    "record_seq",
+    "record_revision",
+    "parent_revision",
+    "created_at",
+    "revised_by",
+    "authored_metadata_state",
+    "intake",
+    "identity",
+    "taxonomy",
+    "external_metadata",
+    "website",
+    "people_and_origin",
+    "dates",
+    "citation",
+    "licenses",
+    "source_resolution",
+    "evidence",
+    "implementation",
+    "input_contract",
+    "observed",
+    "modes",
+    "fidelity",
+    "accuracy_gate",
+    "execution",
+    "status",
+    "provenance",
+    "budget",
+    "flags",
+    "notes",
+    "scar_history",
+    "completeness",
+    "dependency_vector",
+    "artifact_authority",
+    "family_authority"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "menagerie.crawler.model.v3",
+      "description": "Mandatory current model contract discriminator; v2 revisions remain legacy-untrusted history."
+    },
+    "stable_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Mandatory stable model identifier."
+    },
+    "record_seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Mandatory monotonic model-ledger sequence."
+    },
+    "record_revision": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory hash of this model revision."
+    },
+    "parent_revision": {
+      "$ref": "#/$defs/nullable_hash",
+      "description": "Best-effort hash of the superseded model revision."
+    },
+    "created_at": {
+      "$ref": "#/$defs/timestamp",
+      "description": "Mandatory UTC creation timestamp."
+    },
+    "revised_by": {
+      "$ref": "#/$defs/revised_by",
+      "description": "Mandatory actor that produced this revision."
+    },
+    "authored_metadata_state": {
+      "enum": [
+        "pending",
+        "accepted",
+        "failed"
+      ],
+      "description": "Mandatory acceptance state for source-read metadata."
+    },
+    "family_variant_derivation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/family_variant_derivation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Reducer-verifiable mechanical family recipe specialization proof."
+    },
+    "intake": {
+      "$ref": "#/$defs/intake",
+      "description": "Mandatory preserved intake provenance."
+    },
+    "identity": {
+      "$ref": "#/$defs/identity",
+      "description": "Mandatory canonical model identity."
+    },
+    "taxonomy": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/taxonomy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort gated architecture taxonomy."
+    },
+    "external_metadata": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/external_metadata"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort gated externally sourced catalog metadata."
+    },
+    "website": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/website"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort presentation metadata for the catalog page."
+    },
+    "people_and_origin": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/people_and_origin"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort gated people and origin metadata."
+    },
+    "dates": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/dates"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort gated publication-date metadata."
+    },
+    "citation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/citation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort gated citation metadata."
+    },
+    "licenses": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/licenses"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort gated source-license metadata."
+    },
+    "source_resolution": {
+      "$ref": "#/$defs/source_resolution",
+      "description": "Mandatory selected source rung and search record."
+    },
+    "evidence": {
+      "$ref": "#/$defs/evidence",
+      "description": "Mandatory literal evidence and coverage record."
+    },
+    "implementation": {
+      "$ref": "#/$defs/implementation",
+      "description": "Mandatory executable implementation recipe."
+    },
+    "input_contract": {
+      "$ref": "#/$defs/input_contract",
+      "description": "Mandatory source-valid dummy-input contract."
+    },
+    "observed": {
+      "$ref": "#/$defs/observed",
+      "description": "Mandatory best-effort observed runtime facts."
+    },
+    "modes": {
+      "$ref": "#/$defs/modes",
+      "description": "Mandatory meaningful runtime-mode record."
+    },
+    "fidelity": {
+      "$ref": "#/$defs/fidelity",
+      "description": "Mandatory implementation-fidelity gate state."
+    },
+    "accuracy_gate": {
+      "$ref": "#/$defs/accuracy_gate",
+      "description": "Mandatory metadata-accuracy gate state."
+    },
+    "execution": {
+      "$ref": "#/$defs/execution",
+      "description": "Mandatory execution identity and currentness state."
+    },
+    "status": {
+      "$ref": "#/$defs/status",
+      "description": "Mandatory closed current disposition."
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance",
+      "description": "Mandatory production provenance."
+    },
+    "budget": {
+      "$ref": "#/$defs/budget",
+      "description": "Mandatory bounded-work budget accounting."
+    },
+    "flags": {
+      "$ref": "#/$defs/string_array",
+      "description": "Mandatory machine-readable record flags."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Mandatory free-form record notes."
+    },
+    "scar_history": {
+      "$ref": "#/$defs/string_array",
+      "description": "Mandatory immutable history of accepted deviations."
+    },
+    "completeness": {
+      "$ref": "#/$defs/completeness",
+      "description": "Mandatory release-completeness checks."
+    },
+    "untrusted_attempt": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "proposal_sha256",
+            "proposal"
+          ],
+          "properties": {
+            "proposal_sha256": {
+              "$ref": "#/$defs/hash",
+              "description": "Hash of the retained unaccepted author proposal."
+            },
+            "proposal": {
+              "type": "object",
+              "description": "Raw author proposal retained only as untrusted attempt evidence."
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Explicitly untrusted authored attempt facts excluded from authority fields."
+    },
+    "dependency_vector": {
+      "$ref": "#/$defs/dependency_vector",
+      "description": "Mandatory closed reducer-derived stage-sensitive dependency vector."
+    },
+    "artifact_authority": {
+      "$ref": "#/$defs/artifact_authority",
+      "description": "Mandatory reference to independent append-only artifact transaction authority."
+    },
+    "family_authority": {
+      "$ref": "#/$defs/family_authority",
+      "description": "Mandatory trusted-intake family binding retained on every status."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "properties": {
+              "kind": {
+                "const": "runs",
+                "description": "Select successful run terminal records."
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "description": "Select the terminal status contract."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "modes": {
+            "properties": {
+              "per_mode_run": {
+                "minProperties": 1,
+                "description": "Successful runs require at least one mode receipt."
+              }
+            },
+            "description": "Successful run mode receipts."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "website": {
+            "type": "object",
+            "description": "Select structural size-variant website records.",
+            "properties": {
+              "kind": {
+                "const": "size-variant-template",
+                "description": "Require the structural family-variant kind."
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        },
+        "required": [
+          "website"
+        ]
+      },
+      "then": {
+        "required": [
+          "family_variant_derivation"
+        ],
+        "properties": {
+          "family_variant_derivation": {
+            "$ref": "#/$defs/family_variant_derivation",
+            "description": "Require the exact reducer-verifiable derivation proof."
+          },
+          "completeness": {
+            "description": "Bind structural variants to computed family validity.",
+            "properties": {
+              "family_template_valid": {
+                "const": true,
+                "description": "Structural variants cannot disable family validation."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "properties": {
+              "code": {
+                "const": "skipped:insufficient-description",
+                "description": "Mandatory closed status code."
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "description": "Mandatory closed current disposition."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source_resolution": {
+            "properties": {
+              "sufficiency_gap": {
+                "$ref": "#/$defs/nonempty_string",
+                "description": "Mandatory for insufficient-description skips; names missing implementation detail."
+              }
+            },
+            "required": [
+              "sufficiency_gap"
+            ],
+            "description": "Mandatory selected source rung and search record."
+          },
+          "evidence": {
+            "properties": {
+              "excerpts": {
+                "contains": {
+                  "properties": {
+                    "disposition": {
+                      "const": "insufficient-for-faithful-reimpl",
+                      "description": "Mandatory excerpt role, including insufficient reimplementation evidence."
+                    }
+                  },
+                  "required": [
+                    "disposition"
+                  ]
+                },
+                "description": "Mandatory literal source excerpts."
+              }
+            },
+            "description": "Mandatory literal evidence and coverage record."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "authored_metadata_state": {
+            "const": "accepted",
+            "description": "Mandatory acceptance state for source-read metadata."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "taxonomy": {
+            "$ref": "#/$defs/taxonomy",
+            "description": "Best-effort gated architecture taxonomy."
+          },
+          "external_metadata": {
+            "$ref": "#/$defs/external_metadata",
+            "description": "Best-effort gated externally sourced catalog metadata."
+          },
+          "website": {
+            "$ref": "#/$defs/website",
+            "description": "Best-effort presentation metadata for the catalog page."
+          },
+          "people_and_origin": {
+            "$ref": "#/$defs/people_and_origin",
+            "description": "Best-effort gated people and origin metadata."
+          },
+          "dates": {
+            "$ref": "#/$defs/dates",
+            "description": "Best-effort gated publication-date metadata."
+          },
+          "citation": {
+            "$ref": "#/$defs/citation",
+            "description": "Best-effort gated citation metadata."
+          },
+          "licenses": {
+            "$ref": "#/$defs/licenses",
+            "description": "Best-effort gated source-license metadata."
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "taxonomy": {
+            "type": "null",
+            "description": "Best-effort gated architecture taxonomy."
+          },
+          "external_metadata": {
+            "type": "null",
+            "description": "Best-effort gated externally sourced catalog metadata."
+          },
+          "website": {
+            "type": "null",
+            "description": "Best-effort presentation metadata for the catalog page."
+          },
+          "people_and_origin": {
+            "type": "null",
+            "description": "Best-effort gated people and origin metadata."
+          },
+          "dates": {
+            "type": "null",
+            "description": "Best-effort gated publication-date metadata."
+          },
+          "citation": {
+            "type": "null",
+            "description": "Best-effort gated citation metadata."
+          },
+          "licenses": {
+            "type": "null",
+            "description": "Best-effort gated source-license metadata."
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "nullable_hash": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "nonempty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nullable_string": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "string_array": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "nonempty_string_array": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "revised_by": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "actor"
+          ],
+          "properties": {
+            "actor": {
+              "const": "driver",
+              "description": "Mandatory producing actor."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "actor",
+            "model",
+            "version"
+          ],
+          "properties": {
+            "actor": {
+              "type": "string",
+              "minLength": 1,
+              "not": {
+                "const": "driver"
+              },
+              "description": "Mandatory producing actor."
+            },
+            "model": {
+              "$ref": "#/$defs/nonempty_string",
+              "description": "Mandatory model."
+            },
+            "version": {
+              "$ref": "#/$defs/nonempty_string",
+              "description": "Mandatory version."
+            }
+          }
+        }
+      ]
+    },
+    "intake": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot_id",
+        "snapshot_sha256",
+        "legacy_row_sha256",
+        "legacy_recipe_sha256",
+        "legacy_module_sha256",
+        "legacy_claims_untrusted",
+        "preserved_legacy_flags",
+        "discovery_sources"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory snapshot id."
+        },
+        "snapshot_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory snapshot sha256."
+        },
+        "legacy_row_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory legacy row sha256."
+        },
+        "legacy_recipe_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory legacy recipe sha256."
+        },
+        "legacy_module_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory legacy module sha256."
+        },
+        "legacy_claims_untrusted": {
+          "const": true,
+          "description": "Mandatory legacy claims untrusted."
+        },
+        "preserved_legacy_flags": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory preserved legacy flags."
+        },
+        "discovery_sources": {
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Mandatory discovery sources."
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_name",
+        "aliases",
+        "acronym",
+        "variant",
+        "variant_scope",
+        "family_representative_id",
+        "duplicate_of",
+        "alias_of"
+      ],
+      "properties": {
+        "canonical_name": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory canonical name."
+        },
+        "aliases": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory aliases."
+        },
+        "acronym": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory acronym."
+        },
+        "variant": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory variant."
+        },
+        "variant_scope": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory variant scope."
+        },
+        "family_representative_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory family representative id."
+        },
+        "duplicate_of": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory duplicate of."
+        },
+        "alias_of": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory alias of."
+        }
+      }
+    },
+    "taxonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "domains",
+        "tasks",
+        "modalities",
+        "era",
+        "architecture_tags",
+        "novel_ops"
+      ],
+      "properties": {
+        "family": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory family."
+        },
+        "domains": {
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Mandatory domains."
+        },
+        "tasks": {
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Mandatory tasks."
+        },
+        "modalities": {
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Mandatory modalities."
+        },
+        "era": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory era."
+        },
+        "architecture_tags": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory architecture tags."
+        },
+        "novel_ops": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory novel ops."
+        }
+      }
+    },
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "title",
+        "authors",
+        "year",
+        "venue",
+        "arxiv_id",
+        "doi",
+        "openreview_id",
+        "url",
+        "bibtex",
+        "source_evidence_ids"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "present",
+            "not-found-after-search",
+            "not-applicable"
+          ],
+          "description": "Mandatory closed current disposition."
+        },
+        "title": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory title."
+        },
+        "authors": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory authors."
+        },
+        "year": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1800,
+              "maximum": 3000
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory year."
+        },
+        "venue": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory venue."
+        },
+        "arxiv_id": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory arxiv id."
+        },
+        "doi": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory doi."
+        },
+        "openreview_id": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory openreview id."
+        },
+        "url": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "uri"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory public source URL when available."
+        },
+        "bibtex": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory bibtex."
+        },
+        "source_evidence_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory source evidence ids."
+        }
+      }
+    },
+    "external_metadata_modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "meaningful_modes",
+        "train_eval_divergence"
+      ],
+      "properties": {
+        "meaningful_modes": {
+          "$ref": "#/$defs/mode_array",
+          "description": "Mandatory meaningful modes."
+        },
+        "train_eval_divergence": {
+          "enum": [
+            "none",
+            "statistical",
+            "structural"
+          ],
+          "description": "Mandatory train eval divergence."
+        }
+      }
+    },
+    "external_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modality",
+        "architecture_class",
+        "domain",
+        "task",
+        "field",
+        "subfield",
+        "paradigm",
+        "lineage",
+        "predecessors",
+        "tags",
+        "keywords",
+        "venue",
+        "family",
+        "era",
+        "year",
+        "country",
+        "authors",
+        "institution",
+        "citation",
+        "license",
+        "key_contribution",
+        "description",
+        "original_framework",
+        "run_framework",
+        "modes"
+      ],
+      "properties": {
+        "modality": {
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Mandatory modality."
+        },
+        "architecture_class": {
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Mandatory architecture class."
+        },
+        "domain": {
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Mandatory domain."
+        },
+        "task": {
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Mandatory task."
+        },
+        "field": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory field."
+        },
+        "subfield": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory subfield."
+        },
+        "paradigm": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory paradigm."
+        },
+        "lineage": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory lineage."
+        },
+        "predecessors": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory predecessors."
+        },
+        "tags": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory tags."
+        },
+        "keywords": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory non-empty English user search terms. These are relevance-checked model/family/task/domain aliases and phrases, not verbatim-source quotations."
+        },
+        "venue": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory venue."
+        },
+        "family": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory family."
+        },
+        "era": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory era."
+        },
+        "year": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1800,
+              "maximum": 3000
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory year."
+        },
+        "country": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory country."
+        },
+        "authors": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory authors."
+        },
+        "institution": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory institution."
+        },
+        "citation": {
+          "$ref": "#/$defs/citation",
+          "description": "Best-effort gated citation metadata."
+        },
+        "license": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory license."
+        },
+        "key_contribution": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory key contribution."
+        },
+        "description": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory description."
+        },
+        "original_framework": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory original framework."
+        },
+        "run_framework": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory run framework."
+        },
+        "modes": {
+          "$ref": "#/$defs/external_metadata_modes",
+          "description": "Mandatory meaningful runtime-mode record."
+        }
+      }
+    },
+    "website": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "tagline",
+        "description",
+        "key_contribution",
+        "voice_version",
+        "family_grounding_id",
+        "template_source_model_id",
+        "variant_parameter_input_line",
+        "template_hash"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "family-representative",
+            "size-variant-template"
+          ],
+          "description": "Mandatory record or status kind."
+        },
+        "tagline": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory tagline."
+        },
+        "description": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory description."
+        },
+        "key_contribution": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory key contribution."
+        },
+        "voice_version": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory voice version."
+        },
+        "family_grounding_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory family grounding id."
+        },
+        "template_source_model_id": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory template source model id."
+        },
+        "variant_parameter_input_line": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory variant parameter input line."
+        },
+        "template_hash": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory template hash."
+        }
+      }
+    },
+    "people_and_origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authors",
+        "labs",
+        "institutions",
+        "origin_countries",
+        "country_basis",
+        "country_confidence",
+        "country_note"
+      ],
+      "properties": {
+        "authors": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory authors."
+        },
+        "labs": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory labs."
+        },
+        "institutions": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory institutions."
+        },
+        "origin_countries": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "uniqueItems": true,
+          "description": "Mandatory origin countries."
+        },
+        "country_basis": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory country basis."
+        },
+        "country_confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low",
+            "cannot-determine"
+          ],
+          "description": "Mandatory country confidence."
+        },
+        "country_note": {
+          "type": "string",
+          "description": "Mandatory country note."
+        }
+      }
+    },
+    "dates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "year",
+        "year_basis",
+        "first_public_date",
+        "first_public_date_basis"
+      ],
+      "properties": {
+        "year": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1800,
+              "maximum": 3000
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory year."
+        },
+        "year_basis": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory year basis."
+        },
+        "first_public_date": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/date"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory first public date."
+        },
+        "first_public_date_basis": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory first public date basis."
+        }
+      }
+    },
+    "licenses": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "paper_text",
+        "weights",
+        "data",
+        "redistribution_class"
+      ],
+      "properties": {
+        "code": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "spdx",
+            "status",
+            "source_id",
+            "locator",
+            "evidence_ids"
+          ],
+          "properties": {
+            "spdx": {
+              "$ref": "#/$defs/nonempty_string",
+              "description": "Mandatory spdx."
+            },
+            "status": {
+              "enum": [
+                "declared",
+                "not-found",
+                "custom",
+                "not-applicable"
+              ],
+              "description": "Mandatory closed current disposition."
+            },
+            "source_id": {
+              "$ref": "#/$defs/nonempty_string",
+              "description": "Mandatory source identifier."
+            },
+            "locator": {
+              "$ref": "#/$defs/nonempty_string",
+              "description": "Mandatory exact location within the source."
+            },
+            "evidence_ids": {
+              "$ref": "#/$defs/string_array",
+              "description": "Mandatory supporting evidence identifiers."
+            }
+          },
+          "description": "Mandatory closed status code."
+        },
+        "paper_text": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "source_id"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "linked-not-redistributed",
+                "short-excerpt-committed",
+                "not-applicable"
+              ],
+              "description": "Mandatory closed current disposition."
+            },
+            "source_id": {
+              "$ref": "#/$defs/nullable_string",
+              "description": "Mandatory source identifier."
+            }
+          },
+          "description": "Mandatory paper text."
+        },
+        "weights": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "const": "not-used",
+              "description": "Mandatory closed current disposition."
+            }
+          },
+          "description": "Mandatory weights."
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "spdx",
+            "status",
+            "source_id",
+            "evidence_ids"
+          ],
+          "properties": {
+            "spdx": {
+              "$ref": "#/$defs/nullable_string",
+              "description": "Mandatory spdx."
+            },
+            "status": {
+              "$ref": "#/$defs/nonempty_string",
+              "description": "Mandatory closed current disposition."
+            },
+            "source_id": {
+              "$ref": "#/$defs/nullable_string",
+              "description": "Mandatory source identifier."
+            },
+            "evidence_ids": {
+              "$ref": "#/$defs/string_array",
+              "description": "Mandatory supporting evidence identifiers."
+            }
+          },
+          "description": "Mandatory data."
+        },
+        "redistribution_class": {
+          "enum": [
+            "public-compatible",
+            "restricted-private",
+            "manifest-only",
+            "not-applicable"
+          ],
+          "description": "Mandatory redistribution class."
+        },
+        "source_dispositions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "spdx",
+              "status",
+              "source_id",
+              "locator",
+              "evidence_ids"
+            ],
+            "properties": {
+              "spdx": {
+                "$ref": "#/$defs/nonempty_string",
+                "description": "Exact SPDX or NOASSERTION disposition."
+              },
+              "status": {
+                "enum": [
+                  "declared",
+                  "not-found",
+                  "custom",
+                  "not-applicable"
+                ],
+                "description": "Evidence-backed disposition status."
+              },
+              "source_id": {
+                "$ref": "#/$defs/nonempty_string",
+                "description": "Exactly one source-manifest member identity."
+              },
+              "locator": {
+                "$ref": "#/$defs/nonempty_string",
+                "description": "Exact license locator in the named source."
+              },
+              "evidence_ids": {
+                "$ref": "#/$defs/nonempty_string_array",
+                "description": "Literal license excerpts supporting this source."
+              }
+            }
+          },
+          "description": "Optional per-source dispositions for heterogeneous fetched manifests."
+        }
+      }
+    },
+    "source_resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rung",
+        "decision",
+        "rung_evidence",
+        "sufficiency_gap",
+        "searched_at",
+        "attempted_rungs",
+        "search_report",
+        "mandatory_link_status",
+        "primary_source_id",
+        "sources"
+      ],
+      "properties": {
+        "rung": {
+          "$ref": "#/$defs/rung",
+          "description": "Mandatory source-resolution ladder rung."
+        },
+        "decision": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory source-resolution decision."
+        },
+        "rung_evidence": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory rung evidence."
+        },
+        "sufficiency_gap": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nonempty_string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory for insufficient-description skips; names missing implementation detail."
+        },
+        "searched_at": {
+          "$ref": "#/$defs/timestamp",
+          "description": "Mandatory searched at."
+        },
+        "attempted_rungs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/attempted_rung"
+          },
+          "description": "Mandatory attempted rungs."
+        },
+        "search_report": {
+          "$ref": "#/$defs/search_report",
+          "description": "Mandatory search report."
+        },
+        "mandatory_link_status": {
+          "enum": [
+            "ok",
+            "failed"
+          ],
+          "description": "Mandatory mandatory link status."
+        },
+        "primary_source_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory primary source id."
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source"
+          },
+          "description": "Mandatory resolved public sources."
+        }
+      }
+    },
+    "rung": {
+      "enum": [
+        "R1_LIBRARY",
+        "R2_VENDOR",
+        "R3_PORT",
+        "R4_REIMPLEMENT",
+        "R5_SKIP"
+      ]
+    },
+    "attempted_rung": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rung",
+        "result",
+        "reason_code",
+        "evidence_ids"
+      ],
+      "properties": {
+        "rung": {
+          "$ref": "#/$defs/rung",
+          "description": "Mandatory source-resolution ladder rung."
+        },
+        "result": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory immutable attempt outcome."
+        },
+        "reason_code": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory closed reason code when applicable."
+        },
+        "evidence_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory supporting evidence identifiers."
+        }
+      }
+    },
+    "search_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queries",
+        "places_checked",
+        "links_checked",
+        "languages_checked",
+        "archives_checked",
+        "started_at",
+        "finished_at",
+        "conclusion"
+      ],
+      "properties": {
+        "queries": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory queries."
+        },
+        "places_checked": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory places checked."
+        },
+        "links_checked": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory exact content URLs checked. For R2/R4 every entry must bind to fetched, hash-inventoried CAS bytes; unfetched candidate repositories are a coverage gap."
+        },
+        "languages_checked": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory languages checked."
+        },
+        "archives_checked": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory archives checked."
+        },
+        "started_at": {
+          "$ref": "#/$defs/timestamp",
+          "description": "Mandatory UTC start timestamp."
+        },
+        "finished_at": {
+          "$ref": "#/$defs/timestamp",
+          "description": "Mandatory UTC completion timestamp."
+        },
+        "conclusion": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory conclusion."
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "role",
+        "kind",
+        "url",
+        "revision_kind",
+        "revision",
+        "locator",
+        "content_sha256",
+        "byte_count",
+        "media_type",
+        "retrieved_at",
+        "fetch_recipe",
+        "mirror_class",
+        "mirror_digest"
+      ],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory source identifier."
+        },
+        "role": {
+          "enum": [
+            "implementation",
+            "introducing-paper",
+            "supplement",
+            "project-page",
+            "documentation",
+            "license",
+            "affiliation",
+            "archive"
+          ],
+          "description": "Mandatory role."
+        },
+        "kind": {
+          "enum": [
+            "repository",
+            "package",
+            "paper",
+            "web-page",
+            "archive",
+            "intake-snapshot"
+          ],
+          "description": "Mandatory record or status kind."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://",
+          "description": "Mandatory public source URL when available."
+        },
+        "revision_kind": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory revision kind."
+        },
+        "revision": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory revision."
+        },
+        "locator": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory exact location within the source."
+        },
+        "content_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory content sha256."
+        },
+        "byte_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory byte count."
+        },
+        "media_type": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory media type."
+        },
+        "retrieved_at": {
+          "$ref": "#/$defs/timestamp",
+          "description": "Mandatory retrieved at."
+        },
+        "fetch_recipe": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory fetch recipe."
+        },
+        "mirror_class": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory mirror class."
+        },
+        "mirror_digest": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory mirror digest."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "intake-snapshot",
+                "description": "Select an immutable intake-snapshot status source."
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content_sha256": {
+                "type": "null",
+                "description": "Intake locators make no fetched-byte digest claim."
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "content_sha256": {
+                "$ref": "#/$defs/hash",
+                "description": "Fetched public sources require an exact content digest."
+              }
+            }
+          }
+        }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "excerpts",
+        "coverage",
+        "evidence_identity",
+        "family_grounding_path"
+      ],
+      "properties": {
+        "excerpts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/excerpt"
+          },
+          "description": "Mandatory literal source excerpts."
+        },
+        "coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "all_agent_fields_have_support",
+            "missing_support",
+            "family_grounding_complete"
+          ],
+          "properties": {
+            "all_agent_fields_have_support": {
+              "type": "boolean",
+              "description": "Mandatory all agent fields have support."
+            },
+            "missing_support": {
+              "$ref": "#/$defs/string_array",
+              "description": "Mandatory missing support."
+            },
+            "family_grounding_complete": {
+              "type": "boolean",
+              "description": "Mandatory family grounding complete."
+            }
+          },
+          "description": "Mandatory coverage."
+        },
+        "evidence_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory evidence identity."
+        },
+        "family_grounding_path": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory family grounding path."
+        }
+      }
+    },
+    "excerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "source_id",
+        "locator",
+        "text",
+        "text_sha256",
+        "supports",
+        "family_level",
+        "disposition",
+        "license_disposition"
+      ],
+      "properties": {
+        "evidence_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory evidence identifier."
+        },
+        "source_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory source identifier."
+        },
+        "locator": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory exact location within the source."
+        },
+        "text": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory verbatim retained source text."
+        },
+        "text_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory hash of the verbatim excerpt."
+        },
+        "supports": {
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Mandatory supports."
+        },
+        "family_level": {
+          "type": "boolean",
+          "description": "Mandatory family level."
+        },
+        "disposition": {
+          "enum": [
+            "supporting",
+            "insufficient-for-faithful-reimpl"
+          ],
+          "description": "Mandatory excerpt role, including insufficient reimplementation evidence."
+        },
+        "license_disposition": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory license handling for the retained excerpt."
+        }
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "original_framework",
+        "run_framework",
+        "native_object_type",
+        "native_call_method",
+        "transparent_forward_adapter",
+        "recipe_type",
+        "code_path",
+        "code_sha256",
+        "builder_symbol",
+        "dummy_call_symbol",
+        "library_recipe",
+        "upstream_files",
+        "patches",
+        "source_to_code_map",
+        "declared_choices",
+        "initialization",
+        "mode",
+        "device_policy",
+        "required_construct_asset",
+        "recipe_revision",
+        "torchlens_import_static_check"
+      ],
+      "properties": {
+        "original_framework": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory original framework."
+        },
+        "run_framework": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory run framework."
+        },
+        "native_object_type": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory native object type."
+        },
+        "native_call_method": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory native call method."
+        },
+        "transparent_forward_adapter": {
+          "type": "boolean",
+          "description": "Mandatory transparent forward adapter."
+        },
+        "recipe_type": {
+          "enum": [
+            "declarative-library",
+            "typed-adapter",
+            "port",
+            "reimplementation",
+            "none"
+          ],
+          "description": "Mandatory recipe type."
+        },
+        "code_path": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory code path."
+        },
+        "code_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory code sha256."
+        },
+        "code_manifest": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "properties": {
+              "path": {
+                "$ref": "#/$defs/nonempty_string",
+                "description": "Model-root-relative imported code path."
+              },
+              "sha256": {
+                "$ref": "#/$defs/hash",
+                "description": "Exact imported code member digest."
+              }
+            }
+          },
+          "description": "Closed recursive model-local Python import manifest."
+        },
+        "builder_symbol": {
+          "oneOf": [
+            {
+              "const": "build_model"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory builder symbol."
+        },
+        "dummy_call_symbol": {
+          "oneOf": [
+            {
+              "const": "make_dummy_call"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory dummy call symbol."
+        },
+        "library_recipe": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/library_recipe"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory library recipe."
+        },
+        "upstream_files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/upstream_file"
+          },
+          "description": "Mandatory upstream files."
+        },
+        "patches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/patch"
+          },
+          "description": "Mandatory patches."
+        },
+        "source_to_code_map": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source_to_code"
+          },
+          "description": "Mandatory source to code map."
+        },
+        "declared_choices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/declared_choice"
+          },
+          "description": "Mandatory declared choices."
+        },
+        "initialization": {
+          "$ref": "#/$defs/initialization",
+          "description": "Mandatory initialization."
+        },
+        "mode": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory mode."
+        },
+        "device_policy": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory device policy."
+        },
+        "required_construct_asset": {
+          "type": "null",
+          "description": "Mandatory required construct asset."
+        },
+        "recipe_revision": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory recipe revision."
+        },
+        "torchlens_import_static_check": {
+          "enum": [
+            "passed",
+            "not-applicable-no-code"
+          ],
+          "description": "Mandatory torchlens import static check."
+        },
+        "declared_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 1800,
+          "description": "Optional author-declared per-forward timeout seconds in [1,1800]; null uses the default."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recipe_type": {
+                "const": "none",
+                "description": "Select terminal records with no executable recipe."
+              }
+            },
+            "required": [
+              "recipe_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "torchlens_import_static_check": {
+                "const": "not-applicable-no-code",
+                "description": "No-code terminal records cannot run the static import check."
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "torchlens_import_static_check": {
+                "const": "passed",
+                "description": "Executable implementations must pass the static import check."
+              }
+            }
+          }
+        }
+      ]
+    },
+    "library_recipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "distribution",
+        "version",
+        "artifact_sha256",
+        "module",
+        "symbol",
+        "kwargs",
+        "pretrained_disable_fields"
+      ],
+      "properties": {
+        "distribution": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory distribution."
+        },
+        "version": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory version."
+        },
+        "artifact_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory artifact sha256."
+        },
+        "module": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory module."
+        },
+        "symbol": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory symbol."
+        },
+        "kwargs": {
+          "type": "object",
+          "description": "Mandatory kwargs."
+        },
+        "pretrained_disable_fields": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory pretrained disable fields."
+        }
+      }
+    },
+    "upstream_file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "path",
+        "sha256",
+        "use"
+      ],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory source identifier."
+        },
+        "path": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory path."
+        },
+        "sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory sha256."
+        },
+        "use": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory use."
+        }
+      }
+    },
+    "patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "classification",
+        "semantic",
+        "rationale",
+        "evidence_ids"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory path."
+        },
+        "sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory sha256."
+        },
+        "classification": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory classification."
+        },
+        "semantic": {
+          "type": "boolean",
+          "description": "Mandatory semantic."
+        },
+        "rationale": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory rationale."
+        },
+        "evidence_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory supporting evidence identifiers."
+        }
+      }
+    },
+    "source_to_code": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "material_item",
+        "source_id",
+        "source_locator",
+        "evidence_ids",
+        "code_path",
+        "code_locator",
+        "disposition"
+      ],
+      "properties": {
+        "material_item": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory material item."
+        },
+        "source_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory source identifier."
+        },
+        "source_locator": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory source locator."
+        },
+        "evidence_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory supporting evidence identifiers."
+        },
+        "code_path": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory code path."
+        },
+        "code_locator": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory code locator."
+        },
+        "disposition": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory excerpt role, including insufficient reimplementation evidence."
+        }
+      }
+    },
+    "declared_choice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field",
+        "value",
+        "source_status",
+        "material",
+        "rationale",
+        "evidence_ids"
+      ],
+      "properties": {
+        "field": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory field."
+        },
+        "value": {
+          "description": "Mandatory value."
+        },
+        "source_status": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory source status."
+        },
+        "material": {
+          "type": "boolean",
+          "description": "Mandatory material."
+        },
+        "rationale": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory rationale."
+        },
+        "evidence_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory supporting evidence identifiers."
+        }
+      }
+    },
+    "initialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy",
+        "pretrained_disabled",
+        "source_specified_choices"
+      ],
+      "properties": {
+        "policy": {
+          "const": "random",
+          "description": "Mandatory policy."
+        },
+        "pretrained_disabled": {
+          "const": true,
+          "description": "Mandatory pretrained disabled."
+        },
+        "source_specified_choices": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory source specified choices."
+        }
+      }
+    },
+    "input_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code_path",
+        "builder_symbol",
+        "seed",
+        "semantic_description",
+        "source_basis",
+        "smallest_valid_probe_rationale",
+        "args",
+        "kwargs",
+        "non_tensor_values",
+        "masks_state_and_control",
+        "expected_output_semantics"
+      ],
+      "properties": {
+        "code_path": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory code path."
+        },
+        "builder_symbol": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory builder symbol."
+        },
+        "seed": {
+          "type": "integer",
+          "description": "Mandatory seed."
+        },
+        "semantic_description": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory semantic description."
+        },
+        "source_basis": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory source basis."
+        },
+        "smallest_valid_probe_rationale": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory smallest valid probe rationale."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/input_leaf"
+          },
+          "description": "Mandatory args."
+        },
+        "kwargs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/input_leaf"
+          },
+          "description": "Mandatory kwargs."
+        },
+        "non_tensor_values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/non_tensor_value"
+          },
+          "description": "Mandatory non tensor values."
+        },
+        "masks_state_and_control": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory masks state and control."
+        },
+        "expected_output_semantics": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory expected output semantics."
+        }
+      }
+    },
+    "shape_dimension": {
+      "oneOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        }
+      ]
+    },
+    "input_leaf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "kind",
+        "semantic_role",
+        "shape",
+        "dtype",
+        "device_policy",
+        "distribution",
+        "constraints",
+        "source_evidence_ids"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory path."
+        },
+        "kind": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory record or status kind."
+        },
+        "semantic_role": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory semantic role."
+        },
+        "shape": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/shape_dimension"
+          },
+          "description": "Mandatory shape."
+        },
+        "dtype": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory authored, source-read input dtype. Unlike observed.* dtype/device facts, this input_contract leaf is accuracy-gated and contributes to vet identity."
+        },
+        "device_policy": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory device policy."
+        },
+        "distribution": {
+          "enum": [
+            "normal",
+            "uniform",
+            "integer-range",
+            "zeros",
+            "ones",
+            "categorical",
+            "constructor"
+          ],
+          "description": "Mandatory distribution."
+        },
+        "constraints": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory constraints."
+        },
+        "source_evidence_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory source evidence ids."
+        }
+      }
+    },
+    "non_tensor_value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "type",
+        "value",
+        "semantic_role",
+        "constraints",
+        "source_evidence_ids"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory path."
+        },
+        "type": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory type."
+        },
+        "value": {
+          "description": "Mandatory value."
+        },
+        "semantic_role": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory semantic role."
+        },
+        "constraints": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory constraints."
+        },
+        "source_evidence_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory source evidence ids."
+        }
+      }
+    },
+    "output_signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tree",
+        "leaves"
+      ],
+      "properties": {
+        "tree": {
+          "description": "Mandatory tree."
+        },
+        "leaves": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/output_leaf"
+          },
+          "description": "Mandatory leaves."
+        }
+      }
+    },
+    "output_leaf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "kind",
+        "shape",
+        "dtype",
+        "device",
+        "python_type"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory path."
+        },
+        "kind": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory record or status kind."
+        },
+        "shape": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/shape_dimension"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory shape."
+        },
+        "dtype": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory mechanically observed output dtype under observed.*; this root-path placement is TorchLens-derivable and excluded from authored metadata gating."
+        },
+        "device": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory mechanically observed output device under observed.*; this root-path placement is TorchLens-derivable and excluded from authored metadata gating."
+        },
+        "python_type": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory python type."
+        }
+      }
+    },
+    "input_kind": {
+      "type": "string",
+      "pattern": "^(standard-[a-z0-9-]+|random-fallback)$"
+    },
+    "observed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parameter_count_total",
+        "parameter_count_trainable",
+        "native_framework",
+        "delegated_method",
+        "output_signature",
+        "input_kind",
+        "input_asset",
+        "input_note",
+        "constructor_seconds",
+        "forward_seconds",
+        "peak_rss_bytes",
+        "measurement_attempt_ids",
+        "snippet",
+        "snippet_sha256"
+      ],
+      "properties": {
+        "parameter_count_total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory parameter count total."
+        },
+        "parameter_count_trainable": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory parameter count trainable."
+        },
+        "native_framework": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Worker-observed native framework for the designated measurement attempt."
+        },
+        "delegated_method": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Worker-observed native call method for the designated measurement attempt."
+        },
+        "output_signature": {
+          "$ref": "#/$defs/output_signature",
+          "description": "Mandatory output signature."
+        },
+        "input_kind": {
+          "$ref": "#/$defs/input_kind",
+          "description": "Mandatory input kind."
+        },
+        "input_asset": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory input asset."
+        },
+        "input_note": {
+          "type": "string",
+          "description": "Mandatory input note."
+        },
+        "constructor_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Mandatory constructor seconds."
+        },
+        "forward_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Mandatory forward seconds."
+        },
+        "peak_rss_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory peak rss bytes."
+        },
+        "measurement_attempt_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory measurement attempt ids."
+        },
+        "snippet": {
+          "type": "string",
+          "description": "Mandatory snippet."
+        },
+        "snippet_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory snippet sha256."
+        }
+      }
+    },
+    "mode_array": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "items": {
+        "enum": [
+          "train",
+          "eval"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "mode_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "status"
+      ],
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory immutable attempt identifier."
+        },
+        "status": {
+          "enum": [
+            "succeeded",
+            "failed",
+            "observed"
+          ],
+          "description": "Mandatory closed current disposition."
+        }
+      }
+    },
+    "modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "meaningful_modes",
+        "per_mode_run",
+        "train_eval_divergence",
+        "divergence_evidence"
+      ],
+      "properties": {
+        "meaningful_modes": {
+          "$ref": "#/$defs/mode_array",
+          "description": "Mandatory meaningful modes."
+        },
+        "per_mode_run": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "train": {
+              "$ref": "#/$defs/mode_run",
+              "description": "Best-effort train."
+            },
+            "eval": {
+              "$ref": "#/$defs/mode_run",
+              "description": "Best-effort eval."
+            }
+          },
+          "description": "Mandatory per mode run."
+        },
+        "train_eval_divergence": {
+          "enum": [
+            "none",
+            "statistical",
+            "structural"
+          ],
+          "description": "Mandatory train eval divergence."
+        },
+        "divergence_evidence": {
+          "type": "string",
+          "description": "Mandatory divergence evidence."
+        }
+      }
+    },
+    "fidelity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "reason",
+        "verdict",
+        "fidelity_identity",
+        "gate_id",
+        "current",
+        "permanent_scar",
+        "deviations"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean",
+          "description": "Mandatory required."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Mandatory reason."
+        },
+        "verdict": {
+          "oneOf": [
+            {
+              "enum": [
+                "match",
+                "minor-drift",
+                "major-drift",
+                "slop",
+                "cannot-verify"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory checker verdict."
+        },
+        "fidelity_identity": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory fidelity identity."
+        },
+        "gate_id": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory immutable gate identifier."
+        },
+        "current": {
+          "type": "boolean",
+          "description": "Mandatory current."
+        },
+        "permanent_scar": {
+          "type": "boolean",
+          "description": "Mandatory permanent scar."
+        },
+        "deviations": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory deviations."
+        }
+      }
+    },
+    "accuracy_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "vet_identity",
+        "gate_id",
+        "verdict",
+        "current",
+        "checker_model",
+        "checker_version",
+        "prompt_sha256"
+      ],
+      "properties": {
+        "required": {
+          "const": true,
+          "description": "Mandatory required."
+        },
+        "vet_identity": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory vet identity."
+        },
+        "gate_id": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory immutable gate identifier."
+        },
+        "verdict": {
+          "oneOf": [
+            {
+              "enum": [
+                "accurate",
+                "inaccurate",
+                "cannot-verify"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory checker verdict."
+        },
+        "current": {
+          "type": "boolean",
+          "description": "Mandatory current."
+        },
+        "checker_model": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory checker model."
+        },
+        "checker_version": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory checker version."
+        },
+        "prompt_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory prompt sha256."
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution_identity",
+        "environment_id",
+        "env_generation",
+        "accepted_attempt_ids",
+        "confirmation_policy",
+        "network_attempted",
+        "checkpoint_accessed",
+        "last_verified_at",
+        "current"
+      ],
+      "properties": {
+        "execution_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory execution identity."
+        },
+        "environment_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory environment id."
+        },
+        "env_generation": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory env generation."
+        },
+        "accepted_attempt_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory accepted attempt ids."
+        },
+        "confirmation_policy": {
+          "enum": [
+            "two-cold-r3-r4",
+            "single-mechanical",
+            "mechanical-canary"
+          ],
+          "description": "Mandatory confirmation policy."
+        },
+        "network_attempted": {
+          "const": false,
+          "description": "Mandatory network attempted."
+        },
+        "checkpoint_accessed": {
+          "const": false,
+          "description": "Mandatory checkpoint accessed."
+        },
+        "last_verified_at": {
+          "$ref": "#/$defs/timestamp",
+          "description": "Mandatory last verified at."
+        },
+        "current": {
+          "type": "boolean",
+          "description": "Mandatory current."
+        }
+      }
+    },
+    "failure_stage": {
+      "enum": [
+        "intake",
+        "source",
+        "fetch",
+        "evidence",
+        "accuracy-gate",
+        "environment",
+        "import",
+        "constructor",
+        "input",
+        "forward",
+        "fidelity",
+        "resource",
+        "policy",
+        "runner"
+      ]
+    },
+    "status_code": {
+      "enum": [
+        "runs",
+        "deferred:needs-cuda",
+        "deferred:needs-x86",
+        "skipped:insufficient-description",
+        "skipped:no-description",
+        "skipped:not-a-real-NN",
+        "failed:intake",
+        "failed:source",
+        "failed:fetch",
+        "failed:evidence",
+        "failed:accuracy-gate",
+        "failed:environment",
+        "failed:import",
+        "failed:constructor",
+        "failed:input",
+        "failed:forward",
+        "failed:fidelity",
+        "failed:resource",
+        "failed:policy",
+        "failed:runner"
+      ]
+    },
+    "retry_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "fetch",
+        "evidence",
+        "author",
+        "gate",
+        "environment",
+        "import",
+        "constructor",
+        "input",
+        "forward",
+        "fidelity"
+      ],
+      "properties": {
+        "source": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory source."
+        },
+        "fetch": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory fetch."
+        },
+        "evidence": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory literal evidence and coverage record."
+        },
+        "author": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory author model identity."
+        },
+        "gate": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory gate."
+        },
+        "environment": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory environment."
+        },
+        "import": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory import."
+        },
+        "constructor": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory constructor."
+        },
+        "input": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory input."
+        },
+        "forward": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory forward."
+        },
+        "fidelity": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory implementation-fidelity gate state."
+        }
+      }
+    },
+    "human_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "reason",
+        "queue",
+        "requested_at"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean",
+          "description": "Mandatory required."
+        },
+        "reason": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory reason."
+        },
+        "queue": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory queue."
+        },
+        "requested_at": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory requested at."
+        }
+      }
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "code",
+        "stage",
+        "reason_code",
+        "detail",
+        "traceback",
+        "no_traceback_reason",
+        "attempted_rungs",
+        "retries",
+        "environment",
+        "timestamp",
+        "attempt_ids",
+        "root_cause_fingerprint",
+        "supersedes_revision",
+        "human_review"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "runs",
+            "deferred",
+            "skipped",
+            "failed"
+          ],
+          "description": "Mandatory record or status kind."
+        },
+        "code": {
+          "$ref": "#/$defs/status_code",
+          "description": "Mandatory closed status code."
+        },
+        "stage": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/failure_stage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory processing or failure stage."
+        },
+        "reason_code": {
+          "oneOf": [
+            {
+              "$ref": "attempt-v2.schema.json#/$defs/reason_code"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory closed reason code when applicable."
+        },
+        "detail": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Best-effort human-readable detail."
+        },
+        "traceback": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nullable_string"
+            },
+            {
+              "$ref": "attempt-v2.schema.json#/$defs/redacted_text"
+            }
+          ],
+          "description": "Best-effort captured traceback."
+        },
+        "no_traceback_reason": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory no traceback reason."
+        },
+        "attempted_rungs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rung"
+          },
+          "uniqueItems": true,
+          "description": "Mandatory attempted rungs."
+        },
+        "retries": {
+          "$ref": "#/$defs/retry_counts",
+          "description": "Mandatory retries."
+        },
+        "environment": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory environment."
+        },
+        "timestamp": {
+          "$ref": "#/$defs/timestamp",
+          "description": "Mandatory timestamp."
+        },
+        "attempt_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory attempt ids."
+        },
+        "root_cause_fingerprint": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory root cause fingerprint."
+        },
+        "supersedes_revision": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory supersedes revision."
+        },
+        "human_review": {
+          "$ref": "#/$defs/human_review",
+          "description": "Mandatory human review."
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "author_model",
+        "author_version",
+        "author_prompt_sha256",
+        "checker_model",
+        "checker_version",
+        "producer_run_id",
+        "machine_id"
+      ],
+      "properties": {
+        "author_model": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory author model."
+        },
+        "author_version": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory author version."
+        },
+        "author_prompt_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory author prompt sha256."
+        },
+        "checker_model": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory checker model."
+        },
+        "checker_version": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory checker version."
+        },
+        "producer_run_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory producer run id."
+        },
+        "machine_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory machine id."
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "author_sessions_used",
+        "author_sessions_max",
+        "gate_rounds_used",
+        "run_revisions_used",
+        "explicit_grants"
+      ],
+      "properties": {
+        "author_sessions_used": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory author sessions used."
+        },
+        "author_sessions_max": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory author sessions max."
+        },
+        "gate_rounds_used": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory gate rounds used."
+        },
+        "run_revisions_used": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory run revisions used."
+        },
+        "explicit_grants": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory explicit grants."
+        }
+      }
+    },
+    "family_variant_derivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "variant_token",
+        "template_source_model_id",
+        "template_source_revision",
+        "representative_recipe_revision",
+        "representative_library_recipe",
+        "selector_rule",
+        "allowed_recipe_delta",
+        "allowed_input_delta"
+      ],
+      "properties": {
+        "variant_token": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Exact trusted intake token selecting the variant."
+        },
+        "template_source_model_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Exact representative stable ID."
+        },
+        "template_source_revision": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact representative record revision."
+        },
+        "representative_recipe_revision": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact representative recipe identity."
+        },
+        "representative_library_recipe": {
+          "$ref": "#/$defs/library_recipe",
+          "description": "Byte-exact representative declarative library recipe."
+        },
+        "selector_rule": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Closed selector-key or direct-symbol specialization rule.",
+          "required": [
+            "kind",
+            "key"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "kwarg",
+                "symbol"
+              ],
+              "description": "Closed mechanical selector rule kind."
+            },
+            "key": {
+              "$ref": "#/$defs/nullable_string",
+              "description": "Exact selector kwarg, or null for a symbol rule."
+            }
+          }
+        },
+        "allowed_recipe_delta": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The sole permitted representative recipe change.",
+          "required": [
+            "path",
+            "previous_value",
+            "new_value"
+          ],
+          "properties": {
+            "path": {
+              "$ref": "#/$defs/nonempty_string_array",
+              "description": "Exact recipe path changed by specialization."
+            },
+            "previous_value": {
+              "description": "Exact representative value replaced by specialization."
+            },
+            "new_value": {
+              "$ref": "#/$defs/nonempty_string",
+              "description": "Exact trusted intake token written at the recipe path."
+            }
+          }
+        },
+        "allowed_input_delta": {
+          "const": "unchanged",
+          "description": "Input contract must remain byte-identical to the representative."
+        }
+      }
+    },
+    "completeness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_valid",
+        "mandatory_source_present",
+        "source_read_fields_complete",
+        "evidence_coverage_complete",
+        "accuracy_gate_current",
+        "required_fidelity_current",
+        "execution_current",
+        "family_template_valid",
+        "release_eligible",
+        "issues"
+      ],
+      "properties": {
+        "schema_valid": {
+          "type": "boolean",
+          "description": "Mandatory schema valid."
+        },
+        "mandatory_source_present": {
+          "type": "boolean",
+          "description": "Mandatory mandatory source present."
+        },
+        "source_read_fields_complete": {
+          "type": "boolean",
+          "description": "Mandatory source read fields complete."
+        },
+        "evidence_coverage_complete": {
+          "type": "boolean",
+          "description": "Mandatory evidence coverage complete."
+        },
+        "accuracy_gate_current": {
+          "type": "boolean",
+          "description": "Mandatory accuracy gate current."
+        },
+        "required_fidelity_current": {
+          "type": "boolean",
+          "description": "Mandatory required fidelity current."
+        },
+        "execution_current": {
+          "type": "boolean",
+          "description": "Mandatory execution current."
+        },
+        "family_template_valid": {
+          "type": "boolean",
+          "description": "Mandatory family template valid."
+        },
+        "release_eligible": {
+          "type": "boolean",
+          "description": "Mandatory release eligible."
+        },
+        "issues": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory issues."
+        }
+      }
+    },
+    "dependency_vector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intake_snapshot_id",
+        "intake_snapshot_sha256",
+        "intake_item_sha256",
+        "author_result_schema_identity",
+        "author_dispatcher_identity",
+        "author_prompt_identity",
+        "checker_prompt_identity",
+        "terminal_rule_identity",
+        "status_proof_identity",
+        "source_manifest_identity",
+        "proposal_identity",
+        "author_result_identity",
+        "checker_gate_identity",
+        "recipe_revision",
+        "runner_identity",
+        "award_closure_identity",
+        "environment_generation",
+        "artifact_transaction_id",
+        "representative_revision",
+        "publication_policy_identity",
+        "accepted_attempt_ids",
+        "artifact_claim_ids"
+      ],
+      "properties": {
+        "intake_snapshot_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis intake_snapshot_id."
+        },
+        "intake_snapshot_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis intake_snapshot_sha256."
+        },
+        "intake_item_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis intake_item_sha256."
+        },
+        "author_result_schema_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis author_result_schema_identity."
+        },
+        "author_dispatcher_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis author_dispatcher_identity."
+        },
+        "author_prompt_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis author_prompt_identity."
+        },
+        "checker_prompt_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis checker_prompt_identity."
+        },
+        "terminal_rule_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis terminal_rule_identity."
+        },
+        "status_proof_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis status_proof_identity."
+        },
+        "source_manifest_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis source_manifest_identity."
+        },
+        "proposal_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis proposal_identity."
+        },
+        "author_result_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis author_result_identity."
+        },
+        "checker_gate_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis checker_gate_identity."
+        },
+        "recipe_revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis recipe_revision."
+        },
+        "runner_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis runner_identity."
+        },
+        "award_closure_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis award_closure_identity."
+        },
+        "environment_generation": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis environment_generation."
+        },
+        "artifact_transaction_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis artifact_transaction_id."
+        },
+        "representative_revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis representative_revision."
+        },
+        "publication_policy_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis publication_policy_identity."
+        },
+        "accepted_attempt_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonempty_string"
+          },
+          "uniqueItems": true,
+          "description": "Exact accepted attempt identities participating in this revision."
+        },
+        "artifact_claim_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonempty_string"
+          },
+          "uniqueItems": true,
+          "description": "Exact artifact claims participating in this revision."
+        }
+      }
+    },
+    "artifact_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "transaction_id",
+        "committed_event_id",
+        "authorization_id",
+        "reconstruction_sha256",
+        "claim_ids"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "not-applicable",
+            "staged-private",
+            "terminal-authorized",
+            "publication-authorized",
+            "reconstruction-committed",
+            "published",
+            "private-committed"
+          ],
+          "description": "Exact artifact transaction state named by the model revision."
+        },
+        "transaction_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Deterministic artifact transaction identity or typed state."
+        },
+        "committed_event_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact committed artifact-event identity or typed state."
+        },
+        "authorization_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact reducer publication authorization identity or typed state."
+        },
+        "reconstruction_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact immutable reconstruction digest or typed state."
+        },
+        "claim_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonempty_string"
+          },
+          "uniqueItems": true,
+          "description": "Complete selected artifact claim set."
+        }
+      }
+    },
+    "family_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binding_state",
+        "representative_stable_id",
+        "representative_revision",
+        "representative_gate_id",
+        "representative_proposal_id",
+        "variant_token",
+        "template_source_revision",
+        "derivation_rule_identity"
+      ],
+      "properties": {
+        "binding_state": {
+          "enum": [
+            "ordinary",
+            "variant"
+          ],
+          "description": "Trusted intake family branch selected before record inspection."
+        },
+        "representative_stable_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Trusted representative stable identity or not-applicable state."
+        },
+        "representative_revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact representative revision or typed state."
+        },
+        "representative_gate_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact representative checker gate or typed state."
+        },
+        "representative_proposal_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact representative proposal or typed state."
+        },
+        "variant_token": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Trusted variant token or not-applicable state."
+        },
+        "template_source_revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact template source revision or typed state."
+        },
+        "derivation_rule_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Versioned family derivation closure or typed state."
+        }
+      }
+    }
+  },
+  "x-authority-ownership": {
+    "$.accuracy_gate.checker_model": "reducer-derived",
+    "$.accuracy_gate.checker_version": "reducer-derived",
+    "$.accuracy_gate.current": "reducer-derived",
+    "$.accuracy_gate.gate_id": "reducer-derived",
+    "$.accuracy_gate.prompt_sha256": "reducer-derived",
+    "$.accuracy_gate.required": "reducer-derived",
+    "$.accuracy_gate.verdict": "reducer-derived",
+    "$.accuracy_gate.vet_identity": "reducer-derived",
+    "$.artifact_authority.authorization_id": "reducer-derived",
+    "$.artifact_authority.claim_ids[]": "reducer-derived",
+    "$.artifact_authority.committed_event_id": "reducer-derived",
+    "$.artifact_authority.reconstruction_sha256": "reducer-derived",
+    "$.artifact_authority.state": "reducer-derived",
+    "$.artifact_authority.transaction_id": "reducer-derived",
+    "$.authored_metadata_state": "reducer-derived",
+    "$.budget.author_sessions_max": "reducer-derived",
+    "$.budget.author_sessions_used": "reducer-derived",
+    "$.budget.explicit_grants[]": "reducer-derived",
+    "$.budget.gate_rounds_used": "reducer-derived",
+    "$.budget.run_revisions_used": "reducer-derived",
+    "$.citation.arxiv_id": "author-gated",
+    "$.citation.authors[]": "author-gated",
+    "$.citation.bibtex": "author-gated",
+    "$.citation.doi": "author-gated",
+    "$.citation.openreview_id": "author-gated",
+    "$.citation.source_evidence_ids[]": "author-gated",
+    "$.citation.status": "author-gated",
+    "$.citation.title": "author-gated",
+    "$.citation.url": "author-gated",
+    "$.citation.venue": "author-gated",
+    "$.citation.year": "author-gated",
+    "$.completeness.accuracy_gate_current": "reducer-derived",
+    "$.completeness.evidence_coverage_complete": "reducer-derived",
+    "$.completeness.execution_current": "reducer-derived",
+    "$.completeness.family_template_valid": "reducer-derived",
+    "$.completeness.issues[]": "reducer-derived",
+    "$.completeness.mandatory_source_present": "reducer-derived",
+    "$.completeness.release_eligible": "reducer-derived",
+    "$.completeness.required_fidelity_current": "reducer-derived",
+    "$.completeness.schema_valid": "reducer-derived",
+    "$.completeness.source_read_fields_complete": "reducer-derived",
+    "$.created_at": "reducer-derived",
+    "$.dates.first_public_date": "author-gated",
+    "$.dates.first_public_date_basis": "author-gated",
+    "$.dates.year": "author-gated",
+    "$.dates.year_basis": "author-gated",
+    "$.dependency_vector.accepted_attempt_ids[]": "reducer-derived",
+    "$.dependency_vector.artifact_claim_ids[]": "reducer-derived",
+    "$.dependency_vector.artifact_transaction_id": "reducer-derived",
+    "$.dependency_vector.author_dispatcher_identity": "reducer-derived",
+    "$.dependency_vector.author_prompt_identity": "reducer-derived",
+    "$.dependency_vector.author_result_identity": "reducer-derived",
+    "$.dependency_vector.author_result_schema_identity": "reducer-derived",
+    "$.dependency_vector.award_closure_identity": "reducer-derived",
+    "$.dependency_vector.checker_gate_identity": "reducer-derived",
+    "$.dependency_vector.checker_prompt_identity": "reducer-derived",
+    "$.dependency_vector.environment_generation": "reducer-derived",
+    "$.dependency_vector.intake_item_sha256": "reducer-derived",
+    "$.dependency_vector.intake_snapshot_id": "reducer-derived",
+    "$.dependency_vector.intake_snapshot_sha256": "reducer-derived",
+    "$.dependency_vector.proposal_identity": "reducer-derived",
+    "$.dependency_vector.publication_policy_identity": "reducer-derived",
+    "$.dependency_vector.recipe_revision": "reducer-derived",
+    "$.dependency_vector.representative_revision": "reducer-derived",
+    "$.dependency_vector.runner_identity": "reducer-derived",
+    "$.dependency_vector.source_manifest_identity": "reducer-derived",
+    "$.dependency_vector.status_proof_identity": "reducer-derived",
+    "$.dependency_vector.terminal_rule_identity": "reducer-derived",
+    "$.evidence.coverage.all_agent_fields_have_support": "author-gated",
+    "$.evidence.coverage.family_grounding_complete": "author-gated",
+    "$.evidence.coverage.missing_support[]": "author-gated",
+    "$.evidence.evidence_identity": "author-gated",
+    "$.evidence.excerpts[].disposition": "author-gated",
+    "$.evidence.excerpts[].evidence_id": "author-gated",
+    "$.evidence.excerpts[].family_level": "author-gated",
+    "$.evidence.excerpts[].license_disposition": "author-gated",
+    "$.evidence.excerpts[].locator": "author-gated",
+    "$.evidence.excerpts[].source_id": "author-gated",
+    "$.evidence.excerpts[].supports[]": "author-gated",
+    "$.evidence.excerpts[].text": "author-gated",
+    "$.evidence.excerpts[].text_sha256": "author-gated",
+    "$.evidence.family_grounding_path": "author-gated",
+    "$.execution.accepted_attempt_ids[]": "reducer-derived",
+    "$.execution.checkpoint_accessed": "reducer-derived",
+    "$.execution.confirmation_policy": "reducer-derived",
+    "$.execution.current": "reducer-derived",
+    "$.execution.env_generation": "reducer-derived",
+    "$.execution.environment_id": "reducer-derived",
+    "$.execution.execution_identity": "reducer-derived",
+    "$.execution.last_verified_at": "reducer-derived",
+    "$.execution.network_attempted": "reducer-derived",
+    "$.external_metadata.architecture_class[]": "author-gated",
+    "$.external_metadata.authors[]": "author-gated",
+    "$.external_metadata.citation.arxiv_id": "author-gated",
+    "$.external_metadata.citation.authors[]": "author-gated",
+    "$.external_metadata.citation.bibtex": "author-gated",
+    "$.external_metadata.citation.doi": "author-gated",
+    "$.external_metadata.citation.openreview_id": "author-gated",
+    "$.external_metadata.citation.source_evidence_ids[]": "author-gated",
+    "$.external_metadata.citation.status": "author-gated",
+    "$.external_metadata.citation.title": "author-gated",
+    "$.external_metadata.citation.url": "author-gated",
+    "$.external_metadata.citation.venue": "author-gated",
+    "$.external_metadata.citation.year": "author-gated",
+    "$.external_metadata.country": "author-gated",
+    "$.external_metadata.description": "author-gated",
+    "$.external_metadata.domain[]": "author-gated",
+    "$.external_metadata.era": "author-gated",
+    "$.external_metadata.family": "author-gated",
+    "$.external_metadata.field": "author-gated",
+    "$.external_metadata.institution[]": "author-gated",
+    "$.external_metadata.key_contribution": "author-gated",
+    "$.external_metadata.keywords[]": "author-gated",
+    "$.external_metadata.license": "author-gated",
+    "$.external_metadata.lineage[]": "author-gated",
+    "$.external_metadata.modality[]": "author-gated",
+    "$.external_metadata.modes.meaningful_modes[]": "author-gated",
+    "$.external_metadata.modes.train_eval_divergence": "author-gated",
+    "$.external_metadata.original_framework": "author-gated",
+    "$.external_metadata.paradigm[]": "author-gated",
+    "$.external_metadata.predecessors[]": "author-gated",
+    "$.external_metadata.run_framework": "author-gated",
+    "$.external_metadata.subfield": "author-gated",
+    "$.external_metadata.tags[]": "author-gated",
+    "$.external_metadata.task[]": "author-gated",
+    "$.external_metadata.venue": "author-gated",
+    "$.external_metadata.year": "author-gated",
+    "$.family_authority.binding_state": "trusted-intake",
+    "$.family_authority.derivation_rule_identity": "trusted-intake",
+    "$.family_authority.representative_gate_id": "trusted-intake",
+    "$.family_authority.representative_proposal_id": "trusted-intake",
+    "$.family_authority.representative_revision": "trusted-intake",
+    "$.family_authority.representative_stable_id": "trusted-intake",
+    "$.family_authority.template_source_revision": "trusted-intake",
+    "$.family_authority.variant_token": "trusted-intake",
+    "$.family_variant_derivation.allowed_input_delta": "reducer-derived",
+    "$.family_variant_derivation.allowed_recipe_delta.new_value": "reducer-derived",
+    "$.family_variant_derivation.allowed_recipe_delta.path[]": "reducer-derived",
+    "$.family_variant_derivation.allowed_recipe_delta.previous_value": "reducer-derived",
+    "$.family_variant_derivation.representative_library_recipe.artifact_sha256": "reducer-derived",
+    "$.family_variant_derivation.representative_library_recipe.distribution": "reducer-derived",
+    "$.family_variant_derivation.representative_library_recipe.kwargs": "reducer-derived",
+    "$.family_variant_derivation.representative_library_recipe.module": "reducer-derived",
+    "$.family_variant_derivation.representative_library_recipe.pretrained_disable_fields[]": "reducer-derived",
+    "$.family_variant_derivation.representative_library_recipe.symbol": "reducer-derived",
+    "$.family_variant_derivation.representative_library_recipe.version": "reducer-derived",
+    "$.family_variant_derivation.representative_recipe_revision": "reducer-derived",
+    "$.family_variant_derivation.selector_rule.key": "reducer-derived",
+    "$.family_variant_derivation.selector_rule.kind": "reducer-derived",
+    "$.family_variant_derivation.template_source_model_id": "reducer-derived",
+    "$.family_variant_derivation.template_source_revision": "reducer-derived",
+    "$.family_variant_derivation.variant_token": "reducer-derived",
+    "$.fidelity.current": "author-gated",
+    "$.fidelity.deviations[]": "author-gated",
+    "$.fidelity.fidelity_identity": "author-gated",
+    "$.fidelity.gate_id": "author-gated",
+    "$.fidelity.permanent_scar": "author-gated",
+    "$.fidelity.reason": "author-gated",
+    "$.fidelity.required": "author-gated",
+    "$.fidelity.verdict": "author-gated",
+    "$.flags[]": "reducer-derived",
+    "$.identity.acronym": "author-gated",
+    "$.identity.alias_of": "author-gated",
+    "$.identity.aliases[]": "author-gated",
+    "$.identity.canonical_name": "author-gated",
+    "$.identity.duplicate_of": "author-gated",
+    "$.identity.family_representative_id": "trusted-intake",
+    "$.identity.variant": "trusted-intake",
+    "$.identity.variant_scope": "trusted-intake",
+    "$.implementation.builder_symbol": "author-gated",
+    "$.implementation.code_manifest[].path": "author-gated",
+    "$.implementation.code_manifest[].sha256": "author-gated",
+    "$.implementation.code_path": "author-gated",
+    "$.implementation.code_sha256": "author-gated",
+    "$.implementation.declared_choices[].evidence_ids[]": "author-gated",
+    "$.implementation.declared_choices[].field": "author-gated",
+    "$.implementation.declared_choices[].material": "author-gated",
+    "$.implementation.declared_choices[].rationale": "author-gated",
+    "$.implementation.declared_choices[].source_status": "author-gated",
+    "$.implementation.declared_choices[].value": "author-gated",
+    "$.implementation.declared_timeout_seconds": "author-gated",
+    "$.implementation.device_policy": "author-gated",
+    "$.implementation.dummy_call_symbol": "author-gated",
+    "$.implementation.initialization.policy": "author-gated",
+    "$.implementation.initialization.pretrained_disabled": "author-gated",
+    "$.implementation.initialization.source_specified_choices[]": "author-gated",
+    "$.implementation.library_recipe.artifact_sha256": "author-gated",
+    "$.implementation.library_recipe.distribution": "author-gated",
+    "$.implementation.library_recipe.kwargs": "author-gated",
+    "$.implementation.library_recipe.module": "author-gated",
+    "$.implementation.library_recipe.pretrained_disable_fields[]": "author-gated",
+    "$.implementation.library_recipe.symbol": "author-gated",
+    "$.implementation.library_recipe.version": "author-gated",
+    "$.implementation.mode": "author-gated",
+    "$.implementation.native_call_method": "author-gated",
+    "$.implementation.native_object_type": "author-gated",
+    "$.implementation.original_framework": "author-gated",
+    "$.implementation.patches[].classification": "author-gated",
+    "$.implementation.patches[].evidence_ids[]": "author-gated",
+    "$.implementation.patches[].path": "author-gated",
+    "$.implementation.patches[].rationale": "author-gated",
+    "$.implementation.patches[].semantic": "author-gated",
+    "$.implementation.patches[].sha256": "author-gated",
+    "$.implementation.recipe_revision": "author-gated",
+    "$.implementation.recipe_type": "author-gated",
+    "$.implementation.required_construct_asset": "author-gated",
+    "$.implementation.run_framework": "author-gated",
+    "$.implementation.source_to_code_map[].code_locator": "author-gated",
+    "$.implementation.source_to_code_map[].code_path": "author-gated",
+    "$.implementation.source_to_code_map[].disposition": "author-gated",
+    "$.implementation.source_to_code_map[].evidence_ids[]": "author-gated",
+    "$.implementation.source_to_code_map[].material_item": "author-gated",
+    "$.implementation.source_to_code_map[].source_id": "author-gated",
+    "$.implementation.source_to_code_map[].source_locator": "author-gated",
+    "$.implementation.torchlens_import_static_check": "author-gated",
+    "$.implementation.transparent_forward_adapter": "author-gated",
+    "$.implementation.upstream_files[].path": "author-gated",
+    "$.implementation.upstream_files[].sha256": "author-gated",
+    "$.implementation.upstream_files[].source_id": "author-gated",
+    "$.implementation.upstream_files[].use": "author-gated",
+    "$.input_contract.args[].constraints[]": "author-gated",
+    "$.input_contract.args[].device_policy": "author-gated",
+    "$.input_contract.args[].distribution": "author-gated",
+    "$.input_contract.args[].dtype": "author-gated",
+    "$.input_contract.args[].kind": "author-gated",
+    "$.input_contract.args[].path": "author-gated",
+    "$.input_contract.args[].semantic_role": "author-gated",
+    "$.input_contract.args[].shape[]": "author-gated",
+    "$.input_contract.args[].source_evidence_ids[]": "author-gated",
+    "$.input_contract.builder_symbol": "author-gated",
+    "$.input_contract.code_path": "author-gated",
+    "$.input_contract.expected_output_semantics": "author-gated",
+    "$.input_contract.kwargs[].constraints[]": "author-gated",
+    "$.input_contract.kwargs[].device_policy": "author-gated",
+    "$.input_contract.kwargs[].distribution": "author-gated",
+    "$.input_contract.kwargs[].dtype": "author-gated",
+    "$.input_contract.kwargs[].kind": "author-gated",
+    "$.input_contract.kwargs[].path": "author-gated",
+    "$.input_contract.kwargs[].semantic_role": "author-gated",
+    "$.input_contract.kwargs[].shape[]": "author-gated",
+    "$.input_contract.kwargs[].source_evidence_ids[]": "author-gated",
+    "$.input_contract.masks_state_and_control[]": "author-gated",
+    "$.input_contract.non_tensor_values[].constraints[]": "author-gated",
+    "$.input_contract.non_tensor_values[].path": "author-gated",
+    "$.input_contract.non_tensor_values[].semantic_role": "author-gated",
+    "$.input_contract.non_tensor_values[].source_evidence_ids[]": "author-gated",
+    "$.input_contract.non_tensor_values[].type": "author-gated",
+    "$.input_contract.non_tensor_values[].value": "author-gated",
+    "$.input_contract.seed": "author-gated",
+    "$.input_contract.semantic_description": "author-gated",
+    "$.input_contract.smallest_valid_probe_rationale": "author-gated",
+    "$.input_contract.source_basis[]": "author-gated",
+    "$.intake.discovery_sources[]": "untrusted-history",
+    "$.intake.legacy_claims_untrusted": "untrusted-history",
+    "$.intake.legacy_module_sha256": "untrusted-history",
+    "$.intake.legacy_recipe_sha256": "untrusted-history",
+    "$.intake.legacy_row_sha256": "untrusted-history",
+    "$.intake.preserved_legacy_flags[]": "untrusted-history",
+    "$.intake.snapshot_id": "trusted-intake",
+    "$.intake.snapshot_sha256": "trusted-intake",
+    "$.licenses.code.evidence_ids[]": "author-gated",
+    "$.licenses.code.locator": "author-gated",
+    "$.licenses.code.source_id": "author-gated",
+    "$.licenses.code.spdx": "author-gated",
+    "$.licenses.code.status": "author-gated",
+    "$.licenses.data.evidence_ids[]": "author-gated",
+    "$.licenses.data.source_id": "author-gated",
+    "$.licenses.data.spdx": "author-gated",
+    "$.licenses.data.status": "author-gated",
+    "$.licenses.paper_text.source_id": "author-gated",
+    "$.licenses.paper_text.status": "author-gated",
+    "$.licenses.redistribution_class": "author-gated",
+    "$.licenses.source_dispositions[].evidence_ids[]": "author-gated",
+    "$.licenses.source_dispositions[].locator": "author-gated",
+    "$.licenses.source_dispositions[].source_id": "author-gated",
+    "$.licenses.source_dispositions[].spdx": "author-gated",
+    "$.licenses.source_dispositions[].status": "author-gated",
+    "$.licenses.weights.status": "author-gated",
+    "$.modes.divergence_evidence": "reducer-derived",
+    "$.modes.meaningful_modes[]": "author-gated",
+    "$.modes.per_mode_run.eval.attempt_id": "reducer-derived",
+    "$.modes.per_mode_run.eval.status": "reducer-derived",
+    "$.modes.per_mode_run.train.attempt_id": "reducer-derived",
+    "$.modes.per_mode_run.train.status": "reducer-derived",
+    "$.modes.train_eval_divergence": "reducer-derived",
+    "$.notes": "untrusted-history",
+    "$.observed.constructor_seconds": "worker-observed",
+    "$.observed.delegated_method": "worker-observed",
+    "$.observed.forward_seconds": "worker-observed",
+    "$.observed.input_asset": "worker-observed",
+    "$.observed.input_kind": "worker-observed",
+    "$.observed.input_note": "worker-observed",
+    "$.observed.measurement_attempt_ids[]": "worker-observed",
+    "$.observed.native_framework": "worker-observed",
+    "$.observed.output_signature.leaves[].device": "worker-observed",
+    "$.observed.output_signature.leaves[].dtype": "worker-observed",
+    "$.observed.output_signature.leaves[].kind": "worker-observed",
+    "$.observed.output_signature.leaves[].path": "worker-observed",
+    "$.observed.output_signature.leaves[].python_type": "worker-observed",
+    "$.observed.output_signature.leaves[].shape[]": "worker-observed",
+    "$.observed.output_signature.tree": "worker-observed",
+    "$.observed.parameter_count_total": "worker-observed",
+    "$.observed.parameter_count_trainable": "worker-observed",
+    "$.observed.peak_rss_bytes": "worker-observed",
+    "$.observed.snippet": "worker-observed",
+    "$.observed.snippet_sha256": "worker-observed",
+    "$.parent_revision": "reducer-derived",
+    "$.people_and_origin.authors[]": "author-gated",
+    "$.people_and_origin.country_basis": "author-gated",
+    "$.people_and_origin.country_confidence": "author-gated",
+    "$.people_and_origin.country_note": "author-gated",
+    "$.people_and_origin.institutions[]": "author-gated",
+    "$.people_and_origin.labs[]": "author-gated",
+    "$.people_and_origin.origin_countries[]": "author-gated",
+    "$.provenance.author_model": "reducer-derived",
+    "$.provenance.author_prompt_sha256": "reducer-derived",
+    "$.provenance.author_version": "reducer-derived",
+    "$.provenance.checker_model": "reducer-derived",
+    "$.provenance.checker_version": "reducer-derived",
+    "$.provenance.machine_id": "reducer-derived",
+    "$.provenance.producer_run_id": "reducer-derived",
+    "$.record_revision": "reducer-derived",
+    "$.record_seq": "reducer-derived",
+    "$.revised_by.actor": "reducer-derived",
+    "$.revised_by.model": "reducer-derived",
+    "$.revised_by.version": "reducer-derived",
+    "$.scar_history[]": "untrusted-history",
+    "$.schema_version": "reducer-derived",
+    "$.source_resolution.attempted_rungs[].evidence_ids[]": "author-gated",
+    "$.source_resolution.attempted_rungs[].reason_code": "author-gated",
+    "$.source_resolution.attempted_rungs[].result": "author-gated",
+    "$.source_resolution.attempted_rungs[].rung": "author-gated",
+    "$.source_resolution.decision": "author-gated",
+    "$.source_resolution.mandatory_link_status": "author-gated",
+    "$.source_resolution.primary_source_id": "author-gated",
+    "$.source_resolution.rung": "author-gated",
+    "$.source_resolution.rung_evidence": "author-gated",
+    "$.source_resolution.search_report.archives_checked[]": "author-gated",
+    "$.source_resolution.search_report.conclusion": "author-gated",
+    "$.source_resolution.search_report.finished_at": "author-gated",
+    "$.source_resolution.search_report.languages_checked[]": "author-gated",
+    "$.source_resolution.search_report.links_checked[]": "author-gated",
+    "$.source_resolution.search_report.places_checked[]": "author-gated",
+    "$.source_resolution.search_report.queries[]": "author-gated",
+    "$.source_resolution.search_report.started_at": "author-gated",
+    "$.source_resolution.searched_at": "author-gated",
+    "$.source_resolution.sources[].byte_count": "author-gated",
+    "$.source_resolution.sources[].content_sha256": "author-gated",
+    "$.source_resolution.sources[].fetch_recipe": "author-gated",
+    "$.source_resolution.sources[].kind": "author-gated",
+    "$.source_resolution.sources[].locator": "author-gated",
+    "$.source_resolution.sources[].media_type": "author-gated",
+    "$.source_resolution.sources[].mirror_class": "author-gated",
+    "$.source_resolution.sources[].mirror_digest": "author-gated",
+    "$.source_resolution.sources[].retrieved_at": "author-gated",
+    "$.source_resolution.sources[].revision": "author-gated",
+    "$.source_resolution.sources[].revision_kind": "author-gated",
+    "$.source_resolution.sources[].role": "author-gated",
+    "$.source_resolution.sources[].source_id": "author-gated",
+    "$.source_resolution.sources[].url": "author-gated",
+    "$.source_resolution.sufficiency_gap": "author-gated",
+    "$.stable_id": "trusted-intake",
+    "$.status.attempt_ids[]": "reducer-derived",
+    "$.status.attempted_rungs[]": "reducer-derived",
+    "$.status.code": "reducer-derived",
+    "$.status.detail": "reducer-derived",
+    "$.status.environment": "reducer-derived",
+    "$.status.human_review.queue": "reducer-derived",
+    "$.status.human_review.reason": "reducer-derived",
+    "$.status.human_review.requested_at": "reducer-derived",
+    "$.status.human_review.required": "reducer-derived",
+    "$.status.kind": "reducer-derived",
+    "$.status.no_traceback_reason": "reducer-derived",
+    "$.status.reason_code": "reducer-derived",
+    "$.status.retries.author": "reducer-derived",
+    "$.status.retries.constructor": "reducer-derived",
+    "$.status.retries.environment": "reducer-derived",
+    "$.status.retries.evidence": "reducer-derived",
+    "$.status.retries.fetch": "reducer-derived",
+    "$.status.retries.fidelity": "reducer-derived",
+    "$.status.retries.forward": "reducer-derived",
+    "$.status.retries.gate": "reducer-derived",
+    "$.status.retries.import": "reducer-derived",
+    "$.status.retries.input": "reducer-derived",
+    "$.status.retries.source": "reducer-derived",
+    "$.status.root_cause_fingerprint": "reducer-derived",
+    "$.status.stage": "reducer-derived",
+    "$.status.supersedes_revision": "reducer-derived",
+    "$.status.timestamp": "reducer-derived",
+    "$.status.traceback.content_sha256": "reducer-derived",
+    "$.status.traceback.diagnostic_key": "reducer-derived",
+    "$.status.traceback.local_path": "reducer-derived",
+    "$.status.traceback.redaction": "reducer-derived",
+    "$.status.traceback.stream_sha256": "reducer-derived",
+    "$.taxonomy.architecture_tags[]": "author-gated",
+    "$.taxonomy.domains[]": "author-gated",
+    "$.taxonomy.era": "author-gated",
+    "$.taxonomy.family": "author-gated",
+    "$.taxonomy.modalities[]": "author-gated",
+    "$.taxonomy.novel_ops[]": "author-gated",
+    "$.taxonomy.tasks[]": "author-gated",
+    "$.untrusted_attempt.proposal": "untrusted-history",
+    "$.untrusted_attempt.proposal_sha256": "untrusted-history",
+    "$.website.description": "author-gated",
+    "$.website.family_grounding_id": "author-gated",
+    "$.website.key_contribution": "author-gated",
+    "$.website.kind": "author-gated",
+    "$.website.tagline": "author-gated",
+    "$.website.template_hash": "author-gated",
+    "$.website.template_source_model_id": "author-gated",
+    "$.website.variant_parameter_input_line": "author-gated",
+    "$.website.voice_version": "author-gated"
+  }
+}

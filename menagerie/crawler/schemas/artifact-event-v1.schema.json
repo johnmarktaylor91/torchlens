@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/artifact-event-v1.schema.json",
+  "title": "Menagerie crawler append-only artifact authority event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "artifact_event_id", "ledger_seq", "payload_sha256",
+    "transaction_id", "predecessor_event_id", "event_kind", "created_at",
+    "stable_id", "work_id", "intake_snapshot_id", "intake_snapshot_sha256",
+    "author_result_id", "proposal_id", "source_manifest_identity", "source_ids",
+    "objects", "claims", "gate_id", "gate_item_sha256", "dependency_vector_sha256",
+    "authorization_id", "reconstruction", "publication_inventory"
+  ],
+  "properties": {
+    "schema_version": {"const": "menagerie.crawler.artifact-event.v1", "description": "Mandatory artifact authority schema discriminator."},
+    "artifact_event_id": {"$ref": "#/$defs/nonempty_string", "description": "Deterministic immutable artifact-event identity."},
+    "ledger_seq": {"type": "integer", "minimum": 1, "description": "Mandatory monotonic artifact-ledger sequence."},
+    "payload_sha256": {"$ref": "#/$defs/hash", "description": "Hash of the complete artifact-event payload."},
+    "transaction_id": {"$ref": "#/$defs/nonempty_string", "description": "Deterministic artifact transaction identity."},
+    "predecessor_event_id": {"$ref": "#/$defs/nullable_string", "description": "Exact predecessor event in the transaction state machine."},
+    "event_kind": {"enum": ["staged-private", "terminal-authorized", "publication-authorized", "reconstruction-committed", "published", "private-committed"], "description": "Closed artifact transaction transition."},
+    "created_at": {"$ref": "#/$defs/timestamp", "description": "UTC event creation timestamp."},
+    "stable_id": {"$ref": "#/$defs/nonempty_string", "description": "Trusted stable model identity."},
+    "work_id": {"$ref": "#/$defs/nonempty_string", "description": "Deterministic work identity."},
+    "intake_snapshot_id": {"$ref": "#/$defs/nonempty_string", "description": "Exact active intake snapshot identity."},
+    "intake_snapshot_sha256": {"$ref": "#/$defs/hash", "description": "Digest of the exact active intake snapshot."},
+    "author_result_id": {"$ref": "#/$defs/nonempty_string", "description": "Exact typed author-result identity."},
+    "proposal_id": {"$ref": "#/$defs/nullable_string", "description": "Exact proposal identity when the result proposed artifacts."},
+    "source_manifest_identity": {"$ref": "#/$defs/hash", "description": "Exact frozen source-manifest identity."},
+    "source_ids": {"$ref": "#/$defs/string_array", "description": "Exact source identity set retained by this transaction."},
+    "objects": {"type": "array", "items": {"$ref": "#/$defs/mirror_object"}, "description": "Intrinsic content objects in private or public custody."},
+    "claims": {"type": "array", "items": {"$ref": "#/$defs/artifact_claim"}, "description": "Independent model-specific claims over intrinsic objects."},
+    "gate_id": {"$ref": "#/$defs/nullable_string", "description": "Exact accepted gate identity for authorization transitions."},
+    "gate_item_sha256": {"$ref": "#/$defs/nullable_hash", "description": "Digest of the exact accepted gate item."},
+    "dependency_vector_sha256": {"$ref": "#/$defs/nullable_hash", "description": "Digest of the exact reducer-derived dependency vector."},
+    "authorization_id": {"$ref": "#/$defs/nullable_string", "description": "Reducer-created publication or terminal authorization identity."},
+    "reconstruction": {"oneOf": [{"$ref": "#/$defs/reconstruction"}, {"type": "null"}], "description": "Immutable reconstruction anchor committed by this transition."},
+    "publication_inventory": {"oneOf": [{"$ref": "#/$defs/publication_inventory"}, {"type": "null"}], "description": "Exact public or private materialization inventory."}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "nullable_hash": {"oneOf": [{"$ref": "#/$defs/hash"}, {"type": "null"}]},
+    "nonempty_string": {"type": "string", "minLength": 1},
+    "nullable_string": {"oneOf": [{"$ref": "#/$defs/nonempty_string"}, {"type": "null"}]},
+    "timestamp": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "string_array": {"type": "array", "items": {"$ref": "#/$defs/nonempty_string"}, "uniqueItems": true},
+    "mirror_object": {
+      "type": "object", "additionalProperties": false,
+      "required": ["object_id", "mirror_class", "content_sha256", "byte_count", "media_type", "object_key", "private_custody_key"],
+      "properties": {
+        "object_id": {"$ref": "#/$defs/nonempty_string", "description": "Intrinsic content object identity."},
+        "mirror_class": {"enum": ["public", "private", "manifest-only"], "description": "Custody and publication lane."},
+        "content_sha256": {"$ref": "#/$defs/hash", "description": "Digest of exact object bytes."},
+        "byte_count": {"type": "integer", "minimum": 0, "description": "Exact object byte count."},
+        "media_type": {"$ref": "#/$defs/nonempty_string", "description": "Stable media type."},
+        "object_key": {"$ref": "#/$defs/nonempty_string", "description": "Intrinsic content-addressed object key."},
+        "private_custody_key": {"$ref": "#/$defs/nonempty_string", "description": "Private content-addressed custody key."}
+      }
+    },
+    "artifact_claim": {
+      "type": "object", "additionalProperties": false,
+      "required": ["claim_id", "object_id", "stable_id", "work_id", "proposal_id", "gate_id", "authorization_id", "logical_role", "logical_path", "source_id", "origin", "revision", "fetch_recipe_sha256", "evidence_ids", "license_disposition"],
+      "properties": {
+        "claim_id": {"$ref": "#/$defs/nonempty_string", "description": "Model-specific artifact claim identity."},
+        "object_id": {"$ref": "#/$defs/nonempty_string", "description": "Referenced intrinsic object identity."},
+        "stable_id": {"$ref": "#/$defs/nonempty_string", "description": "Claiming stable model identity."},
+        "work_id": {"$ref": "#/$defs/nonempty_string", "description": "Claiming work identity."},
+        "proposal_id": {"$ref": "#/$defs/nullable_string", "description": "Exact proposal lineage."},
+        "gate_id": {"$ref": "#/$defs/nullable_string", "description": "Exact accepted gate lineage."},
+        "authorization_id": {"$ref": "#/$defs/nullable_string", "description": "Exact reducer authorization lineage."},
+        "logical_role": {"$ref": "#/$defs/nonempty_string", "description": "Model-specific logical artifact role."},
+        "logical_path": {"$ref": "#/$defs/nonempty_string", "description": "Model-specific logical path."},
+        "source_id": {"$ref": "#/$defs/nonempty_string", "description": "Exact source identity supporting the claim."},
+        "origin": {"$ref": "#/$defs/nonempty_string", "description": "Exact upstream origin."},
+        "revision": {"$ref": "#/$defs/nonempty_string", "description": "Exact upstream revision."},
+        "fetch_recipe_sha256": {"$ref": "#/$defs/hash", "description": "Digest of the deterministic fetch recipe."},
+        "evidence_ids": {"$ref": "#/$defs/string_array", "description": "Exact supporting evidence identities."},
+        "license_disposition": {"enum": ["public-compatible", "restricted-private", "manifest-only"], "description": "Independently gated claim license disposition."}
+      }
+    },
+    "reconstruction": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "claim_ids"],
+      "properties": {
+        "path": {"$ref": "#/$defs/nonempty_string", "description": "Immutable transaction-addressed reconstruction path."},
+        "sha256": {"$ref": "#/$defs/hash", "description": "Digest of exact reconstruction bytes."},
+        "claim_ids": {"$ref": "#/$defs/string_array", "description": "Complete selected reconstruction claim set."}
+      }
+    },
+    "publication_inventory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["lane", "object_ids", "materialization_paths"],
+      "properties": {
+        "lane": {"enum": ["public", "private"], "description": "Exact committed inventory lane."},
+        "object_ids": {"$ref": "#/$defs/string_array", "description": "Complete committed object inventory."},
+        "materialization_paths": {"$ref": "#/$defs/string_array", "description": "Complete committed repository or private materialization inventory."}
+      }
+    }
+  }
+}

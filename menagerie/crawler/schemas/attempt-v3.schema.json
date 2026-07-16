@@ -1,0 +1,1598 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/attempt-v3.schema.json",
+  "title": "Menagerie crawler immutable attempt v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "attempt_id",
+    "ledger_seq",
+    "payload_sha256",
+    "work_id",
+    "stable_id",
+    "attempt_no",
+    "parent_attempt_id",
+    "actor",
+    "stage",
+    "mode",
+    "started_at",
+    "finished_at",
+    "result",
+    "attempted_rungs",
+    "retries",
+    "identities",
+    "environment",
+    "host",
+    "invocation",
+    "worker_receipt",
+    "supervisor_observation",
+    "policy_observation",
+    "error",
+    "defer_evidence",
+    "execution_read_manifest_identity",
+    "raw_award_receipt",
+    "raw_award_receipt_sha256",
+    "parent_attestation",
+    "unattested_partial"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "menagerie.crawler.attempt.v3",
+      "description": "Mandatory current attempt contract discriminator; immutable v2 rows are legacy-untrusted history."
+    },
+    "attempt_id": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Mandatory immutable attempt identifier."
+    },
+    "ledger_seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Mandatory monotonic ledger sequence."
+    },
+    "payload_sha256": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory hash of the complete ledger payload."
+    },
+    "work_id": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Mandatory deterministic work identifier."
+    },
+    "stable_id": {
+      "$ref": "#/$defs/nullable_string",
+      "description": "Mandatory stable model identifier."
+    },
+    "attempt_no": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Mandatory ordinal attempt number."
+    },
+    "parent_attempt_id": {
+      "$ref": "#/$defs/nullable_string",
+      "description": "Best-effort parent attempt identifier."
+    },
+    "actor": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Mandatory producing actor."
+    },
+    "stage": {
+      "$ref": "#/$defs/stage",
+      "description": "Mandatory processing or failure stage."
+    },
+    "mode": {
+      "oneOf": [
+        {
+          "enum": [
+            "train",
+            "eval"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Mandatory mode."
+    },
+    "started_at": {
+      "$ref": "#/$defs/timestamp",
+      "description": "Mandatory UTC start timestamp."
+    },
+    "finished_at": {
+      "$ref": "#/$defs/timestamp",
+      "description": "Mandatory UTC completion timestamp."
+    },
+    "result": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "observed"
+      ],
+      "description": "Mandatory immutable attempt outcome."
+    },
+    "attempted_rungs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rung"
+      },
+      "uniqueItems": true,
+      "description": "Mandatory attempted rungs."
+    },
+    "retries": {
+      "$ref": "#/$defs/retries",
+      "description": "Mandatory retries."
+    },
+    "identities": {
+      "$ref": "#/$defs/identities",
+      "description": "Mandatory identities."
+    },
+    "environment": {
+      "$ref": "#/$defs/environment",
+      "description": "Mandatory environment."
+    },
+    "host": {
+      "$ref": "#/$defs/host",
+      "description": "Mandatory host."
+    },
+    "invocation": {
+      "$ref": "#/$defs/invocation",
+      "description": "Mandatory invocation."
+    },
+    "worker_receipt": {
+      "$ref": "#/$defs/worker_receipt",
+      "description": "Mandatory worker receipt."
+    },
+    "supervisor_observation": {
+      "$ref": "#/$defs/supervisor_observation",
+      "description": "Mandatory supervisor observation."
+    },
+    "policy_observation": {
+      "$ref": "#/$defs/policy_observation",
+      "description": "Mandatory policy observation."
+    },
+    "error": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/error"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Mandatory error."
+    },
+    "defer_evidence": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/defer_evidence"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Mandatory defer evidence."
+    },
+    "execution_read_manifest_identity": {
+      "$ref": "#/$defs/hash",
+      "description": "Reducer-bound identity of the trusted compiled execution read manifest."
+    },
+    "raw_award_receipt": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/raw_award_receipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Closed success-only worker receipt retained as canonical raw proof bytes."
+    },
+    "raw_award_receipt_sha256": {
+      "$ref": "#/$defs/nullable_hash",
+      "description": "Worker self-hash of the exact canonical raw award receipt bytes."
+    },
+    "parent_attestation": {
+      "$ref": "#/$defs/parent_attestation",
+      "description": "Separately named parent attestation over completion and process facts."
+    },
+    "unattested_partial": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/unattested_partial"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Non-awarding partial worker observation retained for failed supervision."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "forward",
+            "description": "Mandatory processing or failure stage."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "train",
+              "eval"
+            ],
+            "description": "Best-effort mode."
+          },
+          "invocation": {
+            "properties": {
+              "mode": {
+                "enum": [
+                  "train",
+                  "eval"
+                ],
+                "description": "Best-effort mode."
+              }
+            },
+            "description": "Best-effort invocation."
+          },
+          "worker_receipt": {
+            "properties": {
+              "mode": {
+                "enum": [
+                  "train",
+                  "eval"
+                ],
+                "description": "Best-effort mode."
+              }
+            },
+            "description": "Best-effort worker receipt."
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "mode": {
+            "type": "null",
+            "description": "Best-effort mode."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "failed",
+            "description": "Mandatory immutable attempt outcome."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "$ref": "#/$defs/error",
+            "description": "Best-effort error."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "succeeded",
+            "description": "Select attempts eligible for a run award."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "raw_award_receipt": {
+            "$ref": "#/$defs/raw_award_receipt",
+            "description": "Successful attempts retain the exact closed raw award receipt."
+          },
+          "raw_award_receipt_sha256": {
+            "$ref": "#/$defs/hash",
+            "description": "Successful attempts retain the worker self-hash."
+          },
+          "unattested_partial": {
+            "type": "null",
+            "description": "A successful attempt cannot also be an unattested partial."
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "nullable_hash": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "nonempty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nullable_string": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "redacted_text": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "redaction",
+        "content_sha256",
+        "local_path",
+        "diagnostic_key"
+      ],
+      "properties": {
+        "redaction": {
+          "const": "externally-controlled-text-v1",
+          "description": "Closed marker for externally controlled text removed from public records."
+        },
+        "content_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Digest of the exact canonical JSON diagnostic value."
+        },
+        "local_path": {
+          "type": "string",
+          "pattern": "^\\.crawl-local/diagnostics/[A-Za-z0-9._/:-]+\\.json$",
+          "description": "Gitignored local diagnostic sidecar locator."
+        },
+        "diagnostic_key": {
+          "type": "string",
+          "pattern": "^\\$[A-Za-z0-9_.\\[\\]-]+$",
+          "description": "JSON-style key locating the exact value inside the sidecar."
+        },
+        "stream_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact parent-observed stream digest when the value is a stdio tail."
+        }
+      }
+    },
+    "string_array": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "stage": {
+      "enum": [
+        "intake",
+        "source",
+        "fetch",
+        "evidence",
+        "accuracy-gate",
+        "environment",
+        "import",
+        "constructor",
+        "input",
+        "forward",
+        "fidelity",
+        "resource",
+        "policy",
+        "runner"
+      ]
+    },
+    "reason_code": {
+      "enum": [
+        "schema-invalid",
+        "stable-id-conflict",
+        "duplicate-revision-conflict",
+        "migration-invariant",
+        "identity-unresolved",
+        "missing-mandatory-link",
+        "source-model-mismatch",
+        "higher-rung-unresolved",
+        "unreachable",
+        "revision-missing",
+        "hash-mismatch",
+        "access-denied",
+        "artifact-missing",
+        "locator-missing",
+        "excerpt-mismatch",
+        "insufficient-detail",
+        "coverage-incomplete",
+        "search-incomplete",
+        "inaccurate-cap-exhausted",
+        "cannot-verify-cap-exhausted",
+        "identity-mismatch",
+        "checker-contract-invalid",
+        "solve-failed",
+        "lock-missing",
+        "artifact-hash-mismatch",
+        "build-failed",
+        "probe-failed",
+        "resolved-export-mismatch",
+        "island-cap",
+        "below-minimum-island-size",
+        "module-missing",
+        "symbol-missing",
+        "abi-load-failed",
+        "import-exception",
+        "exception",
+        "requires-checkpoint",
+        "requires-weight-asset",
+        "invalid-model-object",
+        "contract-invalid",
+        "source-invalid-shape",
+        "generation-exception",
+        "semantic-constraint",
+        "mode-run",
+        "incomplete-receipt",
+        "invalid-output-signature",
+        "confirmation-mismatch",
+        "major-drift-cap-exhausted",
+        "slop-cap-exhausted",
+        "timeout",
+        "oom",
+        "disk-floor",
+        "scratch-cap",
+        "rss-cap",
+        "network-attempt",
+        "checkpoint-read",
+        "write-outside-scratch",
+        "credentials-exposed",
+        "torchlens-import",
+        "opaque-code",
+        "native-crash",
+        "signal",
+        "missing-receipt",
+        "protocol-violation",
+        "ledger-corruption",
+        "internal-error",
+        "sandbox-unavailable-v1",
+        "effort-cap-exhausted"
+      ]
+    },
+    "rung": {
+      "enum": [
+        "R1_LIBRARY",
+        "R2_VENDOR",
+        "R3_PORT",
+        "R4_REIMPLEMENT",
+        "R5_SKIP"
+      ]
+    },
+    "retries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage_attempt",
+        "root_cause_repeat",
+        "author_round",
+        "gate_round"
+      ],
+      "properties": {
+        "stage_attempt": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory stage attempt."
+        },
+        "root_cause_repeat": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory root cause repeat."
+        },
+        "author_round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory author round."
+        },
+        "gate_round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory checker repair round."
+        }
+      }
+    },
+    "identities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "evidence",
+        "recipe",
+        "environment",
+        "execution",
+        "runner",
+        "author_prompt",
+        "checker_prompt"
+      ],
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory source."
+        },
+        "evidence": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory literal evidence and coverage record."
+        },
+        "recipe": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory recipe."
+        },
+        "environment": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory environment."
+        },
+        "execution": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory execution identity and currentness state."
+        },
+        "runner": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory runner."
+        },
+        "author_prompt": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory author prompt."
+        },
+        "checker_prompt": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory checker prompt."
+        }
+      }
+    },
+    "environment": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/observed_environment"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "observed_environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "target",
+        "env_id",
+        "lock_sha256",
+        "resolved_export_sha256",
+        "python",
+        "packages_manifest_sha256",
+        "compiler_identity",
+        "sdk_identity"
+      ],
+      "properties": {
+        "family": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory family."
+        },
+        "target": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory target."
+        },
+        "env_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory env id."
+        },
+        "lock_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory lock sha256."
+        },
+        "resolved_export_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory resolved export sha256."
+        },
+        "python": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory python."
+        },
+        "packages_manifest_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory packages manifest sha256."
+        },
+        "compiler_identity": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory compiler identity."
+        },
+        "sdk_identity": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory sdk identity."
+        }
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "machine_id",
+        "os",
+        "os_build",
+        "architecture",
+        "cpu",
+        "ram_bytes",
+        "accelerator",
+        "accelerator_runtime"
+      ],
+      "properties": {
+        "machine_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory machine id."
+        },
+        "os": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory os."
+        },
+        "os_build": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory os build."
+        },
+        "architecture": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory architecture."
+        },
+        "cpu": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory cpu."
+        },
+        "ram_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory ram bytes."
+        },
+        "accelerator": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory accelerator."
+        },
+        "accelerator_runtime": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory accelerator runtime."
+        }
+      }
+    },
+    "invocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "argv",
+        "cwd",
+        "safe_env",
+        "seed",
+        "device",
+        "mode",
+        "network_policy",
+        "timeout_seconds",
+        "rss_limit_bytes",
+        "scratch_limit_bytes"
+      ],
+      "properties": {
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "Mandatory argv."
+        },
+        "cwd": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory cwd."
+        },
+        "safe_env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Mandatory safe env."
+        },
+        "seed": {
+          "type": "integer",
+          "description": "Mandatory seed."
+        },
+        "device": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory device."
+        },
+        "mode": {
+          "oneOf": [
+            {
+              "enum": [
+                "train",
+                "eval"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory mode."
+        },
+        "network_policy": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory network policy."
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1800,
+          "description": "Mandatory timeout seconds."
+        },
+        "rss_limit_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Mandatory rss limit bytes."
+        },
+        "scratch_limit_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Mandatory scratch limit bytes."
+        }
+      }
+    },
+    "input_kind": {
+      "type": "string",
+      "pattern": "^(standard-[a-z0-9-]+|random-fallback)$"
+    },
+    "worker_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "present",
+        "receipt_sha256",
+        "observed_recipe_revision",
+        "observed_adapter_sha256",
+        "observed_code_manifest_sha256",
+        "observed_input_asset_sha256",
+        "constructor_started",
+        "constructor_completed",
+        "input_completed",
+        "forward_started",
+        "forward_completed",
+        "mode",
+        "input_signature",
+        "output_signature",
+        "input_kind",
+        "input_asset",
+        "input_note",
+        "parameter_count_total",
+        "parameter_count_trainable",
+        "native_framework",
+        "delegated_method"
+      ],
+      "properties": {
+        "present": {
+          "type": "boolean",
+          "description": "Mandatory present."
+        },
+        "receipt_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory receipt sha256."
+        },
+        "observed_recipe_revision": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Worker-observed recipe revision, required for parent comparison."
+        },
+        "observed_adapter_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Worker-observed typed-adapter digest, or null for declarative recipes."
+        },
+        "observed_code_manifest_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Worker-observed digest over the recursive code_manifest bytes, or null when the recipe has no code manifest."
+        },
+        "observed_input_asset_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Worker-observed digest of the materialized standard input asset, or null when no standard asset was selected."
+        },
+        "constructor_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Worker-observed model-construction wall seconds, or null when the constructor did not complete."
+        },
+        "forward_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Worker-observed forward wall seconds for this mode, or null when the forward did not run."
+        },
+        "constructor_started": {
+          "type": "boolean",
+          "description": "Mandatory constructor started."
+        },
+        "constructor_completed": {
+          "type": "boolean",
+          "description": "Mandatory constructor completed."
+        },
+        "input_completed": {
+          "type": "boolean",
+          "description": "Mandatory input completed."
+        },
+        "forward_started": {
+          "type": "boolean",
+          "description": "Mandatory forward started."
+        },
+        "forward_completed": {
+          "type": "boolean",
+          "description": "Mandatory forward completed."
+        },
+        "mode": {
+          "oneOf": [
+            {
+              "enum": [
+                "train",
+                "eval"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory mode."
+        },
+        "input_signature": {
+          "description": "Mandatory input signature."
+        },
+        "output_signature": {
+          "description": "Mandatory output signature."
+        },
+        "input_kind": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/input_kind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory input kind."
+        },
+        "input_asset": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory input asset."
+        },
+        "input_note": {
+          "type": "string",
+          "description": "Mandatory input note."
+        },
+        "parameter_count_total": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory parameter count total."
+        },
+        "parameter_count_trainable": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory parameter count trainable."
+        },
+        "native_framework": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory native framework."
+        },
+        "delegated_method": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory delegated method."
+        }
+      }
+    },
+    "supervisor_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exit_code",
+        "signal",
+        "wall_seconds",
+        "cpu_seconds",
+        "peak_rss_bytes",
+        "stdout_sha256",
+        "stdout_bytes",
+        "stdout_tail",
+        "stderr_sha256",
+        "stderr_bytes",
+        "stderr_tail",
+        "full_log_local_path",
+        "full_log_retention"
+      ],
+      "properties": {
+        "exit_code": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory exit code."
+        },
+        "signal": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory signal."
+        },
+        "wall_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Mandatory wall seconds."
+        },
+        "cpu_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Mandatory cpu seconds."
+        },
+        "peak_rss_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory peak rss bytes."
+        },
+        "stdout_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory stdout sha256."
+        },
+        "stdout_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory stdout bytes."
+        },
+        "stdout_tail": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 1500
+            },
+            {
+              "$ref": "#/$defs/redacted_text"
+            }
+          ],
+          "description": "Mandatory stdout tail."
+        },
+        "stdout_completion_line": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Parent-attested TorchLens-owned completion marker."
+        },
+        "stderr_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory stderr sha256."
+        },
+        "stderr_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mandatory stderr bytes."
+        },
+        "stderr_tail": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 1500
+            },
+            {
+              "$ref": "#/$defs/redacted_text"
+            }
+          ],
+          "description": "Mandatory stderr tail."
+        },
+        "full_log_local_path": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory full log local path."
+        },
+        "full_log_retention": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory full log retention."
+        }
+      }
+    },
+    "policy_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "network_attempted",
+        "socket_targets",
+        "checkpoint_or_weight_read_attempted",
+        "checkpoint_paths",
+        "write_outside_scratch_attempted",
+        "write_paths",
+        "credentials_present",
+        "torchlens_import_attempted",
+        "cache_read_attempted"
+      ],
+      "properties": {
+        "network_attempted": {
+          "type": "boolean",
+          "description": "Mandatory network attempted."
+        },
+        "socket_targets": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory socket targets."
+        },
+        "checkpoint_or_weight_read_attempted": {
+          "type": "boolean",
+          "description": "Mandatory checkpoint or weight read attempted."
+        },
+        "checkpoint_paths": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory checkpoint paths."
+        },
+        "write_outside_scratch_attempted": {
+          "type": "boolean",
+          "description": "Mandatory write outside scratch attempted."
+        },
+        "write_paths": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory write paths."
+        },
+        "credentials_present": {
+          "type": "boolean",
+          "description": "Mandatory credentials present."
+        },
+        "torchlens_import_attempted": {
+          "type": "boolean",
+          "description": "Mandatory torchlens import attempted."
+        },
+        "cache_read_attempted": {
+          "type": "boolean",
+          "description": "Mandatory cache read attempted."
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "reason_code",
+        "exception_type",
+        "message",
+        "traceback",
+        "no_traceback_reason",
+        "native_crash",
+        "root_cause_fingerprint",
+        "details"
+      ],
+      "properties": {
+        "stage": {
+          "$ref": "#/$defs/stage",
+          "description": "Mandatory processing or failure stage."
+        },
+        "reason_code": {
+          "$ref": "#/$defs/reason_code",
+          "description": "Mandatory closed reason code when applicable."
+        },
+        "exception_type": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory exception type."
+        },
+        "message": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/redacted_text"
+            }
+          ],
+          "description": "Mandatory message."
+        },
+        "traceback": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nullable_string"
+            },
+            {
+              "$ref": "#/$defs/redacted_text"
+            }
+          ],
+          "description": "Best-effort captured traceback."
+        },
+        "no_traceback_reason": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory no traceback reason."
+        },
+        "native_crash": {
+          "type": "boolean",
+          "description": "Mandatory native crash."
+        },
+        "root_cause_fingerprint": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory root cause fingerprint."
+        },
+        "details": {
+          "type": "object",
+          "description": "Mandatory structured event details."
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "traceback": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "$ref": "#/$defs/redacted_text"
+                }
+              ],
+              "description": "Best-effort captured traceback."
+            },
+            "no_traceback_reason": {
+              "type": "null",
+              "description": "Best-effort no traceback reason."
+            }
+          }
+        },
+        {
+          "properties": {
+            "traceback": {
+              "type": "null",
+              "description": "Best-effort captured traceback."
+            },
+            "no_traceback_reason": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Best-effort no traceback reason."
+            }
+          }
+        }
+      ]
+    },
+    "defer_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_status",
+        "source_ids",
+        "probe_attempt_ids",
+        "explanation"
+      ],
+      "properties": {
+        "target_status": {
+          "enum": [
+            "deferred:needs-cuda",
+            "deferred:needs-x86"
+          ],
+          "description": "Mandatory target status."
+        },
+        "source_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory source ids."
+        },
+        "probe_attempt_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory probe attempt ids."
+        },
+        "explanation": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory explanation."
+        }
+      }
+    },
+    "raw_award_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receipt_version",
+        "request_nonce",
+        "request_sha256",
+        "stable_id",
+        "work_id",
+        "execution_identity",
+        "recipe_revision",
+        "code_manifest_identity",
+        "input_identity",
+        "requested_mode",
+        "observation"
+      ],
+      "properties": {
+        "receipt_version": {
+          "const": "menagerie.crawler.raw-award-receipt.v3",
+          "description": "Closed worker receipt protocol discriminator."
+        },
+        "request_nonce": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Fresh parent-issued request nonce echoed by the worker."
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Digest of the exact worker request bytes."
+        },
+        "stable_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Trusted stable model identity bound into the request."
+        },
+        "work_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Deterministic work identity bound into the request."
+        },
+        "execution_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact execution dependency identity."
+        },
+        "recipe_revision": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact accepted recipe revision."
+        },
+        "code_manifest_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact accepted implementation closure identity."
+        },
+        "input_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact selected input-contract identity."
+        },
+        "requested_mode": {
+          "enum": [
+            "train",
+            "eval"
+          ],
+          "description": "Exact requested meaningful runtime mode."
+        },
+        "observation": {
+          "$ref": "#/$defs/worker_receipt",
+          "description": "Closed worker-internal constructor, input, forward, signature, and policy observations."
+        }
+      }
+    },
+    "parent_attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attestation_version",
+        "request_nonce",
+        "request_sha256",
+        "completion_line_sha256",
+        "named_raw_award_receipt_sha256",
+        "exit_code",
+        "signal",
+        "timed_out",
+        "rss_exceeded",
+        "peak_rss_bytes",
+        "stdout_sha256",
+        "stderr_sha256",
+        "started_at",
+        "finished_at",
+        "attestation_sha256"
+      ],
+      "properties": {
+        "attestation_version": {
+          "const": "menagerie.crawler.parent-attestation.v2",
+          "description": "Closed supervisor attestation protocol discriminator."
+        },
+        "request_nonce": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Fresh request nonce observed by the parent."
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Digest of the exact request launched by the parent."
+        },
+        "completion_line_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Digest of the exact worker completion line when present."
+        },
+        "named_raw_award_receipt_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Raw receipt digest literally named by the completion line."
+        },
+        "exit_code": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Parent-observed process exit code."
+        },
+        "signal": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Parent-observed terminating signal."
+        },
+        "timed_out": {
+          "type": "boolean",
+          "description": "Whether the parent enforced the timeout."
+        },
+        "rss_exceeded": {
+          "type": "boolean",
+          "description": "Whether the parent enforced the RSS limit."
+        },
+        "peak_rss_bytes": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Best parent-observed peak resident memory."
+        },
+        "stdout_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Digest of captured standard output bytes."
+        },
+        "stderr_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Digest of captured standard error bytes."
+        },
+        "started_at": {
+          "$ref": "#/$defs/timestamp",
+          "description": "Parent-observed launch timestamp."
+        },
+        "finished_at": {
+          "$ref": "#/$defs/timestamp",
+          "description": "Parent-observed completion timestamp."
+        },
+        "attestation_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Digest of the canonical parent attestation bytes."
+        }
+      }
+    },
+    "unattested_partial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "stage",
+        "reason_code",
+        "diagnostic_sha256"
+      ],
+      "properties": {
+        "state": {
+          "const": "unattested-partial",
+          "description": "Non-awarding partial-observation discriminator."
+        },
+        "stage": {
+          "$ref": "#/$defs/stage",
+          "description": "Stage reached before supervision was lost."
+        },
+        "reason_code": {
+          "$ref": "#/$defs/reason_code",
+          "description": "Typed reason for retaining only partial evidence."
+        },
+        "diagnostic_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Optional digest of redacted diagnostic sidecar bytes."
+        }
+      }
+    }
+  },
+  "x-authority-ownership": {
+    "$.actor": "reducer-derived",
+    "$.attempt_id": "reducer-derived",
+    "$.attempt_no": "reducer-derived",
+    "$.attempted_rungs[]": "reducer-derived",
+    "$.defer_evidence.explanation": "trusted-intake",
+    "$.defer_evidence.probe_attempt_ids[]": "trusted-intake",
+    "$.defer_evidence.source_ids[]": "trusted-intake",
+    "$.defer_evidence.target_status": "trusted-intake",
+    "$.environment.compiler_identity": "reducer-derived",
+    "$.environment.env_id": "reducer-derived",
+    "$.environment.family": "reducer-derived",
+    "$.environment.lock_sha256": "reducer-derived",
+    "$.environment.packages_manifest_sha256": "reducer-derived",
+    "$.environment.python": "reducer-derived",
+    "$.environment.resolved_export_sha256": "reducer-derived",
+    "$.environment.sdk_identity": "reducer-derived",
+    "$.environment.target": "reducer-derived",
+    "$.error.details": "untrusted-history",
+    "$.error.exception_type": "untrusted-history",
+    "$.error.message.content_sha256": "untrusted-history",
+    "$.error.message.diagnostic_key": "untrusted-history",
+    "$.error.message.local_path": "untrusted-history",
+    "$.error.message.redaction": "untrusted-history",
+    "$.error.message.stream_sha256": "untrusted-history",
+    "$.error.native_crash": "untrusted-history",
+    "$.error.no_traceback_reason": "untrusted-history",
+    "$.error.reason_code": "untrusted-history",
+    "$.error.root_cause_fingerprint": "untrusted-history",
+    "$.error.stage": "untrusted-history",
+    "$.error.traceback": "untrusted-history",
+    "$.error.traceback.content_sha256": "untrusted-history",
+    "$.error.traceback.diagnostic_key": "untrusted-history",
+    "$.error.traceback.local_path": "untrusted-history",
+    "$.error.traceback.redaction": "untrusted-history",
+    "$.error.traceback.stream_sha256": "untrusted-history",
+    "$.execution_read_manifest_identity": "reducer-derived",
+    "$.finished_at": "reducer-derived",
+    "$.host.accelerator": "parent-observed",
+    "$.host.accelerator_runtime": "parent-observed",
+    "$.host.architecture": "parent-observed",
+    "$.host.cpu": "parent-observed",
+    "$.host.machine_id": "parent-observed",
+    "$.host.os": "parent-observed",
+    "$.host.os_build": "parent-observed",
+    "$.host.ram_bytes": "parent-observed",
+    "$.identities.author_prompt": "reducer-derived",
+    "$.identities.checker_prompt": "reducer-derived",
+    "$.identities.environment": "reducer-derived",
+    "$.identities.evidence": "reducer-derived",
+    "$.identities.execution": "reducer-derived",
+    "$.identities.recipe": "reducer-derived",
+    "$.identities.runner": "reducer-derived",
+    "$.identities.source": "reducer-derived",
+    "$.invocation.argv[]": "reducer-derived",
+    "$.invocation.cwd": "reducer-derived",
+    "$.invocation.device": "reducer-derived",
+    "$.invocation.mode": "reducer-derived",
+    "$.invocation.network_policy": "reducer-derived",
+    "$.invocation.rss_limit_bytes": "reducer-derived",
+    "$.invocation.safe_env": "reducer-derived",
+    "$.invocation.scratch_limit_bytes": "reducer-derived",
+    "$.invocation.seed": "reducer-derived",
+    "$.invocation.timeout_seconds": "reducer-derived",
+    "$.ledger_seq": "reducer-derived",
+    "$.mode": "reducer-derived",
+    "$.parent_attempt_id": "reducer-derived",
+    "$.parent_attestation.attestation_sha256": "parent-observed",
+    "$.parent_attestation.attestation_version": "parent-observed",
+    "$.parent_attestation.completion_line_sha256": "parent-observed",
+    "$.parent_attestation.exit_code": "parent-observed",
+    "$.parent_attestation.finished_at": "parent-observed",
+    "$.parent_attestation.named_raw_award_receipt_sha256": "parent-observed",
+    "$.parent_attestation.peak_rss_bytes": "parent-observed",
+    "$.parent_attestation.request_nonce": "parent-observed",
+    "$.parent_attestation.request_sha256": "parent-observed",
+    "$.parent_attestation.rss_exceeded": "parent-observed",
+    "$.parent_attestation.signal": "parent-observed",
+    "$.parent_attestation.started_at": "parent-observed",
+    "$.parent_attestation.stderr_sha256": "parent-observed",
+    "$.parent_attestation.stdout_sha256": "parent-observed",
+    "$.parent_attestation.timed_out": "parent-observed",
+    "$.payload_sha256": "reducer-derived",
+    "$.policy_observation.cache_read_attempted": "worker-observed",
+    "$.policy_observation.checkpoint_or_weight_read_attempted": "worker-observed",
+    "$.policy_observation.checkpoint_paths[]": "worker-observed",
+    "$.policy_observation.credentials_present": "worker-observed",
+    "$.policy_observation.network_attempted": "worker-observed",
+    "$.policy_observation.socket_targets[]": "worker-observed",
+    "$.policy_observation.torchlens_import_attempted": "worker-observed",
+    "$.policy_observation.write_outside_scratch_attempted": "worker-observed",
+    "$.policy_observation.write_paths[]": "worker-observed",
+    "$.raw_award_receipt.code_manifest_identity": "worker-observed",
+    "$.raw_award_receipt.execution_identity": "worker-observed",
+    "$.raw_award_receipt.input_identity": "worker-observed",
+    "$.raw_award_receipt.observation.constructor_completed": "worker-observed",
+    "$.raw_award_receipt.observation.constructor_seconds": "worker-observed",
+    "$.raw_award_receipt.observation.constructor_started": "worker-observed",
+    "$.raw_award_receipt.observation.delegated_method": "worker-observed",
+    "$.raw_award_receipt.observation.forward_completed": "worker-observed",
+    "$.raw_award_receipt.observation.forward_seconds": "worker-observed",
+    "$.raw_award_receipt.observation.forward_started": "worker-observed",
+    "$.raw_award_receipt.observation.input_asset": "worker-observed",
+    "$.raw_award_receipt.observation.input_completed": "worker-observed",
+    "$.raw_award_receipt.observation.input_kind": "worker-observed",
+    "$.raw_award_receipt.observation.input_note": "worker-observed",
+    "$.raw_award_receipt.observation.input_signature": "worker-observed",
+    "$.raw_award_receipt.observation.mode": "worker-observed",
+    "$.raw_award_receipt.observation.native_framework": "worker-observed",
+    "$.raw_award_receipt.observation.observed_adapter_sha256": "worker-observed",
+    "$.raw_award_receipt.observation.observed_code_manifest_sha256": "worker-observed",
+    "$.raw_award_receipt.observation.observed_input_asset_sha256": "worker-observed",
+    "$.raw_award_receipt.observation.observed_recipe_revision": "worker-observed",
+    "$.raw_award_receipt.observation.output_signature": "worker-observed",
+    "$.raw_award_receipt.observation.parameter_count_total": "worker-observed",
+    "$.raw_award_receipt.observation.parameter_count_trainable": "worker-observed",
+    "$.raw_award_receipt.observation.present": "worker-observed",
+    "$.raw_award_receipt.observation.receipt_sha256": "worker-observed",
+    "$.raw_award_receipt.receipt_version": "worker-observed",
+    "$.raw_award_receipt.recipe_revision": "worker-observed",
+    "$.raw_award_receipt.request_nonce": "worker-observed",
+    "$.raw_award_receipt.request_sha256": "worker-observed",
+    "$.raw_award_receipt.requested_mode": "worker-observed",
+    "$.raw_award_receipt.stable_id": "worker-observed",
+    "$.raw_award_receipt.work_id": "worker-observed",
+    "$.raw_award_receipt_sha256": "reducer-derived",
+    "$.result": "reducer-derived",
+    "$.retries.author_round": "reducer-derived",
+    "$.retries.gate_round": "reducer-derived",
+    "$.retries.root_cause_repeat": "reducer-derived",
+    "$.retries.stage_attempt": "reducer-derived",
+    "$.schema_version": "reducer-derived",
+    "$.stable_id": "trusted-intake",
+    "$.stage": "reducer-derived",
+    "$.started_at": "reducer-derived",
+    "$.supervisor_observation.cpu_seconds": "parent-observed",
+    "$.supervisor_observation.exit_code": "parent-observed",
+    "$.supervisor_observation.full_log_local_path": "parent-observed",
+    "$.supervisor_observation.full_log_retention": "parent-observed",
+    "$.supervisor_observation.peak_rss_bytes": "parent-observed",
+    "$.supervisor_observation.signal": "parent-observed",
+    "$.supervisor_observation.stderr_bytes": "parent-observed",
+    "$.supervisor_observation.stderr_sha256": "parent-observed",
+    "$.supervisor_observation.stderr_tail.content_sha256": "parent-observed",
+    "$.supervisor_observation.stderr_tail.diagnostic_key": "parent-observed",
+    "$.supervisor_observation.stderr_tail.local_path": "parent-observed",
+    "$.supervisor_observation.stderr_tail.redaction": "parent-observed",
+    "$.supervisor_observation.stderr_tail.stream_sha256": "parent-observed",
+    "$.supervisor_observation.stdout_bytes": "parent-observed",
+    "$.supervisor_observation.stdout_completion_line": "parent-observed",
+    "$.supervisor_observation.stdout_sha256": "parent-observed",
+    "$.supervisor_observation.stdout_tail.content_sha256": "parent-observed",
+    "$.supervisor_observation.stdout_tail.diagnostic_key": "parent-observed",
+    "$.supervisor_observation.stdout_tail.local_path": "parent-observed",
+    "$.supervisor_observation.stdout_tail.redaction": "parent-observed",
+    "$.supervisor_observation.stdout_tail.stream_sha256": "parent-observed",
+    "$.supervisor_observation.wall_seconds": "parent-observed",
+    "$.unattested_partial.diagnostic_sha256": "untrusted-history",
+    "$.unattested_partial.reason_code": "untrusted-history",
+    "$.unattested_partial.stage": "untrusted-history",
+    "$.unattested_partial.state": "untrusted-history",
+    "$.work_id": "reducer-derived",
+    "$.worker_receipt.constructor_completed": "worker-observed",
+    "$.worker_receipt.constructor_seconds": "worker-observed",
+    "$.worker_receipt.constructor_started": "worker-observed",
+    "$.worker_receipt.delegated_method": "worker-observed",
+    "$.worker_receipt.forward_completed": "worker-observed",
+    "$.worker_receipt.forward_seconds": "worker-observed",
+    "$.worker_receipt.forward_started": "worker-observed",
+    "$.worker_receipt.input_asset": "worker-observed",
+    "$.worker_receipt.input_completed": "worker-observed",
+    "$.worker_receipt.input_kind": "worker-observed",
+    "$.worker_receipt.input_note": "worker-observed",
+    "$.worker_receipt.input_signature": "worker-observed",
+    "$.worker_receipt.mode": "worker-observed",
+    "$.worker_receipt.native_framework": "worker-observed",
+    "$.worker_receipt.observed_adapter_sha256": "worker-observed",
+    "$.worker_receipt.observed_code_manifest_sha256": "worker-observed",
+    "$.worker_receipt.observed_input_asset_sha256": "worker-observed",
+    "$.worker_receipt.observed_recipe_revision": "worker-observed",
+    "$.worker_receipt.output_signature": "worker-observed",
+    "$.worker_receipt.parameter_count_total": "worker-observed",
+    "$.worker_receipt.parameter_count_trainable": "worker-observed",
+    "$.worker_receipt.present": "worker-observed",
+    "$.worker_receipt.receipt_sha256": "worker-observed"
+  }
+}

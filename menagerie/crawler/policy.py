@@ -26,6 +26,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, IO, Literal, Mapping, Optional, Sequence, Union
 
+from menagerie.crawler.authority import ExecutionReadManifest as ExecutionReadManifest
 
 _CREDENTIAL_MARKERS = (
     "SECRET",

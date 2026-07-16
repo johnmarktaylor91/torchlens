@@ -104,19 +104,47 @@ class AppendResult:
     appended: bool
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class LedgerPaths:
-    """Paths to the three canonical ledgers.
+    """Paths to the four canonical fact ledgers.
 
     Parameters
     ----------
-    models, attempts, gates:
-        JSONL paths for canonical model revisions, attempts, and gates.
+    models, attempts, gates, artifacts:
+        JSONL paths for canonical model revisions, attempts, gates, and
+        artifact-authority events. The artifact path is derived from the model
+        shard when omitted so existing read-only callers remain source compatible.
     """
 
     models: Path
     attempts: Path
     gates: Path
+    artifacts: Path
+
+    def __init__(
+        self,
+        models: Path,
+        attempts: Path,
+        gates: Path,
+        artifacts: Optional[Path] = None,
+    ) -> None:
+        """Initialize canonical ledger paths.
+
+        Parameters
+        ----------
+        models, attempts, gates:
+            Existing canonical ledger paths.
+        artifacts:
+            Artifact-event ledger path. When omitted, use the model shard name
+            below the sibling ``artifacts`` directory.
+        """
+
+        object.__setattr__(self, "models", models)
+        object.__setattr__(self, "attempts", attempts)
+        object.__setattr__(self, "gates", gates)
+        records_root = models.parent.parent if models.parent.name == "models" else models.parent
+        resolved_artifacts = artifacts or records_root / "artifacts" / models.name
+        object.__setattr__(self, "artifacts", resolved_artifacts)
 
 
 @dataclass(frozen=True)
@@ -203,7 +231,7 @@ class RebuildSummary:
 
     Parameters
     ----------
-    intake_count, model_revision_count, attempt_count, gate_count:
+    intake_count, model_revision_count, attempt_count, gate_count, artifact_event_count:
         Inserted row counts.
     current_count:
         Materialized current model count.
@@ -213,6 +241,7 @@ class RebuildSummary:
     model_revision_count: int = 0
     attempt_count: int = 0
     gate_count: int = 0
+    artifact_event_count: int = 0
     current_count: int = 0
 
 

@@ -1,0 +1,677 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/author-result-v3.schema.json",
+  "title": "Menagerie crawler typed author result v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "result_id",
+    "result_sha256",
+    "kind",
+    "stable_id",
+    "work_id",
+    "campaign_id",
+    "created_at",
+    "author_identity",
+    "prompt_identity",
+    "dispatcher_identity",
+    "source_manifest_identity",
+    "intake_snapshot_id",
+    "intake_snapshot_sha256",
+    "intake_item_sha256",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "menagerie.crawler.author-result.v3",
+      "description": "Mandatory typed author-result discriminator."
+    },
+    "result_id": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Immutable typed author-result identity."
+    },
+    "result_sha256": {
+      "$ref": "#/$defs/hash",
+      "description": "Digest of the exact typed author-result bytes."
+    },
+    "kind": {
+      "enum": [
+        "PROPOSED",
+        "DEFER_RECOMMENDATION",
+        "SKIP_RECOMMENDATION",
+        "BLOCKED"
+      ],
+      "description": "Closed advisory author-result arm."
+    },
+    "stable_id": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Trusted stable model identity."
+    },
+    "work_id": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Deterministic work identity."
+    },
+    "campaign_id": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Exact author campaign identity."
+    },
+    "created_at": {
+      "$ref": "#/$defs/timestamp",
+      "description": "UTC result creation timestamp."
+    },
+    "author_identity": {
+      "$ref": "#/$defs/hash",
+      "description": "Exact author provider, model, and version identity."
+    },
+    "prompt_identity": {
+      "$ref": "#/$defs/hash",
+      "description": "Exact frozen author prompt identity."
+    },
+    "dispatcher_identity": {
+      "$ref": "#/$defs/hash",
+      "description": "Versioned author dispatcher closure identity."
+    },
+    "source_manifest_identity": {
+      "$ref": "#/$defs/hash",
+      "description": "Exact frozen source-manifest identity."
+    },
+    "intake_snapshot_id": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Exact active trusted intake snapshot identity."
+    },
+    "intake_snapshot_sha256": {
+      "$ref": "#/$defs/hash",
+      "description": "Digest of the active intake snapshot."
+    },
+    "intake_item_sha256": {
+      "$ref": "#/$defs/hash",
+      "description": "Digest of the full verified intake row."
+    },
+    "payload": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/proposed_payload"
+        },
+        {
+          "$ref": "#/$defs/defer_payload"
+        },
+        {
+          "$ref": "#/$defs/skip_payload"
+        },
+        {
+          "$ref": "#/$defs/blocked_payload"
+        }
+      ],
+      "description": "Arm-specific closed advisory payload."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "PROPOSED",
+            "description": "Select the proposed arm."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/proposed_payload",
+            "description": "Closed proposed payload."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "DEFER_RECOMMENDATION",
+            "description": "Select the defer arm."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/defer_payload",
+            "description": "Closed defer payload."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "SKIP_RECOMMENDATION",
+            "description": "Select the skip arm."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/skip_payload",
+            "description": "Closed skip payload."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "BLOCKED",
+            "description": "Select the blocked arm."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/blocked_payload",
+            "description": "Closed blocked payload."
+          }
+        }
+      }
+    }
+  ],
+  "x-authority-ownership": {
+    "$.author_identity": "author-gated",
+    "$.campaign_id": "trusted-intake",
+    "$.created_at": "reducer-derived",
+    "$.dispatcher_identity": "reducer-derived",
+    "$.intake_item_sha256": "trusted-intake",
+    "$.intake_snapshot_id": "trusted-intake",
+    "$.intake_snapshot_sha256": "trusted-intake",
+    "$.kind": "reducer-derived",
+    "$.payload.arm": "author-gated",
+    "$.payload.evidence_identity": "author-gated",
+    "$.payload.evidence_ids[]": "author-gated",
+    "$.payload.license_identity": "author-gated",
+    "$.payload.platform": "author-gated",
+    "$.payload.prerequisite_ids[]": "author-gated",
+    "$.payload.proposal.author.model": "author-gated",
+    "$.payload.proposal.author.prompt_sha256": "author-gated",
+    "$.payload.proposal.author.provider": "author-gated",
+    "$.payload.proposal.author.version": "author-gated",
+    "$.payload.proposal.campaign_id": "author-gated",
+    "$.payload.proposal.created_at": "author-gated",
+    "$.payload.proposal.dispatcher_identity": "author-gated",
+    "$.payload.proposal.evidence_identity": "author-gated",
+    "$.payload.proposal.fidelity_identity": "author-gated",
+    "$.payload.proposal.intake_item_sha256": "author-gated",
+    "$.payload.proposal.intake_snapshot_id": "author-gated",
+    "$.payload.proposal.intake_snapshot_sha256": "author-gated",
+    "$.payload.proposal.proposal_id": "author-gated",
+    "$.payload.proposal.proposal_sha256": "author-gated",
+    "$.payload.proposal.proposed_facts.citation.arxiv_id": "author-gated",
+    "$.payload.proposal.proposed_facts.citation.authors[]": "author-gated",
+    "$.payload.proposal.proposed_facts.citation.bibtex": "author-gated",
+    "$.payload.proposal.proposed_facts.citation.doi": "author-gated",
+    "$.payload.proposal.proposed_facts.citation.openreview_id": "author-gated",
+    "$.payload.proposal.proposed_facts.citation.source_evidence_ids[]": "author-gated",
+    "$.payload.proposal.proposed_facts.citation.status": "author-gated",
+    "$.payload.proposal.proposed_facts.citation.title": "author-gated",
+    "$.payload.proposal.proposed_facts.citation.url": "author-gated",
+    "$.payload.proposal.proposed_facts.citation.venue": "author-gated",
+    "$.payload.proposal.proposed_facts.citation.year": "author-gated",
+    "$.payload.proposal.proposed_facts.dates.first_public_date": "author-gated",
+    "$.payload.proposal.proposed_facts.dates.first_public_date_basis": "author-gated",
+    "$.payload.proposal.proposed_facts.dates.year": "author-gated",
+    "$.payload.proposal.proposed_facts.dates.year_basis": "author-gated",
+    "$.payload.proposal.proposed_facts.evidence.coverage.all_agent_fields_have_support": "author-gated",
+    "$.payload.proposal.proposed_facts.evidence.coverage.family_grounding_complete": "author-gated",
+    "$.payload.proposal.proposed_facts.evidence.coverage.missing_support[]": "author-gated",
+    "$.payload.proposal.proposed_facts.evidence.evidence_identity": "author-gated",
+    "$.payload.proposal.proposed_facts.evidence.excerpts[].disposition": "author-gated",
+    "$.payload.proposal.proposed_facts.evidence.excerpts[].evidence_id": "author-gated",
+    "$.payload.proposal.proposed_facts.evidence.excerpts[].family_level": "author-gated",
+    "$.payload.proposal.proposed_facts.evidence.excerpts[].license_disposition": "author-gated",
+    "$.payload.proposal.proposed_facts.evidence.excerpts[].locator": "author-gated",
+    "$.payload.proposal.proposed_facts.evidence.excerpts[].source_id": "author-gated",
+    "$.payload.proposal.proposed_facts.evidence.excerpts[].supports[]": "author-gated",
+    "$.payload.proposal.proposed_facts.evidence.excerpts[].text": "author-gated",
+    "$.payload.proposal.proposed_facts.evidence.excerpts[].text_sha256": "author-gated",
+    "$.payload.proposal.proposed_facts.evidence.family_grounding_path": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.architecture_class[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.authors[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.citation.arxiv_id": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.citation.authors[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.citation.bibtex": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.citation.doi": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.citation.openreview_id": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.citation.source_evidence_ids[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.citation.status": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.citation.title": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.citation.url": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.citation.venue": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.citation.year": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.country": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.description": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.domain[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.era": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.family": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.field": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.institution[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.key_contribution": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.keywords[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.license": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.lineage[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.modality[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.modes.meaningful_modes[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.modes.train_eval_divergence": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.original_framework": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.paradigm[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.predecessors[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.run_framework": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.subfield": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.tags[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.task[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.venue": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.year": "author-gated",
+    "$.payload.proposal.proposed_facts.fidelity.current": "author-gated",
+    "$.payload.proposal.proposed_facts.fidelity.deviations[]": "author-gated",
+    "$.payload.proposal.proposed_facts.fidelity.fidelity_identity": "author-gated",
+    "$.payload.proposal.proposed_facts.fidelity.gate_id": "author-gated",
+    "$.payload.proposal.proposed_facts.fidelity.permanent_scar": "author-gated",
+    "$.payload.proposal.proposed_facts.fidelity.reason": "author-gated",
+    "$.payload.proposal.proposed_facts.fidelity.required": "author-gated",
+    "$.payload.proposal.proposed_facts.fidelity.verdict": "author-gated",
+    "$.payload.proposal.proposed_facts.identity.acronym": "author-gated",
+    "$.payload.proposal.proposed_facts.identity.alias_of": "author-gated",
+    "$.payload.proposal.proposed_facts.identity.aliases[]": "author-gated",
+    "$.payload.proposal.proposed_facts.identity.canonical_name": "author-gated",
+    "$.payload.proposal.proposed_facts.identity.duplicate_of": "author-gated",
+    "$.payload.proposal.proposed_facts.identity.family_representative_id": "author-gated",
+    "$.payload.proposal.proposed_facts.identity.variant": "author-gated",
+    "$.payload.proposal.proposed_facts.identity.variant_scope": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.builder_symbol": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.code_manifest[].path": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.code_manifest[].sha256": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.code_path": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.code_sha256": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.declared_choices[].evidence_ids[]": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.declared_choices[].field": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.declared_choices[].material": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.declared_choices[].rationale": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.declared_choices[].source_status": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.declared_choices[].value": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.declared_timeout_seconds": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.device_policy": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.dummy_call_symbol": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.initialization.policy": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.initialization.pretrained_disabled": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.initialization.source_specified_choices[]": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.library_recipe.artifact_sha256": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.library_recipe.distribution": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.library_recipe.kwargs": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.library_recipe.module": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.library_recipe.pretrained_disable_fields[]": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.library_recipe.symbol": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.library_recipe.version": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.mode": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.native_call_method": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.native_object_type": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.original_framework": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.patches[].classification": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.patches[].evidence_ids[]": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.patches[].path": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.patches[].rationale": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.patches[].semantic": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.patches[].sha256": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.recipe_revision": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.recipe_type": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.required_construct_asset": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.run_framework": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.source_to_code_map[].code_locator": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.source_to_code_map[].code_path": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.source_to_code_map[].disposition": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.source_to_code_map[].evidence_ids[]": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.source_to_code_map[].material_item": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.source_to_code_map[].source_id": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.source_to_code_map[].source_locator": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.torchlens_import_static_check": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.transparent_forward_adapter": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.upstream_files[].path": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.upstream_files[].sha256": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.upstream_files[].source_id": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.upstream_files[].use": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.args[].constraints[]": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.args[].device_policy": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.args[].distribution": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.args[].dtype": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.args[].kind": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.args[].path": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.args[].semantic_role": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.args[].shape[]": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.args[].source_evidence_ids[]": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.builder_symbol": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.code_path": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.expected_output_semantics": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.kwargs[].constraints[]": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.kwargs[].device_policy": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.kwargs[].distribution": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.kwargs[].dtype": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.kwargs[].kind": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.kwargs[].path": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.kwargs[].semantic_role": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.kwargs[].shape[]": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.kwargs[].source_evidence_ids[]": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.masks_state_and_control[]": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.non_tensor_values[].constraints[]": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.non_tensor_values[].path": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.non_tensor_values[].semantic_role": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.non_tensor_values[].source_evidence_ids[]": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.non_tensor_values[].type": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.non_tensor_values[].value": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.seed": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.semantic_description": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.smallest_valid_probe_rationale": "author-gated",
+    "$.payload.proposal.proposed_facts.input_contract.source_basis[]": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.code.evidence_ids[]": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.code.locator": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.code.source_id": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.code.spdx": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.code.status": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.data.evidence_ids[]": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.data.source_id": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.data.spdx": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.data.status": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.paper_text.source_id": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.paper_text.status": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.redistribution_class": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.source_dispositions[].evidence_ids[]": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.source_dispositions[].locator": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.source_dispositions[].source_id": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.source_dispositions[].spdx": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.source_dispositions[].status": "author-gated",
+    "$.payload.proposal.proposed_facts.licenses.weights.status": "author-gated",
+    "$.payload.proposal.proposed_facts.modes.divergence_evidence": "author-gated",
+    "$.payload.proposal.proposed_facts.modes.meaningful_modes[]": "author-gated",
+    "$.payload.proposal.proposed_facts.modes.per_mode_run.eval.attempt_id": "author-gated",
+    "$.payload.proposal.proposed_facts.modes.per_mode_run.eval.status": "author-gated",
+    "$.payload.proposal.proposed_facts.modes.per_mode_run.train.attempt_id": "author-gated",
+    "$.payload.proposal.proposed_facts.modes.per_mode_run.train.status": "author-gated",
+    "$.payload.proposal.proposed_facts.modes.train_eval_divergence": "author-gated",
+    "$.payload.proposal.proposed_facts.people_and_origin.authors[]": "author-gated",
+    "$.payload.proposal.proposed_facts.people_and_origin.country_basis": "author-gated",
+    "$.payload.proposal.proposed_facts.people_and_origin.country_confidence": "author-gated",
+    "$.payload.proposal.proposed_facts.people_and_origin.country_note": "author-gated",
+    "$.payload.proposal.proposed_facts.people_and_origin.institutions[]": "author-gated",
+    "$.payload.proposal.proposed_facts.people_and_origin.labs[]": "author-gated",
+    "$.payload.proposal.proposed_facts.people_and_origin.origin_countries[]": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.attempted_rungs[].evidence_ids[]": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.attempted_rungs[].reason_code": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.attempted_rungs[].result": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.attempted_rungs[].rung": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.decision": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.mandatory_link_status": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.primary_source_id": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.rung": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.rung_evidence": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.search_report.archives_checked[]": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.search_report.conclusion": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.search_report.finished_at": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.search_report.languages_checked[]": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.search_report.links_checked[]": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.search_report.places_checked[]": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.search_report.queries[]": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.search_report.started_at": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.searched_at": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sources[].byte_count": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sources[].content_sha256": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sources[].fetch_recipe": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sources[].kind": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sources[].locator": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sources[].media_type": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sources[].mirror_class": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sources[].mirror_digest": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sources[].retrieved_at": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sources[].revision": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sources[].revision_kind": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sources[].role": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sources[].source_id": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sources[].url": "author-gated",
+    "$.payload.proposal.proposed_facts.source_resolution.sufficiency_gap": "author-gated",
+    "$.payload.proposal.proposed_facts.taxonomy.architecture_tags[]": "author-gated",
+    "$.payload.proposal.proposed_facts.taxonomy.domains[]": "author-gated",
+    "$.payload.proposal.proposed_facts.taxonomy.era": "author-gated",
+    "$.payload.proposal.proposed_facts.taxonomy.family": "author-gated",
+    "$.payload.proposal.proposed_facts.taxonomy.modalities[]": "author-gated",
+    "$.payload.proposal.proposed_facts.taxonomy.novel_ops[]": "author-gated",
+    "$.payload.proposal.proposed_facts.taxonomy.tasks[]": "author-gated",
+    "$.payload.proposal.proposed_facts.website.description": "author-gated",
+    "$.payload.proposal.proposed_facts.website.family_grounding_id": "author-gated",
+    "$.payload.proposal.proposed_facts.website.key_contribution": "author-gated",
+    "$.payload.proposal.proposed_facts.website.kind": "author-gated",
+    "$.payload.proposal.proposed_facts.website.tagline": "author-gated",
+    "$.payload.proposal.proposed_facts.website.template_hash": "author-gated",
+    "$.payload.proposal.proposed_facts.website.template_source_model_id": "author-gated",
+    "$.payload.proposal.proposed_facts.website.variant_parameter_input_line": "author-gated",
+    "$.payload.proposal.proposed_facts.website.voice_version": "author-gated",
+    "$.payload.proposal.recipe_revision": "author-gated",
+    "$.payload.proposal.schema_version": "author-gated",
+    "$.payload.proposal.source_identity": "author-gated",
+    "$.payload.proposal.source_manifest_identity": "author-gated",
+    "$.payload.proposal.stable_id": "author-gated",
+    "$.payload.proposal.verified_hashes.code": "author-gated",
+    "$.payload.proposal.verified_hashes.code_manifest": "author-gated",
+    "$.payload.proposal.verified_hashes.evidence": "author-gated",
+    "$.payload.proposal.verified_hashes.family_template": "author-gated",
+    "$.payload.proposal.verified_hashes.source_manifest": "author-gated",
+    "$.payload.proposal.verified_hashes.source_to_code_map": "author-gated",
+    "$.payload.proposal.vet_identity": "author-gated",
+    "$.payload.proposal.work_id": "author-gated",
+    "$.payload.reason_code": "author-gated",
+    "$.payload.recommendation_sha256": "author-gated",
+    "$.payload.search_report_identity": "author-gated",
+    "$.payload.source_ids[]": "author-gated",
+    "$.payload.stage": "author-gated",
+    "$.payload.status_code": "author-gated",
+    "$.prompt_identity": "reducer-derived",
+    "$.result_id": "reducer-derived",
+    "$.result_sha256": "reducer-derived",
+    "$.schema_version": "reducer-derived",
+    "$.source_manifest_identity": "reducer-derived",
+    "$.stable_id": "trusted-intake",
+    "$.work_id": "trusted-intake"
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "nonempty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "string_array": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonempty_string"
+      },
+      "uniqueItems": true
+    },
+    "proposed_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "arm",
+        "proposal"
+      ],
+      "properties": {
+        "arm": {
+          "const": "PROPOSED",
+          "description": "Proposed-result arm discriminator."
+        },
+        "proposal": {
+          "$ref": "https://torchlens.org/schemas/menagerie/crawler/author-proposal-v3.schema.json",
+          "description": "Complete frozen author proposal v3."
+        }
+      }
+    },
+    "defer_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "arm",
+        "platform",
+        "source_ids",
+        "evidence_ids",
+        "evidence_identity",
+        "license_identity",
+        "recommendation_sha256"
+      ],
+      "properties": {
+        "arm": {
+          "const": "DEFER_RECOMMENDATION",
+          "description": "Platform-deferral recommendation arm discriminator."
+        },
+        "platform": {
+          "enum": [
+            "cuda",
+            "x86"
+          ],
+          "description": "Closed recommended platform capability."
+        },
+        "source_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Hash-bound candidate source identities."
+        },
+        "evidence_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Hash-bound candidate evidence excerpts."
+        },
+        "evidence_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact candidate evidence-pack identity."
+        },
+        "license_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact proposed license disposition identity."
+        },
+        "recommendation_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Digest of the closed recommendation payload."
+        }
+      }
+    },
+    "skip_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "arm",
+        "status_code",
+        "source_ids",
+        "evidence_ids",
+        "evidence_identity",
+        "search_report_identity",
+        "license_identity",
+        "recommendation_sha256"
+      ],
+      "properties": {
+        "arm": {
+          "const": "SKIP_RECOMMENDATION",
+          "description": "Epistemic skip recommendation arm discriminator."
+        },
+        "status_code": {
+          "enum": [
+            "skipped:insufficient-description",
+            "skipped:no-description",
+            "skipped:not-a-real-NN"
+          ],
+          "description": "Closed R5 status recommendation."
+        },
+        "source_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Hash-bound candidate source identities."
+        },
+        "evidence_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Hash-bound candidate evidence excerpts."
+        },
+        "evidence_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact candidate evidence-pack identity."
+        },
+        "search_report_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact bounded search-report identity."
+        },
+        "license_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact proposed license disposition identity."
+        },
+        "recommendation_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Digest of the closed recommendation payload."
+        }
+      }
+    },
+    "blocked_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "arm",
+        "stage",
+        "reason_code",
+        "prerequisite_ids",
+        "evidence_ids",
+        "evidence_identity",
+        "license_identity",
+        "recommendation_sha256"
+      ],
+      "properties": {
+        "arm": {
+          "const": "BLOCKED",
+          "description": "Blocked-prerequisite recommendation arm discriminator."
+        },
+        "stage": {
+          "enum": [
+            "source",
+            "fetch",
+            "evidence",
+            "environment",
+            "policy",
+            "runner"
+          ],
+          "description": "Closed recommended blocking stage."
+        },
+        "reason_code": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Typed recommended root reason code."
+        },
+        "prerequisite_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Exact prerequisite fact identities claimed missing or failed."
+        },
+        "evidence_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Hash-bound candidate evidence excerpts."
+        },
+        "evidence_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact candidate evidence-pack identity."
+        },
+        "license_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact proposed license disposition identity."
+        },
+        "recommendation_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Digest of the closed recommendation payload."
+        }
+      }
+    }
+  }
+}
