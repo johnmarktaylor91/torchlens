@@ -565,16 +565,29 @@ def _runtime_input_metadata_value(value: torch.Tensor, name: str) -> Any:
     """Evaluate one recorded metadata predicate on the RAW bound runtime input.
 
     Evaluated on the user-provided tensor BEFORE the defensive detach-clone, which
-    erases ``requires_grad`` and may normalize layout -- the capture-time read saw the
-    forward's real input, so the comparison must too.
+    erases the autograd state (``requires_grad`` / ``grad_fn`` / ``is_leaf``) and resets
+    ``storage_offset`` -- the capture-time read saw the forward's real input, so the
+    comparison must too. ``grad_fn`` is compared as a PRESENCE boolean (the exact backward
+    object is not comparable across runs), mirroring the capture-time recording.
     """
 
-    if name == "is_contiguous":
-        return bool(value.is_contiguous())
-    if name == "stride":
-        return [int(v) for v in value.stride()]
-    if name == "requires_grad":
-        return bool(value.requires_grad)
+    try:
+        if name == "is_contiguous":
+            return bool(value.is_contiguous())
+        if name == "stride":
+            return [int(v) for v in value.stride()]
+        if name == "storage_offset":
+            return int(value.storage_offset())
+        if name == "requires_grad":
+            return bool(value.requires_grad)
+        if name == "grad_fn":
+            return bool(value.grad_fn is not None)
+        if name == "is_leaf":
+            return bool(value.is_leaf)
+        if name == "storage_nbytes":
+            return int(value.untyped_storage().nbytes())
+    except (RuntimeError, AttributeError, TypeError, ValueError):
+        return None
     return None
 
 
@@ -871,10 +884,107 @@ def _model_input_version_closure(descriptor: SparseRunDescriptor) -> set[str]:
     return closure
 
 
-def _descriptor_mutates_model_input(descriptor: SparseRunDescriptor) -> bool:
-    """Return whether any in-place call targets a model-input slot (or its version chain)."""
+_VIEW_OP_QUALNAMES = frozenset(
+    {
+        # Storage-sharing view ops whose output aliases an input tensor's storage (r29-C3, F2).
+        # Deliberately OVER-broad: some entries here also cover copy variants -- that only
+        # widens the fail-closed gate, which fires ONLY when runtime inputs actually alias, so
+        # a false positive here can never over-trigger an ordinary (non-aliased-input) run.
+        "__getitem__",
+        "getitem",
+        "select",
+        "slice",
+        "narrow",
+        "narrow_copy",
+        "view",
+        "view_as",
+        "_view",
+        "reshape",
+        "reshape_as",
+        "transpose",
+        "t",
+        "permute",
+        "squeeze",
+        "unsqueeze",
+        "expand",
+        "expand_as",
+        "broadcast_to",
+        "flatten",
+        "unflatten",
+        "ravel",
+        "unfold",
+        "diagonal",
+        "diagonal_scatter",
+        "movedim",
+        "moveaxis",
+        "swapaxes",
+        "swapdims",
+        "detach",
+        "as_strided",
+        "split",
+        "split_with_sizes",
+        "chunk",
+        "tensor_split",
+        "hsplit",
+        "vsplit",
+        "dsplit",
+        "unbind",
+        "real",
+        "imag",
+        "view_as_real",
+        "view_as_complex",
+        "adjoint",
+        "alias",
+        "contiguous",
+        "indices",
+        "values",
+    }
+)
+"""Torch op qualnames whose output can SHARE STORAGE with a tensor input (r29-C3, F2)."""
 
+
+def _model_input_storage_closure(descriptor: SparseRunDescriptor) -> set[str]:
+    """Model-input slots plus every slot reachable by version chains AND view-op lineage.
+
+    A view op (``a[0]``, ``a.t()``, ``a.narrow(...)``) produces an output that SHARES STORAGE
+    with its tensor input, so an in-place op on that view mutates the input's storage even
+    though the view slot has no ``version_of`` link to the input (r29-C3, F2-hon). The gate
+    that guards the input-aliasing fail-closed therefore follows both version chains and
+    view-producing lineage from the model-input slots: a slot enters the closure if it is a
+    model input, is versioned from a closure slot, or is the output of a view op whose tensor
+    argument is already in the closure.
+    """
+
+    reg_qualname = {
+        entry.registry_id: getattr(entry.key, "qualname", None)
+        for entry in descriptor.callable_registry
+    }
     closure = _model_input_version_closure(descriptor)
+    changed = True
+    while changed:
+        changed = False
+        for call in descriptor.calls:
+            if reg_qualname.get(call.registry_id) not in _VIEW_OP_QUALNAMES:
+                continue
+            if not any(arg.slot_id in closure for arg in call.tensor_arguments):
+                continue
+            for output_slot_id in call.output_slot_ids:
+                if output_slot_id not in closure:
+                    closure.add(output_slot_id)
+                    changed = True
+        # Re-follow version chains from any newly-added view outputs.
+        for slot in descriptor.tensor_slots:
+            if slot.version_of in closure and slot.slot_id not in closure:
+                closure.add(slot.slot_id)
+                changed = True
+    return closure
+
+
+def _descriptor_mutates_model_input(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether any in-place call targets a model-input slot, its version chain, or a
+    view derived from it (r29-C3, F2-hon)."""
+
+    closure = _model_input_storage_closure(descriptor)
     for call in descriptor.calls:
         if call.is_inplace and _mutation_target_slot_id(call) in closure:
             return True
@@ -890,6 +1000,39 @@ def _tensor_storage_key(value: torch.Tensor) -> int | None:
         return None
 
 
+def _tensor_storage_footprint(value: torch.Tensor) -> tuple[int, int, int] | None:
+    """Return ``(storage_ptr, start_byte, end_byte)`` spanned by a tensor's elements.
+
+    ``end_byte`` is exclusive and covers the highest linear storage index the tensor's
+    shape+stride reaches (r29-C3, F4). Two same-storage inputs whose byte spans do NOT
+    overlap (``a = base[:2]``, ``b = base[2:]``) share a base pointer but touch disjoint
+    memory, so an in-place mutation of one cannot reach the other -- keying aliasing on the
+    base pointer alone falsely diverges them. Overlap of the spans is the honest hazard test.
+    """
+
+    try:
+        storage_ptr = int(value.untyped_storage().data_ptr())
+        element_size = int(value.element_size())
+        offset_bytes = int(value.storage_offset()) * element_size
+        if value.numel() == 0:
+            return storage_ptr, offset_bytes, offset_bytes
+        max_linear_index = sum(
+            (int(dim) - 1) * int(stride) for dim, stride in zip(value.shape, value.stride())
+        )
+        end_byte = offset_bytes + (max_linear_index + 1) * element_size
+        return storage_ptr, offset_bytes, end_byte
+    except (RuntimeError, AttributeError, TypeError, ValueError):
+        return None
+
+
+def _footprints_overlap(left: tuple[int, int, int], right: tuple[int, int, int]) -> bool:
+    """Return whether two ``(storage_ptr, start, end)`` byte spans can touch shared memory."""
+
+    if left[0] != right[0]:
+        return False
+    return left[1] < right[2] and right[1] < left[2]
+
+
 def _input_alias_topology_checks(
     descriptor: SparseRunDescriptor,
     input_slots: Sequence[TensorSlotDescriptor],
@@ -898,42 +1041,48 @@ def _input_alias_topology_checks(
     """Fail closed on runtime input aliasing unreproducible against a de-aliased capture.
 
     Torch capture clones each model-input leaf before the forward, so aliasing between
-    input sites (``forward(a, b)`` with ``a is b``, or two views sharing storage) is LOST:
-    the recorded DAG / archive reflect distinct-input semantics. When any in-place call
-    mutates a model input, a runtime call whose inputs DO alias would propagate that
+    input sites (``forward(a, b)`` with ``a is b``, or two views whose storage spans
+    OVERLAP) is LOST: the recorded DAG / archive reflect distinct-input semantics. When any
+    in-place call mutates a model input (directly, via its version chain, or via a view
+    derived from it), a runtime call whose input byte spans OVERLAP would propagate that
     mutation between sites while the de-aliased replay (independent per-slot clones) would
     not -- a divergence from a fresh model on the given inputs that the replay would
-    otherwise falsely VERIFY. Such an aliased-input run is therefore failed closed. A run
-    with no in-place mutation of an input, or with no input aliasing, is unaffected (no
-    over-trigger): read-only aliasing is numerically irrelevant and stays VERIFIED.
+    otherwise falsely VERIFY. Such a run is failed closed. A run with no in-place mutation of
+    an input, or whose inputs merely share a base storage with DISJOINT byte spans
+    (``base[:2]`` / ``base[2:]``), is unaffected (no over-trigger): a mutation of one span
+    cannot reach the other, and read-only aliasing is numerically irrelevant.
     """
 
     if not _descriptor_mutates_model_input(descriptor):
         return ()
-    storage_to_slots: dict[int, list[str]] = {}
+    footprints: list[tuple[str, tuple[int, int, int]]] = []
     for slot in input_slots:
         value = raw_values.get(slot.slot_id)
         if not isinstance(value, torch.Tensor):
             continue
-        storage_key = _tensor_storage_key(value)
-        if storage_key is None:
+        footprint = _tensor_storage_footprint(value)
+        if footprint is None:
             continue
-        storage_to_slots.setdefault(storage_key, []).append(slot.slot_id)
-    aliased = {key: slots for key, slots in storage_to_slots.items() if len(slots) > 1}
-    if not aliased:
+        footprints.append((slot.slot_id, footprint))
+    overlapping: list[tuple[str, str]] = []
+    for i in range(len(footprints)):
+        for j in range(i + 1, len(footprints)):
+            if _footprints_overlap(footprints[i][1], footprints[j][1]):
+                overlapping.append((footprints[i][0], footprints[j][0]))
+    if not overlapping:
         return ()
     return (
         _contract_check(
             "input_alias_topology",
             False,
             RunnableErrorCode.INPUT_TREE_MISMATCH,
-            "Runtime model inputs alias (share storage) while an in-place op mutates a "
-            "model input; capture de-aliases inputs, so the recorded taken path cannot "
-            "reproduce the aliased mutation and must not be blessed VERIFIED.",
+            "Runtime model inputs alias (overlapping storage spans) while an in-place op "
+            "mutates a model input; capture de-aliases inputs, so the recorded taken path "
+            "cannot reproduce the aliased mutation and must not be blessed VERIFIED.",
             details=(
                 (
-                    "aliased_input_slot_groups",
-                    repr({key: sorted(slots) for key, slots in aliased.items()}),
+                    "overlapping_input_slot_pairs",
+                    repr(sorted(tuple(sorted(pair)) for pair in overlapping)),
                 ),
             ),
         ),
@@ -1076,7 +1225,13 @@ def _runtime_nontensor_leaf_paths(root: Any) -> set[tuple[str | int, ...]]:
     by index. Every other value is a scalar leaf recorded at its path.
     """
 
-    from torchlens._io.runnable import _UnsupportedLiteralError, _encode_literal_key
+    from torchlens._io.runnable import (
+        EMPTY_CONTAINER_PATH_MARKER,
+        _UnsupportedLiteralError,
+        _encode_literal_key,
+        empty_container_kind,
+        input_path_key_component,
+    )
 
     paths: set[tuple[str | int, ...]] = set()
 
@@ -1084,6 +1239,9 @@ def _runtime_nontensor_leaf_paths(root: Any) -> set[tuple[str | int, ...]]:
         """Descend one runtime boundary value, collecting every non-tensor leaf path."""
 
         if isinstance(value, torch.Tensor):
+            return
+        if empty_container_kind(value) is not None:
+            paths.add((*path, EMPTY_CONTAINER_PATH_MARKER))
             return
         if isinstance(value, tuple) and hasattr(value, "_fields"):
             for name in value._fields:
@@ -1096,7 +1254,7 @@ def _runtime_nontensor_leaf_paths(root: Any) -> set[tuple[str | int, ...]]:
                 except _UnsupportedLiteralError:
                     paths.add(path)
                     continue
-                _walk(child, (*path, key))
+                _walk(child, (*path, input_path_key_component(key)))
             return
         if isinstance(value, (list, tuple)):
             for index, child in enumerate(value):
@@ -1603,7 +1761,14 @@ def _bind_call_outputs(
                 ),
             )
         )
-    checks.extend(_mutation_contract_checks(call, output, slot_values, before_versions))
+    state_slot_ids = frozenset(
+        slot.slot_id
+        for slot in descriptor.tensor_slots
+        if slot.role in {TensorSlotRole.PARAMETER, TensorSlotRole.BUFFER}
+    )
+    checks.extend(
+        _mutation_contract_checks(call, output, slot_values, before_versions, state_slot_ids)
+    )
     return tuple(checks)
 
 
@@ -1612,8 +1777,21 @@ def _mutation_contract_checks(
     output: Any,
     slot_values: Mapping[str, torch.Tensor],
     before_versions: Mapping[str, int],
+    state_slot_ids: frozenset[str] = frozenset(),
 ) -> tuple[ContractCheck, ...]:
-    """Validate recorded in-place aliasing and tensor-version expectations."""
+    """Validate recorded in-place aliasing and tensor-version expectations.
+
+    A NON-inplace call may legitimately bump the ``_version`` of a STATE buffer/parameter
+    slot -- a mode-sensitive norm layer (InstanceNorm/BatchNorm with
+    ``track_running_stats=True``) updates its ``running_mean``/``running_var`` running stats
+    inside the functional ``instance_norm``/``batch_norm`` call, which TorchLens does not
+    record as a separate in-place op (r29-C3, codex-F3). That running-stat update is a
+    declared-state side effect reproduced identically on a fresh replay from the captured
+    state, NOT the input/activation-tensor mutation this check guards against, so state slots
+    are excluded from the non-inplace ``changed`` set. Value correctness of the updated buffer
+    is separately enforced by state/output attestation, so this exclusion cannot mask a real
+    numeric divergence.
+    """
 
     changed = {
         slot_id
@@ -1621,14 +1799,15 @@ def _mutation_contract_checks(
         if slot_id in slot_values and slot_values[slot_id]._version != before
     }
     if not call.is_inplace:
+        non_state_changed = changed - state_slot_ids
         return (
             _contract_check(
                 f"mutation:{call.call_id}",
-                not changed,
+                not non_state_changed,
                 RunnableErrorCode.MUTATION_VERSION_MISMATCH,
                 f"Non-mutating call {call.call_id!r} changed an input tensor version.",
                 affected_op_labels=call.op_labels,
-                details=(("changed_slot_ids", repr(tuple(sorted(changed)))),),
+                details=(("changed_slot_ids", repr(tuple(sorted(non_state_changed)))),),
             ),
         )
     input_slot_id = _mutation_target_slot_id(call)
@@ -2794,11 +2973,14 @@ def _numeric_attestation_check(
     if any(member.field != "out" for member in layer.members):
         return NumericAttestationStatus.NOT_APPLICABLE, None
     raw_members = layer.members
-    if _has_journaled_buffer_activation_member(descriptor, raw_members):
-        # Repeated registered-buffer source slots for the same state entry are journal points, not
-        # immutable activation payloads. A pure journaled replay can be path-faithful while each
-        # selected buffer slot's bytes are only meaningful at that journal point; skip byte-exact
-        # activation attestation rather than raising a false mismatch on a valid replay.
+    if _has_journaled_buffer_activation_member(descriptor, layer, raw_members):
+        # Repeated registered-buffer slots for the same state entry whose archived bytes DIFFER
+        # from the capture-time state are journal points (a mode-sensitive norm layer updating
+        # its running stats mid-forward), not immutable activation payloads: each slot's bytes
+        # are only meaningful at that journal point, so skip byte-exact activation attestation
+        # rather than raising a false mismatch on a valid replay. A repeated buffer slot whose
+        # archived bytes EQUAL the capture state (a read-only running stat under eval) is stable,
+        # not journaled, and stays byte-attestable (r29-C4, codex-F2).
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if _has_out_mutated_activation_member(descriptor, raw_members):
         # An archived activation that later became an ``out=`` destination was
@@ -3112,25 +3294,41 @@ def _is_benign_downstream_nonreproducible(
 
 def _has_journaled_buffer_activation_member(
     descriptor: SparseRunDescriptor,
+    layer: Any,
     members: Sequence[ActivationPayloadMember],
 ) -> bool:
-    """Return whether selected activation payloads include journaled buffer slots.
+    """Return whether selected activation payloads include JOURNALED buffer slots.
+
+    A buffer state entry with multiple selected activation members is journaled only when at
+    least one member's ARCHIVED bytes DIFFER from the capture-time state digest -- i.e. the
+    buffer was actually WRITTEN mid-forward (a norm layer updating its running stats). When
+    every repeated member equals the capture state digest, the buffer is a STABLE read-only
+    source (running stats under eval, or an unwritten buffer read at several points), which is
+    fully byte-attestable and must NOT be suppressed (r29-C4, codex-F2). When the capture state
+    digest is unavailable for a repeated buffer name, fail closed (treat as journaled) rather
+    than risk a false mismatch.
 
     Parameters
     ----------
     descriptor:
         Sparse descriptor declaring tensor slot roles.
+    layer:
+        Activation payload layer descriptor carrying ``capture_state_digests``.
     members:
         Raw activation payload members selected for byte attestation.
 
     Returns
     -------
     bool
-        ``True`` when multiple selected buffer slots refer to the same state entry.
+        ``True`` when a repeated same-state buffer entry was actually journaled (written).
     """
 
     slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
-    seen_state_names: set[str] = set()
+    state_digests = {
+        item.state_dict_name: item.byte_digest
+        for item in getattr(layer, "capture_state_digests", ()) or ()
+    }
+    members_by_state: dict[str, list[ActivationPayloadMember]] = {}
     for member in members:
         slot = slots.get(member.slot_id)
         if slot is None or slot.role is not TensorSlotRole.BUFFER:
@@ -3138,10 +3336,14 @@ def _has_journaled_buffer_activation_member(
         binding = slot.state_binding
         if binding is None:
             continue
-        state_name = binding.state_dict_name
-        if state_name in seen_state_names:
+        members_by_state.setdefault(binding.state_dict_name, []).append(member)
+    for state_name, state_members in members_by_state.items():
+        if len(state_members) <= 1:
+            continue
+        if state_name not in state_digests:
             return True
-        seen_state_names.add(state_name)
+        if any(member.byte_digest != state_digests[state_name] for member in state_members):
+            return True
     return False
 
 
@@ -3670,10 +3872,36 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
     :func:`_field_getattr`; string components are never fed to an unconstrained
     ``getattr`` (untrusted-bundle path strings could otherwise walk descriptor / dunder
     chains).
+
+    Two synthetic component forms (r29-C2) are decoded: a terminal
+    ``EMPTY_CONTAINER_PATH_MARKER`` resolves to the KIND string of the empty container at
+    the parent path (so a runtime empty container of a different kind, or a non-empty/scalar
+    value, diverges); a ``(BOOL_KEY_PATH_TAG, bool)`` tuple component indexes a mapping with
+    the bool key (kept distinct from the equal-valued int key).
     """
+
+    from torchlens._io.runnable import (
+        BOOL_KEY_PATH_TAG,
+        EMPTY_CONTAINER_PATH_MARKER,
+        empty_container_kind,
+    )
 
     current = value
     for component in path:
+        if component == EMPTY_CONTAINER_PATH_MARKER:
+            kind = empty_container_kind(current)
+            if kind is None:
+                raise KeyError(EMPTY_CONTAINER_PATH_MARKER)
+            return kind
+        if (
+            isinstance(component, (tuple, list))
+            and len(component) == 2
+            and (component[0] == BOOL_KEY_PATH_TAG)
+        ):
+            if not isinstance(current, Mapping):
+                raise KeyError(component[1])
+            current = current[bool(component[1])]
+            continue
         if isinstance(current, Mapping):
             current = current[component]
         elif isinstance(component, int):

@@ -393,14 +393,20 @@ If such a property can neither be wrapped nor its source recorded, its use must 
 (INCOMPLETE), never silently VERIFIED.
 """
 
-INPUT_METADATA_PREDICATE_FUNCS = frozenset({"is_contiguous", "stride"})
-"""Tensor METADATA-PREDICATE methods whose result on a MODEL INPUT can steer unobserved
-Python control flow (r27-H2).
+INPUT_METADATA_PREDICATE_FUNCS = frozenset({"is_contiguous", "stride", "storage_offset"})
+"""Tensor METADATA-PREDICATE **methods** whose result on a MODEL INPUT can steer unobserved
+Python control flow (r27-H2, extended r29-C1).
 
-``x.is_contiguous()`` / ``x.stride()`` return host values derived from the input's memory
-LAYOUT -- which the input contract does NOT check (only shape+dtype), so a same-shape,
-same-dtype runtime input with a different layout (a transposed view) flips such a branch
-while the sparse replay silently follows the CAPTURED arm: a false VERIFIED+ATTESTED.
+``x.is_contiguous()`` / ``x.stride()`` / ``x.storage_offset()`` return host values derived
+from the input's memory LAYOUT -- which the input contract does NOT check (only shape+dtype),
+so a same-shape, same-dtype runtime input with a different layout (a transposed view, or a
+slice of a larger buffer whose ``storage_offset`` is non-zero) flips such a branch while the
+sparse replay silently follows the CAPTURED arm: a false VERIFIED+ATTESTED. ``storage_offset``
+is doubly dangerous because capture CLONES the input leaf and the clone RESETS the offset to
+0, so a branch on it would be wrong even for the original-input replay; the fact is recorded
+from the RAW pre-clone input the forward actually read, and re-checked against the RAW runtime
+input before the executor's detach-clone.
+
 These reads emit no aten dispatch (pure metadata, deliberately excluded from the escape
 census -- see ``HOST_ESCAPE_OPERATORS``), so they are observed by the same scoped method
 patch as the invisible escapes, but with a DIFFERENT recording rule: only a read whose
@@ -409,17 +415,46 @@ so a model that never reads input layout records nothing and can never over-trig
 ``size``/``dim``/``numel``/``dtype`` derive from shape+dtype and stay covered by the
 existing input contract; they are deliberately NOT observed (a real model reads shapes
 constantly -- patching them buys no honesty and costs every capture).
+
+COVERAGE (the closed host-input-metadata-read class -- round-30 must find no other plain
+input-metadata accessor): layout methods here (``is_contiguous`` / ``stride`` /
+``storage_offset``); autograd/leaf PROPERTIES in ``INPUT_METADATA_PROPERTY_NAMES``
+(``requires_grad`` / ``grad_fn`` / ``is_leaf``); and raw storage GEOMETRY
+(``untyped_storage().nbytes()`` / ``.size()``), recorded as ``storage_nbytes`` at the
+``untyped_storage()`` / ``storage()`` exposure of a model-input leaf (see
+``_maybe_record_input_storage_geometry``). Reads on a DERIVED VIEW of an input leaf
+(``x.t().is_contiguous()``) are handled by fail-closed view attribution (see
+``_observe_input_metadata_read``). ``data_ptr`` / storage ``data_ptr`` already fail closed
+(r15/r16-C1); ``dtype`` / ``device`` / ``shape`` / ``numel`` are shape+dtype covered.
+"""
+
+INPUT_METADATA_PROPERTY_NAMES = frozenset({"requires_grad", "grad_fn", "is_leaf"})
+"""Tensor autograd/leaf getset PROPERTIES whose read on a MODEL INPUT is witnessed
+(r27-H2 ``requires_grad``; r29-C1 adds ``grad_fn`` / ``is_leaf``).
+
+``x.requires_grad`` / ``x.grad_fn`` / ``x.is_leaf`` are non-callable getset descriptors (like
+``__cuda_array_interface__``) read by ``if x.requires_grad:`` / ``if x.grad_fn is not None:`` /
+``if x.is_leaf:`` control flow. The runnable executor detach-clones bound inputs, ERASING the
+runtime autograd state (a detached clone has ``requires_grad=False``, ``grad_fn=None``,
+``is_leaf=True``), so without these facts an autograd-branching model would falsely VERIFY for
+a runtime input whose autograd state differs. The scoped property patch records the observed
+value only for MODEL-INPUT receivers (``grad_fn`` is recorded as a PRESENCE bool -- the exact
+backward object is not comparable across runs) and must preserve descriptor SET semantics for
+the writable ``requires_grad`` (``x.requires_grad = True`` inside a forward still works);
+``grad_fn`` / ``is_leaf`` are read-only.
 """
 
 INPUT_METADATA_GRAD_PROPERTY = "requires_grad"
-"""Tensor grad-flag PROPERTY whose read on a MODEL INPUT is witnessed (r27-H2).
+"""Deprecated single-name alias retained for back-compat; see ``INPUT_METADATA_PROPERTY_NAMES``."""
 
-``x.requires_grad`` is a non-callable getset descriptor (like ``__cuda_array_interface__``)
-read by ``if x.requires_grad:``-style control flow. The runnable executor detach-clones
-bound inputs, ERASING the runtime grad flag, so without this fact a requires_grad-branching
-model would falsely VERIFY for a runtime input with the opposite flag. The scoped property
-patch records the observed flag only for MODEL-INPUT receivers and must preserve descriptor
-SET semantics (``x.requires_grad = True`` inside a forward still works).
+_INPUT_METADATA_VIEW_DOWNGRADE_NAMES = frozenset({"is_contiguous", "stride", "storage_offset"})
+"""LAYOUT predicates whose read on an input-derived VIEW fails closed (r29-C1, F5).
+
+Restricted to the layout family: torch's internal C++ layout reads bypass the Python method
+patch, so a Python-level layout read on an input view is genuine user control flow. The
+autograd family (``requires_grad`` / ``grad_fn`` / ``is_leaf``) is EXCLUDED because torch /
+TorchLens read those Python properties on input-derived views during ordinary autograd and
+escape bookkeeping, which would over-trigger the fail-closed downgrade.
 """
 
 
@@ -444,6 +479,67 @@ def _record_input_metadata_read(trace: Any, source: torch.Tensor, name: str, val
     facts = trace.__dict__.setdefault("_runnable_input_metadata_reads", {})
     site_facts = facts.setdefault(site, {})
     site_facts[name] = value
+
+
+def _observe_input_metadata_read(trace: Any, source: torch.Tensor, name: str, value: Any) -> None:
+    """Attribute one metadata read to a model-input leaf, else fail closed on a derived view.
+
+    Three cases (r29-C1):
+
+    * The receiver IS a model-input leaf -> record a re-checkable (site, predicate, value)
+      fact via :func:`_record_input_metadata_read`.
+    * The receiver is a pure VIEW of a model-input leaf (``x.t()``, ``x[1:]``; its
+      ``_base`` collapses to the storage-owning input leaf) AND the predicate is a LAYOUT
+      read (``is_contiguous`` / ``stride`` / ``storage_offset``) -> the sparse replay never
+      re-derives that intermediate view, so its layout metadata cannot be re-verified at
+      run time; mark the run fail-closed (via ``_INPUT_METADATA_VIEW_READ``) so the producer
+      downgrades witness completeness to UNVERIFIABLE rather than blessing a possibly-wrong
+      replayed arm. Only PYTHON-level LAYOUT reads reach this patch as user control flow;
+      torch's internal C++ layout reads bypass it, so a layout-oblivious model that never
+      calls these accessors in Python records nothing and never downgrades. The AUTOGRAD
+      family (``requires_grad`` / ``grad_fn`` / ``is_leaf``) is DELIBERATELY excluded from
+      the view path: torch/TorchLens read those Python properties on input-derived views
+      during ordinary autograd/escape bookkeeping (e.g. ``x[i].item()``), so downgrading on
+      them would massively over-trigger; they are only witnessed on the input LEAF itself,
+      where the framework reads go through the C++ path and never hit the Python property.
+    * Anything else (a genuinely new activation not aliasing an input) -> ignore.
+    """
+
+    sites = trace.__dict__.get("_runnable_input_tensor_sites")
+    if not sites:
+        return
+    if id(source) in sites:
+        _record_input_metadata_read(trace, source, name, value)
+        return
+    if name not in _INPUT_METADATA_VIEW_DOWNGRADE_NAMES:
+        return
+    base = getattr(source, "_base", None)
+    if base is not None and id(base) in sites:
+        _INPUT_METADATA_VIEW_READ.add(trace)
+
+
+def _maybe_record_input_storage_geometry(trace: Any, source: torch.Tensor, storage: Any) -> None:
+    """Witness raw storage GEOMETRY read off a model-input leaf (r29-C1, F4).
+
+    ``x.untyped_storage().nbytes()`` / ``.size()`` return the input's BASE storage byte
+    count, which the shape+dtype input contract does NOT pin: a same-shape input that is a
+    slice of a larger buffer has a larger storage than a freshly-allocated contiguous twin,
+    so a branch on storage geometry would silently replay the captured arm -- a false
+    VERIFIED. The byte count is recorded here at the ``untyped_storage()`` / ``storage()``
+    exposure of a model-input leaf and re-checked against the RAW runtime input. For a normal
+    contiguous input the storage byte count is exactly ``numel * element_size`` (already
+    shape+dtype pinned), so recording it can only ever DIVERGE on a genuinely different
+    underlying buffer -- no over-trigger for ordinary inputs or read-only identity checks.
+    """
+
+    sites = trace.__dict__.get("_runnable_input_tensor_sites")
+    if not sites or id(source) not in sites:
+        return
+    try:
+        nbytes = int(storage.nbytes())
+    except (RuntimeError, AttributeError, TypeError, ValueError):
+        return
+    _record_input_metadata_read(trace, source, "storage_nbytes", nbytes)
 
 
 _HOST_ESCAPE_STATE_SOURCE_NAMES: "weakref.WeakKeyDictionary[Any, set[str]]" = (
@@ -480,6 +576,24 @@ A dispatcher-invisible conversion of a tensor with no resolvable capture label l
 source-op slot AND no reliable scalar to value-match (it may be multi-element). Its source
 cannot be witnessed, so the runnable producer fails closed (UNVERIFIABLE). Presence-only.
 """
+
+
+_INPUT_METADATA_VIEW_READ: "weakref.WeakSet[Any]" = weakref.WeakSet()
+"""Traces that read a metadata predicate on a DERIVED VIEW of a model input (r29-C1, F5).
+
+``x.t().is_contiguous()`` reads layout metadata on a pure view of an input leaf. The view is
+an orphan-pruned intermediate the sparse replay never re-derives, so the read cannot be
+re-verified against the runtime input; the producer consults this set to downgrade witness
+completeness (UNVERIFIABLE) rather than falsely VERIFY a possibly-wrong replayed arm. Kept in
+a weak-keyed module table (not a Trace field) so the fact survives cooking without a scrub
+allow-list entry. Presence-only.
+"""
+
+
+def input_metadata_view_read(trace: Any) -> bool:
+    """Return whether a metadata predicate was read on an input-derived view (r29-C1, F5)."""
+
+    return trace in _INPUT_METADATA_VIEW_READ
 
 
 def host_escape_source_labels(trace: Any) -> frozenset[str]:
@@ -1585,8 +1699,13 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
     # a genuine user call fails closed to UNVERIFIABLE. ``untyped_storage()`` / ``storage()`` keep
     # the watch-only write-back treatment (their value reads are already UNVERIFIABLE).
     is_raw_pointer = name == "data_ptr"
+    # ``untyped_storage()`` / ``storage()`` expose the input's BASE storage; its byte GEOMETRY
+    # (``nbytes()`` / ``size()``) can steer control flow the shape+dtype contract does not pin
+    # (r29-C1, F4). Record it against the model-input leaf here at exposure time.
+    records_storage_geometry = name in {"untyped_storage", "storage"}
 
     def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
+        result_holder: dict[str, Any] = {}
         if (
             isinstance(self, torch.Tensor)
             and threading.get_ident() == state.owner_thread_id
@@ -1595,6 +1714,10 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
         ):
             if record_source:
                 _record_escape_source_tensor(state.trace, self, invisible=True)
+            if records_storage_geometry and not _internal_read_active():
+                storage = original(self, *args, **kwargs)
+                result_holder["value"] = storage
+                _maybe_record_input_storage_geometry(state.trace, self, storage)
             # A raw ``data_ptr()`` pointer is unobservable; only a genuine USER call (internal
             # marker inactive -- TorchLens's own bookkeeping ``data_ptr`` reads run under it) fails
             # closed so the tensor's subsequent value cannot be silently VERIFIED.
@@ -1609,6 +1732,8 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
             # mutable alias is never called internally, so it is always watched, as in r13.)
             if watch_writeback and not (is_storage_bridge and _internal_read_active()):
                 _snapshot_writeback_source(state, self)
+        if "value" in result_holder:
+            return result_holder["value"]
         return original(self, *args, **kwargs)
 
     return wrapper
@@ -1691,19 +1816,20 @@ def _make_invisible_escape_property(descriptor: Any, state: _WitnessState) -> pr
 def _make_input_metadata_wrapper(
     original: Any, state: _WitnessState, name: str, stride_original: Any
 ) -> Any:
-    """Wrap ``is_contiguous`` / ``stride`` to record a MODEL-INPUT layout fact, then call through.
+    """Wrap a layout METHOD (``is_contiguous`` / ``stride`` / ``storage_offset``) to record a
+    MODEL-INPUT layout fact, then call through.
 
     The wrapper computes the original result first (byte-identical behavior), then -- gated
     to the owner thread / active trace / logging-enabled window, with TorchLens's own
-    marked internal reads excluded -- records a layout fact when the receiver is a
-    model-input leaf. ``stride`` records the FULL stride tuple (a dim-scoped
-    ``x.stride(0)`` read is implied by it); ``is_contiguous`` with the default memory
-    format records the boolean, while an explicit ``memory_format=`` probe records the
-    full stride tuple instead, which determines contiguity under EVERY memory format
-    (given the already-checked shape) without enumerating formats.
+    marked internal reads excluded -- attributes a layout fact when the receiver is a
+    model-input leaf (or downgrades on a derived view; see
+    :func:`_observe_input_metadata_read`). ``stride`` records the FULL stride tuple (a
+    dim-scoped ``x.stride(0)`` read is implied by it); ``is_contiguous`` with the default
+    memory format records the boolean, while an explicit ``memory_format=`` probe records the
+    full stride tuple instead, which determines contiguity under EVERY memory format (given
+    the already-checked shape) without enumerating formats. ``storage_offset`` records the
+    integer offset read from the RAW pre-clone input.
     """
-
-    records_default_bool = name == "is_contiguous"
 
     def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
         result = original(self, *args, **kwargs)
@@ -1714,28 +1840,40 @@ def _make_input_metadata_wrapper(
             and _state._active_trace is state.trace
             and not _internal_read_active()
         ):
-            if records_default_bool and not args and not kwargs:
-                _record_input_metadata_read(state.trace, self, "is_contiguous", bool(result))
+            if name == "storage_offset":
+                try:
+                    _observe_input_metadata_read(state.trace, self, "storage_offset", int(result))
+                except (RuntimeError, TypeError, ValueError):
+                    return result
+            elif name == "is_contiguous" and not args and not kwargs:
+                _observe_input_metadata_read(state.trace, self, "is_contiguous", bool(result))
             elif stride_original is not None:
                 try:
                     full_stride = tuple(int(v) for v in stride_original(self))
                 except (RuntimeError, TypeError):
                     return result
-                _record_input_metadata_read(state.trace, self, "stride", full_stride)
+                _observe_input_metadata_read(state.trace, self, "stride", full_stride)
         return result
 
     return wrapper
 
 
-def _make_input_metadata_grad_property(descriptor: Any, state: _WitnessState) -> property:
-    """Wrap the ``requires_grad`` getset descriptor to record a MODEL-INPUT grad fact.
+def _make_input_metadata_grad_property(
+    descriptor: Any, state: _WitnessState, name: str
+) -> property:
+    """Wrap an autograd/leaf getset descriptor (``requires_grad`` / ``grad_fn`` / ``is_leaf``)
+    to record a MODEL-INPUT autograd fact.
 
-    Like ``_make_invisible_escape_property`` this replaces a non-callable getset
-    descriptor with a recording ``property``, but it MUST also delegate the SETTER:
-    ``requires_grad`` is writable (``x.requires_grad = True`` / ``requires_grad_()``
-    inside a forward), and a getter-only property would turn that write into an
-    ``AttributeError`` mid-capture.
+    Like ``_make_invisible_escape_property`` this replaces a non-callable getset descriptor
+    with a recording ``property``. ``requires_grad`` is writable (``x.requires_grad = True`` /
+    ``requires_grad_()`` inside a forward), so its setter MUST be delegated -- a getter-only
+    property would turn that write into an ``AttributeError`` mid-capture; ``grad_fn`` /
+    ``is_leaf`` are read-only, so a setter is only installed when the original descriptor
+    supports ``__set__``. ``grad_fn`` is recorded as a PRESENCE boolean (the backward object
+    itself is not comparable across runs); the others as their boolean value.
     """
+
+    records_presence = name == "grad_fn"
 
     def getter(self: torch.Tensor) -> Any:
         value = descriptor.__get__(self, torch.Tensor)
@@ -1746,13 +1884,16 @@ def _make_input_metadata_grad_property(descriptor: Any, state: _WitnessState) ->
             and _state._active_trace is state.trace
             and not _internal_read_active()
         ):
-            _record_input_metadata_read(state.trace, self, "requires_grad", bool(value))
+            fact = (value is not None) if records_presence else bool(value)
+            _observe_input_metadata_read(state.trace, self, name, fact)
         return value
+
+    has_setter = hasattr(descriptor, "__set__")
 
     def setter(self: torch.Tensor, value: Any) -> None:
         descriptor.__set__(self, value)
 
-    return property(getter, setter)
+    return property(getter, setter if has_setter else None)
 
 
 @contextmanager
@@ -1833,24 +1974,25 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
         except (TypeError, AttributeError):
             continue
         metadata_originals[name] = original
-    # ``requires_grad`` lives as a getset descriptor on the C BASE class
-    # (``torch._C.TensorBase``), not in ``torch.Tensor.__dict__``; patching installs a
-    # SHADOWING property on ``torch.Tensor`` itself, so restore must DELETE the shadow
-    # when the name was not originally in ``torch.Tensor.__dict__``.
-    grad_property_restore: tuple[bool, Any] | None = None
-    grad_descriptor = inspect.getattr_static(torch.Tensor, INPUT_METADATA_GRAD_PROPERTY, None)
-    if grad_descriptor is not None and hasattr(grad_descriptor, "__get__"):
-        shadowed = INPUT_METADATA_GRAD_PROPERTY in torch.Tensor.__dict__
+    # ``requires_grad`` / ``grad_fn`` / ``is_leaf`` live as getset descriptors on the C BASE
+    # class (``torch._C.TensorBase``), not in ``torch.Tensor.__dict__``; patching installs a
+    # SHADOWING property on ``torch.Tensor`` itself, so restore must DELETE the shadow when the
+    # name was not originally in ``torch.Tensor.__dict__``.
+    grad_property_restore: dict[str, tuple[bool, Any]] = {}
+    for prop_name in INPUT_METADATA_PROPERTY_NAMES:
+        prop_descriptor = inspect.getattr_static(torch.Tensor, prop_name, None)
+        if prop_descriptor is None or not hasattr(prop_descriptor, "__get__"):
+            continue
+        shadowed = prop_name in torch.Tensor.__dict__
         try:
             setattr(
                 torch.Tensor,
-                INPUT_METADATA_GRAD_PROPERTY,
-                _make_input_metadata_grad_property(grad_descriptor, state),
+                prop_name,
+                _make_input_metadata_grad_property(prop_descriptor, state, prop_name),
             )
         except (TypeError, AttributeError):
-            pass
-        else:
-            grad_property_restore = (shadowed, grad_descriptor)
+            continue
+        grad_property_restore[prop_name] = (shadowed, prop_descriptor)
     try:
         yield
     finally:
@@ -1879,13 +2021,12 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
                 setattr(torch.Tensor, name, original)
             except (TypeError, AttributeError):
                 pass
-        if grad_property_restore is not None:
-            was_shadowed, original_descriptor = grad_property_restore
+        for prop_name, (was_shadowed, original_descriptor) in grad_property_restore.items():
             try:
                 if was_shadowed:
-                    setattr(torch.Tensor, INPUT_METADATA_GRAD_PROPERTY, original_descriptor)
+                    setattr(torch.Tensor, prop_name, original_descriptor)
                 else:
-                    delattr(torch.Tensor, INPUT_METADATA_GRAD_PROPERTY)
+                    delattr(torch.Tensor, prop_name)
             except (TypeError, AttributeError):
                 pass
         _check_writeback_watch(state)

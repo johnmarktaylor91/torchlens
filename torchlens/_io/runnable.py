@@ -305,6 +305,16 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # observe-only or backward/grad intervention leaves the forward output
         # reproducible byte-for-byte and is NOT flagged here, so it still VERIFIES.
         completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
+    if _has_input_metadata_view_read(trace) and completeness is WitnessCompleteness.COMPLETE:
+        # A metadata predicate (``is_contiguous`` / ``stride`` / ``storage_offset`` / autograd
+        # flag) was read on a DERIVED VIEW of a model input (``x.t().is_contiguous()``): the
+        # view is an orphan-pruned intermediate the sparse replay never re-derives, so its
+        # layout metadata cannot be re-verified against the runtime input. A same-shape layout
+        # twin flips such a branch on a fresh model while the replay silently follows the
+        # captured arm, so keep the run honestly UNVERIFIABLE + NOT_APPLICABLE rather than a
+        # false VERIFIED. A model that never reads metadata on an input-derived view records
+        # nothing and stays VERIFIED (no over-trigger).
+        completeness = WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
     if _has_pruned_rng_control_flow(trace) and completeness is WitnessCompleteness.COMPLETE:
         # A torch-RNG draw steered pure-Python control flow, so its predicate chain
         # is input-disconnected and was orphaned out of the visible graph. The
@@ -1850,6 +1860,22 @@ def _value_matches_baked_literal(
     return False
 
 
+def _has_input_metadata_view_read(trace: Any) -> bool:
+    """Return whether a metadata predicate was read on a DERIVED VIEW of a model input.
+
+    The completeness-witness scoped patch records (in a weak-keyed module table) any trace
+    that read a layout/autograd predicate (``is_contiguous`` / ``stride`` / ``storage_offset``
+    / ``requires_grad`` / ``grad_fn`` / ``is_leaf``) on a pure view of a model-input leaf
+    (``x.t().is_contiguous()``). That view is an orphan-pruned intermediate the sparse replay
+    never re-derives, so the read cannot be re-verified against the runtime input and the
+    producer must downgrade witness completeness to keep the run honest.
+    """
+
+    from ..backends.torch.completeness_witness import input_metadata_view_read
+
+    return bool(input_metadata_view_read(trace))
+
+
 def _has_pruned_rng_control_flow(trace: Any) -> bool:
     """Return whether a torch-RNG op that steered control flow was orphan-pruned.
 
@@ -2365,8 +2391,19 @@ MODEL_INPUT_METADATA_SITE_PREFIX = "model_input_metadata:"
 MODEL_INPUT_METADATA_FACT_KEY = "model_input_metadata"
 """Discriminator key present in every model-input metadata-predicate fact."""
 
-_INPUT_METADATA_FACT_NAMES = frozenset({"is_contiguous", "stride", "requires_grad"})
-"""Metadata predicates the capture-time observer records for model-input receivers."""
+_INPUT_METADATA_FACT_NAMES = frozenset(
+    {
+        "is_contiguous",
+        "stride",
+        "storage_offset",
+        "requires_grad",
+        "grad_fn",
+        "is_leaf",
+        "storage_nbytes",
+    }
+)
+"""Metadata predicates the capture-time observer records for model-input receivers (r27-H2,
+extended r29-C1 with ``storage_offset`` / ``grad_fn`` / ``is_leaf`` / ``storage_nbytes``)."""
 
 
 def _input_metadata_witnesses(
@@ -2840,6 +2877,53 @@ def _encode_slice_component(value: Any, field_name: str) -> LiteralAtom:
             "non-tensor literal grammar; only int or None slice components are supported."
         )
     return LiteralAtom(LiteralAtomKind.INT, int(value))
+
+
+EMPTY_CONTAINER_PATH_MARKER = "\x00tl_empty_container"
+"""Reserved terminal path component marking an EMPTY non-tensor input container (r29-C2).
+
+An empty dict/list/tuple contributes NO leaf path, so the non-tensor leaf-path SET witness
+(H1) is blind to an EXTRA empty container a model branches on (``if not d.get('flag', {})``).
+Both the capture and runtime walks emit a synthetic leaf at ``(*container_path, MARKER)``
+carrying the container KIND string, so an added/removed/kind-changed empty container diverges
+the run. The null-byte prefix makes collision with a real string dict key effectively
+impossible.
+"""
+
+BOOL_KEY_PATH_TAG = "\x00tl_bool_key"
+"""Reserved tag distinguishing a BOOL mapping key from the equal-valued int (r29-C2, F6).
+
+``bool`` is a subclass of ``int`` and ``hash(True) == hash(1)``, so a raw ``(True,)`` path
+component compares equal to ``(1,)`` in the leaf-path set and ``_value_at_path`` resolves both
+against either key. Encoding a bool key as ``(BOOL_KEY_PATH_TAG, bool(key))`` keeps the key
+TYPE distinct across capture/runtime, matching the type-strict ``_literal_leaf_equal`` used for
+values.
+"""
+
+
+def input_path_key_component(key: Any) -> Any:
+    """Return a type-strict non-tensor path component for one mapping key (r29-C2, F6)."""
+
+    if isinstance(key, bool):
+        return (BOOL_KEY_PATH_TAG, bool(key))
+    return key
+
+
+def empty_container_kind(value: Any) -> str | None:
+    """Return the KIND string of an EMPTY non-tensor container, else ``None`` (r29-C2).
+
+    ``None`` for non-containers and for NON-empty containers (whose leaves are witnessed
+    ordinarily). Namedtuples are treated as sequences by field arity; an empty namedtuple has
+    no fields.
+    """
+
+    if isinstance(value, tuple) and hasattr(value, "_fields"):
+        return "namedtuple" if len(value._fields) == 0 else None
+    if isinstance(value, Mapping):
+        return "mapping" if len(value) == 0 else None
+    if isinstance(value, (list, tuple)):
+        return "sequence" if len(value) == 0 else None
+    return None
 
 
 def _encode_literal_key(value: Any) -> LiteralAtom | LiteralTupleKey:
