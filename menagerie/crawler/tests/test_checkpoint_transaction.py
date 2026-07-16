@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -1032,6 +1033,110 @@ def test_public_license_rows_append_in_arrival_order_and_preserve_prefix(tmp_pat
     assert manifest.read_bytes() == extended
 
 
+@pytest.mark.parametrize(
+    ("spdx", "status", "redistribution"),
+    (
+        ("GPL-3.0-only", "declared", "restricted-private"),
+        ("NOASSERTION", "custom", "manifest-only"),
+    ),
+)
+def test_restricted_and_unknown_promotion_use_only_private_mirror(
+    tmp_path: Path,
+    spdx: str,
+    status: str,
+    redistribution: str,
+) -> None:
+    """Restricted/unknown source and code bytes never enter public roots."""
+
+    snapshot = _snapshot(tmp_path)
+    paths = default_driver_paths(tmp_path, snapshot.root)
+    intake = snapshot.items[0]
+    item = WorkItem(intake, route_model(ModelRequirements(intake.stable_id, "pytorch")))
+    config = DriverConfig(review_checkpoint_at=None, progress_milestones=())
+    artifact = _normalize_artifact_modes(
+        CanonicalTypedAuthor().author(item, paths.work_root, config), config
+    )
+    licenses = artifact.proposal["proposed_facts"]["licenses"]
+    licenses["code"]["spdx"] = spdx
+    licenses["code"]["status"] = status
+    licenses["redistribution_class"] = redistribution
+    _refresh_proposal_identities(
+        artifact.proposal,
+        checker_model=config.checker_model,
+        checker_version=config.checker_version,
+    )
+    artifact = replace(artifact, proposal=artifact.proposal)
+    gate = FakeChecker().check_metadata((artifact,), paths.work_root, config).gate
+    assert gate is not None
+    with JsonlLedger(paths.ledgers.gates, gate["schema_version"]) as ledger:
+        ledger.append(gate)
+
+    promoted = _promote_and_publish_accepted_artifact(item, artifact, paths)
+    crawler = tmp_path / "menagerie" / "crawler"
+    source_digest = artifact.source_manifest["sources"][0]["content_sha256"]
+    source_path = crawler / "source_cas" / f"{source_digest.removeprefix('sha256:')}.source"
+    prefix = intake.stable_id.removeprefix("m_")[:2]
+    code_path = crawler / "adapters" / prefix / intake.stable_id / "adapter.py"
+
+    assert not source_path.exists()
+    assert not code_path.exists()
+    assert promoted.model_dir.is_relative_to(paths.runtime_root)
+    assert scan_jsonl(crawler / "mirrors" / "public-manifest.jsonl", validate=False) == []
+    private_rows = scan_jsonl(crawler / "mirrors" / "private-manifest.jsonl", validate=False)
+    assert {row["staged_path"] for row in private_rows} == {
+        source_path.relative_to(tmp_path).as_posix(),
+        code_path.relative_to(tmp_path).as_posix(),
+    }
+    mirrors = _mirrors(tmp_path)
+    for row in private_rows:
+        artifact_manifest = checkpoint_module._licensed_artifact(row)
+        assert mirrors.fetch(artifact_manifest.manifest)
+    shutil.rmtree(artifact.model_dir)
+    for source in artifact.source_manifest["sources"]:
+        Path(source["cas_path"]).unlink()
+    reconstructed = _rehydrate_canonical_artifact(item, paths)
+    assert reconstructed is not None
+    assert (reconstructed.model_dir / "adapter.py").is_file()
+
+
+def test_promotion_uses_snapshot_identity_when_intake_directory_is_renamed(
+    tmp_path: Path,
+) -> None:
+    """An exact renamed snapshot promotes and rehydrates under its canonical ID."""
+
+    snapshot = _snapshot(tmp_path)
+    renamed_root = tmp_path / "renamed-exact-snapshot"
+    shutil.copytree(snapshot.root, renamed_root)
+    renamed_snapshot = replace(snapshot, root=renamed_root)
+    paths = default_driver_paths(tmp_path, renamed_root)
+    intake = renamed_snapshot.items[0]
+    item = WorkItem(intake, route_model(ModelRequirements(intake.stable_id, "pytorch")))
+    config = DriverConfig(review_checkpoint_at=None, progress_milestones=())
+    artifact = _normalize_artifact_modes(
+        CanonicalTypedAuthor().author(item, paths.work_root, config), config
+    )
+    gate = FakeChecker().check_metadata((artifact,), paths.work_root, config).gate
+    assert gate is not None
+    with JsonlLedger(paths.ledgers.gates, gate["schema_version"]) as ledger:
+        ledger.append(gate)
+
+    _promote_and_publish_accepted_artifact(item, artifact, paths)
+    prefix = intake.stable_id.removeprefix("m_")[:2]
+    reconstruction_path = (
+        tmp_path / "menagerie" / "crawler" / "reconstruction" / prefix / f"{intake.stable_id}.json"
+    )
+    reconstruction = json.loads(reconstruction_path.read_text(encoding="utf-8"))
+
+    assert reconstruction["intake_snapshot_id"] == snapshot.snapshot_id
+    assert (
+        tmp_path / "menagerie" / "crawler" / "records" / "intake" / snapshot.snapshot_id
+    ).is_dir()
+    assert not (
+        tmp_path / "menagerie" / "crawler" / "records" / "intake" / renamed_root.name
+    ).exists()
+    assert _rehydrate_canonical_artifact(item, paths) is not None
+
+
 def test_clean_checkpoint_stages_only_derived_allowlist_and_never_pushes(tmp_path: Path) -> None:
     """Clean canonical state stages every derived fact, no runtime state, and never pushes."""
 
@@ -1117,6 +1222,9 @@ def test_checkpoint_rejects_self_attested_promoted_code_license(
     rows.append(
         {
             "staged_path": code_artifact.staged_path.as_posix(),
+            "artifact_role": "code",
+            "source_id": "source-authored-adapter",
+            "fetch_recipe": "https-get",
             "manifest": code_artifact.manifest.to_dict(),
             "decision": code_artifact.decision.to_dict(),
         }
@@ -1129,7 +1237,7 @@ def test_checkpoint_rejects_self_attested_promoted_code_license(
         [report.to_dict()],
     )
 
-    with pytest.raises(RestrictedPublicArtifact, match="does not recompute"):
+    with pytest.raises(RestrictedPublicArtifact, match="closed dependency-current"):
         create_canonical_checkpoint(
             tmp_path,
             snapshot.root,
@@ -1266,7 +1374,7 @@ def test_deferred_ungated_promotion_cannot_checkpoint_public_code(tmp_path: Path
         crawler / "views",
         tmp_path / ".crawl-local" / "checkpoint-state.sqlite",
     )
-    with pytest.raises(RestrictedPublicArtifact, match="does not recompute"):
+    with pytest.raises(RestrictedPublicArtifact, match="closed dependency-current"):
         create_canonical_checkpoint(
             tmp_path,
             snapshot.root,

@@ -34,12 +34,13 @@ from menagerie.crawler.family_templates import (
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.intake import IntakeError, load_intake_snapshot
 from menagerie.crawler.licenses import (
+    AuthorizedArtifact,
     LicenseDecision,
     LicenseSweepReport,
     LicensedArtifact,
     PublicMergeRejected,
     RedistributionClass,
-    gated_license_decisions,
+    gated_authorized_artifacts,
     pre_public_merge_sweep,
 )
 from menagerie.crawler.mirrors import ArtifactManifest, MirrorStore
@@ -789,6 +790,7 @@ def create_checkpoint_set(
     mirror_manifests: Iterable[ArtifactManifest] = (),
     license_inventory: Iterable[LicensedArtifact] = (),
     generated_metadata_inventory: Iterable[GeneratedMetadataDisposition] = (),
+    restricted_gated_digests: Iterable[str] = (),
     expected_branch: str = CRAWLER_BRANCH,
     branch: Optional[str] = None,
     git_runner: Optional[GitRunner] = None,
@@ -814,6 +816,8 @@ def create_checkpoint_set(
     license_inventory:
         Complete public/private license-decision inventory used to prove candidate
         coverage and exclude every restricted or unknown digest.
+    restricted_gated_digests:
+        Restricted/unknown exact digests derived independently from current gated facts.
     expected_branch:
         Exact crawler branch.
     branch:
@@ -869,6 +873,7 @@ def create_checkpoint_set(
             requested_artifacts,
             inventory,
             tuple(generated_metadata_inventory),
+            tuple(restricted_gated_digests),
         )
         license_report = pre_public_merge_sweep(sweep_artifacts, mirrors)
     except PublicMergeRejected as exc:
@@ -1159,7 +1164,13 @@ def _create_canonical_checkpoint(
     )
     manifest_root = canonical_root / "mirrors"
     public_artifacts, license_inventory, mirror_manifests = _derive_mirror_facts(manifest_root)
-    _validate_gated_license_decisions(license_inventory, current)
+    authorized_artifacts = _validate_gated_license_decisions(license_inventory, current)
+    restricted_gated_digests = tuple(
+        artifact.content_sha256
+        for artifact in authorized_artifacts
+        if artifact.decision.redistribution_class
+        in {RedistributionClass.RESTRICTED_PRIVATE, RedistributionClass.UNKNOWN}
+    )
     candidates = _derive_candidate_paths(root, canonical_root)
     _validate_canonical_jsonl_append_only(root, canonical_root, candidates, runner)
     validated_environment_candidates = _validate_environment_candidates(
@@ -1175,6 +1186,7 @@ def _create_canonical_checkpoint(
         public_artifacts,
         license_inventory,
         generated_inventory,
+        restricted_gated_digests,
     )
     report = _validate_persisted_license_report(
         canonical_root / "license_reports", sweep_artifacts, mirror_store
@@ -1200,6 +1212,7 @@ def _create_canonical_checkpoint(
         mirror_manifests=mirror_manifests,
         license_inventory=license_inventory,
         generated_metadata_inventory=generated_inventory,
+        restricted_gated_digests=restricted_gated_digests,
         expected_branch=expected_branch,
         branch=actual_branch,
         git_runner=runner,
@@ -1353,14 +1366,31 @@ def _licensed_artifact(payload: Mapping[str, Any]) -> LicensedArtifact:
         staged_path = _normalize_path(Path(str(payload["staged_path"])))
     except (KeyError, TypeError, ValueError) as exc:
         raise CheckpointValidationError(f"invalid licensed mirror artifact: {exc}") from exc
-    return LicensedArtifact(staged_path, manifest, decision)
+    artifact_role = payload.get("artifact_role")
+    source_id = payload.get("source_id")
+    fetch_recipe = payload.get("fetch_recipe")
+    if any(
+        not isinstance(value, str) or not value
+        for value in (artifact_role, source_id, fetch_recipe)
+    ):
+        raise RestrictedPublicArtifact(
+            "licensed mirror artifact requires role, source_id, and fetch_recipe"
+        )
+    return LicensedArtifact(
+        staged_path,
+        manifest,
+        decision,
+        str(artifact_role),
+        str(source_id),
+        str(fetch_recipe),
+    )
 
 
 def _validate_gated_license_decisions(
     artifacts: Sequence[LicensedArtifact],
     current_models: Mapping[str, Mapping[str, Any]],
-) -> None:
-    """Recompute every public decision from reducer-admitted gated evidence.
+) -> tuple[AuthorizedArtifact, ...]:
+    """Validate the complete mirror inventory against a closed gated artifact map.
 
     Parameters
     ----------
@@ -1372,7 +1402,8 @@ def _validate_gated_license_decisions(
     Raises
     ------
     CheckpointValidationError
-        If public bytes rely on a persisted self-attested classification.
+        If any public/private row is missing, extra, ambiguous, or differs in its
+        exact path, role, digest, origin, evidence decision, or fetch recipe.
     """
 
     accepted = tuple(
@@ -1380,20 +1411,55 @@ def _validate_gated_license_decisions(
         for model in current_models.values()
         if model.get("authored_metadata_state") == "accepted"
     )
-    for artifact in artifacts:
-        if artifact.manifest.mirror_class.value != "public":
-            continue
-        matches = {
-            (decision, origin)
-            for model in accepted
-            for decision, origin in gated_license_decisions(model, artifact.manifest.content_sha256)
-            if origin == artifact.manifest.origin
-        }
-        if not matches or all(decision != artifact.decision for decision, _origin in matches):
+    authorized_by_path: dict[Path, set[AuthorizedArtifact]] = {}
+    for model in accepted:
+        for authorized in gated_authorized_artifacts(model):
+            path = _normalize_path(authorized.staged_path)
+            authorized_by_path.setdefault(path, set()).add(authorized)
+    ambiguous = {path: values for path, values in authorized_by_path.items() if len(values) != 1}
+    if ambiguous:
+        raise RestrictedPublicArtifact(
+            "gated facts ambiguously authorize canonical artifact paths: "
+            f"{[path.as_posix() for path in sorted(ambiguous, key=str)]}"
+        )
+
+    inventory_by_path = {_normalize_path(artifact.staged_path): artifact for artifact in artifacts}
+    for path, artifact in inventory_by_path.items():
+        expected_values = authorized_by_path.get(path, set())
+        expected = next(iter(expected_values)) if len(expected_values) == 1 else None
+        if (
+            expected is None
+            or artifact.artifact_role != expected.artifact_role
+            or artifact.source_id != expected.source_id
+            or artifact.fetch_recipe != expected.fetch_recipe
+            or artifact.manifest.content_sha256 != expected.content_sha256
+            or artifact.manifest.origin != expected.origin
+            or artifact.decision != expected.decision
+        ):
             raise RestrictedPublicArtifact(
-                "public license decision does not recompute from canonical gated evidence: "
-                f"{artifact.staged_path.as_posix()}"
+                "mirror row is outside the closed dependency-current authorized-artifact map: "
+                f"{path.as_posix()}"
             )
+        expected_mirror = (
+            "public"
+            if expected.decision.redistribution_class is RedistributionClass.PUBLIC_OK
+            else "private"
+        )
+        if artifact.manifest.mirror_class.value != expected_mirror:
+            raise RestrictedPublicArtifact(
+                "mirror row is stored on the wrong license boundary: "
+                f"{path.as_posix()} expected={expected_mirror}"
+            )
+
+    missing = tuple(path for path in authorized_by_path if path not in inventory_by_path)
+    if missing:
+        raise RestrictedPublicArtifact(
+            "canonical mirror manifests are incomplete for dependency-current artifacts: "
+            f"{[path.as_posix() for path in sorted(missing, key=str)]}"
+        )
+    return tuple(
+        next(iter(authorized_by_path[path])) for path in sorted(authorized_by_path, key=str)
+    )
 
 
 def _validate_candidate_license_coverage(
@@ -1402,6 +1468,7 @@ def _validate_candidate_license_coverage(
     requested_artifacts: Sequence[LicensedArtifact],
     inventory: Sequence[LicensedArtifact],
     generated_metadata_inventory: Sequence[GeneratedMetadataDisposition] = (),
+    restricted_gated_digests: Sequence[str] = (),
 ) -> tuple[LicensedArtifact, ...]:
     """Bind every candidate code/excerpt file to one hash-bound decision.
 
@@ -1422,6 +1489,9 @@ def _validate_candidate_license_coverage(
         Existing public mirror entries that must always enter the sweep.
     inventory:
         Complete public/private license-decision inventory.
+    restricted_gated_digests:
+        Restricted/unknown digests recomputed from dependency-current facts rather
+        than inferred from the possibly incomplete manifest inventory.
 
     Returns
     -------
@@ -1521,6 +1591,7 @@ def _validate_candidate_license_coverage(
         if artifact.decision.redistribution_class
         in {RedistributionClass.RESTRICTED_PRIVATE, RedistributionClass.UNKNOWN}
     }
+    restricted_digests.update(restricted_gated_digests)
     restricted_paths = [
         path
         for path in candidates
@@ -2438,12 +2509,29 @@ def validate_canonical_reconstruction(
         source_path = _resolve_reconstruction_reference(
             repo_root, source.get("cas_path"), "source CAS path"
         )
-        try:
-            digest = hash_bytes(source_path.read_bytes())
-        except OSError as exc:
-            raise ReconstructionValidationError("canonical source CAS byte is missing") from exc
-        if digest != source.get("content_sha256"):
-            raise ReconstructionValidationError("canonical source CAS digest changed")
+        relative_source = source_path.relative_to(repo_root)
+        licensed_source = _reconstruction_license_artifact(root, relative_source)
+        if licensed_source is None:
+            raise ReconstructionValidationError(
+                "canonical source CAS lacks an exact public/private mirror row"
+            )
+        if (
+            licensed_source.artifact_role != "source"
+            or licensed_source.manifest.content_sha256 != source.get("content_sha256")
+        ):
+            raise ReconstructionValidationError("canonical source CAS mirror authorization changed")
+        if licensed_source.manifest.mirror_class.value == "private":
+            if source_path.exists():
+                raise ReconstructionValidationError(
+                    "private source bytes appear in the public repository tree"
+                )
+        else:
+            try:
+                digest = hash_bytes(source_path.read_bytes())
+            except OSError as exc:
+                raise ReconstructionValidationError("canonical source CAS byte is missing") from exc
+            if digest != source.get("content_sha256"):
+                raise ReconstructionValidationError("canonical source CAS digest changed")
 
     intake_id = manifest.get("intake_snapshot_id")
     if not isinstance(intake_id, str) or not intake_id:
@@ -2515,7 +2603,10 @@ def validate_canonical_reconstruction(
     if not isinstance(implementation, Mapping):
         raise ReconstructionValidationError("canonical proposal implementation is malformed")
     code_value = implementation.get("code_path")
-    if isinstance(code_value, str):
+    code_storage = manifest.get("code_storage", "public-repository")
+    if code_storage not in {"public-repository", "private-mirror"}:
+        raise ReconstructionValidationError("canonical code storage class is invalid")
+    if isinstance(code_value, str) and code_storage == "public-repository":
         if Path(code_value).is_absolute():
             raise ReconstructionValidationError("canonical model entry point must be relative")
         declared_manifest = implementation.get("code_manifest")
@@ -2537,9 +2628,82 @@ def validate_canonical_reconstruction(
             or verified_hashes.get("code_manifest") != stable_hash(observed_manifest)
         ):
             raise ReconstructionValidationError("canonical recursive code manifest changed")
+    elif isinstance(code_value, str):
+        declared_manifest = implementation.get("code_manifest")
+        if not isinstance(declared_manifest, list) or not declared_manifest:
+            raise ReconstructionValidationError("canonical recursive code manifest is missing")
+        for member in declared_manifest:
+            if not isinstance(member, Mapping) or not isinstance(member.get("path"), str):
+                raise ReconstructionValidationError("canonical recursive code row is malformed")
+            member_path = _resolve_reconstruction_reference(
+                repo_root,
+                (model_root / str(member["path"])).relative_to(repo_root).as_posix(),
+                "private code member",
+            )
+            relative_member = member_path.relative_to(repo_root)
+            licensed_member = _reconstruction_license_artifact(root, relative_member)
+            if (
+                licensed_member is None
+                or licensed_member.artifact_role != "code"
+                or licensed_member.manifest.mirror_class.value != "private"
+                or licensed_member.manifest.content_sha256 != member.get("sha256")
+                or member_path.exists()
+            ):
+                raise ReconstructionValidationError(
+                    "private code member lacks an exact private-only mirror row"
+                )
+        verified_hashes = proposal.get("verified_hashes")
+        if (
+            not isinstance(verified_hashes, Mapping)
+            or verified_hashes.get("code") != implementation.get("code_sha256")
+            or verified_hashes.get("code_manifest") != stable_hash(declared_manifest)
+        ):
+            raise ReconstructionValidationError("private recursive code manifest changed")
     elif implementation.get("code_manifest") is not None:
         raise ReconstructionValidationError("declarative reconstruction carries code members")
     return ValidatedReconstruction(manifest, proposal, source_manifest, model_root)
+
+
+def _reconstruction_license_artifact(
+    canonical_root: Path, staged_path: Path
+) -> Optional[LicensedArtifact]:
+    """Return one unique committed mirror row for a reconstruction path.
+
+    Parameters
+    ----------
+    canonical_root:
+        Canonical crawler root containing both mirror manifests.
+    staged_path:
+        Repository-relative logical artifact path.
+
+    Returns
+    -------
+    LicensedArtifact | None
+        Unique parsed row, or ``None`` when absent.
+
+    Raises
+    ------
+    ReconstructionValidationError
+        If the public/private manifests repeat the logical path.
+    """
+
+    matches: list[LicensedArtifact] = []
+    for name in _CANONICAL_MANIFEST_NAMES:
+        path = canonical_root / "mirrors" / name
+        if not path.is_file():
+            continue
+        for row in scan_jsonl(path, validate=False):
+            if row.get("staged_path") != staged_path.as_posix():
+                continue
+            try:
+                matches.append(_licensed_artifact(row))
+            except CheckpointValidationError as exc:
+                raise ReconstructionValidationError(str(exc)) from exc
+    if len(matches) > 1:
+        raise ReconstructionValidationError(
+            "public/private manifests repeat a reconstruction artifact path"
+        )
+    return matches[0] if matches else None
 
 
 def _canonical_gate_rows(records_root: Path) -> tuple[JsonObject, ...]:
@@ -2654,10 +2818,53 @@ def _reconstruction_has_canonical_anchor(
                 family_variant = False
         if family_variant:
             assert isinstance(representative, Mapping)
+            assert isinstance(proposed_facts, Mapping)
             representative_gate_id = representative.get("accuracy_gate", {}).get("gate_id")
-            if current_gate_id == representative_gate_id and current.get(
-                "accuracy_gate"
-            ) == representative.get("accuracy_gate"):
+            authorization = manifest.get("family_variant_authorization")
+            authorization_valid = bool(
+                isinstance(authorization, Mapping)
+                and authorization.get("authorization_sha256")
+                == stable_hash(
+                    {
+                        key: value
+                        for key, value in authorization.items()
+                        if key != "authorization_sha256"
+                    }
+                )
+                and authorization.get("representative_stable_id") == representative_id
+                and authorization.get("representative_record_revision")
+                == representative.get("record_revision")
+                and authorization.get("representative_gate_id") == representative_gate_id
+                and authorization.get("derived_proposal_sha256") == proposal_digest
+                and authorization.get("derived_source_manifest_sha256")
+                == manifest.get("source_manifest", {}).get("manifest_sha256")
+                and authorization.get("derived_source_facts_sha256")
+                == stable_hash(proposed_facts.get("source_resolution"))
+                and authorization.get("derived_evidence_facts_sha256")
+                == stable_hash(proposed_facts.get("evidence"))
+                and all(
+                    proposed_facts.get(field) == current.get(field)
+                    for field in (
+                        "identity",
+                        "taxonomy",
+                        "external_metadata",
+                        "people_and_origin",
+                        "dates",
+                        "citation",
+                        "licenses",
+                        "source_resolution",
+                        "evidence",
+                        "implementation",
+                        "input_contract",
+                    )
+                )
+            )
+            if (
+                authorization_valid
+                and current_gate_id == representative_gate_id
+                and current.get("accuracy_gate") == representative.get("accuracy_gate")
+            ):
+                assert isinstance(authorization, Mapping)
                 for gate in gates:
                     if (
                         gate.get("gate_id") != representative_gate_id
@@ -2667,6 +2874,8 @@ def _reconstruction_has_canonical_anchor(
                     if any(
                         isinstance(item, Mapping)
                         and item.get("stable_id") == representative_id
+                        and item.get("verified_hashes", {}).get("proposal")
+                        == authorization.get("representative_proposal_sha256")
                         and item.get("verified_hashes", {}).get("source_manifest")
                         == proposal.get("verified_hashes", {}).get("source_manifest")
                         and item.get("verdict") == "accurate"

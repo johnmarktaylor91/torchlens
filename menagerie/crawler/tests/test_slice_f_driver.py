@@ -15,6 +15,7 @@ from typing import Any, Mapping, Optional, Sequence
 
 import pytest
 
+import menagerie.crawler.checkpoint as checkpoint_module
 import menagerie.crawler.driver as driver_module
 import menagerie.crawler.reducer as reducer_module
 from menagerie.crawler.checker_dispatch import CheckerBackoffSignal
@@ -2104,6 +2105,105 @@ def test_family_representative_once_templates_variants_that_still_run(tmp_path: 
             assert canonical_json_bytes(variant[field]) == canonical_json_bytes(
                 representative[field]
             )
+
+
+def test_family_variant_reconstruction_rewrite_cannot_replace_gated_derivation(
+    tmp_path: Path,
+) -> None:
+    """A coherent variant source rewrite remains bound to the representative gate."""
+
+    snapshot, representative_id, variant_ids = _family_snapshot(tmp_path)
+    counts = {representative_id: 10, variant_ids[0]: 20, variant_ids[1]: 30}
+    driver = _driver(
+        tmp_path,
+        snapshot,
+        author=FakeAuthor(),
+        checker=FakeChecker(),
+        forward=FamilyCountForward(counts),
+    )
+    assert driver.run().status == "complete"
+    stable_id = variant_ids[0]
+    paths = _paths(tmp_path, snapshot)
+    current = {str(model["stable_id"]): model for model in scan_jsonl(paths.ledgers.models)}
+    representative = current[representative_id]
+    variant = current[stable_id]
+    gate = scan_jsonl(paths.ledgers.gates)[0]
+    gate_item = next(item for item in gate["items"] if item["stable_id"] == representative_id)
+    work_id = f"work-{stable_id}"
+    proposed_facts = {
+        field: json.loads(json.dumps(variant[field]))
+        for field in (
+            "identity",
+            "taxonomy",
+            "external_metadata",
+            "website",
+            "people_and_origin",
+            "dates",
+            "citation",
+            "licenses",
+            "source_resolution",
+            "evidence",
+            "implementation",
+            "input_contract",
+        )
+    }
+    source_manifest_digest = gate_item["verified_hashes"]["source_manifest"]
+    proposal = {
+        "stable_id": stable_id,
+        "work_id": work_id,
+        "proposal_id": stable_hash(
+            {
+                "template_source_revision": representative["record_revision"],
+                "stable_id": stable_id,
+                "work_id": work_id,
+            }
+        ),
+        "proposed_facts": proposed_facts,
+        "recipe_revision": variant["implementation"]["recipe_revision"],
+        "evidence_identity": variant["evidence"]["evidence_identity"],
+        "verified_hashes": {
+            "family_template": variant["website"]["template_hash"],
+            "source_manifest": source_manifest_digest,
+        },
+    }
+    proposal_digest = stable_hash(proposal)
+    proposal["proposal_sha256"] = proposal_digest
+    authorization = {
+        "representative_stable_id": representative_id,
+        "representative_record_revision": representative["record_revision"],
+        "representative_gate_id": representative["accuracy_gate"]["gate_id"],
+        "representative_proposal_sha256": gate_item["verified_hashes"]["proposal"],
+        "derived_proposal_sha256": proposal_digest,
+        "derived_source_manifest_sha256": source_manifest_digest,
+        "derived_source_facts_sha256": stable_hash(proposed_facts["source_resolution"]),
+        "derived_evidence_facts_sha256": stable_hash(proposed_facts["evidence"]),
+    }
+    authorization["authorization_sha256"] = stable_hash(authorization)
+    manifest = {
+        "campaign_root_work_id": work_id,
+        "intake_item": snapshot.items[1].to_dict(),
+        "source_manifest": {"manifest_sha256": source_manifest_digest},
+        "family_variant_authorization": authorization,
+    }
+    assert checkpoint_module._reconstruction_has_canonical_anchor(
+        manifest, proposal, proposal_digest, (gate,), current
+    )
+
+    proposed_facts["source_resolution"]["sources"][0]["revision"] = "rewritten-revision"
+    proposed_facts["evidence"]["excerpts"][0]["text"] = "rewritten evidence"
+    proposal_digest = stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+    proposal["proposal_sha256"] = proposal_digest
+    authorization["derived_proposal_sha256"] = proposal_digest
+    authorization["derived_source_facts_sha256"] = stable_hash(proposed_facts["source_resolution"])
+    authorization["derived_evidence_facts_sha256"] = stable_hash(proposed_facts["evidence"])
+    authorization["authorization_sha256"] = stable_hash(
+        {key: value for key, value in authorization.items() if key != "authorization_sha256"}
+    )
+    assert not checkpoint_module._reconstruction_has_canonical_anchor(
+        manifest, proposal, proposal_digest, (gate,), current
+    )
 
 
 def test_family_variant_falls_back_to_full_author_when_representative_fails(

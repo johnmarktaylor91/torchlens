@@ -125,7 +125,7 @@ from menagerie.crawler.metadata import (
     validate_authored_facts_for_write,
 )
 from menagerie.crawler.models import JsonObject, LedgerPaths
-from menagerie.crawler.mirrors import ArtifactManifest, ArtifactOrigin, MirrorStore
+from menagerie.crawler.mirrors import ArtifactManifest, ArtifactOrigin, MirrorClass, MirrorStore
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.recordio import JsonlLedger, SingleWriterError, scan_jsonl
 from menagerie.crawler.reducer import (
@@ -5726,6 +5726,11 @@ def _rehydrate_canonical_artifact(item: WorkItem, paths: DriverPaths) -> Optiona
         return None
     repo_root = _canonical_repo_root(canonical_root)
     model_dir = validated.model_root
+    runtime_mirrors = MirrorStore(
+        repo_root / ".crawl-local" / "mirrors" / "public",
+        repo_root / ".crawl-local" / "mirrors" / "private",
+        repo_root / ".crawl-local" / "mirrors" / "local",
+    )
     source_manifest = deepcopy(validated.source_manifest)
     sources = source_manifest.get("sources", [])
     if not isinstance(sources, list):
@@ -5739,9 +5744,58 @@ def _rehydrate_canonical_artifact(item: WorkItem, paths: DriverPaths) -> Optiona
                 "reconstruction source CAS path must be repository-relative"
             )
         resolved = (repo_root / relative).resolve()
-        if hash_bytes(resolved.read_bytes()) != source.get("content_sha256"):
-            raise DriverIntegrationError("reconstruction source CAS digest changed")
-        source["cas_path"] = str(resolved)
+        if resolved.is_file():
+            if hash_bytes(resolved.read_bytes()) != source.get("content_sha256"):
+                raise DriverIntegrationError("reconstruction source CAS digest changed")
+            source["cas_path"] = str(resolved)
+        else:
+            licensed = _driver_license_artifact(canonical_root, relative)
+            if (
+                licensed is None
+                or licensed.manifest.mirror_class is not MirrorClass.PRIVATE
+                or licensed.manifest.content_sha256 != source.get("content_sha256")
+            ):
+                raise DriverIntegrationError(
+                    "private reconstruction source lacks its exact mirror object"
+                )
+            runtime_mirrors.fetch(licensed.manifest)
+            source["cas_path"] = str(
+                runtime_mirrors.root(MirrorClass.PRIVATE) / licensed.manifest.object_key
+            )
+    if isinstance(code_value, str) and value.get("code_storage") == "private-mirror":
+        code_manifest = implementation.get("code_manifest")
+        if not isinstance(code_manifest, list) or not code_manifest:
+            raise DriverIntegrationError("private reconstruction code manifest is missing")
+        materialized = (
+            paths.work_root
+            / item.stable_id
+            / "private-reconstruction"
+            / str(proposal["proposal_sha256"]).removeprefix("sha256:")
+        )
+        for member in code_manifest:
+            if not isinstance(member, Mapping) or not isinstance(member.get("path"), str):
+                raise DriverIntegrationError("private reconstruction code row is malformed")
+            relative_member = Path(str(member["path"]))
+            logical_member = model_dir.relative_to(repo_root) / relative_member
+            licensed = _driver_license_artifact(canonical_root, logical_member)
+            if (
+                licensed is None
+                or licensed.manifest.mirror_class is not MirrorClass.PRIVATE
+                or licensed.manifest.content_sha256 != member.get("sha256")
+            ):
+                raise DriverIntegrationError(
+                    "private reconstruction code lacks its exact mirror object"
+                )
+            content = runtime_mirrors.fetch(licensed.manifest)
+            destination = materialized / relative_member
+            if destination.is_file():
+                if hash_bytes(destination.read_bytes()) != member.get("sha256"):
+                    raise DriverIntegrationError(
+                        "materialized private reconstruction code conflicts"
+                    )
+            else:
+                _atomic_materialize_bytes(destination, content)
+        model_dir = materialized
     if isinstance(code_value, str):
         code_path = (model_dir / code_value).resolve()
         if not code_path.is_relative_to(model_dir) or hash_bytes(code_path.read_bytes()) != (
@@ -5755,6 +5809,61 @@ def _rehydrate_canonical_artifact(item: WorkItem, paths: DriverPaths) -> Optiona
         campaign_root_work_id=str(value.get("campaign_root_work_id") or proposal["work_id"]),
         canonical_code_root=model_dir if isinstance(code_value, str) else None,
     )
+
+
+def _driver_license_artifact(canonical_root: Path, staged_path: Path) -> Optional[LicensedArtifact]:
+    """Return one unique committed mirror row for a logical artifact path.
+
+    Parameters
+    ----------
+    canonical_root:
+        Canonical crawler root containing public/private manifests.
+    staged_path:
+        Repository-relative logical artifact path.
+
+    Returns
+    -------
+    LicensedArtifact | None
+        Unique parsed artifact, or ``None`` when absent.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If the manifests repeat the logical path.
+    """
+
+    matches: list[LicensedArtifact] = []
+    for name in ("public-manifest.jsonl", "private-manifest.jsonl"):
+        manifest_path = canonical_root / "mirrors" / name
+        if not manifest_path.is_file():
+            continue
+        for row in scan_jsonl(manifest_path, validate=False):
+            if row.get("staged_path") == staged_path.as_posix():
+                matches.append(_licensed_artifact_from_row(row))
+    if len(matches) > 1:
+        raise DriverIntegrationError("mirror manifests repeat a logical artifact path")
+    return matches[0] if matches else None
+
+
+def _atomic_materialize_bytes(destination: Path, content: bytes) -> None:
+    """Atomically materialize verified private bytes for local execution.
+
+    Parameters
+    ----------
+    destination, content:
+        Local runtime path and exact mirror-verified content.
+    """
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _promote_and_publish_accepted_artifact(
@@ -5840,11 +5949,16 @@ def _promote_and_publish_transaction_body(
         )
     license_bindings = _gated_path_license_bindings(proposal, artifact.source_manifest)
     code_license = license_bindings["__code__"]
-    promoted = _promote_accepted_code(artifact, paths)
     prefix = item.stable_id.removeprefix("m_")[:2] or "__"
+    rung = str(facts.get("source_resolution", {}).get("rung"))
+    root_name = "adapters" if rung in {"R1_LIBRARY", "R2_VENDOR"} else "ports"
+    logical_code_root = canonical_root / root_name / prefix / item.stable_id
+    code_public = classify_redistribution(code_license[0]) is RedistributionClass.PUBLIC_OK
+    promoted = _promote_accepted_code(artifact, paths) if code_public else artifact
 
     canonical_sources: list[JsonObject] = []
-    licensed_paths: list[tuple[Path, tuple[LicenseEvidence, ...], ArtifactOrigin]] = []
+    licensed_paths: list[tuple[Path, tuple[LicenseEvidence, ...], ArtifactOrigin, str]] = []
+    logical_paths: dict[Path, Path] = {}
     raw_sources = artifact.source_manifest.get("sources", [])
     if not isinstance(raw_sources, list):
         raise DriverIntegrationError("accepted source manifest must contain a source list")
@@ -5860,16 +5974,22 @@ def _promote_and_publish_transaction_body(
         if hash_bytes(local_cas.read_bytes()) != digest:
             raise DriverIntegrationError("accepted source CAS digest changed before promotion")
         destination = canonical_root / "source_cas" / f"{digest.removeprefix('sha256:')}.source"
-        _atomic_promote_file(local_cas, destination)
-        source["cas_path"] = destination.relative_to(repo_root).as_posix()
-        canonical_sources.append(source)
         source_id = str(source.get("source_id"))
         source_license = license_bindings.get(source_id)
         if source_license is None:
             raise DriverIntegrationError(
                 f"accepted source CAS has no exact gated license disposition: {source_id}"
             )
-        licensed_paths.append((destination, *source_license))
+        source_public = classify_redistribution(source_license[0]) is RedistributionClass.PUBLIC_OK
+        if source_public:
+            _atomic_promote_file(local_cas, destination)
+            publication_path = destination
+        else:
+            publication_path = local_cas
+            logical_paths[publication_path] = destination.relative_to(repo_root)
+        source["cas_path"] = destination.relative_to(repo_root).as_posix()
+        canonical_sources.append(source)
+        licensed_paths.append((publication_path, *source_license))
     canonical_source_manifest: JsonObject = {
         **{
             key: deepcopy(value)
@@ -5880,13 +6000,14 @@ def _promote_and_publish_transaction_body(
         "manifest_sha256": stable_hash(canonical_sources),
     }
 
-    intake_destination = canonical_root / "records" / "intake" / paths.intake_root.name
+    intake_snapshot = load_intake_snapshot(paths.intake_root)
+    intake_destination = canonical_root / "records" / "intake" / intake_snapshot.snapshot_id
     _atomic_promote_tree(paths.intake_root.resolve(), intake_destination)
     source_manifest_path = canonical_root / "source_manifests" / prefix / f"{item.stable_id}.json"
     _write_json_atomic(source_manifest_path, canonical_source_manifest)
     code_root_relative = (
-        promoted.model_dir.relative_to(repo_root)
-        if promoted.canonical_code_root is not None
+        logical_code_root.relative_to(repo_root)
+        if isinstance(code_value, str)
         else canonical_root.relative_to(repo_root)
     )
     reconstruction = {
@@ -5896,38 +6017,172 @@ def _promote_and_publish_transaction_body(
         "proposal": proposal,
         "proposal_sha256": proposal.get("proposal_sha256"),
         "canonical_code_root": code_root_relative.as_posix(),
+        "code_storage": "public-repository" if code_public else "private-mirror",
         "source_manifest": canonical_source_manifest,
         "source_manifest_path": source_manifest_path.relative_to(repo_root).as_posix(),
-        "intake_snapshot_id": paths.intake_root.name,
-        "intake_snapshot_sha256": load_intake_snapshot(paths.intake_root).snapshot_sha256,
+        "intake_snapshot_id": intake_snapshot.snapshot_id,
+        "intake_snapshot_sha256": intake_snapshot.snapshot_sha256,
         "intake_item": item.intake.to_dict(),
         "intake_item_sha256": stable_hash(item.intake.to_dict()),
         "campaign_root_work_id": promoted.campaign_root_work_id or proposal["work_id"],
     }
+    family_authorization = _family_variant_reconstruction_authorization(
+        proposal, canonical_source_manifest, paths
+    )
+    if family_authorization is not None:
+        reconstruction["family_variant_authorization"] = family_authorization
     reconstruction_path = canonical_root / "reconstruction" / prefix / f"{item.stable_id}.json"
     _write_json_atomic(reconstruction_path, reconstruction)
 
-    if promoted.canonical_code_root is not None:
-        licensed_paths.extend(
-            (path, *code_license)
-            for path in promoted.canonical_code_root.rglob("*")
-            if path.is_file()
-        )
+    code_manifest = implementation.get("code_manifest")
+    if isinstance(code_manifest, list):
+        for member in code_manifest:
+            if not isinstance(member, Mapping) or not isinstance(member.get("path"), str):
+                raise DriverIntegrationError("accepted code manifest row is malformed")
+            relative = Path(str(member["path"]))
+            publication_path = promoted.model_dir / relative
+            logical_path = logical_code_root / relative
+            if not code_public:
+                logical_paths[publication_path] = logical_path.relative_to(repo_root)
+            licensed_paths.append((publication_path, *code_license))
+    patches = implementation.get("patches")
+    if isinstance(patches, list):
         patch_root = canonical_root / "patches" / prefix / item.stable_id
-        if patch_root.is_dir():
-            licensed_paths.extend(
-                (path, *code_license) for path in patch_root.rglob("*") if path.is_file()
+        for patch in patches:
+            if not isinstance(patch, Mapping) or not isinstance(patch.get("path"), str):
+                raise DriverIntegrationError("accepted patch row is malformed")
+            relative = Path(str(patch["path"]))
+            publication_path = (
+                patch_root / relative if code_public else artifact.model_dir / relative
             )
-    _publish_licensed_paths(
+            if not code_public:
+                logical_paths[publication_path] = (patch_root / relative).relative_to(repo_root)
+            licensed_paths.append((publication_path, *code_license))
+    published = _publish_licensed_paths(
         repo_root,
         canonical_root,
         tuple(sorted(licensed_paths, key=lambda value: str(value[0]))),
+        logical_paths=logical_paths,
     )
 
     rebound_source = deepcopy(canonical_source_manifest)
+    published_by_path = {value.staged_path: value for value in published}
+    mirror_root = repo_root / ".crawl-local" / "mirrors"
     for source in rebound_source["sources"]:
-        source["cas_path"] = str((repo_root / source["cas_path"]).resolve())
-    return replace(promoted, source_manifest=rebound_source)
+        relative = Path(str(source["cas_path"]))
+        licensed = published_by_path.get(relative)
+        if licensed is None:
+            raise DriverIntegrationError("promoted source lacks its exact mirror row")
+        if licensed.manifest.mirror_class is MirrorClass.PUBLIC:
+            source["cas_path"] = str((repo_root / relative).resolve())
+        else:
+            source["cas_path"] = str(
+                mirror_root / licensed.manifest.mirror_class.value / licensed.manifest.object_key
+            )
+    return replace(
+        promoted,
+        source_manifest=rebound_source,
+        canonical_code_root=(promoted.model_dir if isinstance(code_manifest, list) else None),
+    )
+
+
+def _family_variant_reconstruction_authorization(
+    proposal: Mapping[str, Any],
+    source_manifest: Mapping[str, Any],
+    paths: DriverPaths,
+) -> Optional[JsonObject]:
+    """Bind a derived variant to its representative's exact accepted proposal.
+
+    Parameters
+    ----------
+    proposal, source_manifest:
+        Exact derived proposal and canonical source transaction being promoted.
+    paths:
+        Canonical ledgers and reconstruction roots containing representative authority.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Hash-closed representative/variant authorization, or ``None`` for an
+        independently gated non-variant proposal.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If a claimed family variant lacks an exact current gate/reconstruction anchor.
+    """
+
+    proposed_facts = proposal.get("proposed_facts")
+    website = proposed_facts.get("website") if isinstance(proposed_facts, Mapping) else None
+    if not isinstance(website, Mapping) or website.get("kind") != "size-variant-template":
+        return None
+    identity = proposed_facts.get("identity") if isinstance(proposed_facts, Mapping) else None
+    representative_id = (
+        identity.get("family_representative_id") if isinstance(identity, Mapping) else None
+    )
+    if not isinstance(representative_id, str) or not representative_id:
+        raise DriverIntegrationError("family variant has no representative proposal authority")
+    current = materialize_current(paths.ledgers)
+    representative = current.get(representative_id)
+    if not isinstance(representative, Mapping):
+        raise DriverIntegrationError("family variant representative is not dependency-current")
+    representative_revision = representative.get("record_revision")
+    representative_gate_id = representative.get("accuracy_gate", {}).get("gate_id")
+    canonical_root = _canonical_crawler_root(paths)
+    prefix = representative_id.removeprefix("m_")[:2] or "__"
+    representative_path = canonical_root / "reconstruction" / prefix / f"{representative_id}.json"
+    if not representative_path.is_file():
+        raise DriverIntegrationError("family variant representative reconstruction is missing")
+    representative_reconstruction = _read_json(representative_path)
+    representative_proposal_digest = representative_reconstruction.get("proposal_sha256")
+    representative_proposal = representative_reconstruction.get("proposal")
+    if (
+        not isinstance(representative_proposal_digest, str)
+        or not isinstance(representative_proposal, Mapping)
+        or representative_proposal.get("proposal_sha256") != representative_proposal_digest
+        or stable_hash(
+            {
+                key: value
+                for key, value in representative_proposal.items()
+                if key != "proposal_sha256"
+            }
+        )
+        != representative_proposal_digest
+    ):
+        raise DriverIntegrationError("family variant representative proposal binding changed")
+    gate_matches = [
+        item
+        for gate in scan_jsonl(paths.ledgers.gates)
+        if gate.get("gate_id") == representative_gate_id
+        and gate.get("gate_kind") == "metadata_batch"
+        for item in gate.get("items", [])
+        if isinstance(item, Mapping)
+        and item.get("stable_id") == representative_id
+        and item.get("verified_hashes", {}).get("proposal") == representative_proposal_digest
+        and item.get("verdict") == "accurate"
+        and item.get("integrity", {}).get("verdict") == "accurate"
+        and item.get("rung_check", {}).get("verdict") == "accurate"
+    ]
+    if len(gate_matches) != 1:
+        raise DriverIntegrationError(
+            "family variant representative proposal lacks one exact accepted gate"
+        )
+    payload: JsonObject = {
+        "representative_stable_id": representative_id,
+        "representative_record_revision": representative_revision,
+        "representative_gate_id": representative_gate_id,
+        "representative_proposal_sha256": representative_proposal_digest,
+        "derived_proposal_sha256": proposal.get("proposal_sha256"),
+        "derived_source_manifest_sha256": source_manifest.get("manifest_sha256"),
+        "derived_source_facts_sha256": stable_hash(
+            proposed_facts.get("source_resolution") if isinstance(proposed_facts, Mapping) else None
+        ),
+        "derived_evidence_facts_sha256": stable_hash(
+            proposed_facts.get("evidence") if isinstance(proposed_facts, Mapping) else None
+        ),
+    }
+    payload["authorization_sha256"] = stable_hash(payload)
+    return payload
 
 
 def _promotion_transaction_destinations(
@@ -5957,7 +6212,7 @@ def _promotion_transaction_destinations(
     rung = str(facts.get("source_resolution", {}).get("rung"))
     root_name = "adapters" if rung in {"R1_LIBRARY", "R2_VENDOR"} else "ports"
     destinations: list[Path] = [
-        canonical_root / "records" / "intake" / paths.intake_root.name,
+        canonical_root / "records" / "intake" / load_intake_snapshot(paths.intake_root).snapshot_id,
         canonical_root / "source_manifests" / prefix / f"{item.stable_id}.json",
         canonical_root / "reconstruction" / prefix / f"{item.stable_id}.json",
         canonical_root / "mirrors" / "public-manifest.jsonl",
@@ -6105,19 +6360,39 @@ def _validate_complete_promotion(
     reconstruction = canonical_root / "reconstruction" / prefix / f"{item.stable_id}.json"
     if not reconstruction.is_file():
         raise DriverIntegrationError("promotion transaction lacks reconstruction facts")
-    rows = scan_jsonl(canonical_root / "mirrors" / "public-manifest.jsonl", validate=False)
+    reconstruction_value = _read_json(reconstruction)
+    rows = [
+        *scan_jsonl(canonical_root / "mirrors" / "public-manifest.jsonl", validate=False),
+        *scan_jsonl(canonical_root / "mirrors" / "private-manifest.jsonl", validate=False),
+    ]
     by_path = [str(row.get("staged_path")) for row in rows]
     promoted_paths: list[Path] = []
-    if artifact.canonical_code_root is not None:
-        promoted_paths.extend(
-            path for path in artifact.canonical_code_root.rglob("*") if path.is_file()
-        )
+    proposal = reconstruction_value.get("proposal")
+    facts = proposal.get("proposed_facts") if isinstance(proposal, Mapping) else None
+    implementation = facts.get("implementation") if isinstance(facts, Mapping) else None
+    code_root_value = reconstruction_value.get("canonical_code_root")
+    if isinstance(implementation, Mapping) and isinstance(code_root_value, str):
+        code_root = repo_root / code_root_value
+        code_manifest = implementation.get("code_manifest")
+        if isinstance(code_manifest, list):
+            promoted_paths.extend(
+                code_root / str(member["path"])
+                for member in code_manifest
+                if isinstance(member, Mapping) and isinstance(member.get("path"), str)
+            )
         patch_root = canonical_root / "patches" / prefix / item.stable_id
-        if patch_root.is_dir():
-            promoted_paths.extend(path for path in patch_root.rglob("*") if path.is_file())
-    for source in artifact.source_manifest.get("sources", []):
+        patches = implementation.get("patches")
+        if isinstance(patches, list):
+            promoted_paths.extend(
+                patch_root / str(patch["path"])
+                for patch in patches
+                if isinstance(patch, Mapping) and isinstance(patch.get("path"), str)
+            )
+    source_manifest = reconstruction_value.get("source_manifest")
+    sources = source_manifest.get("sources", []) if isinstance(source_manifest, Mapping) else []
+    for source in sources:
         if isinstance(source, Mapping) and isinstance(source.get("cas_path"), str):
-            promoted_paths.append(Path(str(source["cas_path"])))
+            promoted_paths.append(repo_root / str(source["cas_path"]))
     for path in promoted_paths:
         relative = path.resolve().relative_to(repo_root).as_posix()
         if by_path.count(relative) != 1:
@@ -6131,7 +6406,7 @@ def _validate_complete_promotion(
 
 def _gated_code_license_evidence(
     proposal: Mapping[str, Any],
-) -> tuple[tuple[LicenseEvidence, ...], ArtifactOrigin]:
+) -> tuple[tuple[LicenseEvidence, ...], ArtifactOrigin, str]:
     """Derive public-compatible license evidence from current gated facts.
 
     Parameters
@@ -6141,8 +6416,8 @@ def _gated_code_license_evidence(
 
     Returns
     -------
-    tuple[tuple[LicenseEvidence, ...], ArtifactOrigin]
-        Literal evidence and exact source origin for promotion.
+    tuple[tuple[LicenseEvidence, ...], ArtifactOrigin, str]
+        Literal evidence, exact source origin, and deterministic fetch recipe.
     """
 
     return _gated_path_license_bindings(proposal, {"sources": []})["__code__"]
@@ -6150,7 +6425,7 @@ def _gated_code_license_evidence(
 
 def _gated_path_license_bindings(
     proposal: Mapping[str, Any], source_manifest: Mapping[str, Any]
-) -> dict[str, tuple[tuple[LicenseEvidence, ...], ArtifactOrigin]]:
+) -> dict[str, tuple[tuple[LicenseEvidence, ...], ArtifactOrigin, str]]:
     """Map code and each fetched source to one exact gated disposition.
 
     Parameters
@@ -6162,26 +6437,31 @@ def _gated_path_license_bindings(
 
     Returns
     -------
-    dict[str, tuple[tuple[LicenseEvidence, ...], ArtifactOrigin]]
+    dict[str, tuple[tuple[LicenseEvidence, ...], ArtifactOrigin, str]]
         ``__code__`` plus one binding per fetched ``source_id``.
 
     Raises
     ------
     DriverIntegrationError
-        If a promoted path is ambiguous, unmatched, unsafe, or disagrees with
+        If a promoted path is ambiguous, unmatched, ungrounded, or disagrees with
         the exact source origin.
     """
 
     facts = proposal.get("proposed_facts", {})
     licenses = facts.get("licenses", {}) if isinstance(facts, Mapping) else {}
-    if not isinstance(licenses, Mapping) or licenses.get("redistribution_class") != (
-        "public-compatible"
-    ):
-        raise DriverIntegrationError(
-            "accepted-code promotion refuses restricted/unknown disposition"
-        )
+    if not isinstance(licenses, Mapping) or licenses.get("redistribution_class") not in {
+        "public-compatible",
+        "restricted-private",
+        "manifest-only",
+        "not-applicable",
+    }:
+        raise DriverIntegrationError("accepted-code promotion has no closed redistribution class")
     code = licenses.get("code")
-    if not isinstance(code, Mapping) or code.get("status") not in {"declared", "custom"}:
+    if not isinstance(code, Mapping) or code.get("status") not in {
+        "declared",
+        "custom",
+        "not-found",
+    }:
         raise DriverIntegrationError("accepted-code promotion requires explicit gated code license")
     evidence_block = facts.get("evidence", {})
     excerpts = evidence_block.get("excerpts", []) if isinstance(evidence_block, Mapping) else []
@@ -6203,8 +6483,10 @@ def _gated_path_license_bindings(
         raise DriverIntegrationError("gated per-source license dispositions are malformed")
     dispositions.extend(value for value in extra if isinstance(value, Mapping))
 
-    def binding(finding: Mapping[str, Any]) -> tuple[tuple[LicenseEvidence, ...], ArtifactOrigin]:
-        """Build one public-compatible literal-evidence and origin binding."""
+    def binding(
+        finding: Mapping[str, Any],
+    ) -> tuple[tuple[LicenseEvidence, ...], ArtifactOrigin, str]:
+        """Build one literal-evidence, origin, and fetch-recipe binding."""
 
         source_id = finding.get("source_id")
         source = source_facts.get(str(source_id))
@@ -6234,11 +6516,14 @@ def _gated_path_license_bindings(
         if not findings:
             raise DriverIntegrationError("promotion requires literal per-path license evidence")
         evidence = tuple(findings)
-        if classify_redistribution(evidence) is not RedistributionClass.PUBLIC_OK:
-            raise DriverIntegrationError(
-                "promotion refuses restricted/unknown per-path gated license evidence"
-            )
-        return evidence, ArtifactOrigin(str(source["url"]), str(source["revision"]))
+        fetch_recipe = source.get("fetch_recipe")
+        if not isinstance(fetch_recipe, str) or not fetch_recipe:
+            raise DriverIntegrationError("gated license source has no exact fetch recipe")
+        return (
+            evidence,
+            ArtifactOrigin(str(source["url"]), str(source["revision"])),
+            fetch_recipe,
+        )
 
     result = {"__code__": binding(code)}
     raw_sources = source_manifest.get("sources", [])
@@ -6269,15 +6554,25 @@ def _gated_path_license_bindings(
 def _publish_licensed_paths(
     repo_root: Path,
     canonical_root: Path,
-    paths: Sequence[tuple[Path, tuple[LicenseEvidence, ...], ArtifactOrigin]],
-) -> None:
-    """Publish per-path license rows and regenerate the canonical sweep report.
+    paths: Sequence[tuple[Path, tuple[LicenseEvidence, ...], ArtifactOrigin, str]],
+    *,
+    logical_paths: Optional[Mapping[Path, Path]] = None,
+) -> tuple[LicensedArtifact, ...]:
+    """Publish public/private rows and regenerate the public sweep report.
 
     Parameters
     ----------
     repo_root, canonical_root, paths:
-        Repository roots and promoted files individually bound to current gated
-        license facts and exact origins.
+        Repository roots and source files individually bound to current gated
+        license facts, exact origins, and fetch recipes.
+    logical_paths:
+        Optional source-file to canonical logical-path mapping for private bytes
+        that must never be copied below the public repository root.
+
+    Returns
+    -------
+    tuple[LicensedArtifact, ...]
+        Exact stored public/private artifacts in input order.
     """
 
     runtime = repo_root / ".crawl-local" / "mirrors"
@@ -6289,23 +6584,35 @@ def _publish_licensed_paths(
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+b") as lock_handle:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
-        existing_rows = scan_jsonl(public_path, validate=False) if public_path.is_file() else []
-        rows_by_path: dict[str, JsonObject] = {}
-        for raw_row in existing_rows:
-            row = dict(raw_row)
-            staged_path = row.get("staged_path")
-            if not isinstance(staged_path, str) or staged_path in rows_by_path:
-                raise DriverIntegrationError(
-                    "canonical public license inventory contains a duplicate path"
-                )
-            rows_by_path[staged_path] = row
+        existing_public = scan_jsonl(public_path, validate=False) if public_path.is_file() else []
+        existing_private = (
+            scan_jsonl(private_path, validate=False) if private_path.is_file() else []
+        )
+        rows_by_path: dict[str, tuple[str, JsonObject]] = {}
+        for manifest_class, existing_rows in (
+            ("public", existing_public),
+            ("private", existing_private),
+        ):
+            for raw_row in existing_rows:
+                row = dict(raw_row)
+                staged_path = row.get("staged_path")
+                if not isinstance(staged_path, str) or staged_path in rows_by_path:
+                    raise DriverIntegrationError(
+                        "canonical license inventory contains a duplicate path"
+                    )
+                rows_by_path[staged_path] = (manifest_class, row)
         seen_paths: set[Path] = set()
-        additions: list[JsonObject] = []
-        for path, evidence, origin in paths:
-            relative = path.relative_to(repo_root)
+        additions: dict[str, list[JsonObject]] = {"public": [], "private": []}
+        stored: list[LicensedArtifact] = []
+        logical = dict(logical_paths or {})
+        for path, evidence, origin, fetch_recipe in paths:
+            relative = logical[path] if path in logical else path.relative_to(repo_root)
             if relative in seen_paths:
                 raise DriverIntegrationError("promotion path has ambiguous license bindings")
             seen_paths.add(relative)
+            if not evidence or len({finding.source_id for finding in evidence}) != 1:
+                raise DriverIntegrationError("promotion path has no exact gated source identity")
+            artifact_role = _license_artifact_role(relative)
             artifact = store_licensed_artifact(
                 mirrors,
                 path.read_bytes(),
@@ -6316,17 +6623,29 @@ def _publish_licensed_paths(
                     "text/x-python" if path.suffix == ".py" else "application/octet-stream"
                 ),
             )
-            if artifact.decision.redistribution_class is not RedistributionClass.PUBLIC_OK:
-                raise DriverIntegrationError(
-                    "promotion license transaction refused non-public bytes"
-                )
+            artifact = replace(
+                artifact,
+                artifact_role=artifact_role,
+                source_id=evidence[0].source_id,
+                fetch_recipe=fetch_recipe,
+            )
+            stored.append(artifact)
             row = {
                 "staged_path": relative.as_posix(),
+                "artifact_role": artifact_role,
+                "source_id": evidence[0].source_id,
+                "fetch_recipe": fetch_recipe,
                 "manifest": artifact.manifest.to_dict(),
                 "decision": artifact.decision.to_dict(),
             }
-            previous = rows_by_path.get(relative.as_posix())
+            manifest_class = artifact.manifest.mirror_class.value
+            previous_value = rows_by_path.get(relative.as_posix())
+            previous = previous_value[1] if previous_value is not None else None
             if previous is not None:
+                if previous_value is None or previous_value[0] != manifest_class:
+                    raise DriverIntegrationError(
+                        "licensed path changed its immutable public/private boundary"
+                    )
                 previous_manifest = previous.get("manifest")
                 if isinstance(previous_manifest, Mapping):
                     row["manifest"]["verified_at"] = previous_manifest.get("verified_at")
@@ -6335,21 +6654,71 @@ def _publish_licensed_paths(
                         "licensed path conflicts with its immutable canonical row"
                     )
                 continue
-            rows_by_path[relative.as_posix()] = row
-            additions.append(row)
-        arrival_rows = [*existing_rows, *additions]
-        inventory = tuple(_licensed_artifact_from_row(row) for row in arrival_rows)
-        report = pre_public_merge_sweep(inventory, mirrors)
-        if additions:
-            public_path.parent.mkdir(parents=True, exist_ok=True)
-            with public_path.open("ab") as handle:
-                for row in additions:
+            rows_by_path[relative.as_posix()] = (manifest_class, row)
+            additions[manifest_class].append(row)
+        public_inventory = tuple(
+            _licensed_artifact_from_row(row) for row in (*existing_public, *additions["public"])
+        )
+        report = pre_public_merge_sweep(public_inventory, mirrors)
+        for manifest_class, manifest_path in (
+            ("public", public_path),
+            ("private", private_path),
+        ):
+            if not additions[manifest_class] and manifest_path.is_file():
+                continue
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            with manifest_path.open("ab") as handle:
+                for row in additions[manifest_class]:
                     handle.write(canonical_json_bytes(row) + b"\n")
                 handle.flush()
                 os.fsync(handle.fileno())
-        if not private_path.is_file():
-            _write_jsonl_atomic(private_path, [])
         _write_jsonl_atomic(canonical_root / "license_reports" / "current.json", [report.to_dict()])
+    return tuple(stored)
+
+
+def _license_artifact_role(staged_path: Path) -> str:
+    """Return the closed artifact role implied by one canonical path.
+
+    Parameters
+    ----------
+    staged_path:
+        Repository-relative logical artifact path.
+
+    Returns
+    -------
+    str
+        ``source``, ``code``, or ``patch``.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If the path is outside the closed promoted-artifact roots.
+    """
+
+    parts = staged_path.parts
+    if (
+        parts[:3] != ("menagerie", "crawler", "source_cas")
+        and parts[:3]
+        != (
+            "menagerie",
+            "crawler",
+            "adapters",
+        )
+        and parts[:3] != ("menagerie", "crawler", "ports")
+        and parts[:3]
+        != (
+            "menagerie",
+            "crawler",
+            "patches",
+        )
+    ):
+        raise DriverIntegrationError("licensed path is outside the closed artifact-role roots")
+    return {
+        "source_cas": "source",
+        "adapters": "code",
+        "ports": "code",
+        "patches": "patch",
+    }[parts[2]]
 
 
 def _licensed_artifact_from_row(row: Mapping[str, Any]) -> LicensedArtifact:
@@ -6376,7 +6745,22 @@ def _licensed_artifact_from_row(row: Mapping[str, Any]) -> LicensedArtifact:
         evidence_ids=tuple(str(value) for value in decision_raw.get("evidence_ids", [])),
         rationale=str(decision_raw["rationale"]),
     )
-    return LicensedArtifact(Path(str(row["staged_path"])), manifest, decision)
+    artifact_role = row.get("artifact_role")
+    source_id = row.get("source_id")
+    fetch_recipe = row.get("fetch_recipe")
+    if any(
+        not isinstance(value, str) or not value
+        for value in (artifact_role, source_id, fetch_recipe)
+    ):
+        raise DriverIntegrationError("canonical license row lacks its artifact authorization")
+    return LicensedArtifact(
+        Path(str(row["staged_path"])),
+        manifest,
+        decision,
+        str(artifact_role),
+        str(source_id),
+        str(fetch_recipe),
+    )
 
 
 def _promote_accepted_code(artifact: AuthorArtifact, paths: DriverPaths) -> AuthorArtifact:
