@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+import menagerie.crawler.reducer as reducer_module
 from menagerie.crawler.constants import MODEL_SCHEMA_VERSION, OPERATIONAL_EVENT_SCHEMA_VERSION
 from menagerie.crawler.family_templates import (
     instantiate_size_variant,
@@ -17,7 +18,12 @@ from menagerie.crawler.identity import canonical_json_bytes, stable_hash
 from menagerie.crawler.metadata import recompute_accepted_identities
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.recordio import JsonlLedger, SingleWriterError
-from menagerie.crawler.reducer import CanonicalReducer, ReductionError, materialize_current
+from menagerie.crawler.reducer import (
+    CanonicalReducer,
+    ReductionError,
+    materialize_current,
+    project_dependency_current,
+)
 from menagerie.crawler.status import (
     PartitionError,
     assert_partition,
@@ -25,9 +31,12 @@ from menagerie.crawler.status import (
     record_is_release_eligible,
 )
 from menagerie.crawler.tests.conftest import (
+    HASH,
     _bind_model_identities,
     _model_facts,
+    bind_terminal_attempts,
     make_attempt,
+    make_failed_attempt,
     make_gate,
     make_model,
 )
@@ -169,6 +178,53 @@ def _attempt_for_model(model: dict[str, Any], attempt_id: str) -> dict[str, Any]
     return attempt
 
 
+def _terminal_case(
+    status_code: str,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
+    """Build one failed, deferred, or skipped terminal with exact attempt evidence.
+
+    Parameters
+    ----------
+    status_code:
+        Closed terminal code.
+
+    Returns
+    -------
+    tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]
+        Model, referenced attempt, and optional metadata gate.
+    """
+
+    if status_code == "failed:forward":
+        attempt = make_failed_attempt(stage="forward", reason_code="exception")
+        model = make_model(status_code=status_code)
+        model["status"]["reason_code"] = "exception"
+        return bind_terminal_attempts(model, [attempt]), attempt, None
+    if status_code == "deferred:needs-cuda":
+        attempt = make_failed_attempt(stage="environment", reason_code="probe-failed")
+        attempt["result"] = "observed"
+        attempt["error"] = None
+        attempt["defer_evidence"] = {
+            "target_status": status_code,
+            "source_ids": ["source-1"],
+            "probe_attempt_ids": [],
+            "explanation": "source requires CUDA",
+        }
+        model = make_model(status_code=status_code)
+        return bind_terminal_attempts(model, [attempt]), attempt, None
+    if status_code == "skipped:no-description":
+        attempt = make_failed_attempt()
+        model = make_model(accepted=True, status_code=status_code)
+        model["source_resolution"]["rung"] = "R5_SKIP"
+        model["source_resolution"]["attempted_rungs"][0]["rung"] = "R5_SKIP"
+        bind_terminal_attempts(model, [attempt])
+        _bind_model_identities(model)
+        gate = make_gate(["m_example"])
+        gate["items"][0]["vet_identity"] = model["accuracy_gate"]["vet_identity"]
+        gate["items"][0]["rung_check"]["selected_rung"] = "R5_SKIP"
+        return model, attempt, gate
+    raise AssertionError(f"unsupported terminal fixture: {status_code}")
+
+
 def test_reducer_is_the_single_writer(tmp_path: Path) -> None:
     """A second reducer cannot acquire canonical writer authority.
 
@@ -217,6 +273,61 @@ def test_reducer_rejects_observed_facts_not_earned_by_receipts(
             reducer.append_model(model)
 
 
+def test_reducer_rejects_evidence_free_terminal(tmp_path: Path) -> None:
+    """A shaped failure cannot close the partition without canonical evidence."""
+
+    model = bind_terminal_attempts(make_model(status_code="failed:source"), [])
+    with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
+        with pytest.raises(ReductionError, match="lacks exact attempt or closed gate evidence"):
+            reducer.append_model(model)
+
+
+@pytest.mark.parametrize(
+    "status_code",
+    ("failed:forward", "deferred:needs-cuda", "skipped:no-description"),
+)
+def test_terminal_projection_readmits_every_referenced_attempt(
+    tmp_path: Path, status_code: str
+) -> None:
+    """Every terminal lane becomes stale when its attempt fails live admission."""
+
+    paths = _paths(tmp_path / status_code.replace(":", "-"))
+    model, attempt, gate = _terminal_case(status_code)
+    attempt["identities"]["environment"] = HASH
+    with JsonlLedger(paths.attempts, "menagerie.crawler.attempt.v2") as ledger:
+        ledger.append(attempt)
+    if gate is not None:
+        with JsonlLedger(paths.gates, "menagerie.crawler.gate.v2") as ledger:
+            ledger.append(gate)
+    with JsonlLedger(paths.models, MODEL_SCHEMA_VERSION) as ledger:
+        ledger.append(model)
+    projection = project_dependency_current(paths, intake_ids=["m_example"])
+    assert projection.current_records == {}
+    assert "environment/execution identities" in projection.stale_reasons["m_example"]
+
+
+@pytest.mark.parametrize(
+    "status_code",
+    ("failed:forward", "deferred:needs-cuda", "skipped:no-description"),
+)
+def test_terminal_projection_rederives_observed_facts(tmp_path: Path, status_code: str) -> None:
+    """Persisted observed facts never override a terminal attempt receipt."""
+
+    paths = _paths(tmp_path / status_code.replace(":", "-"))
+    model, attempt, gate = _terminal_case(status_code)
+    model["observed"]["peak_rss_bytes"] = 999
+    with JsonlLedger(paths.attempts, "menagerie.crawler.attempt.v2") as ledger:
+        ledger.append(attempt)
+    if gate is not None:
+        with JsonlLedger(paths.gates, "menagerie.crawler.gate.v2") as ledger:
+            ledger.append(gate)
+    with JsonlLedger(paths.models, MODEL_SCHEMA_VERSION) as ledger:
+        ledger.append(model)
+    projection = project_dependency_current(paths, intake_ids=["m_example"])
+    assert projection.current_records == {}
+    assert "terminal observed facts contradict" in projection.stale_reasons["m_example"]
+
+
 def test_bad_parentage_is_rejected(tmp_path: Path) -> None:
     """A superseding revision must point to the current exact parent.
 
@@ -227,8 +338,10 @@ def test_bad_parentage_is_rejected(tmp_path: Path) -> None:
     """
 
     paths = _paths(tmp_path)
-    first = make_model(status_code="failed:source")
+    failed_attempt = make_failed_attempt()
+    first = bind_terminal_attempts(make_model(status_code="failed:source"), [failed_attempt])
     with CanonicalReducer(paths, ["m_example"]) as reducer:
+        reducer.append_attempt(failed_attempt)
         reducer.append_model(first)
         second = make_model(status_code="failed:source")
         second["record_seq"] = 2
@@ -301,8 +414,10 @@ def test_later_revision_binds_public_supersession_to_parent(tmp_path: Path) -> N
     """The public supersession field must equal the reducer-authorized parent."""
 
     paths = _paths(tmp_path)
-    first = make_model(status_code="failed:source")
+    failed_attempt = make_failed_attempt()
+    first = bind_terminal_attempts(make_model(status_code="failed:source"), [failed_attempt])
     with CanonicalReducer(paths, ["m_example"]) as reducer:
+        reducer.append_attempt(failed_attempt)
         persisted = reducer.append_model(first).record
         second = make_model(status_code="failed:source")
         second["record_seq"] = 2
@@ -316,7 +431,8 @@ def test_reducer_rebuild_rejects_persisted_false_supersession(tmp_path: Path) ->
     """Reducer startup detects false public lineage already persisted in canonical bytes."""
 
     paths = _paths(tmp_path)
-    first = make_model(status_code="failed:source")
+    failed_attempt = make_failed_attempt()
+    first = bind_terminal_attempts(make_model(status_code="failed:source"), [failed_attempt])
     with JsonlLedger(paths.models, MODEL_SCHEMA_VERSION) as ledger:
         persisted = ledger.append(first).record
         second = make_model(status_code="failed:source")
@@ -332,7 +448,8 @@ def test_requeue_grant_rejects_wrong_exact_parent_binding(tmp_path: Path) -> Non
     """A durable grant cannot authorize a supersession of a different parent revision."""
 
     paths = _paths(tmp_path)
-    first = make_model(status_code="failed:source")
+    failed_attempt = make_failed_attempt()
+    first = bind_terminal_attempts(make_model(status_code="failed:source"), [failed_attempt])
     first["status"]["human_review"] = {
         "required": True,
         # The test exercises requeue lineage; raw review diagnostics are rejected separately.
@@ -341,6 +458,7 @@ def test_requeue_grant_rejects_wrong_exact_parent_binding(tmp_path: Path) -> Non
         "requested_at": first["created_at"],
     }
     with CanonicalReducer(paths, ["m_example"]) as reducer:
+        reducer.append_attempt(failed_attempt)
         parent = reducer.append_model(first).record["record_revision"]
         reason = "reviewed corrected source"
         grant_id = stable_hash(
@@ -398,6 +516,8 @@ def test_requeue_grant_rejects_wrong_exact_parent_binding(tmp_path: Path) -> Non
         with JsonlLedger(operational / "events.jsonl", OPERATIONAL_EVENT_SCHEMA_VERSION) as ledger:
             ledger.append(event)
         attempt = make_attempt(attempt_id="attempt-requeue")
+        attempt.pop("ledger_seq")
+        attempt.pop("payload_sha256")
         attempt["work_id"] = work_id
         reducer.append_attempt(attempt)
         second = make_model(
@@ -566,9 +686,13 @@ def test_family_variant_recipe_must_be_mechanical_specialization(tmp_path: Path)
 def test_reducer_derives_release_and_rejects_pending_true_claim(tmp_path: Path) -> None:
     """A candidate cannot publish pending metadata by flipping release true."""
 
-    model = make_model(accepted=False, status_code="failed:source")
+    failed_attempt = make_failed_attempt()
+    model = bind_terminal_attempts(
+        make_model(accepted=False, status_code="failed:source"), [failed_attempt]
+    )
     model["completeness"]["release_eligible"] = True
     with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
+        reducer.append_attempt(failed_attempt)
         with pytest.raises(ReductionError, match="completeness.release_eligible"):
             reducer.append_model(model)
 
@@ -627,6 +751,57 @@ def test_representative_supersession_stales_current_variant(tmp_path: Path) -> N
     materialized = materialize_current(paths)
     assert "m_rep" in materialized
     assert "m_variant" not in materialized
+
+
+def test_dependency_stale_representative_cascades_to_current_variant(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A replay-stale representative cannot survive through raw-current authority."""
+
+    paths = _paths(tmp_path)
+    gate_ids = ["m_rep", *(f"m_{index}" for index in range(9))]
+    stable_ids = [*gate_ids, "m_variant"]
+    bindings = {"m_variant": ("m_rep", "Large")}
+    representative = make_model("m_rep", accepted=True, attempt_id="attempt-rep")
+    with CanonicalReducer(
+        paths,
+        stable_ids,
+        intake_variant_bindings=bindings,
+    ) as reducer:
+        reducer.append_gate(make_gate(gate_ids))
+        reducer.append_attempt(make_attempt("m_rep", attempt_id="attempt-rep"))
+        persisted_representative = reducer.append_model(representative).record
+        variant = _variant_from_representative(persisted_representative)
+        variant_attempt = _attempt_for_model(variant, "attempt-variant")
+        variant_attempt.pop("ledger_seq")
+        variant_attempt.pop("payload_sha256")
+        reducer.append_attempt(variant_attempt)
+        reducer.append_model(variant)
+
+    original = reducer_module._referenced_evidence_repasses
+
+    def stale_representative(
+        replay: CanonicalReducer,
+        record: dict[str, Any],
+        attempts: tuple[dict[str, Any], ...],
+        gates: tuple[dict[str, Any], ...],
+    ) -> None:
+        """Simulate a representative-only live dependency failure."""
+
+        if record.get("stable_id") == "m_rep":
+            raise ReductionError("representative dependency changed")
+        original(replay, record, attempts, gates)
+
+    monkeypatch.setattr(reducer_module, "_referenced_evidence_repasses", stale_representative)
+    projection = project_dependency_current(
+        paths,
+        intake_ids=stable_ids,
+        intake_variant_bindings=bindings,
+    )
+    assert "m_rep" not in projection.current_records
+    assert "m_variant" not in projection.current_records
+    assert "representative dependency changed" in projection.stale_reasons["m_rep"]
+    assert "representative" in projection.stale_reasons["m_variant"]
 
 
 @pytest.mark.parametrize(

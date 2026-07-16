@@ -65,7 +65,15 @@ from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import CanonicalReducer, default_ledger_paths
 from menagerie.crawler.routing import ModelRequirements, route_model
-from menagerie.crawler.tests.conftest import make_attempt, make_author_proposal, make_model
+from menagerie.crawler.tests.conftest import (
+    _bind_model_identities,
+    bind_terminal_attempts,
+    make_attempt,
+    make_author_proposal,
+    make_failed_attempt,
+    make_gate,
+    make_model,
+)
 from menagerie.crawler.tests.test_slice_f_driver import (
     FakeChecker,
     FakeEnvironments,
@@ -702,7 +710,10 @@ def _clean_state(
     snapshot = _snapshot(root, intake_count)
     crawler = root / "menagerie" / "crawler"
     records = crawler / "records"
-    model = make_model(snapshot.items[0].stable_id, accepted=False, status_code=status_code)
+    stable_id = snapshot.items[0].stable_id
+    model = make_model(stable_id, accepted=False, status_code=status_code)
+    terminal_attempts: list[dict[str, Any]] = []
+    gate: dict[str, Any] | None = None
     if status_code != "runs":
         model["execution"]["current"] = False
         model["completeness"]["execution_current"] = False
@@ -713,14 +724,39 @@ def _clean_state(
         # A bare digest is not a retrievable diagnostic reference. Public failure
         # details are empty unless they carry the explicit local-sidecar shape.
         model["status"]["detail"] = None
+        terminal_attempts = [
+            make_failed_attempt(stable_id, stage="forward", reason_code="exception")
+        ]
+        bind_terminal_attempts(model, terminal_attempts)
+    elif status_code.startswith("failed:"):
+        stage = status_code.split(":", 1)[1]
+        terminal_attempts = [
+            make_failed_attempt(
+                stable_id,
+                stage=stage,
+                reason_code=str(model["status"]["reason_code"]),
+            )
+        ]
+        bind_terminal_attempts(model, terminal_attempts)
+    elif status_code.startswith("skipped:"):
+        model = make_model(stable_id, accepted=True, status_code=status_code)
+        model["source_resolution"]["rung"] = "R5_SKIP"
+        model["source_resolution"]["attempted_rungs"][0]["rung"] = "R5_SKIP"
+        model["execution"]["accepted_attempt_ids"] = []
+        bind_terminal_attempts(model, [])
+        _bind_model_identities(model)
+        gate = make_gate([stable_id])
+        gate["items"][0]["vet_identity"] = model["accuracy_gate"]["vet_identity"]
+        gate["items"][0]["rung_check"]["selected_rung"] = "R5_SKIP"
     ledgers = default_ledger_paths(records)
     with CanonicalReducer(ledgers, (item.stable_id for item in snapshot.items)) as reducer:
         if status_code.startswith("deferred:"):
-            attempt = make_attempt(snapshot.items[0].stable_id)
+            attempt = make_attempt(stable_id)
             attempt["environment"] = None
             attempt["identities"]["environment"] = None
             attempt["identities"]["execution"] = None
             attempt["worker_receipt"]["present"] = False
+            attempt["result"] = "observed"
             attempt["supervisor_observation"]["stdout_sha256"] = None
             attempt["supervisor_observation"]["stderr_sha256"] = None
             attempt["defer_evidence"] = {
@@ -729,6 +765,11 @@ def _clean_state(
                 "probe_attempt_ids": [],
                 "explanation": "source requires the deferred platform",
             }
+            terminal_attempts = [attempt]
+            bind_terminal_attempts(model, terminal_attempts)
+        if gate is not None:
+            reducer.append_gate(gate)
+        for attempt in terminal_attempts:
             reducer.append_attempt(attempt)
         reducer.append_model(model)
     rebuild_views(

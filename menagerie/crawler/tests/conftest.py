@@ -306,6 +306,134 @@ def make_attempt(
     return model
 
 
+def make_failed_attempt(
+    stable_id: str = "m_example",
+    *,
+    attempt_id: str = "attempt-1",
+    stage: str = "source",
+    reason_code: str = "identity-unresolved",
+) -> dict[str, Any]:
+    """Build one reducer-valid failed attempt for terminal-evidence tests.
+
+    Parameters
+    ----------
+    stable_id, attempt_id:
+        Exact model and immutable attempt identities.
+    stage, reason_code:
+        Closed failure stage and reason.
+
+    Returns
+    -------
+    dict[str, Any]
+        Complete failed attempt payload with redacted diagnostics.
+    """
+
+    attempt = make_attempt(stable_id, attempt_id=attempt_id)
+    diagnostic = {
+        "redaction": "externally-controlled-text-v1",
+        "content_sha256": HASH,
+        "local_path": f".crawl-local/diagnostics/{attempt_id}.json",
+        "diagnostic_key": "$.error.message",
+    }
+    mode = "eval" if stage == "forward" else None
+    attempt.update(
+        {
+            "actor": "driver",
+            "stage": stage,
+            "mode": mode,
+            "result": "failed",
+            "environment": None,
+            "error": {
+                "stage": stage,
+                "reason_code": reason_code,
+                "exception_type": "builtins.RuntimeError",
+                "message": diagnostic,
+                "traceback": None,
+                "no_traceback_reason": "synthetic failure has no traceback",
+                "native_crash": False,
+                "root_cause_fingerprint": HASH,
+                "details": {},
+            },
+        }
+    )
+    attempt["identities"]["environment"] = None
+    attempt["identities"]["execution"] = None
+    attempt["invocation"].update({"mode": mode, "network_policy": "not-invoked"})
+    attempt["worker_receipt"].update(
+        {
+            "present": False,
+            "receipt_sha256": None,
+            "observed_recipe_revision": None,
+            "observed_adapter_sha256": None,
+            "observed_code_manifest_sha256": None,
+            "observed_input_asset_sha256": None,
+            "constructor_started": False,
+            "constructor_completed": False,
+            "input_completed": False,
+            "forward_started": False,
+            "forward_completed": False,
+            "mode": mode,
+            "input_signature": None,
+            "output_signature": None,
+            "input_kind": None,
+            "input_asset": None,
+            "input_note": "worker was not invoked for this synthetic failure",
+            "parameter_count_total": None,
+            "parameter_count_trainable": None,
+            "native_framework": None,
+            "delegated_method": None,
+        }
+    )
+    attempt["supervisor_observation"].update(
+        {
+            "exit_code": None,
+            "wall_seconds": 0.0,
+            "cpu_seconds": 0.0,
+            "peak_rss_bytes": 0,
+            "stdout_sha256": None,
+            "stdout_bytes": 0,
+            "stdout_completion_line": None,
+            "stderr_sha256": None,
+            "stderr_bytes": 0,
+            "full_log_local_path": "driver-observed",
+        }
+    )
+    return attempt
+
+
+def bind_terminal_attempts(model: dict[str, Any], attempts: list[dict[str, Any]]) -> dict[str, Any]:
+    """Bind a terminal model fixture to exact canonical attempt observations.
+
+    Parameters
+    ----------
+    model:
+        Non-run model fixture to update in place.
+    attempts:
+        Ordered canonical attempts supporting its terminal status.
+
+    Returns
+    -------
+    dict[str, Any]
+        The updated model fixture.
+    """
+
+    from menagerie.crawler.reducer import _terminal_observation_from_attempts
+
+    attempt_ids = [str(attempt["attempt_id"]) for attempt in attempts]
+    model["status"]["attempt_ids"] = attempt_ids
+    model["execution"]["accepted_attempt_ids"] = []
+    model["observed"] = _terminal_observation_from_attempts(attempts)
+    model["modes"]["per_mode_run"] = {
+        str(attempt["mode"]): {
+            "attempt_id": attempt["attempt_id"],
+            "status": attempt["result"],
+        }
+        for attempt in attempts
+        if attempt.get("mode") in model["modes"]["meaningful_modes"]
+    }
+    return model
+
+
 def make_gate(
     stable_ids: Optional[list[str]] = None,
     *,
@@ -651,7 +779,7 @@ def make_model(
                     "source_id": "source-1",
                     "locator": "README:1",
                     "text": "ExampleNet is a small convolutional network.",
-                    "text_sha256": HASH,
+                    "text_sha256": hash_bytes(b"ExampleNet is a small convolutional network."),
                     "supports": ["identity.canonical_name"],
                     "family_level": True,
                     "disposition": "supporting",

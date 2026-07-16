@@ -7,7 +7,11 @@ from pathlib import Path
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.reducer import CanonicalReducer
 from menagerie.crawler.state import load_current_records, rebuild_state
-from menagerie.crawler.tests.conftest import make_model
+from menagerie.crawler.tests.conftest import (
+    bind_terminal_attempts,
+    make_failed_attempt,
+    make_model,
+)
 
 
 def test_sqlite_rebuild_materializes_current_revision(tmp_path: Path) -> None:
@@ -24,10 +28,12 @@ def test_sqlite_rebuild_materializes_current_revision(tmp_path: Path) -> None:
         attempts=tmp_path / "attempts.jsonl",
         gates=tmp_path / "gates.jsonl",
     )
-    first = make_model(status_code="failed:source")
+    failed_attempt = make_failed_attempt()
+    first = bind_terminal_attempts(make_model(status_code="failed:source"), [failed_attempt])
     with CanonicalReducer(paths, ["m_example"]) as reducer:
+        reducer.append_attempt(failed_attempt)
         persisted = reducer.append_model(first).record
-        second = make_model(status_code="failed:source")
+        second = bind_terminal_attempts(make_model(status_code="failed:source"), [failed_attempt])
         second["record_seq"] = 2
         second["parent_revision"] = persisted["record_revision"]
         second["status"]["supersedes_revision"] = persisted["record_revision"]

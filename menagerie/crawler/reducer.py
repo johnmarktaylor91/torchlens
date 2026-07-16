@@ -74,13 +74,33 @@ class _ReplayLedger:
     """Minimal in-memory ledger used to replay reducer admission without writes."""
 
     def __init__(self, records: Iterable[Mapping[str, Any]]) -> None:
-        """Copy pre-existing records into an append-compatible replay ledger."""
+        """Retain immutable records in an append-compatible replay ledger.
 
-        self.records = [deepcopy(dict(record)) for record in records]
+        Replay never mutates canonical input rows, so sharing their mappings
+        avoids a full-ledger deepcopy for every projected model.
+        """
+
+        self.records: list[Mapping[str, Any]] = list(records)
 
     def append(self, record: Mapping[str, Any]) -> AppendResult:
         """Record one already hash-validated replay candidate in memory."""
 
+        identity = next(
+            (
+                (field, record.get(field))
+                for field in ("attempt_id", "gate_id", "record_revision")
+                if record.get(field) is not None
+            ),
+            None,
+        )
+        if identity is not None:
+            field, value = identity
+            existing = next(
+                (candidate for candidate in self.records if candidate.get(field) == value),
+                None,
+            )
+            if existing is not None:
+                return AppendResult(deepcopy(dict(existing)), appended=False)
         copied = deepcopy(dict(record))
         self.records.append(copied)
         return AppendResult(copied, appended=True)
@@ -600,6 +620,81 @@ def _checker_prompt_hash() -> str:
         raise ReductionError(f"checker prompt bytes are unavailable: {exc}") from exc
 
 
+def _gate_item_fingerprint(item: Mapping[str, Any]) -> str:
+    """Return the canonical checker root-cause fingerprint for one item."""
+
+    return stable_hash(
+        {
+            "verdict": item.get("verdict"),
+            "integrity": item.get("integrity"),
+            "field_checks": item.get("field_checks"),
+            "rung_check": item.get("rung_check"),
+            "fidelity": item.get("fidelity"),
+            "unsupported_claims": item.get("unsupported_claims"),
+            "required_repairs": item.get("required_repairs"),
+        }
+    )
+
+
+def _record_attempt_ids(record: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return every attempt reference carried by a terminal or run record."""
+
+    referenced: list[str] = []
+    blocks = (
+        record.get("status", {}).get("attempt_ids", []),
+        record.get("execution", {}).get("accepted_attempt_ids", []),
+        record.get("observed", {}).get("measurement_attempt_ids", []),
+        [
+            value.get("attempt_id")
+            for value in record.get("modes", {}).get("per_mode_run", {}).values()
+            if isinstance(value, Mapping)
+        ],
+    )
+    for values in blocks:
+        if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+            continue
+        for value in values:
+            if value is not None and str(value) not in referenced:
+                referenced.append(str(value))
+    return tuple(referenced)
+
+
+def _terminal_observation_from_attempts(
+    attempts: Sequence[Mapping[str, Any]],
+) -> JsonObject:
+    """Derive the canonical best-effort terminal observation from exact attempts."""
+
+    receipt: Mapping[str, Any] = {}
+    supervisor: Mapping[str, Any] = {}
+    for attempt in reversed(attempts):
+        candidate = attempt.get("worker_receipt", {})
+        if isinstance(candidate, Mapping) and candidate.get("present"):
+            receipt = candidate
+            observed_supervisor = attempt.get("supervisor_observation", {})
+            supervisor = observed_supervisor if isinstance(observed_supervisor, Mapping) else {}
+            break
+    output = receipt.get("output_signature")
+    if not isinstance(output, Mapping) or not {"tree", "leaves"}.issubset(output):
+        output = {"tree": None, "leaves": []}
+    snippet = "driver-owned terminal disposition; no run awarded"
+    return {
+        "parameter_count_total": int(receipt.get("parameter_count_total") or 0),
+        "parameter_count_trainable": int(receipt.get("parameter_count_trainable") or 0),
+        "native_framework": receipt.get("native_framework"),
+        "delegated_method": receipt.get("delegated_method"),
+        "output_signature": dict(output),
+        "input_kind": str(receipt.get("input_kind") or "random-fallback"),
+        "input_asset": receipt.get("input_asset"),
+        "input_note": str(receipt.get("input_note") or "No complete worker input receipt."),
+        "constructor_seconds": float(receipt.get("constructor_seconds") or 0.0),
+        "forward_seconds": float(receipt.get("forward_seconds") or 0.0),
+        "peak_rss_bytes": int(supervisor.get("peak_rss_bytes") or 0),
+        "measurement_attempt_ids": [str(attempt["attempt_id"]) for attempt in attempts],
+        "snippet": snippet,
+        "snippet_sha256": stable_hash(snippet),
+    }
+
+
 class CanonicalReducer:
     """Exclusive canonical writer enforcing parentage, gates, runs, and statuses.
 
@@ -661,6 +756,8 @@ class CanonicalReducer:
             raise
         self._current = _select_current(self._models.records)
         self._projection_cache: Optional[tuple[str, DependencyCurrencyProjection]] = None
+        self._attempt_index_cache: Optional[Mapping[str, Mapping[str, Any]]] = None
+        self._gate_index_cache: Optional[Mapping[str, Mapping[str, Any]]] = None
         _validate_persisted_requeue_lineage(
             self._models.records,
             self.ledger_paths,
@@ -728,6 +825,32 @@ class CanonicalReducer:
             projection = cached[1]
         return deepcopy(projection.current_records)
 
+    def _attempt_index(self) -> Mapping[str, Mapping[str, Any]]:
+        """Return the shared immutable attempt-ID index for reducer validation."""
+
+        cached = getattr(self, "_attempt_index_cache", None)
+        if cached is None:
+            cached = {str(record.get("attempt_id")): record for record in self._attempts.records}
+            self._attempt_index_cache = cached
+        return cached
+
+    def _gate_index(self) -> Mapping[str, Mapping[str, Any]]:
+        """Return the shared immutable gate-ID index for reducer validation."""
+
+        cached = getattr(self, "_gate_index_cache", None)
+        if cached is None:
+            cached = {str(record.get("gate_id")): record for record in self._gates.records}
+            self._gate_index_cache = cached
+        return cached
+
+    def _validation_current_records(self) -> Mapping[str, Mapping[str, Any]]:
+        """Return the dependency-current map selected for this admission pass."""
+
+        projected = getattr(self, "_validation_current", None)
+        if isinstance(projected, Mapping):
+            return projected
+        return self._current
+
     def append_attempt(self, attempt: Mapping[str, Any]) -> AppendResult:
         """Append one immutable attempt after parent/work validation.
 
@@ -747,7 +870,7 @@ class CanonicalReducer:
         if stable_id is not None and stable_id not in self.intake_ids:
             raise ReductionError(f"attempt stable_id is outside intake: {stable_id}")
         parent_id = attempt.get("parent_attempt_id")
-        by_id = {record["attempt_id"]: record for record in self._attempts.records}
+        by_id = self._attempt_index()
         if parent_id is not None:
             parent = by_id.get(parent_id)
             if parent is None:
@@ -801,7 +924,10 @@ class CanonicalReducer:
             or "observed_adapter_sha256" not in receipt
         ):
             raise ReductionError("successful worker receipt lacks current observed recipe bindings")
-        return self._attempts.append(attempt)
+        result = self._attempts.append(attempt)
+        if result.appended:
+            self._attempt_index_cache = None
+        return result
 
     def _validate_environment_generation(self, attempt: Mapping[str, Any]) -> None:
         """Recompute production environment identity from committed exact artifacts.
@@ -919,7 +1045,10 @@ class CanonicalReducer:
                 raise ReductionError(
                     "an accurate gate item requires accurate integrity/field checks"
                 )
-        return self._gates.append(gate)
+        result = self._gates.append(gate)
+        if result.appended:
+            self._gate_index_cache = None
+        return result
 
     def append_model(self, model: Mapping[str, Any]) -> AppendResult:
         """Validate and append a full canonical model revision.
@@ -945,6 +1074,11 @@ class CanonicalReducer:
         stable_id = candidate.get("stable_id")
         if stable_id not in self.intake_ids:
             raise ReductionError(f"model stable_id is outside intake: {stable_id}")
+        semantic_replay = bool(getattr(self, "_semantic_replay", False))
+        projection_before: Optional[tuple[str, DependencyCurrencyProjection]] = None
+        if not semantic_replay:
+            self._validation_current = self.current_records
+            projection_before = self._projection_cache
         for existing in self._models.records:
             if existing["stable_id"] != stable_id:
                 continue
@@ -965,7 +1099,7 @@ class CanonicalReducer:
         if (
             previous is not None
             and candidate.get("parent_revision") is None
-            and not getattr(self, "_semantic_replay", False)
+            and not semantic_replay
             and str(stable_id) not in self.current_records
         ):
             candidate["parent_revision"] = expected_parent
@@ -996,7 +1130,7 @@ class CanonicalReducer:
                 raise ReductionError(
                     "human-review terminal supersession requires a new explicit grant"
                 )
-        if not getattr(self, "_semantic_replay", False):
+        if not semantic_replay:
             _validate_persisted_requeue_lineage(
                 (*self._models.records, candidate),
                 self.ledger_paths,
@@ -1008,14 +1142,48 @@ class CanonicalReducer:
         self._validate_family_template(candidate)
         self._validate_gates(candidate)
         self._validate_deferral(candidate)
+        self._validate_terminal_evidence(candidate)
         self._validate_execution(candidate)
         self._validate_completeness(candidate)
+        if not semantic_replay:
+            _validate_projection_artifacts(
+                self.ledger_paths,
+                candidate,
+                self._attempts.records,
+                self._gates.records,
+                self._validation_current_records(),
+            )
         try:
             result = self._models.append(candidate)
         except LedgerConflictError as exc:
             raise ReductionError(str(exc)) from exc
         self._current[str(stable_id)] = deepcopy(result.record)
-        self._projection_cache = None
+        if not semantic_replay:
+            if projection_before is None:
+                self._projection_cache = None
+            else:
+                token, prior_projection = projection_before
+                projected = dict(prior_projection.current_records)
+                stale = dict(prior_projection.stale_reasons)
+                projected[str(stable_id)] = deepcopy(result.record)
+                stale.pop(str(stable_id), None)
+                for variant_id, (
+                    representative_id,
+                    _variant_token,
+                ) in self.intake_variant_bindings.items():
+                    if representative_id != stable_id or variant_id == stable_id:
+                        continue
+                    projected.pop(variant_id, None)
+                    stale[variant_id] = (
+                        "family variant representative changed dependency-current revision"
+                    )
+                self._projection_cache = (
+                    token,
+                    DependencyCurrencyProjection(projected, stale),
+                )
+            del self._validation_current
+        else:
+            self._projection_cache = None
         return result
 
     def _validate_status(self, model: Mapping[str, Any]) -> None:
@@ -1103,14 +1271,13 @@ class CanonicalReducer:
 
         if gate_id is None:
             return None
-        for gate in self._gates.records:
-            if gate["gate_id"] != gate_id:
-                continue
-            matches = [item for item in gate["items"] if item["stable_id"] == stable_id]
-            if len(matches) != 1:
-                return None
-            return gate, matches[0]
-        return None
+        gate = self._gate_index().get(str(gate_id))
+        if gate is None:
+            return None
+        matches = [item for item in gate["items"] if item["stable_id"] == stable_id]
+        if len(matches) != 1:
+            return None
+        return gate, matches[0]
 
     def _validate_gates(self, model: Mapping[str, Any]) -> None:
         """Enforce block-at-write metadata and required fidelity gates.
@@ -1131,7 +1298,9 @@ class CanonicalReducer:
             isinstance(website, Mapping) and website.get("kind") == "size-variant-template"
         )
         representative_id = str(model.get("identity", {}).get("family_representative_id", ""))
-        representative = self._current.get(representative_id) if family_variant else None
+        representative = (
+            self._validation_current_records().get(representative_id) if family_variant else None
+        )
         identities = None
         rung_gate_current = False
         gate_stable_id = representative_id if family_variant else stable_id
@@ -1411,7 +1580,10 @@ class CanonicalReducer:
         stable_id = str(model.get("stable_id"))
         prefix = stable_id.removeprefix("m_")[:2] or "__"
         reconstruction = canonical_root / "reconstruction" / prefix / f"{stable_id}.json"
-        candidate_current = {**self._current, stable_id: dict(model)}
+        candidate_current = {
+            **self._validation_current_records(),
+            stable_id: dict(model),
+        }
         try:
             validated = validate_canonical_reconstruction(
                 reconstruction,
@@ -1453,7 +1625,7 @@ class CanonicalReducer:
             "cannot-verify",
         }:
             return False
-        attempts_by_id = {record["attempt_id"]: record for record in self._attempts.records}
+        attempts_by_id = self._attempt_index()
         return any(
             (attempt := attempts_by_id.get(str(attempt_id))) is not None
             and attempt.get("actor") == "driver"
@@ -1502,7 +1674,7 @@ class CanonicalReducer:
             or execution.get("accepted_attempt_ids")
         ):
             return False
-        attempts_by_id = {record["attempt_id"]: record for record in self._attempts.records}
+        attempts_by_id = self._attempt_index()
         for attempt_id in status.get("attempt_ids", []):
             attempt = attempts_by_id.get(attempt_id)
             if attempt is None:
@@ -1536,7 +1708,7 @@ class CanonicalReducer:
             or website.get("template_source_model_id") != trusted_representative_id
         ):
             raise ReductionError("family variant contradicts its trusted intake family binding")
-        representative = self._current.get(str(representative_id))
+        representative = self._validation_current_records().get(str(representative_id))
         if not isinstance(representative, Mapping) or not family_representative_is_usable(
             representative, str(representative_id)
         ):
@@ -1654,6 +1826,175 @@ class CanonicalReducer:
                     f"completeness.{field} contradicts reducer-derived value {expected_value!r}"
                 )
 
+    def _terminal_gate_evidence_valid(self, model: Mapping[str, Any], gate_kind: str) -> bool:
+        """Return whether a rejected checker history proves one gate terminal.
+
+        Parameters
+        ----------
+        model:
+            Candidate failed terminal.
+        gate_kind:
+            ``metadata_batch`` or ``fidelity``.
+
+        Returns
+        -------
+        bool
+            True only for the exact rejected item after bounded cap exhaustion
+            or a repeated root cause.
+        """
+
+        stable_id = str(model.get("stable_id"))
+        block_name = "accuracy_gate" if gate_kind == "metadata_batch" else "fidelity"
+        gate_id = model.get(block_name, {}).get("gate_id")
+        found = self._gate_item(gate_id, stable_id)
+        if found is None:
+            return False
+        gate, item = found
+        if gate.get("gate_kind") != gate_kind:
+            return False
+        if gate_kind == "metadata_batch":
+            rejected = not (
+                item.get("verdict") == "accurate"
+                and item.get("integrity", {}).get("verdict") == "accurate"
+                and item.get("rung_check", {}).get("verdict") == "accurate"
+            )
+        else:
+            rejected = not (
+                item.get("fidelity", {}).get("verdict") in {"match", "minor-drift"}
+                and item.get("rung_check", {}).get("verdict") == "accurate"
+            )
+        status = model.get("status", {})
+        if not rejected or status.get("root_cause_fingerprint") != _gate_item_fingerprint(item):
+            return False
+        lineage = item.get("campaign_root_work_id")
+        rejected_fingerprints: list[str] = []
+        for candidate_gate in self._gates.records:
+            if candidate_gate.get("gate_kind") != gate_kind:
+                continue
+            matching = [
+                candidate
+                for candidate in candidate_gate.get("items", [])
+                if candidate.get("stable_id") == stable_id
+                and candidate.get("campaign_root_work_id") == lineage
+            ]
+            if len(matching) != 1:
+                continue
+            candidate = matching[0]
+            if gate_kind == "metadata_batch":
+                accepted = bool(
+                    candidate.get("verdict") == "accurate"
+                    and candidate.get("integrity", {}).get("verdict") == "accurate"
+                    and candidate.get("rung_check", {}).get("verdict") == "accurate"
+                )
+            else:
+                accepted = bool(
+                    candidate.get("fidelity", {}).get("verdict") in {"match", "minor-drift"}
+                    and candidate.get("rung_check", {}).get("verdict") == "accurate"
+                )
+            if not accepted:
+                rejected_fingerprints.append(_gate_item_fingerprint(candidate))
+            if candidate_gate.get("gate_id") == gate_id:
+                break
+        if not rejected_fingerprints:
+            return False
+        latest = rejected_fingerprints[-1]
+        return len(rejected_fingerprints) > 2 or latest in rejected_fingerprints[:-1]
+
+    def _validate_terminal_evidence(self, model: Mapping[str, Any]) -> None:
+        """Require canonical, status-bound evidence for every non-run terminal.
+
+        Parameters
+        ----------
+        model:
+            Candidate model revision.
+
+        Raises
+        ------
+        ReductionError
+            If attempts, observations, gates, or status facts do not form a
+            closed reducer-derived terminal proof.
+        """
+
+        status = model.get("status", {})
+        kind = status.get("kind")
+        if kind == "runs":
+            return
+        status_ids = status.get("attempt_ids", [])
+        measurement_ids = model.get("observed", {}).get("measurement_attempt_ids", [])
+        if (
+            not isinstance(status_ids, list)
+            or len(status_ids) != len(set(status_ids))
+            or measurement_ids != status_ids
+        ):
+            raise ReductionError(
+                "terminal attempts and observed measurement references must match exactly"
+            )
+        attempts_by_id = self._attempt_index()
+        attempts: list[Mapping[str, Any]] = []
+        for attempt_id in status_ids:
+            attempt = attempts_by_id.get(str(attempt_id))
+            if attempt is None:
+                raise ReductionError(f"terminal evidence attempt is missing: {attempt_id}")
+            if attempt.get("stable_id") != model.get("stable_id"):
+                raise ReductionError("terminal evidence attempt belongs to another model")
+            attempts.append(attempt)
+        expected_observed = _terminal_observation_from_attempts(attempts)
+        if model.get("observed") != expected_observed:
+            raise ReductionError("terminal observed facts contradict referenced attempt receipts")
+        mode_attempt_ids = {
+            str(value.get("attempt_id"))
+            for value in model.get("modes", {}).get("per_mode_run", {}).values()
+            if isinstance(value, Mapping) and value.get("attempt_id") is not None
+        }
+        if not mode_attempt_ids.issubset({str(value) for value in status_ids}):
+            raise ReductionError("terminal mode outcome references unbound attempt evidence")
+        code = str(status.get("code"))
+        if kind == "failed":
+            matching_failures = []
+            for attempt in attempts:
+                error = attempt.get("error")
+                if (
+                    attempt.get("result") == "failed"
+                    and attempt.get("stage") == status.get("stage")
+                    and isinstance(error, Mapping)
+                    and error.get("stage") == status.get("stage")
+                    and error.get("reason_code") == status.get("reason_code")
+                    and error.get("root_cause_fingerprint") == status.get("root_cause_fingerprint")
+                ):
+                    matching_failures.append(attempt)
+            gate_valid = bool(
+                code == "failed:accuracy-gate"
+                and self._terminal_gate_evidence_valid(model, "metadata_batch")
+            ) or bool(
+                code == "failed:fidelity" and self._terminal_gate_evidence_valid(model, "fidelity")
+            )
+            missing_source_conversion = bool(
+                code == "failed:source"
+                and status.get("reason_code") == "missing-mandatory-link"
+                and model.get("source_resolution", {}).get("mandatory_link_status") == "failed"
+                and any(attempt.get("result") == "failed" for attempt in attempts)
+            )
+            if not matching_failures and not gate_valid and not missing_source_conversion:
+                raise ReductionError("failed terminal lacks exact attempt or closed gate evidence")
+        elif kind == "deferred":
+            if not attempts:
+                raise ReductionError("deferred terminal lacks its canonical attempt evidence")
+        elif kind == "skipped":
+            accuracy = model.get("accuracy_gate", {})
+            found = self._gate_item(accuracy.get("gate_id"), str(model.get("stable_id")))
+            resolution = model.get("source_resolution", {})
+            if (
+                found is None
+                or found[0].get("gate_kind") != "metadata_batch"
+                or found[1].get("verdict") != "accurate"
+                or found[1].get("integrity", {}).get("verdict") != "accurate"
+                or found[1].get("rung_check", {}).get("verdict") != "accurate"
+                or resolution.get("rung") != "R5_SKIP"
+            ):
+                raise ReductionError("skipped terminal lacks an accurate R5 checker decision")
+        else:
+            raise ReductionError("terminal status kind has no canonical evidence rule")
+
     def _validate_execution(self, model: Mapping[str, Any]) -> None:
         """Enforce attempt/receipt and meaningful-mode rules for run awards.
 
@@ -1675,7 +2016,7 @@ class CanonicalReducer:
         per_mode = modes.get("per_mode_run", {})
         if meaningful != set(per_mode):
             raise ReductionError("per_mode_run must cover exactly every meaningful mode")
-        attempts_by_id = {record["attempt_id"]: record for record in self._attempts.records}
+        attempts_by_id = self._attempt_index()
         accepted = set(execution.get("accepted_attempt_ids", []))
         stable_id = model["stable_id"]
         signatures: dict[str, list[Any]] = {mode: [] for mode in meaningful}
@@ -1800,7 +2141,7 @@ class CanonicalReducer:
                 representative_id = str(
                     model.get("identity", {}).get("family_representative_id", "")
                 )
-                representative = self._current.get(representative_id)
+                representative = self._validation_current_records().get(representative_id)
                 if not isinstance(representative, Mapping) or (
                     model.get("accuracy_gate") != representative.get("accuracy_gate")
                 ):
@@ -1914,7 +2255,7 @@ class CanonicalReducer:
         status_code = model.get("status", {}).get("code")
         if status_code not in {"deferred:needs-cuda", "deferred:needs-x86"}:
             return
-        attempts_by_id = {record["attempt_id"]: record for record in self._attempts.records}
+        attempts_by_id = self._attempt_index()
         for attempt_id in model.get("status", {}).get("attempt_ids", []):
             attempt = attempts_by_id.get(attempt_id)
             evidence = attempt.get("defer_evidence") if attempt is not None else None
@@ -1953,7 +2294,7 @@ def _production_canonical_root(ledgers: LedgerPaths) -> Optional[Path]:
 
 
 def _dependency_bytes_token(ledgers: LedgerPaths) -> str:
-    """Return a cheap invalidation token for every live projection dependency.
+    """Return a cheap live-cache token for shared projection authorities.
 
     Parameters
     ----------
@@ -1963,57 +2304,32 @@ def _dependency_bytes_token(ledgers: LedgerPaths) -> str:
     Returns
     -------
     str
-        Stable token over prompts, authority code, schemas, and canonical artifacts.
+        Stable token over prompts, authority code, schemas, and environment manifests.
+
+        Per-model reconstruction/source bytes are validated while projecting that
+        model and by every one-shot checkpoint/rebuild projection. They are not
+        rescanned globally on each driver hot-path lookup.
     """
 
     package_root = Path(__file__).parent
-    paths = [
+    authority_paths = [
         *package_root.glob("*.py"),
         *(package_root / "schemas").glob("*.json"),
         *(package_root / "prompts").glob("*.txt"),
     ]
     canonical_root = _production_canonical_root(ledgers)
     if canonical_root is not None:
-        for name in (
-            "envs",
-            "reconstruction",
-            "source_manifests",
-            "source_cas",
-            "adapters",
-            "ports",
-            "patches",
-        ):
-            root = canonical_root / name
-            if root.exists():
-                paths.extend(path for path in root.rglob("*") if path.is_file())
-    facts: list[tuple[str, int, int]] = []
-    for path in sorted(set(paths)):
+        envs_root = canonical_root / "envs"
+        if envs_root.exists():
+            authority_paths.extend(path for path in envs_root.rglob("*") if path.is_file())
+    facts: list[tuple[str, str]] = []
+    for path in sorted(set(authority_paths)):
         try:
-            stat = path.stat()
+            digest = hash_bytes(path.read_bytes())
         except OSError:
             continue
-        facts.append((str(path), stat.st_mtime_ns, stat.st_size))
-    prompt_hashes = (
-        _checker_prompt_hash(),
-        hash_bytes((package_root / "prompts" / "claude_crawler_author_v2.txt").read_bytes()),
-    )
-    live_functions: tuple[int, ...]
-    try:
-        from menagerie.crawler.driver import (  # noqa: PLC0415
-            _award_closure_identity,
-            _execution_identity,
-        )
-
-        live_functions = (id(_award_closure_identity), id(_execution_identity))
-    except ImportError:
-        live_functions = ()
-    return stable_hash(
-        {
-            "files": facts,
-            "prompts": prompt_hashes,
-            "live_functions": live_functions,
-        }
-    )
+        facts.append((str(path), digest))
+    return stable_hash(facts)
 
 
 def intake_variant_bindings_from_rows(
@@ -2090,11 +2406,13 @@ def _replay_reducer(
     *,
     intake_ids: Iterable[str],
     intake_variant_bindings: Mapping[str, tuple[str, str]],
-    model_records: Sequence[Mapping[str, Any]],
+    prior_model_records: Sequence[Mapping[str, Any]],
     attempt_records: Sequence[Mapping[str, Any]],
     gate_records: Sequence[Mapping[str, Any]],
-    candidate_index: int,
-    prior_current: Mapping[str, Mapping[str, Any]],
+    raw_prior_current: Mapping[str, Mapping[str, Any]],
+    dependency_current: Mapping[str, Mapping[str, Any]],
+    attempt_index: Mapping[str, Mapping[str, Any]],
+    gate_index: Mapping[str, Mapping[str, Any]],
 ) -> CanonicalReducer:
     """Build a write-free reducer positioned immediately before one candidate.
 
@@ -2102,10 +2420,12 @@ def _replay_reducer(
     ----------
     ledgers, intake_ids, intake_variant_bindings:
         Canonical authority inputs used by ordinary reducer admission.
-    model_records, attempt_records, gate_records:
+    prior_model_records, attempt_records, gate_records:
         Hash-validated append-only history.
-    candidate_index, prior_current:
-        Position of the current candidate in model-ledger order.
+    raw_prior_current, dependency_current:
+        Raw parent-lineage state and already dependency-current representatives.
+    attempt_index, gate_index:
+        Projection-wide immutable evidence indexes shared across every replay.
 
     Returns
     -------
@@ -2118,17 +2438,14 @@ def _replay_reducer(
     replay._semantic_replay = True
     replay.intake_ids = frozenset(intake_ids)
     replay.intake_variant_bindings = dict(intake_variant_bindings)
-    candidate_stable_id = model_records[candidate_index].get("stable_id")
-    replay._models = _ReplayLedger(
-        record
-        for record in model_records[:candidate_index]
-        if record.get("stable_id") == candidate_stable_id
-    )
+    replay._models = _ReplayLedger(prior_model_records)
     replay._attempts = _ReplayLedger(attempt_records)
     replay._gates = _ReplayLedger(gate_records)
-    replay._current = {
-        stable_id: deepcopy(dict(record)) for stable_id, record in prior_current.items()
-    }
+    replay._current = {stable_id: record for stable_id, record in raw_prior_current.items()}
+    replay._validation_current = dependency_current
+    replay._attempt_index_cache = attempt_index
+    replay._gate_index_cache = gate_index
+    replay._projection_cache = None
     return replay
 
 
@@ -2155,25 +2472,30 @@ def _referenced_evidence_repasses(
         If referenced evidence no longer passes its original admission predicate.
     """
 
-    attempt_ids = (
-        set(record.get("execution", {}).get("accepted_attempt_ids", []))
-        if record.get("status", {}).get("kind") == "runs"
-        else set()
-    )
+    attempt_ids = set(_record_attempt_ids(record))
     attempts_by_id = {str(value.get("attempt_id")): value for value in attempts}
+    pending = list(attempt_ids)
+    while pending:
+        referenced_id = pending.pop()
+        referenced = attempts_by_id.get(str(referenced_id))
+        if referenced is None:
+            continue
+        defer_evidence = referenced.get("defer_evidence")
+        probe_ids = (
+            defer_evidence.get("probe_attempt_ids", [])
+            if isinstance(defer_evidence, Mapping)
+            else []
+        )
+        for probe_id in probe_ids:
+            normalized = str(probe_id)
+            if normalized not in attempt_ids:
+                attempt_ids.add(normalized)
+                pending.append(normalized)
     for attempt_id in sorted(str(value) for value in attempt_ids):
         attempt = attempts_by_id.get(attempt_id)
         if attempt is None:
             raise ReductionError(f"referenced attempt is missing: {attempt_id}")
-        replay_any: Any = replay
-        original = replay_any._attempts
-        replay_any._attempts = _ReplayLedger(
-            value for value in attempts if value.get("attempt_id") != attempt_id
-        )
-        try:
-            replay.append_attempt(attempt)
-        finally:
-            replay_any._attempts = original
+        replay.append_attempt(attempt)
 
     gate_ids = {
         record.get("accuracy_gate", {}).get("gate_id"),
@@ -2291,6 +2613,29 @@ def _recompute_live_execution_identity(
     identities = first.get("identities")
     if not isinstance(environment, Mapping) or not isinstance(identities, Mapping):
         raise ReductionError("current run lacks environment facts for execution replay")
+    host = first.get("host")
+    if not isinstance(host, Mapping):
+        raise ReductionError("current run lacks execution-host facts for identity replay")
+    host_os = host.get("os")
+    architecture = host.get("architecture")
+    target = environment.get("target")
+    if not all(isinstance(value, str) and value for value in (host_os, architecture, target)):
+        raise ReductionError("current run has incomplete execution-host identity facts")
+    for value in accepted[1:]:
+        assert value is not None
+        candidate_environment = value.get("environment")
+        candidate_host = value.get("host")
+        candidate_identities = value.get("identities")
+        if (
+            not isinstance(candidate_environment, Mapping)
+            or not isinstance(candidate_host, Mapping)
+            or not isinstance(candidate_identities, Mapping)
+            or candidate_environment.get("target") != target
+            or candidate_host.get("os") != host_os
+            or candidate_host.get("architecture") != architecture
+            or candidate_identities.get("environment") != identities.get("environment")
+        ):
+            raise ReductionError("accepted attempts disagree on historical host/environment facts")
     binding = EnvironmentBinding(
         prefix=Path("."),
         python_executable=Path("python"),
@@ -2305,7 +2650,12 @@ def _recompute_live_execution_identity(
         sdk_identity=str(environment.get("sdk_identity")),
     )
     try:
-        expected = _execution_identity(proposal, binding)
+        expected = _execution_identity(
+            proposal,
+            binding,
+            host_os=str(host_os),
+            machine_class=str(architecture),
+        )
     except (KeyError, OSError, TypeError, ValueError) as exc:
         raise ReductionError("current execution dependencies cannot be recomputed") from exc
     execution = record.get("execution", {})
@@ -2314,6 +2664,62 @@ def _recompute_live_execution_identity(
         for value in accepted
     ):
         raise ReductionError("runner/award closure or execution identity is stale")
+
+
+def _validate_projection_artifacts(
+    ledgers: LedgerPaths,
+    record: Mapping[str, Any],
+    attempts: Sequence[Mapping[str, Any]],
+    gates: Sequence[Mapping[str, Any]],
+    dependency_current: Mapping[str, Mapping[str, Any]],
+) -> None:
+    """Validate canonical reconstruction, proposal, and live execution authority.
+
+    Parameters
+    ----------
+    ledgers, record, attempts, gates:
+        Exact canonical records and evidence histories.
+    dependency_current:
+        Already projected representative authority for this record.
+
+    Raises
+    ------
+    ReductionError
+        If any production reconstruction/proposal/execution dependency is stale.
+    """
+
+    canonical_root = _production_canonical_root(ledgers)
+    if canonical_root is None:
+        return
+    from menagerie.crawler.checkpoint import (  # noqa: PLC0415
+        ReconstructionValidationError,
+        validate_canonical_reconstruction,
+    )
+
+    stable_id = str(record.get("stable_id"))
+    prefix = stable_id.removeprefix("m_")[:2] or "__"
+    reconstruction = canonical_root / "reconstruction" / prefix / f"{stable_id}.json"
+    reconstruction_required = record.get("status", {}).get("kind") == "runs"
+    if not reconstruction_required and not reconstruction.is_file():
+        return
+    try:
+        validated = validate_canonical_reconstruction(
+            reconstruction,
+            canonical_root,
+            expected_stable_id=stable_id,
+            canonical_gates=gates,
+            current_models={**dependency_current, stable_id: record},
+        )
+    except (OSError, ReconstructionValidationError) as exc:
+        raise ReductionError(
+            "current record lacks valid proposal/reconstruction authority"
+        ) from exc
+    retained = record.get("untrusted_attempt")
+    retained_proposal = retained.get("proposal") if isinstance(retained, Mapping) else None
+    if retained_proposal is not None and retained_proposal != validated.proposal:
+        raise ReductionError("current record proposal differs from canonical reconstruction")
+    if reconstruction_required:
+        _recompute_live_execution_identity(record, validated.proposal, attempts)
 
 
 def project_dependency_current(
@@ -2372,13 +2778,15 @@ def project_dependency_current(
         else intake_variant_bindings_from_rows(canonical_intake.values())
     )
     by_revision = {str(record.get("record_revision")): index for index, record in enumerate(models)}
+    attempts_by_id = {str(record.get("attempt_id")): record for record in attempts}
+    gates_by_id = {str(record.get("gate_id")): record for record in gates}
     current: dict[str, JsonObject] = {}
     stale: dict[str, str] = {}
-    canonical_root = _production_canonical_root(ledgers)
     ordered_current = sorted(
         raw_current.items(), key=lambda value: by_revision[str(value[1].get("record_revision"))]
     )
     prior_current: dict[str, JsonObject] = {}
+    prior_models_by_stable_id: dict[str, list[Mapping[str, Any]]] = {}
     cursor = 0
     for stable_id, record in ordered_current:
         try:
@@ -2386,16 +2794,19 @@ def project_dependency_current(
             while cursor < index:
                 prior = models[cursor]
                 prior_current[str(prior.get("stable_id"))] = deepcopy(dict(prior))
+                prior_models_by_stable_id.setdefault(str(prior.get("stable_id")), []).append(prior)
                 cursor += 1
             replay = _replay_reducer(
                 ledgers,
                 intake_ids=trusted_ids,
                 intake_variant_bindings=bindings,
-                model_records=models,
+                prior_model_records=prior_models_by_stable_id.get(stable_id, ()),
                 attempt_records=attempts,
                 gate_records=gates,
-                candidate_index=index,
-                prior_current=prior_current,
+                raw_prior_current=prior_current,
+                dependency_current=current,
+                attempt_index=attempts_by_id,
+                gate_index=gates_by_id,
             )
             _referenced_evidence_repasses(replay, record, attempts, gates)
             replay_candidate = {
@@ -2404,28 +2815,10 @@ def project_dependency_current(
                 if key not in {"record_seq", "record_revision"}
             }
             replay.append_model(replay_candidate)
-            family_error = family_variant_currency_error(record, raw_current)
+            family_error = family_variant_currency_error(record, current)
             if family_error is not None:
                 raise ReductionError(family_error)
-            if canonical_root is not None and record.get("status", {}).get("kind") == "runs":
-                from menagerie.crawler.checkpoint import (  # noqa: PLC0415
-                    ReconstructionValidationError,
-                    validate_canonical_reconstruction,
-                )
-
-                prefix = stable_id.removeprefix("m_")[:2] or "__"
-                reconstruction = canonical_root / "reconstruction" / prefix / f"{stable_id}.json"
-                try:
-                    validated = validate_canonical_reconstruction(
-                        reconstruction,
-                        canonical_root,
-                        expected_stable_id=stable_id,
-                        canonical_gates=gates,
-                        current_models=raw_current,
-                    )
-                except (OSError, ReconstructionValidationError) as exc:
-                    raise ReductionError("current run lacks a valid reconstruction") from exc
-                _recompute_live_execution_identity(record, validated.proposal, attempts)
+            _validate_projection_artifacts(ledgers, record, attempts, gates, current)
             current[stable_id] = deepcopy(dict(record))
         except (KeyError, ReductionError, TypeError, ValueError) as exc:
             stale[stable_id] = str(exc)

@@ -234,6 +234,11 @@ _AWARD_CLOSURE_SYMBOLS = {
         "_validate_variant_line",
         "_validate_representative",
     ),
+    "proposal.py": ("validate_author_proposal",),
+    "checkpoint.py": (
+        "validate_canonical_reconstruction",
+        "_reconstruction_has_canonical_anchor",
+    ),
     "gates.py": (
         "MetadataRouteDecision",
         "FidelityRouteDecision",
@@ -290,6 +295,9 @@ _AWARD_CLOSURE_SYMBOLS = {
         "CanonicalReducer._validate_family_template",
         "CanonicalReducer._validate_deferral",
         "CanonicalReducer._validate_execution",
+        "CanonicalReducer._validate_terminal_evidence",
+        "project_dependency_current",
+        "validate_reconstruction_source_binding",
     ),
     "recordio.py": (
         "_fsync_directory",
@@ -4884,7 +4892,7 @@ def _award_closure_identity() -> str:
     return _award_closure_from_bytes(source_items, schema_items)
 
 
-def _runner_identity(modality: object = None) -> str:
+def _runner_identity(modality: object = None, *, platform_name: Optional[str] = None) -> str:
     """Hash transitive runtime behavior plus the exact selected input asset.
 
     Parameters
@@ -4892,6 +4900,9 @@ def _runner_identity(modality: object = None) -> str:
     modality:
         Accepted modality string or sequence used to select the only bundled
         asset that can participate in this execution.
+    platform_name:
+        Execution-host platform. Historical replay passes the recorded host OS;
+        live execution defaults to the reviewing process platform.
 
     Returns
     -------
@@ -4899,6 +4910,7 @@ def _runner_identity(modality: object = None) -> str:
         Compositional execution-closure identity.
     """
 
+    selected_platform = platform_name or sys.platform
     root = Path(__file__).parent
     source_texts = {
         path.name: path.read_text(encoding="utf-8") for path in sorted(root.glob("*.py"))
@@ -4906,7 +4918,7 @@ def _runner_identity(modality: object = None) -> str:
     selected_asset = expected_standard_asset(modality)
     cache_key = stable_hash(
         {
-            "platform": sys.platform,
+            "platform": selected_platform,
             "sources": {
                 relative: hash_bytes(source.encode("utf-8"))
                 for relative, source in source_texts.items()
@@ -5002,11 +5014,11 @@ def _runner_identity(modality: object = None) -> str:
                 continue
             imported_relative, imported_symbol = resolved_import
             lowered = imported_symbol.lower()
-            if sys.platform.startswith("linux") and (
+            if selected_platform.startswith("linux") and (
                 "macos" in lowered or "sandbox_exec" in lowered
             ):
                 continue
-            if sys.platform == "darwin" and ("linux" in lowered or "bubblewrap" in lowered):
+            if selected_platform == "darwin" and ("linux" in lowered or "bubblewrap" in lowered):
                 continue
             pending.append((imported_relative, imported_symbol))
     if selected_asset is not None:
@@ -5345,8 +5357,28 @@ def _bind_model_code_manifest(proposal: JsonObject, model_dir: Path) -> bool:
     return changed
 
 
-def _execution_identity(proposal: Mapping[str, Any], environment: EnvironmentBinding) -> str:
-    """Compute the current execution identity from every runtime dependency."""
+def _execution_identity(
+    proposal: Mapping[str, Any],
+    environment: EnvironmentBinding,
+    *,
+    host_os: Optional[str] = None,
+    machine_class: Optional[str] = None,
+) -> str:
+    """Compute execution identity from runtime dependencies and execution-host facts.
+
+    Parameters
+    ----------
+    proposal, environment:
+        Exact proposal and committed environment generation.
+    host_os, machine_class:
+        OS and architecture of the host that executed the attempt. Live calls
+        default to the current host; historical replay supplies recorded facts.
+
+    Returns
+    -------
+    str
+        Exact execution identity.
+    """
 
     facts = proposal["proposed_facts"]
     implementation = facts["implementation"]
@@ -5361,9 +5393,9 @@ def _execution_identity(proposal: Mapping[str, Any], environment: EnvironmentBin
         stable_id=str(proposal["stable_id"]),
         recipe_revision=str(proposal["recipe_revision"]),
         env_generation=environment.env_generation,
-        runner_version=_runner_identity(modality),
+        runner_version=_runner_identity(modality, platform_name=host_os),
         target=environment.target,
-        machine_class=platform.machine(),
+        machine_class=machine_class or platform.machine(),
         seed_policy={
             "input_seed": facts.get("input_contract", {}).get("seed", 0),
             "cold_seed_reuse": "single-accepted-input-manifest",

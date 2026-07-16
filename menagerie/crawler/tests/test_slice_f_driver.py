@@ -73,7 +73,11 @@ from menagerie.crawler.metadata import authored_fact_leaves, recompute_accepted_
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.policy import SandboxUnavailableError
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
-from menagerie.crawler.reducer import CanonicalReducer
+from menagerie.crawler.reducer import (
+    CanonicalReducer,
+    ReductionError,
+    _recompute_live_execution_identity,
+)
 from menagerie.crawler.status import assert_partition
 from menagerie.crawler.tests.conftest import (
     HASH,
@@ -260,7 +264,6 @@ class TerminalOutcomeAuthor(FakeAuthor):
             artifact.proposal,
             artifact.source_manifest,
             artifact.model_dir,
-            terminal_status="skipped:no-description",
             terminal_detail="bounded search found no architecture description",
         )
 
@@ -1150,6 +1153,21 @@ def test_runner_execution_manifest_is_compositional_by_selected_modality(
             "constants.py",
             b'MODEL_SCHEMA_VERSION = "menagerie.crawler.model.v2"',
             b'MODEL_SCHEMA_VERSION = "menagerie.crawler.model.v3"',
+        ),
+        (
+            "proposal.py",
+            b"    _validate_structural_slop(facts, code_paths)\n",
+            b"    _validate_structural_slop(facts, tuple(code_paths))\n",
+        ),
+        (
+            "checkpoint.py",
+            b"    root = canonical_root.resolve()\n",
+            b"    root = canonical_root.absolute()\n",
+        ),
+        (
+            "reducer.py",
+            b"    raw_current = _select_current(models)\n",
+            b"    raw_current = dict(_select_current(models))\n",
         ),
     ),
 )
@@ -2284,6 +2302,55 @@ def test_award_closure_change_stales_execution_and_current_run(
     assert not driver_module._current_run_is_fresh(
         model, artifact, environment, [gate_outcome.gate]
     )
+
+
+def test_historical_execution_replay_uses_recorded_host_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Mac execution remains current when replay is reviewed on Linux."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    driver = _driver(tmp_path, snapshot)
+    item = driver._ordered_work(snapshot, {})[0]
+    artifact = FakeAuthor().author(item, driver.paths.work_root, driver.config)
+    environment = _test_environment(tmp_path / "env")
+    gate_outcome = FakeChecker().check_metadata([artifact], driver.paths.work_root, driver.config)
+    assert gate_outcome.gate is not None
+    attempts = list(FakeForward().forward(artifact, environment, 1, driver.paths.work_root))
+    mac_identity = _execution_identity(
+        artifact.proposal,
+        environment,
+        host_os="darwin",
+        machine_class="arm64",
+    )
+    for attempt in attempts:
+        attempt["host"] = {
+            **attempt["host"],
+            "os": "darwin",
+            "architecture": "arm64",
+        }
+        attempt["identities"] = {
+            **attempt["identities"],
+            "execution": mac_identity,
+        }
+    model = driver_module._assemble_run_model(
+        item,
+        artifact,
+        attempts,
+        [gate_outcome.gate],
+        driver.config,
+    )
+    monkeypatch.setattr(driver_module.sys, "platform", "linux")
+    monkeypatch.setattr(driver_module.platform, "machine", lambda: "x86_64")
+    _recompute_live_execution_identity(model, artifact.proposal, attempts)
+
+    monkeypatch.setattr(
+        driver_module,
+        "_award_closure_identity",
+        lambda: "sha256:" + "f" * 64,
+    )
+    with pytest.raises(ReductionError, match="execution identity is stale"):
+        _recompute_live_execution_identity(model, artifact.proposal, attempts)
 
 
 def test_checker_prompt_change_invalidates_author_cache_and_reauthors(
