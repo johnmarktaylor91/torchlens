@@ -6,8 +6,11 @@ import torch
 
 from menagerie.crawler.constants import RunMode
 from menagerie.crawler.modes import (
+    classify_observed_mode_receipts,
     classify_train_eval_divergence,
     detect_meaningful_modes,
+    output_signature,
+    output_value_sha256,
 )
 
 
@@ -78,3 +81,41 @@ def test_modes_classify_none_statistical_and_structural() -> None:
     eval_output = structural(value)
     assert classify_train_eval_divergence(train_output, eval_output).classification == "structural"
     assert detect_meaningful_modes(structural) == (RunMode.TRAIN, RunMode.EVAL)
+
+
+def test_independent_mode_receipts_recover_all_divergence_classes() -> None:
+    """Per-process structure and value digests mechanically recover mode divergence."""
+
+    train = torch.tensor([[1.0, 2.0]])
+    equal = train.clone()
+    drifted = torch.tensor([[2.0, 3.0]])
+    reshaped = torch.tensor([[1.0], [2.0]])
+
+    def receipt(value: torch.Tensor) -> dict[str, object]:
+        """Build the observation subset retained by an isolated mode receipt.
+
+        Parameters
+        ----------
+        value:
+            Captured mode output.
+
+        Returns
+        -------
+        dict[str, object]
+            Structure and value-digest observation.
+        """
+
+        return {
+            "output_signature": output_signature(value),
+            "output_value_sha256": output_value_sha256(value),
+        }
+
+    assert classify_observed_mode_receipts(receipt(train), receipt(equal)).classification == "none"
+    assert (
+        classify_observed_mode_receipts(receipt(train), receipt(drifted)).classification
+        == "statistical"
+    )
+    assert (
+        classify_observed_mode_receipts(receipt(train), receipt(reshaped)).classification
+        == "structural"
+    )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 import re
@@ -258,6 +259,8 @@ def _child_limit(rss_limit_bytes: int) -> None:
 
     if rss_limit_bytes > 0:
         resource.setrlimit(resource.RLIMIT_AS, (rss_limit_bytes, rss_limit_bytes))
+        if sys.platform == "darwin" and hasattr(resource, "RLIMIT_DATA"):
+            resource.setrlimit(resource.RLIMIT_DATA, (rss_limit_bytes, rss_limit_bytes))
 
 
 def _linux_rss(pid: int) -> int:
@@ -282,6 +285,86 @@ def _linux_rss(pid: int) -> int:
     except (OSError, ValueError, IndexError):
         return 0
     return 0
+
+
+def _macos_rss(pid: int) -> int:
+    """Read live resident bytes for one macOS child via ``proc_pid_rusage``.
+
+    Parameters
+    ----------
+    pid:
+        Sandboxed worker process ID.
+
+    Returns
+    -------
+    int
+        Resident bytes for the live worker, or zero when unavailable.
+    """
+
+    try:
+        libproc = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
+        proc_pid_rusage = libproc.proc_pid_rusage
+        proc_pid_rusage.argtypes = (ctypes.c_int, ctypes.c_int, ctypes.c_void_p)
+        proc_pid_rusage.restype = ctypes.c_int
+        buffer = (ctypes.c_ubyte * 256)()
+        if proc_pid_rusage(pid, 2, ctypes.byref(buffer)) != 0:
+            return 0
+        # rusage_info_v2: UUID (16 bytes), six uint64 counters, then resident_size.
+        return int(ctypes.c_uint64.from_buffer(buffer, 64).value)
+    except (AttributeError, OSError, ValueError):
+        return 0
+
+
+def _child_rss(pid: int, *, platform_name: Optional[str] = None) -> int:
+    """Read live child RSS using the current host's supported mechanism.
+
+    Parameters
+    ----------
+    pid:
+        Root child process ID.
+    platform_name:
+        Optional platform override used by parser/dispatch tests.
+
+    Returns
+    -------
+    int
+        Live resident bytes, or zero when the platform sampler is unavailable.
+    """
+
+    selected = sys.platform if platform_name is None else platform_name
+    if selected == "darwin":
+        return _macos_rss(pid)
+    if selected.startswith("linux"):
+        return _linux_rss(pid)
+    return 0
+
+
+def _rusage_peak_rss_floor_bytes(
+    usage_before: resource.struct_rusage,
+    usage_after: resource.struct_rusage,
+    *,
+    platform_name: Optional[str] = None,
+) -> int:
+    """Return a correctly scaled rusage floor only for the first reaped child.
+
+    Parameters
+    ----------
+    usage_before, usage_after:
+        Process-lifetime ``RUSAGE_CHILDREN`` snapshots.
+    platform_name:
+        Optional platform override used by unit tests.
+
+    Returns
+    -------
+    int
+        A byte floor for the first child only. Later calls return zero because
+        ``ru_maxrss`` cannot be attributed to an individual reaped child.
+    """
+
+    if int(usage_before.ru_maxrss) != 0:
+        return 0
+    scale = 1 if (sys.platform if platform_name is None else platform_name) == "darwin" else 1024
+    return max(0, int(usage_after.ru_maxrss)) * scale
 
 
 def _kill_process_group(process: subprocess.Popen[Any]) -> None:
@@ -1222,6 +1305,7 @@ def _macos_denial_audit(
     ignored_ids = set(ignored_process_ids)
     process_roots = tuple(path.resolve() for path in expected_process_roots)
     unparseable = False
+    unattributable_denial = False
     for line in records:
         record_ids = _macos_denial_process_ids(line)
         if ignored_ids.intersection(record_ids):
@@ -1232,6 +1316,19 @@ def _macos_denial_audit(
                 process_path == root or root in process_path.parents for root in process_roots
             )
             if not expected_ids.intersection(record_ids) and not scoped_by_path:
+                if process_path is None:
+                    message = _macos_denial_message(line)
+                    if message is None or any(
+                        marker in message.lower()
+                        for marker in (
+                            "network",
+                            "file-write",
+                            "file write",
+                            "file-read-data",
+                            "file read data",
+                        )
+                    ):
+                        unattributable_denial = True
                 continue
             # Records may carry only the denied descendant PID. Runtime-root scoping
             # admits that first record; retaining its IDs grows the ancestry closure.
@@ -1267,6 +1364,8 @@ def _macos_denial_audit(
         failures.append(_telemetry_failure_observation("truncated"))
     if unparseable:
         failures.append(_telemetry_failure_observation("unparsable-record"))
+    if unattributable_denial:
+        failures.append(_telemetry_failure_observation("unattributable-denial"))
     return _merge_denial_observations(observed, *failures)
 
 
@@ -1927,13 +2026,15 @@ def run_isolated_subprocess(
             )
             if macos_audit_channel is not None:
                 macos_audit_channel.worker_pid = process.pid
-            while process.poll() is None:
+            while True:
                 elapsed = time.monotonic() - started
-                current_rss = _linux_rss(process.pid)
+                current_rss = _child_rss(process.pid)
                 peak_rss = max(peak_rss, current_rss)
                 if current_rss and rss_limit_bytes > 0 and current_rss > rss_limit_bytes:
                     rss_exceeded = True
                     _kill_process_group(process)
+                    break
+                if process.poll() is not None:
                     break
                 if elapsed >= timeout_seconds:
                     timed_out = True
@@ -1947,7 +2048,7 @@ def run_isolated_subprocess(
     wall_seconds = time.monotonic() - started
     usage_after = resource.getrusage(resource.RUSAGE_CHILDREN)
     cpu_seconds = max(0.0, _rusage_seconds(usage_after) - _rusage_seconds(usage_before))
-    peak_rss = max(peak_rss, int(usage_after.ru_maxrss) * 1024)
+    peak_rss = max(peak_rss, _rusage_peak_rss_floor_bytes(usage_before, usage_after))
     return_code = process.returncode
     signal_number = -return_code if return_code is not None and return_code < 0 else None
     exit_code = return_code if return_code is not None and return_code >= 0 else None

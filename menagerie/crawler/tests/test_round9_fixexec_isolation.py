@@ -412,6 +412,7 @@ def test_macos_denial_parser_scopes_pid_and_ignores_other_denial_classes() -> No
         json.dumps(
             {
                 "processID": 999,
+                "processImagePath": "/Applications/Other.app/Contents/MacOS/other",
                 "eventMessage": "Sandbox: other(999) deny file-read-data /tmp/other.bin",
             }
         )
@@ -455,6 +456,27 @@ def test_macos_denial_parser_scopes_pid_and_ignores_other_denial_classes() -> No
     )
     assert denied.network_attempted is True
     assert denied.poisoned is True
+
+
+def test_macos_unattributable_policy_denial_fails_closed() -> None:
+    """A policy-class denial without a trustworthy worker/noise scope poisons telemetry."""
+
+    telemetry = (
+        json.dumps(
+            {
+                "processID": 999,
+                "eventMessage": "Sandbox: helper(999) deny file-read-data /tmp/hidden.bin",
+            }
+        )
+        + "\n"
+        + _MACOS_AUDIT_COMPLETION_MARKER
+        + "\n"
+    ).encode("utf-8")
+
+    observed = _macos_denial_audit(telemetry, expected_process_ids=(42,))
+
+    assert observed.poisoned is True
+    assert observed.telemetry_failure == "unattributable-denial"
 
 
 def test_macos_descendant_denial_scopes_by_parent_owned_runtime_root(tmp_path: Path) -> None:
