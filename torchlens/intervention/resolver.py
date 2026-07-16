@@ -31,6 +31,7 @@ from ..ir.container_registry import Role
 from ..utils._callable_safety import (
     _DENIED_MODULES,
     _matches,
+    is_denied_stdlib_or_builtin_module,
     is_inert_first_party_callable,
     is_pure_forward_callable,
     unsafe_callable_reason,
@@ -363,6 +364,21 @@ def resolve_function_registry_key(
                         "even under trust_custom_callables or an explicit module "
                         "allowlist. Trust never authorizes importing these modules."
                     )
+                # STRUCTURAL close of the denylist-completeness class (r31): DENY any
+                # STANDARD-LIBRARY / BUILTIN module (keyed on the resolved real
+                # top-level package), regardless of trust or allowlist. This closes
+                # the whole class the explicit denylist above kept chasing one module
+                # at a time (io / _imp / zipimport / linecache / gc / mmap / ...). The
+                # pure-forward ``operator`` root and non-stdlib torch / torchlens /
+                # user packages are carved out inside the detector.
+                if is_denied_stdlib_or_builtin_module(resolved_module):
+                    raise UntrustedCallableError(
+                        "Refusing to resolve bundle-supplied custom callable from "
+                        f"standard-library / builtin module {resolved_module!r}; stdlib "
+                        "and builtin modules are DENIED even under trust_custom_callables "
+                        "or an explicit module allowlist. Trust authorizes running a "
+                        "user recipe, never importing a stdlib/builtin module."
+                    )
                 if allowed_custom_callable_modules is not None:
                     if resolved_module not in allowed_custom_callable_modules:
                         raise UntrustedCallableError(
@@ -431,6 +447,18 @@ def resolve_function_registry_key(
                         f"module {resolved_owner!r} is a dangerous (process / OS / "
                         "serialization / import) module reached by attribute-walking a "
                         f"dotted qualname off {module_name!r}; denied even under trust."
+                    )
+                # STRUCTURAL stdlib/builtin close (r31): a dotted qualname can walk OFF
+                # a permitted user/torch module and land on a stdlib/builtin callable
+                # (e.g. a trusted ``mymod:io.open`` resolving ``io.open``, real module
+                # ``io``). ``_DENIED_MODULES`` above never enumerates every such owner;
+                # deny the whole stdlib/builtin class on the resolved real module.
+                if is_denied_stdlib_or_builtin_module(resolved_owner):
+                    raise UntrustedCallableError(
+                        "Refusing bundle-supplied custom callable whose RESOLVED real "
+                        f"module {resolved_owner!r} is a standard-library / builtin "
+                        f"module reached by attribute-walking a dotted qualname off "
+                        f"{module_name!r}; denied even under trust."
                     )
                 # A callable that walked BACK into the torch namespace via a dotted
                 # qualname must be a PURE forward op: ``torch`` also hosts

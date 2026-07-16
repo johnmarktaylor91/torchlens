@@ -83,7 +83,9 @@ clear error; we NEVER admit a code-exec gadget to make a load succeed.
 from __future__ import annotations
 
 import io
+import os
 import pickle
+import sys
 from dataclasses import dataclass
 from typing import Any, BinaryIO, Collection, Mapping
 
@@ -171,6 +173,63 @@ def _module_denied(module: str) -> bool:
     return any(
         module == denied or module.startswith(denied + ".") for denied in _DENIED_FOREIGN_MODULES
     )
+
+
+# STRUCTURAL close of the denylist-completeness class (r31). Mirrors
+# ``torchlens.utils._callable_safety`` (``_ALLOWED_STDLIB_ROOTS`` /
+# ``_STDLIB_AND_BUILTIN_TOP_LEVEL`` / ``is_denied_stdlib_or_builtin_module``) and is
+# duplicated here -- rather than imported -- to keep this early-imported security
+# front door free of import-order coupling (exactly as ``_DENIED_FOREIGN_MODULES``
+# mirrors the resolver denylist). The explicit ``_DENIED_FOREIGN_MODULES`` denylist
+# stays as belt-and-suspenders; this positive rule closes the CLASS: any FOREIGN
+# global whose real top-level module is a Python STANDARD-LIBRARY or BUILTIN module
+# is denied EVEN under trust. The pure-forward ``operator`` / ``_operator`` root is
+# carved out for parity with the resolver; non-stdlib torch / torchlens / numpy /
+# user packages are naturally allowed (not in the detector set). NOTE: this is
+# applied ONLY in the FOREIGN tail of ``find_class`` -- the ``torch`` / ``torchlens``
+# / preview / ``_SAFE_EXPLICIT_GLOBALS`` branches (which legitimately resolve
+# ``collections`` / ``builtins`` pure-data globals) return BEFORE the tail.
+_ALLOWED_STDLIB_ROOTS: frozenset[str] = frozenset({"operator", "_operator"})
+
+
+def _stdlib_and_builtin_top_level() -> frozenset[str]:
+    """Return the top-level Python stdlib + builtin module-name detector set."""
+
+    names: set[str] = set(sys.builtin_module_names)
+    stdlib = getattr(sys, "stdlib_module_names", None)
+    if stdlib is not None:
+        names |= set(stdlib)
+        return frozenset(names)
+    # pre-3.10 fallback: enumerate top-level names from the stdlib directory.
+    try:
+        std_dir = os.path.dirname(os.__file__ or "")
+        if std_dir:
+            for entry in os.listdir(std_dir):
+                if entry.endswith(".py"):
+                    names.add(entry[:-3])
+                elif "." not in entry and not entry.startswith("_"):
+                    names.add(entry)
+    except OSError:  # pragma: no cover - defensive; stdlib dir is always readable here.
+        pass
+    return frozenset(names)
+
+
+_STDLIB_AND_BUILTIN_TOP_LEVEL: frozenset[str] = _stdlib_and_builtin_top_level()
+
+
+def _stdlib_or_builtin_denied(module: str) -> bool:
+    """Return whether ``module``'s real top-level package is a denied stdlib/builtin.
+
+    Mirrors ``torchlens.utils._callable_safety.is_denied_stdlib_or_builtin_module``.
+    The ``operator`` / ``_operator`` pure-forward root is carved out.
+    """
+
+    if not module:
+        return False
+    top_level = module.split(".", 1)[0]
+    if top_level in _ALLOWED_STDLIB_ROOTS:
+        return False
+    return top_level in _STDLIB_AND_BUILTIN_TOP_LEVEL
 
 
 def _name_has_dunder_walk(name: str) -> bool:
@@ -1039,6 +1098,20 @@ class SafeBundleUnpickler(pickle.Unpickler):
             raise pickle.UnpicklingError(
                 f"Blocked dangerous global during bundle metadata unpickle: {module}.{name}."
             )
+        # 1b. STRUCTURAL close of the denylist-completeness class (r31): hard-deny any
+        #     FOREIGN global whose pickled module is a Python STANDARD-LIBRARY /
+        #     BUILTIN module (keyed on the top-level package), regardless of trust.
+        #     This closes the whole class the explicit denylist kept chasing (io /
+        #     _imp / zipimport / linecache / gc / mmap / ...). The pure-data stdlib
+        #     globals that legit bundles need (``collections`` / ``builtins``) resolved
+        #     via ``_SAFE_EXPLICIT_GLOBALS`` far above; only genuinely-foreign globals
+        #     reach here, so a stdlib/builtin owner is never legitimate.
+        if _stdlib_or_builtin_denied(module):
+            raise pickle.UnpicklingError(
+                "Blocked standard-library / builtin global during bundle metadata "
+                f"unpickle: {module}.{name}. Stdlib/builtin modules are denied even "
+                "under trust_custom_callables or an explicit module allowlist."
+            )
         # 2. Explicit trust opt-in: import + resolve the real foreign callable,
         #    mirroring ``resolve_function_registry_key`` under trust. Importing the
         #    module executes its top-level code, so this is gated behind the flags.
@@ -1085,6 +1158,16 @@ class SafeBundleUnpickler(pickle.Unpickler):
                     "Blocked dangerous global (resolved real module "
                     f"{resolved_owner!r}) during trusted bundle metadata unpickle: "
                     f"{module}.{name}."
+                )
+            # STRUCTURAL stdlib/builtin close (r31): a dotted ``name`` can walk OFF a
+            # trusted module and land on a stdlib/builtin callable (e.g. a trusted
+            # ``mymod.io.open`` resolving ``io.open``, real module ``io``). Deny the
+            # whole stdlib/builtin class on the resolved real module, even under trust.
+            if _stdlib_or_builtin_denied(resolved_owner):
+                raise pickle.UnpicklingError(
+                    "Blocked standard-library / builtin global (resolved real module "
+                    f"{resolved_owner!r}) reached via a dotted name during trusted "
+                    f"bundle metadata unpickle: {module}.{name}."
                 )
             # A callable that walked back into the torch namespace via a dotted name
             # must be a PURE forward op -- ``torch`` also hosts side-effecting builtins
