@@ -95,7 +95,9 @@ def _variant_from_representative(
     assert isinstance(identity, dict)
     identity.update(
         {
-            "canonical_name": f"ExampleNet {variant_token}",
+            # Canonical name is author-gated and therefore inherited under the
+            # representative-only template lane. The trusted variant token carries
+            # the size identity unless a full independent author/checker path runs.
             "variant": variant_token,
             "family_representative_id": representative_id,
         }
@@ -650,7 +652,7 @@ def test_family_template_is_verified_even_when_candidate_declares_false(tmp_path
         variant_attempt.pop("ledger_seq")
         variant_attempt.pop("payload_sha256")
         reducer.append_attempt(variant_attempt)
-        with pytest.raises(ReductionError, match="inherited metadata field 'taxonomy'"):
+        with pytest.raises(ReductionError, match="inherited author-gated leaves.*taxonomy.family"):
             reducer.append_model(variant)
 
 
@@ -679,7 +681,10 @@ def test_family_variant_recipe_must_be_mechanical_specialization(tmp_path: Path)
         variant_attempt.pop("ledger_seq")
         variant_attempt.pop("payload_sha256")
         reducer.append_attempt(variant_attempt)
-        with pytest.raises(ReductionError, match="not the mechanical representative"):
+        with pytest.raises(
+            ReductionError,
+            match="inherited author-gated leaves.*implementation.library_recipe.module",
+        ):
             reducer.append_model(variant)
 
 

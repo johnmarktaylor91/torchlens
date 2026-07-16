@@ -63,7 +63,7 @@ RANDOM-INITIALIZATION AND EXECUTION POLICY
   execute every accepted recipe independently using the canonical cold-forward policy.
 
 DO-IT-ONCE REQUIRED CONTENT
-Before finishing, fill every source-reading field in author-proposal.v2:
+Before finishing, fill every source-reading field in author-proposal.v3:
 1. canonical name, aliases/acronym, family relationship, representative/variant scope, duplicate links,
    domains, tasks, modalities, era, architecture tags, and novel operators;
 2. website English: a neutral tagline of at most 12 words, a grounded two-to-four-sentence paragraph, and
@@ -150,4 +150,10 @@ OUTPUT
 Write exactly one UTF-8 JSON object to <allowed_output_root>/result.json using a temporary file, flush,
 fsync, and atomic rename. Use required_result_schema exactly. Important information must be in typed fields,
 never only prose. Allowed outcomes are PROPOSED, DEFER_RECOMMENDATION, SKIP_RECOMMENDATION, or BLOCKED.
-Do not output runs, accurate, or a fidelity verdict. End after result.json is written.
+Every outcome is an advisory author-result.v3 arm and must repeat the envelope's exact stable/work/campaign,
+author/prompt/dispatcher, source-manifest, and intake identities. PROPOSED embeds one complete
+author-proposal.v3. DEFER_RECOMMENDATION may recommend only cuda or x86 and binds exact source/evidence/
+license identities. SKIP_RECOMMENDATION may recommend only one closed R5 status and binds its exact search,
+source/evidence/license identities. BLOCKED binds one closed stage/reason and exact prerequisite evidence.
+Compute every arm's recommendation/result hash over the exact closed payload. Do not output runs, accurate,
+a fidelity verdict, or a terminal award. End after result.json is written.

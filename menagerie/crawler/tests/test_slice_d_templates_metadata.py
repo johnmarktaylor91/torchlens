@@ -94,6 +94,31 @@ def test_size_variant_must_measure_a_different_constructed_size() -> None:
         )
 
 
+def test_variant_parity_is_schema_derived_for_authored_mode_leaves() -> None:
+    """Variants inherit authored mode expectations while reducer mode results may differ."""
+
+    representative = make_model(accepted=True)
+    variant = deepcopy(representative)
+    variant["website"] = instantiate_size_variant(
+        representative,
+        representative_model_id="m_example",
+        variant_parameter_input_line="2 parameters; input [1, 3, 8, 8]",
+    )
+    variant["modes"]["train_eval_divergence"] = "structural"
+    variant["modes"]["divergence_evidence"] = "reducer-derived signature difference"
+    validate_size_variant(representative, variant, "m_example")
+
+    changed_expectation = deepcopy(variant)
+    changed_expectation["modes"]["meaningful_modes"] = ["train"]
+    with pytest.raises(FamilyTemplateError, match="modes.meaningful_modes"):
+        validate_size_variant(representative, changed_expectation, "m_example")
+
+    changed_external_claim = deepcopy(variant)
+    changed_external_claim["external_metadata"]["modes"]["train_eval_divergence"] = "structural"
+    with pytest.raises(FamilyTemplateError, match="external_metadata.modes"):
+        validate_size_variant(representative, changed_external_claim, "m_example")
+
+
 def _external_metadata() -> dict[str, Any]:
     """Return complete mandatory external metadata.
 

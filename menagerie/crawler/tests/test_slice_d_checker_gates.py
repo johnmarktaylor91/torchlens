@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from menagerie.crawler.author_dispatch import AuthorResultBinding, DeferRecommendation
 from menagerie.crawler.checker_dispatch import (
     CheckerDispatchError,
     build_metadata_vet_envelope,
@@ -17,15 +18,18 @@ from menagerie.crawler.checker_dispatch import (
     validate_checker_result,
 )
 from menagerie.crawler.constants import (
+    GATE_SCHEMA_VERSION_V3,
     AccuracyVerdict,
     CheckerPauseReason,
     FidelityVerdict,
     GateRoute,
 )
 from menagerie.crawler.gates import (
+    GateRoutingError,
     next_metadata_batch_ids,
     route_fidelity_gate,
     route_metadata_gate,
+    validate_terminal_disposition_gate,
 )
 from menagerie.crawler.identity import stable_hash
 from menagerie.crawler.models import LedgerPaths
@@ -287,7 +291,9 @@ def _rung_checked_fidelity_gate(verdict: AccuracyVerdict) -> dict[str, Any]:
     gate = make_gate(["m_example"], gate_kind="fidelity", fidelity_identity=HASH)
     gate["items"][0]["rung_check"] = {
         "selected_rung": "R4_REIMPLEMENT",
-        "highest_applicable": "R2_VENDOR",
+        "highest_applicable": (
+            "R4_REIMPLEMENT" if verdict is AccuracyVerdict.ACCURATE else "R2_VENDOR"
+        ),
         "verdict": verdict.value,
         "findings": (
             ["usable upstream implementation exists"]
@@ -408,6 +414,92 @@ def test_cannot_verify_rung_check_does_not_silently_accept() -> None:
     assert decision.route is GateRoute.BLOCK_FIDELITY
     assert metadata_decision.canonical_write_allowed is False
     assert metadata_decision.route is GateRoute.REQUEUE_NEXT_BATCH
+
+
+def test_terminal_disposition_gate_resolves_exact_advisory_references() -> None:
+    """A terminal gate checks exact result/source/evidence/license facts but does not award."""
+
+    raw_result = {
+        "result_id": "result-defer",
+        "result_sha256": HASH,
+        "stable_id": "m_example",
+        "work_id": "work-m_example",
+        "campaign_id": "work-m_example",
+        "author_identity": HASH,
+        "prompt_identity": HASH,
+        "dispatcher_identity": HASH,
+        "source_manifest_identity": HASH,
+        "intake_snapshot_id": "intake-1",
+        "intake_snapshot_sha256": HASH,
+        "intake_item_sha256": HASH,
+        "created_at": "2026-07-16T00:00:00Z",
+    }
+    binding = AuthorResultBinding(raw_result=raw_result, **raw_result)
+    result = DeferRecommendation(
+        binding=binding,
+        platform="cuda",
+        source_ids=("source-1",),
+        evidence_ids=("evidence-1",),
+        evidence_identity=HASH,
+        license_identity=HASH,
+        recommendation_sha256=HASH,
+    )
+    gate = make_gate(["m_example"])
+    gate.update(
+        {
+            "schema_version": GATE_SCHEMA_VERSION_V3,
+            "gate_kind": "terminal_disposition",
+            "batch_size": 1,
+            "author_result_schema_identity": HASH,
+            "dispatcher_identity": HASH,
+        }
+    )
+    gate["items"][0]["terminal_disposition"] = {
+        "author_result_id": "result-defer",
+        "author_result_sha256": HASH,
+        "kind": "DEFER_RECOMMENDATION",
+        "predicate": "needs-cuda",
+        "verdict": "accepted",
+        "source_manifest_identity": HASH,
+        "source_ids": ["source-1"],
+        "evidence_identity": HASH,
+        "evidence_ids": ["evidence-1"],
+        "license_identity": HASH,
+        "findings": [],
+    }
+    source_manifest = {
+        "manifest_sha256": HASH,
+        "sources": [{"source_id": "source-1"}],
+    }
+    evidence_pack = {
+        "evidence_identity": HASH,
+        "excerpts": [
+            {
+                "evidence_id": "evidence-1",
+                "source_id": "source-1",
+                "supports": ["needs-cuda"],
+            }
+        ],
+    }
+    decision = validate_terminal_disposition_gate(
+        gate,
+        result,
+        source_manifest=source_manifest,
+        evidence_pack=evidence_pack,
+        license_identity=HASH,
+    )
+    assert decision.accepted is True
+    assert decision.predicate == "needs-cuda"
+
+    gate["items"][0]["terminal_disposition"]["source_ids"] = ["source-fabricated"]
+    with pytest.raises(GateRoutingError, match="source IDs"):
+        validate_terminal_disposition_gate(
+            gate,
+            result,
+            source_manifest=source_manifest,
+            evidence_pack=evidence_pack,
+            license_identity=HASH,
+        )
 
 
 def test_reducer_refuses_run_award_with_inaccurate_rung_check(tmp_path: Path) -> None:

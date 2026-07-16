@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any, Mapping, Optional, Sequence
 
 from menagerie.crawler.constants import (
-    AUTHOR_PROPOSAL_SCHEMA_VERSION,
+    AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
     MODEL_SCHEMA_VERSION,
+    MODEL_SCHEMA_VERSION_V3,
     AccuracyVerdict,
 )
 from menagerie.crawler.identity import (
@@ -18,7 +20,12 @@ from menagerie.crawler.identity import (
     compute_vet_identity,
     stable_hash,
 )
-from menagerie.crawler.schema import load_schema
+from menagerie.crawler.schema import (
+    OwnedSchemaLeaf,
+    author_gated_schema_paths,
+    load_schema,
+    owned_schema_leaves,
+)
 
 
 def _required_external_fields(schema_version: str) -> tuple[str, ...]:
@@ -52,10 +59,10 @@ def _required_external_fields(schema_version: str) -> tuple[str, ...]:
     return tuple(required)
 
 
-_MODEL_EXTERNAL_FIELDS = _required_external_fields(MODEL_SCHEMA_VERSION)
-_AUTHOR_EXTERNAL_FIELDS = _required_external_fields(AUTHOR_PROPOSAL_SCHEMA_VERSION)
+_MODEL_EXTERNAL_FIELDS = _required_external_fields(MODEL_SCHEMA_VERSION_V3)
+_AUTHOR_EXTERNAL_FIELDS = _required_external_fields(AUTHOR_PROPOSAL_SCHEMA_VERSION_V3)
 if _MODEL_EXTERNAL_FIELDS != _AUTHOR_EXTERNAL_FIELDS:
-    raise RuntimeError("model-v2 and author-proposal-v2 external metadata requirements diverge")
+    raise RuntimeError("model-v3 and author-proposal-v3 external metadata requirements diverge")
 
 MANDATORY_EXTERNAL_FIELDS = _MODEL_EXTERNAL_FIELDS
 
@@ -93,6 +100,7 @@ _REQUIRED_NONEMPTY_STRINGS = frozenset(
     {"family", "era", "key_contribution", "description", "original_framework", "run_framework"}
 )
 _CANONICAL_MODE_ORDER = ("train", "eval")
+_INDEX_PATTERN = re.compile(r"\[[0-9]+\]")
 
 
 class MetadataValidationError(ValueError):
@@ -156,17 +164,24 @@ def canonical_meaningful_modes(value: Any, *, field: str) -> list[str]:
     return [mode for mode in _CANONICAL_MODE_ORDER if mode in declared]
 
 
-def authored_fact_leaves(facts: Mapping[str, Any]) -> Mapping[str, Any]:
-    """Return every recursively gated authored leaf in deterministic path order.
+def authored_fact_leaves(
+    facts: Mapping[str, Any], *, schema_version: str = MODEL_SCHEMA_VERSION
+) -> Mapping[str, Any]:
+    """Return canonical model-owned author-gated fact leaves in deterministic order.
 
-    Empty arrays and objects are leaves because their emptiness is itself an authored
-    judgment. Only fields below the mechanical ``observed`` root are excluded; a field
-    named ``dtype`` or another derivable name below an authored root remains gated.
+    The v3 model schema is the canonical write-policy source. This intentionally
+    excludes proposal-time top-level mode observations that the model schema assigns
+    to the reducer, while retaining declared meaningful modes and external mode
+    claims. Collection items use normalized ``[]`` paths and repeated concrete values
+    are collected in traversal order under their single schema leaf.
 
     Parameters
     ----------
     facts:
         Complete ``proposed_facts`` or corresponding canonical fact mapping.
+    schema_version:
+        Ownership policy to apply. V3 uses the frozen generated registry. The v2
+        default exists only until the Phase-2 hubs switch atomically.
 
     Returns
     -------
@@ -174,10 +189,24 @@ def authored_fact_leaves(facts: Mapping[str, Any]) -> Mapping[str, Any]:
         Dotted/indexed paths mapped to their exact JSON-compatible values.
     """
 
+    if schema_version == MODEL_SCHEMA_VERSION:
+        return _legacy_v2_authored_fact_leaves(facts)
+    if schema_version != MODEL_SCHEMA_VERSION_V3:
+        raise MetadataValidationError(f"unsupported authored ownership schema: {schema_version}")
+    return _owned_instance_leaves(facts, schema_version=schema_version, schema_prefix="$")
+
+
+def _legacy_v2_authored_fact_leaves(facts: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Retain the unwired v2 hub's historical authored projection.
+
+    This path is categorically legacy-untrusted and removable once reducer/driver
+    pass ``model.v3`` explicitly. It cannot be selected for v3 facts.
+    """
+
     leaves: dict[str, Any] = {}
 
     def visit(value: Any, path: str) -> None:
-        """Collect one authored value recursively."""
+        """Collect one historical concrete v2 leaf."""
 
         if isinstance(value, Mapping):
             if not value:
@@ -191,15 +220,13 @@ def authored_fact_leaves(facts: Mapping[str, Any]) -> Mapping[str, Any]:
             if not value:
                 leaves[path] = []
                 return
-            for index, child_value in enumerate(value):
-                visit(child_value, f"{path}[{index}]")
+            for index, child in enumerate(value):
+                visit(child, f"{path}[{index}]")
             return
         leaves[path] = value
 
     for root in sorted(facts):
-        if root == "observed":
-            continue
-        if root == "fidelity":
+        if root in {"observed", "fidelity"}:
             continue
         if root == "modes":
             modes = facts[root]
@@ -208,6 +235,143 @@ def authored_fact_leaves(facts: Mapping[str, Any]) -> Mapping[str, Any]:
             continue
         visit(facts[root], str(root))
     return dict(sorted(leaves.items()))
+
+
+def authored_model_leaves(model: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Return schema-owned author-gated leaves from a canonical v3 model.
+
+    Parameters
+    ----------
+    model:
+        Complete canonical model mapping.
+
+    Returns
+    -------
+    Mapping[str, Any]
+        Exact model paths and values owned by ``author-gated`` schema policy.
+    """
+
+    return _owned_instance_leaves(
+        model,
+        schema_version=MODEL_SCHEMA_VERSION_V3,
+        schema_prefix="$",
+    )
+
+
+def proposal_fact_block(model: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Select the proposal-fact block from a model using the v3 schema contract.
+
+    Parameters
+    ----------
+    model:
+        Canonical model or proposal-shaped fact source.
+
+    Returns
+    -------
+    Mapping[str, Any]
+        Exact fields required by ``author-proposal.v3`` ``proposed_facts``.
+    """
+
+    schema = load_schema(AUTHOR_PROPOSAL_SCHEMA_VERSION_V3)
+    definitions = schema.get("$defs")
+    proposed = definitions.get("proposed_facts") if isinstance(definitions, Mapping) else None
+    required = proposed.get("required") if isinstance(proposed, Mapping) else None
+    if not isinstance(required, list) or not all(isinstance(field, str) for field in required):
+        raise MetadataValidationError("author-proposal.v3 proposed_facts contract is incomplete")
+    missing = [field for field in required if field not in model]
+    if missing:
+        raise MetadataValidationError(f"model lacks proposal fact blocks: {missing}")
+    return {field: model[field] for field in required}
+
+
+def _owned_instance_leaves(
+    value: Mapping[str, Any],
+    *,
+    schema_version: str,
+    schema_prefix: str,
+) -> Mapping[str, Any]:
+    """Project concrete instance leaves selected by schema ownership metadata.
+
+    Parameters
+    ----------
+    value:
+        Instance mapping rooted at ``schema_prefix``.
+    schema_version:
+        Ownership-annotated schema discriminator.
+    schema_prefix:
+        Exact schema path corresponding to ``value``.
+
+    Returns
+    -------
+    Mapping[str, Any]
+        Normalized paths relative to ``schema_prefix`` and their exact values.
+
+    Raises
+    ------
+    MetadataValidationError
+        If the instance exposes a leaf not present in the frozen schema registry.
+    """
+
+    owned = author_gated_schema_paths(schema_version)
+    all_paths = frozenset(leaf.path for leaf in _owned_schema_registry(schema_version))
+    selected: dict[str, Any] = {}
+
+    def relative_path(path: str) -> str:
+        """Return a normalized instance path relative to the supplied schema root."""
+
+        path = _INDEX_PATTERN.sub("[]", path)
+        if schema_prefix == "$":
+            return path.removeprefix("$.")
+        return path.removeprefix(f"{schema_prefix}.")
+
+    def select(path: str, item: Any) -> None:
+        """Collect one concrete value under its normalized owned schema leaf."""
+
+        relative = relative_path(path)
+        if "[]" not in relative:
+            selected[relative] = item
+            return
+        existing = selected.setdefault(relative, [])
+        if not isinstance(existing, list):
+            raise MetadataValidationError(f"normalized collection leaf conflicts at {relative}")
+        existing.append(item)
+
+    def visit(item: Any, path: str) -> None:
+        """Visit one concrete instance node using normalized schema paths."""
+
+        normalized = _INDEX_PATTERN.sub("[]", path)
+        if normalized in all_paths:
+            if normalized in owned:
+                select(path, item)
+            return
+        if isinstance(item, Mapping):
+            if not item:
+                return
+            for key in sorted(item, key=str):
+                visit(item[key], f"{path}.{key}")
+            return
+        if isinstance(item, list):
+            if not item:
+                return
+            for index, child in enumerate(item):
+                visit(child, f"{path}[{index}]")
+            return
+        descendants = frozenset(
+            candidate for candidate in all_paths if candidate.startswith(f"{normalized}.")
+        )
+        if descendants:
+            return
+        raise MetadataValidationError(f"unowned schema leaf at {relative_path(path)}")
+
+    for key in sorted(value, key=str):
+        visit(value[key], f"{schema_prefix}.{key}")
+    return dict(sorted(selected.items()))
+
+
+def _owned_schema_registry(schema_version: str) -> tuple[OwnedSchemaLeaf, ...]:
+    """Return the cached validated ownership registry without duplicating policy."""
+
+    return owned_schema_leaves(schema_version)
 
 
 def _evidence_references(facts: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -234,6 +398,7 @@ def recompute_accepted_identities(
     checker_prompt_hash: str,
     checker_model: str,
     checker_version: str,
+    schema_version: str = MODEL_SCHEMA_VERSION,
 ) -> AcceptedIdentities:
     """Recompute all accepted identities from fact bytes and checker prompt bytes.
 
@@ -243,6 +408,8 @@ def recompute_accepted_identities(
         Complete accepted model/proposal facts.
     checker_prompt_hash, checker_model, checker_version:
         Current frozen checker prompt byte hash and exact checker identity.
+    schema_version:
+        Exact model ownership policy used for vet identity derivation.
 
     Returns
     -------
@@ -277,7 +444,7 @@ def recompute_accepted_identities(
         "modes": {"meaningful_modes": meaningful_modes},
     }
     recipe = compute_recipe_revision(recipe_facts, source)
-    authored = authored_fact_leaves(facts)
+    authored = authored_fact_leaves(facts, schema_version=schema_version)
     vet = compute_vet_identity(
         authored_metadata=authored,
         evidence_references=_evidence_references(facts),
@@ -392,29 +559,48 @@ def validate_authored_facts_for_write(
     _validate_gate_header(gate_item)
     external = _mapping(facts.get("external_metadata"), "external_metadata")
     validate_external_metadata(external)
-    required = authored_fact_leaves(facts)
     checks = gate_item.get("field_checks")
     if not isinstance(checks, list):
         raise MetadataValidationError("metadata gate has no per-field checks")
+    strict_v3 = "terminal_disposition" in gate_item
+    required = authored_fact_leaves(
+        facts,
+        schema_version=MODEL_SCHEMA_VERSION_V3 if strict_v3 else MODEL_SCHEMA_VERSION,
+    )
+    source_ids, evidence_by_id = _authored_reference_indexes(facts)
     verdicts: dict[str, str] = {}
     for check in checks:
+        if not isinstance(check, Mapping):
+            raise MetadataValidationError("metadata field check must be an object")
         raw_field = check.get("field")
         if not isinstance(raw_field, str):
             raise MetadataValidationError("metadata field check has no field name")
         field = raw_field.removeprefix("proposed_facts.")
         if field not in required:
+            if strict_v3:
+                raise MetadataValidationError(f"extraneous authored field check: {field}")
             continue
         if field in verdicts:
             raise MetadataValidationError(f"duplicate authored field check: {field}")
         checked_source_ids = check.get("checked_source_ids")
-        if not checked_source_ids:
+        if not isinstance(checked_source_ids, list) or not checked_source_ids:
             raise MetadataValidationError(
                 f"authored field check lacks checked source context: {field}"
             )
         evidence_ids = check.get("evidence_ids")
+        if not isinstance(evidence_ids, list):
+            raise MetadataValidationError(f"authored field check has invalid evidence_ids: {field}")
         if not _is_keyword_leaf(field) and not evidence_ids:
             raise MetadataValidationError(
                 f"authored field check lacks verified evidence support: {field}"
+            )
+        if strict_v3:
+            _validate_field_check_references(
+                field,
+                checked_source_ids=checked_source_ids,
+                evidence_ids=evidence_ids,
+                source_ids=source_ids,
+                evidence_by_id=evidence_by_id,
             )
         verdicts[field] = str(check.get("verdict"))
     missing = set(required) - set(verdicts)
@@ -427,6 +613,8 @@ def validate_authored_facts_for_write(
     }
     if failed:
         raise MetadataValidationError(f"non-accurate authored facts: {failed}")
+    if strict_v3:
+        _validate_rung_and_search_attestation(facts, gate_item)
     return MetadataValidationReport(
         present_fields=frozenset(MANDATORY_EXTERNAL_FIELDS),
         gated_fields=frozenset(verdicts),
@@ -448,7 +636,147 @@ def _is_keyword_leaf(field: str) -> bool:
         True for individual ``external_metadata.keywords`` entries.
     """
 
-    return field.startswith("external_metadata.keywords[")
+    return field in {"external_metadata.keywords", "external_metadata.keywords[]"}
+
+
+def _authored_reference_indexes(
+    facts: Mapping[str, Any],
+) -> tuple[frozenset[str], Mapping[str, Mapping[str, Any]]]:
+    """Build exact source/evidence indexes for v3 gate reference validation.
+
+    Parameters
+    ----------
+    facts:
+        Complete proposed fact tree.
+
+    Returns
+    -------
+    tuple[frozenset[str], Mapping[str, Mapping[str, Any]]]
+        Exact source-ID set and evidence excerpts keyed by evidence ID.
+    """
+
+    resolution = _mapping(facts.get("source_resolution"), "source_resolution")
+    raw_sources = resolution.get("sources")
+    evidence = _mapping(facts.get("evidence"), "evidence")
+    raw_excerpts = evidence.get("excerpts")
+    if not isinstance(raw_sources, list) or not isinstance(raw_excerpts, list):
+        raise MetadataValidationError("authored source/evidence references are incomplete")
+    source_values = [
+        source.get("source_id") for source in raw_sources if isinstance(source, Mapping)
+    ]
+    if (
+        not all(isinstance(source_id, str) and source_id for source_id in source_values)
+        or len(source_values) != len(raw_sources)
+        or len(source_values) != len(set(source_values))
+    ):
+        raise MetadataValidationError("authored source IDs must be complete and unique")
+    evidence_by_id: dict[str, Mapping[str, Any]] = {}
+    for excerpt in raw_excerpts:
+        if not isinstance(excerpt, Mapping):
+            raise MetadataValidationError("authored evidence excerpt must be an object")
+        evidence_id = excerpt.get("evidence_id")
+        if not isinstance(evidence_id, str) or not evidence_id or evidence_id in evidence_by_id:
+            raise MetadataValidationError("authored evidence IDs must be complete and unique")
+        if excerpt.get("source_id") not in source_values:
+            raise MetadataValidationError(
+                f"evidence {evidence_id} references a source outside the proposal"
+            )
+        evidence_by_id[evidence_id] = excerpt
+    return frozenset(str(source_id) for source_id in source_values), evidence_by_id
+
+
+def _validate_field_check_references(
+    field: str,
+    *,
+    checked_source_ids: Sequence[Any],
+    evidence_ids: Sequence[Any],
+    source_ids: frozenset[str],
+    evidence_by_id: Mapping[str, Mapping[str, Any]],
+) -> None:
+    """Resolve one exact v3 checker field check to proposal sources and excerpts."""
+
+    if not all(isinstance(source_id, str) and source_id for source_id in checked_source_ids) or len(
+        checked_source_ids
+    ) != len(set(checked_source_ids)):
+        raise MetadataValidationError(
+            f"authored field check source IDs are invalid or duplicated: {field}"
+        )
+    extraneous_sources = set(checked_source_ids) - source_ids
+    if extraneous_sources:
+        raise MetadataValidationError(
+            f"authored field check references extraneous sources for {field}: "
+            f"{sorted(extraneous_sources)}"
+        )
+    if not all(isinstance(evidence_id, str) and evidence_id for evidence_id in evidence_ids) or len(
+        evidence_ids
+    ) != len(set(evidence_ids)):
+        raise MetadataValidationError(
+            f"authored field check evidence IDs are invalid or duplicated: {field}"
+        )
+    for evidence_id in evidence_ids:
+        excerpt = evidence_by_id.get(str(evidence_id))
+        if excerpt is None:
+            raise MetadataValidationError(
+                f"authored field check references fabricated evidence for {field}: {evidence_id}"
+            )
+        if excerpt.get("source_id") not in checked_source_ids:
+            raise MetadataValidationError(
+                f"authored field evidence source was not checked for {field}: {evidence_id}"
+            )
+        supports = excerpt.get("supports")
+        accepted_supports = {field, f"proposed_facts.{field}"}
+        if not isinstance(supports, list) or not accepted_supports.intersection(supports):
+            raise MetadataValidationError(
+                f"authored evidence {evidence_id} does not support exact field {field}"
+            )
+
+
+def _validate_rung_and_search_attestation(
+    facts: Mapping[str, Any], gate_item: Mapping[str, Any]
+) -> None:
+    """Consume exact rung equality and closed R4 search-attestation findings."""
+
+    resolution = _mapping(facts.get("source_resolution"), "source_resolution")
+    rung = resolution.get("rung")
+    rung_check = _mapping(gate_item.get("rung_check"), "rung_check")
+    if rung_check.get("selected_rung") != rung:
+        raise MetadataValidationError("checker selected_rung does not match proposed source rung")
+    if rung_check.get("verdict") == AccuracyVerdict.ACCURATE.value and (
+        rung_check.get("highest_applicable") != rung_check.get("selected_rung")
+    ):
+        raise MetadataValidationError(
+            "accurate rung check requires highest_applicable == selected_rung"
+        )
+    if rung != "R4_REIMPLEMENT":
+        return
+    search_report = _mapping(resolution.get("search_report"), "source_resolution.search_report")
+    links = search_report.get("links_checked")
+    findings = rung_check.get("findings")
+    if not isinstance(links, list) or not isinstance(findings, list):
+        raise MetadataValidationError("R4 rung check lacks typed search attestations")
+    attested = {
+        finding.removeprefix("search-attested:")
+        for finding in findings
+        if isinstance(finding, str) and finding.startswith("search-attested:")
+    }
+    cannot_verify = any(
+        isinstance(finding, str) and finding.startswith("search-cannot-verify:")
+        for finding in findings
+    )
+    if rung_check.get("verdict") == AccuracyVerdict.ACCURATE.value:
+        missing = set(str(link) for link in links) - attested
+        if missing:
+            raise MetadataValidationError(
+                f"accurate R4 rung check lacks re-executed search attestations: {sorted(missing)}"
+            )
+        if cannot_verify:
+            raise MetadataValidationError(
+                "accurate R4 rung check cannot carry search-cannot-verify"
+            )
+    elif not cannot_verify:
+        raise MetadataValidationError(
+            "non-accurate R4 rung check requires typed search-cannot-verify"
+        )
 
 
 def input_signature_matches_contract(signature: Any, input_contract: Mapping[str, Any]) -> bool:

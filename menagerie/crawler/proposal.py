@@ -200,6 +200,7 @@ def validate_author_proposal(
     source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
     required_claims: Optional[Iterable[str]] = None,
     cas_root: Union[str, Path, None] = None,
+    expected_schema_version: str = AUTHOR_PROPOSAL_SCHEMA_VERSION,
 ) -> ProposalValidationReport:
     """Validate one complete author proposal without modifying it.
 
@@ -216,6 +217,9 @@ def validate_author_proposal(
         externally-authored categories.
     cas_root:
         Optional source CAS root.
+    expected_schema_version:
+        Exact proposal discriminator required by the caller. The legacy default
+        remains only until the Phase-2 hub switches to ``author-proposal.v3``.
 
     Returns
     -------
@@ -229,7 +233,7 @@ def validate_author_proposal(
     """
 
     try:
-        validate_payload(proposal, AUTHOR_PROPOSAL_SCHEMA_VERSION)
+        validate_payload(proposal, expected_schema_version)
     except PayloadValidationError as exc:
         raise ProposalValidationError(str(exc)) from exc
     _validate_verified_hash_keys(proposal)

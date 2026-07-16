@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from menagerie.crawler.constants import MODEL_SCHEMA_VERSION_V3
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.metadata import (
     MANDATORY_EXTERNAL_FIELDS,
@@ -137,22 +138,30 @@ def _accurate_authored_gate(facts: dict[str, Any]) -> dict[str, Any]:
         Accurate gate item suitable for block-at-write validation.
     """
 
+    fields = tuple(authored_fact_leaves(facts, schema_version=MODEL_SCHEMA_VERSION_V3))
+    facts["evidence"]["excerpts"][0]["supports"] = list(fields)
     return {
         "verdict": "accurate",
         "integrity": {"verdict": "accurate"},
+        "campaign_root_work_id": "campaign-1",
+        "terminal_disposition": None,
+        "rung_check": {
+            "selected_rung": facts["source_resolution"]["rung"],
+            "highest_applicable": facts["source_resolution"]["rung"],
+            "verdict": "accurate",
+            "findings": [],
+        },
         "field_checks": [
             {
                 "field": field,
                 "verdict": "accurate",
-                "evidence_ids": []
-                if field.startswith("external_metadata.keywords[")
-                else ["evidence-1"],
+                "evidence_ids": [] if field == "external_metadata.keywords[]" else ["evidence-1"],
                 "checked_source_ids": ["source-1"],
                 "reason": "relevant user search term"
-                if field.startswith("external_metadata.keywords[")
+                if field == "external_metadata.keywords[]"
                 else "supported",
             }
-            for field in authored_fact_leaves(facts)
+            for field in fields
         ],
     }
 
@@ -161,12 +170,13 @@ def test_authored_input_dtype_is_gated_and_changes_vet_identity() -> None:
     """An authored dtype collision cannot bypass write gating or vet staleness."""
 
     facts = make_author_proposal()["proposed_facts"]
-    dtype_path = "input_contract.args[0].dtype"
+    dtype_path = "input_contract.args[].dtype"
     kwarg = deepcopy(facts["input_contract"]["args"][0])
     kwarg["path"] = "kwargs.image"
     facts["input_contract"]["kwargs"].append(kwarg)
-    assert authored_fact_leaves(facts)[dtype_path] == "float32"
-    assert authored_fact_leaves(facts)["input_contract.kwargs[0].dtype"] == "float32"
+    leaves = authored_fact_leaves(facts, schema_version=MODEL_SCHEMA_VERSION_V3)
+    assert leaves[dtype_path] == ["float32"]
+    assert leaves["input_contract.kwargs[].dtype"] == ["float32"]
 
     gate_item = _accurate_authored_gate(facts)
     dtype_check = next(check for check in gate_item["field_checks"] if check["field"] == dtype_path)
@@ -179,6 +189,7 @@ def test_authored_input_dtype_is_gated_and_changes_vet_identity() -> None:
         checker_prompt_hash="sha256:" + "1" * 64,
         checker_model="codex",
         checker_version="test",
+        schema_version=MODEL_SCHEMA_VERSION_V3,
     )
     changed = deepcopy(facts)
     changed["input_contract"]["args"][0]["dtype"] = "float64"
@@ -187,13 +198,14 @@ def test_authored_input_dtype_is_gated_and_changes_vet_identity() -> None:
         checker_prompt_hash="sha256:" + "1" * 64,
         checker_model="codex",
         checker_version="test",
+        schema_version=MODEL_SCHEMA_VERSION_V3,
     )
     assert after.vet != before.vet
 
 
 @pytest.mark.parametrize("name", sorted(TORCHLENS_DERIVABLE_FIELDS))
-def test_derivable_name_collision_is_exempt_only_below_observed(name: str) -> None:
-    """Every present or future authored collision remains inside the gate.
+def test_derivable_name_collision_requires_schema_ownership(name: str) -> None:
+    """A future path cannot acquire authored or observed policy by leaf-name collision.
 
     Parameters
     ----------
@@ -201,13 +213,14 @@ def test_derivable_name_collision_is_exempt_only_below_observed(name: str) -> No
         Mechanically derivable leaf name reused below both roots.
     """
 
-    leaves = authored_fact_leaves(
-        {
-            "authored_future": {name: "source-read claim"},
-            "observed": {name: "mechanical fact"},
-        }
-    )
-    assert leaves == {f"authored_future.{name}": "source-read claim"}
+    with pytest.raises(MetadataValidationError, match="unowned schema leaf"):
+        authored_fact_leaves(
+            {
+                "authored_future": {name: "source-read claim"},
+                "observed": {name: "mechanical fact"},
+            },
+            schema_version=MODEL_SCHEMA_VERSION_V3,
+        )
 
 
 def test_keywords_use_nonverbatim_relevance_checks_but_remain_gated() -> None:
@@ -217,7 +230,7 @@ def test_keywords_use_nonverbatim_relevance_checks_but_remain_gated() -> None:
     facts["external_metadata"]["keywords"] = ["image feature extractor"]
     gate_item = _accurate_authored_gate(facts)
     report = validate_authored_facts_for_write(facts, gate_item)
-    keyword_path = "external_metadata.keywords[0]"
+    keyword_path = "external_metadata.keywords[]"
     assert keyword_path in report.gated_fields
 
     keyword_check = next(
@@ -227,6 +240,70 @@ def test_keywords_use_nonverbatim_relevance_checks_but_remain_gated() -> None:
     keyword_check["reason"] = "unrelated to the verified model"
     with pytest.raises(MetadataValidationError, match="non-accurate authored facts"):
         validate_authored_facts_for_write(facts, gate_item)
+
+
+def test_v3_schema_ownership_gates_mode_divergence_and_resolves_references() -> None:
+    """External mode claims are gated while reducer mode results stay outside vet identity."""
+
+    facts = make_author_proposal()["proposed_facts"]
+    leaves = authored_fact_leaves(facts, schema_version=MODEL_SCHEMA_VERSION_V3)
+    assert "external_metadata.modes.train_eval_divergence" in leaves
+    assert "modes.meaningful_modes[]" in leaves
+    assert "modes.train_eval_divergence" not in leaves
+    assert "modes.divergence_evidence" not in leaves
+    facts["evidence"]["excerpts"][0]["supports"] = list(leaves)
+    gate_item = _accurate_authored_gate(facts)
+    gate_item.update(
+        {
+            "campaign_root_work_id": "campaign-1",
+            "terminal_disposition": None,
+            "rung_check": {
+                "selected_rung": "R1_LIBRARY",
+                "highest_applicable": "R1_LIBRARY",
+                "verdict": "accurate",
+                "findings": [],
+            },
+        }
+    )
+    report = validate_authored_facts_for_write(facts, gate_item)
+    assert "external_metadata.modes.train_eval_divergence" in report.gated_fields
+
+    fabricated = deepcopy(gate_item)
+    fabricated["field_checks"][0]["evidence_ids"] = ["fabricated"]
+    with pytest.raises(MetadataValidationError, match="fabricated evidence"):
+        validate_authored_facts_for_write(facts, fabricated)
+
+    extraneous = deepcopy(gate_item)
+    extraneous["field_checks"][0]["checked_source_ids"] = ["source-elsewhere"]
+    with pytest.raises(MetadataValidationError, match="extraneous sources"):
+        validate_authored_facts_for_write(facts, extraneous)
+
+
+def test_v3_accurate_r4_requires_enumerated_search_attestation() -> None:
+    """An accurate R4 result consumes each exact re-executed search assertion."""
+
+    facts = make_author_proposal()["proposed_facts"]
+    facts["source_resolution"]["rung"] = "R4_REIMPLEMENT"
+    links = facts["source_resolution"]["search_report"]["links_checked"]
+    leaves = authored_fact_leaves(facts, schema_version=MODEL_SCHEMA_VERSION_V3)
+    facts["evidence"]["excerpts"][0]["supports"] = list(leaves)
+    gate_item = _accurate_authored_gate(facts)
+    gate_item.update(
+        {
+            "campaign_root_work_id": "campaign-1",
+            "terminal_disposition": None,
+            "rung_check": {
+                "selected_rung": "R4_REIMPLEMENT",
+                "highest_applicable": "R4_REIMPLEMENT",
+                "verdict": "accurate",
+                "findings": [],
+            },
+        }
+    )
+    with pytest.raises(MetadataValidationError, match="re-executed search attestations"):
+        validate_authored_facts_for_write(facts, gate_item)
+    gate_item["rung_check"]["findings"] = [f"search-attested:{link}" for link in links]
+    validate_authored_facts_for_write(facts, gate_item)
 
 
 def test_empty_keywords_are_rejected() -> None:
