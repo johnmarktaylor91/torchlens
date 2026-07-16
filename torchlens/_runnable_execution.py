@@ -279,8 +279,17 @@ def _execute_loaded_sparse_transaction(
     )
     _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
     nontensor_inputs_match = all(
-        check.passed for check in contract_checks if check.name.startswith("input_literal:")
+        check.passed
+        for check in contract_checks
+        if check.name.startswith("input_literal:") or check.name.startswith("input_nontensor_tree:")
     )
+    input_alias_unreproducible = any(
+        not check.passed for check in contract_checks if check.name == "input_alias_topology"
+    )
+    input_metadata_mismatch = any(
+        not check.passed for check in contract_checks if check.name.startswith("input_metadata:")
+    )
+    mode_sensitive_op_unwitnessed = _mode_sensitive_op_unwitnessed(descriptor)
     tensor_derived_scalar_stale = _tensor_derived_scalar_stale(
         descriptor, slot_values, witness_source_snapshots
     )
@@ -299,6 +308,11 @@ def _execute_loaded_sparse_transaction(
         host_rng_unreproduced=host_rng_unreproduced,
         tensor_derived_scalar_stale=tensor_derived_scalar_stale,
         unbound_state_escape_stale=unbound_state_escape_stale,
+        container_reconstruction_lossy=container_reconstruction_lossy,
+        output_not_reproduced=output_not_reproduced,
+        input_alias_unreproducible=input_alias_unreproducible,
+        input_metadata_mismatch=input_metadata_mismatch,
+        mode_sensitive_op_unwitnessed=mode_sensitive_op_unwitnessed,
     )
     if attestation_check is not None:
         contract_checks.append(attestation_check)
@@ -312,6 +326,7 @@ def _execute_loaded_sparse_transaction(
         unbound_state_escape_stale=unbound_state_escape_stale,
         container_reconstruction_lossy=container_reconstruction_lossy,
         output_not_reproduced=output_not_reproduced,
+        mode_sensitive_op_unwitnessed=mode_sensitive_op_unwitnessed,
     )
     path_faithfulness, mismatch = mark_trace_path_status(
         fork,
@@ -513,6 +528,114 @@ def _is_model_input_literal_witness(witness: ControlWitness) -> bool:
     )
 
 
+_MODEL_INPUT_METADATA_SITE_PREFIX = "model_input_metadata:"
+"""``site_label`` prefix marking a witnessed model-input metadata-predicate read."""
+
+_MODEL_INPUT_METADATA_FACT_KEY = "model_input_metadata"
+"""Discriminator key present in every model-input metadata-predicate fact."""
+
+
+def _model_input_metadata_facts(
+    descriptor: SparseRunDescriptor,
+) -> list[tuple[ControlWitness, Mapping[str, Any]]]:
+    """Decode every witnessed model-input metadata-predicate fact (r27-H2)."""
+
+    facts: list[tuple[ControlWitness, Mapping[str, Any]]] = []
+    for witness in descriptor.control_witnesses:
+        if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
+            continue
+        if not witness.site_label.startswith(_MODEL_INPUT_METADATA_SITE_PREFIX):
+            continue
+        decoded = _decode_literal(witness.observed_value)
+        if isinstance(decoded, Mapping) and decoded.get(_MODEL_INPUT_METADATA_FACT_KEY) is True:
+            facts.append((witness, decoded))
+    return facts
+
+
+def _is_model_input_metadata_witness(witness: ControlWitness) -> bool:
+    """Return whether a structure witness records a model-input metadata-predicate read."""
+
+    return (
+        witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
+        and witness.site_label.startswith(_MODEL_INPUT_METADATA_SITE_PREFIX)
+    )
+
+
+def _runtime_input_metadata_value(value: torch.Tensor, name: str) -> Any:
+    """Evaluate one recorded metadata predicate on the RAW bound runtime input.
+
+    Evaluated on the user-provided tensor BEFORE the defensive detach-clone, which
+    erases ``requires_grad`` and may normalize layout -- the capture-time read saw the
+    forward's real input, so the comparison must too.
+    """
+
+    if name == "is_contiguous":
+        return bool(value.is_contiguous())
+    if name == "stride":
+        return [int(v) for v in value.stride()]
+    if name == "requires_grad":
+        return bool(value.requires_grad)
+    return None
+
+
+def _input_metadata_contract_checks(
+    descriptor: SparseRunDescriptor,
+    inputs: Any,
+    positions: set[Any],
+) -> tuple[ContractCheck, ...]:
+    """Compare runtime input metadata predicates with capture-time observed facts (r27-H2).
+
+    The capture-time forward READ these predicates (``is_contiguous`` / ``stride`` /
+    ``requires_grad``) on a model-input leaf, so their values can have steered the
+    recorded taken path. The input contract checks only shape+dtype; a same-shape
+    runtime input differing in layout or grad flag would replay the captured arm a
+    fresh model would not take -- a false VERIFIED+ATTESTED. Witnesses exist ONLY for
+    captures that performed such a read, so an ordinary layout-oblivious model has no
+    metadata witnesses and can never over-trigger here.
+    """
+
+    checks: list[ContractCheck] = []
+    for witness, fact in _model_input_metadata_facts(descriptor):
+        raw_position = fact.get("position")
+        position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
+        path = tuple(fact.get("path", ()) or ())
+        recorded_facts = fact.get("facts")
+        if not isinstance(recorded_facts, Mapping):
+            continue
+        try:
+            root = _input_site_value(inputs, position, positions)
+            runtime_leaf = _value_at_path(root, path)
+            resolved = isinstance(runtime_leaf, torch.Tensor)
+        except (KeyError, IndexError, TypeError, AttributeError):
+            runtime_leaf = None
+            resolved = False
+        for name in sorted(recorded_facts):
+            recorded_value = recorded_facts[name]
+            runtime_value = (
+                _runtime_input_metadata_value(runtime_leaf, str(name)) if resolved else None
+            )
+            passed = resolved and runtime_value == recorded_value
+            checks.append(
+                _contract_check(
+                    f"input_metadata:{name}:{position!r}:{path!r}",
+                    passed,
+                    RunnableErrorCode.INPUT_TREE_MISMATCH,
+                    f"Runtime input {name} differs from the capture-time value the "
+                    "forward read; the recorded taken path may not be valid for "
+                    "this input.",
+                    affected_op_labels=(witness.site_label,),
+                    details=(
+                        ("model_site_position", repr(position)),
+                        ("container_path", repr(path)),
+                        ("predicate", str(name)),
+                        ("recorded_value", repr(recorded_value)),
+                        ("runtime_value", repr(runtime_value) if resolved else "<unresolved>"),
+                    ),
+                )
+            )
+    return tuple(checks)
+
+
 def _model_input_arity_positions(descriptor: SparseRunDescriptor) -> set[Any]:
     """Return every distinct model-input site position, tensor and non-tensor.
 
@@ -661,6 +784,14 @@ def _bind_runtime_inputs(
     values: dict[str, torch.Tensor] = {}
     checks: list[ContractCheck] = []
     positions = _model_input_arity_positions(descriptor)
+    # Torch capture DE-ALIASES model inputs (each input leaf is cloned before the forward,
+    # so ``forward(a, b)`` with ``a is b`` is captured as two DISTINCT tensors). The recorded
+    # DAG and activation archive therefore reflect distinct-input semantics, and each runtime
+    # input slot is likewise cloned independently. A runtime call that passes ALIASED inputs
+    # (same object, or distinct views sharing storage) is NOT reproducible against that
+    # de-aliased capture when an in-place op mutates an input -- see
+    # ``_input_alias_topology_checks``, which fails such a run closed instead of a false VERIFIED.
+    raw_values: dict[str, torch.Tensor] = {}
     for slot in input_slots:
         binding = slot.input_binding
         if binding is None:
@@ -672,7 +803,7 @@ def _bind_runtime_inputs(
         try:
             root = _input_site_value(inputs, binding.model_site_position, positions)
             value = _value_at_path(root, binding.container_path)
-        except (KeyError, IndexError, TypeError) as exc:
+        except (KeyError, IndexError, TypeError, AttributeError) as exc:
             raise _input_error(
                 RunnableErrorCode.INPUT_TREE_MISMATCH,
                 slot,
@@ -684,6 +815,7 @@ def _bind_runtime_inputs(
                 slot,
                 f"Runtime input leaf is {type(value).__name__}, expected torch.Tensor.",
             )
+        raw_values[slot.slot_id] = value
         values[slot.slot_id] = value.detach().clone()
         shape_ok = tuple(value.shape) == slot.shape
         dtype_ok = str(value.dtype) == slot.dtype
@@ -717,7 +849,95 @@ def _bind_runtime_inputs(
         )
     checks.extend(_input_tree_contract_checks(descriptor, inputs))
     checks.extend(_input_literal_contract_checks(descriptor, inputs, positions))
+    checks.extend(_input_metadata_contract_checks(descriptor, inputs, positions))
+    checks.extend(_input_nontensor_tree_contract_checks(descriptor, inputs, positions))
+    checks.extend(_input_alias_topology_checks(descriptor, input_slots, raw_values))
     return values, tuple(checks)
+
+
+def _model_input_version_closure(descriptor: SparseRunDescriptor) -> set[str]:
+    """Return model-input slot ids plus every slot transitively versioned from one."""
+
+    closure = {
+        slot.slot_id for slot in descriptor.tensor_slots if slot.role is TensorSlotRole.MODEL_INPUT
+    }
+    changed = True
+    while changed:
+        changed = False
+        for slot in descriptor.tensor_slots:
+            if slot.version_of in closure and slot.slot_id not in closure:
+                closure.add(slot.slot_id)
+                changed = True
+    return closure
+
+
+def _descriptor_mutates_model_input(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether any in-place call targets a model-input slot (or its version chain)."""
+
+    closure = _model_input_version_closure(descriptor)
+    for call in descriptor.calls:
+        if call.is_inplace and _mutation_target_slot_id(call) in closure:
+            return True
+    return False
+
+
+def _tensor_storage_key(value: torch.Tensor) -> int | None:
+    """Return a stable base-storage identity for aliasing comparison, or ``None``."""
+
+    try:
+        return int(value.untyped_storage().data_ptr())
+    except (RuntimeError, AttributeError):
+        return None
+
+
+def _input_alias_topology_checks(
+    descriptor: SparseRunDescriptor,
+    input_slots: Sequence[TensorSlotDescriptor],
+    raw_values: Mapping[str, torch.Tensor],
+) -> tuple[ContractCheck, ...]:
+    """Fail closed on runtime input aliasing unreproducible against a de-aliased capture.
+
+    Torch capture clones each model-input leaf before the forward, so aliasing between
+    input sites (``forward(a, b)`` with ``a is b``, or two views sharing storage) is LOST:
+    the recorded DAG / archive reflect distinct-input semantics. When any in-place call
+    mutates a model input, a runtime call whose inputs DO alias would propagate that
+    mutation between sites while the de-aliased replay (independent per-slot clones) would
+    not -- a divergence from a fresh model on the given inputs that the replay would
+    otherwise falsely VERIFY. Such an aliased-input run is therefore failed closed. A run
+    with no in-place mutation of an input, or with no input aliasing, is unaffected (no
+    over-trigger): read-only aliasing is numerically irrelevant and stays VERIFIED.
+    """
+
+    if not _descriptor_mutates_model_input(descriptor):
+        return ()
+    storage_to_slots: dict[int, list[str]] = {}
+    for slot in input_slots:
+        value = raw_values.get(slot.slot_id)
+        if not isinstance(value, torch.Tensor):
+            continue
+        storage_key = _tensor_storage_key(value)
+        if storage_key is None:
+            continue
+        storage_to_slots.setdefault(storage_key, []).append(slot.slot_id)
+    aliased = {key: slots for key, slots in storage_to_slots.items() if len(slots) > 1}
+    if not aliased:
+        return ()
+    return (
+        _contract_check(
+            "input_alias_topology",
+            False,
+            RunnableErrorCode.INPUT_TREE_MISMATCH,
+            "Runtime model inputs alias (share storage) while an in-place op mutates a "
+            "model input; capture de-aliases inputs, so the recorded taken path cannot "
+            "reproduce the aliased mutation and must not be blessed VERIFIED.",
+            details=(
+                (
+                    "aliased_input_slot_groups",
+                    repr({key: sorted(slots) for key, slots in aliased.items()}),
+                ),
+            ),
+        ),
+    )
 
 
 def _clone_state_values(
@@ -835,6 +1055,101 @@ def _input_tree_contract_checks(
                 actual == expected,
                 RunnableErrorCode.INPUT_TREE_MISMATCH,
                 "Runtime input tensor-leaf paths disagree with the recorded input tree.",
+                details=(
+                    ("model_site_position", repr(position)),
+                    ("expected_paths", repr(sorted(expected, key=repr))),
+                    ("actual_paths", repr(sorted(actual, key=repr))),
+                ),
+            )
+        )
+    return tuple(checks)
+
+
+def _runtime_nontensor_leaf_paths(root: Any) -> set[tuple[str | int, ...]]:
+    """Enumerate runtime non-tensor input leaf paths, mirroring the capture walk.
+
+    Reproduces the capture-side ``_record_runnable_input_literal_leaves`` traversal so
+    the runtime non-tensor leaf-path SET aligns with the recorded fact set: tensor
+    leaves are skipped, namedtuples descend by field name, mappings descend under
+    grammar-encodable keys (a non-encodable key collapses its whole subtree to one
+    opaque leaf at the parent path, exactly as capture does), and lists/tuples descend
+    by index. Every other value is a scalar leaf recorded at its path.
+    """
+
+    from torchlens._io.runnable import _UnsupportedLiteralError, _encode_literal_key
+
+    paths: set[tuple[str | int, ...]] = set()
+
+    def _walk(value: Any, path: tuple[str | int, ...]) -> None:
+        """Descend one runtime boundary value, collecting every non-tensor leaf path."""
+
+        if isinstance(value, torch.Tensor):
+            return
+        if isinstance(value, tuple) and hasattr(value, "_fields"):
+            for name in value._fields:
+                _walk(getattr(value, name), (*path, str(name)))
+            return
+        if isinstance(value, Mapping):
+            for key, child in value.items():
+                try:
+                    _encode_literal_key(key)
+                except _UnsupportedLiteralError:
+                    paths.add(path)
+                    continue
+                _walk(child, (*path, key))
+            return
+        if isinstance(value, (list, tuple)):
+            for index, child in enumerate(value):
+                _walk(child, (*path, index))
+            return
+        paths.add(path)
+
+    _walk(root, ())
+    return paths
+
+
+def _input_nontensor_tree_contract_checks(
+    descriptor: SparseRunDescriptor,
+    inputs: Any,
+    positions: set[Any],
+) -> tuple[ContractCheck, ...]:
+    """Compare the runtime NON-tensor leaf-path tree with every recorded input site.
+
+    The per-leaf value check (:func:`_input_literal_contract_checks`) only visits
+    leaves RECORDED at capture, so it catches a CHANGED or MISSING non-tensor leaf but
+    is blind to an EXTRA runtime non-tensor leaf (an added dict key the model branches
+    on via ``'flag' in d`` / ``d.get('mode')``, or a longer list). An extra leaf can
+    steer unwitnessed Python control flow while replay still reports VERIFIED against a
+    fresh model on the given inputs. This mirrors the tensor-leaf set-equality
+    (:func:`_input_tree_contract_checks`) for non-tensor leaves: EVERY model-input site
+    is seeded with its recorded non-tensor leaf-path set (the empty set when capture had
+    no non-tensor leaf at that site), and any runtime non-tensor leaf path absent at
+    capture -- or a recorded one absent at runtime -- diverges the run.
+    """
+
+    expected_by_position: dict[Any, set[tuple[str | int, ...]]] = {
+        position: set() for position in positions
+    }
+    for _witness, fact in _model_input_literal_facts(descriptor):
+        raw_position = fact.get("position")
+        position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
+        path = tuple(fact.get("path", ()) or ())
+        expected_by_position.setdefault(position, set()).add(path)
+
+    checks: list[ContractCheck] = []
+    for position, expected in expected_by_position.items():
+        try:
+            root = _input_site_value(inputs, position, positions)
+            actual = _runtime_nontensor_leaf_paths(root)
+        except (KeyError, IndexError, TypeError, AttributeError):
+            actual = set()
+        checks.append(
+            _contract_check(
+                f"input_nontensor_tree:{position!r}",
+                actual == expected,
+                RunnableErrorCode.INPUT_TREE_MISMATCH,
+                "Runtime non-tensor input leaf paths disagree with the recorded input "
+                "tree; an added/removed non-tensor leaf can steer an unwitnessed path.",
                 details=(
                     ("model_site_position", repr(position)),
                     ("expected_paths", repr(sorted(expected, key=repr))),
@@ -1709,9 +2024,19 @@ def _post_execution_contract_checks(
             # Non-tensor input leaves are compared in the input contract before
             # execution; they are not runtime container-structure facts.
             continue
+        if _is_model_input_metadata_witness(witness):
+            # Model-input metadata-predicate facts are compared against the RAW
+            # runtime inputs in the input contract before execution; they are not
+            # runtime container-structure facts.
+            continue
         if _is_unbound_state_escape_witness(witness):
             # Unbound state escapes are compared by capture-digest in the dedicated
             # staleness check, not against runtime container structure.
+            continue
+        if witness.site_label.startswith(_MODULE_TRAINING_MODE_SITE_PREFIX):
+            # The declared per-module train/eval mode is a capture-time state fact anchoring
+            # VERIFIED (see ``_mode_sensitive_op_unwitnessed``), not a runtime container
+            # structure fact; it must not be compared against the runtime container.
             continue
         if witness.kind is ControlWitnessKind.CONDITIONAL_ARM_ENTRY:
             checks.append(_conditional_arm_check(witness, fork))
@@ -2282,6 +2607,7 @@ def _path_faithfulness(
     unbound_state_escape_stale: bool = False,
     container_reconstruction_lossy: bool = False,
     output_not_reproduced: bool = False,
+    mode_sensitive_op_unwitnessed: bool = False,
 ) -> tuple[PathFaithfulness, RunnableDiagnostic | None]:
     """Classify exact three-state path faithfulness after all honesty checks."""
 
@@ -2289,6 +2615,12 @@ def _path_faithfulness(
     if failed is not None:
         return PathFaithfulness.DIVERGED, failed.diagnostic
     if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
+        return PathFaithfulness.UNVERIFIABLE, None
+    if mode_sensitive_op_unwitnessed:
+        # A BatchNorm/InstanceNorm op in the taken path is train/eval mode-sensitive, but the
+        # capture-time mode was not recorded as a declared fact. Without that anchor the run
+        # cannot prove which mode (eval running-stats vs train batch-stats) VERIFIED
+        # corresponds to, so the honest ceiling is UNVERIFIABLE, never a false VERIFIED.
         return PathFaithfulness.UNVERIFIABLE, None
     if output_not_reproduced:
         # The captured forward returned a HOST-ESCAPED non-tensor scalar (or otherwise
@@ -2361,6 +2693,11 @@ def _numeric_attestation_check(
     host_rng_unreproduced: bool = False,
     tensor_derived_scalar_stale: bool = False,
     unbound_state_escape_stale: bool = False,
+    container_reconstruction_lossy: bool = False,
+    output_not_reproduced: bool = False,
+    input_alias_unreproducible: bool = False,
+    input_metadata_mismatch: bool = False,
+    mode_sensitive_op_unwitnessed: bool = False,
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
     """Compare recomputed saved slots with the independent activation archive.
 
@@ -2407,6 +2744,37 @@ def _numeric_attestation_check(
         # An unbound state slot (read only through an untraced host path) was staged
         # with a value differing from capture, so the recorded taken path may not
         # apply; a byte-exact attestation would dishonestly bless a stale result.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    if input_alias_unreproducible:
+        # Runtime inputs alias (share storage) while an in-place op mutates a model
+        # input, but capture de-aliases inputs, so the recorded taken path cannot
+        # reproduce the aliased mutation. The run diverges; attesting recomputed slots
+        # against the de-aliased archive would be an internally inconsistent false positive.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    if input_metadata_mismatch:
+        # The capture-time forward READ a metadata predicate (layout / requires_grad) on a
+        # model input and the runtime input differs on that witnessed fact (r27-H2). The
+        # input VALUES may be byte-identical (a layout twin), so the original-input digest
+        # gate alone would attest a run whose recorded taken path is invalid for this
+        # input -- an internally inconsistent ATTESTED alongside a DIVERGED path.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    if mode_sensitive_op_unwitnessed:
+        # A mode-sensitive op (BatchNorm/InstanceNorm) replays without a declared train/eval
+        # mode, so ``_path_faithfulness`` ceils this run at UNVERIFIABLE. A byte-exact ATTESTED
+        # alongside an UNVERIFIABLE mode-unanchored path is an internally inconsistent positive.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    if output_not_reproduced:
+        # The captured forward returned a HOST-ESCAPED non-tensor scalar (or otherwise
+        # unrepresentable value): the sparse DAG emitted a dropped ``None`` that was
+        # never produced or compared, so ``_path_faithfulness`` ceils this run at
+        # UNVERIFIABLE. Attesting selected internal slots as ATTESTED while the output
+        # itself was never reproduced is internally inconsistent -- a false positive.
+        return NumericAttestationStatus.NOT_APPLICABLE, None
+    if container_reconstruction_lossy:
+        # The output container reconstructs lossily (computed non-field state, a
+        # ``__slots__`` layout, or a data-descriptor field), so ``_path_faithfulness``
+        # ceils this run at UNVERIFIABLE. A byte-exact ATTESTED alongside an
+        # UNVERIFIABLE path would be an internally inconsistent false positive.
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
         # Incomplete witness coverage (e.g. an opaque non-tensor input leaf that
@@ -2857,6 +3225,66 @@ def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> boo
     return any(_call_consumes_seeded_rng(call, registry) for call in descriptor.calls)
 
 
+_MODULE_TRAINING_MODE_SITE_PREFIX = "module_training_mode:"
+"""``site_label`` prefix marking the declared capture-time per-module train/eval mode."""
+
+
+def _is_mode_sensitive_qualname(qualname: str | None) -> bool:
+    """Return whether a qualname is a train/eval mode-sensitive op (BatchNorm family).
+
+    BatchNorm / InstanceNorm produce numerically different results in eval (running
+    statistics) vs train (batch statistics) mode. The recorded aten op bakes in the
+    captured mode, so the replay reproduces it -- but only the DECLARED mode proves which
+    result VERIFIED corresponds to. Dropout is intentionally excluded here: its train arm
+    is already RNG-tainted (``not_applicable``) and its eval arm is identity, so it never
+    creates a mode-driven false VERIFIED.
+    """
+
+    if not qualname:
+        return False
+    tail = qualname.rsplit(".", 1)[-1]
+    if tail.endswith("_"):
+        tail = tail[:-1]
+    return "batch_norm" in tail or tail.endswith("instance_norm")
+
+
+def _descriptor_has_mode_sensitive_op(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether the taken path contains a train/eval mode-sensitive op."""
+
+    registry = {entry.registry_id: entry for entry in descriptor.callable_registry}
+    for call in descriptor.calls:
+        entry = registry.get(call.registry_id)
+        if entry is not None and _is_mode_sensitive_qualname(entry.key.qualname):
+            return True
+    return False
+
+
+def _descriptor_declares_training_mode(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether the descriptor declares the capture-time per-module train/eval mode."""
+
+    return any(
+        witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
+        and witness.site_label.startswith(_MODULE_TRAINING_MODE_SITE_PREFIX)
+        for witness in descriptor.control_witnesses
+    )
+
+
+def _mode_sensitive_op_unwitnessed(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether a mode-sensitive op replays without a declared train/eval mode.
+
+    ``self.training`` is declared state the VERIFIED oracle (a fresh instance in the
+    captured mode on the given inputs) reproduces. A BatchNorm / InstanceNorm op in the
+    taken path whose capture-time mode is NOT recorded has no witnessed proof of the mode
+    it corresponds to (eval running-stats vs train batch-stats), so the honest ceiling is
+    UNVERIFIABLE. Captures with no mode-sensitive op, or that declare the mode (every new
+    intervention-ready capture does), stay VERIFIED -- no over-trigger.
+    """
+
+    return _descriptor_has_mode_sensitive_op(descriptor) and not _descriptor_declares_training_mode(
+        descriptor
+    )
+
+
 def _call_consumes_seeded_rng(
     call: RunnableCallDescriptor,
     registry: Mapping[str, CallableRegistryEntry],
@@ -3206,8 +3634,43 @@ def _decode_torch_symbol(qualname: str) -> Any:
     )
 
 
+def _field_getattr(current: Any, component: Any) -> Any:
+    """Read one attribute-path component against a structurally-known field only.
+
+    Attacker-controlled path strings from an untrusted bundle reach this function
+    (``input_binding.container_path``, the recorded literal-witness ``fact["path"]``,
+    and the reconstructed output ``slot.output_path``). An unconstrained ``getattr``
+    would fire arbitrary victim-object descriptor getters and could walk dunder chains
+    (``__class__.__init__.__globals__`` ...), so the component must be a string that is
+    STRUCTURALLY PRESENT as a declared field on the current object's type -- a dataclass
+    field, a namedtuple ``_fields`` entry, or a ``torch.return_types`` structseq field.
+    Dunder / descriptor attributes (``__class__``, ``__dict__``, ...) are never declared
+    fields, so this check inherently excludes the escape chains; anything else raises
+    ``AttributeError`` and every caller fails closed.
+    """
+
+    if not isinstance(component, str):
+        raise AttributeError(f"Non-string attribute component {component!r}.")
+    allowed: set[str] = set()
+    if dataclasses.is_dataclass(current) and not isinstance(current, type):
+        allowed.update(field.name for field in dataclasses.fields(current))
+    allowed.update(_container_field_names(current))
+    if component not in allowed:
+        raise AttributeError(
+            f"Attribute component {component!r} is not a structurally-known field of "
+            f"{type(current).__name__}."
+        )
+    return getattr(current, component)
+
+
 def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
-    """Read one list/tuple/mapping/object path from a runtime value."""
+    """Read one list/tuple/mapping/object path from a runtime value.
+
+    Attribute traversal is constrained to structurally-known container fields via
+    :func:`_field_getattr`; string components are never fed to an unconstrained
+    ``getattr`` (untrusted-bundle path strings could otherwise walk descriptor / dunder
+    chains).
+    """
 
     current = value
     for component in path:
@@ -3216,7 +3679,7 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
         elif isinstance(component, int):
             current = current[component]
         else:
-            current = getattr(current, component)
+            current = _field_getattr(current, component)
     return current
 
 

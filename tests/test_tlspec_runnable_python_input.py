@@ -192,3 +192,99 @@ def test_mixed_tensor_and_python_arg_binds_without_crashing(tmp_path: Path) -> N
     )
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+# --------------------------------------------------------------------------- #
+# r27-H1: an EXTRA runtime non-tensor input leaf (an added dict key the model
+# branches on, or a longer list) steers unwitnessed control flow. The per-leaf
+# value check only visits RECORDED leaves, so it is blind to an extra leaf; the
+# non-tensor leaf-path SET check (mirroring the tensor-leaf set equality) now
+# diverges on any added/removed non-tensor leaf. A fresh model on the given
+# inputs differs, so the run must never report VERIFIED/ATTESTED.
+# --------------------------------------------------------------------------- #
+
+
+class _FlagInDictModel(nn.Module):
+    """Branch on the PRESENCE of an extra non-tensor dict key."""
+
+    def forward(self, d: dict) -> torch.Tensor:
+        """Steer control flow on whether an extra ``'flag'`` key is present."""
+
+        x = d["x"]
+        if "flag" in d:
+            return x * 10.0
+        return x + 1.0
+
+
+class _ExtraListElementModel(nn.Module):
+    """Branch on the LENGTH of a runtime input list nested in a dict.
+
+    The list lives inside a dict so ``tl.trace`` does not unpack it as positional
+    arguments; an extra trailing non-tensor element is a new non-tensor leaf.
+    """
+
+    def forward(self, d: dict) -> torch.Tensor:
+        """Steer control flow on whether an extra trailing list element exists."""
+
+        x = d["x"]
+        tags = d.get("tags", [])
+        if len(tags) > 0:
+            return x * 5.0
+        return x + 2.0
+
+
+def _save_dictish(model: nn.Module, capture_input, path: Path) -> Path:
+    """Capture and save a runnable artifact for a single container-input model."""
+
+    trace = tl.trace(
+        model,
+        capture_input,
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+        ),
+    )
+    trace.save(path, level="runnable", include_activations=True)
+    return path
+
+
+@pytest.mark.smoke
+def test_h1_extra_dict_key_diverges_identical_verifies(tmp_path: Path) -> None:
+    """An extra dict key must diverge; the identical dict input still VERIFIES."""
+
+    x = torch.tensor([1.0, 2.0])
+    path = _save_dictish(_FlagInDictModel(), {"x": x}, tmp_path / "flag_dict.tlspec")
+
+    # No over-trigger: the identical (single-key) input still verifies + attests.
+    same = tl.load(path).run(inputs={"x": x})
+    assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert same.report.numeric_attestation is NumericAttestationStatus.ATTESTED
+
+    # An extra non-tensor leaf steers an unwitnessed branch -> fail closed.
+    with pytest.raises(PathDivergenceError):
+        tl.load(path).run(inputs={"x": x, "flag": True})
+    diverged = tl.load(path).run(
+        inputs={"x": x, "flag": True}, on_divergence=DivergencePolicy.RETURN_DIVERGED
+    )
+    assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
+    assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
+
+
+@pytest.mark.smoke
+def test_h1_longer_list_diverges_identical_verifies(tmp_path: Path) -> None:
+    """A longer runtime input list (extra non-tensor element) must diverge."""
+
+    x = torch.tensor([3.0, 4.0])
+    path = _save_dictish(
+        _ExtraListElementModel(), {"x": x, "tags": []}, tmp_path / "extra_list.tlspec"
+    )
+
+    same = tl.load(path).run(inputs={"x": x, "tags": []})
+    assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+    diverged = tl.load(path).run(
+        inputs={"x": x, "tags": ["extra"]}, on_divergence=DivergencePolicy.RETURN_DIVERGED
+    )
+    assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
+    assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED

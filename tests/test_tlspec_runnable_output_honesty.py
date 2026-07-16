@@ -440,3 +440,82 @@ def test_r26_normal_tensor_output_still_verified(tmp_path: Path) -> None:
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert isinstance(result.output, torch.Tensor)
+
+
+# --------------------------------------------------------------------------- #
+# r27-H4 (R27-C1/C2): a run whose path ceils at UNVERIFIABLE because the OUTPUT
+# was never reproduced (host-escaped scalar) or reconstructs LOSSILY (a computed
+# __post_init__ field) must NEVER simultaneously report numeric_attestation =
+# ATTESTED -- an internally inconsistent false positive. The two lossy/dropped
+# flags are now threaded into the numeric-attestation gate.
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class _H4LossyPostInitOutput:
+    """Dataclass output whose ``__post_init__`` computes dropped non-field state.
+
+    The non-invoking rebuild restores only ``value`` / ``meta`` and cannot recompute
+    ``derived``, so ``_container_spec_reconstruction_lossy`` flags it and the run ceils
+    at UNVERIFIABLE. Defined at MODULE scope so ``resolve_container_type`` finds it and
+    the lossiness comes specifically from the ``__post_init__`` signal (not "type not
+    loaded"), exercising the exact H4 gate.
+    """
+
+    value: torch.Tensor
+    meta: int
+
+    def __post_init__(self) -> None:
+        """Compute a dropped non-field attribute."""
+
+        self.derived = int(self.meta) * 2
+
+
+class _H4LossyDataclassModel(nn.Module):
+    """Return a lossy-reconstruction dataclass output."""
+
+    def forward(self, x: torch.Tensor) -> Any:
+        """Return the lossy ``__post_init__`` dataclass output."""
+
+        return _H4LossyPostInitOutput(value=x + 1, meta=7)
+
+
+class _H4FloatScalarModel(nn.Module):
+    """Return a host-escaped ``float(...)`` scalar (no output tensor slot)."""
+
+    def __init__(self) -> None:
+        """Build a linear op so activations exist to (falsely) attest."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> Any:
+        """Return a host-escaped scalar derived from a param op."""
+
+        return float(self.lin(x).sum().detach())
+
+
+@pytest.mark.smoke
+def test_h4_host_escaped_scalar_output_not_attested(tmp_path: Path) -> None:
+    """A dropped (host-escaped) output must not be ATTESTED while path is UNVERIFIABLE."""
+
+    x = torch.randn(2, 4)
+    result = _roundtrip(
+        _H4FloatScalarModel(), x, tmp_path / "h4_scalar.tlspec", include_activations=True
+    )
+
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
+
+
+@pytest.mark.smoke
+def test_h4_lossy_container_output_not_attested(tmp_path: Path) -> None:
+    """A lossy __post_init__ dataclass output must not be ATTESTED (path UNVERIFIABLE)."""
+
+    x = torch.tensor([1.0, 2.0])
+    result = _roundtrip(
+        _H4LossyDataclassModel(), x, tmp_path / "h4_lossy.tlspec", include_activations=True
+    )
+
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
