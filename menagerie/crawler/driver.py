@@ -1082,6 +1082,7 @@ class CrawlerDriver:
         self.registry = registry or load_environment_registry(target=config.target)
         self._reduced = 0
         self._family_artifacts: dict[str, AuthorArtifact] = {}
+        self._intake_snapshot: Optional[IntakeSnapshot] = None
 
     def run(self, *, after_review: bool = False) -> DriverResult:
         """Acquire authority and resume the first unsatisfied durable work identity."""
@@ -1152,6 +1153,17 @@ class CrawlerDriver:
         """Run while holding both the process lock and canonical reducer locks."""
 
         snapshot = load_intake_snapshot(self.paths.intake_root)
+        canonical_snapshot_id = f"intake-{snapshot.snapshot_sha256.removeprefix('sha256:')[:20]}"
+        if snapshot.snapshot_id != canonical_snapshot_id:
+            raise DriverIntegrationError(
+                "intake manifest snapshot_id conflicts with its verified snapshot_sha256"
+            )
+        path_claim = self.paths.intake_root.name
+        if re.fullmatch(r"intake-[0-9a-f]{20}", path_claim) and path_claim != snapshot.snapshot_id:
+            raise DriverIntegrationError(
+                "intake path basename claims a conflicting canonical snapshot identity"
+            )
+        self._intake_snapshot = snapshot
         intake_ids = tuple(item.stable_id for item in snapshot.items)
         self.paths.runtime_root.mkdir(parents=True, exist_ok=True)
         with (
@@ -1174,7 +1186,7 @@ class CrawlerDriver:
             )
             state = _load_driver_state(self.paths.driver_state)
             self._retry_notification_outbox(operational)
-            if self._review_is_pending(operational):
+            if self._review_is_pending(operational, snapshot):
                 if not after_review:
                     _write_driver_state(
                         self.paths.driver_state,
@@ -1186,13 +1198,13 @@ class CrawlerDriver:
                         0,
                         "review-checkpoint",
                     )
-                self._record_review_signoff(operational, reducer, "resume --after-review")
+                self._record_review_signoff(operational, reducer, snapshot, "resume --after-review")
                 state["status"] = "running"
             elif after_review:
                 raise DriverIntegrationError("--after-review requires a pending review checkpoint")
 
-            self._handle_progress(operational, reducer.current_records, state=state)
-            if self._maybe_pause_for_review(operational, reducer.current_records, state):
+            self._handle_progress(operational, reducer.current_records, snapshot, state=state)
+            if self._maybe_pause_for_review(operational, reducer.current_records, snapshot, state):
                 return DriverResult(
                     "paused:review-checkpoint", len(reducer.current_records), 0, "review-checkpoint"
                 )
@@ -1703,6 +1715,7 @@ class CrawlerDriver:
                     "internal-error",
                     exc,
                     self.config,
+                    diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                     environment=None,
                     created_at=self.dependencies.clock(),
                 )
@@ -1738,6 +1751,7 @@ class CrawlerDriver:
                     "protocol-violation",
                     exc,
                     self.config,
+                    diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                     environment=None,
                     created_at=self.dependencies.clock(),
                 )
@@ -1764,6 +1778,7 @@ class CrawlerDriver:
                     "coverage-incomplete",
                     exc,
                     self.config,
+                    diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                     environment=None,
                     created_at=self.dependencies.clock(),
                 )
@@ -1928,6 +1943,7 @@ class CrawlerDriver:
                         reason,
                         exc,
                         self.config,
+                        diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                         environment=None,
                         created_at=self.dependencies.clock(),
                     )
@@ -1971,6 +1987,7 @@ class CrawlerDriver:
                             reason,
                             exc,
                             self.config,
+                            diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                             environment=None,
                             created_at=self.dependencies.clock(),
                         )
@@ -2013,6 +2030,7 @@ class CrawlerDriver:
                             "checker-contract-invalid",
                             exc,
                             self.config,
+                            diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                             environment=None,
                             created_at=self.dependencies.clock(),
                         )
@@ -2199,6 +2217,7 @@ class CrawlerDriver:
                             reason,
                             exc,
                             self.config,
+                            diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                             environment=None,
                             created_at=self.dependencies.clock(),
                         )
@@ -2237,6 +2256,9 @@ class CrawlerDriver:
                                 reason,
                                 exc,
                                 self.config,
+                                diagnostics_root=_diagnostics_root_for_work_root(
+                                    self.paths.work_root
+                                ),
                                 environment=None,
                                 created_at=self.dependencies.clock(),
                             )
@@ -2286,6 +2308,9 @@ class CrawlerDriver:
                                 "checker-contract-invalid",
                                 exc,
                                 self.config,
+                                diagnostics_root=_diagnostics_root_for_work_root(
+                                    self.paths.work_root
+                                ),
                                 environment=None,
                                 created_at=self.dependencies.clock(),
                             )
@@ -2350,6 +2375,9 @@ class CrawlerDriver:
                                 reason,
                                 exc,
                                 self.config,
+                                diagnostics_root=_diagnostics_root_for_work_root(
+                                    self.paths.work_root
+                                ),
                                 environment=None,
                                 created_at=self.dependencies.clock(),
                             )
@@ -2388,6 +2416,7 @@ class CrawlerDriver:
                         reason,
                         exc,
                         self.config,
+                        diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                         environment=None,
                         created_at=self.dependencies.clock(),
                     )
@@ -2422,6 +2451,7 @@ class CrawlerDriver:
                         "identity-mismatch",
                         exc,
                         self.config,
+                        diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                         environment=None,
                         created_at=self.dependencies.clock(),
                     )
@@ -2543,6 +2573,7 @@ class CrawlerDriver:
                 reason,
                 exc,
                 self.config,
+                diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                 environment=None,
                 created_at=self.dependencies.clock(),
             )
@@ -2717,6 +2748,7 @@ class CrawlerDriver:
                     reason,
                     environment_failure,
                     self.config,
+                    diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                     environment=intent.name,
                     created_at=self.dependencies.clock(),
                 )
@@ -2812,6 +2844,7 @@ class CrawlerDriver:
                             reason,
                             exc,
                             self.config,
+                            diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                             environment=environment.family,
                             created_at=self.dependencies.clock(),
                         ),
@@ -2825,7 +2858,14 @@ class CrawlerDriver:
                     },
                 )
             for attempt in generated:
-                reducer.append_attempt(_without_ledger_fields(attempt))
+                candidate = _without_ledger_fields(attempt)
+                reducer.append_attempt(
+                    _redact_attempt_diagnostics(
+                        candidate,
+                        None,
+                        _diagnostics_root_for_work_root(self.paths.work_root),
+                    )
+                )
                 self.dependencies.boundary_hook("after-attempt", item.stable_id)
             attempts = _matching_attempts(
                 self.paths.ledgers.attempts,
@@ -2857,6 +2897,7 @@ class CrawlerDriver:
                             "protocol-violation",
                             integration_error,
                             self.config,
+                            diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                             environment=environment.family,
                             created_at=self.dependencies.clock(),
                         )
@@ -2907,6 +2948,7 @@ class CrawlerDriver:
                     "protocol-violation",
                     exc,
                     self.config,
+                    diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                     environment=environment.family,
                     created_at=self.dependencies.clock(),
                 )
@@ -2934,8 +2976,9 @@ class CrawlerDriver:
             self._reduced += 1
         self.dependencies.boundary_hook("after-reduce", item.stable_id)
         current_records = reducer.current_records
-        self._handle_progress(operational, current_records, state=state)
-        if self._maybe_pause_for_review(operational, current_records, state):
+        snapshot = self._policy_snapshot()
+        self._handle_progress(operational, current_records, snapshot, state=state)
+        if self._maybe_pause_for_review(operational, current_records, snapshot, state):
             raise DriverPaused("review checkpoint reached")
         state["last_terminal_count"] = len(current_records)
         state["status"] = "running"
@@ -3080,10 +3123,23 @@ class CrawlerDriver:
                 status_code,
                 artifact.defer_evidence,
                 self.config,
+                diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
                 created_at=self.dependencies.clock(),
             )
             terminal_attempts = (reducer.append_attempt(deferral_attempt).record,)
         gates = scan_jsonl(self.paths.ledgers.gates)
+        created_at = self.dependencies.clock()
+        terminal_diagnostic_reference = (
+            _redact_terminal_detail(
+                detail,
+                item.stable_id,
+                status_code,
+                created_at,
+                _diagnostics_root_for_work_root(self.paths.work_root),
+            )
+            if status_code.startswith("failed:")
+            else None
+        )
         model = _assemble_terminal_model(
             item,
             artifact,
@@ -3093,9 +3149,10 @@ class CrawlerDriver:
             terminal_attempts,
             gates,
             self.config,
-            self.dependencies.clock(),
+            created_at,
             human_review=human_review,
             root_cause_fingerprint=root_cause_fingerprint,
+            terminal_diagnostic_reference=terminal_diagnostic_reference,
         )
         current_model = reducer.current_records.get(item.stable_id)
         model["parent_revision"] = (
@@ -3108,8 +3165,9 @@ class CrawlerDriver:
             self._reduced += 1
         self.dependencies.boundary_hook("after-reduce", item.stable_id)
         current_records = reducer.current_records
-        self._handle_progress(operational, current_records, state=state)
-        if self._maybe_pause_for_review(operational, current_records, state):
+        snapshot = self._policy_snapshot()
+        self._handle_progress(operational, current_records, snapshot, state=state)
+        if self._maybe_pause_for_review(operational, current_records, snapshot, state):
             raise DriverPaused("review checkpoint reached")
         state.update({"last_terminal_count": len(current_records), "status": "running"})
         _write_driver_state(self.paths.driver_state, state)
@@ -3127,10 +3185,43 @@ class CrawlerDriver:
         if scheduler is not None:
             scheduler.schedule(signal, operational, context, created_at, reset_at)
         else:
+            wake_callback_id = stable_hash(
+                {
+                    "mode": "scheduled-wake",
+                    "provider": provider,
+                    "reset_at": reset_at,
+                    "run_id": self.config.run_id,
+                    "machine_id": self.config.machine_id,
+                }
+            ).removeprefix("sha256:")[:32]
+            repo_root = (
+                self.paths.runtime_root.parent
+                if self.paths.runtime_root.name == ".crawl-local"
+                else Path.cwd()
+            )
             manager = WakeupManager(
                 self.paths.runtime_root / "wakeups",
                 operational,
-                [sys.executable, "-m", "menagerie.crawler", "run", "--resume"],
+                [
+                    sys.executable,
+                    "-m",
+                    "menagerie.crawler",
+                    "--repo-root",
+                    str(repo_root),
+                    "run",
+                    "--resume",
+                    "--intake",
+                    str(self.paths.intake_root),
+                    "--target",
+                    self.config.target,
+                    "--run-id",
+                    self.config.run_id,
+                    "--scheduled-wake",
+                    "--scheduled-wake-id",
+                    wake_callback_id,
+                    "--scheduled-wake-at",
+                    reset_at,
+                ],
             )
             manager.record_pause_and_schedule(
                 provider=provider,
@@ -3149,36 +3240,36 @@ class CrawlerDriver:
         self,
         operational: JsonlLedger,
         current: Mapping[str, JsonObject],
+        intake_snapshot: IntakeSnapshot,
         *,
         state: JsonObject,
     ) -> None:
         """Derive every unrecorded crossed milestone from canonical facts alone."""
 
         completed = len(current)
-        intake_snapshot_id = self.paths.intake_root.name
+        intake_snapshot_id = intake_snapshot.snapshot_id
+        intake_snapshot_sha256 = intake_snapshot.snapshot_sha256
         canonical_path = canonical_operational_ledger_path(self.paths.ledgers.models)
         canonical_events = scan_jsonl(canonical_path)
         existing = {
-            (
-                str(event.get("details", {}).get("intake_snapshot_id")),
-                int(event["milestone"]),
-            )
+            str(event.get("details", {}).get("policy_key"))
             for event in (*canonical_events, *operational.records)
             if event.get("event_kind") == OperationalEventKind.PROGRESS_NOTIFICATION.value
-            and isinstance(event.get("milestone"), int)
+            and isinstance(event.get("details", {}).get("policy_key"), str)
         }
         snapshot = _funnel_snapshot(current)
         for milestone in sorted(self.config.progress_milestones):
-            if (intake_snapshot_id, milestone) in existing or milestone > completed:
-                continue
-            created_at = self.dependencies.clock()
             policy_key = stable_hash(
                 {
                     "policy": "crawler-progress-milestone-v1",
                     "intake_snapshot_id": intake_snapshot_id,
+                    "intake_snapshot_sha256": intake_snapshot_sha256,
                     "milestone": milestone,
                 }
             )
+            if policy_key in existing or milestone > completed:
+                continue
+            created_at = self.dependencies.clock()
             event_id = f"progress-{policy_key.removeprefix('sha256:')[:24]}"
             event = {
                 "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
@@ -3197,6 +3288,7 @@ class CrawlerDriver:
                     "identity_only": True,
                     "policy_key": policy_key,
                     "intake_snapshot_id": intake_snapshot_id,
+                    "intake_snapshot_sha256": intake_snapshot_sha256,
                 },
                 "models_completed": completed,
                 "milestone": milestone,
@@ -3351,6 +3443,7 @@ class CrawlerDriver:
         self,
         operational: JsonlLedger,
         current: Mapping[str, JsonObject],
+        intake_snapshot: IntakeSnapshot,
         state: JsonObject,
     ) -> bool:
         """Create the one-shot blocking review report/event at its configured count."""
@@ -3358,11 +3451,13 @@ class CrawlerDriver:
         threshold = self.config.review_checkpoint_at
         if not threshold or len(current) < threshold:
             return False
-        intake_snapshot_id = self.paths.intake_root.name
+        intake_snapshot_id = intake_snapshot.snapshot_id
+        intake_snapshot_sha256 = intake_snapshot.snapshot_sha256
         policy_key = stable_hash(
             {
                 "policy": "crawler-review-checkpoint-v1",
                 "intake_snapshot_id": intake_snapshot_id,
+                "intake_snapshot_sha256": intake_snapshot_sha256,
                 "review_threshold": threshold,
             }
         )
@@ -3395,6 +3490,7 @@ class CrawlerDriver:
             policy_identity={
                 "policy_key": policy_key,
                 "intake_snapshot_id": intake_snapshot_id,
+                "intake_snapshot_sha256": intake_snapshot_sha256,
                 "review_threshold": threshold,
             },
         )
@@ -3415,8 +3511,8 @@ class CrawlerDriver:
         _write_driver_state(self.paths.driver_state, state)
         return True
 
-    def _review_is_pending(self, operational: JsonlLedger) -> bool:
-        """Return whether any canonical/runtime policy key lacks a signoff."""
+    def _review_is_pending(self, operational: JsonlLedger, intake_snapshot: IntakeSnapshot) -> bool:
+        """Return whether this verified snapshot's review policy lacks a signoff."""
 
         canonical_path = canonical_operational_ledger_path(self.paths.ledgers.models)
         combined_by_id = {
@@ -3424,12 +3520,23 @@ class CrawlerDriver:
             for event in (*scan_jsonl(canonical_path), *operational.records)
         }
         combined = tuple(combined_by_id.values())
+        snapshot_policy_keys = {
+            stable_hash(
+                {
+                    "policy": "crawler-review-checkpoint-v1",
+                    "intake_snapshot_id": intake_snapshot.snapshot_id,
+                    "intake_snapshot_sha256": intake_snapshot.snapshot_sha256,
+                    "review_threshold": self.config.review_checkpoint_at,
+                }
+            )
+        }
         review_keys = {
             str(event.get("details", {}).get("policy_key"))
             for event in combined
             if event.get("event_kind") == OperationalEventKind.CHECKPOINT_REVIEW.value
             and isinstance(event.get("details"), Mapping)
             and isinstance(event.get("details", {}).get("policy_key"), str)
+            and event.get("details", {}).get("policy_key") in snapshot_policy_keys
         }
         signoff_keys = {
             str(event.get("details", {}).get("policy_key"))
@@ -3437,6 +3544,7 @@ class CrawlerDriver:
             if event.get("event_kind") == OperationalEventKind.REVIEW_SIGNOFF.value
             and isinstance(event.get("details"), Mapping)
             and isinstance(event.get("details", {}).get("policy_key"), str)
+            and event.get("details", {}).get("policy_key") in snapshot_policy_keys
         }
         return bool(review_keys - signoff_keys)
 
@@ -3444,17 +3552,46 @@ class CrawlerDriver:
         self,
         operational: JsonlLedger,
         reducer: CanonicalReducer,
+        intake_snapshot: IntakeSnapshot,
         note: str,
     ) -> None:
         """Append the one-shot human review approval consumed by resume."""
 
-        record_review_signoff(
+        expected_policy_key = stable_hash(
+            {
+                "policy": "crawler-review-checkpoint-v1",
+                "intake_snapshot_id": intake_snapshot.snapshot_id,
+                "intake_snapshot_sha256": intake_snapshot.snapshot_sha256,
+                "review_threshold": self.config.review_checkpoint_at,
+            }
+        )
+        signoff = record_review_signoff(
             operational,
             approved_by_note=note,
             resume_after=len(reducer.current_records),
             context=self._context(0, None),
             created_at=self.dependencies.clock(),
         )
+        if signoff.record.get("details", {}).get("policy_key") != expected_policy_key:
+            raise DriverIntegrationError("review signoff did not bind the verified intake snapshot")
+
+    def _policy_snapshot(self) -> IntakeSnapshot:
+        """Return the verified snapshot loaded for the active locked run.
+
+        Returns
+        -------
+        IntakeSnapshot
+            Exact snapshot object whose bytes were verified by ``_run_locked``.
+
+        Raises
+        ------
+        DriverIntegrationError
+            If a policy is evaluated outside an active locked run.
+        """
+
+        if self._intake_snapshot is None:
+            raise DriverIntegrationError("snapshot policy evaluated before intake verification")
+        return self._intake_snapshot
 
     def _ordered_intents(self, grouped: Mapping[str, Sequence[WorkItem]]) -> tuple[str, ...]:
         """Return intent names in registry phase order and deterministic name order."""
@@ -6439,7 +6576,7 @@ def _diagnostics_root_for_work_root(work_root: Path) -> Path:
 
 def _redact_attempt_diagnostics(
     attempt: JsonObject,
-    observation: SupervisorObservation,
+    observation: Optional[SupervisorObservation],
     diagnostics_root: Optional[Path],
 ) -> JsonObject:
     """Persist exact local diagnostics and redact their canonical attempt projections.
@@ -6449,7 +6586,8 @@ def _redact_attempt_diagnostics(
     attempt:
         Newly assembled attempt before canonical persistence.
     observation:
-        Live :class:`SupervisorObservation` retaining exact bounded stream tails and paths.
+        Live :class:`SupervisorObservation` retaining exact bounded stream tails and paths,
+        or ``None`` for a driver-originated failure with no child process.
     diagnostics_root:
         Gitignored local sidecar root. It may be omitted only when every controlled value
         is empty, as in receipt-contract unit tests.
@@ -6477,6 +6615,8 @@ def _redact_attempt_diagnostics(
             for key, nested in value.items():
                 nested_location = f"{location}.{key}"
                 if key in _EXTERNALLY_CONTROLLED_ATTEMPT_FIELDS:
+                    if _is_diagnostic_redaction_reference(nested):
+                        continue
                     controlled[nested_location] = deepcopy(nested)
                     if nested is not None and nested != "":
                         has_nonempty_controlled = True
@@ -6486,6 +6626,8 @@ def _redact_attempt_diagnostics(
                 collect(nested, f"{location}[{index}]")
 
     collect(attempt)
+    if not has_nonempty_controlled:
+        return attempt
     if diagnostics_root is None:
         if has_nonempty_controlled:
             raise DriverIntegrationError(
@@ -6495,20 +6637,50 @@ def _redact_attempt_diagnostics(
 
     local_path = _diagnostic_relative_path(diagnostics_root, attempt_id)
     sidecar_path = diagnostics_root / f"{attempt_id}.json"
+    supervisor_value = attempt.get("supervisor_observation", {})
+    supervisor = supervisor_value if isinstance(supervisor_value, Mapping) else {}
     sidecar: JsonObject = {
         "schema_version": "menagerie.crawler.local-diagnostics.v1",
         "attempt_id": attempt_id,
         "stdout": {
-            "stream_sha256": observation.stdout_sha256,
-            "stream_bytes": observation.stdout_bytes,
-            "tail": observation.stdout_tail,
-            "full_log_path": observation.stdout_path,
+            "stream_sha256": (
+                observation.stdout_sha256
+                if observation is not None
+                else supervisor.get("stdout_sha256")
+            ),
+            "stream_bytes": (
+                observation.stdout_bytes
+                if observation is not None
+                else supervisor.get("stdout_bytes", 0)
+            ),
+            "tail": observation.stdout_tail
+            if observation is not None
+            else supervisor.get("stdout_tail", ""),
+            "full_log_path": (
+                observation.stdout_path
+                if observation is not None
+                else supervisor.get("full_log_local_path")
+            ),
         },
         "stderr": {
-            "stream_sha256": observation.stderr_sha256,
-            "stream_bytes": observation.stderr_bytes,
-            "tail": observation.stderr_tail,
-            "full_log_path": observation.stderr_path,
+            "stream_sha256": (
+                observation.stderr_sha256
+                if observation is not None
+                else supervisor.get("stderr_sha256")
+            ),
+            "stream_bytes": (
+                observation.stderr_bytes
+                if observation is not None
+                else supervisor.get("stderr_bytes", 0)
+            ),
+            "tail": observation.stderr_tail
+            if observation is not None
+            else supervisor.get("stderr_tail", ""),
+            "full_log_path": (
+                observation.stderr_path
+                if observation is not None
+                else supervisor.get("full_log_local_path")
+            ),
         },
         "externally_controlled_fields": controlled,
     }
@@ -6526,6 +6698,7 @@ def _redact_attempt_diagnostics(
                     key in _EXTERNALLY_CONTROLLED_ATTEMPT_FIELDS
                     and nested is not None
                     and nested != ""
+                    and not _is_diagnostic_redaction_reference(nested)
                 ):
                     reference: dict[str, Any] = {
                         "redaction": _DIAGNOSTIC_REDACTION_MARKER,
@@ -6534,9 +6707,17 @@ def _redact_attempt_diagnostics(
                         "diagnostic_key": nested_location,
                     }
                     if key == "stdout_tail":
-                        reference["stream_sha256"] = observation.stdout_sha256
+                        reference["stream_sha256"] = (
+                            observation.stdout_sha256
+                            if observation is not None
+                            else supervisor.get("stdout_sha256")
+                        )
                     elif key == "stderr_tail":
-                        reference["stream_sha256"] = observation.stderr_sha256
+                        reference["stream_sha256"] = (
+                            observation.stderr_sha256
+                            if observation is not None
+                            else supervisor.get("stderr_sha256")
+                        )
                     redacted[key] = reference
                 else:
                     redacted[key] = redact(nested, nested_location)
@@ -6548,10 +6729,34 @@ def _redact_attempt_diagnostics(
     redacted_attempt = redact(attempt)
     if not isinstance(redacted_attempt, dict):
         raise AssertionError("attempt redaction must preserve the top-level object")
-    supervisor = redacted_attempt.get("supervisor_observation")
-    if isinstance(supervisor, dict):
-        supervisor["full_log_local_path"] = local_path
+    redacted_supervisor = redacted_attempt.get("supervisor_observation")
+    if isinstance(redacted_supervisor, dict):
+        redacted_supervisor["full_log_local_path"] = local_path
     return redacted_attempt
+
+
+def _is_diagnostic_redaction_reference(value: Any) -> bool:
+    """Return whether a value is an already-redacted C-07 sidecar reference.
+
+    Parameters
+    ----------
+    value:
+        Candidate diagnostic field value.
+
+    Returns
+    -------
+    bool
+        Whether the value carries the closed redaction marker and required locator fields.
+    """
+
+    return bool(
+        isinstance(value, Mapping)
+        and value.get("redaction") == _DIAGNOSTIC_REDACTION_MARKER
+        and all(
+            isinstance(value.get(field), str) and value.get(field)
+            for field in ("content_sha256", "local_path", "diagnostic_key")
+        )
+    )
 
 
 def _parent_cache_read_attempted(policy: Mapping[str, Any]) -> bool:
@@ -7579,6 +7784,7 @@ def _driver_failure_attempt(
     exc: Exception,
     config: DriverConfig,
     *,
+    diagnostics_root: Path,
     environment: Optional[str],
     created_at: str,
 ) -> JsonObject:
@@ -7607,7 +7813,7 @@ def _driver_failure_attempt(
         }
     )
     formatted = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
-    return {
+    attempt: JsonObject = {
         "schema_version": ATTEMPT_SCHEMA_VERSION,
         "attempt_id": attempt_id,
         "work_id": proposal.get("work_id", f"work-{item.stable_id}"),
@@ -7722,6 +7928,7 @@ def _driver_failure_attempt(
         },
         "defer_evidence": None,
     }
+    return _redact_attempt_diagnostics(attempt, None, diagnostics_root)
 
 
 def _driver_deferral_attempt(
@@ -7731,6 +7938,7 @@ def _driver_deferral_attempt(
     evidence: Mapping[str, Any],
     config: DriverConfig,
     *,
+    diagnostics_root: Path,
     created_at: str,
 ) -> JsonObject:
     """Build one observed driver attempt retaining positive platform evidence."""
@@ -7747,6 +7955,7 @@ def _driver_deferral_attempt(
         "probe-failed",
         marker,
         config,
+        diagnostics_root=diagnostics_root,
         environment=item.route.intent,
         created_at=created_at,
     )
@@ -7760,7 +7969,50 @@ def _driver_deferral_attempt(
     attempt["result"] = "observed"
     attempt["error"] = None
     attempt["defer_evidence"] = deepcopy(dict(evidence))
-    return attempt
+    return _redact_attempt_diagnostics(attempt, None, diagnostics_root)
+
+
+def _redact_terminal_detail(
+    detail: Optional[str],
+    stable_id: str,
+    status_code: str,
+    created_at: str,
+    diagnostics_root: Path,
+) -> Optional[Mapping[str, Any]]:
+    """Persist a terminal diagnostic and return its structured sidecar reference.
+
+    Parameters
+    ----------
+    detail:
+        Exception- or checker-derived terminal detail.
+    stable_id, status_code, created_at:
+        Stable facts used to identify an idempotent local diagnostic sidecar.
+    diagnostics_root:
+        Gitignored campaign diagnostics root.
+
+    Returns
+    -------
+    Mapping[str, Any] | None
+        Checkpoint-approved sidecar reference, or ``None`` for empty detail.
+    """
+
+    if detail is None or detail == "":
+        return None
+    diagnostic_id = stable_hash(
+        {
+            "kind": "terminal-detail",
+            "stable_id": stable_id,
+            "status_code": status_code,
+            "created_at": created_at,
+            "detail": detail,
+        }
+    )
+    payload: JsonObject = {"attempt_id": diagnostic_id, "traceback": detail}
+    redacted = _redact_attempt_diagnostics(payload, None, diagnostics_root)
+    reference = redacted.get("traceback")
+    if not isinstance(reference, Mapping):
+        raise DriverIntegrationError("terminal diagnostic redaction did not produce a reference")
+    return reference
 
 
 def _placeholder_facts(item: WorkItem, created_at: str) -> JsonObject:
@@ -7959,6 +8211,7 @@ def _assemble_terminal_model(
     *,
     human_review: bool,
     root_cause_fingerprint: Optional[str],
+    terminal_diagnostic_reference: Optional[Mapping[str, Any]] = None,
 ) -> JsonObject:
     """Assemble one schema-complete driver terminal revision from durable evidence."""
 
@@ -8020,15 +8273,22 @@ def _assemble_terminal_model(
     error = failed_attempt.get("error") if failed_attempt is not None else None
     if isinstance(error, Mapping):
         traceback_text = error.get("traceback")
+        message_reference = error.get("message")
         no_traceback_reason = error.get("no_traceback_reason")
         fingerprint = root_cause_fingerprint or str(error["root_cause_fingerprint"])
     else:
         traceback_text = None
+        message_reference = None
         no_traceback_reason = "terminal checker or author decision produced no Python traceback"
         fingerprint = root_cause_fingerprint or stable_hash(
             {"stable_id": item.stable_id, "status": status_code, "detail": detail}
         )
     kind = status_code.split(":", 1)[0]
+    status_diagnostic_reference = (
+        traceback_text or message_reference or terminal_diagnostic_reference
+        if kind == "failed"
+        else None
+    )
     stage = status_code.split(":", 1)[1] if kind == "failed" else None
     attempt_ids = [str(attempt["attempt_id"]) for attempt in attempts]
     last_environment = attempts[-1].get("environment") if attempts else None
@@ -8116,8 +8376,8 @@ def _assemble_terminal_model(
             "code": status_code,
             "stage": stage,
             "reason_code": reason_code,
-            "detail": detail,
-            "traceback": traceback_text if kind == "failed" else None,
+            "detail": None if kind == "failed" else detail,
+            "traceback": status_diagnostic_reference,
             "no_traceback_reason": no_traceback_reason if kind == "failed" else None,
             "attempted_rungs": [source_rung],
             "retries": {
@@ -8145,7 +8405,7 @@ def _assemble_terminal_model(
             "supersedes_revision": None,
             "human_review": {
                 "required": human_review,
-                "reason": detail if human_review else None,
+                "reason": None,
                 "queue": "crawler-human-review" if human_review else None,
                 "requested_at": created_at if human_review else None,
             },

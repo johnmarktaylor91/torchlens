@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any, Iterable, Mapping, Optional, Union
 
 from menagerie.crawler.constants import (
@@ -70,6 +72,115 @@ _MODALITY_STANDARD_ASSETS = {
     "vision": "image.ppm",
 }
 _WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V1 "
+_DIAGNOSTIC_REDACTION_MARKER = "externally-controlled-text-v1"
+_HASH_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
+_SAFE_EXCERPT_DISPOSITIONS = frozenset(
+    {"public-compatible", "public-domain", "short-excerpt-committed"}
+)
+_EXTERNALLY_CONTROLLED_RECORD_FIELDS = frozenset(
+    {
+        "message",
+        "mode_error",
+        "observed_response",
+        "receipt_error",
+        "response_excerpt",
+        "stderr_tail",
+        "stdout_tail",
+        "traceback",
+    }
+)
+
+
+def _is_safe_diagnostic_redaction(value: Any) -> bool:
+    """Return whether a C-07 field contains no raw externally controlled text.
+
+    Parameters
+    ----------
+    value:
+        Candidate externally controlled field value.
+
+    Returns
+    -------
+    bool
+        ``True`` for empty values or the checkpoint-approved sidecar reference shape.
+    """
+
+    if value is None or value == "":
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    if value.get("license_disposition") in _SAFE_EXCERPT_DISPOSITIONS:
+        return bool(
+            _HASH_PATTERN.fullmatch(str(value.get("text_sha256", "")))
+            and isinstance(value.get("locator"), str)
+        )
+    required = {"redaction", "content_sha256", "local_path", "diagnostic_key"}
+    allowed = required | {"stream_sha256"}
+    local_path = str(value.get("local_path", ""))
+    pure_local = PurePosixPath(local_path)
+    stream_sha256 = value.get("stream_sha256")
+    return bool(
+        set(value) <= allowed
+        and required <= set(value)
+        and value.get("redaction") == _DIAGNOSTIC_REDACTION_MARKER
+        and _HASH_PATTERN.fullmatch(str(value.get("content_sha256", "")))
+        and pure_local.parts[:2] == (".crawl-local", "diagnostics")
+        and ".." not in pure_local.parts
+        and pure_local.suffix == ".json"
+        and re.fullmatch(r"\$[A-Za-z0-9_.\[\]-]+", str(value.get("diagnostic_key", "")))
+        and (stream_sha256 is None or _HASH_PATTERN.fullmatch(str(stream_sha256)) is not None)
+    )
+
+
+def _validate_c07_diagnostic_fields(record: Mapping[str, Any], *, model: bool) -> None:
+    """Reject raw C-07 diagnostic values before a canonical append.
+
+    Parameters
+    ----------
+    record:
+        Proposed attempt or model record.
+    model:
+        Whether model-only failed-detail and human-review fields are in scope.
+
+    Raises
+    ------
+    ReductionError
+        If any protected field contains raw text or a forged redaction reference.
+    """
+
+    findings: list[str] = []
+
+    def visit(value: Any, location: str = "$") -> None:
+        """Collect unsafe protected values recursively."""
+
+        if isinstance(value, Mapping):
+            for key, nested in value.items():
+                nested_location = f"{location}.{key}"
+                failed_status_detail = bool(
+                    model
+                    and key == "detail"
+                    and location.endswith(".status")
+                    and value.get("kind") == "failed"
+                )
+                human_review_reason = bool(
+                    model and key == "reason" and location.endswith(".status.human_review")
+                )
+                if (
+                    key in _EXTERNALLY_CONTROLLED_RECORD_FIELDS
+                    or failed_status_detail
+                    or human_review_reason
+                ) and not _is_safe_diagnostic_redaction(nested):
+                    findings.append(nested_location)
+                visit(nested, nested_location)
+        elif isinstance(value, list):
+            for index, nested in enumerate(value):
+                visit(nested, f"{location}[{index}]")
+
+    visit(record)
+    if findings:
+        raise ReductionError(
+            f"canonical record contains unredacted externally controlled text: fields={findings}"
+        )
 
 
 def expected_standard_asset(modality: object) -> Optional[dict[str, str]]:
@@ -495,6 +606,14 @@ class CanonicalReducer:
             for ledger in reversed(opened):
                 ledger.close()
             raise
+        try:
+            for attempt in self._attempts.records:
+                _validate_c07_diagnostic_fields(attempt, model=False)
+            for model in self._models.records:
+                _validate_c07_diagnostic_fields(model, model=True)
+        except ReductionError:
+            self.close()
+            raise
         self._current = _select_current(self._models.records)
         _validate_persisted_requeue_lineage(
             self._models.records,
@@ -563,6 +682,7 @@ class CanonicalReducer:
             Idempotent append result.
         """
 
+        _validate_c07_diagnostic_fields(attempt, model=False)
         stable_id = attempt.get("stable_id")
         if stable_id is not None and stable_id not in self.intake_ids:
             raise ReductionError(f"attempt stable_id is outside intake: {stable_id}")
@@ -683,6 +803,7 @@ class CanonicalReducer:
         """
 
         candidate = deepcopy(dict(model))
+        _validate_c07_diagnostic_fields(candidate, model=True)
         stable_id = candidate.get("stable_id")
         if stable_id not in self.intake_ids:
             raise ReductionError(f"model stable_id is outside intake: {stable_id}")

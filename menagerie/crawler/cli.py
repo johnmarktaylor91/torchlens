@@ -13,9 +13,16 @@ from typing import Optional, Protocol, Sequence
 
 from menagerie.crawler.checkpoint import (
     CheckpointError,
+    append_canonical_operational_event,
     append_canonical_requeue_grant,
     build_canonical_requeue_grant,
+    canonical_operational_ledger_path,
     create_canonical_checkpoint,
+)
+from menagerie.crawler.constants import (
+    OPERATIONAL_EVENT_SCHEMA_VERSION,
+    OperationalEventKind,
+    OperationalEventStatus,
 )
 from menagerie.crawler.doctor import DoctorConfig, DoctorError, DoctorProbes, run_doctor
 from menagerie.crawler.driver import (
@@ -226,6 +233,9 @@ def _add_driver_config_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--notify-command")
     parser.add_argument("--run-id", default="crawler-run")
+    parser.add_argument("--scheduled-wake", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--scheduled-wake-id", help=argparse.SUPPRESS)
+    parser.add_argument("--scheduled-wake-at", help=argparse.SUPPRESS)
     parser.add_argument(
         "--author-command",
         default=os.environ.get("MENAGERIE_AUTHOR_COMMAND"),
@@ -311,13 +321,72 @@ def _driver_command(args: argparse.Namespace, factory: DriverFactory) -> int:
 
     driver = factory(args)
     after_review = bool(getattr(args, "after_review", False))
-    result: DriverResult = driver.run(after_review=after_review)
+    scheduled_wake = bool(getattr(args, "scheduled_wake", False))
+    wake_id = getattr(args, "scheduled_wake_id", None)
+    wake_at = getattr(args, "scheduled_wake_at", None)
+    if scheduled_wake and (not isinstance(wake_id, str) or not isinstance(wake_at, str)):
+        raise ValueError(
+            "scheduled wake callbacks require --scheduled-wake-id and --scheduled-wake-at"
+        )
+    try:
+        result: DriverResult = driver.run(after_review=after_review)
+    except DriverLockError:
+        if not scheduled_wake:
+            raise
+        if not isinstance(wake_id, str) or not isinstance(wake_at, str):
+            raise AssertionError("validated scheduled wake identity was lost")
+        _record_scheduled_wake_noop(driver, wake_id, wake_at)
+        print(
+            json.dumps(
+                {
+                    "status": OperationalEventStatus.WAKE_NOOP_ALREADY_RUNNING.value,
+                    "wake_id": wake_id,
+                },
+                sort_keys=True,
+            )
+        )
+        return EXIT_OK
     output: dict[str, object] = dict(result.__dict__)
     if bool(getattr(args, "dry_run", False)):
         current = materialize_current(driver.paths.ledgers)
         output.update({"dry_run": True, "funnel": funnel_counts(current)})
     print(json.dumps(output, sort_keys=True))
     return EXIT_PAUSED if result.paused_reason is not None else EXIT_OK
+
+
+def _record_scheduled_wake_noop(driver: CrawlerDriver, wake_id: str, wake_at: str) -> None:
+    """Record one idempotent scheduled-wake live-lock outcome canonically.
+
+    Parameters
+    ----------
+    driver:
+        Driver whose authoritative kernel lock was found live.
+    wake_id, wake_at:
+        Explicit scheduler callback identity and immutable scheduled timestamp.
+    """
+
+    event = {
+        "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+        "event_id": f"wake-noop-{wake_id}",
+        "created_at": wake_at,
+        "event_kind": OperationalEventKind.WAKE_NOOP_ALREADY_RUNNING.value,
+        "status": OperationalEventStatus.WAKE_NOOP_ALREADY_RUNNING.value,
+        "provider": None,
+        "observed_response": None,
+        "reset_at": wake_at,
+        "queued_work_counts": {"models": 0},
+        "current_environment": None,
+        "run_id": driver.config.run_id,
+        "machine_id": driver.config.machine_id,
+        "details": {
+            "mode": "scheduled-wake",
+            "wake_id": wake_id,
+            "authoritative_driver_lock_live": True,
+        },
+    }
+    append_canonical_operational_event(
+        canonical_operational_ledger_path(driver.paths.ledgers.models), event
+    )
 
 
 def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
