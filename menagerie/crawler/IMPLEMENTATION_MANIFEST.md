@@ -56,8 +56,8 @@ environment after the registry contract is fixed.
 | 40 | F | `menagerie/crawler/driver.py` | Run the single-writer scheduler, lock guard, env lifecycle, author/check lanes, forwards, and reduction. | 14-15, 22, 26-35, 38-39 |
 | 41 | F | `menagerie/crawler/cli.py` | Expose doctor/intake/plan/run/status/checkpoint/teardown/requeue/handoff commands with typed args. | 15-17, 31-40 |
 | 42 | F | `menagerie/crawler/doctor.py` | Verify target, branch, disk, locks, mirrors, Claude Code author WebSearch + Exa availability, secrets, policy tripwires, wakeups, and TorchLens ban. | 20, 33, 36-39 |
-| 43 | G | `menagerie/crawler/prompts/claude_crawler_author_v2.txt` | Byte-for-byte frozen canonical author prompt from PLAN section 18.1. | PLAN section 18.1 |
-| 44 | G | `menagerie/crawler/prompts/codex_accuracy_checker_v2.txt` | Byte-for-byte frozen canonical checker prompt from PLAN section 18.2. | PLAN section 18.2 |
+| 43 | G | `menagerie/crawler/prompts/claude_crawler_author_v2.txt` | Byte-for-byte frozen canonical v3 author-result prompt from PLAN section 18.1. | PLAN section 18.1 |
+| 44 | G | `menagerie/crawler/prompts/codex_accuracy_checker_v2.txt` | Byte-for-byte frozen canonical v3 checker prompt from PLAN section 18.2. | PLAN section 18.2 |
 | 45 | G | `menagerie/crawler/tools/requeue.py` | Append explicit budget grants/new work generations without mutating history. | 12-15, 32 |
 | 46 | G | `menagerie/crawler/tools/license_sweep.py` | CLI wrapper for public/private byte-boundary and license-report enforcement. | 37, 39 |
 | 47 | G | `menagerie/crawler/tools/rebuild_views.py` | Rebuild and digest current/release/deferred views from canonical JSONL only. | 12-15 |

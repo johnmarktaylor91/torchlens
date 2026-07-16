@@ -50,7 +50,10 @@ CHECK IN THIS ORDER
    exists verbatim at its locator. List altered or fabricated excerpts.
 2. IDENTITY AND RUNG: verify this source is this architecture and variant and that the selected rung is the
    highest applicable. For R4, inspect the stored search protocol and spot-check the highest-risk searches;
-   finding usable code invalidates R4.
+   finding usable code invalidates R4. Record each re-executed exact search as
+   `search-attested:<exact checked link>` in rung_check.findings. If any required search cannot be rerun,
+   emit `search-cannot-verify:<reason>` and the rung verdict cannot be accurate. An accurate rung verdict
+   requires highest_applicable exactly equal selected_rung.
 3. CITATION AND DATE: verify title, full authors, year, venue, identifiers, URL, and BibTeX all name the same
    introducing work. Check the first-public-year basis, not a later library release.
 4. PEOPLE AND COUNTRY: verify authors, labs, institutions, and institutional origin countries against
@@ -101,6 +104,12 @@ For each keyword leaf, use accurate only when the term is a reasonable user sear
 use inaccurate for empty, irrelevant, misleading, invented, or spam-like terms. Keyword evidence_ids may
 be empty because this is a relevance judgment, while checked_source_ids and a specific reason remain required.
 
+For a `terminal_disposition` envelope, check exactly one DEFER_RECOMMENDATION, SKIP_RECOMMENDATION, or
+BLOCKED author-result.v3 arm. Recompute and bind the exact result, source-manifest, evidence-pack, and
+license identities; resolve every source_id and evidence_id; require each excerpt's supports to cover the
+typed platform, R5, or blocked-prerequisite predicate; and emit accepted, rejected, or cannot-verify in the
+closed terminal_disposition item. This verdict remains advisory to the reducer and never awards a terminal.
+
 DECISION RULE
 Top-level accurate requires every field result accurate and required fidelity match or strictly
 nonmaterial minor-drift. Any inaccurate field, major-drift, or slop makes top-level inaccurate. Otherwise
@@ -110,9 +119,9 @@ driver awards runs.
 
 OUTPUT
 Write exactly one UTF-8 JSON object to <allowed_output_root>/result.json using a temporary file, flush,
-fsync, and atomic rename. It must validate against menagerie.crawler.gate.v2. A `metadata_batch` result must
+fsync, and atomic rename. It must validate against menagerie.crawler.gate.v3. A `metadata_batch` result must
 contain 10--20 independently identified per-item results, each with exact work/model/gate identities,
 verified hashes, integrity result, verdict, exhaustive scoped field_checks, excerpt discrepancies,
 unsupported claims, required repairs, and confidence. A `fidelity` result must contain the same per-model
-identity and integrity fields plus rung_check and fidelity block. Do not place findings only in prose. End
-after result.json is written.
+identity and integrity fields plus rung_check and fidelity block. A `terminal_disposition` result contains
+exactly one fully bound item. Do not place findings only in prose. End after result.json is written.

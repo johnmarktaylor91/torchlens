@@ -6,20 +6,29 @@ import re
 from copy import deepcopy
 from typing import Any, Mapping, Optional
 
+from menagerie.crawler.authority import DependencyState, FamilyAuthority
+from menagerie.crawler.constants import MODEL_SCHEMA_VERSION_V3
 from menagerie.crawler.identity import canonical_json_bytes, stable_hash
+from menagerie.crawler.metadata import (
+    authored_model_leaves,
+    proposal_fact_block,
+    validate_authored_facts_for_write,
+)
 from menagerie.crawler.models import JsonObject
 
 VETTED_TEXT_FIELDS = ("tagline", "description", "key_contribution", "voice_version")
-INHERITED_METADATA_FIELDS = (
-    "taxonomy",
-    "external_metadata",
-    "people_and_origin",
-    "dates",
-    "citation",
-    "licenses",
-    "source_resolution",
-    "evidence",
+VARIANT_MECHANICAL_AUTHOR_PATHS = frozenset(
+    {
+        "website.kind",
+        "website.template_hash",
+        "website.template_source_model_id",
+        "website.variant_parameter_input_line",
+        "implementation.library_recipe.kwargs",
+        "implementation.library_recipe.symbol",
+        "implementation.recipe_revision",
+    }
 )
+_LEGACY_V2_VARIANT_PATHS = frozenset({"identity.canonical_name"})
 VARIANT_PARAMETER_INPUT_PATTERN = re.compile(
     r"^(?:0|[1-9][0-9]*) parameters; input \[(?:0|[1-9][0-9]*)"
     r"(?:, (?:0|[1-9][0-9]*))*\]$"
@@ -269,10 +278,20 @@ def family_variant_currency_error(
         Stable-family reason, or ``None`` for a non-variant/current variant.
     """
 
-    website = variant.get("website")
-    if not isinstance(website, Mapping) or website.get("kind") != "size-variant-template":
-        return None
-    representative_id = website.get("template_source_model_id")
+    if variant.get("schema_version") == MODEL_SCHEMA_VERSION_V3:
+        authority_block = variant.get("family_authority")
+        if not isinstance(authority_block, Mapping):
+            return "missing trusted family authority"
+        if authority_block.get("binding_state") == "ordinary":
+            return None
+        if authority_block.get("binding_state") != "variant":
+            return "invalid trusted family binding state"
+        representative_id = authority_block.get("representative_stable_id")
+    else:
+        website = variant.get("website")
+        if not isinstance(website, Mapping) or website.get("kind") != "size-variant-template":
+            return None
+        representative_id = website.get("template_source_model_id")
     if not isinstance(representative_id, str) or not representative_id:
         return "missing representative binding"
     representative = current.get(representative_id)
@@ -284,6 +303,9 @@ def family_variant_currency_error(
     if not isinstance(derivation, Mapping):
         return "missing derivation payload"
     try:
+        if variant.get("schema_version") == MODEL_SCHEMA_VERSION_V3:
+            authority = _family_authority_from_model(variant)
+            validate_family_variant_authority(representative, variant, authority)
         validate_size_variant(
             representative,
             variant,
@@ -300,6 +322,78 @@ def family_variant_currency_error(
     except FamilyTemplateError as exc:
         return str(exc)
     return None
+
+
+def validate_family_variant_authority(
+    representative: Mapping[str, Any],
+    variant: Mapping[str, Any],
+    authority: FamilyAuthority,
+    *,
+    representative_gate_item: Mapping[str, Any] | None = None,
+) -> None:
+    """Validate a v3 variant against trusted family authority and gate parity.
+
+    Parameters
+    ----------
+    representative, variant:
+        Exact representative and derived variant model revisions.
+    authority:
+        Frozen trusted-intake family binding supplied by the authority kernel.
+    representative_gate_item:
+        Optional exact accepted representative checker item. When supplied, the
+        ordinary authored write gate is rerun over representative facts and the
+        variant must bind the same representative vet identity.
+
+    Raises
+    ------
+    FamilyTemplateError
+        If trusted binding, representative revision, author-gated parity, or gate
+        parity differs.
+    """
+
+    representative_id = authority.representative_stable_id
+    if not isinstance(representative_id, str) or representative_id in {
+        DependencyState.NOT_APPLICABLE.value,
+        DependencyState.PENDING_UNTRUSTED.value,
+    }:
+        raise FamilyTemplateError("variant family authority lacks a representative stable ID")
+    if authority.stable_id != variant.get("stable_id"):
+        raise FamilyTemplateError("family authority stable ID does not match the variant")
+    if representative.get("stable_id") != representative_id:
+        raise FamilyTemplateError("family authority representative stable ID is mismatched")
+    if authority.representative_revision != representative.get("record_revision"):
+        raise FamilyTemplateError("family authority representative revision is stale")
+    if authority.template_source_revision != representative.get("record_revision"):
+        raise FamilyTemplateError("family authority template source revision is stale")
+    derivation = variant.get("family_variant_derivation")
+    if not isinstance(derivation, Mapping):
+        raise FamilyTemplateError("variant lacks its reducer-derived family derivation")
+    if derivation.get("variant_token") != authority.variant_token:
+        raise FamilyTemplateError("family authority variant token is mismatched")
+    if derivation.get("template_source_revision") != authority.template_source_revision:
+        raise FamilyTemplateError("family derivation does not bind the authority template revision")
+    _validate_inherited_metadata(representative, variant)
+    if representative_gate_item is None:
+        return
+    if representative_gate_item.get("stable_id") != representative_id:
+        raise FamilyTemplateError("variant gate parity did not use the representative checker item")
+    representative_accuracy = representative.get("accuracy_gate")
+    variant_accuracy = variant.get("accuracy_gate")
+    if not isinstance(representative_accuracy, Mapping) or not isinstance(
+        variant_accuracy, Mapping
+    ):
+        raise FamilyTemplateError("family gate parity requires complete accuracy-gate blocks")
+    expected_vet = representative_accuracy.get("vet_identity")
+    if representative_gate_item.get("vet_identity") != expected_vet:
+        raise FamilyTemplateError("representative checker item vet identity is stale")
+    if variant_accuracy.get("vet_identity") != expected_vet:
+        raise FamilyTemplateError("variant does not inherit the representative vet identity")
+    try:
+        validate_authored_facts_for_write(
+            proposal_fact_block(representative), representative_gate_item
+        )
+    except ValueError as exc:
+        raise FamilyTemplateError(f"representative authored write gate failed: {exc}") from exc
 
 
 def mechanical_variant_parameter_input_line(
@@ -511,9 +605,7 @@ def _template_identity_payload(
         if not isinstance(revision, str) or not revision.strip():
             raise FamilyTemplateError("representative record revision must be non-empty")
         payload["template_source_revision"] = revision
-        payload["inherited_metadata"] = {
-            field: representative.get(field) for field in INHERITED_METADATA_FIELDS
-        }
+        payload["inherited_author_gated_leaves"] = _inherited_author_gated_leaves(representative)
     return payload
 
 
@@ -535,11 +627,62 @@ def _validate_inherited_metadata(
 
     if "website" not in representative or "website" not in variant:
         raise FamilyTemplateError("family template validation requires two complete records")
-    for field in INHERITED_METADATA_FIELDS:
-        if canonical_json_bytes(representative.get(field)) != canonical_json_bytes(
-            variant.get(field)
-        ):
-            raise FamilyTemplateError(f"variant differs in inherited metadata field {field!r}")
+    representative_leaves = _inherited_author_gated_leaves(representative)
+    variant_leaves = _inherited_author_gated_leaves(variant)
+    if canonical_json_bytes(representative_leaves) == canonical_json_bytes(variant_leaves):
+        return
+    changed = sorted(
+        path
+        for path in set(representative_leaves) | set(variant_leaves)
+        if canonical_json_bytes(representative_leaves.get(path))
+        != canonical_json_bytes(variant_leaves.get(path))
+    )
+    raise FamilyTemplateError(f"variant differs in inherited author-gated leaves: {changed}")
+
+
+def _inherited_author_gated_leaves(model: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Return schema-derived family leaves after ruled mechanical deltas."""
+
+    try:
+        leaves = authored_model_leaves(model)
+    except ValueError as exc:
+        raise FamilyTemplateError(f"cannot derive authored family ownership: {exc}") from exc
+    excluded = VARIANT_MECHANICAL_AUTHOR_PATHS
+    if model.get("schema_version") != MODEL_SCHEMA_VERSION_V3:
+        # The unwired v2 hub still derives a display name from trusted intake. V2 is
+        # legacy-untrusted under the frozen contract; the v3 authority path below
+        # intentionally has no such exception.
+        excluded = excluded | _LEGACY_V2_VARIANT_PATHS
+    return {path: value for path, value in leaves.items() if path not in excluded}
+
+
+def _family_authority_from_model(model: Mapping[str, Any]) -> FamilyAuthority:
+    """Parse the frozen family authority value already carried by a v3 model."""
+
+    value = model.get("family_authority")
+    if not isinstance(value, Mapping):
+        raise FamilyTemplateError("v3 variant is missing family authority")
+    required = (
+        "representative_stable_id",
+        "representative_revision",
+        "representative_gate_id",
+        "representative_proposal_id",
+        "variant_token",
+        "template_source_revision",
+        "derivation_rule_identity",
+    )
+    if any(not isinstance(value.get(field), str) for field in required):
+        raise FamilyTemplateError("v3 variant family authority is incomplete")
+    return FamilyAuthority(
+        stable_id=str(model.get("stable_id")),
+        representative_stable_id=str(value["representative_stable_id"]),
+        representative_revision=str(value["representative_revision"]),
+        representative_gate_id=str(value["representative_gate_id"]),
+        representative_proposal_id=str(value["representative_proposal_id"]),
+        variant_token=str(value["variant_token"]),
+        template_source_revision=str(value["template_source_revision"]),
+        derivation_rule_identity=str(value["derivation_rule_identity"]),
+    )
 
 
 def _representative_website(representative: Mapping[str, Any]) -> Mapping[str, Any]:

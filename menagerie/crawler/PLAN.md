@@ -924,7 +924,7 @@ and say task/domain only when grounded.
 3. The checker dispatcher packs 10--20 eligible description/lightweight-metadata proposals into one fresh
    Codex `metadata_batch` envelope; each item includes its own frozen pack and stored source excerpt.
    Required R3/R4 fidelity review uses a separate fresh per-model `fidelity` envelope.
-4. Codex atomically writes `gate.v2` with a per-item verdict. The dispatcher independently recomputes all
+4. Codex atomically writes `gate.v3` with a per-item verdict. The dispatcher independently recomputes all
    identities and rejects any batch summary that lacks an item result.
 5. `accurate`: the single writer appends that item's authored facts and gate only after its batch result.
 6. `inaccurate`: exact findings go to Claude for a bounded repair against the same frozen pack; the repaired
@@ -1439,7 +1439,7 @@ RANDOM-INITIALIZATION AND EXECUTION POLICY
   execute every accepted recipe independently using the canonical cold-forward policy.
 
 DO-IT-ONCE REQUIRED CONTENT
-Before finishing, fill every source-reading field in author-proposal.v2:
+Before finishing, fill every source-reading field in author-proposal.v3:
 1. canonical name, aliases/acronym, family relationship, representative/variant scope, duplicate links,
    domains, tasks, modalities, era, architecture tags, and novel operators;
 2. website English: a neutral tagline of at most 12 words, a grounded two-to-four-sentence paragraph, and
@@ -1526,7 +1526,13 @@ OUTPUT
 Write exactly one UTF-8 JSON object to <allowed_output_root>/result.json using a temporary file, flush,
 fsync, and atomic rename. Use required_result_schema exactly. Important information must be in typed fields,
 never only prose. Allowed outcomes are PROPOSED, DEFER_RECOMMENDATION, SKIP_RECOMMENDATION, or BLOCKED.
-Do not output runs, accurate, or a fidelity verdict. End after result.json is written.
+Every outcome is an advisory author-result.v3 arm and must repeat the envelope's exact stable/work/campaign,
+author/prompt/dispatcher, source-manifest, and intake identities. PROPOSED embeds one complete
+author-proposal.v3. DEFER_RECOMMENDATION may recommend only cuda or x86 and binds exact source/evidence/
+license identities. SKIP_RECOMMENDATION may recommend only one closed R5 status and binds its exact search,
+source/evidence/license identities. BLOCKED binds one closed stage/reason and exact prerequisite evidence.
+Compute every arm's recommendation/result hash over the exact closed payload. Do not output runs, accurate,
+a fidelity verdict, or a terminal award. End after result.json is written.
 ```
 
 ### 18.2 Codex accuracy and fidelity checker prompt
@@ -1584,7 +1590,10 @@ CHECK IN THIS ORDER
    exists verbatim at its locator. List altered or fabricated excerpts.
 2. IDENTITY AND RUNG: verify this source is this architecture and variant and that the selected rung is the
    highest applicable. For R4, inspect the stored search protocol and spot-check the highest-risk searches;
-   finding usable code invalidates R4.
+   finding usable code invalidates R4. Record each re-executed exact search as
+   `search-attested:<exact checked link>` in rung_check.findings. If any required search cannot be rerun,
+   emit `search-cannot-verify:<reason>` and the rung verdict cannot be accurate. An accurate rung verdict
+   requires highest_applicable exactly equal selected_rung.
 3. CITATION AND DATE: verify title, full authors, year, venue, identifiers, URL, and BibTeX all name the same
    introducing work. Check the first-public-year basis, not a later library release.
 4. PEOPLE AND COUNTRY: verify authors, labs, institutions, and institutional origin countries against
@@ -1635,6 +1644,12 @@ For each keyword leaf, use accurate only when the term is a reasonable user sear
 use inaccurate for empty, irrelevant, misleading, invented, or spam-like terms. Keyword evidence_ids may
 be empty because this is a relevance judgment, while checked_source_ids and a specific reason remain required.
 
+For a `terminal_disposition` envelope, check exactly one DEFER_RECOMMENDATION, SKIP_RECOMMENDATION, or
+BLOCKED author-result.v3 arm. Recompute and bind the exact result, source-manifest, evidence-pack, and
+license identities; resolve every source_id and evidence_id; require each excerpt's supports to cover the
+typed platform, R5, or blocked-prerequisite predicate; and emit accepted, rejected, or cannot-verify in the
+closed terminal_disposition item. This verdict remains advisory to the reducer and never awards a terminal.
+
 DECISION RULE
 Top-level accurate requires every field result accurate and required fidelity match or strictly
 nonmaterial minor-drift. Any inaccurate field, major-drift, or slop makes top-level inaccurate. Otherwise
@@ -1644,12 +1659,12 @@ driver awards runs.
 
 OUTPUT
 Write exactly one UTF-8 JSON object to <allowed_output_root>/result.json using a temporary file, flush,
-fsync, and atomic rename. It must validate against menagerie.crawler.gate.v2. A `metadata_batch` result must
+fsync, and atomic rename. It must validate against menagerie.crawler.gate.v3. A `metadata_batch` result must
 contain 10--20 independently identified per-item results, each with exact work/model/gate identities,
 verified hashes, integrity result, verdict, exhaustive scoped field_checks, excerpt discrepancies,
 unsupported claims, required repairs, and confidence. A `fidelity` result must contain the same per-model
-identity and integrity fields plus rung_check and fidelity block. Do not place findings only in prose. End
-after result.json is written.
+identity and integrity fields plus rung_check and fidelity block. A `terminal_disposition` result contains
+exactly one fully bound item. Do not place findings only in prose. End after result.json is written.
 ```
 
 ## 19. Extensibility

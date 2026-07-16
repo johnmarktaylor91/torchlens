@@ -335,9 +335,9 @@ class FakeChecker(CheckerLane):
                 "proposal": proposal["proposal_sha256"],
                 **proposal["verified_hashes"],
             }
-            item["rung_check"]["selected_rung"] = proposal["proposed_facts"]["source_resolution"][
-                "rung"
-            ]
+            selected_rung = proposal["proposed_facts"]["source_resolution"]["rung"]
+            item["rung_check"]["selected_rung"] = selected_rung
+            item["rung_check"]["highest_applicable"] = selected_rung
             item["field_checks"] = [
                 {
                     "field": field,
@@ -384,9 +384,9 @@ class FakeChecker(CheckerLane):
             "proposal": artifact.proposal["proposal_sha256"],
             **artifact.proposal["verified_hashes"],
         }
-        item["rung_check"]["selected_rung"] = artifact.proposal["proposed_facts"][
-            "source_resolution"
-        ]["rung"]
+        selected_rung = artifact.proposal["proposed_facts"]["source_resolution"]["rung"]
+        item["rung_check"]["selected_rung"] = selected_rung
+        item["rung_check"]["highest_applicable"] = selected_rung
         gate["checker"].update(
             {
                 "model": config.checker_model,
@@ -1631,6 +1631,9 @@ for result_item, request_item in zip(gate["items"], request["items"], strict=Tru
     result_item["rung_check"]["selected_rung"] = request_item["proposal"][
         "proposed_facts"
     ]["source_resolution"]["rung"]
+    result_item["rung_check"]["highest_applicable"] = result_item["rung_check"][
+        "selected_rung"
+    ]
 gate["result_envelope_sha256"] = compute_result_envelope_sha256(gate)
 Path(request["required_output_path"]).write_text(json.dumps(gate), encoding="utf-8")
 """

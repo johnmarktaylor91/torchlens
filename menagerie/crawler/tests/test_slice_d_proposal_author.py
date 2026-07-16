@@ -10,8 +10,19 @@ import pytest
 
 from menagerie.crawler.author_dispatch import (
     AuthorDispatchError,
+    BlockedRecommendation,
+    DeferRecommendation,
+    ProposedAuthorResult,
+    SkipRecommendation,
     build_author_envelope,
+    serialize_author_result_cache,
     validate_author_result,
+    validate_author_result_cache,
+)
+from menagerie.crawler.authority import AuthorityContext
+from menagerie.crawler.constants import (
+    AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
+    AUTHOR_RESULT_SCHEMA_VERSION,
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.proposal import (
@@ -344,26 +355,47 @@ def test_author_envelope_round_trip_and_result_binding(tmp_path: Path) -> None:
     """A complete hash-matched result validates against its one-model packet."""
 
     proposal, manifest = _ground_proposal(tmp_path)
+    prompt_hash = hash_bytes(
+        (Path(__file__).parents[1] / "prompts" / "claude_crawler_author_v2.txt").read_bytes()
+    )
+    proposal["author"]["prompt_sha256"] = prompt_hash
+    proposal.update(
+        {
+            "schema_version": AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
+            "campaign_id": "campaign-1",
+            "intake_snapshot_id": "intake-1",
+            "intake_snapshot_sha256": "sha256:" + "1" * 64,
+            "intake_item_sha256": stable_hash(
+                {"stable_id": proposal["stable_id"], "variant": "base"}
+            ),
+            "source_manifest_identity": str(manifest["manifest_sha256"]),
+            "dispatcher_identity": "sha256:" + "2" * 64,
+        }
+    )
+    proposal["proposal_sha256"] = stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+    context = _author_context(proposal, prompt_hash)
     result_path = tmp_path / "output" / "result.json"
     envelope = build_author_envelope(
+        context=context,
         work_id=proposal["work_id"],
         stable_id=proposal["stable_id"],
+        campaign_id="campaign-1",
+        created_at="2026-07-16T00:00:00Z",
         untrusted_hints={"legacy": "hint"},
         source_manifest=manifest,
         allowed_model_dir=tmp_path,
         output_path=result_path,
-        author_model="claude",
-        author_version="test",
     )
-    proposal["author"]["prompt_sha256"] = envelope["prompt"]["sha256"]
-    proposal["verified_hashes"]["source_manifest"] = envelope["source_manifest_sha256"]
-    proposal["proposal_sha256"] = stable_hash(
-        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
-    )
+    result = _author_result(envelope, "PROPOSED", {"arm": "PROPOSED", "proposal": proposal})
     result_path.parent.mkdir()
-    result_path.write_text(json.dumps(proposal))
-    validated, report = validate_author_result(result_path, envelope)
-    assert validated["stable_id"] == report.stable_id
+    result_path.write_text(json.dumps(result))
+    validated = validate_author_result(result_path, envelope)
+    assert isinstance(validated, ProposedAuthorResult)
+    assert validated.binding.stable_id == validated.validation_report.stable_id
+    cache = serialize_author_result_cache(validated, source_manifest=manifest, model_dir=tmp_path)
+    assert isinstance(validate_author_result_cache(cache, envelope), ProposedAuthorResult)
 
 
 @pytest.mark.parametrize("corruption", ["mismatched", "partial"])
@@ -377,24 +409,167 @@ def test_author_result_rejects_mismatch_or_partial(tmp_path: Path, corruption: s
     """
 
     proposal, manifest = _ground_proposal(tmp_path)
+    prompt_hash = hash_bytes(
+        (Path(__file__).parents[1] / "prompts" / "claude_crawler_author_v2.txt").read_bytes()
+    )
+    proposal["author"]["prompt_sha256"] = prompt_hash
+    context = _author_context(proposal, prompt_hash)
     result_path = tmp_path / "result.json"
     envelope = build_author_envelope(
+        context=context,
         work_id=proposal["work_id"],
         stable_id=proposal["stable_id"],
+        campaign_id="campaign-1",
+        created_at="2026-07-16T00:00:00Z",
         untrusted_hints={},
         source_manifest=manifest,
         allowed_model_dir=tmp_path,
         output_path=result_path,
-        author_model="claude",
-        author_version="test",
     )
     if corruption == "partial":
         result_path.write_text('{"schema_version":')
     else:
-        proposal["stable_id"] = "m_other"
-        proposal["proposal_sha256"] = stable_hash(
-            {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+        payload = {
+            "arm": "DEFER_RECOMMENDATION",
+            "platform": "cuda",
+            "source_ids": ["source-1"],
+            "evidence_ids": ["evidence-1"],
+            "evidence_identity": "sha256:" + "3" * 64,
+            "license_identity": "sha256:" + "4" * 64,
+        }
+        payload["recommendation_sha256"] = stable_hash(payload)
+        result = _author_result(envelope, "DEFER_RECOMMENDATION", payload)
+        result["stable_id"] = "m_other"
+        result["result_sha256"] = stable_hash(
+            {key: value for key, value in result.items() if key != "result_sha256"}
         )
-        result_path.write_text(json.dumps(proposal))
+        result_path.write_text(json.dumps(result))
     with pytest.raises(AuthorDispatchError):
         validate_author_result(result_path, envelope)
+
+
+@pytest.mark.parametrize(
+    ("kind", "payload", "expected_type"),
+    [
+        (
+            "DEFER_RECOMMENDATION",
+            {
+                "arm": "DEFER_RECOMMENDATION",
+                "platform": "cuda",
+                "source_ids": ["source-1"],
+                "evidence_ids": ["evidence-1"],
+                "evidence_identity": "sha256:" + "3" * 64,
+                "license_identity": "sha256:" + "4" * 64,
+            },
+            DeferRecommendation,
+        ),
+        (
+            "SKIP_RECOMMENDATION",
+            {
+                "arm": "SKIP_RECOMMENDATION",
+                "status_code": "skipped:no-description",
+                "source_ids": ["source-1"],
+                "evidence_ids": ["evidence-1"],
+                "evidence_identity": "sha256:" + "3" * 64,
+                "search_report_identity": "sha256:" + "5" * 64,
+                "license_identity": "sha256:" + "4" * 64,
+            },
+            SkipRecommendation,
+        ),
+        (
+            "BLOCKED",
+            {
+                "arm": "BLOCKED",
+                "stage": "source",
+                "reason_code": "missing-prerequisite",
+                "prerequisite_ids": ["prerequisite-1"],
+                "evidence_ids": ["evidence-1"],
+                "evidence_identity": "sha256:" + "3" * 64,
+                "license_identity": "sha256:" + "4" * 64,
+            },
+            BlockedRecommendation,
+        ),
+    ],
+)
+def test_advisory_author_result_arms_are_production_parsed(
+    tmp_path: Path,
+    kind: str,
+    payload: dict[str, Any],
+    expected_type: type[object],
+) -> None:
+    """Every non-proposal arm reaches the same production parser and cache.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated author result directory.
+    kind, payload, expected_type:
+        Closed union fixture and its arm-specific dataclass type.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    prompt_hash = hash_bytes(
+        (Path(__file__).parents[1] / "prompts" / "claude_crawler_author_v2.txt").read_bytes()
+    )
+    proposal["author"]["prompt_sha256"] = prompt_hash
+    envelope = build_author_envelope(
+        context=_author_context(proposal, prompt_hash),
+        work_id=proposal["work_id"],
+        stable_id=proposal["stable_id"],
+        campaign_id="campaign-1",
+        created_at="2026-07-16T00:00:00Z",
+        untrusted_hints={},
+        source_manifest=manifest,
+        allowed_model_dir=tmp_path,
+        output_path=tmp_path / "result.json",
+    )
+    payload["recommendation_sha256"] = stable_hash(payload)
+    raw = _author_result(envelope, kind, payload)
+    (tmp_path / "result.json").write_text(json.dumps(raw))
+    parsed = validate_author_result(tmp_path / "result.json", envelope)
+    assert isinstance(parsed, expected_type)
+    cache = serialize_author_result_cache(parsed, source_manifest=manifest, model_dir=tmp_path)
+    assert isinstance(validate_author_result_cache(cache, envelope), expected_type)
+
+
+def _author_context(proposal: dict[str, Any], prompt_hash: str) -> AuthorityContext:
+    """Return the mandatory frozen context for one author-dispatch fixture."""
+
+    intake = {"stable_id": proposal["stable_id"], "variant": "base"}
+    proposal["intake_item_sha256"] = stable_hash(intake)
+    return AuthorityContext(
+        active_intake_snapshot_id="intake-1",
+        active_intake_snapshot_sha256="sha256:" + "1" * 64,
+        intake_by_stable_id={proposal["stable_id"]: intake},
+        family_bindings={},
+        author_prompt_identity=prompt_hash,
+        author_model_identity=stable_hash(proposal["author"]),
+        author_schema_identity="sha256:" + "6" * 64,
+        author_dispatcher_identity="sha256:" + "2" * 64,
+        checker_prompt_identity="sha256:" + "7" * 64,
+        checker_model_identity="sha256:" + "8" * 64,
+        checker_schema_identity="sha256:" + "9" * 64,
+        environment_generations={},
+        reducer_policy_identity="sha256:" + "a" * 64,
+        runner_policy_identity="sha256:" + "b" * 64,
+        terminal_policy_identity="sha256:" + "c" * 64,
+        publication_policy_identity="sha256:" + "d" * 64,
+    )
+
+
+def _author_result(envelope: dict[str, Any], kind: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Build one exact self-hashed author-result.v3 fixture."""
+
+    result = {
+        **envelope["expected_result"],
+        "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
+        "result_id": f"result-{kind.lower()}",
+        "result_sha256": "sha256:" + "0" * 64,
+        "kind": kind,
+        "created_at": "2026-07-16T00:01:00Z",
+        "payload": payload,
+    }
+    result["result_sha256"] = stable_hash(
+        {key: value for key, value in result.items() if key != "result_sha256"}
+    )
+    return result
