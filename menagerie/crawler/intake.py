@@ -471,6 +471,41 @@ def load_intake_snapshot(snapshot_root: Path) -> IntakeSnapshot:
     manifest_value = json.loads((snapshot_root / "manifest.json").read_text(encoding="utf-8"))
     if not isinstance(manifest_value, dict):
         raise IntakeError("intake manifest must be a JSON object")
+    source_inventory = manifest_value.get("sources")
+    if not isinstance(source_inventory, dict) or not all(
+        isinstance(name, str)
+        and name
+        and isinstance(digest, str)
+        and re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is not None
+        for name, digest in source_inventory.items()
+    ):
+        raise IntakeError("intake manifest source inventory is malformed")
+    source_root = (snapshot_root / "sources").resolve()
+    observed_names = {
+        path.relative_to(source_root).as_posix()
+        for path in source_root.rglob("*")
+        if path.is_file()
+    }
+    if observed_names != set(source_inventory):
+        raise IntakeError(
+            "intake source inventory differs from the immutable manifest: "
+            f"missing={sorted(set(source_inventory) - observed_names)}, "
+            f"extra={sorted(observed_names - set(source_inventory))}"
+        )
+    for name, expected_digest in source_inventory.items():
+        relative = Path(name)
+        if relative.is_absolute():
+            raise IntakeError("intake source path must be relative")
+        candidate_path = source_root / relative
+        source_path = candidate_path.resolve()
+        if not source_path.is_relative_to(source_root) or candidate_path.is_symlink():
+            raise IntakeError("intake source path escapes its immutable snapshot")
+        try:
+            observed_digest = hash_bytes(source_path.read_bytes())
+        except OSError as exc:
+            raise IntakeError(f"intake source byte is unavailable: {name}") from exc
+        if observed_digest != expected_digest:
+            raise IntakeError(f"intake source digest changed: {name}")
     rows = _read_jsonl(snapshot_root / "items.jsonl")
     manifest_items = manifest_value.get("items")
     if not isinstance(manifest_items, list) or rows != manifest_items:

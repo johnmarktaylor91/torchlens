@@ -3,20 +3,36 @@
 from __future__ import annotations
 
 import shutil
+from dataclasses import replace
 from pathlib import Path
 from typing import Sequence
 
 import pytest
 
 from menagerie.crawler.env_lifecycle import (
+    ArtifactReceipt,
     DiskRecoveryError,
+    EnvironmentCleanupError,
+    EnvironmentExactnessError,
+    EnvironmentProbeError,
     ProbeResult,
     SequentialEnvironmentLifecycle,
     SolveResult,
+    expected_probe_names,
 )
 from menagerie.crawler.envs import DEFAULT_ENVS_ROOT, IntentProbes, load_environment_registry
 from menagerie.crawler.effort import CapFailureRecord, EffortCapExceeded, EffortTracker, StageCap
 from menagerie.crawler.identity import hash_bytes
+
+_ARTIFACT_BYTES = b"exact conda artifact"
+_ARTIFACT_SHA256 = hash_bytes(_ARTIFACT_BYTES)
+_ARTIFACT_URL = "https://conda.example.test/python.conda"
+_LOCK_BYTES = f"{_ARTIFACT_URL}#{_ARTIFACT_SHA256.removeprefix('sha256:')}\n".encode()
+_EXPORT_BYTES = (
+    b'{"packages":[{"build":"h1_0","name":"python","sha256":"'
+    + _ARTIFACT_SHA256.encode()
+    + b'","url":"https://conda.example.test/python.conda","version":"3.11"}]}\n'
+)
 
 
 class FakeEnvironmentBackend:
@@ -33,19 +49,27 @@ class FakeEnvironmentBackend:
 
         assert environment_file.is_file()
         self.events.append(f"solve:{target}")
-        return SolveResult(b"exact-lock", b'{"python":"3.11"}\n', self.elapsed_seconds, 40)
+        return SolveResult(
+            _LOCK_BYTES,
+            _EXPORT_BYTES,
+            self.elapsed_seconds,
+            40,
+            (ArtifactReceipt(_ARTIFACT_URL, _ARTIFACT_SHA256),),
+        )
 
-    def create(self, lock_file: Path, prefix: Path) -> None:
+    def create(self, lock_file: Path, prefix: Path) -> bytes:
         """Record creation after proving the lock was written."""
 
-        assert lock_file.read_bytes() == b"exact-lock"
+        del prefix
+        assert lock_file.read_bytes() == _LOCK_BYTES
         self.events.append("create")
+        return _EXPORT_BYTES
 
     def probe(self, prefix: Path, probes: IntentProbes) -> Sequence[ProbeResult]:
         """Return successful results for all declared import canaries."""
 
         self.events.append("probe")
-        return tuple(ProbeResult(name, True, "ok") for name in probes.imports)
+        return tuple(ProbeResult(name, True, "ok") for name in expected_probe_names(probes))
 
     def remove(self, prefix: Path) -> None:
         """Record deterministic teardown."""
@@ -199,8 +223,47 @@ def test_failed_teardown_releases_lifecycle_for_a_later_retry(tmp_path: Path) ->
         minimum_free_bytes=0,
     )
 
-    with pytest.raises(DiskRecoveryError, match="synthetic teardown"):
+    with pytest.raises(EnvironmentCleanupError, match="synthetic teardown"):
         lifecycle.run(intent, use=lambda _prefix, _probes: events.append("use"))
     lifecycle.run(intent, use=lambda _prefix, _probes: events.append("use"))
 
     assert events.count("use") == 2
+
+
+def test_lifecycle_rejects_empty_probe_contract_and_unverified_lock(tmp_path: Path) -> None:
+    """Neither zero probe receipts nor solver-asserted artifact hashes are admissible."""
+
+    root = _copy_env_specs(tmp_path)
+    base_intent = load_environment_registry(root).intents["core"]
+    empty_intent = replace(base_intent, probes=IntentProbes((), (), ()))
+    lifecycle = SequentialEnvironmentLifecycle(
+        FakeEnvironmentBackend([]),
+        EffortTracker({"environment": StageCap(attempts=1, seconds=5, bytes=100)}),
+        env_root=tmp_path / "empty-probes",
+        disk_free=lambda _path: 1000,
+        minimum_free_bytes=0,
+    )
+    with pytest.raises(EnvironmentProbeError, match="empty"):
+        lifecycle.run(empty_intent, use=lambda _prefix, _probes: None)
+
+    class UnverifiedArtifactBackend(FakeEnvironmentBackend):
+        """Return a lock receipt that was not verified from the named artifact bytes."""
+
+        def solve(self, environment_file: Path, target: str) -> SolveResult:
+            """Change the materialized receipt while leaving lock bytes unchanged."""
+
+            solved = super().solve(environment_file, target)
+            return replace(
+                solved,
+                artifact_receipts=(ArtifactReceipt(_ARTIFACT_URL, "sha256:" + "f" * 64),),
+            )
+
+    lifecycle = SequentialEnvironmentLifecycle(
+        UnverifiedArtifactBackend([]),
+        EffortTracker({"environment": StageCap(attempts=1, seconds=5, bytes=100)}),
+        env_root=tmp_path / "unverified-lock",
+        disk_free=lambda _path: 1000,
+        minimum_free_bytes=0,
+    )
+    with pytest.raises(EnvironmentExactnessError, match="materialized solver artifacts"):
+        lifecycle.run(base_intent, use=lambda _prefix, _probes: None)

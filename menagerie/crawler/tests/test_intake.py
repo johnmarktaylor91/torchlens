@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from menagerie.crawler.intake import (
+    IntakeError,
     create_intake_snapshot,
     legacy_requires_fidelity_audit,
     load_intake_snapshot,
@@ -90,3 +93,17 @@ def test_all_legacy_audit_classes_survive_snapshot_reload(tmp_path: Path) -> Non
     assert "legacy-fidelity-claim" in flags_by_name["FaithfulNet"]
     assert "legacy-slop-requires-fidelity-audit" in flags_by_name["SlopNet"]
     assert all(legacy_requires_fidelity_audit(flags) for flags in flags_by_name.values())
+
+
+def test_load_rejects_changed_manifest_source_without_reconstruction(tmp_path: Path) -> None:
+    """Snapshot loading always verifies declared source bytes, even with no model artifacts."""
+
+    master = tmp_path / "master.jsonl"
+    deferred = tmp_path / "deferred.jsonl"
+    _write_jsonl(master, [{"name": "TinyNet", "zoo": "fixtures", "variant": "base"}])
+    _write_jsonl(deferred, [])
+    snapshot = create_intake_snapshot(master, deferred, tmp_path / "snapshots")
+    (snapshot.root / "sources" / "master_catalog.jsonl").write_bytes(b"changed\n")
+
+    with pytest.raises(IntakeError, match="source digest changed"):
+        load_intake_snapshot(snapshot.root)

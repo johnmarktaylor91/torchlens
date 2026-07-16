@@ -58,7 +58,12 @@ from menagerie.crawler.envs import (
     LockArtifacts,
     load_environment_registry,
 )
-from menagerie.crawler.env_lifecycle import DiskRecoveryError, EnvironmentProbeError, ProbeResult
+from menagerie.crawler.env_lifecycle import (
+    DiskRecoveryError,
+    EnvironmentProbeError,
+    ProbeResult,
+    expected_probe_names,
+)
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.fetcher import fetch_targets as controlled_fetch_targets
@@ -467,6 +472,9 @@ class FakeForward(ForwardLane):
                         "lock_sha256": environment.lock_sha256,
                         "resolved_export_sha256": environment.resolved_export_sha256,
                         "packages_manifest_sha256": environment.packages_manifest_sha256,
+                        "python": environment.python_version,
+                        "compiler_identity": environment.compiler_identity,
+                        "sdk_identity": environment.sdk_identity,
                     }
                 )
                 attempts.append(attempt)
@@ -807,7 +815,12 @@ class FakeEnvironments(EnvironmentLane):
         prefix = self.root / intent.name
         prefix.mkdir(parents=True, exist_ok=True)
         try:
-            use(prefix, (ProbeResult("synthetic-canary", True, "ok"),))
+            use(
+                prefix,
+                tuple(
+                    ProbeResult(name, True, "ok") for name in expected_probe_names(intent.probes)
+                ),
+            )
         finally:
             self.events.append(f"remove:{intent.name}")
             self.active -= 1
@@ -1214,17 +1227,44 @@ def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
 ) -> None:
     """Runtime provenance and sandbox argv use the verified environment itself."""
 
-    lock_bytes = b"exact lock bytes"
-    export_bytes = b"exact resolved export bytes"
-    package_bytes = b'{"packages":["torch==test"]}'
+    artifact_sha256 = "sha256:" + "a" * 64
+    package_row = {
+        "name": "python",
+        "version": "3.11",
+        "build": "h1_0",
+        "url": "https://conda.example.test/python.conda",
+        "sha256": artifact_sha256,
+    }
+    lock_bytes = f"{package_row['url']}#{artifact_sha256.removeprefix('sha256:')}\n".encode()
+    package_bytes = canonical_json_bytes({"packages": [package_row]}) + b"\n"
+    export_bytes = package_bytes
     lock_path = tmp_path / "target.lock"
     export_path = tmp_path / "target.resolved.json"
     lock_path.write_bytes(lock_bytes)
     export_path.write_bytes(export_bytes)
+    (tmp_path / "target.sha256").write_text(f"{hash_bytes(export_bytes)}\n", encoding="utf-8")
+    probe_receipt_path = tmp_path / "linux-64.probes.json"
+    probe_result = ProbeResult("import:canary", True, "observed")
+    probe_receipt_path.write_bytes(
+        canonical_json_bytes(
+            {
+                "probes": [
+                    {
+                        "name": probe_result.name,
+                        "passed": probe_result.passed,
+                        "detail": probe_result.detail,
+                    }
+                ]
+            }
+        )
+        + b"\n"
+    )
     prefix = tmp_path / "env-prefix"
     (prefix / "bin").mkdir(parents=True)
     (prefix / "bin" / "python").symlink_to(Path(sys.executable))
-    (prefix / "packages-manifest.json").write_bytes(package_bytes)
+    (prefix / "conda-meta").mkdir()
+    (prefix / "conda-meta" / "python.json").write_bytes(canonical_json_bytes(package_row))
+    (prefix / "packages-manifest.json").write_bytes(b"fabricated package claims")
     intent = EnvironmentIntent(
         name="core",
         phase=EnvironmentPhase.PYTORCH,
@@ -1233,7 +1273,7 @@ def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
         split_guidance="test",
         channels=("conda-forge",),
         dependencies=("python",),
-        probes=IntentProbes((), (), ()),
+        probes=IntentProbes(("canary",), (), ()),
         lock=LockArtifacts(
             target="linux-64",
             lock_path=lock_path,
@@ -1248,16 +1288,31 @@ def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
     binding = _environment_binding(
         intent,
         prefix,
-        (ProbeResult("canary", True, "observed"),),
+        (probe_result,),
         strict=True,
     )
     assert binding.lock_sha256 == hash_bytes(lock_bytes)
     assert binding.resolved_export_sha256 == hash_bytes(export_bytes)
     assert binding.packages_manifest_sha256 == hash_bytes(package_bytes)
+    changed_result = ProbeResult("import:canary", True, "different observed result")
+    probe_receipt_path.write_bytes(
+        canonical_json_bytes(
+            {
+                "probes": [
+                    {
+                        "name": changed_result.name,
+                        "passed": changed_result.passed,
+                        "detail": changed_result.detail,
+                    }
+                ]
+            }
+        )
+        + b"\n"
+    )
     changed_probe = _environment_binding(
         intent,
         prefix,
-        (ProbeResult("canary", True, "different observed result"),),
+        (changed_result,),
         strict=True,
     )
     assert changed_probe.env_generation != binding.env_generation
@@ -1274,10 +1329,24 @@ def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
         encoding="utf-8",
     )
     interpreter.chmod(0o755)
+    probe_receipt_path.write_bytes(
+        canonical_json_bytes(
+            {
+                "probes": [
+                    {
+                        "name": probe_result.name,
+                        "passed": probe_result.passed,
+                        "detail": probe_result.detail,
+                    }
+                ]
+            }
+        )
+        + b"\n"
+    )
     prefix_observed = _environment_binding(
         intent,
         prefix,
-        (ProbeResult("canary", True, "observed"),),
+        (probe_result,),
         strict=True,
     )
     assert prefix_observed.python_version == "prefix-python-9.9"
@@ -2844,7 +2913,7 @@ def test_environment_medic_retries_before_model_fanout(tmp_path: Path) -> None:
 
 
 def test_post_use_teardown_failure_preserves_pending_run_award(tmp_path: Path) -> None:
-    """A teardown error cannot replace a durable pending run with a false failure."""
+    """A teardown error quarantines its generation without revising or retrying runs."""
 
     class TeardownFailingEnvironments(FakeEnvironments):
         """Complete model use and then report teardown disk failure."""
@@ -2857,21 +2926,39 @@ def test_post_use_teardown_failure_preserves_pending_run_award(tmp_path: Path) -
 
     snapshot = _snapshot(tmp_path, count=1)
     paths = _paths(tmp_path, snapshot)
-    with pytest.raises(DiskRecoveryError, match="post-use teardown"):
-        _driver(
-            tmp_path,
-            snapshot,
-            checker=FakeChecker(quota=True),
-            environments=TeardownFailingEnvironments(tmp_path / "fake-envs"),
-            pause_scheduler=FakePauseScheduler(tmp_path),
-        ).run()
+    environments = TeardownFailingEnvironments(tmp_path / "fake-envs")
+    first = _driver(
+        tmp_path,
+        snapshot,
+        checker=FakeChecker(quota=True),
+        environments=environments,
+        pause_scheduler=FakePauseScheduler(tmp_path),
+    ).run()
+    second = _driver(
+        tmp_path,
+        snapshot,
+        checker=FakeChecker(quota=True),
+        environments=environments,
+        pause_scheduler=FakePauseScheduler(tmp_path),
+    ).run()
 
+    assert first.status == second.status == "paused:usage-limit"
     models = scan_jsonl(paths.ledgers.models)
     assert len(models) == 1
     assert models[0]["status"]["code"] == "runs"
     assert models[0]["authored_metadata_state"] == "pending"
     assert models[0]["completeness"]["release_eligible"] is False
     assert len(scan_jsonl(paths.ledgers.attempts)) == 2
+    assert environments.events.count("create:core") == 1
+    canonical_events = scan_jsonl(
+        driver_module.canonical_operational_ledger_path(paths.ledgers.models)
+    )
+    quarantines = [
+        event
+        for event in canonical_events
+        if event.get("details", {}).get("disposition") == "environment-cleanup-quarantined"
+    ]
+    assert len(quarantines) == 1
 
 
 def test_disposable_author_cache_corruption_reauthors(tmp_path: Path) -> None:
@@ -2906,7 +2993,7 @@ def test_stale_forward_cache_work_id_regenerates_without_campaign_failure(tmp_pa
     environment = _environment_binding(
         intent,
         prefix,
-        (ProbeResult("synthetic-canary", True, "ok"),),
+        tuple(ProbeResult(name, True, "ok") for name in expected_probe_names(intent.probes)),
         strict=False,
     )
     execution_identity = _execution_identity(artifact.proposal, environment)
