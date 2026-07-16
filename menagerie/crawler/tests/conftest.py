@@ -791,7 +791,8 @@ def make_model(
             "code": status_code,
             "stage": stage,
             "reason_code": reason,
-            "detail": "synthetic failure" if kind == "failed" else None,
+            # Failed diagnostics must be absent or sidecar-redacted at the reducer boundary.
+            "detail": None,
             "traceback": None,
             "no_traceback_reason": "no Python exception" if kind == "failed" else None,
             "attempted_rungs": ["R1_LIBRARY"],

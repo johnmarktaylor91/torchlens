@@ -79,6 +79,56 @@ def test_bad_parentage_is_rejected(tmp_path: Path) -> None:
             reducer.append_model(second)
 
 
+@pytest.mark.parametrize(
+    "field",
+    (
+        "message",
+        "mode_error",
+        "observed_response",
+        "receipt_error",
+        "response_excerpt",
+        "stderr_tail",
+        "stdout_tail",
+        "traceback",
+    ),
+)
+def test_reducer_rejects_raw_c07_fields_in_attempts(tmp_path: Path, field: str) -> None:
+    """No producer can append raw text through any checkpoint-protected field name."""
+
+    attempt = make_attempt()
+    attempt["c07_tripwire"] = {field: "raw externally controlled text"}
+    with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
+        with pytest.raises(ReductionError, match="unredacted externally controlled text"):
+            reducer.append_attempt(attempt)
+
+
+@pytest.mark.parametrize(
+    ("location", "field"),
+    (
+        ("status", "detail"),
+        ("status", "traceback"),
+        ("human_review", "reason"),
+        ("nested", "message"),
+        ("nested", "stdout_tail"),
+    ),
+)
+def test_reducer_rejects_raw_c07_fields_in_models(
+    tmp_path: Path, location: str, field: str
+) -> None:
+    """Terminal projections and nested model diagnostics require sidecar references."""
+
+    model = make_model(status_code="failed:source")
+    if location == "status":
+        model["status"][field] = "raw externally controlled text"
+    elif location == "human_review":
+        model["status"]["human_review"][field] = "raw externally controlled text"
+    else:
+        model["c07_tripwire"] = {field: "raw externally controlled text"}
+    with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
+        with pytest.raises(ReductionError, match="unredacted externally controlled text"):
+            reducer.append_model(model)
+
+
 def test_first_revision_rejects_public_supersession_lineage(tmp_path: Path) -> None:
     """A first revision cannot claim to supersede an unrelated public revision."""
 
@@ -127,7 +177,8 @@ def test_requeue_grant_rejects_wrong_exact_parent_binding(tmp_path: Path) -> Non
     first = make_model(status_code="failed:source")
     first["status"]["human_review"] = {
         "required": True,
-        "reason": "manual source review",
+        # The test exercises requeue lineage; raw review diagnostics are rejected separately.
+        "reason": None,
         "queue": "crawler-human-review",
         "requested_at": first["created_at"],
     }

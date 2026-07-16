@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import argparse
 import ast
 import json
 import shutil
 import subprocess
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
@@ -16,7 +18,8 @@ import pytest
 import menagerie.crawler.driver as driver_module
 import menagerie.crawler.reducer as reducer_module
 from menagerie.crawler.checker_dispatch import CheckerBackoffSignal
-from menagerie.crawler.cli import build_parser
+from menagerie.crawler.checkpoint import _externally_controlled_record_text
+from menagerie.crawler.cli import build_parser, main as cli_main
 from menagerie.crawler.constants import (
     CheckerPauseReason,
     EnvironmentPhase,
@@ -33,6 +36,7 @@ from menagerie.crawler.driver import (
     DriverConfig,
     DriverDependencies,
     DriverIntegrationError,
+    DriverLock,
     DriverPaths,
     EnvironmentLane,
     EnvironmentBinding,
@@ -156,17 +160,18 @@ class FakeAuthor(AuthorLane):
 class OneModelAuthorFailure(FakeAuthor):
     """Raise from the author lane for exactly one model."""
 
-    def __init__(self, failed_id: str) -> None:
+    def __init__(self, failed_id: str, message: str = "synthetic author command failure") -> None:
         """Store the model-local author failure identity."""
 
         super().__init__()
         self.failed_id = failed_id
+        self.message = message
 
     def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
         """Raise for one item and author every later item normally."""
 
         if item.stable_id == self.failed_id:
-            raise RuntimeError("synthetic author command failure")
+            raise RuntimeError(self.message)
         return super().author(item, work_root, config)
 
 
@@ -1893,7 +1898,11 @@ def test_family_variant_template_failure_terminalizes_its_own_lane(tmp_path: Pat
     for variant_id in variant_ids:
         assert current[variant_id]["status"]["code"] == "failed:runner"
         assert current[variant_id]["status"]["reason_code"] == "protocol-violation"
-        assert "must differ" in current[variant_id]["status"]["detail"]
+        # Failure text is retrievable only from the gitignored C-07 diagnostic sidecar.
+        reference = current[variant_id]["status"]["traceback"]
+        assert reference["redaction"] == "externally-controlled-text-v1"
+        sidecar_path = next(tmp_path.rglob(Path(reference["local_path"]).name))
+        assert "must differ" in sidecar_path.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(
@@ -2348,16 +2357,98 @@ def test_runtime_wipe_preserves_milestone_and_review_one_shots(tmp_path: Path) -
     assert [event["event_kind"] for event in canonical_events].count("review-signoff") == 1
 
     shutil.rmtree(paths.runtime_root)
+    renamed_root = tmp_path / "renamed-clean-clone-intake"
+    shutil.copytree(snapshot.root, renamed_root)
+    renamed_snapshot = replace(snapshot, root=renamed_root)
     clean_notifier = FakeNotifier()
     clean_resume = _driver(
         tmp_path,
-        snapshot,
+        renamed_snapshot,
         notifier=clean_notifier,
         review_at=1,
         milestones=(1,),
     ).run()
     assert clean_resume.status == "complete"
     assert clean_notifier.messages == []
+    after_rename = scan_jsonl(paths.ledgers.models.parent / "operational" / "events.jsonl")
+    assert [event["event_kind"] for event in after_rename].count("progress-notification") == 1
+    assert [event["event_kind"] for event in after_rename].count("checkpoint-review") == 1
+
+
+def test_driver_failure_diagnostics_are_sidecar_only_and_checkpoint_safe(
+    tmp_path: Path,
+) -> None:
+    """Driver exception source text never enters canonical attempts or terminal models."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    restricted = "https://restricted.example/repo.py\nraise LicenseBoundSource('private excerpt')"
+    driver = _driver(
+        tmp_path,
+        snapshot,
+        author=OneModelAuthorFailure(snapshot.items[0].stable_id, restricted),
+    )
+    assert driver.run().status == "complete"
+    paths = _paths(tmp_path, snapshot)
+    attempt_bytes = paths.ledgers.attempts.read_bytes()
+    model_bytes = paths.ledgers.models.read_bytes()
+    assert restricted.encode() not in attempt_bytes
+    assert restricted.encode() not in model_bytes
+    attempt = scan_jsonl(paths.ledgers.attempts)[0]
+    model = scan_jsonl(paths.ledgers.models)[0]
+    assert attempt["error"]["message"]["redaction"] == "externally-controlled-text-v1"
+    assert model["status"]["detail"] is None
+    assert model["status"]["traceback"]["redaction"] == "externally-controlled-text-v1"
+    assert model["status"]["human_review"]["reason"] is None
+    assert (
+        _externally_controlled_record_text(
+            Path("menagerie/crawler/records/attempts/driver-failure.jsonl"), attempt_bytes
+        )
+        == ()
+    )
+    assert (
+        _externally_controlled_record_text(
+            Path("menagerie/crawler/records/models/driver-failure.jsonl"), model_bytes
+        )
+        == ()
+    )
+
+
+def test_scheduled_wake_live_lock_is_idempotent_success(tmp_path: Path) -> None:
+    """A scheduled wake records one canonical no-op and exits zero under a live lock."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    driver = _driver(tmp_path, snapshot)
+
+    class LockedDriverFactory:
+        """Return the same lock-contending driver for each CLI replay."""
+
+        def __call__(self, _args: argparse.Namespace) -> CrawlerDriver:
+            """Return the lock-contending driver."""
+
+            return driver
+
+    factory = LockedDriverFactory()
+
+    argv = [
+        "--repo-root",
+        str(tmp_path),
+        "run",
+        "--scheduled-wake",
+        "--scheduled-wake-id",
+        "wake-identity-1",
+        "--scheduled-wake-at",
+        NOW,
+    ]
+    with DriverLock(driver.paths.lock_path, {"pid": 1}):
+        assert cli_main(argv, driver_factory=factory) == 0
+        assert cli_main(argv, driver_factory=factory) == 0
+    events = scan_jsonl(
+        paths := driver.paths.ledgers.models.parent / "operational" / "events.jsonl"
+    )
+    assert paths.is_file()
+    noops = [event for event in events if event["event_kind"] == "wake-noop-already-running"]
+    assert len(noops) == 1
+    assert noops[0]["details"]["wake_id"] == "wake-identity-1"
 
 
 def test_empty_milestones_and_missing_notifier_never_block(tmp_path: Path) -> None:
@@ -2399,17 +2490,21 @@ def test_failed_forward_terminalizes_and_campaign_continues(tmp_path: Path) -> N
         if record["stable_id"] == failed_id and record["result"] == "failed"
     )
     assert failed_attempt["stage"] == "forward"
-    assert failed_attempt["error"] == {
+    error = failed_attempt["error"]
+    assert {key: value for key, value in error.items() if key not in {"message", "traceback"}} == {
         "stage": "forward",
         "reason_code": "mode-run",
         "exception_type": "builtins.RuntimeError",
-        "message": "synthetic forward failure",
-        "traceback": "Traceback: synthetic forward failure",
         "no_traceback_reason": None,
         "native_crash": False,
         "root_cause_fingerprint": HASH,
         "details": {"mode": failed_attempt["mode"]},
     }
+    assert error["message"]["redaction"] == "externally-controlled-text-v1"
+    assert error["traceback"]["redaction"] == "externally-controlled-text-v1"
+    sidecar_path = next(tmp_path.rglob(Path(error["message"]["local_path"]).name))
+    sidecar_text = sidecar_path.read_text(encoding="utf-8")
+    assert "synthetic forward failure" in sidecar_text
 
 
 def test_author_failure_terminalizes_one_model_and_later_models_continue(tmp_path: Path) -> None:
