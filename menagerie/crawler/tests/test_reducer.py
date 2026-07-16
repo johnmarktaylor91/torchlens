@@ -4,16 +4,26 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.constants import MODEL_SCHEMA_VERSION, OPERATIONAL_EVENT_SCHEMA_VERSION
+from menagerie.crawler.family_templates import (
+    instantiate_size_variant,
+    specialize_size_variant_recipe,
+)
 from menagerie.crawler.identity import canonical_json_bytes, stable_hash
+from menagerie.crawler.metadata import recompute_accepted_identities
+from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.recordio import JsonlLedger, SingleWriterError
-from menagerie.crawler.reducer import CanonicalReducer, ReductionError
-from menagerie.crawler.status import PartitionError, assert_partition
-from menagerie.crawler.metadata import authored_fact_leaves
+from menagerie.crawler.reducer import CanonicalReducer, ReductionError, materialize_current
+from menagerie.crawler.status import (
+    PartitionError,
+    assert_partition,
+    completeness_report,
+    record_is_release_eligible,
+)
 from menagerie.crawler.tests.conftest import (
     _bind_model_identities,
     _model_facts,
@@ -42,6 +52,121 @@ def _paths(tmp_path: Path) -> LedgerPaths:
         attempts=tmp_path / "attempts.jsonl",
         gates=tmp_path / "gates.jsonl",
     )
+
+
+def _variant_from_representative(
+    representative: dict[str, Any],
+    *,
+    stable_id: str = "m_variant",
+    variant_token: str = "Large",
+    attempt_id: str = "attempt-variant",
+) -> dict[str, Any]:
+    """Build an exact mechanically specialized variant fixture.
+
+    Parameters
+    ----------
+    representative:
+        Persisted accepted representative revision.
+    stable_id, variant_token, attempt_id:
+        Variant identity and execution reference.
+
+    Returns
+    -------
+    dict[str, object]
+        Reducer-valid family variant candidate.
+    """
+
+    variant = deepcopy(representative)
+    representative_id = str(representative["stable_id"])
+    variant["stable_id"] = stable_id
+    variant.pop("record_seq", None)
+    variant.pop("record_revision", None)
+    variant["parent_revision"] = None
+    identity = variant["identity"]
+    assert isinstance(identity, dict)
+    identity.update(
+        {
+            "canonical_name": f"ExampleNet {variant_token}",
+            "variant": variant_token,
+            "family_representative_id": representative_id,
+        }
+    )
+    implementation, input_contract, derivation = specialize_size_variant_recipe(
+        representative,
+        representative_model_id=representative_id,
+        variant_token=variant_token,
+    )
+    variant["implementation"] = implementation
+    variant["input_contract"] = input_contract
+    variant["family_variant_derivation"] = derivation
+    variant["website"] = instantiate_size_variant(
+        representative,
+        representative_model_id=representative_id,
+        variant_parameter_input_line="3 parameters; input [1, 3, 8, 8]",
+    )
+    observed = variant["observed"]
+    assert isinstance(observed, dict)
+    observed["parameter_count_total"] = 3
+    observed["parameter_count_trainable"] = 3
+    observed["measurement_attempt_ids"] = [attempt_id]
+    modes = variant["modes"]
+    assert isinstance(modes, dict)
+    modes["per_mode_run"] = {"eval": {"attempt_id": attempt_id, "status": "succeeded"}}
+    execution = variant["execution"]
+    assert isinstance(execution, dict)
+    execution["accepted_attempt_ids"] = [attempt_id]
+    status = variant["status"]
+    assert isinstance(status, dict)
+    status["attempt_ids"] = [attempt_id]
+    _bind_model_identities(variant)
+    variant["accuracy_gate"] = deepcopy(representative["accuracy_gate"])
+    return variant
+
+
+def _attempt_for_model(model: dict[str, Any], attempt_id: str) -> dict[str, Any]:
+    """Build an attempt whose identities and measurements bind one model fixture.
+
+    Parameters
+    ----------
+    model:
+        Accepted canonical model candidate.
+    attempt_id:
+        Exact attempt identity referenced by the candidate.
+
+    Returns
+    -------
+    dict[str, object]
+        Successful reducer-verifiable attempt.
+    """
+
+    stable_id = str(model["stable_id"])
+    attempt = make_attempt(stable_id, attempt_id=attempt_id)
+    accuracy = model["accuracy_gate"]
+    assert isinstance(accuracy, dict)
+    identities = recompute_accepted_identities(
+        _model_facts(model),
+        checker_prompt_hash=str(accuracy["prompt_sha256"]),
+        checker_model="codex",
+        checker_version="test",
+    )
+    attempt_identities = attempt["identities"]
+    receipt = attempt["worker_receipt"]
+    observed = model["observed"]
+    assert isinstance(attempt_identities, dict)
+    assert isinstance(receipt, dict)
+    assert isinstance(observed, dict)
+    attempt_identities.update(
+        {
+            "source": identities.source,
+            "evidence": identities.evidence,
+            "recipe": identities.recipe,
+            "checker_prompt": str(accuracy["prompt_sha256"]),
+        }
+    )
+    receipt["observed_recipe_revision"] = identities.recipe
+    receipt["parameter_count_total"] = observed["parameter_count_total"]
+    receipt["parameter_count_trainable"] = observed["parameter_count_trainable"]
+    return attempt
 
 
 def test_reducer_is_the_single_writer(tmp_path: Path) -> None:
@@ -298,49 +423,111 @@ def test_legacy_audit_flag_cannot_bypass_current_fidelity_gate(tmp_path: Path) -
             reducer.append_model(model)
 
 
-def test_family_template_true_is_verified_against_representative(tmp_path: Path) -> None:
-    """A written true cannot conceal changed family prose."""
+def test_family_template_is_verified_even_when_candidate_declares_false(tmp_path: Path) -> None:
+    """A producer false cannot disable byte-exact inherited metadata validation."""
 
     paths = _paths(tmp_path)
-    stable_ids = ["m_rep", "m_variant", *(f"m_{index}" for index in range(8))]
+    gate_ids = ["m_rep", *(f"m_{index}" for index in range(9))]
+    stable_ids = [*gate_ids, "m_variant"]
     representative = make_model("m_rep", accepted=True, attempt_id="attempt-rep")
     representative_attempt = make_attempt("m_rep", attempt_id="attempt-rep")
-    variant = make_model("m_variant", accepted=True, attempt_id="attempt-variant")
-    variant_attempt = make_attempt("m_variant", attempt_id="attempt-variant")
-    variant_attempt.pop("ledger_seq")
-    variant_attempt.pop("payload_sha256")
-    variant["identity"]["family_representative_id"] = "m_rep"
-    variant["website"].update(
-        {
-            "kind": "size-variant-template",
-            "template_source_model_id": "m_rep",
-            "variant_parameter_input_line": "2 parameters; input [1, 3, 8, 8]",
-            "template_hash": "sha256:" + "f" * 64,
-            "description": "silently altered family prose",
-        }
-    )
-    _bind_model_identities(variant)
-    gate = make_gate(stable_ids)
-    variant_gate_item = next(item for item in gate["items"] if item["stable_id"] == "m_variant")
-    variant_gate_item["vet_identity"] = variant["accuracy_gate"]["vet_identity"]
-    variant_gate_item["field_checks"] = [
-        {
-            "field": field,
-            "verdict": "accurate",
-            "evidence_ids": ["evidence-1"],
-            "checked_source_ids": ["source-1"],
-            "reason": "supported",
-            "required_repair": None,
-        }
-        for field in authored_fact_leaves(_model_facts(variant))
-    ]
-    with CanonicalReducer(paths, stable_ids) as reducer:
-        reducer.append_gate(gate)
+    with CanonicalReducer(
+        paths,
+        stable_ids,
+        intake_variant_bindings={"m_variant": ("m_rep", "Large")},
+    ) as reducer:
+        reducer.append_gate(make_gate(gate_ids))
         reducer.append_attempt(representative_attempt)
+        persisted_representative = reducer.append_model(representative).record
+        variant = _variant_from_representative(persisted_representative)
+        variant["taxonomy"]["family"] = "silently altered family"
+        variant["completeness"]["family_template_valid"] = False
+        variant_attempt = _attempt_for_model(variant, "attempt-variant")
+        variant_attempt.pop("ledger_seq")
+        variant_attempt.pop("payload_sha256")
         reducer.append_attempt(variant_attempt)
-        reducer.append_model(representative)
-        with pytest.raises(ReductionError, match="family template validation failed"):
+        with pytest.raises(ReductionError, match="inherited metadata field 'taxonomy'"):
             reducer.append_model(variant)
+
+
+def test_family_variant_recipe_must_be_mechanical_specialization(tmp_path: Path) -> None:
+    """A self-consistent unrelated recipe cannot inherit representative authority."""
+
+    paths = _paths(tmp_path)
+    gate_ids = ["m_rep", *(f"m_{index}" for index in range(9))]
+    stable_ids = [*gate_ids, "m_variant"]
+    representative = make_model("m_rep", accepted=True, attempt_id="attempt-rep")
+    with CanonicalReducer(
+        paths,
+        stable_ids,
+        intake_variant_bindings={"m_variant": ("m_rep", "Large")},
+    ) as reducer:
+        reducer.append_gate(make_gate(gate_ids))
+        reducer.append_attempt(make_attempt("m_rep", attempt_id="attempt-rep"))
+        persisted_representative = reducer.append_model(representative).record
+        variant = _variant_from_representative(persisted_representative)
+        variant["implementation"]["library_recipe"]["module"] = "unrelated.mobilenet"
+        variant["implementation"]["library_recipe"]["symbol"] = "MobileNetV3"
+        inherited_accuracy = deepcopy(variant["accuracy_gate"])
+        _bind_model_identities(variant)
+        variant["accuracy_gate"] = inherited_accuracy
+        variant_attempt = _attempt_for_model(variant, "attempt-variant")
+        variant_attempt.pop("ledger_seq")
+        variant_attempt.pop("payload_sha256")
+        reducer.append_attempt(variant_attempt)
+        with pytest.raises(ReductionError, match="not the mechanical representative"):
+            reducer.append_model(variant)
+
+
+def test_reducer_derives_release_and_rejects_pending_true_claim(tmp_path: Path) -> None:
+    """A candidate cannot publish pending metadata by flipping release true."""
+
+    model = make_model(accepted=False, status_code="failed:source")
+    model["completeness"]["release_eligible"] = True
+    with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
+        with pytest.raises(ReductionError, match="completeness.release_eligible"):
+            reducer.append_model(model)
+
+
+def test_representative_supersession_stales_current_variant(tmp_path: Path) -> None:
+    """A representative-only revision blocks completion and dependent publication."""
+
+    paths = _paths(tmp_path)
+    gate_ids = ["m_rep", *(f"m_{index}" for index in range(9))]
+    stable_ids = [*gate_ids, "m_variant"]
+    representative = make_model("m_rep", accepted=True, attempt_id="attempt-rep")
+    with CanonicalReducer(
+        paths,
+        stable_ids,
+        intake_variant_bindings={"m_variant": ("m_rep", "Large")},
+    ) as reducer:
+        reducer.append_gate(make_gate(gate_ids))
+        reducer.append_attempt(make_attempt("m_rep", attempt_id="attempt-rep"))
+        persisted_representative = reducer.append_model(representative).record
+        variant = _variant_from_representative(persisted_representative)
+        variant_attempt = _attempt_for_model(variant, "attempt-variant")
+        variant_attempt.pop("ledger_seq")
+        variant_attempt.pop("payload_sha256")
+        reducer.append_attempt(variant_attempt)
+        reducer.append_model(variant)
+
+        superseding = deepcopy(persisted_representative)
+        superseding.pop("record_seq", None)
+        superseding.pop("record_revision", None)
+        superseding["parent_revision"] = persisted_representative["record_revision"]
+        superseding["status"]["supersedes_revision"] = persisted_representative["record_revision"]
+        superseding["notes"] = "metadata-only representative re-vet"
+        reducer.append_model(superseding)
+
+        raw_current = reducer.current_records
+        report = completeness_report(["m_rep", "m_variant"], raw_current)
+        assert report.incomplete_by_issue["stale_family_variant"] == ("m_variant",)
+        assert not report.complete
+        assert not record_is_release_eligible(raw_current["m_variant"], raw_current)
+
+    materialized = materialize_current(paths)
+    assert "m_rep" in materialized
+    assert "m_variant" not in materialized
 
 
 @pytest.mark.parametrize(

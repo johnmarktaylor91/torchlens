@@ -78,8 +78,11 @@ from menagerie.crawler.effort import EffortTracker, StageCap
 from menagerie.crawler.fetcher import FetchTarget, fetch_targets
 from menagerie.crawler.family_templates import (
     FamilyTemplateError,
+    build_size_variant_derivation,
+    family_representative_is_usable,
     instantiate_size_variant,
     mechanical_variant_parameter_input_line,
+    specialize_size_variant_recipe,
     validate_size_variant,
 )
 from menagerie.crawler.gates import emit_gate_records, route_fidelity_gate, route_metadata_gate
@@ -1153,7 +1156,16 @@ class CrawlerDriver:
             JsonlLedger(
                 self.paths.operational_ledger, OPERATIONAL_EVENT_SCHEMA_VERSION
             ) as operational,
-            CanonicalReducer(self.paths.ledgers, intake_ids) as reducer,
+            CanonicalReducer(
+                self.paths.ledgers,
+                intake_ids,
+                intake_variant_bindings={
+                    item.stable_id: (item.family_representative_id or item.stable_id, item.variant)
+                    for item in snapshot.items
+                    if item.variant_scope == "family"
+                    and (item.family_representative_id or item.stable_id) != item.stable_id
+                },
+            ) as reducer,
         ):
             rebuild_state(
                 self.paths.state_database, snapshot.root / "items.jsonl", self.paths.ledgers
@@ -5542,23 +5554,7 @@ def _usable_family_representative(model: Mapping[str, Any] | None, representativ
         True only for a fully accepted, executed, self-representative record.
     """
 
-    if not isinstance(model, Mapping):
-        return False
-    identity = model.get("identity")
-    website = model.get("website")
-    return bool(
-        model.get("stable_id") == representative_id
-        and model.get("authored_metadata_state") == "accepted"
-        and isinstance(identity, Mapping)
-        and identity.get("variant_scope") == "family"
-        and identity.get("family_representative_id") == representative_id
-        and isinstance(website, Mapping)
-        and website.get("kind") == "family-representative"
-        and model.get("accuracy_gate", {}).get("current")
-        and model.get("execution", {}).get("current")
-        and model.get("status", {}).get("kind") == "runs"
-        and model.get("completeness", {}).get("release_eligible")
-    )
+    return family_representative_is_usable(model, representative_id)
 
 
 def _instantiate_variant_artifact(
@@ -5623,7 +5619,7 @@ def _instantiate_variant_artifact(
         }
     )
     facts["identity"] = identity
-    _specialize_variant_recipe(facts, item)
+    _specialize_variant_recipe(facts, item, representative_model)
     try:
         provisional_line = mechanical_variant_parameter_input_line(0, facts["input_contract"])
         facts["website"] = instantiate_size_variant(
@@ -5694,7 +5690,9 @@ def _instantiate_variant_artifact(
     )
 
 
-def _specialize_variant_recipe(facts: JsonObject, item: WorkItem) -> None:
+def _specialize_variant_recipe(
+    facts: JsonObject, item: WorkItem, representative_model: Mapping[str, Any]
+) -> None:
     """Mechanically select a sibling constructor without accepting authored prose.
 
     Closed declarative family recipes can expose a conventional variant-selector
@@ -5707,6 +5705,8 @@ def _specialize_variant_recipe(facts: JsonObject, item: WorkItem) -> None:
         Mutable representative proposal facts copied for the variant.
     item:
         Explicit intake size variant providing the selector token.
+    representative_model:
+        Exact accepted representative revision supplying the only recipe/input base.
 
     Raises
     ------
@@ -5714,34 +5714,16 @@ def _specialize_variant_recipe(facts: JsonObject, item: WorkItem) -> None:
         If the recipe has no single closed mechanical specialization.
     """
 
-    implementation = facts.get("implementation")
-    if (
-        not isinstance(implementation, dict)
-        or implementation.get("recipe_type") != "declarative-library"
-    ):
-        raise VariantRecipeUnsupported(
-            "typed family variants require their own full author/gate fallback"
+    try:
+        implementation, input_contract, _derivation = specialize_size_variant_recipe(
+            representative_model,
+            representative_model_id=item.family_representative_id,
+            variant_token=item.intake.variant,
         )
-    recipe = implementation.get("library_recipe")
-    if not isinstance(recipe, dict):
-        raise VariantRecipeUnsupported("family declarative recipe is incomplete")
-    kwargs = recipe.get("kwargs")
-    if not isinstance(kwargs, dict):
-        raise VariantRecipeUnsupported("family declarative recipe kwargs are incomplete")
-    selector_keys = tuple(
-        key for key in ("variant", "model_name", "arch", "architecture", "size") if key in kwargs
-    )
-    if len(selector_keys) == 1:
-        kwargs[selector_keys[0]] = item.intake.variant
-        return
-    if selector_keys:
-        raise VariantRecipeUnsupported("family recipe has ambiguous variant selector kwargs")
-    if item.intake.variant.isidentifier():
-        recipe["symbol"] = item.intake.variant
-        return
-    raise VariantRecipeUnsupported(
-        "family recipe has no closed variant selector; full author fallback is required"
-    )
+    except FamilyTemplateError as exc:
+        raise VariantRecipeUnsupported(str(exc)) from exc
+    facts["implementation"] = implementation
+    facts["input_contract"] = input_contract
 
 
 def _worker_request(
@@ -7908,6 +7890,7 @@ def _assemble_terminal_model(
         "created_at": created_at,
         "revised_by": {"actor": "driver"},
         "authored_metadata_state": metadata_state,
+        "family_variant_derivation": None,
         "intake": {
             "snapshot_id": "driver-loaded",
             "snapshot_sha256": stable_hash(item.intake.to_dict()),
@@ -7936,7 +7919,7 @@ def _assemble_terminal_model(
             "vet_identity": proposal.get("vet_identity") if metadata_item else None,
             "gate_id": metadata_gate_id,
             "verdict": metadata_verdict,
-            "current": metadata_gate is not None,
+            "current": metadata_accepted,
             "checker_model": (
                 str(metadata_gate["checker"]["model"])
                 if metadata_gate is not None
@@ -8042,10 +8025,12 @@ def _assemble_terminal_model(
             "mandatory_source_present": True,
             "source_read_fields_complete": metadata_accepted,
             "evidence_coverage_complete": metadata_accepted,
-            "accuracy_gate_current": metadata_gate is not None,
-            "required_fidelity_current": bool(facts["fidelity"].get("current")),
+            "accuracy_gate_current": metadata_accepted,
+            "required_fidelity_current": bool(
+                not facts["fidelity"].get("required") or facts["fidelity"].get("current")
+            ),
             "execution_current": False,
-            "family_template_valid": metadata_accepted,
+            "family_template_valid": True,
             "release_eligible": False,
             "issues": [status_code],
         },
@@ -8244,6 +8229,15 @@ def _assemble_run_model(
     accepted_ids = [str(attempt["attempt_id"]) for attempt in clean_attempts]
     execution_identity = str(first_attempt["identities"]["execution"])
     now = str(first_attempt.get("finished_at") or utc_now())
+    family_variant_derivation = (
+        build_size_variant_derivation(
+            representative_model,
+            representative_model_id=item.family_representative_id,
+            variant_token=item.intake.variant,
+        )
+        if templated_variant and representative_model is not None
+        else None
+    )
     model: JsonObject = {
         "schema_version": "menagerie.crawler.model.v2",
         "stable_id": stable_id,
@@ -8251,6 +8245,7 @@ def _assemble_run_model(
         "created_at": now,
         "revised_by": {"actor": "driver"},
         "authored_metadata_state": metadata_state,
+        "family_variant_derivation": family_variant_derivation,
         "intake": {
             "snapshot_id": "driver-loaded",
             "snapshot_sha256": stable_hash(item.intake.to_dict()),
@@ -8416,7 +8411,7 @@ def _assemble_run_model(
             "accuracy_gate_current": metadata_accepted,
             "required_fidelity_current": True,
             "execution_current": True,
-            "family_template_valid": metadata_accepted,
+            "family_template_valid": True,
             "release_eligible": metadata_accepted,
             "issues": [] if metadata_accepted else ["authored-metadata-pending"],
         },

@@ -1833,6 +1833,14 @@ def test_family_representative_once_templates_variants_that_still_run(tmp_path: 
         assert variant["accuracy_gate"] == representative["accuracy_gate"]
         assert variant["website"]["kind"] == "size-variant-template"
         assert variant["website"]["template_source_model_id"] == representative_id
+        derivation = variant["family_variant_derivation"]
+        assert derivation["variant_token"] == variant["identity"]["variant"]
+        assert derivation["template_source_revision"] == representative["record_revision"]
+        assert (
+            derivation["representative_recipe_revision"]
+            == representative["implementation"]["recipe_revision"]
+        )
+        assert derivation["allowed_input_delta"] == "unchanged"
         assert (
             variant["implementation"]["library_recipe"]["symbol"] == variant["identity"]["variant"]
         )

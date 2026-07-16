@@ -14,7 +14,13 @@ from menagerie.crawler.constants import (
     MODEL_SCHEMA_VERSION,
     TERMINAL_STATUS_CODES,
 )
-from menagerie.crawler.family_templates import FamilyTemplateError, validate_size_variant
+from menagerie.crawler.family_templates import (
+    FamilyTemplateError,
+    family_representative_is_usable,
+    family_variant_currency_error,
+    validate_size_variant,
+    validate_size_variant_derivation,
+)
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.intake import legacy_requires_fidelity_audit
 from menagerie.crawler.metadata import (
@@ -449,7 +455,13 @@ class CanonicalReducer:
         Stable IDs in the trusted immutable intake snapshot.
     """
 
-    def __init__(self, ledgers: LedgerPaths, intake_ids: Iterable[str]) -> None:
+    def __init__(
+        self,
+        ledgers: LedgerPaths,
+        intake_ids: Iterable[str],
+        *,
+        intake_variant_bindings: Optional[Mapping[str, tuple[str, str]]] = None,
+    ) -> None:
         """Acquire all canonical writer locks and load current facts.
 
         Parameters
@@ -458,10 +470,19 @@ class CanonicalReducer:
             Paths to canonical ledgers.
         intake_ids:
             Stable IDs in trusted intake.
+        intake_variant_bindings:
+            Trusted non-representative stable ID to exact representative ID and
+            intake variant token.
         """
 
         self.ledger_paths = ledgers
         self.intake_ids = frozenset(intake_ids)
+        self.intake_variant_bindings = dict(intake_variant_bindings or {})
+        unknown_bindings = set(self.intake_variant_bindings) - self.intake_ids
+        if unknown_bindings:
+            raise ReductionError(
+                f"family variant bindings exist outside intake: {sorted(unknown_bindings)}"
+            )
         opened: list[JsonlLedger] = []
         try:
             self._models = JsonlLedger(ledgers.models, MODEL_SCHEMA_VERSION)
@@ -718,6 +739,7 @@ class CanonicalReducer:
         self._validate_gates(candidate)
         self._validate_deferral(candidate)
         self._validate_execution(candidate)
+        self._validate_completeness(candidate)
         try:
             result = self._models.append(candidate)
         except LedgerConflictError as exc:
@@ -1173,25 +1195,23 @@ class CanonicalReducer:
     def _validate_family_template(self, model: Mapping[str, Any]) -> None:
         """Mechanically compare a claimed size variant with its exact current representative."""
 
-        if not model.get("completeness", {}).get("family_template_valid"):
-            return
         website = model.get("website")
         if not isinstance(website, Mapping) or website.get("kind") != "size-variant-template":
             return
+        stable_id = str(model.get("stable_id", ""))
+        binding = self.intake_variant_bindings.get(stable_id)
+        if binding is None:
+            raise ReductionError("family variant lacks its trusted intake derivation binding")
+        trusted_representative_id, trusted_variant_token = binding
         representative_id = model.get("identity", {}).get("family_representative_id")
-        representative = self._current.get(str(representative_id))
-        if not isinstance(representative, Mapping):
-            raise ReductionError("family variant has no accepted current representative")
-        representative_identity = representative.get("identity")
-        representative_website = representative.get("website")
         if (
-            representative.get("authored_metadata_state") != "accepted"
-            or representative.get("status", {}).get("kind") != "runs"
-            or representative.get("accuracy_gate", {}).get("current") is not True
-            or not isinstance(representative_identity, Mapping)
-            or representative_identity.get("family_representative_id") != representative_id
-            or not isinstance(representative_website, Mapping)
-            or representative_website.get("kind") != "family-representative"
+            representative_id != trusted_representative_id
+            or website.get("template_source_model_id") != trusted_representative_id
+        ):
+            raise ReductionError("family variant contradicts its trusted intake family binding")
+        representative = self._current.get(str(representative_id))
+        if not isinstance(representative, Mapping) or not family_representative_is_usable(
+            representative, str(representative_id)
         ):
             raise ReductionError("family variant representative is not a usable accepted record")
         try:
@@ -1202,8 +1222,101 @@ class CanonicalReducer:
                 parameter_count_total=model.get("observed", {}).get("parameter_count_total"),
                 input_contract=model.get("input_contract", {}),
             )
+            validate_size_variant_derivation(
+                representative,
+                model,
+                str(representative_id),
+                trusted_variant_token=trusted_variant_token,
+            )
         except FamilyTemplateError as exc:
             raise ReductionError(f"family template validation failed: {exc}") from exc
+
+    def _validate_completeness(self, model: Mapping[str, Any]) -> None:
+        """Derive every completeness bit and reject producer contradictions.
+
+        Parameters
+        ----------
+        model:
+            Candidate already validated for source, gates, family, and execution.
+
+        Raises
+        ------
+        ReductionError
+            If any supplied completeness value differs from reducer-derived facts.
+        """
+
+        completeness = model.get("completeness")
+        if not isinstance(completeness, Mapping):
+            raise ReductionError("model completeness block is missing")
+        status = model.get("status", {})
+        status_kind = status.get("kind")
+        metadata_accepted = model.get("authored_metadata_state") == "accepted"
+        source_fields = (
+            "taxonomy",
+            "external_metadata",
+            "website",
+            "people_and_origin",
+            "dates",
+            "citation",
+            "licenses",
+        )
+        source_read_complete = metadata_accepted and all(
+            model.get(field) is not None for field in source_fields
+        )
+        coverage = model.get("evidence", {}).get("coverage", {})
+        evidence_complete = bool(
+            metadata_accepted
+            and coverage.get("all_agent_fields_have_support") is True
+            and coverage.get("family_grounding_complete") is True
+            and coverage.get("missing_support") == []
+        )
+        accuracy = model.get("accuracy_gate", {})
+        accuracy_current = bool(
+            metadata_accepted
+            and accuracy.get("current") is True
+            and accuracy.get("verdict") == "accurate"
+            and accuracy.get("gate_id")
+            and accuracy.get("vet_identity")
+        )
+        fidelity = model.get("fidelity", {})
+        fidelity_current = bool(not fidelity.get("required") or fidelity.get("current") is True)
+        execution_current = bool(
+            status_kind == "runs" and model.get("execution", {}).get("current") is True
+        )
+        family_valid = True
+        human_review_pending = status.get("human_review", {}).get("required") is True
+        release_eligible = bool(
+            status_kind == "runs"
+            and source_read_complete
+            and evidence_complete
+            and accuracy_current
+            and fidelity_current
+            and execution_current
+            and family_valid
+            and not human_review_pending
+        )
+        status_code = str(status.get("code"))
+        if status_kind == "runs":
+            expected_issues = [] if metadata_accepted else ["authored-metadata-pending"]
+        else:
+            expected_issues = [status_code]
+        expected: JsonObject = {
+            "schema_valid": True,
+            "mandatory_source_present": True,
+            "source_read_fields_complete": source_read_complete,
+            "evidence_coverage_complete": evidence_complete,
+            "accuracy_gate_current": accuracy_current,
+            "required_fidelity_current": fidelity_current,
+            "execution_current": execution_current,
+            "family_template_valid": family_valid,
+            "release_eligible": release_eligible,
+            "issues": expected_issues,
+        }
+        for field, expected_value in expected.items():
+            if completeness.get(field) != expected_value:
+                raise ReductionError(
+                    f"completeness.{field} contradicts reducer-derived value {expected_value!r}"
+                )
 
     def _validate_execution(self, model: Mapping[str, Any]) -> None:
         """Enforce attempt/receipt and meaningful-mode rules for run awards.
@@ -1452,7 +1565,8 @@ def materialize_current(ledgers: LedgerPaths) -> Mapping[str, JsonObject]:
     Returns
     -------
     Mapping[str, dict[str, Any]]
-        Highest valid revision per stable ID.
+        Highest valid dependency-current revision per stable ID. Stale family
+        variants remain in append-only history but are excluded from this view.
     """
 
     from menagerie.crawler.recordio import scan_jsonl
@@ -1464,7 +1578,12 @@ def materialize_current(ledgers: LedgerPaths) -> Mapping[str, JsonObject]:
         scan_jsonl(ledgers.attempts),
         scan_jsonl(ledgers.gates),
     )
-    return _select_current(records)
+    current = _select_current(records)
+    return {
+        stable_id: record
+        for stable_id, record in current.items()
+        if family_variant_currency_error(record, current) is None
+    }
 
 
 def default_ledger_paths(root: Union[str, Path]) -> LedgerPaths:

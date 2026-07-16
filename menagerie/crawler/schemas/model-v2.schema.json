@@ -78,6 +78,17 @@
       ],
       "description": "Mandatory acceptance state for source-read metadata."
     },
+    "family_variant_derivation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/family_variant_derivation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Reducer-verifiable mechanical family recipe specialization proof."
+    },
     "intake": {
       "$ref": "#/$defs/intake",
       "description": "Mandatory preserved intake provenance."
@@ -282,6 +293,48 @@
               }
             },
             "description": "Successful run mode receipts."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "website": {
+            "type": "object",
+            "description": "Select structural size-variant website records.",
+            "properties": {
+              "kind": {
+                "const": "size-variant-template",
+                "description": "Require the structural family-variant kind."
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        },
+        "required": [
+          "website"
+        ]
+      },
+      "then": {
+        "required": [
+          "family_variant_derivation"
+        ],
+        "properties": {
+          "family_variant_derivation": {
+            "$ref": "#/$defs/family_variant_derivation",
+            "description": "Require the exact reducer-verifiable derivation proof."
+          },
+          "completeness": {
+            "description": "Bind structural variants to computed family validity.",
+            "properties": {
+              "family_template_valid": {
+                "const": true,
+                "description": "Structural variants cannot disable family validation."
+              }
+            }
           }
         }
       }
@@ -2961,6 +3014,91 @@
         "explicit_grants": {
           "$ref": "#/$defs/string_array",
           "description": "Mandatory explicit grants."
+        }
+      }
+    },
+    "family_variant_derivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "variant_token",
+        "template_source_model_id",
+        "template_source_revision",
+        "representative_recipe_revision",
+        "representative_library_recipe",
+        "selector_rule",
+        "allowed_recipe_delta",
+        "allowed_input_delta"
+      ],
+      "properties": {
+        "variant_token": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Exact trusted intake token selecting the variant."
+        },
+        "template_source_model_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Exact representative stable ID."
+        },
+        "template_source_revision": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact representative record revision."
+        },
+        "representative_recipe_revision": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact representative recipe identity."
+        },
+        "representative_library_recipe": {
+          "$ref": "#/$defs/library_recipe",
+          "description": "Byte-exact representative declarative library recipe."
+        },
+        "selector_rule": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Closed selector-key or direct-symbol specialization rule.",
+          "required": [
+            "kind",
+            "key"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "kwarg",
+                "symbol"
+              ],
+              "description": "Closed mechanical selector rule kind."
+            },
+            "key": {
+              "$ref": "#/$defs/nullable_string",
+              "description": "Exact selector kwarg, or null for a symbol rule."
+            }
+          }
+        },
+        "allowed_recipe_delta": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The sole permitted representative recipe change.",
+          "required": [
+            "path",
+            "previous_value",
+            "new_value"
+          ],
+          "properties": {
+            "path": {
+              "$ref": "#/$defs/nonempty_string_array",
+              "description": "Exact recipe path changed by specialization."
+            },
+            "previous_value": {
+              "description": "Exact representative value replaced by specialization."
+            },
+            "new_value": {
+              "$ref": "#/$defs/nonempty_string",
+              "description": "Exact trusted intake token written at the recipe path."
+            }
+          }
+        },
+        "allowed_input_delta": {
+          "const": "unchanged",
+          "description": "Input contract must remain byte-identical to the representative."
         }
       }
     },

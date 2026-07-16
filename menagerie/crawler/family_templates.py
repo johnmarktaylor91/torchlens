@@ -24,10 +24,282 @@ VARIANT_PARAMETER_INPUT_PATTERN = re.compile(
     r"^(?:0|[1-9][0-9]*) parameters; input \[(?:0|[1-9][0-9]*)"
     r"(?:, (?:0|[1-9][0-9]*))*\]$"
 )
+VARIANT_SELECTOR_KEYS = ("variant", "model_name", "arch", "architecture", "size")
 
 
 class FamilyTemplateError(ValueError):
     """Raised when a size variant changes inherited family metadata."""
+
+
+def build_size_variant_derivation(
+    representative: Mapping[str, Any],
+    *,
+    representative_model_id: str,
+    variant_token: str,
+) -> JsonObject:
+    """Build the closed reducer-verifiable recipe specialization proof.
+
+    Parameters
+    ----------
+    representative:
+        Exact accepted representative model revision.
+    representative_model_id:
+        Trusted stable ID of the representative.
+    variant_token:
+        Exact trusted intake variant token.
+
+    Returns
+    -------
+    dict[str, Any]
+        Exact source revision/recipe and the sole permitted specialization delta.
+
+    Raises
+    ------
+    FamilyTemplateError
+        If the representative cannot be specialized by the closed rule.
+    """
+
+    revision = representative.get("record_revision")
+    implementation = representative.get("implementation")
+    if not isinstance(revision, str) or not revision.strip():
+        raise FamilyTemplateError("family representative has no exact record revision")
+    if representative.get("stable_id") != representative_model_id:
+        raise FamilyTemplateError("family representative stable ID is mismatched")
+    if not isinstance(variant_token, str) or not variant_token.strip():
+        raise FamilyTemplateError("trusted intake variant token must be non-empty")
+    if (
+        not isinstance(implementation, Mapping)
+        or implementation.get("recipe_type") != "declarative-library"
+    ):
+        raise FamilyTemplateError("family representative has no declarative library recipe")
+    recipe = implementation.get("library_recipe")
+    if not isinstance(recipe, Mapping):
+        raise FamilyTemplateError("family representative library recipe is incomplete")
+    kwargs = recipe.get("kwargs")
+    if not isinstance(kwargs, Mapping):
+        raise FamilyTemplateError("family representative recipe kwargs are incomplete")
+    selector_keys = tuple(key for key in VARIANT_SELECTOR_KEYS if key in kwargs)
+    if len(selector_keys) == 1:
+        selector_key = selector_keys[0]
+        selector_rule: JsonObject = {"kind": "kwarg", "key": selector_key}
+        recipe_path = ["library_recipe", "kwargs", selector_key]
+        previous_value = deepcopy(kwargs[selector_key])
+    elif selector_keys:
+        raise FamilyTemplateError("family recipe has ambiguous variant selector kwargs")
+    elif variant_token.isidentifier():
+        selector_rule = {"kind": "symbol", "key": None}
+        recipe_path = ["library_recipe", "symbol"]
+        previous_value = deepcopy(recipe.get("symbol"))
+    else:
+        raise FamilyTemplateError(
+            "family recipe has no closed variant selector; full author fallback is required"
+        )
+    return {
+        "variant_token": variant_token,
+        "template_source_model_id": representative_model_id,
+        "template_source_revision": revision,
+        "representative_recipe_revision": implementation.get("recipe_revision"),
+        "representative_library_recipe": deepcopy(dict(recipe)),
+        "selector_rule": selector_rule,
+        "allowed_recipe_delta": {
+            "path": recipe_path,
+            "previous_value": previous_value,
+            "new_value": variant_token,
+        },
+        "allowed_input_delta": "unchanged",
+    }
+
+
+def specialize_size_variant_recipe(
+    representative: Mapping[str, Any],
+    *,
+    representative_model_id: str,
+    variant_token: str,
+) -> tuple[JsonObject, JsonObject, JsonObject]:
+    """Derive the exact implementation and input contract for one size variant.
+
+    Parameters
+    ----------
+    representative:
+        Exact accepted representative model revision.
+    representative_model_id:
+        Trusted stable ID of the representative.
+    variant_token:
+        Exact trusted intake token selecting the sibling recipe.
+
+    Returns
+    -------
+    tuple[dict[str, Any], dict[str, Any], dict[str, Any]]
+        Specialized implementation, unchanged input contract, and derivation proof.
+
+    Raises
+    ------
+    FamilyTemplateError
+        If the representative recipe or input contract is incomplete.
+    """
+
+    derivation = build_size_variant_derivation(
+        representative,
+        representative_model_id=representative_model_id,
+        variant_token=variant_token,
+    )
+    implementation = representative.get("implementation")
+    input_contract = representative.get("input_contract")
+    if not isinstance(implementation, Mapping) or not isinstance(input_contract, Mapping):
+        raise FamilyTemplateError("family representative recipe/input facts are incomplete")
+    specialized = deepcopy(dict(implementation))
+    recipe = specialized.get("library_recipe")
+    if not isinstance(recipe, dict):
+        raise FamilyTemplateError("family representative library recipe is incomplete")
+    selector = derivation["selector_rule"]
+    if selector["kind"] == "kwarg":
+        kwargs = recipe.get("kwargs")
+        if not isinstance(kwargs, dict):
+            raise FamilyTemplateError("family representative recipe kwargs are incomplete")
+        kwargs[str(selector["key"])] = variant_token
+    else:
+        recipe["symbol"] = variant_token
+    return specialized, deepcopy(dict(input_contract)), derivation
+
+
+def validate_size_variant_derivation(
+    representative: Mapping[str, Any],
+    variant: Mapping[str, Any],
+    representative_model_id: str,
+    *,
+    trusted_variant_token: str,
+) -> None:
+    """Verify that a variant recipe is the sole mechanical representative delta.
+
+    Parameters
+    ----------
+    representative, variant:
+        Exact representative and proposed canonical variant records.
+    representative_model_id:
+        Trusted representative stable ID.
+    trusted_variant_token:
+        Exact variant token from trusted intake.
+
+    Raises
+    ------
+    FamilyTemplateError
+        If the proof, recipe, input, or trusted family binding differs.
+    """
+
+    expected_implementation, expected_input, expected_derivation = specialize_size_variant_recipe(
+        representative,
+        representative_model_id=representative_model_id,
+        variant_token=trusted_variant_token,
+    )
+    if canonical_json_bytes(variant.get("family_variant_derivation")) != canonical_json_bytes(
+        expected_derivation
+    ):
+        raise FamilyTemplateError("variant derivation payload is stale or mismatched")
+    identity = variant.get("identity")
+    if not isinstance(identity, Mapping) or identity.get("variant") != trusted_variant_token:
+        raise FamilyTemplateError("variant identity does not match trusted intake token")
+    variant_implementation = variant.get("implementation")
+    if not isinstance(variant_implementation, Mapping):
+        raise FamilyTemplateError("variant implementation is incomplete")
+    expected_implementation["recipe_revision"] = variant_implementation.get("recipe_revision")
+    if canonical_json_bytes(variant_implementation) != canonical_json_bytes(
+        expected_implementation
+    ):
+        raise FamilyTemplateError(
+            "variant implementation is not the mechanical representative specialization"
+        )
+    if canonical_json_bytes(variant.get("input_contract")) != canonical_json_bytes(expected_input):
+        raise FamilyTemplateError("variant input contract changed outside the closed derivation")
+
+
+def family_representative_is_usable(
+    representative: Mapping[str, Any] | None, representative_model_id: str
+) -> bool:
+    """Return whether a representative can currently authorize family variants.
+
+    Parameters
+    ----------
+    representative:
+        Candidate current representative record.
+    representative_model_id:
+        Stable ID named by the dependent variant.
+
+    Returns
+    -------
+    bool
+        True only for accepted, executed, current family authority.
+    """
+
+    if not isinstance(representative, Mapping):
+        return False
+    identity = representative.get("identity")
+    website = representative.get("website")
+    fidelity = representative.get("fidelity", {})
+    return bool(
+        representative.get("stable_id") == representative_model_id
+        and representative.get("authored_metadata_state") == "accepted"
+        and representative.get("status", {}).get("kind") == "runs"
+        and representative.get("accuracy_gate", {}).get("current") is True
+        and representative.get("accuracy_gate", {}).get("verdict") == "accurate"
+        and representative.get("execution", {}).get("current") is True
+        and (not fidelity.get("required") or fidelity.get("current") is True)
+        and isinstance(identity, Mapping)
+        and identity.get("variant_scope") == "family"
+        and identity.get("family_representative_id") == representative_model_id
+        and isinstance(website, Mapping)
+        and website.get("kind") == "family-representative"
+    )
+
+
+def family_variant_currency_error(
+    variant: Mapping[str, Any], current: Mapping[str, Mapping[str, Any]]
+) -> Optional[str]:
+    """Return why a structural family variant is stale, if it is stale.
+
+    Parameters
+    ----------
+    variant:
+        Candidate current variant record.
+    current:
+        Independently selected current records keyed by stable ID.
+
+    Returns
+    -------
+    str | None
+        Stable-family reason, or ``None`` for a non-variant/current variant.
+    """
+
+    website = variant.get("website")
+    if not isinstance(website, Mapping) or website.get("kind") != "size-variant-template":
+        return None
+    representative_id = website.get("template_source_model_id")
+    if not isinstance(representative_id, str) or not representative_id:
+        return "missing representative binding"
+    representative = current.get(representative_id)
+    if not isinstance(representative, Mapping) or not family_representative_is_usable(
+        representative, representative_id
+    ):
+        return "representative is not current accepted usable authority"
+    derivation = variant.get("family_variant_derivation")
+    if not isinstance(derivation, Mapping):
+        return "missing derivation payload"
+    try:
+        validate_size_variant(
+            representative,
+            variant,
+            representative_id,
+            parameter_count_total=variant.get("observed", {}).get("parameter_count_total"),
+            input_contract=variant.get("input_contract", {}),
+        )
+        validate_size_variant_derivation(
+            representative,
+            variant,
+            representative_id,
+            trusted_variant_token=str(derivation.get("variant_token", "")),
+        )
+    except FamilyTemplateError as exc:
+        return str(exc)
+    return None
 
 
 def mechanical_variant_parameter_input_line(

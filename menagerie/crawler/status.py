@@ -6,6 +6,7 @@ from collections import Counter, defaultdict
 from typing import Any, Iterable, Mapping, Sequence
 
 from menagerie.crawler.constants import SKIPPED_STATUS_CODES, TERMINAL_STATUS_CODES, WORKFLOW_STATES
+from menagerie.crawler.family_templates import family_variant_currency_error
 from menagerie.crawler.models import (
     CompletenessReport,
     FunnelQuery,
@@ -351,6 +352,63 @@ def checkpoint_consistency_report(
     )
 
 
+def record_is_release_eligible(
+    record: Mapping[str, Any], current_records: Mapping[str, Mapping[str, Any]]
+) -> bool:
+    """Derive release eligibility without trusting the persisted release flag.
+
+    Parameters
+    ----------
+    record:
+        Candidate current canonical model revision.
+    current_records:
+        Independently selected current revisions keyed by stable ID.
+
+    Returns
+    -------
+    bool
+        True only when current metadata, gates, execution, and family dependencies hold.
+    """
+
+    if (
+        record.get("status", {}).get("kind") != "runs"
+        or record.get("authored_metadata_state") != "accepted"
+        or record.get("status", {}).get("human_review", {}).get("required") is True
+    ):
+        return False
+    source_fields = (
+        "taxonomy",
+        "external_metadata",
+        "website",
+        "people_and_origin",
+        "dates",
+        "citation",
+        "licenses",
+    )
+    if any(record.get(field) is None for field in source_fields):
+        return False
+    coverage = record.get("evidence", {}).get("coverage", {})
+    accuracy = record.get("accuracy_gate", {})
+    fidelity = record.get("fidelity", {})
+    execution = record.get("execution", {})
+    meaningful = set(record.get("modes", {}).get("meaningful_modes", []))
+    outcomes = set(record.get("modes", {}).get("per_mode_run", {}))
+    return bool(
+        coverage.get("all_agent_fields_have_support") is True
+        and coverage.get("family_grounding_complete") is True
+        and coverage.get("missing_support") == []
+        and accuracy.get("current") is True
+        and accuracy.get("verdict") == "accurate"
+        and accuracy.get("gate_id")
+        and accuracy.get("vet_identity")
+        and (not fidelity.get("required") or fidelity.get("current") is True)
+        and execution.get("current") is True
+        and meaningful
+        and meaningful == outcomes
+        and family_variant_currency_error(record, current_records) is None
+    )
+
+
 def _record_completion_issues(records: Sequence[Mapping[str, Any]]) -> dict[str, list[str]]:
     """Return status-appropriate completeness issues for represented records.
 
@@ -380,6 +438,7 @@ def _record_completion_issues(records: Sequence[Mapping[str, Any]]) -> dict[str,
         "family_template_valid",
         "release_eligible",
     )
+    current_by_id = {str(record.get("stable_id")): record for record in records}
     for failure in _status_completeness_failures(records):
         stable_id, issue = failure.split(":", 1)
         issues[f"status:{issue}"].append(stable_id)
@@ -406,4 +465,9 @@ def _record_completion_issues(records: Sequence[Mapping[str, Any]]) -> dict[str,
             outcomes = set(record.get("modes", {}).get("per_mode_run", {}))
             if meaningful != outcomes:
                 issues["meaningful_mode_outcomes_incomplete"].append(stable_id)
+            family_error = family_variant_currency_error(record, current_by_id)
+            if family_error is not None:
+                issues["stale_family_variant"].append(stable_id)
+            elif not record_is_release_eligible(record, current_by_id):
+                issues["derived_release_ineligible"].append(stable_id)
     return issues

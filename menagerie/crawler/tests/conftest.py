@@ -592,6 +592,7 @@ def make_model(
         "created_at": NOW,
         "revised_by": {"actor": "driver"},
         "authored_metadata_state": "accepted" if accepted else "pending",
+        "family_variant_derivation": None,
         "intake": {
             "snapshot_id": "snapshot-1",
             "snapshot_sha256": HASH,
@@ -761,7 +762,7 @@ def make_model(
             "verdict": None,
             "fidelity_identity": None,
             "gate_id": None,
-            "current": True,
+            "current": kind == "runs",
             "permanent_scar": False,
             "deviations": [],
         },
@@ -784,7 +785,7 @@ def make_model(
             "network_attempted": False,
             "checkpoint_accessed": False,
             "last_verified_at": NOW,
-            "current": True,
+            "current": kind == "runs",
         },
         "status": {
             "kind": kind,
@@ -846,10 +847,16 @@ def make_model(
             "evidence_coverage_complete": accepted,
             "accuracy_gate_current": accepted,
             "required_fidelity_current": True,
-            "execution_current": True,
-            "family_template_valid": accepted,
-            "release_eligible": accepted,
-            "issues": [] if accepted else ["authored-metadata-pending"],
+            "execution_current": kind == "runs",
+            "family_template_valid": True,
+            "release_eligible": accepted and kind == "runs",
+            "issues": (
+                []
+                if accepted and kind == "runs"
+                else ["authored-metadata-pending"]
+                if kind == "runs"
+                else [status_code]
+            ),
         },
     }
     if accepted:
