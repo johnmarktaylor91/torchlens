@@ -834,7 +834,13 @@ def _record_runnable_input_literal_leaves(
 
     import torch as _torch
 
-    from torchlens._io.runnable import _UnsupportedLiteralError, _encode_literal_key
+    from torchlens._io.runnable import (
+        EMPTY_CONTAINER_PATH_MARKER,
+        _UnsupportedLiteralError,
+        _encode_literal_key,
+        empty_container_kind,
+        input_path_key_component,
+    )
 
     leaves: list[tuple[object, tuple[str | int, ...], Any]] = []
 
@@ -851,9 +857,20 @@ def _record_runnable_input_literal_leaves(
         downgrades witness coverage to UNVERIFIABLE rather than silently dropping
         the subtree -- a silently skipped leaf under an exotic key is the
         false-VERIFIED money bug this walker exists to prevent.
+
+        An EMPTY container adds no child leaf, so it is witnessed by a synthetic
+        marker leaf carrying its KIND at ``(*path, EMPTY_CONTAINER_PATH_MARKER)``
+        so an added/removed/kind-changed empty container (which can steer
+        ``'flag' in d`` / ``if not lst`` control flow) diverges instead of
+        silently replaying the recorded path. A BOOL mapping key is tagged so it
+        stays distinct from the equal-valued int key in the leaf-path set.
         """
 
         if isinstance(value, _torch.Tensor):
+            return
+        kind = empty_container_kind(value)
+        if kind is not None:
+            leaves.append((position, (*path, EMPTY_CONTAINER_PATH_MARKER), kind))
             return
         if isinstance(value, tuple) and hasattr(value, "_fields"):
             for name in value._fields:
@@ -866,7 +883,7 @@ def _record_runnable_input_literal_leaves(
                 except _UnsupportedLiteralError:
                     leaves.append((position, path, _OPAQUE_INPUT_LEAF))
                     continue
-                _walk(position, child, (*path, key))
+                _walk(position, child, (*path, input_path_key_component(key)))
             return
         if isinstance(value, (list, tuple)):
             for index, child in enumerate(value):

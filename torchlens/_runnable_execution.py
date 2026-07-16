@@ -1089,7 +1089,13 @@ def _runtime_nontensor_leaf_paths(root: Any) -> set[tuple[str | int, ...]]:
     by index. Every other value is a scalar leaf recorded at its path.
     """
 
-    from torchlens._io.runnable import _UnsupportedLiteralError, _encode_literal_key
+    from torchlens._io.runnable import (
+        EMPTY_CONTAINER_PATH_MARKER,
+        _UnsupportedLiteralError,
+        _encode_literal_key,
+        empty_container_kind,
+        input_path_key_component,
+    )
 
     paths: set[tuple[str | int, ...]] = set()
 
@@ -1097,6 +1103,9 @@ def _runtime_nontensor_leaf_paths(root: Any) -> set[tuple[str | int, ...]]:
         """Descend one runtime boundary value, collecting every non-tensor leaf path."""
 
         if isinstance(value, torch.Tensor):
+            return
+        if empty_container_kind(value) is not None:
+            paths.add((*path, EMPTY_CONTAINER_PATH_MARKER))
             return
         if isinstance(value, tuple) and hasattr(value, "_fields"):
             for name in value._fields:
@@ -1109,7 +1118,7 @@ def _runtime_nontensor_leaf_paths(root: Any) -> set[tuple[str | int, ...]]:
                 except _UnsupportedLiteralError:
                     paths.add(path)
                     continue
-                _walk(child, (*path, key))
+                _walk(child, (*path, input_path_key_component(key)))
             return
         if isinstance(value, (list, tuple)):
             for index, child in enumerate(value):
@@ -3683,10 +3692,36 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
     :func:`_field_getattr`; string components are never fed to an unconstrained
     ``getattr`` (untrusted-bundle path strings could otherwise walk descriptor / dunder
     chains).
+
+    Two synthetic component forms (r29-C2) are decoded: a terminal
+    ``EMPTY_CONTAINER_PATH_MARKER`` resolves to the KIND string of the empty container at
+    the parent path (so a runtime empty container of a different kind, or a non-empty/scalar
+    value, diverges); a ``(BOOL_KEY_PATH_TAG, bool)`` tuple component indexes a mapping with
+    the bool key (kept distinct from the equal-valued int key).
     """
+
+    from torchlens._io.runnable import (
+        BOOL_KEY_PATH_TAG,
+        EMPTY_CONTAINER_PATH_MARKER,
+        empty_container_kind,
+    )
 
     current = value
     for component in path:
+        if component == EMPTY_CONTAINER_PATH_MARKER:
+            kind = empty_container_kind(current)
+            if kind is None:
+                raise KeyError(EMPTY_CONTAINER_PATH_MARKER)
+            return kind
+        if (
+            isinstance(component, (tuple, list))
+            and len(component) == 2
+            and (component[0] == BOOL_KEY_PATH_TAG)
+        ):
+            if not isinstance(current, Mapping):
+                raise KeyError(component[1])
+            current = current[bool(component[1])]
+            continue
         if isinstance(current, Mapping):
             current = current[component]
         elif isinstance(component, int):

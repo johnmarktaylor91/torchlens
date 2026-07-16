@@ -2879,6 +2879,53 @@ def _encode_slice_component(value: Any, field_name: str) -> LiteralAtom:
     return LiteralAtom(LiteralAtomKind.INT, int(value))
 
 
+EMPTY_CONTAINER_PATH_MARKER = "\x00tl_empty_container"
+"""Reserved terminal path component marking an EMPTY non-tensor input container (r29-C2).
+
+An empty dict/list/tuple contributes NO leaf path, so the non-tensor leaf-path SET witness
+(H1) is blind to an EXTRA empty container a model branches on (``if not d.get('flag', {})``).
+Both the capture and runtime walks emit a synthetic leaf at ``(*container_path, MARKER)``
+carrying the container KIND string, so an added/removed/kind-changed empty container diverges
+the run. The null-byte prefix makes collision with a real string dict key effectively
+impossible.
+"""
+
+BOOL_KEY_PATH_TAG = "\x00tl_bool_key"
+"""Reserved tag distinguishing a BOOL mapping key from the equal-valued int (r29-C2, F6).
+
+``bool`` is a subclass of ``int`` and ``hash(True) == hash(1)``, so a raw ``(True,)`` path
+component compares equal to ``(1,)`` in the leaf-path set and ``_value_at_path`` resolves both
+against either key. Encoding a bool key as ``(BOOL_KEY_PATH_TAG, bool(key))`` keeps the key
+TYPE distinct across capture/runtime, matching the type-strict ``_literal_leaf_equal`` used for
+values.
+"""
+
+
+def input_path_key_component(key: Any) -> Any:
+    """Return a type-strict non-tensor path component for one mapping key (r29-C2, F6)."""
+
+    if isinstance(key, bool):
+        return (BOOL_KEY_PATH_TAG, bool(key))
+    return key
+
+
+def empty_container_kind(value: Any) -> str | None:
+    """Return the KIND string of an EMPTY non-tensor container, else ``None`` (r29-C2).
+
+    ``None`` for non-containers and for NON-empty containers (whose leaves are witnessed
+    ordinarily). Namedtuples are treated as sequences by field arity; an empty namedtuple has
+    no fields.
+    """
+
+    if isinstance(value, tuple) and hasattr(value, "_fields"):
+        return "namedtuple" if len(value._fields) == 0 else None
+    if isinstance(value, Mapping):
+        return "mapping" if len(value) == 0 else None
+    if isinstance(value, (list, tuple)):
+        return "sequence" if len(value) == 0 else None
+    return None
+
+
 def _encode_literal_key(value: Any) -> LiteralAtom | LiteralTupleKey:
     """Encode a mapping key using the frozen safe key subset."""
 
