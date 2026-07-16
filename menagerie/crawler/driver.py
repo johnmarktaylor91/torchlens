@@ -1016,6 +1016,8 @@ class SupervisedForwardLane:
         stable_id = str(proposal["stable_id"])
         execution_identity = _execution_identity(proposal, environment)
         attempts: list[JsonObject] = []
+        # These modes are gate-authoritative. A worker-discovered expansion is a
+        # contract failure below and must be re-proposed/re-gated before it can run.
         modes = tuple(
             str(value) for value in proposal["proposed_facts"]["modes"]["meaningful_modes"]
         )
@@ -3819,7 +3821,7 @@ def _source_symbol_bytes(
     source: Optional[str] = None,
     tree: Optional[ast.Module] = None,
 ) -> bytes:
-    """Return exact source bytes for one module function or class method.
+    """Return normalized semantic AST bytes for one source-level binding.
 
     Parameters
     ----------
@@ -3833,19 +3835,19 @@ def _source_symbol_bytes(
     Returns
     -------
     bytes
-        Exact UTF-8 source slice, including decorators when present.
+        Stable AST bytes with docstrings and source locations omitted.
 
     Raises
     ------
     DriverIntegrationError
-        If the requested award symbol cannot be located exactly.
+        If the requested award binding cannot be located exactly.
     """
 
     source_text = path.read_text(encoding="utf-8") if source is None else source
     module_tree = ast.parse(source_text, filename=str(path)) if tree is None else tree
     parts = qualified_name.split(".")
     body: Sequence[ast.stmt] = module_tree.body
-    found: Optional[ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef] = None
+    found: Optional[ast.stmt] = None
     for part in parts:
         found = next(
             (
@@ -3857,20 +3859,46 @@ def _source_symbol_bytes(
             None,
         )
         if found is None:
+            if len(parts) == 1:
+                break
             raise DriverIntegrationError(
                 f"award-closure source symbol is missing: {path.name}:{qualified_name}"
             )
         body = found.body
-    if found is None or found.end_lineno is None:
+    if found is None:
+        if len(parts) != 1:
+            raise DriverIntegrationError(
+                f"award-closure source binding is missing: {path.name}:{qualified_name}"
+            )
+        for node in module_tree.body:
+            targets: Sequence[ast.expr]
+            if isinstance(node, ast.Assign):
+                targets = node.targets
+            elif isinstance(node, ast.AnnAssign):
+                targets = (node.target,)
+            else:
+                continue
+            if any(
+                isinstance(target, ast.Name) and target.id == qualified_name for target in targets
+            ):
+                found = node
+                break
+    if found is None:
         raise DriverIntegrationError(
-            f"award-closure source symbol has no exact span: {path.name}:{qualified_name}"
+            f"award-closure source binding is missing: {path.name}:{qualified_name}"
         )
-    start_line = found.lineno
-    decorators = getattr(found, "decorator_list", ())
-    if decorators:
-        start_line = min(start_line, *(decorator.lineno for decorator in decorators))
-    lines = source_text.splitlines(keepends=True)
-    return "".join(lines[start_line - 1 : found.end_lineno]).encode("utf-8")
+    semantic = deepcopy(found)
+    for descendant in ast.walk(semantic):
+        descendant_body = getattr(descendant, "body", None)
+        if (
+            isinstance(descendant_body, list)
+            and descendant_body
+            and isinstance(descendant_body[0], ast.Expr)
+            and isinstance(descendant_body[0].value, ast.Constant)
+            and isinstance(descendant_body[0].value.value, str)
+        ):
+            del descendant_body[0]
+    return ast.dump(semantic, annotate_fields=True, include_attributes=False).encode("utf-8")
 
 
 @lru_cache(maxsize=8)
@@ -3878,7 +3906,7 @@ def _award_closure_from_bytes(
     source_items: tuple[tuple[str, bytes], ...],
     schema_items: tuple[tuple[str, bytes], ...],
 ) -> str:
-    """Hash selected award symbols from an immutable once-read byte snapshot.
+    """Hash the transitive semantic award closure from one byte snapshot.
 
     Parameters
     ----------
@@ -3895,14 +3923,104 @@ def _award_closure_from_bytes(
 
     root = Path(__file__).parent
     components: dict[str, str] = {}
-    for relative, source_bytes in source_items:
+    source_by_relative = {
+        relative: source_bytes.decode("utf-8") for relative, source_bytes in source_items
+    }
+    module_trees: dict[str, ast.Module] = {}
+    module_definitions: dict[str, dict[str, ast.stmt]] = {}
+    module_imports: dict[str, dict[str, tuple[str, str]]] = {}
+    for relative, source in source_by_relative.items():
         path = root / relative
-        source = source_bytes.decode("utf-8")
         tree = ast.parse(source, filename=str(path))
-        for symbol in _AWARD_CLOSURE_SYMBOLS[relative]:
-            components[f"{relative}:{symbol}"] = hash_bytes(
-                _source_symbol_bytes(path, symbol, source=source, tree=tree)
+        definitions: dict[str, ast.stmt] = {}
+        imports: dict[str, tuple[str, str]] = {}
+        for node in tree.body:
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                definitions[node.name] = node
+                if isinstance(node, ast.ClassDef):
+                    for child in node.body:
+                        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                            definitions[f"{node.name}.{child.name}"] = child
+            elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else (node.target,)
+                for target in targets:
+                    if isinstance(target, ast.Name):
+                        definitions[target.id] = node
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                prefix = "menagerie.crawler."
+                if node.module.startswith(prefix):
+                    imported_relative = f"{node.module.removeprefix(prefix).replace('.', '/')}.py"
+                    if imported_relative in source_by_relative:
+                        for imported_name in node.names:
+                            imports[imported_name.asname or imported_name.name] = (
+                                imported_relative,
+                                imported_name.name,
+                            )
+            elif isinstance(node, ast.Import):
+                prefix = "menagerie.crawler."
+                for imported_name in node.names:
+                    if not imported_name.name.startswith(prefix):
+                        continue
+                    imported_relative = (
+                        f"{imported_name.name.removeprefix(prefix).replace('.', '/')}.py"
+                    )
+                    if imported_relative in source_by_relative:
+                        imports[imported_name.asname or imported_name.name.rsplit(".", 1)[-1]] = (
+                            imported_relative,
+                            "",
+                        )
+        module_trees[relative] = tree
+        module_definitions[relative] = definitions
+        module_imports[relative] = imports
+
+    pending = [
+        (relative, symbol)
+        for relative, symbols in _AWARD_CLOSURE_SYMBOLS.items()
+        for symbol in symbols
+    ]
+    while pending:
+        relative, symbol = pending.pop()
+        component = f"{relative}:{symbol}"
+        if component in components:
+            continue
+        relative_definitions = module_definitions.get(relative)
+        if relative_definitions is None or symbol not in relative_definitions:
+            raise DriverIntegrationError(f"award-closure source symbol is missing: {component}")
+        definition = relative_definitions[symbol]
+        components[component] = hash_bytes(
+            _source_symbol_bytes(
+                root / relative,
+                symbol,
+                source=source_by_relative[relative],
+                tree=module_trees[relative],
             )
+        )
+        class_name = symbol.split(".", 1)[0] if "." in symbol else None
+        for descendant in ast.walk(definition):
+            if isinstance(descendant, ast.Name) and isinstance(descendant.ctx, ast.Load):
+                if descendant.id in relative_definitions:
+                    pending.append((relative, descendant.id))
+                    continue
+                imported = module_imports[relative].get(descendant.id)
+                if imported is not None and imported[1]:
+                    pending.append(imported)
+            elif (
+                class_name is not None
+                and isinstance(descendant, ast.Attribute)
+                and isinstance(descendant.value, ast.Name)
+                and descendant.value.id in {"self", "cls"}
+            ):
+                method = f"{class_name}.{descendant.attr}"
+                if method in relative_definitions:
+                    pending.append((relative, method))
+            elif (
+                isinstance(descendant, ast.Attribute)
+                and isinstance(descendant.value, ast.Name)
+                and descendant.value.id in module_imports[relative]
+            ):
+                imported_relative, imported_symbol = module_imports[relative][descendant.value.id]
+                if not imported_symbol:
+                    pending.append((imported_relative, descendant.attr))
     for relative, schema_bytes in schema_items:
         components[relative] = hash_bytes(schema_bytes)
     return stable_hash(components)
@@ -3919,7 +4037,7 @@ def _award_closure_identity() -> str:
 
     root = Path(__file__).parent
     source_items = tuple(
-        (relative, (root / relative).read_bytes()) for relative in _AWARD_CLOSURE_SYMBOLS
+        (path.relative_to(root).as_posix(), path.read_bytes()) for path in sorted(root.glob("*.py"))
     )
     schema_items = tuple(
         (relative, (root / relative).read_bytes()) for relative in _AWARD_CLOSURE_SCHEMAS
@@ -6059,6 +6177,15 @@ def _attempts_from_supervised(
     )
     per_mode = receipt.get("per_mode", {})
     receipt_modes = receipt.get("meaningful_modes", [])
+    detected_modes = tuple(
+        str(value)
+        for value in receipt.get("detected_meaningful_modes", [])
+        if isinstance(value, str)
+    )
+    proposal_mode_set = {str(value) for value in facts["modes"]["meaningful_modes"]}
+    missing_proposal_modes = tuple(
+        mode for mode in ("train", "eval") if mode in set(detected_modes) - proposal_mode_set
+    )
     modes = (
         (requested_mode,)
         if requested_mode is not None
@@ -6103,7 +6230,22 @@ def _attempts_from_supervised(
         attempt_stage = "forward"
         attempt_mode: Optional[str] = mode
         if not succeeded:
-            failure = _supervised_failure(effective_result, receipt, mode_receipt, policy)
+            if missing_proposal_modes:
+                failure = _attempt_error_fields(
+                    "input",
+                    "contract-invalid",
+                    None,
+                    "worker detected meaningful modes absent from the gated proposal",
+                    native_crash=False,
+                    details={
+                        "route": "recipe-and-gate-revision-required",
+                        "proposal_meaningful_modes": list(declared_modes),
+                        "detected_meaningful_modes": list(detected_modes),
+                        "missing_proposal_modes": list(missing_proposal_modes),
+                    },
+                )
+            else:
+                failure = _supervised_failure(effective_result, receipt, mode_receipt, policy)
             attempt_stage = failure["stage"]
             attempt_mode = mode if attempt_stage == "forward" else None
             error = {
@@ -6562,6 +6704,10 @@ def _receipt_envelope_error(
         not isinstance(modes, list)
         or not isinstance(detected, list)
         or not isinstance(declared, list)
+        or any(not isinstance(value, str) for value in (*modes, *detected, *declared))
+        or len(modes) != len(set(modes))
+        or len(detected) != len(set(detected))
+        or len(declared) != len(set(declared))
     ):
         return "invalid-receipt:mode-envelope"
     proposal_modes = set(
@@ -6569,6 +6715,18 @@ def _receipt_envelope_error(
         for value in proposal.get("proposed_facts", {}).get("modes", {}).get("meaningful_modes", [])
     )
     mode_set = set(modes)
+    detected_set = set(detected)
+    declared_set = set(declared)
+    valid_modes = {"train", "eval"}
+    if (
+        not mode_set <= valid_modes
+        or not detected_set <= valid_modes
+        or declared_set != proposal_modes
+        or mode_set != proposal_modes | detected_set
+    ):
+        return "invalid-receipt:mode-envelope"
+    if detected_set - proposal_modes:
+        return "invalid-receipt:meaningful-mode-contract"
     if not isinstance(per_mode, Mapping):
         return "invalid-receipt:mode-envelope"
     receipt_mode = receipt.get("mode")
