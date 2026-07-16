@@ -1130,7 +1130,11 @@ def test_unified_load_rejects_symlinked_manifest(tmp_path: Path) -> None:
     member.rename(target)
     member.symlink_to(target)
 
-    with pytest.raises(TorchLensIOError, match="Refusing symlinked manifest"):
+    # r29 F-r28-1: a symlinked manifest is now rejected even earlier, at
+    # format-detection (before the loader's own symlink guard), so match the
+    # symlink-refusal message point-agnostically -- the assertion still verifies
+    # that a symlinked manifest.json member is refused with TorchLensIOError.
+    with pytest.raises(TorchLensIOError, match="Refusing symlinked"):
         load(bundle_path)
 
 
