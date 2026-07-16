@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import random
 import re
+import select
+import signal
 import sys
+import threading
 import time
 import traceback
 from contextlib import nullcontext
@@ -41,6 +45,12 @@ from menagerie.crawler.standard_inputs import (
 
 _PARENT_COMPLETION_CHALLENGE_ENV = "MENAGERIE_PARENT_COMPLETION_CHALLENGE"
 _WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V1 "
+_WORKER_COMPLETION_V2_PREFIX = "MENAGERIE_WORKER_COMPLETION_V2 "
+_REQUEST_SHA256_ENV = "MENAGERIE_WORKER_REQUEST_SHA256"
+_READ_MANIFEST_ID_ENV = "MENAGERIE_EXECUTION_READ_MANIFEST_ID"
+_WORKER_LOCK_FD_ENV = "MENAGERIE_WORKER_LOCK_FD"
+_LIFECYCLE_FD_ENV = "MENAGERIE_WORKER_LIFECYCLE_FD"
+_PARENT_STANDARD_INPUT_ASSET_ENV = "MENAGERIE_PARENT_STANDARD_INPUT_ASSET"
 
 
 @dataclass(frozen=True)
@@ -77,6 +87,14 @@ class WorkerRequest:
     input_spec: Optional[InputSpec]
     scratch_root: Path
     receipt_path: Path
+    protocol_version: str = "menagerie.crawler.worker-request.v1"
+    work_id: str = "unbound"
+    request_nonce: str = "unbound"
+    request_sha256: str = "unbound"
+    code_manifest_identity: str = "unbound"
+    input_identity: str = "unbound"
+    execution_read_manifest_identity: str = "unbound"
+    standard_input_asset: Optional[Mapping[str, str]] = None
     input_contract: Optional[Mapping[str, Any]] = None
     input_manifest: Optional[Mapping[str, Any]] = None
     seed: int = 0
@@ -92,7 +110,11 @@ class WorkerRequest:
 
     @classmethod
     def from_mapping(
-        cls, value: Mapping[str, Any], *, receipt_path: Optional[Path] = None
+        cls,
+        value: Mapping[str, Any],
+        *,
+        receipt_path: Optional[Path] = None,
+        request_sha256: Optional[str] = None,
     ) -> "WorkerRequest":
         """Validate and normalize a JSON worker request.
 
@@ -102,6 +124,8 @@ class WorkerRequest:
             JSON-compatible request mapping.
         receipt_path:
             Optional argv-owned receipt path override.
+        request_sha256:
+            Parent-bound digest recomputed from the exact request file bytes.
 
         Returns
         -------
@@ -115,12 +139,50 @@ class WorkerRequest:
         input_value = value.get("input_spec")
         input_contract_value = value.get("input_contract")
         input_manifest_value = value.get("input_manifest")
+        protocol_value = value.get("protocol_version", "menagerie.crawler.worker-request.v1")
+        v3_protocol = protocol_value == "menagerie.crawler.worker-request.v3"
         if input_value is not None and not isinstance(input_value, Mapping):
             raise ValueError("worker input_spec must be an object or null")
         if input_contract_value is not None and not isinstance(input_contract_value, Mapping):
             raise ValueError("worker input_contract must be an object or null")
         if input_manifest_value is not None and not isinstance(input_manifest_value, Mapping):
             raise ValueError("worker input_manifest must be an object or null")
+        if v3_protocol:
+            if input_manifest_value is not None:
+                raise ValueError("v3 worker requests forbid the legacy input_manifest")
+            input_code_path = (
+                input_contract_value.get("code_path")
+                if isinstance(input_contract_value, Mapping)
+                else None
+            )
+            if input_code_path is not None:
+                raise ValueError("v3 worker requests forbid input_contract.code_path")
+            if mode_value := value.get("mode"):
+                RunMode(str(mode_value))
+            else:
+                raise ValueError("v3 worker requests require one explicit mode")
+            required_strings = (
+                "work_id",
+                "request_nonce",
+                "execution_identity",
+                "recipe_revision",
+                "code_manifest_identity",
+                "input_identity",
+                "execution_read_manifest_identity",
+            )
+            if any(
+                not isinstance(value.get(field), str) or not value.get(field)
+                for field in required_strings
+            ):
+                raise ValueError("v3 worker request association fields must be non-empty")
+            if request_sha256 is None or os.environ.get(_REQUEST_SHA256_ENV) != request_sha256:
+                raise ValueError("v3 worker request digest does not match the parent binding")
+            if os.environ.get(_READ_MANIFEST_ID_ENV) != value.get(
+                "execution_read_manifest_identity"
+            ):
+                raise ValueError(
+                    "v3 worker read manifest identity does not match the parent binding"
+                )
         if input_value is None and input_contract_value is None:
             raise ValueError("worker requires input_contract or legacy input_spec")
         modality_value = value.get("modality")
@@ -149,6 +211,20 @@ class WorkerRequest:
             receipt_value = receipt_path
         return cls(
             stable_id=str(value.get("stable_id", "")),
+            protocol_version=str(protocol_value),
+            work_id=str(value.get("work_id", "unbound")),
+            request_nonce=str(value.get("request_nonce", "unbound")),
+            request_sha256=request_sha256 or "unbound",
+            code_manifest_identity=str(value.get("code_manifest_identity", "unbound")),
+            input_identity=str(value.get("input_identity", "unbound")),
+            execution_read_manifest_identity=str(
+                value.get("execution_read_manifest_identity", "unbound")
+            ),
+            standard_input_asset=(
+                dict(value["standard_input_asset"])
+                if isinstance(value.get("standard_input_asset"), Mapping)
+                else None
+            ),
             recipe=dict(recipe),
             modality=modality,
             input_spec=InputSpec.from_value(input_value) if input_value is not None else None,
@@ -227,17 +303,30 @@ def _observe_request_bytes(
         observed_manifest = stable_hash(observed_members)
         if observed_manifest != expected_manifest:
             errors.append("typed-adapter code-manifest aggregate digest changed")
+        if (
+            request.protocol_version == "menagerie.crawler.worker-request.v3"
+            and expected_manifest != request.code_manifest_identity
+        ):
+            errors.append("typed-adapter code manifest differs from the request association")
 
     selected_asset = (
-        request.input_manifest.get("selected_asset")
-        if isinstance(request.input_manifest, Mapping)
-        else None
+        request.standard_input_asset
+        if request.protocol_version == "menagerie.crawler.worker-request.v3"
+        else (
+            request.input_manifest.get("selected_asset")
+            if isinstance(request.input_manifest, Mapping)
+            else None
+        )
     )
     observed_asset: Optional[str] = None
     if selected_asset is not None:
         if not isinstance(selected_asset, Mapping):
             raise RecipeError("worker selected-asset manifest must be an object")
-        path_value = selected_asset.get("path")
+        path_value = (
+            os.environ.get(_PARENT_STANDARD_INPUT_ASSET_ENV)
+            if request.protocol_version == "menagerie.crawler.worker-request.v3"
+            else selected_asset.get("path")
+        )
         expected_digest = selected_asset.get("sha256")
         if not isinstance(path_value, str) or not isinstance(expected_digest, str):
             raise RecipeError("worker selected-asset manifest is incomplete")
@@ -773,6 +862,198 @@ def _atomic_receipt(path: Path, payload: Mapping[str, Any]) -> dict[str, Any]:
     return record
 
 
+def _clean_policy_observation(observation: PolicyObservation) -> bool:
+    """Return whether every worker-side policy tripwire remained clean.
+
+    Parameters
+    ----------
+    observation:
+        Closed in-child policy facts.
+
+    Returns
+    -------
+    bool
+        True only when no disqualifying policy fact was observed.
+    """
+
+    return not any(
+        (
+            observation.network_attempted,
+            observation.checkpoint_or_weight_read_attempted,
+            observation.write_outside_scratch_attempted,
+            observation.credentials_present,
+            observation.torchlens_import_attempted,
+            observation.cache_read_attempted,
+        )
+    )
+
+
+def _raw_award_receipt(
+    request: WorkerRequest,
+    diagnostic: Mapping[str, Any],
+    policy: PolicyObservation,
+) -> Optional[dict[str, Any]]:
+    """Derive the closed success-only v3 raw receipt from worker observations.
+
+    Parameters
+    ----------
+    request:
+        Exact parent-bound v3 request.
+    diagnostic:
+        Complete internal execution diagnostic.
+    policy:
+        In-child policy observation.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Frozen raw award receipt, or ``None`` for every failed/partial/dirty run.
+    """
+
+    if (
+        request.mode is None
+        or diagnostic.get("error") is not None
+        or not _clean_policy_observation(policy)
+    ):
+        return None
+    per_mode = diagnostic.get("per_mode")
+    mode_observation = per_mode.get(request.mode.value) if isinstance(per_mode, Mapping) else None
+    if not isinstance(mode_observation, Mapping) or not mode_observation.get("forward_completed"):
+        return None
+    observation: dict[str, Any] = {
+        "present": True,
+        "receipt_sha256": None,
+        "observed_recipe_revision": diagnostic.get("observed_recipe_revision"),
+        "observed_adapter_sha256": diagnostic.get("observed_adapter_sha256"),
+        "observed_code_manifest_sha256": diagnostic.get("observed_code_manifest_sha256"),
+        "observed_input_asset_sha256": diagnostic.get("observed_input_asset_sha256"),
+        "constructor_seconds": mode_observation.get("constructor_seconds"),
+        "forward_seconds": mode_observation.get("forward_seconds"),
+        "constructor_started": bool(mode_observation.get("constructor_started")),
+        "constructor_completed": bool(mode_observation.get("constructor_completed")),
+        "input_completed": bool(mode_observation.get("input_completed")),
+        "forward_started": bool(mode_observation.get("forward_started")),
+        "forward_completed": bool(mode_observation.get("forward_completed")),
+        "mode": mode_observation.get("mode"),
+        "input_signature": mode_observation.get("input_signature"),
+        "output_signature": mode_observation.get("output_signature"),
+        "input_kind": mode_observation.get("input_kind"),
+        "input_asset": mode_observation.get("input_asset"),
+        "input_note": str(mode_observation.get("input_note", "")),
+        "parameter_count_total": mode_observation.get("parameter_count_total"),
+        "parameter_count_trainable": mode_observation.get("parameter_count_trainable"),
+        "native_framework": mode_observation.get("native_framework"),
+        "delegated_method": mode_observation.get("delegated_method"),
+    }
+    observation["receipt_sha256"] = stable_hash(
+        {key: value for key, value in observation.items() if key != "receipt_sha256"}
+    )
+    return {
+        "receipt_version": "menagerie.crawler.raw-award-receipt.v3",
+        "request_nonce": request.request_nonce,
+        "request_sha256": request.request_sha256,
+        "stable_id": request.stable_id,
+        "work_id": request.work_id,
+        "execution_identity": request.execution_identity,
+        "recipe_revision": request.recipe_revision,
+        "code_manifest_identity": request.code_manifest_identity,
+        "input_identity": request.input_identity,
+        "requested_mode": request.mode.value,
+        "observation": observation,
+    }
+
+
+def _atomic_worker_result(
+    path: Path,
+    raw_receipt: Optional[Mapping[str, Any]],
+    diagnostic: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Persist one v3 worker-result envelope with exact embedded raw bytes.
+
+    Parameters
+    ----------
+    path:
+        Atomic result path.
+    raw_receipt:
+        Closed success-only receipt, or ``None`` for a non-awarding result.
+    diagnostic:
+        Hash-bound diagnostic retained for failure assembly only.
+
+    Returns
+    -------
+    dict[str, Any]
+        Persisted result envelope.
+    """
+
+    payload: dict[str, Any] = {
+        "result_version": "menagerie.crawler.worker-result.v3",
+        "raw_award_receipt": None if raw_receipt is None else dict(raw_receipt),
+        "raw_award_receipt_sha256": (None if raw_receipt is None else stable_hash(raw_receipt)),
+        "diagnostic": dict(diagnostic),
+    }
+    payload["result_sha256"] = stable_hash(payload)
+    data = canonical_json_bytes(payload) + b"\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with temporary.open("wb") as handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
+    descriptor = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    return payload
+
+
+def _start_parent_watchdog() -> None:
+    """Validate inherited lifecycle FDs and kill this worker when its parent dies.
+
+    The kernel flock remains the concurrency authority. This watchdog and Linux
+    ``PR_SET_PDEATHSIG`` are defense in depth for parent ``SIGKILL``.
+    """
+
+    lock_value = os.environ.pop(_WORKER_LOCK_FD_ENV, None)
+    lifecycle_value = os.environ.pop(_LIFECYCLE_FD_ENV, None)
+    if lock_value is None or lifecycle_value is None:
+        raise RuntimeError("v3 worker is missing inherited lifecycle descriptors")
+    try:
+        lock_fd = int(lock_value)
+        lifecycle_fd = int(lifecycle_value)
+        os.fstat(lock_fd)
+        os.fstat(lifecycle_fd)
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (OSError, ValueError) as exc:
+        raise RuntimeError("v3 worker inherited invalid lifecycle descriptors") from exc
+    parent_pid = os.getppid()
+
+    def watch_parent() -> None:
+        """Terminate immediately on lifecycle EOF or verified parent change."""
+
+        while True:
+            try:
+                readable, _writable, _exceptional = select.select((lifecycle_fd,), (), (), 0.1)
+            except OSError:
+                os.kill(os.getpid(), signal.SIGKILL)
+                return
+            if os.getppid() != parent_pid:
+                os.kill(os.getpid(), signal.SIGKILL)
+                return
+            if readable:
+                try:
+                    data = os.read(lifecycle_fd, 1)
+                except OSError:
+                    data = b""
+                if not data:
+                    os.kill(os.getpid(), signal.SIGKILL)
+                    return
+
+    thread = threading.Thread(target=watch_parent, name="worker-parent-watchdog", daemon=True)
+    thread.start()
+
+
 def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]:
     """Execute one model under active in-child policy tripwires.
 
@@ -796,7 +1077,9 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
             sidecar_digest = _sidecar_adapter_sha256(request, Path(recipe_path))
             if sidecar_digest is not None:
                 effective_recipe["adapter_sha256"] = sidecar_digest
-    allowed_read_paths = [ASSET_ROOT]
+    allowed_read_paths = (
+        [] if request.protocol_version == "menagerie.crawler.worker-request.v3" else [ASSET_ROOT]
+    )
     if isinstance(recipe_path, str) and recipe_path:
         allowed_read_paths.append(Path(recipe_path))
     manifest_value = effective_recipe.get("code_manifest")
@@ -907,9 +1190,13 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
                 loaded, request
             )
             selected_asset = (
-                request.input_manifest.get("selected_asset")
-                if isinstance(request.input_manifest, Mapping)
-                else None
+                request.standard_input_asset
+                if request.protocol_version == "menagerie.crawler.worker-request.v3"
+                else (
+                    request.input_manifest.get("selected_asset")
+                    if isinstance(request.input_manifest, Mapping)
+                    else None
+                )
             )
             expected_asset_id = (
                 selected_asset.get("asset_id") if isinstance(selected_asset, Mapping) else None
@@ -996,7 +1283,10 @@ def run_worker(request: WorkerRequest) -> dict[str, Any]:
         Persisted receipt. This function never awards the canonical ``runs`` status.
     """
 
-    payload, _observation = _execute(request)
+    payload, observation = _execute(request)
+    if request.protocol_version == "menagerie.crawler.worker-request.v3":
+        raw_receipt = _raw_award_receipt(request, payload, observation)
+        return _atomic_worker_result(request.receipt_path, raw_receipt, payload)
     return _atomic_receipt(request.receipt_path, payload)
 
 
@@ -1036,19 +1326,54 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     completion_challenge = os.environ.pop(_PARENT_COMPLETION_CHALLENGE_ENV, None)
     args = _parse_args(argv)
-    request_value = json.loads(args.request.read_text(encoding="utf-8"))
+    request_bytes = args.request.read_bytes()
+    request_value = json.loads(request_bytes)
     if not isinstance(request_value, dict):
         raise ValueError("worker request must be a JSON object")
-    request = WorkerRequest.from_mapping(request_value, receipt_path=args.receipt)
-    receipt = run_worker(request)
-    per_mode = receipt.get("per_mode", {})
-    succeeded = bool(per_mode) and all(
-        bool(item.get("forward_completed"))
-        for item in per_mode.values()
-        if isinstance(item, Mapping)
+    request = WorkerRequest.from_mapping(
+        request_value,
+        receipt_path=args.receipt,
+        request_sha256=hash_bytes(request_bytes),
     )
-    success = receipt.get("error") is None and succeeded
-    if success and completion_challenge:
+    if request.protocol_version == "menagerie.crawler.worker-request.v3":
+        _start_parent_watchdog()
+    receipt = run_worker(request)
+    raw_receipt = receipt.get("raw_award_receipt")
+    if request.protocol_version == "menagerie.crawler.worker-request.v3":
+        success = isinstance(raw_receipt, Mapping)
+    else:
+        per_mode = receipt.get("per_mode", {})
+        succeeded = bool(per_mode) and all(
+            bool(item.get("forward_completed"))
+            for item in per_mode.values()
+            if isinstance(item, Mapping)
+        )
+        success = receipt.get("error") is None and succeeded
+    if (
+        success
+        and completion_challenge
+        and request.protocol_version == "menagerie.crawler.worker-request.v3"
+    ):
+        raw_digest = receipt.get("raw_award_receipt_sha256")
+        completion = {
+            "request_nonce": request.request_nonce,
+            "request_sha256": request.request_sha256,
+            "raw_award_receipt_sha256": raw_digest,
+            "proof": stable_hash(
+                {
+                    "version": "menagerie.crawler.worker-completion.v2",
+                    "challenge": completion_challenge,
+                    "request_nonce": request.request_nonce,
+                    "request_sha256": request.request_sha256,
+                    "raw_award_receipt_sha256": raw_digest,
+                }
+            ),
+        }
+        os.write(
+            1,
+            _WORKER_COMPLETION_V2_PREFIX.encode("ascii") + canonical_json_bytes(completion) + b"\n",
+        )
+    elif success and completion_challenge:
         completion = {
             "receipt_sha256": receipt.get("receipt_sha256"),
             "proof": stable_hash(

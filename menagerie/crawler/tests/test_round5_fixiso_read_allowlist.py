@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import shutil
 import site
 import sys
@@ -17,7 +18,9 @@ from menagerie.crawler import worker_supervisor
 from menagerie.crawler.identity import compute_recipe_revision, hash_bytes
 from menagerie.crawler.policy import (
     _runtime_code_path_allowed,
+    _runtime_model_data_path,
     _runtime_package_data_paths,
+    compile_execution_read_manifest,
     detect_os_sandbox,
 )
 from menagerie.crawler.worker_supervisor import (
@@ -77,9 +80,13 @@ def undeclared_data_paths(tmp_path: Path) -> Iterator[tuple[tuple[Path, ...], Pa
     """
 
     site_packages = Path(site.getsitepackages()[0]).resolve()
-    hidden_directory = site_packages / f".menagerie-r5-{tmp_path.name}"
+    hidden_directory = site_packages / (
+        f".menagerie-r5-{tmp_path.parent.parent.name}-{tmp_path.name}"
+    )
     repository_root = Path(__file__).resolve().parents[3]
-    repository_data = repository_root / f".menagerie-r5-{tmp_path.name}.bin"
+    repository_data = repository_root / (
+        f".menagerie-r5-{tmp_path.parent.parent.name}-{tmp_path.name}.bin"
+    )
     hidden_directory.mkdir()
     site_paths = tuple(
         hidden_directory / name for name in ("weights.pt", "weights.bin", "weights.npz", "weights")
@@ -109,7 +116,7 @@ def _supervise_adapter(
     adapter_source:
         Complete typed-adapter source.
     declared_input:
-        Optional exact input path named by the immutable request.
+        Optional legacy author path used to prove it cannot become a grant.
 
     Returns
     -------
@@ -231,19 +238,83 @@ def test_hash_inventoried_package_data_and_declared_input_are_readable(tmp_path:
         )
         is True
     )
-    assert (
-        _read_path_is_allowed(
-            str(inventoried_weights),
-            tmp_path,
-            (),
-            (inventoried_weights,),
-            runtime_roots,
-        )
-        is True
+    # Round 14: model-data denial precedes ordinary allowlist success. Only the
+    # compiled manifest's exact trusted standard asset may bypass this classifier.
+    assert not _read_path_is_allowed(
+        str(inventoried_weights),
+        tmp_path,
+        (),
+        (inventoried_weights,),
+        runtime_roots,
+    )
+    assert _read_path_is_allowed(
+        str(inventoried_weights),
+        tmp_path,
+        (),
+        (inventoried_weights,),
+        runtime_roots,
+        standard_input_asset=inventoried_weights,
     )
 
     package_data.write_bytes(b"tampered package data")
     assert _runtime_code_path_allowed(package_data.resolve(), runtime_roots) is False
+
+
+def test_compiled_manifest_rejects_author_shaped_model_data_and_large_text(
+    tmp_path: Path,
+) -> None:
+    """No renamed checkpoint can enter the compiled implementation capability."""
+
+    checkpoint = tmp_path / "pretrained.pt"
+    checkpoint.write_bytes(b"hidden weights")
+    large_text = tmp_path / "numeric.py"
+    large_text.write_bytes(b"0" * (1024**2 + 1))
+    assert _runtime_model_data_path(large_text)
+    with pytest.raises(ValueError, match="forbidden kind/suffix"):
+        compile_execution_read_manifest(
+            stable_id="m_manifest_deny",
+            work_id="work-manifest-deny",
+            execution_identity="sha256:" + "1" * 64,
+            code_manifest_identity="sha256:" + "2" * 64,
+            code_members=((checkpoint, hash_bytes(checkpoint.read_bytes()), "python-source"),),
+        )
+    with pytest.raises(ValueError, match="model-data-shaped"):
+        compile_execution_read_manifest(
+            stable_id="m_manifest_deny",
+            work_id="work-manifest-deny",
+            execution_identity="sha256:" + "1" * 64,
+            code_manifest_identity="sha256:" + "2" * 64,
+            code_members=((large_text, hash_bytes(large_text.read_bytes()), "python-source"),),
+        )
+
+
+def test_compiled_manifest_rejects_symlink_and_hardlink_aliases(tmp_path: Path) -> None:
+    """Accepted implementation bytes cannot escape through inode aliases."""
+
+    source = tmp_path / "source.py"
+    source.write_text("VALUE = 1\n", encoding="utf-8")
+    symlink = tmp_path / "symlink.py"
+    symlink.symlink_to(source)
+    digest = hash_bytes(source.read_bytes())
+    common = {
+        "stable_id": "m_manifest_alias",
+        "work_id": "work-manifest-alias",
+        "execution_identity": "sha256:" + "1" * 64,
+        "code_manifest_identity": "sha256:" + "2" * 64,
+    }
+    with pytest.raises(ValueError, match="aliased"):
+        compile_execution_read_manifest(
+            **common,
+            code_members=((symlink, digest, "python-source"),),
+        )
+
+    hardlink = tmp_path / "hardlink.py"
+    os.link(source, hardlink)
+    with pytest.raises(ValueError, match="aliased"):
+        compile_execution_read_manifest(
+            **common,
+            code_members=((source, digest, "python-source"),),
+        )
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux semantic-read regression")
@@ -311,10 +382,10 @@ def test_native_reads_hidden_env_and_repository_data_poison_successful_receipt(
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux semantic-read regression")
-def test_declared_input_verified_source_and_environment_code_reads_remain_clean(
+def test_legacy_author_declared_input_cannot_become_a_read_capability(
     tmp_path: Path,
 ) -> None:
-    """Exact declared data and inventoried code can still earn a clean receipt."""
+    """The removed input_contract path grant fails closed even in a legacy request."""
 
     declared_input = tmp_path / "declared-input.bin"
     declared_input.write_bytes(b"declared-model-input")
@@ -332,13 +403,12 @@ def test_declared_input_verified_source_and_environment_code_reads_remain_clean(
 
     if not _assert_linux_enforcement_or_closed(result):
         return
-    assert result.observation.exit_code == 0
+    assert result.observation.exit_code == 1
     assert result.worker_receipt is not None
-    assert result.worker_receipt["constructor_completed"] is True
-    assert result.worker_receipt["per_mode"]["eval"]["forward_completed"] is True
     policy = result.worker_receipt["policy_observation"]
-    assert policy["checkpoint_or_weight_read_attempted"] is False
-    assert result.worker_receipt["error"] is None
+    assert policy["checkpoint_or_weight_read_attempted"] is True
+    assert str(declared_input) in policy["checkpoint_paths"]
+    assert result.worker_receipt["error"]["reason_code"] == "checkpoint-read"
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux semantic-read regression")

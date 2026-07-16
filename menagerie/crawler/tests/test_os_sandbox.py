@@ -111,8 +111,13 @@ def test_supervisor_fails_closed_when_no_os_sandbox_is_available(
     monkeypatch.setattr(worker_supervisor, "detect_os_sandbox", no_sandbox)
     monkeypatch.setattr(worker_supervisor.subprocess, "Popen", forbidden_popen)
     scratch = tmp_path / "scratch"
+    request = tmp_path / "request.json"
+    request.write_text(
+        '{"recipe": {}, "input_spec": {"shape": [1], "dtype": "float32"}}',
+        encoding="utf-8",
+    )
     result = supervise_worker(
-        tmp_path / "request.json",
+        request,
         tmp_path / "result" / "receipt.json",
         scratch,
     )
