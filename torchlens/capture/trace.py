@@ -883,6 +883,115 @@ def _record_runnable_input_literal_leaves(
         trace.__dict__["_runnable_input_nontensor_leaves"] = tuple(leaves)
 
 
+def _record_runnable_input_tensor_sites(
+    trace: "Trace",
+    input_args: list[Any],
+    input_kwargs: dict[Any, Any],
+) -> None:
+    """Index model-input TENSOR leaves by object identity for metadata-read witnessing.
+
+    A Python-level metadata predicate read on a model input (``x.is_contiguous()`` /
+    ``x.stride()`` / ``x.requires_grad``) can steer control flow that TorchLens never
+    observes as an op: the input contract checks only shape+dtype, so a same-shape
+    runtime input differing in layout or grad flag would silently replay the wrong
+    recorded path. The completeness-witness scoped patch observes such reads during
+    the runnable forward; this map lets it attribute a read RECEIVER back to its
+    model-boundary site (position, container path) so the producer can witness the
+    read fact and the executor can diverge on a mismatched runtime input. Keys are
+    ``id(tensor)`` -- stable for the forward's duration because ``input_args`` /
+    ``input_kwargs`` hold strong references until the capture completes. It runs only
+    for intervention-ready captures and stores no tensors.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    input_args:
+        Normalized positional model inputs.
+    input_kwargs:
+        Normalized keyword model inputs.
+    """
+
+    if not bool(getattr(trace, "intervention_ready", False)):
+        return
+
+    from collections.abc import Mapping as _Mapping
+
+    import torch as _torch
+
+    sites: dict[int, tuple[object, tuple[str | int, ...]]] = {}
+
+    def _walk(position: object, value: Any, path: tuple[str | int, ...]) -> None:
+        """Descend one boundary value, indexing every tensor leaf by identity.
+
+        Mapping children are indexed under EVERY key type: a fact site whose path
+        carries a non-representable key simply fails literal encoding at witness time
+        and is dropped, and the literal-leaf walker independently records such a
+        subtree as an OPAQUE leaf that downgrades the run to UNVERIFIABLE -- so a
+        dropped metadata fact under an exotic key can never yield a false VERIFIED.
+        """
+
+        if isinstance(value, _torch.Tensor):
+            sites[id(value)] = (position, path)
+            return
+        if isinstance(value, tuple) and hasattr(value, "_fields"):
+            for name in value._fields:
+                _walk(position, getattr(value, name), (*path, str(name)))
+            return
+        if isinstance(value, _Mapping):
+            for key, child in value.items():
+                _walk(position, child, (*path, key))
+            return
+        if isinstance(value, (list, tuple)):
+            for index, child in enumerate(value):
+                _walk(position, child, (*path, index))
+            return
+
+    for index, arg in enumerate(input_args):
+        _walk(("arg", index), arg, ())
+    for key, value in input_kwargs.items():
+        _walk(("kwarg", key), value, ())
+
+    if sites:
+        trace.__dict__["_runnable_input_tensor_sites"] = sites
+
+
+def _record_runnable_module_training_modes(trace: "Trace", model: Any) -> None:
+    """Stash the capture-time per-module ``training`` mode for runnable honesty.
+
+    ``self.training`` is module state that is NOT part of the ``state_dict`` and is not a
+    model input, yet it steers mode-sensitive ops (BatchNorm running-stats vs batch-stats,
+    Dropout on/off). The runnable VERIFIED oracle is a *fresh instance in the captured mode*
+    on the given inputs, so the captured mode is DECLARED state the replay reproduces.
+    Recording it (per submodule -- submodules can differ) lets the producer declare the mode
+    as a witness fact; a mode-sensitive op replayed without a recorded mode fact is downgraded
+    to UNVERIFIABLE (fail closed). It runs only for intervention-ready captures, touches no
+    tensors, and stores an in-memory map consumed by the producer at save time.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    model:
+        The prepared source model whose per-module ``training`` flags are recorded.
+    """
+
+    if not bool(getattr(trace, "intervention_ready", False)):
+        return
+    named_modules = getattr(model, "named_modules", None)
+    if not callable(named_modules):
+        return
+    modes: dict[str, bool] = {}
+    try:
+        for name, module in named_modules():
+            address = name or "self"
+            modes[address] = bool(getattr(module, "training", False))
+    except (AttributeError, TypeError):
+        return
+    if modes:
+        trace.__dict__["_runnable_module_training_modes"] = modes
+
+
 def _extract_and_mark_outputs(
     self: "Trace",
     outputs: Any,
@@ -1185,6 +1294,8 @@ def run_and_log_inputs_through_model(
                 backend.log_source_tensor(self, t, "input", input_tensor_addresses[i])
             _register_model_input_container_snapshots(self, input_args, input_kwargs)
             _record_runnable_input_literal_leaves(self, input_args, input_kwargs)
+            _record_runnable_input_tensor_sites(self, input_args, input_kwargs)
+            _record_runnable_module_training_modes(self, model)
 
             if self.capture_mode == "predicate":
                 outputs = _run_predicate_forward_with_root_frame(

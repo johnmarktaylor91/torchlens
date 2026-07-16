@@ -270,6 +270,8 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     witnesses, completeness = _build_control_witnesses(trace, ops, diagnostics)
     literal_witnesses, saw_opaque_leaf = _input_literal_witnesses(trace, start_order=len(witnesses))
     witnesses.extend(literal_witnesses)
+    witnesses.extend(_input_metadata_witnesses(trace, start_order=len(witnesses)))
+    witnesses.extend(_module_training_mode_witnesses(trace, start_order=len(witnesses)))
     escape_witnesses, escape_incomplete = _escape_witnesses(
         trace, ops, calls, slot_drafts, start_order=len(witnesses)
     )
@@ -2310,6 +2312,121 @@ MODEL_INPUT_LITERAL_SITE_PREFIX = "model_input_literal:"
 
 MODEL_INPUT_LITERAL_FACT_KEY = "model_input_literal"
 """Discriminator key present in every non-tensor model-input leaf fact."""
+
+MODULE_TRAINING_MODE_SITE_PREFIX = "module_training_mode:"
+"""``site_label`` prefix marking the declared capture-time per-module train/eval mode."""
+
+MODULE_TRAINING_MODE_FACT_KEY = "module_training_mode"
+"""Discriminator key present in the declared per-module train/eval mode fact."""
+
+
+def _module_training_mode_witnesses(
+    trace: Any,
+    *,
+    start_order: int,
+) -> list[ControlWitness]:
+    """Declare the capture-time per-module ``training`` mode as a structure fact.
+
+    ``self.training`` is module state outside the ``state_dict``, but it steers
+    mode-sensitive ops (BatchNorm running-stats vs batch-stats, Dropout on/off). The
+    runnable VERIFIED oracle is a fresh instance IN THE CAPTURED MODE on the given inputs,
+    so the captured mode is DECLARED state the replay reproduces. Emitting it as a single
+    ``SHAPE_STRUCTURE_FACT`` witness lets the executor anchor VERIFIED to the recorded mode;
+    a mode-sensitive op replayed without this fact is downgraded to UNVERIFIABLE (fail
+    closed). No tensors are recorded.
+    """
+
+    modes = getattr(trace, "__dict__", {}).get("_runnable_module_training_modes", None)
+    if not isinstance(modes, Mapping) or not modes:
+        return []
+    fact = {
+        MODULE_TRAINING_MODE_FACT_KEY: True,
+        "modes": {str(address): bool(training) for address, training in modes.items()},
+    }
+    try:
+        observed = _encode_literal(fact)
+    except _UnsupportedLiteralError:
+        return []
+    return [
+        ControlWitness(
+            witness_id=f"witness:{start_order + 1}",
+            kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+            order=start_order,
+            call_id=None,
+            site_label=MODULE_TRAINING_MODE_SITE_PREFIX,
+            observed_value=observed,
+        )
+    ]
+
+
+MODEL_INPUT_METADATA_SITE_PREFIX = "model_input_metadata:"
+"""``site_label`` prefix marking a witnessed model-input metadata-predicate read."""
+
+MODEL_INPUT_METADATA_FACT_KEY = "model_input_metadata"
+"""Discriminator key present in every model-input metadata-predicate fact."""
+
+_INPUT_METADATA_FACT_NAMES = frozenset({"is_contiguous", "stride", "requires_grad"})
+"""Metadata predicates the capture-time observer records for model-input receivers."""
+
+
+def _input_metadata_witnesses(
+    trace: Any,
+    *,
+    start_order: int,
+) -> list[ControlWitness]:
+    """Witness capture-time metadata-predicate reads on model-input leaves (r27-H2).
+
+    A forward that reads ``x.is_contiguous()`` / ``x.stride()`` / ``x.requires_grad`` on a
+    model input steers Python control flow on facts the input contract does NOT check
+    (only shape+dtype): a same-shape runtime input differing in layout or grad flag would
+    silently replay the wrong recorded arm as a false VERIFIED+ATTESTED. Each observed
+    (site, predicate, value) fact -- recorded by the completeness-witness scoped patch
+    ONLY when such a read actually happened -- becomes a ``SHAPE_STRUCTURE_FACT`` witness
+    the executor compares against the RAW runtime input (before the detach-clone that
+    erases ``requires_grad``), diverging on mismatch. A model that never reads input
+    metadata records no facts and emits no witnesses: zero over-trigger by construction.
+    """
+
+    reads = getattr(trace, "__dict__", {}).get("_runnable_input_metadata_reads", None)
+    if not isinstance(reads, Mapping) or not reads:
+        return []
+    witnesses: list[ControlWitness] = []
+    for (position, path), site_facts in reads.items():
+        if not isinstance(site_facts, Mapping):
+            continue
+        recorded = {
+            str(name): (list(value) if isinstance(value, tuple) else value)
+            for name, value in site_facts.items()
+            if str(name) in _INPUT_METADATA_FACT_NAMES
+        }
+        if not recorded:
+            continue
+        fact = {
+            MODEL_INPUT_METADATA_FACT_KEY: True,
+            "position": list(position) if isinstance(position, tuple) else position,
+            "path": list(path),
+            "facts": recorded,
+        }
+        try:
+            observed = _encode_literal(fact)
+        except _UnsupportedLiteralError:
+            # Defensive: a fact site under a non-encodable container key cannot be
+            # re-resolved at run time. The literal-leaf walker independently records
+            # such a subtree as an OPAQUE leaf, downgrading the run to UNVERIFIABLE,
+            # so dropping the witness here can never produce a false VERIFIED.
+            continue
+        order = start_order + len(witnesses)
+        witnesses.append(
+            ControlWitness(
+                witness_id=f"witness:{order + 1}",
+                kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+                order=order,
+                call_id=None,
+                site_label=f"{MODEL_INPUT_METADATA_SITE_PREFIX}{position!r}:{list(path)!r}",
+                observed_value=observed,
+            )
+        )
+    return witnesses
 
 
 def _input_literal_witnesses(

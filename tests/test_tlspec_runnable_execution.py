@@ -1021,3 +1021,146 @@ def test_h3_readonly_aliased_inputs_do_not_over_trigger(tmp_path: Path) -> None:
     shared = torch.tensor([3.0, 4.0])
     result = tl.load(tmp_path / "readonly.tlspec").run(inputs=[shared, shared])
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+# --------------------------------------------------------------------------- #
+# r27-H5: self.training is module state (not state_dict, not an input) that steers
+# mode-sensitive ops (BatchNorm running-stats vs batch-stats). The VERIFIED oracle
+# is a fresh instance IN THE CAPTURED MODE on the given inputs, so the captured mode
+# is DECLARED state. Every intervention-ready capture now records it; a mode-sensitive
+# op replayed WITHOUT a declared mode (an old bundle / capture gap) downgrades to
+# UNVERIFIABLE (fail closed). Mode-insensitive models are unaffected.
+# --------------------------------------------------------------------------- #
+
+
+class _BatchNormModel(nn.Module):
+    """Linear + BatchNorm1d: BatchNorm is train/eval mode-sensitive."""
+
+    def __init__(self) -> None:
+        """Build a linear layer feeding a BatchNorm layer."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+        self.bn = nn.BatchNorm1d(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the linear then the mode-sensitive BatchNorm."""
+
+        return self.bn(self.lin(x))
+
+
+@pytest.mark.parametrize("train", [False, True])
+def test_h5_batchnorm_records_mode_and_verifies(train: bool, tmp_path: Path) -> None:
+    """A BatchNorm model records its mode and still VERIFIES (no over-trigger)."""
+
+    model = _BatchNormModel()
+    model.train(train)
+    x = torch.randn(8, 4)
+    trace = tl.trace(
+        model,
+        x,
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
+    )
+    assert trace.__dict__.get("_runnable_module_training_modes") == {
+        "self": train,
+        "lin": train,
+        "bn": train,
+    }
+    trace.save(tmp_path / "bn.tlspec", level="runnable", include_activations=True)
+    result = tl.load(tmp_path / "bn.tlspec").run(inputs=x)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+def test_h5_dropout_model_in_eval_records_mode_and_verifies(tmp_path: Path) -> None:
+    """A Dropout model captured in eval records its mode and still VERIFIES."""
+
+    class _DropModel(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self.drop = nn.Dropout(0.5)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.drop(self.lin(x))
+
+    model = _DropModel().eval()
+    x = torch.randn(8, 4)
+    trace = tl.trace(
+        model,
+        x,
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
+    )
+    assert trace.__dict__.get("_runnable_module_training_modes") == {
+        "self": False,
+        "lin": False,
+        "drop": False,
+    }
+    trace.save(tmp_path / "drop.tlspec", level="runnable", include_activations=True)
+    result = tl.load(tmp_path / "drop.tlspec").run(inputs=x)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+def test_h5_mode_sensitive_op_without_declared_mode_is_unverifiable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A BatchNorm op with NO declared mode (old bundle / capture gap) is UNVERIFIABLE."""
+
+    import torchlens.capture.trace as capture_trace
+
+    # Simulate an old bundle / capture gap: skip the mode recording entirely.
+    monkeypatch.setattr(
+        capture_trace, "_record_runnable_module_training_modes", lambda trace, model: None
+    )
+    model = _BatchNormModel().eval()
+    x = torch.randn(8, 4)
+    trace = tl.trace(
+        model,
+        x,
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
+    )
+    assert trace.__dict__.get("_runnable_module_training_modes") is None
+    trace.save(tmp_path / "bn_nomode.tlspec", level="runnable", include_activations=True)
+
+    result = tl.load(tmp_path / "bn_nomode.tlspec").run(
+        inputs=x, on_divergence=DivergencePolicy.RETURN_DIVERGED
+    )
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
+
+
+def test_h5_mode_insensitive_model_without_mode_still_verifies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A model with NO mode-sensitive op verifies even with no declared mode (no over-trigger)."""
+
+    import torchlens.capture.trace as capture_trace
+
+    monkeypatch.setattr(
+        capture_trace, "_record_runnable_module_training_modes", lambda trace, model: None
+    )
+
+    class _Plain(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.lin(x)
+
+    x = torch.randn(8, 4)
+    trace = tl.trace(
+        _Plain(),
+        x,
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
+    )
+    trace.save(tmp_path / "plain_nomode.tlspec", level="runnable", include_activations=True)
+    result = tl.load(tmp_path / "plain_nomode.tlspec").run(inputs=x)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
