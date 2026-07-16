@@ -704,15 +704,37 @@ def _snapshot(root: Path, count: int = 1) -> IntakeSnapshot:
 
 
 def _clean_state(
-    root: Path, *, intake_count: int = 1, status_code: str = "failed:source"
+    root: Path,
+    *,
+    intake_count: int = 1,
+    status_code: str = "failed:source",
+    accepted_metadata: bool = False,
 ) -> tuple[IntakeSnapshot, MirrorStore]:
-    """Materialize a complete canonical mini-campaign and matching derived facts."""
+    """Materialize a complete canonical mini-campaign and matching derived facts.
+
+    Parameters
+    ----------
+    root:
+        Temporary repository root.
+    intake_count:
+        Number of intake rows in the checkpoint prefix.
+    status_code:
+        Current terminal status for the materialized model.
+    accepted_metadata:
+        Whether a non-skip terminal has accepted gated metadata without a
+        canonical promotion transaction.
+
+    Returns
+    -------
+    tuple[IntakeSnapshot, MirrorStore]
+        Canonical intake snapshot and empty separated mirror stores.
+    """
 
     snapshot = _snapshot(root, intake_count)
     crawler = root / "menagerie" / "crawler"
     records = crawler / "records"
     stable_id = snapshot.items[0].stable_id
-    model = make_model(stable_id, accepted=False, status_code=status_code)
+    model = make_model(stable_id, accepted=accepted_metadata, status_code=status_code)
     terminal_attempts: list[dict[str, Any]] = []
     gate: dict[str, Any] | None = None
     if status_code != "runs":
@@ -746,9 +768,10 @@ def _clean_state(
         model["execution"]["accepted_attempt_ids"] = []
         bind_terminal_attempts(model, [])
         _bind_model_identities(model)
+    if model["authored_metadata_state"] == "accepted":
         gate = make_gate([stable_id])
         gate["items"][0]["vet_identity"] = model["accuracy_gate"]["vet_identity"]
-        gate["items"][0]["rung_check"]["selected_rung"] = "R5_SKIP"
+        gate["items"][0]["rung_check"]["selected_rung"] = model["source_resolution"]["rung"]
     ledgers = default_ledger_paths(records)
     with CanonicalReducer(ledgers, (item.stable_id for item in snapshot.items)) as reducer:
         if status_code.startswith("deferred:"):

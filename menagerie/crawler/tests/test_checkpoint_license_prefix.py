@@ -21,7 +21,12 @@ from menagerie.crawler.licenses import (
     store_licensed_artifact,
 )
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes
-from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
+from menagerie.crawler.mirrors import (
+    ArtifactOrigin,
+    MirrorClass,
+    MirrorStore,
+    RetentionClass,
+)
 from menagerie.crawler.status import checkpoint_consistency_report, completeness_report
 from menagerie.crawler.tests.conftest import make_model
 from menagerie.crawler.tests.test_checkpoint_transaction import RecordingGit, _clean_state
@@ -304,19 +309,71 @@ def test_matching_origin_cannot_authorize_an_unrelated_public_digest(tmp_path: P
 
     with pytest.raises(RestrictedPublicArtifact, match="closed dependency-current"):
         checkpoint_module._validate_gated_license_decisions(
-            (manufactured,), {"m_closed_map": model}
+            (manufactured,),
+            {"m_closed_map": model},
+            promoted_model_ids=(),
         )
 
 
-def test_missing_restricted_manifest_row_cannot_erase_restricted_signal() -> None:
-    """Every dependency-current restricted digest requires its exact private row."""
+@pytest.mark.parametrize(
+    ("spdx", "redistribution"),
+    (
+        ("Apache-2.0", "public-compatible"),
+        ("GPL-3.0-only", "restricted-private"),
+    ),
+)
+def test_promoted_manifest_row_cannot_be_omitted(
+    spdx: str,
+    redistribution: str,
+) -> None:
+    """Every promoted public or restricted artifact requires its exact row."""
 
     model = make_model("m_missing_private", accepted=True)
-    model["licenses"]["code"]["spdx"] = "GPL-3.0-only"
-    model["licenses"]["redistribution_class"] = "restricted-private"
+    model["licenses"]["code"]["spdx"] = spdx
+    model["licenses"]["redistribution_class"] = redistribution
 
     with pytest.raises(RestrictedPublicArtifact, match="manifests are incomplete"):
-        checkpoint_module._validate_gated_license_decisions((), {"m_missing_private": model})
+        checkpoint_module._validate_gated_license_decisions(
+            (),
+            {"m_missing_private": model},
+            promoted_model_ids={"m_missing_private"},
+        )
+
+
+def test_exact_restricted_public_row_is_rejected(tmp_path: Path) -> None:
+    """Restricted bytes on the public store fail the exact closed-map boundary check."""
+
+    content = b"restricted bytes misplaced in the public store"
+    digest = hash_bytes(content)
+    model = make_model("m_restricted_public", accepted=True)
+    source = model["source_resolution"]["sources"][0]
+    source["content_sha256"] = digest
+    source["mirror_digest"] = digest
+    model["licenses"]["code"]["spdx"] = "GPL-3.0-only"
+    model["licenses"]["redistribution_class"] = "restricted-private"
+    mirrors = _mirrors(tmp_path / "mirrors")
+    origin = ArtifactOrigin(str(source["url"]), str(source["revision"]))
+    public_manifest = mirrors.put(
+        content,
+        mirror_class=MirrorClass.PUBLIC,
+        retention_class=RetentionClass.DURABLE_PUBLIC,
+        origin=origin,
+    )
+    misplaced = LicensedArtifact(
+        Path(f"menagerie/crawler/source_cas/{digest.removeprefix('sha256:')}.source"),
+        public_manifest,
+        checkpoint_module.gated_authorized_artifacts(model)[0].decision,
+        "source",
+        "source-1",
+        "https-get",
+    )
+
+    with pytest.raises(RestrictedPublicArtifact, match="wrong license boundary"):
+        checkpoint_module._validate_gated_license_decisions(
+            (misplaced,),
+            {"m_restricted_public": model},
+            promoted_model_ids={"m_restricted_public"},
+        )
 
 
 def test_exact_restricted_private_row_is_checkpoint_authorized(tmp_path: Path) -> None:
@@ -357,8 +414,49 @@ def test_exact_restricted_private_row_is_checkpoint_authorized(tmp_path: Path) -
     )
 
     assert checkpoint_module._validate_gated_license_decisions(
-        (artifact,), {"m_private_exact": model}
+        (artifact,),
+        {"m_private_exact": model},
+        promoted_model_ids={"m_private_exact"},
     )
+
+
+@pytest.mark.parametrize(
+    "status_code",
+    ("failed:forward", "skipped:no-description", "deferred:needs-cuda"),
+)
+def test_unpromoted_terminal_authorizations_do_not_require_manifest_rows(
+    status_code: str,
+) -> None:
+    """Accepted terminal facts authorize publication without claiming it occurred."""
+
+    model = make_model("m_unpromoted", accepted=True, status_code=status_code)
+    authorized = checkpoint_module._validate_gated_license_decisions(
+        (),
+        {"m_unpromoted": model},
+        promoted_model_ids=(),
+    )
+
+    assert {artifact.artifact_role for artifact in authorized} == {"source"}
+
+
+def test_unpromoted_restricted_authorization_retains_public_sweep_signal() -> None:
+    """Omitting an unpublished private row does not erase its restricted digest."""
+
+    model = make_model("m_unpromoted_private", accepted=True, status_code="deferred:needs-cuda")
+    model["licenses"]["code"]["spdx"] = "GPL-3.0-only"
+    model["licenses"]["redistribution_class"] = "restricted-private"
+
+    authorized = checkpoint_module._validate_gated_license_decisions(
+        (),
+        {"m_unpromoted_private": model},
+        promoted_model_ids=(),
+    )
+
+    assert {
+        artifact.content_sha256
+        for artifact in authorized
+        if artifact.decision.redistribution_class.value == "restricted-private"
+    } == {model["source_resolution"]["sources"][0]["content_sha256"]}
 
 
 @pytest.mark.parametrize(
@@ -370,7 +468,11 @@ def test_canonical_checkpoint_accepts_honest_terminal_nonruns(
 ) -> None:
     """Failed, skipped, and deferred terminals cannot block checkpoints forever."""
 
-    snapshot, mirrors = _clean_state(tmp_path, status_code=status_code)
+    snapshot, mirrors = _clean_state(
+        tmp_path,
+        status_code=status_code,
+        accepted_metadata=True,
+    )
     result = create_canonical_checkpoint(
         tmp_path,
         snapshot.root,

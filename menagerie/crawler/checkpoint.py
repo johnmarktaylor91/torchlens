@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
+from typing import Any, Callable, Collection, Iterable, Mapping, Optional, Sequence
 
 from menagerie.crawler.constants import (
     FAILURE_REASON_CODES,
@@ -1164,7 +1164,12 @@ def _create_canonical_checkpoint(
     )
     manifest_root = canonical_root / "mirrors"
     public_artifacts, license_inventory, mirror_manifests = _derive_mirror_facts(manifest_root)
-    authorized_artifacts = _validate_gated_license_decisions(license_inventory, current)
+    promoted_model_ids = _committed_promotion_model_ids(canonical_root)
+    authorized_artifacts = _validate_gated_license_decisions(
+        license_inventory,
+        current,
+        promoted_model_ids=promoted_model_ids,
+    )
     restricted_gated_digests = tuple(
         artifact.content_sha256
         for artifact in authorized_artifacts
@@ -1386,9 +1391,66 @@ def _licensed_artifact(payload: Mapping[str, Any]) -> LicensedArtifact:
     )
 
 
+def _committed_promotion_model_ids(canonical_root: Path) -> frozenset[str]:
+    """Return model IDs whose mirror publication transaction committed.
+
+    The promotion commit marker is written only after code/source publication,
+    exact mirror-row coverage, and the persisted license report all validate.
+    Accepted metadata without this marker therefore authorizes a future
+    publication but does not require mirror inventory rows yet.
+
+    Parameters
+    ----------
+    canonical_root:
+        Canonical crawler root containing reconstruction transactions.
+
+    Returns
+    -------
+    frozenset[str]
+        Stable IDs with a structurally valid durable promotion marker and its
+        companion reconstruction manifest.
+
+    Raises
+    ------
+    ReconstructionValidationError
+        If a marker is malformed, misplaced, or lacks its reconstruction.
+    """
+
+    promoted: set[str] = set()
+    reconstruction_root = canonical_root / "reconstruction"
+    for marker_path in sorted(reconstruction_root.rglob("*.commit.json")):
+        marker = _read_json_object(marker_path, "canonical reconstruction commit marker")
+        stable_id = marker.get("stable_id")
+        if (
+            set(marker)
+            != {
+                "schema_version",
+                "stable_id",
+                "transaction_id",
+                "proposal_sha256",
+            }
+            or marker.get("schema_version") != "menagerie.crawler.promotion-commit.v1"
+            or not isinstance(stable_id, str)
+            or not stable_id
+            or marker_path.name != f"{stable_id}.commit.json"
+        ):
+            raise ReconstructionValidationError(
+                f"canonical promotion marker is malformed or misplaced: {marker_path}"
+            )
+        reconstruction_path = marker_path.with_name(f"{stable_id}.json")
+        if not reconstruction_path.is_file():
+            raise ReconstructionValidationError(
+                f"canonical promotion marker lacks its reconstruction: {marker_path}"
+            )
+        promoted.add(stable_id)
+    return frozenset(promoted)
+
+
 def _validate_gated_license_decisions(
     artifacts: Sequence[LicensedArtifact],
     current_models: Mapping[str, Mapping[str, Any]],
+    *,
+    promoted_model_ids: Collection[str],
 ) -> tuple[AuthorizedArtifact, ...]:
     """Validate the complete mirror inventory against a closed gated artifact map.
 
@@ -1398,24 +1460,31 @@ def _validate_gated_license_decisions(
         Complete canonical public/private mirror inventory.
     current_models:
         Dependency-current records that passed reducer semantic replay.
+    promoted_model_ids:
+        Models with a durable promotion commit marker. Only their complete
+        authorized artifact sets must already appear in the mirror inventory.
 
     Raises
     ------
     CheckpointValidationError
-        If any public/private row is missing, extra, ambiguous, or differs in its
-        exact path, role, digest, origin, evidence decision, or fetch recipe.
+        If any promoted public/private row is missing, any row is extra or
+        ambiguous, or any row differs in its exact path, role, digest, origin,
+        evidence decision, or fetch recipe.
     """
 
     accepted = tuple(
-        model
-        for model in current_models.values()
+        (stable_id, model)
+        for stable_id, model in current_models.items()
         if model.get("authored_metadata_state") == "accepted"
     )
     authorized_by_path: dict[Path, set[AuthorizedArtifact]] = {}
-    for model in accepted:
+    promoted_paths: set[Path] = set()
+    for stable_id, model in accepted:
         for authorized in gated_authorized_artifacts(model):
             path = _normalize_path(authorized.staged_path)
             authorized_by_path.setdefault(path, set()).add(authorized)
+            if stable_id in promoted_model_ids:
+                promoted_paths.add(path)
     ambiguous = {path: values for path, values in authorized_by_path.items() if len(values) != 1}
     if ambiguous:
         raise RestrictedPublicArtifact(
@@ -1451,10 +1520,11 @@ def _validate_gated_license_decisions(
                 f"{path.as_posix()} expected={expected_mirror}"
             )
 
-    missing = tuple(path for path in authorized_by_path if path not in inventory_by_path)
+    missing = tuple(path for path in promoted_paths if path not in inventory_by_path)
     if missing:
         raise RestrictedPublicArtifact(
-            "canonical mirror manifests are incomplete for dependency-current artifacts: "
+            "canonical mirror manifests are incomplete for promoted dependency-current "
+            "artifacts: "
             f"{[path.as_posix() for path in sorted(missing, key=str)]}"
         )
     return tuple(
