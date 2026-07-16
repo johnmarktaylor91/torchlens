@@ -567,6 +567,45 @@ class EvalOnlyAuthor(FakeAuthor):
         return artifact
 
 
+class DetectedModeRepairAuthor(FakeAuthor):
+    """Revise an eval-only first proposal to the complete detected mode set."""
+
+    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+        """Return eval-only initially and a new dual-mode work identity on repair."""
+
+        artifact = super().author(item, work_root, config)
+        generation = self.calls[item.stable_id]
+        facts = artifact.proposal["proposed_facts"]
+        if generation == 1:
+            facts["modes"]["meaningful_modes"] = ["eval"]
+            facts["external_metadata"]["modes"]["meaningful_modes"] = ["eval"]
+        artifact.proposal["work_id"] = f"work-{item.stable_id}-mode-generation-{generation}"
+        _refresh_proposal_identities(
+            artifact.proposal,
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
+        return artifact
+
+
+class ModeRepairCapAuthor(EvalOnlyAuthor):
+    """Issue fresh work identities that never cover a detected train mode."""
+
+    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
+        """Return a new eval-only proposal for every bounded repair generation."""
+
+        artifact = super().author(item, work_root, config)
+        artifact.proposal["work_id"] = (
+            f"work-{item.stable_id}-unrepaired-{self.calls[item.stable_id]}"
+        )
+        _refresh_proposal_identities(
+            artifact.proposal,
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
+        return artifact
+
+
 class ReverseModeAuthor(FakeAuthor):
     """Author the complete mode set in noncanonical eval/train order."""
 
@@ -1157,6 +1196,39 @@ def test_award_closure_ignores_comments_docstrings_and_formatting(
 
     monkeypatch.setattr(Path, "read_bytes", nonsemantic_edit)
     assert driver_module._award_closure_identity() == before
+
+
+def test_env_observation_binding_changes_award_closure_and_execution_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Parent package observation semantics are load-bearing award authority."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    driver = _driver(tmp_path, snapshot)
+    item = driver._ordered_work(snapshot, {})[0]
+    artifact = FakeAuthor().author(item, driver.paths.work_root, driver.config)
+    environment = _test_environment(tmp_path / "env")
+    before_closure = driver_module._award_closure_identity()
+    before_execution = _execution_identity(artifact.proposal, environment)
+    original_read_bytes = Path.read_bytes
+
+    def changed_environment_observer(path: Path) -> bytes:
+        """Mutate one loaded parent-side installed-package observation binding."""
+
+        value = original_read_bytes(path)
+        if path.name != "driver.py":
+            return value
+        old = b"    package_bytes = _installed_package_manifest_bytes(prefix, strict=strict)\n"
+        new = (
+            b"    package_bytes = _installed_package_manifest_bytes(prefix, strict=strict) "
+            b"+ b'changed'\n"
+        )
+        assert old in value
+        return value.replace(old, new, 1)
+
+    monkeypatch.setattr(Path, "read_bytes", changed_environment_observer)
+    assert driver_module._award_closure_identity() != before_closure
+    assert _execution_identity(artifact.proposal, environment) != before_execution
 
 
 def test_award_validator_behavior_change_changes_closure_identity(
@@ -1932,6 +2004,7 @@ def _driver(
     milestones: tuple[int, ...] = (),
     pause_scheduler: Optional[FakePauseScheduler] = None,
     phase: Optional[str] = None,
+    run_repair_max: int = 2,
 ) -> CrawlerDriver:
     """Build a fully fake deterministic driver."""
 
@@ -1954,6 +2027,7 @@ def _driver(
             machine_id="machine-test",
             review_checkpoint_at=review_at,
             progress_milestones=milestones,
+            run_repair_max=run_repair_max,
         ),
         dependencies,
         registry=load_environment_registry(target="osx-arm64"),
@@ -2040,7 +2114,7 @@ def test_family_variant_falls_back_to_full_author_when_representative_fails(
     checker = FakeChecker()
     result = _driver(tmp_path, snapshot, author=author, checker=checker).run()
 
-    assert result.status == "complete"
+    assert result.status == "terminal-partition-complete"
     assert author.calls == {variant_id: 1 for variant_id in variant_ids}
     current = {
         model["stable_id"]: model for model in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
@@ -2419,27 +2493,67 @@ def test_legacy_faithful_r1_requires_current_fidelity_gate(tmp_path: Path) -> No
 
 
 def test_runtime_mode_expansion_is_model_local_and_restart_stable(tmp_path: Path) -> None:
-    """Worker train/eval expansion never mutates eval-only gated recipe facts or aborts the batch."""
+    """Worker mode expansion is re-authored, re-gated, and executed in both modes."""
 
-    snapshot = _snapshot(tmp_path)
+    snapshot = _snapshot(tmp_path, count=1)
     expanded_id = snapshot.items[0].stable_id
+    author = DetectedModeRepairAuthor()
+    checker = FakeChecker()
+    forward = OneModelModeExpansion(expanded_id)
     first = _driver(
         tmp_path,
         snapshot,
-        author=EvalOnlyAuthor(),
-        forward=OneModelModeExpansion(expanded_id),
+        author=author,
+        checker=checker,
+        forward=forward,
     ).run()
     paths = _paths(tmp_path, snapshot)
     models = {record["stable_id"]: record for record in scan_jsonl(paths.ledgers.models)}
 
-    assert first.status in {"complete", "terminal-partition-complete"}
-    assert models[expanded_id]["status"]["code"] == "failed:runner"
-    assert models[expanded_id]["modes"]["meaningful_modes"] == ["eval"]
-    assert sum(model["status"]["code"] == "runs" for model in models.values()) == 9
+    assert first.status == "complete"
+    assert models[expanded_id]["status"]["code"] == "runs"
+    assert models[expanded_id]["modes"]["meaningful_modes"] == ["train", "eval"]
+    assert set(models[expanded_id]["modes"]["per_mode_run"]) == {"train", "eval"}
+    assert author.calls == {expanded_id: 2}
+    assert checker.metadata_calls == 2
+    failures = [
+        attempt
+        for attempt in scan_jsonl(paths.ledgers.attempts)
+        if isinstance(attempt.get("error"), Mapping)
+        and attempt["error"].get("details", {}).get("route") == "recipe-and-gate-revision-required"
+    ]
+    assert len(failures) == 1
     revision_count = len(scan_jsonl(paths.ledgers.models))
-    restarted = _driver(tmp_path, snapshot, author=EvalOnlyAuthor()).run()
+    restarted = _driver(tmp_path, snapshot, author=author, checker=checker, forward=forward).run()
     assert restarted.status == first.status
     assert len(scan_jsonl(paths.ledgers.models)) == revision_count
+
+
+def test_runtime_mode_expansion_terminalizes_only_after_repair_cap(tmp_path: Path) -> None:
+    """A repairable mode gap consumes the configured revisions before one terminal."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    stable_id = snapshot.items[0].stable_id
+    author = ModeRepairCapAuthor()
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=author,
+        forward=OneModelModeExpansion(stable_id),
+        run_repair_max=2,
+    ).run()
+    model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[-1]
+
+    assert result.status == "complete"
+    assert model["status"]["code"] == "failed:runner"
+    assert model["status"]["reason_code"] == "protocol-violation"
+    assert author.calls == {stable_id: 3}
+    repair_requests = sorted(
+        (_paths(tmp_path, snapshot).work_root / stable_id / "repair").glob(
+            "run-modes-generation-*.json"
+        )
+    )
+    assert len(repair_requests) == 2
 
 
 def test_declared_mode_order_is_canonical_before_gate_and_recipe_identity(tmp_path: Path) -> None:
@@ -2563,7 +2677,7 @@ def test_driver_failure_diagnostics_are_sidecar_only_and_checkpoint_safe(
         snapshot,
         author=OneModelAuthorFailure(snapshot.items[0].stable_id, restricted),
     )
-    assert driver.run().status == "complete"
+    assert driver.run().status == "terminal-partition-complete"
     paths = _paths(tmp_path, snapshot)
     attempt_bytes = paths.ledgers.attempts.read_bytes()
     model_bytes = paths.ledgers.models.read_bytes()
@@ -2683,8 +2797,10 @@ def test_failed_forward_terminalizes_and_campaign_continues(tmp_path: Path) -> N
     assert "synthetic forward failure" in sidecar_text
 
 
-def test_author_failure_terminalizes_one_model_and_later_models_continue(tmp_path: Path) -> None:
-    """An author command failure becomes failed:runner without aborting the campaign."""
+def test_author_failure_without_source_is_honest_and_later_models_continue(
+    tmp_path: Path,
+) -> None:
+    """A source-less author failure stays visible instead of receiving a stand-in URL."""
 
     snapshot = _snapshot(tmp_path, count=20)
     failed_id = snapshot.items[0].stable_id
@@ -2693,24 +2809,73 @@ def test_author_failure_terminalizes_one_model_and_later_models_continue(tmp_pat
         snapshot,
         author=OneModelAuthorFailure(failed_id),
     ).run()
-    # An evidenced failed:runner outcome is terminal; it leaves no campaign work pending.
-    assert result.status == "complete"
+    assert result.status == "terminal-partition-complete"
     models = {
         record["stable_id"]: record
         for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
     }
-    assert models[failed_id]["status"]["code"] == "failed:runner"
+    assert models[failed_id]["status"]["code"] == "failed:source"
+    assert models[failed_id]["status"]["reason_code"] == "missing-mandatory-link"
     assert sum(record["status"]["code"] == "runs" for record in models.values()) == 19
-    source = models[failed_id]["source_resolution"]["sources"][0]
-    assert source["kind"] == "intake-snapshot"
-    assert source["url"] == "https://github.com/johnmarktaylor91/torchlens"
-    assert source["locator"].startswith("menagerie/crawler/records/intake/")
-    assert source["content_sha256"] is None
-    assert source["mirror_digest"] is None
+    assert models[failed_id]["source_resolution"]["sources"] == []
+    assert models[failed_id]["source_resolution"]["mandatory_link_status"] == "failed"
+    assert models[failed_id]["completeness"]["mandatory_source_present"] is False
     assert (
         models[failed_id]["implementation"]["torchlens_import_static_check"]
         == "not-applicable-no-code"
     )
+
+
+def test_author_failure_retains_exact_intake_discovery_url(tmp_path: Path) -> None:
+    """A pre-author terminal uses its model's retained intake URL, never a stand-in."""
+
+    master = tmp_path / "source-master.jsonl"
+    deferred = tmp_path / "source-deferred.jsonl"
+    source_url = "https://example.com/intake-model"
+    _write_jsonl(
+        master,
+        [
+            {
+                "name": "IntakeSourceModel",
+                "zoo": "pytorch",
+                "variant": "base",
+                "source_url": source_url,
+            }
+        ],
+    )
+    _write_jsonl(deferred, [])
+    snapshot = create_intake_snapshot(master, deferred, tmp_path / "source-intake")
+    failed_id = snapshot.items[0].stable_id
+
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=OneModelAuthorFailure(failed_id),
+    ).run()
+
+    assert result.status == "complete"
+    model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[-1]
+    assert model["status"]["code"] == "failed:runner"
+    assert model["source_resolution"]["mandatory_link_status"] == "ok"
+    assert model["source_resolution"]["sources"] == [
+        {
+            "source_id": "intake-discovery-record",
+            "role": "documentation",
+            "kind": "intake-snapshot",
+            "url": source_url,
+            "revision_kind": "legacy-row-sha256",
+            "revision": snapshot.items[0].legacy_row_sha256,
+            "locator": "natural-key:('IntakeSourceModel', 'pytorch', 'base')",
+            "content_sha256": None,
+            "byte_count": 0,
+            "media_type": "application/json",
+            "retrieved_at": model["created_at"],
+            "fetch_recipe": "immutable-intake-discovery-lead",
+            "mirror_class": "public",
+            "mirror_digest": None,
+        }
+    ]
+    assert model["completeness"]["mandatory_source_present"] is True
 
 
 def test_mode_normalization_failure_terminalizes_and_continues(tmp_path: Path) -> None:
@@ -2959,6 +3124,125 @@ def test_post_use_teardown_failure_preserves_pending_run_award(tmp_path: Path) -
         if event.get("details", {}).get("disposition") == "environment-cleanup-quarantined"
     ]
     assert len(quarantines) == 1
+
+
+def test_checker_backoff_sees_driver_owned_mechanical_anchor_first(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pending R1/R2 execution starts only after its reconstruction transaction."""
+
+    order: list[str] = []
+    original_promote = CrawlerDriver._promote_artifact
+
+    def tracking_promote(
+        driver: CrawlerDriver, item: WorkItem, artifact: AuthorArtifact
+    ) -> AuthorArtifact:
+        """Record the exact point at which the pending anchor is staged."""
+
+        order.append(f"anchor:{item.stable_id}")
+        return original_promote(driver, item, artifact)
+
+    class BackoffAfterAnchor(FakeChecker):
+        """Pause only after observing the driver-owned staging call."""
+
+        def check_metadata(
+            self,
+            artifacts: Sequence[AuthorArtifact],
+            work_root: Path,
+            config: DriverConfig,
+        ) -> CheckerOutcome:
+            """Return quota backoff after the anchor-order assertion."""
+
+            del work_root, config
+            assert order == [f"anchor:{artifacts[0].proposal['stable_id']}"]
+            return CheckerOutcome(
+                backoff=CheckerBackoffSignal(
+                    CheckerPauseReason.QUOTA_EXHAUSTED,
+                    None,
+                    "2026-07-15T13:00:00Z",
+                    "quota",
+                )
+            )
+
+    monkeypatch.setattr(CrawlerDriver, "_promote_artifact", tracking_promote)
+    snapshot = _snapshot(tmp_path, count=1)
+    result = _driver(
+        tmp_path,
+        snapshot,
+        checker=BackoffAfterAnchor(),
+        pause_scheduler=FakePauseScheduler(tmp_path),
+    ).run()
+    model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[0]
+
+    assert result.status == "paused:usage-limit"
+    assert model["status"]["code"] == "runs"
+    assert model["authored_metadata_state"] == "pending"
+    assert order == [f"anchor:{snapshot.items[0].stable_id}"]
+
+
+def test_quarantine_terminalizes_new_work_identity_once_without_resume_loop(
+    tmp_path: Path,
+) -> None:
+    """New work under an exact quarantined generation receives one honest terminal."""
+
+    class TeardownFailingEnvironments(FakeEnvironments):
+        """Complete the first use and then fail environment teardown."""
+
+        def run(self, intent: EnvironmentIntent, *, use: Any) -> object:
+            """Invoke use before reporting an incomplete cleanup."""
+
+            super().run(intent, use=use)
+            raise DiskRecoveryError("synthetic post-use teardown failure")
+
+    master = tmp_path / "master.jsonl"
+    deferred = tmp_path / "deferred.jsonl"
+    _write_jsonl(master, [{"name": "First", "zoo": "fixtures", "variant": "base"}])
+    _write_jsonl(deferred, [])
+    first_snapshot = create_intake_snapshot(master, deferred, tmp_path / "intake-first")
+    environments = TeardownFailingEnvironments(tmp_path / "fake-envs")
+    pause_scheduler = FakePauseScheduler(tmp_path)
+    assert (
+        _driver(
+            tmp_path,
+            first_snapshot,
+            checker=FakeChecker(quota=True),
+            environments=environments,
+            pause_scheduler=pause_scheduler,
+        )
+        .run()
+        .status
+        == "paused:usage-limit"
+    )
+
+    _write_jsonl(
+        master,
+        [
+            {"name": "First", "zoo": "fixtures", "variant": "base"},
+            {"name": "Second", "zoo": "fixtures", "variant": "base"},
+        ],
+    )
+    second_snapshot = create_intake_snapshot(master, deferred, tmp_path / "intake-second")
+    for _ in range(2):
+        assert (
+            _driver(
+                tmp_path,
+                second_snapshot,
+                checker=FakeChecker(quota=True),
+                environments=environments,
+                pause_scheduler=pause_scheduler,
+            )
+            .run()
+            .status
+            == "paused:usage-limit"
+        )
+
+    models = scan_jsonl(_paths(tmp_path, second_snapshot).ledgers.models)
+    second_id = next(item.stable_id for item in second_snapshot.items if item.name == "Second")
+    second_revisions = [model for model in models if model["stable_id"] == second_id]
+    assert len(second_revisions) == 1
+    assert second_revisions[0]["status"]["code"] == "failed:environment"
+    assert second_revisions[0]["status"]["reason_code"] == "build-failed"
+    assert environments.events.count("create:core") == 1
 
 
 def test_disposable_author_cache_corruption_reauthors(tmp_path: Path) -> None:

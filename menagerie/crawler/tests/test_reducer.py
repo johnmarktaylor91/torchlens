@@ -184,6 +184,39 @@ def test_reducer_is_the_single_writer(tmp_path: Path) -> None:
             CanonicalReducer(paths, ["m_example"])
 
 
+@pytest.mark.parametrize(
+    "field,replacement",
+    (
+        ("parameter_count_total", 999),
+        ("parameter_count_trainable", 998),
+        ("native_framework", "tensorflow"),
+        ("delegated_method", "__call__"),
+        ("output_signature", {"tree": None, "leaves": []}),
+        ("input_kind", "random-fallback"),
+        ("input_asset", None),
+        ("input_note", "different input"),
+        ("constructor_seconds", 9.0),
+        ("forward_seconds", 8.0),
+        ("peak_rss_bytes", 9999),
+        ("measurement_attempt_ids", []),
+    ),
+)
+def test_reducer_rejects_observed_facts_not_earned_by_receipts(
+    tmp_path: Path, field: str, replacement: object
+) -> None:
+    """Every published runtime observation must match its designated accepted attempt."""
+
+    model = make_model(accepted=True)
+    observed = model["observed"]
+    assert isinstance(observed, dict)
+    observed[field] = replacement
+    with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
+        reducer.append_gate(make_gate(["m_example"]))
+        reducer.append_attempt(make_attempt())
+        with pytest.raises(ReductionError, match="observed runtime facts contradict"):
+            reducer.append_model(model)
+
+
 def test_bad_parentage_is_rejected(tmp_path: Path) -> None:
     """A superseding revision must point to the current exact parent.
 

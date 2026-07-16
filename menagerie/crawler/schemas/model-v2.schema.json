@@ -1342,7 +1342,6 @@
         },
         "sources": {
           "type": "array",
-          "minItems": 1,
           "items": {
             "$ref": "#/$defs/source"
           },
@@ -2352,6 +2351,8 @@
       "required": [
         "parameter_count_total",
         "parameter_count_trainable",
+        "native_framework",
+        "delegated_method",
         "output_signature",
         "input_kind",
         "input_asset",
@@ -2373,6 +2374,14 @@
           "type": "integer",
           "minimum": 0,
           "description": "Mandatory parameter count trainable."
+        },
+        "native_framework": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Worker-observed native framework for the designated measurement attempt."
+        },
+        "delegated_method": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Worker-observed native call method for the designated measurement attempt."
         },
         "output_signature": {
           "$ref": "#/$defs/output_signature",
