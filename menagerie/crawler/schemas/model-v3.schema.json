@@ -2119,7 +2119,6 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "code_path",
         "builder_symbol",
         "seed",
         "semantic_description",
@@ -2132,10 +2131,6 @@
         "expected_output_semantics"
       ],
       "properties": {
-        "code_path": {
-          "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory code path."
-        },
         "builder_symbol": {
           "$ref": "#/$defs/nonempty_string",
           "description": "Mandatory builder symbol."
@@ -3997,7 +3992,6 @@
     "$.input_contract.args[].shape[]": "author-gated",
     "$.input_contract.args[].source_evidence_ids[]": "author-gated",
     "$.input_contract.builder_symbol": "author-gated",
-    "$.input_contract.code_path": "author-gated",
     "$.input_contract.expected_output_semantics": "author-gated",
     "$.input_contract.kwargs[].constraints[]": "author-gated",
     "$.input_contract.kwargs[].device_policy": "author-gated",

@@ -4,10 +4,32 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from menagerie.crawler.constants import RunMode
 from menagerie.crawler.identity import compute_recipe_revision, hash_bytes
 from menagerie.crawler.standard_inputs import InputSpec
 from menagerie.crawler.worker import WorkerRequest, run_worker
+
+
+@pytest.mark.parametrize("value", [None, "adapter.py"])
+def test_v3_worker_request_rejects_input_contract_code_path_presence(value: object) -> None:
+    """Direct v3 requests reject null and string forms of the deleted leaf.
+
+    Parameters
+    ----------
+    value:
+        Legacy value whose presence must fail before worker execution.
+    """
+
+    with pytest.raises(ValueError, match="code_path presence"):
+        WorkerRequest.from_mapping(
+            {
+                "protocol_version": "menagerie.crawler.worker-request.v3",
+                "recipe": {},
+                "input_contract": {"code_path": value},
+            }
+        )
 
 
 def _adapter_revision(path: Path, source_identity: str = "unbound") -> str:
@@ -198,7 +220,6 @@ def test_r1_declarative_worker_executes_complete_args_and_kwargs_contract(
         "source_evidence_ids": ["evidence-1"],
     }
     contract = {
-        "code_path": None,
         "builder_symbol": "make_dummy_call",
         "seed": 0,
         "semantic_description": "Query, key, and value tensors with no returned weights.",

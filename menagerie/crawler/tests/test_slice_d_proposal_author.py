@@ -398,6 +398,60 @@ def test_author_envelope_round_trip_and_result_binding(tmp_path: Path) -> None:
     assert isinstance(validate_author_result_cache(cache, envelope), ProposedAuthorResult)
 
 
+@pytest.mark.parametrize("value", [None, "adapter.py"])
+def test_embedded_author_result_rejects_input_contract_code_path(
+    tmp_path: Path, value: object
+) -> None:
+    """The result callback rejects both forms of the deleted embedded v3 leaf.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated author result directory.
+    value:
+        Legacy null or string value whose presence must reject.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    prompt_hash = hash_bytes(
+        (Path(__file__).parents[1] / "prompts" / "claude_crawler_author_v2.txt").read_bytes()
+    )
+    proposal["author"]["prompt_sha256"] = prompt_hash
+    proposal.update(
+        {
+            "campaign_id": "campaign-1",
+            "intake_snapshot_id": "intake-1",
+            "intake_snapshot_sha256": "sha256:" + "1" * 64,
+            "intake_item_sha256": stable_hash(
+                {"stable_id": proposal["stable_id"], "variant": "base"}
+            ),
+            "source_manifest_identity": str(manifest["manifest_sha256"]),
+            "dispatcher_identity": "sha256:" + "2" * 64,
+        }
+    )
+    proposal["proposed_facts"]["input_contract"]["code_path"] = value
+    proposal["proposal_sha256"] = stable_hash(
+        {key: item for key, item in proposal.items() if key != "proposal_sha256"}
+    )
+    result_path = tmp_path / "result.json"
+    envelope = build_author_envelope(
+        context=_author_context(proposal, prompt_hash),
+        work_id=proposal["work_id"],
+        stable_id=proposal["stable_id"],
+        campaign_id="campaign-1",
+        created_at="2026-07-16T00:00:00Z",
+        untrusted_hints={},
+        source_manifest=manifest,
+        allowed_model_dir=tmp_path,
+        output_path=result_path,
+    )
+    result_path.write_text(
+        json.dumps(_author_result(envelope, "PROPOSED", {"arm": "PROPOSED", "proposal": proposal}))
+    )
+    with pytest.raises(AuthorDispatchError):
+        validate_author_result(result_path, envelope)
+
+
 @pytest.mark.parametrize("corruption", ["mismatched", "partial"])
 def test_author_result_rejects_mismatch_or_partial(tmp_path: Path, corruption: str) -> None:
     """Mismatched identity and partial JSON never enter the proposal lane.

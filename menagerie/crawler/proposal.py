@@ -820,25 +820,14 @@ def _validate_author_read_grants(facts: Mapping[str, Any], allowed_dir: Path) ->
     Raises
     ------
     ProposalValidationError
-        If an input builder path, symbol, scalar path value, or source CAS locator
-        could grant access outside the model-local regular-file boundary.
+        If the deleted input code-path leaf is present, or a builder symbol, scalar
+        path value, or source CAS locator could grant access outside the model-local
+        regular-file boundary.
     """
 
     input_contract = _mapping(facts.get("input_contract"), "input_contract")
-    code_value = input_contract.get("code_path")
-    if code_value is not None:
-        if not isinstance(code_value, str) or not code_value.strip():
-            raise ProposalValidationError("input_contract.code_path must be null or non-empty")
-        candidate = Path(code_value)
-        if candidate.is_absolute():
-            raise ProposalValidationError(
-                "input_contract.code_path must be repository-relative before proposal identity"
-            )
-        resolved = (allowed_dir / candidate).resolve()
-        if not resolved.is_relative_to(allowed_dir):
-            raise ProposalValidationError("input_contract.code_path escapes the model sandbox")
-        if not resolved.is_file():
-            raise ProposalValidationError("input_contract.code_path must name a regular file")
+    if "code_path" in input_contract:
+        raise ProposalValidationError("v3 input_contract forbids code_path presence")
     builder_symbol = input_contract.get("builder_symbol")
     if not isinstance(builder_symbol, str) or not re.fullmatch(
         r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*", builder_symbol

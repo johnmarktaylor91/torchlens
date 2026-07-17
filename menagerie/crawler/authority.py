@@ -283,6 +283,84 @@ class ExecutionReadManifest:
 
 
 @dataclass(frozen=True)
+class RuntimeMember:
+    """One exact digest-bound executable or runtime file in manifest v2.
+
+    Parameters
+    ----------
+    path:
+        Absolute regular unaliased member path.
+    sha256:
+        Canonical digest of the exact member bytes.
+    kind:
+        Closed executable/runtime member kind selected by the closure compiler.
+    provenance:
+        Exact compiler inventory or seed that admitted the member.
+    """
+
+    path: Path
+    sha256: str
+    kind: str
+    provenance: str
+
+
+@dataclass(frozen=True)
+class RuntimeLookupDirectory:
+    """Lookup-only directory scaffold that grants no child-file read authority."""
+
+    path: Path
+    provenance: str
+
+
+@dataclass(frozen=True)
+class ExecutionReadManifestV2:
+    """Frozen v2 worker capability with no semantic filesystem-root grants.
+
+    Every executable/runtime file is named by path and digest. Lookup directories
+    exist only to support import and mount traversal and never authorize descendants.
+    The environment generation and installed-package inventory digest are identity
+    inputs so later producers can recompile and stale manifests from their real closure.
+    """
+
+    manifest_version: str
+    manifest_id: str
+    stable_id: str
+    work_id: str
+    execution_identity: str
+    code_manifest_identity: str
+    environment_generation: str
+    installed_package_inventory_sha256: str
+    code_members: tuple[RuntimeMember, ...]
+    runtime_members: tuple[RuntimeMember, ...]
+    standard_input_asset: Optional[tuple[Path, str, str]]
+    lookup_directories: tuple[RuntimeLookupDirectory, ...]
+
+
+@dataclass(frozen=True)
+class ShutdownInterruptionFact:
+    """Operational-only fact for one shutdown-interrupted worker invocation.
+
+    A fact may describe a pre-spawn interruption, in which case lease, process,
+    parent observation, and partial receipt fields are null. It never represents an
+    attempt or model row and any partial receipt remains non-awarding diagnostics.
+    """
+
+    invocation_id: str
+    admission_boundary: str
+    stable_id: Optional[str]
+    work_id: Optional[str]
+    execution_identity: Optional[str]
+    request_identity: Optional[str]
+    lease_id: Optional[str]
+    child_pid: Optional[int]
+    child_start_token: Optional[str]
+    child_pgid: Optional[int]
+    signal: Optional[int]
+    parent_observation: Optional[Mapping[str, Any]]
+    partial_receipt: Optional[Mapping[str, Any]]
+
+
+@dataclass(frozen=True)
 class WorkerLease:
     """Durable metadata that augments the child-held worker kernel lock."""
 

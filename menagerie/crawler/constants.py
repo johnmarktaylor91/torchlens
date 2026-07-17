@@ -9,6 +9,8 @@ ATTEMPT_SCHEMA_VERSION = "menagerie.crawler.attempt.v2"
 GATE_SCHEMA_VERSION = "menagerie.crawler.gate.v2"
 AUTHOR_PROPOSAL_SCHEMA_VERSION = "menagerie.crawler.author-proposal.v2"
 OPERATIONAL_EVENT_SCHEMA_VERSION = "menagerie.crawler.operational-event.v1"
+EXECUTION_READ_MANIFEST_VERSION_V2 = "menagerie.crawler.execution-read-manifest.v2"
+DRIVER_SHUTDOWN_STATUS = "interrupted:shutdown"
 
 # Round-14 contracts are additive during the interface freeze. Existing producers
 # continue to emit v2 until the authority kernel switches atomically; v3 writers
@@ -58,6 +60,14 @@ DEFAULT_PROGRESS_NOTIFICATION_MILESTONES = (2_000, 3_000, 5_000, 10_000, 15_000,
 
 class StrEnum(str, Enum):
     """String-valued enum compatible with all supported Python versions."""
+
+
+class InvocationOrigin(StrEnum):
+    """Closed origin of one driver invocation for wake-episode transitions."""
+
+    ORDINARY_RUN = "ordinary-run"
+    MANUAL_RESUME = "manual-resume"
+    WAKE_CALLBACK = "wake-callback"
 
 
 class AuthoredMetadataState(StrEnum):
@@ -390,6 +400,7 @@ class OperationalEventKind(StrEnum):
     WAKEUP_FAILED = "wakeup-failed"
     CAMPAIGN_COMPLETED = "campaign-completed"
     OPERATOR_CANCELLED = "operator-cancelled"
+    WORKER_SHUTDOWN_INTERRUPTED = "worker-shutdown-interrupted"
 
 
 class OperationalEventStatus(StrEnum):
@@ -424,6 +435,7 @@ class OperationalEventStatus(StrEnum):
     CAMPAIGN_COMPLETED = "campaign-completed"
     OPERATOR_CANCELLED = "operator-cancelled"
     TERMINATED = "paused:terminated"
+    SHUTDOWN_INTERRUPTED = DRIVER_SHUTDOWN_STATUS
 
 
 # Slice-F scheduler configuration defaults.  The earlier names remain the

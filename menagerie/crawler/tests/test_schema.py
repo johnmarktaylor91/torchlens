@@ -27,6 +27,7 @@ from menagerie.crawler.tests.conftest import (
     make_gate,
     make_model,
     make_operational_event,
+    make_shutdown_interruption_event,
 )
 
 
@@ -40,6 +41,7 @@ from menagerie.crawler.tests.conftest import (
         make_gate(["m_example"], gate_kind="fidelity", fidelity_identity="sha256:" + "a" * 64),
         make_author_proposal(),
         make_operational_event(),
+        make_shutdown_interruption_event(),
     ],
 )
 def test_representative_records_validate(payload: dict[str, Any]) -> None:
@@ -79,6 +81,26 @@ def test_unknown_fields_are_rejected(valid_model: dict[str, Any]) -> None:
         validate_payload(root_unknown)
     with pytest.raises(PayloadValidationError):
         validate_payload(nested_unknown)
+
+
+@pytest.mark.parametrize("value", [None, "adapter.py"])
+def test_v3_input_contract_code_path_presence_is_rejected(value: object) -> None:
+    """Null and string forms of the deleted v3 executable-path leaf both reject.
+
+    Parameters
+    ----------
+    value:
+        Legacy input-contract value whose presence must fail closed.
+    """
+
+    model = make_model(accepted=True)
+    model["input_contract"]["code_path"] = value
+    proposal = make_author_proposal()
+    proposal["proposed_facts"]["input_contract"]["code_path"] = value
+    with pytest.raises(PayloadValidationError):
+        validate_payload(model)
+    with pytest.raises(PayloadValidationError):
+        validate_payload(proposal)
 
 
 def test_missing_mandatory_fields_are_rejected(valid_model: dict[str, Any]) -> None:

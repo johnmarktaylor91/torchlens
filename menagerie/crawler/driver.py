@@ -53,6 +53,7 @@ from menagerie.crawler.authority import (
     AuthorityContext,
     DependencyState,
     ExecutionReadManifest,
+    ShutdownInterruptionFact,
     WorkerLease,
     build_authority_context,
     derive_attempt_projection,
@@ -388,6 +389,10 @@ class VariantRecipeUnsupported(DriverIntegrationError):
 
 class DriverPaused(DriverError):
     """Raised internally to unwind one environment after a clean campaign pause."""
+
+
+class DriverShutdown(BaseException):
+    """Typed internal control flow that cannot become an ordinary model failure."""
 
 
 @dataclass(frozen=True)
@@ -789,6 +794,7 @@ class DriverResult:
     terminal_models: int
     models_reduced: int
     paused_reason: Optional[str]
+    shutdown_interruption: Optional[ShutdownInterruptionFact] = None
 
 
 class AuthorLane(Protocol):
@@ -6812,7 +6818,6 @@ def _worker_request(
     facts = proposal["proposed_facts"]
     implementation = facts["implementation"]
     input_contract = deepcopy(dict(facts["input_contract"]))
-    input_contract["code_path"] = None
     builder_symbol = input_contract.get("builder_symbol")
     if not isinstance(builder_symbol, str) or not re.fullmatch(
         r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*", builder_symbol
@@ -9233,7 +9238,6 @@ def _placeholder_facts(
             "torchlens_import_static_check": "not-applicable-no-code",
         },
         "input_contract": {
-            "code_path": None,
             "builder_symbol": "make_dummy_call",
             "seed": 0,
             "semantic_description": "Input contract unresolved.",

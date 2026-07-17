@@ -2,6 +2,12 @@
 
 This data dictionary is the human companion to the executable JSON Schemas in `menagerie/crawler/schemas/`. “Mandatory” means the field is required by its enclosing schema object; “Best-effort” means it may be null, omitted by a branch, or records an observation that is not guaranteed to exist. Closed vocabularies and cross-field conditions remain authoritative in the schemas.
 
+Current v3 amendment: `input_contract.code_path` is absent from `model.v3`,
+`author-proposal.v3`, and embedded `author-result.v3`; either null or string presence rejects. The field
+listed below belongs only to readable untrusted `model.v2` history. The distinct current-v3 fields
+`implementation.code_path` and `implementation.source_to_code_map[].code_path` remain mandatory where
+their enclosing recipe requires them.
+
 ## `model.v2`
 
 ### Bookkeeping
@@ -322,7 +328,7 @@ External metadata is captured and gated now because it requires source reading, 
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
 | `input_contract` | object | Mandatory | Mandatory source-valid dummy-input contract. |
-| `input_contract.code_path` | string \| null | Mandatory | Mandatory code path. |
+| `input_contract.code_path` | string \| null | Mandatory | Historical v2 input-builder path retained only as untrusted history; absent and rejected in v3. |
 | `input_contract.builder_symbol` | string | Mandatory | Mandatory builder symbol. |
 | `input_contract.seed` | integer | Mandatory | Mandatory seed. |
 | `input_contract.semantic_description` | string | Mandatory | Mandatory semantic description. |

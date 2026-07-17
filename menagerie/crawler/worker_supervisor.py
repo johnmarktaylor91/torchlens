@@ -3183,8 +3183,8 @@ def supervise_worker(
                 "worker request differs from execution manifest: " + ",".join(mismatches)
             )
         input_contract = request_value.get("input_contract")
-        if isinstance(input_contract, Mapping) and input_contract.get("code_path") is not None:
-            raise ValueError("v3 execution forbids input_contract.code_path")
+        if isinstance(input_contract, Mapping) and "code_path" in input_contract:
+            raise ValueError("v3 execution forbids input_contract.code_path presence")
         if request_value.get("input_manifest") is not None:
             raise ValueError("v3 execution forbids legacy input_manifest grants")
         expected_asset = execution_read_manifest.standard_input_asset

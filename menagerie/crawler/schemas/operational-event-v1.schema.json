@@ -72,7 +72,8 @@
         "wakeup-health-degraded",
         "wakeup-failed",
         "campaign-completed",
-        "operator-cancelled"
+        "operator-cancelled",
+        "worker-shutdown-interrupted"
       ],
       "description": "Mandatory operational event kind."
     },
@@ -106,7 +107,8 @@
         "wakeup-failed",
         "campaign-completed",
         "operator-cancelled",
-        "paused:terminated"
+        "paused:terminated",
+        "interrupted:shutdown"
       ],
       "description": "Mandatory closed current disposition."
     },
@@ -241,6 +243,93 @@
       "description": "Non-blocking completed-model milestone being reported."
     }
   },
+  "$defs": {
+    "shutdown_interruption_details": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "invocation_id",
+        "admission_boundary",
+        "stable_id",
+        "work_id",
+        "execution_identity",
+        "request_identity",
+        "lease_id",
+        "child_pid",
+        "child_start_token",
+        "child_pgid",
+        "signal",
+        "parent_observation",
+        "partial_receipt"
+      ],
+      "properties": {
+        "invocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exact idempotency identity of the interrupted invocation."
+        },
+        "admission_boundary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Named admission boundary at which shutdown was observed."
+        },
+        "stable_id": {
+          "type": ["string", "null"],
+          "description": "Model identity when work had been selected, otherwise null."
+        },
+        "work_id": {
+          "type": ["string", "null"],
+          "description": "Work identity when work had been selected, otherwise null."
+        },
+        "execution_identity": {
+          "oneOf": [
+            {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            {"type": "null"}
+          ],
+          "description": "Execution identity when compilation reached that boundary."
+        },
+        "request_identity": {
+          "oneOf": [
+            {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            {"type": "null"}
+          ],
+          "description": "Exact worker-request digest when request bytes existed."
+        },
+        "lease_id": {
+          "type": ["string", "null"],
+          "description": "Exact worker lease identity when a lease had opened."
+        },
+        "child_pid": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Parent-observed child process id when a child existed."
+        },
+        "child_start_token": {
+          "type": ["string", "null"],
+          "description": "Kernel child-start identity when a child existed."
+        },
+        "child_pgid": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Parent-observed child process-group id when available."
+        },
+        "signal": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Signal number observed for a drained child, otherwise null."
+        },
+        "parent_observation": {
+          "type": ["object", "null"],
+          "description": "Complete parent supervisor observation when a child was drained."
+        },
+        "partial_receipt": {
+          "type": ["object", "null"],
+          "description": "Non-awarding partial worker receipt retained only for diagnostics."
+        }
+      },
+      "description": "Exact operational-only shutdown interruption fact."
+    }
+  },
   "allOf": [
     {
       "if": {
@@ -330,6 +419,28 @@
               "notification-failed"
             ],
             "description": "Delivery is recorded separately from notification identity."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_kind": {
+            "const": "worker-shutdown-interrupted",
+            "description": "Select the operational-only worker shutdown contract."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "interrupted:shutdown",
+            "description": "A completed interruption remains ordinarily resumable."
+          },
+          "details": {
+            "$ref": "#/$defs/shutdown_interruption_details",
+            "description": "Exact operational-only shutdown interruption fact."
           }
         }
       }

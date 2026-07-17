@@ -56,6 +56,8 @@ RANDOM-INITIALIZATION AND EXECUTION POLICY
   dimension or alter architecture for convenience.
 - R1 may use the closed declarative library recipe. Other runnable work must stage a typed adapter defining
   build_model() and make_dummy_call(seed, device). The returned object must expose forward.
+- Record executable paths only in implementation.code_path and source_to_code_map; input_contract has no
+  code_path field and must never carry one.
 - A transparent native adapter must record its native object type and delegated method.
 - Record every positional and keyword leaf's semantic role, shape, dtype, legal value range or distribution,
   device policy, constraints, masks/state, and all non-tensor values.

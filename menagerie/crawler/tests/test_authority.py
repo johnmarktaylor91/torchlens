@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import fields
 from typing import Any, Mapping, Optional
 
 import pytest
@@ -11,6 +12,10 @@ from menagerie.crawler.authority import (
     AuthorityContext,
     AuthorityDerivationError,
     DependencyState,
+    ExecutionReadManifestV2,
+    RuntimeLookupDirectory,
+    RuntimeMember,
+    ShutdownInterruptionFact,
     derive_attempt_projection,
     derive_dependency_vector,
     derive_execution_identity,
@@ -27,6 +32,12 @@ from menagerie.crawler.authority import (
     validate_currency,
     completion_line_for_raw_award_receipt,
 )
+from menagerie.crawler.artifact_transactions import (
+    ArtifactCheckpointProjection,
+    ArtifactTransactionProjection,
+)
+from menagerie.crawler.constants import InvocationOrigin
+from menagerie.crawler.driver import DriverResult, DriverShutdown
 from menagerie.crawler.identity import stable_hash
 
 HASH_A = "sha256:" + "a" * 64
@@ -35,6 +46,83 @@ HASH_C = "sha256:" + "c" * 64
 HASH_D = "sha256:" + "d" * 64
 STARTED = "2026-07-16T12:00:00Z"
 FINISHED = "2026-07-16T12:00:01Z"
+
+
+def test_round15_phase_zero_shared_contract_shapes_are_exact() -> None:
+    """Freeze the cross-workstream shapes before any producer wires them."""
+
+    assert tuple(field.name for field in fields(RuntimeMember)) == (
+        "path",
+        "sha256",
+        "kind",
+        "provenance",
+    )
+    assert tuple(field.name for field in fields(RuntimeLookupDirectory)) == (
+        "path",
+        "provenance",
+    )
+    assert tuple(field.name for field in fields(ExecutionReadManifestV2)) == (
+        "manifest_version",
+        "manifest_id",
+        "stable_id",
+        "work_id",
+        "execution_identity",
+        "code_manifest_identity",
+        "environment_generation",
+        "installed_package_inventory_sha256",
+        "code_members",
+        "runtime_members",
+        "standard_input_asset",
+        "lookup_directories",
+    )
+    assert tuple(field.name for field in fields(ShutdownInterruptionFact)) == (
+        "invocation_id",
+        "admission_boundary",
+        "stable_id",
+        "work_id",
+        "execution_identity",
+        "request_identity",
+        "lease_id",
+        "child_pid",
+        "child_start_token",
+        "child_pgid",
+        "signal",
+        "parent_observation",
+        "partial_receipt",
+    )
+    assert tuple(field.name for field in fields(DriverResult)) == (
+        "status",
+        "terminal_models",
+        "models_reduced",
+        "paused_reason",
+        "shutdown_interruption",
+    )
+    assert issubclass(DriverShutdown, BaseException)
+    assert not issubclass(DriverShutdown, Exception)
+    assert {origin.value for origin in InvocationOrigin} == {
+        "ordinary-run",
+        "manual-resume",
+        "wake-callback",
+    }
+    assert tuple(field.name for field in fields(ArtifactTransactionProjection)) == (
+        "stable_id",
+        "work_id",
+        "transaction_id",
+        "final_event_id",
+        "final_event_kind",
+        "authorization_id",
+        "accepted_gate_id",
+        "reconstruction_path",
+        "reconstruction_sha256",
+        "reconstruction_inputs",
+        "objects",
+        "claims",
+    )
+    assert tuple(field.name for field in fields(ArtifactCheckpointProjection)) == (
+        "transactions",
+        "objects",
+        "claims",
+    )
 
 
 def _observation(mode: str, signature: Optional[Mapping[str, Any]] = None) -> dict[str, Any]:

@@ -351,7 +351,6 @@
     "$.payload.proposal.proposed_facts.input_contract.args[].shape[]": "author-gated",
     "$.payload.proposal.proposed_facts.input_contract.args[].source_evidence_ids[]": "author-gated",
     "$.payload.proposal.proposed_facts.input_contract.builder_symbol": "author-gated",
-    "$.payload.proposal.proposed_facts.input_contract.code_path": "author-gated",
     "$.payload.proposal.proposed_facts.input_contract.expected_output_semantics": "author-gated",
     "$.payload.proposal.proposed_facts.input_contract.kwargs[].constraints[]": "author-gated",
     "$.payload.proposal.proposed_facts.input_contract.kwargs[].device_policy": "author-gated",

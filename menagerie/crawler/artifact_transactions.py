@@ -15,7 +15,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterable, Mapping, Optional, Sequence
+from types import MappingProxyType
+from typing import Any, Iterable, Mapping, Optional, Sequence, TypeAlias
 
 from menagerie.crawler.authority import (
     ArtifactClaim,
@@ -133,6 +134,48 @@ class ReconstructionInputs:
     proposal: Optional[Mapping[str, Any]]
     source_manifest: Mapping[str, Any]
     accepted_gate_item: Mapping[str, Any]
+
+
+ArtifactProjectionKey: TypeAlias = tuple[str, str, ArtifactTransactionId]
+
+
+@dataclass(frozen=True)
+class ArtifactTransactionProjection:
+    """One uniquely verified final artifact transaction in checkpoint authority."""
+
+    stable_id: str
+    work_id: str
+    transaction_id: ArtifactTransactionId
+    final_event_id: str
+    final_event_kind: str
+    authorization_id: str
+    accepted_gate_id: str
+    reconstruction_path: Path
+    reconstruction_sha256: str
+    reconstruction_inputs: ReconstructionInputs
+    objects: tuple[MirrorObject, ...]
+    claims: tuple[ArtifactClaim, ...]
+
+
+@dataclass(frozen=True)
+class ArtifactCheckpointProjection:
+    """Read-only normalized object/claim authority shared by later consumers.
+
+    ``transactions`` is indexed by exact ``(stable_id, work_id, transaction_id)``.
+    ``objects`` contains one intrinsic row per physical object identity, while
+    ``claims`` retains every independent model-specific claim even when digests are
+    shared. The future rehydrator and canonical checkpoint must consume this same
+    projection instead of independently folding artifact events.
+    """
+
+    transactions: Mapping[ArtifactProjectionKey, ArtifactTransactionProjection]
+    objects: tuple[MirrorObject, ...]
+    claims: tuple[ArtifactClaim, ...]
+
+    def __post_init__(self) -> None:
+        """Defensively freeze the transaction index after construction."""
+
+        object.__setattr__(self, "transactions", MappingProxyType(dict(self.transactions)))
 
 
 @dataclass(frozen=True)

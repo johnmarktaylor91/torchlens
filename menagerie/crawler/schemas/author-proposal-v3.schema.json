@@ -735,7 +735,6 @@
     "$.proposed_facts.input_contract.args[].shape[]": "author-gated",
     "$.proposed_facts.input_contract.args[].source_evidence_ids[]": "author-gated",
     "$.proposed_facts.input_contract.builder_symbol": "author-gated",
-    "$.proposed_facts.input_contract.code_path": "author-gated",
     "$.proposed_facts.input_contract.expected_output_semantics": "author-gated",
     "$.proposed_facts.input_contract.kwargs[].constraints[]": "author-gated",
     "$.proposed_facts.input_contract.kwargs[].device_policy": "author-gated",

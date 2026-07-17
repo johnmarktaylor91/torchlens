@@ -225,7 +225,6 @@ class TinyModelAuthor(FakeAuthor):
         code_manifest = [dict(row) for row in model_code_manifest(adapter_path, artifact.model_dir)]
         implementation["code_manifest"] = code_manifest
         contract = facts["input_contract"]
-        contract["code_path"] = "adapter.py"
         contract["args"][0].update(
             {
                 "semantic_role": "features" if case.name == "DryRunMLP" else "image",

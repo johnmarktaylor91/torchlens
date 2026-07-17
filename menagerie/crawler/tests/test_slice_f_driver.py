@@ -1683,6 +1683,7 @@ def test_mode_requests_reuse_one_accepted_input_seed_and_manifest(tmp_path: Path
     assert {request["input_seed"] for request in requests} == {0}
     assert len({request["input_identity"] for request in requests}) == 1
     assert len({request["execution_read_manifest_identity"] for request in requests}) == 1
+    assert all("code_path" not in request["input_contract"] for request in requests)
 
 
 def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(

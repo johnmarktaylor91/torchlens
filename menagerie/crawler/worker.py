@@ -151,13 +151,8 @@ class WorkerRequest:
         if v3_protocol:
             if input_manifest_value is not None:
                 raise ValueError("v3 worker requests forbid the legacy input_manifest")
-            input_code_path = (
-                input_contract_value.get("code_path")
-                if isinstance(input_contract_value, Mapping)
-                else None
-            )
-            if input_code_path is not None:
-                raise ValueError("v3 worker requests forbid input_contract.code_path")
+            if isinstance(input_contract_value, Mapping) and "code_path" in input_contract_value:
+                raise ValueError("v3 worker requests forbid input_contract.code_path presence")
             if mode_value := value.get("mode"):
                 RunMode(str(mode_value))
             else:

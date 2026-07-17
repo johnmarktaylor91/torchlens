@@ -264,6 +264,25 @@ def _terminal_case(
     raise AssertionError(f"unsupported terminal fixture: {status_code}")
 
 
+@pytest.mark.parametrize(
+    "status_code",
+    ["failed:forward", "deferred:needs-cuda", "skipped:no-description"],
+)
+def test_terminal_case_fixture_covers_later_currency_families(status_code: str) -> None:
+    """Keep the shared terminal fixture live for the Round-15 W7 matrix.
+
+    Parameters
+    ----------
+    status_code:
+        Representative failed, deferred, or skipped terminal family.
+    """
+
+    model, attempt, gate = _terminal_case(status_code)
+    assert model["status"]["code"] == status_code
+    assert attempt["attempt_id"] in model["status"]["attempt_ids"]
+    assert (gate is not None) == status_code.startswith("skipped:")
+
+
 def test_reducer_is_the_single_writer(tmp_path: Path) -> None:
     """A second reducer cannot acquire canonical writer authority.
 

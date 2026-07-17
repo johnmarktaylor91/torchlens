@@ -959,7 +959,6 @@ def make_model(
             "torchlens_import_static_check": "passed",
         },
         "input_contract": {
-            "code_path": None,
             "builder_symbol": "make_dummy_call",
             "seed": 0,
             "semantic_description": "One small RGB image.",
@@ -1318,6 +1317,44 @@ def make_operational_event() -> dict[str, Any]:
         "machine_id": "machine-test",
         "details": {"wakeup": "scheduled"},
     }
+
+
+def make_shutdown_interruption_event() -> dict[str, Any]:
+    """Build the frozen operational-only shutdown interruption fixture.
+
+    Returns
+    -------
+    dict[str, Any]
+        Complete pre-spawn worker-shutdown-interrupted event.
+    """
+
+    event = make_operational_event()
+    event.update(
+        {
+            "event_kind": "worker-shutdown-interrupted",
+            "status": "interrupted:shutdown",
+            "provider": None,
+            "observed_response": None,
+            "reset_at": None,
+            "current_environment": None,
+            "details": {
+                "invocation_id": "invocation-1",
+                "admission_boundary": "pre-spawn",
+                "stable_id": "m_example",
+                "work_id": "work-m_example",
+                "execution_identity": HASH,
+                "request_identity": None,
+                "lease_id": None,
+                "child_pid": None,
+                "child_start_token": None,
+                "child_pgid": None,
+                "signal": None,
+                "parent_observation": None,
+                "partial_receipt": None,
+            },
+        }
+    )
+    return event
 
 
 @pytest.fixture

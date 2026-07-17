@@ -338,9 +338,9 @@ def test_author_path_leaves_never_become_parent_read_grants(tmp_path: Path) -> N
     hidden = tmp_path / "host-checkpoints"
     hidden.mkdir()
     facts["input_contract"]["code_path"] = str(hidden)
-    with pytest.raises(ProposalValidationError, match="repository-relative"):
+    with pytest.raises(ProposalValidationError, match="forbids code_path presence"):
         _validate_author_read_grants(facts, tmp_path / "model")
-    facts["input_contract"]["code_path"] = None
+    del facts["input_contract"]["code_path"]
     facts["input_contract"]["non_tensor_values"] = [
         {"type": "path", "value": "missing-checkpoint.pt"}
     ]

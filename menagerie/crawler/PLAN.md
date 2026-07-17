@@ -262,6 +262,48 @@ classification: `author-gated`, `worker-observed`, `parent-observed`, `reducer-d
 policy, vet identity, canonical assembly, variant inheritance, and exact checker field coverage. CI
 expands schema references and fails on every missing, extraneous, unknown, or multiply owned leaf.
 
+### 5.0.1 Round-15 shared contract freeze
+
+The execution capability v2 discriminator is
+`menagerie.crawler.execution-read-manifest.v2`. `ExecutionReadManifestV2` contains
+`{manifest_version, manifest_id, stable_id, work_id, execution_identity,
+code_manifest_identity, environment_generation, installed_package_inventory_sha256,
+code_members[], runtime_members[], standard_input_asset|null, lookup_directories[]}`. Every code/runtime
+member is a `RuntimeMember {path, sha256, kind, provenance}` naming one exact regular unaliased file.
+Every `RuntimeLookupDirectory {path, provenance}` is traversal or mount scaffolding only and grants no
+descendant read or execute authority. The manifest identity is recomputed from every listed field,
+including all member digests and both environment identities. No repository root, environment root, or
+other semantic root grant is a v2 member. Phase 0 freezes this shape; the closure compiler, driver,
+supervisor, worker policy, and OS renderers switch to it in the ordered executable-capability phase.
+
+Shutdown control flow uses `DriverShutdown(BaseException)`, never an ordinary exception. One interrupted
+invocation produces only `worker-shutdown-interrupted` / `interrupted:shutdown` operational evidence and
+no attempt or model row. Its closed details are `{invocation_id, admission_boundary, stable_id|null,
+work_id|null, execution_identity|null, request_identity|null, lease_id|null, child_pid|null,
+child_start_token|null, child_pgid|null, signal|null, parent_observation|null, partial_receipt|null}`.
+`parent_observation`, when present, is the complete parent supervisor observation; `partial_receipt` is
+non-awarding diagnostics. `DriverResult.shutdown_interruption` carries the same typed fact and the durable
+driver state name is exactly `interrupted:shutdown`. Runtime propagation and admission guards land later.
+
+Every driver invocation has one closed origin: `ordinary-run`, `manual-resume`, or `wake-callback`.
+Later wake integration must use this enum, and pause or `DriverShutdown` exits must never resolve an active
+wake episode.
+
+Artifact validation will return one read-only `ArtifactCheckpointProjection` whose transaction index is
+keyed by exact `(stable_id, work_id, transaction_id)`. Each `ArtifactTransactionProjection` retains the
+verified final/authorization identities, immutable reconstruction path/digest/inputs, normalized
+`MirrorObject` rows, and independent `ArtifactClaim` rows. The projection-level object tuple has one row
+per intrinsic physical identity; the claim tuple preserves every claim even when multiple models share
+one object digest. Reconstruction and canonical checkpoint must consume this same projection; neither may
+derive a second path-keyed or latest-event view.
+
+Current v3 `input_contract` has no `code_path` property. Presence with either null or a string rejects at
+proposal, embedded author-result, model, supervisor, and worker boundaries. Executable authorship remains
+only in the distinct `implementation.code_path` and `implementation.source_to_code_map[].code_path`
+fields. V2 history retains its untrusted historical leaf. Phase 0 intentionally does not perform the
+bundled identity/staleness bump; the later final migration recomputes identities from the frozen inputs
+above together with every other changed dependency closure.
+
 ### 5.1 `model.v2`
 
 Every accepted current view has the following complete field tree.
@@ -1432,6 +1474,8 @@ RANDOM-INITIALIZATION AND EXECUTION POLICY
   dimension or alter architecture for convenience.
 - R1 may use the closed declarative library recipe. Other runnable work must stage a typed adapter defining
   build_model() and make_dummy_call(seed, device). The returned object must expose forward.
+- Record executable paths only in implementation.code_path and source_to_code_map; input_contract has no
+  code_path field and must never carry one.
 - A transparent native adapter must record its native object type and delegated method.
 - Record every positional and keyword leaf's semantic role, shape, dtype, legal value range or distribution,
   device policy, constraints, masks/state, and all non-tensor values.
