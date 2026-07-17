@@ -46,7 +46,6 @@ from menagerie.crawler.licenses import (
     LicenseEvidenceStatus,
     LicensedArtifact,
     pre_public_merge_sweep,
-    store_licensed_artifact,
 )
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorClass, MirrorStore
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
@@ -55,6 +54,8 @@ from menagerie.crawler.tests.conftest import (
     HASH,
     NOW,
     _bind_model_identities,
+    make_licensed_artifact_fixture,
+    rebind_nonaward_parent_proof,
     bind_terminal_attempts,
     make_attempt,
     make_authority_context,
@@ -579,9 +580,17 @@ def _clean_state(
                 "probe_attempt_ids": [],
                 "explanation": "source requires the deferred platform",
             }
+            rebind_nonaward_parent_proof(attempt)
             terminal_attempts = [attempt]
             bind_terminal_attempts(model, terminal_attempts)
         if gate is not None:
+            gate["result_envelope_sha256"] = stable_hash(
+                {
+                    key: value
+                    for key, value in gate.items()
+                    if key not in {"result_envelope_sha256", "payload_sha256", "ledger_seq"}
+                }
+            )
             reducer.append_gate(gate)
         for attempt in terminal_attempts:
             reducer.append_attempt(attempt)
@@ -701,7 +710,7 @@ def test_checkpoint_derives_and_refuses_restricted_public_artifact(tmp_path: Pat
     """A restricted public-manifest row is found without a caller artifact list."""
 
     snapshot, mirrors = _clean_state(tmp_path)
-    artifact = store_licensed_artifact(
+    artifact = make_licensed_artifact_fixture(
         mirrors,
         b"restricted source",
         staged_path=Path("menagerie/crawler/evidence/restricted.txt"),

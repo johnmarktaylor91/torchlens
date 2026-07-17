@@ -518,6 +518,15 @@ def test_reducer_refuses_run_award_with_inaccurate_rung_check(tmp_path: Path) ->
     fidelity_gate = _rung_checked_fidelity_gate(AccuracyVerdict.INACCURATE)
     fidelity_gate["gate_id"] = "gate-fidelity"
     fidelity_gate["ledger_seq"] = 2
+    # Keep the proof envelope authentic so this regression reaches the intended
+    # semantic rung-check rejection rather than failing at the proof loader.
+    fidelity_gate["result_envelope_sha256"] = stable_hash(
+        {
+            key: value
+            for key, value in fidelity_gate.items()
+            if key not in {"result_envelope_sha256", "payload_sha256", "ledger_seq"}
+        }
+    )
     model = make_model(accepted=True)
     model["source_resolution"]["rung"] = "R4_REIMPLEMENT"
     model["fidelity"].update(

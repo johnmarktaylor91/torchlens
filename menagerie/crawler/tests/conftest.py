@@ -27,11 +27,24 @@ from menagerie.crawler.constants import (
     SourceRung,
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.licenses import (
+    LicenseEvidence,
+    LicensedArtifact,
+    RedistributionClass,
+    classify_redistribution,
+    recompute_license_decision,
+)
 from menagerie.crawler.metadata import (
     authored_fact_leaves,
     recompute_accepted_identities,
 )
 from menagerie.crawler.proposal import ProposalValidationReport
+from menagerie.crawler.mirrors import (
+    ArtifactOrigin,
+    MirrorClass,
+    MirrorStore,
+    RetentionClass,
+)
 from menagerie.crawler.standard_inputs import ASSET_ROOT
 
 HASH = "sha256:" + "a" * 64
@@ -54,6 +67,49 @@ _FACT_KEYS = (
     "modes",
     "fidelity",
 )
+
+
+def make_licensed_artifact_fixture(
+    mirrors: MirrorStore,
+    content: bytes,
+    *,
+    staged_path: Path,
+    origin: ArtifactOrigin,
+    evidence: tuple[LicenseEvidence, ...],
+    media_type: str = "application/octet-stream",
+) -> LicensedArtifact:
+    """Materialize explicit legacy mirror data for license-sweep unit fixtures.
+
+    This test-only constructor carries no production authorization meaning. Tests of
+    canonical publication use artifact transactions and reducer authorization directly.
+
+    Parameters
+    ----------
+    mirrors, content, staged_path, origin, evidence, media_type:
+        Explicit fixture storage and evidence inputs.
+
+    Returns
+    -------
+    LicensedArtifact
+        Data-only legacy manifest row used by checkpoint/license unit tests.
+    """
+
+    redistribution = classify_redistribution(evidence)
+    public = redistribution is RedistributionClass.PUBLIC_OK
+    manifest = mirrors.put(
+        content,
+        mirror_class=MirrorClass.PUBLIC if public else MirrorClass.PRIVATE,
+        retention_class=(
+            RetentionClass.DURABLE_PUBLIC if public else RetentionClass.RESTRICTED_PRIVATE
+        ),
+        origin=origin,
+        media_type=media_type,
+    )
+    return LicensedArtifact(
+        staged_path=staged_path,
+        manifest=manifest,
+        decision=recompute_license_decision(manifest.content_sha256, evidence),
+    )
 
 
 def make_authority_context(
@@ -521,6 +577,41 @@ def rebind_attempt_raw_proof(attempt: dict[str, Any]) -> dict[str, Any]:
     return attempt
 
 
+def rebind_nonaward_parent_proof(attempt: dict[str, Any]) -> dict[str, Any]:
+    """Rebuild exact parent-only proof after a fixture becomes non-awarding.
+
+    Parameters
+    ----------
+    attempt:
+        Current-v3 failed or observed attempt fixture.
+
+    Returns
+    -------
+    dict[str, Any]
+        The same fixture with closed empty-stream parent attestation.
+    """
+
+    parent = {
+        "attestation_version": "menagerie.crawler.parent-attestation.v2",
+        "request_nonce": f"driver-{attempt['attempt_id']}",
+        "request_sha256": HASH,
+        "completion_line_sha256": None,
+        "named_raw_award_receipt_sha256": None,
+        "exit_code": attempt["supervisor_observation"].get("exit_code"),
+        "signal": attempt["supervisor_observation"].get("signal"),
+        "timed_out": False,
+        "rss_exceeded": False,
+        "peak_rss_bytes": attempt["supervisor_observation"].get("peak_rss_bytes"),
+        "stdout_sha256": attempt["supervisor_observation"].get("stdout_sha256") or hash_bytes(b""),
+        "stderr_sha256": attempt["supervisor_observation"].get("stderr_sha256") or hash_bytes(b""),
+        "started_at": attempt["started_at"],
+        "finished_at": attempt["finished_at"],
+    }
+    parent["attestation_sha256"] = stable_hash(parent)
+    attempt["parent_attestation"] = parent
+    return attempt
+
+
 def bind_terminal_attempts(model: dict[str, Any], attempts: list[dict[str, Any]]) -> dict[str, Any]:
     """Bind a terminal model fixture to exact canonical attempt observations.
 
@@ -671,6 +762,13 @@ def make_gate(
         "author_result_schema_identity": HASH,
         "dispatcher_identity": HASH,
     }
+    proposal["result_envelope_sha256"] = stable_hash(
+        {
+            key: value
+            for key, value in proposal.items()
+            if key not in {"result_envelope_sha256", "payload_sha256", "ledger_seq"}
+        }
+    )
     return proposal
 
 

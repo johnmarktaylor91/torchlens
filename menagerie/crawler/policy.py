@@ -26,7 +26,11 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, IO, Literal, Mapping, Optional, Sequence, Union
 
-from menagerie.crawler.authority import ExecutionReadManifest as ExecutionReadManifest
+from menagerie.crawler.authority import (
+    ExecutionReadManifest as ExecutionReadManifest,
+    ExecutionReadManifestV2,
+    verify_execution_read_manifest_v2,
+)
 from menagerie.crawler.identity import hash_bytes, stable_hash
 
 _CREDENTIAL_MARKERS = (
@@ -955,7 +959,9 @@ def compile_execution_read_manifest(
     )
 
 
-def verify_execution_read_manifest(manifest: ExecutionReadManifest) -> None:
+def verify_execution_read_manifest(
+    manifest: ExecutionReadManifest | ExecutionReadManifestV2,
+) -> None:
     """Re-verify a compiled execution manifest immediately before spawn.
 
     Parameters
@@ -969,6 +975,9 @@ def verify_execution_read_manifest(manifest: ExecutionReadManifest) -> None:
         If its identity, bytes, paths, aliases, or closed kinds changed.
     """
 
+    if isinstance(manifest, ExecutionReadManifestV2):
+        verify_execution_read_manifest_v2(manifest)
+        return
     rebuilt = compile_execution_read_manifest(
         stable_id=manifest.stable_id,
         work_id=manifest.work_id,

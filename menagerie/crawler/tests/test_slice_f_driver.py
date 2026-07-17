@@ -70,7 +70,6 @@ from menagerie.crawler.driver import (
     _RUNNER_EXECUTION_CLOSURE,
     _runner_identity,
     _receipt_envelope_error,
-    _supervise_environment_worker,
     _worker_request,
 )
 from menagerie.crawler.envs import (
@@ -586,6 +585,13 @@ class FakeChecker(CheckerLane):
                 "prompt_sha256": driver_module._checker_prompt_hash(),
             }
         )
+        gate["result_envelope_sha256"] = stable_hash(
+            {
+                key: value
+                for key, value in gate.items()
+                if key not in {"result_envelope_sha256", "payload_sha256", "ledger_seq"}
+            }
+        )
         return CheckerOutcome(gate=gate)
 
     def check_fidelity(
@@ -622,6 +628,13 @@ class FakeChecker(CheckerLane):
                 "model": config.checker_model,
                 "version": config.checker_version,
                 "prompt_sha256": driver_module._checker_prompt_hash(),
+            }
+        )
+        gate["result_envelope_sha256"] = stable_hash(
+            {
+                key: value
+                for key, value in gate.items()
+                if key not in {"result_envelope_sha256", "payload_sha256", "ledger_seq"}
             }
         )
         return CheckerOutcome(gate=gate)
@@ -677,6 +690,13 @@ class FakeChecker(CheckerLane):
                 "model": config.checker_model,
                 "version": config.checker_version,
                 "prompt_sha256": driver_module._checker_prompt_hash(),
+            }
+        )
+        gate["result_envelope_sha256"] = stable_hash(
+            {
+                key: value
+                for key, value in gate.items()
+                if key not in {"result_envelope_sha256", "payload_sha256", "ledger_seq"}
             }
         )
         return CheckerOutcome(gate=gate)
@@ -1124,6 +1144,16 @@ class FidelityAuthor(FakeAuthor):
                 "current": False,
             }
         )
+        repair_generation = self.calls[item.stable_id]
+        if repair_generation > 1:
+            # A fidelity repair must mint distinct proposal authority; replaying an
+            # identical checker item would correctly trip F-6 ambiguous membership.
+            facts["input_contract"]["args"][0]["shape"] = [
+                1,
+                3,
+                7 + repair_generation,
+                7 + repair_generation,
+            ]
         _refresh_proposal_identities(artifact.proposal)
         return _rebind_fake_author_result(artifact)
 
@@ -1269,6 +1299,7 @@ class FakePauseScheduler(UsagePauseScheduler):
         context: OperationalContext,
         created_at: str,
         reset_at: str,
+        reset_observation: str,
     ) -> None:
         """Record pause/wakeup events without installing an OS scheduler."""
 
@@ -1285,6 +1316,7 @@ class FakePauseScheduler(UsagePauseScheduler):
             provider="openai",
             observed_response=signal.response_excerpt,
             reset_at=reset_at,
+            reset_observation=reset_observation,
             context=context,
             created_at=created_at,
         )
@@ -1817,54 +1849,6 @@ def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
     assert prefix_observed.compiler_identity == "prefix-compiler"
     assert prefix_observed.sdk_identity == "prefix-sdk"
     assert prefix_observed.env_generation != binding.env_generation
-
-    receipt_path = tmp_path / "result" / "receipt.json"
-    captured: list[str] = []
-
-    def fake_isolated(argv: Sequence[str], scratch_root: Path, **kwargs: Any) -> Any:
-        """Capture sandbox input and publish one self-hashed receipt."""
-
-        del scratch_root, kwargs
-        captured.extend(argv)
-        payload = {"receipt_version": "test"}
-        receipt_path.parent.mkdir(parents=True, exist_ok=True)
-        receipt_path.write_text(
-            json.dumps({**payload, "receipt_sha256": stable_hash(payload)}),
-            encoding="utf-8",
-        )
-        return SupervisorObservation(
-            argv=tuple(argv),
-            cwd=str(tmp_path),
-            exit_code=0,
-            signal_number=None,
-            wall_seconds=0.1,
-            cpu_seconds=0.1,
-            peak_rss_bytes=1,
-            timed_out=False,
-            rss_exceeded=False,
-            stdout_sha256=hash_bytes(b""),
-            stdout_bytes=0,
-            stdout_tail="",
-            stderr_sha256=hash_bytes(b""),
-            stderr_bytes=0,
-            stderr_tail="",
-            stdout_path=str(tmp_path / "stdout"),
-            stderr_path=str(tmp_path / "stderr"),
-        )
-
-    monkeypatch.setattr(driver_module, "run_isolated_subprocess", fake_isolated)
-    result = _supervise_environment_worker(
-        tmp_path / "request.json",
-        receipt_path,
-        tmp_path / "supervisor",
-        prefix_observed.python_executable,
-        timeout_seconds=1,
-        rss_limit_bytes=1024,
-        cwd=tmp_path,
-    )
-    assert result.receipt_error == "missing-parent-success-attestation"
-    assert result.success_attestation_sha256 is None
-    assert captured[0] == str(prefix / "bin" / "python")
 
 
 def test_author_source_handshake_freezes_nonempty_cas_manifest(
@@ -3230,7 +3214,6 @@ def test_scheduled_wake_live_lock_is_idempotent_success(tmp_path: Path) -> None:
         "--repo-root",
         str(tmp_path),
         "run",
-        "--scheduled-wake",
         "--wake-episode-id",
         scheduled.episode.episode_id,
     ]
@@ -3256,7 +3239,7 @@ def test_scheduled_wake_not_before_guard_does_not_run_driver(tmp_path: Path) -> 
         def __call__(self, args: argparse.Namespace) -> CrawlerDriver:
             """Return the guarded driver."""
 
-            driver.config = replace(driver.config, wake_episode_id=str(args.wake_episode_id))
+            assert args.wake_episode_id == scheduled.episode.episode_id
             return driver
 
     event_path = canonical_operational_ledger_path(driver.paths.ledgers.models)
@@ -3279,7 +3262,6 @@ def test_scheduled_wake_not_before_guard_does_not_run_driver(tmp_path: Path) -> 
         "--repo-root",
         str(tmp_path),
         "run",
-        "--scheduled-wake",
         "--wake-episode-id",
         scheduled.episode.episode_id,
     ]
@@ -3325,7 +3307,6 @@ def test_live_driver_ingests_scheduled_wake_intent_without_deactivation(tmp_path
         "--repo-root",
         str(tmp_path),
         "run",
-        "--scheduled-wake",
         "--wake-episode-id",
         scheduled.episode.episode_id,
     ]

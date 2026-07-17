@@ -18,9 +18,11 @@ from menagerie.crawler.constants import FidelityVerdict
 from menagerie.crawler.licenses import (
     LicenseEvidence,
     LicenseEvidenceStatus,
-    store_licensed_artifact,
 )
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
+from menagerie.crawler.tests.conftest import (
+    make_licensed_artifact_fixture,
+)
 from menagerie.crawler.retro_audit import (
     CampaignWave,
     LegacyAuditItem,
@@ -138,7 +140,7 @@ def test_checkpoint_refuses_restricted_public_artifact(tmp_path: Path) -> None:
     """The checkpoint converts a failed license sweep into typed validation refusal."""
 
     mirrors = _mirrors(tmp_path)
-    restricted = store_licensed_artifact(
+    restricted = make_licensed_artifact_fixture(
         mirrors,
         b"restricted",
         staged_path=Path("menagerie/crawler/mirrors/private-manifest.jsonl"),

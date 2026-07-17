@@ -434,7 +434,9 @@ def _current_gate(
         "author_result_schema_identity": HASH_C,
         "dispatcher_identity": HASH_D,
     }
-    gate["result_envelope_sha256"] = stable_hash(gate)
+    gate["result_envelope_sha256"] = stable_hash(
+        {key: value for key, value in gate.items() if key != "ledger_seq"}
+    )
     gate["payload_sha256"] = payload_hash(gate)
     return gate
 

@@ -12,7 +12,6 @@ from menagerie.crawler.licenses import (
     PublicMergeRejected,
     RedistributionClass,
     pre_public_merge_sweep,
-    store_licensed_artifact,
 )
 from menagerie.crawler.mirrors import (
     ArtifactOrigin,
@@ -20,6 +19,9 @@ from menagerie.crawler.mirrors import (
     MirrorHashMismatchError,
     MirrorStore,
     RetentionClass,
+)
+from menagerie.crawler.tests.conftest import (
+    make_licensed_artifact_fixture,
 )
 
 
@@ -109,7 +111,7 @@ def test_restricted_bytes_stay_private_and_public_sweep_rejects(tmp_path: Path) 
     """GPL bytes remain private and cannot pass a staged public sweep."""
 
     mirrors = _mirrors(tmp_path)
-    artifact = store_licensed_artifact(
+    artifact = make_licensed_artifact_fixture(
         mirrors,
         b"restricted",
         staged_path=Path("menagerie/crawler/mirrors/restricted.bin"),
@@ -126,7 +128,7 @@ def test_unknown_license_rejected_but_public_ok_passes(tmp_path: Path) -> None:
     """Unknown disposition fails closed while evidence-backed MIT bytes pass."""
 
     mirrors = _mirrors(tmp_path)
-    unknown = store_licensed_artifact(
+    unknown = make_licensed_artifact_fixture(
         mirrors,
         b"unknown",
         staged_path=Path("menagerie/crawler/mirrors/unknown.bin"),
@@ -135,7 +137,7 @@ def test_unknown_license_rejected_but_public_ok_passes(tmp_path: Path) -> None:
     )
     with pytest.raises(PublicMergeRejected):
         pre_public_merge_sweep([unknown], mirrors)
-    public = store_licensed_artifact(
+    public = make_licensed_artifact_fixture(
         mirrors,
         b"permissive",
         staged_path=Path("menagerie/crawler/mirrors/permissive.bin"),

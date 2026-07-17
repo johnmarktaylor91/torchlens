@@ -15,12 +15,14 @@ from menagerie.crawler.intake import create_intake_snapshot
 from menagerie.crawler.licenses import (
     LicenseEvidence,
     LicenseEvidenceStatus,
-    store_licensed_artifact,
 )
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.recordio import JsonlLedger
-from menagerie.crawler.tests.conftest import make_model
+from menagerie.crawler.tests.conftest import (
+    make_licensed_artifact_fixture,
+    make_model,
+)
 from menagerie.crawler.tools.license_sweep import main as license_sweep_main
 from menagerie.crawler.tools.rebuild_views import main as rebuild_views_main
 from menagerie.crawler.tools.requeue import main as requeue_main
@@ -114,7 +116,7 @@ def test_license_sweep_rejects_restricted_staged_artifact(tmp_path: Path) -> Non
             spdx="GPL-3.0-only",
         ),
     )
-    artifact = store_licensed_artifact(
+    artifact = make_licensed_artifact_fixture(
         mirrors,
         b"restricted",
         staged_path=Path("menagerie/crawler/ports/restricted.py"),

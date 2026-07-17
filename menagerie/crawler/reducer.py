@@ -29,6 +29,7 @@ from menagerie.crawler.authority import (
     FamilyAuthority,
     PublicationAuthorization,
     TerminalProof,
+    authenticate_accepted_attempts,
     derive_attempt_projection,
     dependency_vector_projection,
     derive_dependency_vector,
@@ -39,6 +40,9 @@ from menagerie.crawler.authority import (
     derive_terminal_proof,
     family_authority_projection,
     mode_summary_projection,
+    load_current_attempt_proof,
+    load_current_gate_proof,
+    resolve_exact_gate_item_membership,
     validate_currency,
 )
 
@@ -917,6 +921,57 @@ class CanonicalReducer:
             return projected
         return self._current
 
+    def _current_attempt_records(self) -> tuple[Mapping[str, Any], ...]:
+        """Return only attempts carrying authenticated current-v3 proof authority.
+
+        Returns
+        -------
+        tuple[Mapping[str, Any], ...]
+            Current authenticated attempts in immutable ledger order. Legacy rows
+            remain readable audit history but cannot participate in model authority.
+
+        Raises
+        ------
+        ReductionError
+            If a purported current-v3 row fails its proof replay.
+        """
+
+        current: list[Mapping[str, Any]] = []
+        for attempt in self._attempts.records:
+            if attempt.get("schema_version") != ATTEMPT_SCHEMA_VERSION_V3:
+                continue
+            try:
+                load_current_attempt_proof(attempt)
+            except AuthorityDerivationError as exc:
+                raise ReductionError(str(exc)) from exc
+            current.append(attempt)
+        return tuple(current)
+
+    def _current_gate_records(self) -> tuple[Mapping[str, Any], ...]:
+        """Return only gates carrying authenticated current-v3 proof authority.
+
+        Returns
+        -------
+        tuple[Mapping[str, Any], ...]
+            Current authenticated gates in immutable ledger order.
+
+        Raises
+        ------
+        ReductionError
+            If a purported current-v3 gate fails its proof replay.
+        """
+
+        current: list[Mapping[str, Any]] = []
+        for gate in self._gates.records:
+            if gate.get("schema_version") != GATE_SCHEMA_VERSION_V3:
+                continue
+            try:
+                load_current_gate_proof(gate)
+            except AuthorityDerivationError as exc:
+                raise ReductionError(str(exc)) from exc
+            current.append(gate)
+        return tuple(current)
+
     def append_attempt(self, attempt: Mapping[str, Any]) -> AppendResult:
         """Append one immutable attempt after parent/work validation.
 
@@ -1356,12 +1411,14 @@ class CanonicalReducer:
                         license_identity = terminal.get("license_identity")
                         evidence_identity = terminal.get("evidence_identity", evidence_identity)
         try:
+            current_attempts = self._current_attempt_records()
+            current_gates = self._current_gate_records()
             terminal_proof = derive_terminal_proof(
                 stable_id,
                 work_id,
                 str(model.get("status", {}).get("code")),
-                attempts=self._attempts.records,
-                gates=self._gates.records,
+                attempts=current_attempts,
+                gates=current_gates,
                 source_manifest=source_manifest,
                 evidence_excerpts=evidence_excerpts,
                 source_resolution=source_resolution,
@@ -1391,7 +1448,7 @@ class CanonicalReducer:
 
         relevant = tuple(
             attempt
-            for attempt in self._attempts.records
+            for attempt in current_attempts
             if attempt.get("stable_id") == stable_id and attempt.get("work_id") == work_id
         )
         expected_per_mode = derive_per_mode_run(
@@ -1420,7 +1477,7 @@ class CanonicalReducer:
                 raise ReductionError(f"modes.{field} contradicts reducer-derived mode authority")
         if model.get("status", {}).get("kind") != "runs":
             expected_observed = derive_terminal_observation(
-                self._attempts.records,
+                current_attempts,
                 stable_id=stable_id,
                 work_id=work_id,
             )
@@ -1444,7 +1501,7 @@ class CanonicalReducer:
         }
         proof_environment_generations = {
             attempt.get("identities", {}).get("environment")
-            for attempt in self._attempts.records
+            for attempt in current_attempts
             if attempt.get("attempt_id") in proof_attempt_ids
             and isinstance(attempt.get("identities", {}).get("environment"), str)
         }
@@ -1702,22 +1759,20 @@ class CanonicalReducer:
         raw_vector["accepted_attempt_ids"] = tuple(raw_vector["accepted_attempt_ids"])
         raw_vector["artifact_claim_ids"] = ()
         provisional = DependencyVector(**raw_vector)
-        gate_id = str(accepted_gate_item.get("gate_id") or "")
-        if not gate_id:
-            gate_id = next(
-                (
-                    str(gate["gate_id"])
-                    for gate in reversed(self._gates.records)
-                    if accepted_gate_item in gate.get("items", [])
-                ),
-                "",
+        gate_item_sha256 = stable_hash(accepted_gate_item)
+        try:
+            owning_gate, ledger_gate_item = resolve_exact_gate_item_membership(
+                self._gates.records,
+                accepted_gate_item=accepted_gate_item,
+                accepted_gate_item_sha256=gate_item_sha256,
             )
-        if not gate_id:
-            raise ReductionError("accepted artifact gate item has no owning gate")
+        except AuthorityDerivationError as exc:
+            raise ReductionError(str(exc)) from exc
+        gate_id = str(owning_gate["gate_id"])
         authorization_id = derive_publication_authorization_id(
             staged,
             accepted_gate_id=gate_id,
-            accepted_gate_item_sha256=stable_hash(accepted_gate_item),
+            accepted_gate_item_sha256=gate_item_sha256,
             dependency_vector=provisional,
             decisions=decisions,
             publication_policy_identity=self.context.publication_policy_identity,
@@ -1749,7 +1804,7 @@ class CanonicalReducer:
             work_id=str(staged.event["work_id"]),
             transaction_id=staged.transaction_id,
             accepted_gate_id=gate_id,
-            accepted_gate_item_sha256=stable_hash(accepted_gate_item),
+            accepted_gate_item_sha256=gate_item_sha256,
             dependency_vector=final_vector,
             claim_ids=tuple(claim.claim_id for claim in claims),
             public_object_ids=public_object_ids,
@@ -1760,7 +1815,7 @@ class CanonicalReducer:
             staged,
             authorization,
             claims,
-            accepted_gate_item=accepted_gate_item,
+            accepted_gate_item=ledger_gate_item,
             event_kind=(
                 ArtifactEventKind.TERMINAL_AUTHORIZED
                 if terminal
@@ -1990,6 +2045,12 @@ class CanonicalReducer:
         gate = self._gate_index().get(str(gate_id))
         if gate is None:
             return None
+        if gate.get("schema_version") != GATE_SCHEMA_VERSION_V3:
+            return None
+        try:
+            load_current_gate_proof(gate)
+        except AuthorityDerivationError as exc:
+            raise ReductionError(str(exc)) from exc
         matches = [item for item in gate["items"] if item["stable_id"] == stable_id]
         if len(matches) != 1:
             return None
@@ -2585,108 +2646,6 @@ class CanonicalReducer:
         latest = rejected_fingerprints[-1]
         return len(rejected_fingerprints) > 2 or latest in rejected_fingerprints[:-1]
 
-    def _validate_terminal_evidence(self, model: Mapping[str, Any]) -> None:
-        """Require canonical, status-bound evidence for every non-run terminal.
-
-        Parameters
-        ----------
-        model:
-            Candidate model revision.
-
-        Raises
-        ------
-        ReductionError
-            If attempts, observations, gates, or status facts do not form a
-            closed reducer-derived terminal proof.
-        """
-
-        status = model.get("status", {})
-        kind = status.get("kind")
-        if kind == "runs":
-            return
-        status_ids = status.get("attempt_ids", [])
-        measurement_ids = model.get("observed", {}).get("measurement_attempt_ids", [])
-        if (
-            not isinstance(status_ids, list)
-            or len(status_ids) != len(set(status_ids))
-            or measurement_ids != status_ids
-        ):
-            raise ReductionError(
-                "terminal attempts and observed measurement references must match exactly"
-            )
-        attempts_by_id = self._attempt_index()
-        attempts: list[Mapping[str, Any]] = []
-        for attempt_id in status_ids:
-            attempt = attempts_by_id.get(str(attempt_id))
-            if attempt is None:
-                raise ReductionError(f"terminal evidence attempt is missing: {attempt_id}")
-            if attempt.get("stable_id") != model.get("stable_id"):
-                raise ReductionError("terminal evidence attempt belongs to another model")
-            attempts.append(attempt)
-        work_ids = {str(attempt.get("work_id")) for attempt in attempts}
-        if len(work_ids) > 1:
-            raise ReductionError("terminal observation spans multiple work generations")
-        expected_observed = derive_terminal_observation(
-            attempts,
-            stable_id=str(model.get("stable_id")),
-            work_id=next(iter(work_ids), DependencyState.NOT_APPLICABLE.value),
-        )
-        if model.get("observed") != expected_observed:
-            raise ReductionError("terminal observed facts contradict referenced attempt receipts")
-        mode_attempt_ids = {
-            str(value.get("attempt_id"))
-            for value in model.get("modes", {}).get("per_mode_run", {}).values()
-            if isinstance(value, Mapping) and value.get("attempt_id") is not None
-        }
-        if not mode_attempt_ids.issubset({str(value) for value in status_ids}):
-            raise ReductionError("terminal mode outcome references unbound attempt evidence")
-        code = str(status.get("code"))
-        if kind == "failed":
-            matching_failures = []
-            for attempt in attempts:
-                error = attempt.get("error")
-                if (
-                    attempt.get("result") == "failed"
-                    and attempt.get("stage") == status.get("stage")
-                    and isinstance(error, Mapping)
-                    and error.get("stage") == status.get("stage")
-                    and error.get("reason_code") == status.get("reason_code")
-                    and error.get("root_cause_fingerprint") == status.get("root_cause_fingerprint")
-                ):
-                    matching_failures.append(attempt)
-            gate_valid = bool(
-                code == "failed:accuracy-gate"
-                and self._terminal_gate_evidence_valid(model, "metadata_batch")
-            ) or bool(
-                code == "failed:fidelity" and self._terminal_gate_evidence_valid(model, "fidelity")
-            )
-            missing_source_conversion = bool(
-                code == "failed:source"
-                and status.get("reason_code") == "missing-mandatory-link"
-                and model.get("source_resolution", {}).get("mandatory_link_status") == "failed"
-                and any(attempt.get("result") == "failed" for attempt in attempts)
-            )
-            if not matching_failures and not gate_valid and not missing_source_conversion:
-                raise ReductionError("failed terminal lacks exact attempt or closed gate evidence")
-        elif kind == "deferred":
-            if not attempts:
-                raise ReductionError("deferred terminal lacks its canonical attempt evidence")
-        elif kind == "skipped":
-            accuracy = model.get("accuracy_gate", {})
-            found = self._gate_item(accuracy.get("gate_id"), str(model.get("stable_id")))
-            resolution = model.get("source_resolution", {})
-            if (
-                found is None
-                or found[0].get("gate_kind") != "metadata_batch"
-                or found[1].get("verdict") != "accurate"
-                or found[1].get("integrity", {}).get("verdict") != "accurate"
-                or found[1].get("rung_check", {}).get("verdict") != "accurate"
-                or resolution.get("rung") != "R5_SKIP"
-            ):
-                raise ReductionError("skipped terminal lacks an accurate R5 checker decision")
-        else:
-            raise ReductionError("terminal status kind has no canonical evidence rule")
-
     def _validate_execution(self, model: Mapping[str, Any]) -> None:
         """Enforce attempt/receipt and meaningful-mode rules for run awards.
 
@@ -2765,11 +2724,24 @@ class CanonicalReducer:
         accepted_in_order = execution.get("accepted_attempt_ids", [])
         if not isinstance(accepted_in_order, list) or len(accepted_in_order) != len(accepted):
             raise ReductionError("accepted execution attempt IDs must be a unique ordered list")
+        try:
+            authenticated_attempts = authenticate_accepted_attempts(
+                accepted_in_order,
+                self._attempts.records,
+                stable_id=str(stable_id),
+                execution_identity=str(execution.get("execution_identity")),
+            )
+        except AuthorityDerivationError as exc:
+            raise ReductionError(str(exc)) from exc
+        authenticated_by_id = {
+            authority.attempt_id: authority for authority in authenticated_attempts
+        }
         for attempt_id in accepted:
             attempt = attempts_by_id.get(attempt_id)
             if attempt is None:
                 raise ReductionError("accepted execution attempt is missing")
-            accepted_work_ids.add(str(attempt.get("work_id")))
+            authority = authenticated_by_id[attempt_id]
+            accepted_work_ids.add(authority.work_id)
             identities = attempt.get("identities", {})
             receipt = attempt.get("worker_receipt", {})
             policy = attempt.get("policy_observation", {})
@@ -3262,74 +3234,6 @@ def _referenced_evidence_repasses(
         if gate is None:
             raise ReductionError(f"referenced gate is missing: {gate_id}")
         replay.append_gate(gate)
-
-
-def validate_reconstruction_source_binding(
-    proposal: Mapping[str, Any], source_manifest: Mapping[str, Any], canonical_root: Path
-) -> None:
-    """Bind canonical source rows to the exact gate-anchored proposal source facts.
-
-    Parameters
-    ----------
-    proposal:
-        Exact proposal named by the accepted gate or pending record.
-    source_manifest:
-        Canonicalized reconstruction source manifest.
-    canonical_root:
-        Resolved canonical crawler root containing ``source_cas``.
-
-    Raises
-    ------
-    ReductionError
-        If canonical source identity, origin, content, or CAS location diverges.
-    """
-
-    proposed_facts = proposal.get("proposed_facts")
-    resolution = (
-        proposed_facts.get("source_resolution") if isinstance(proposed_facts, Mapping) else None
-    )
-    proposed_sources = resolution.get("sources") if isinstance(resolution, Mapping) else None
-    canonical_sources = source_manifest.get("sources")
-    if not isinstance(proposed_sources, list) or not isinstance(canonical_sources, list):
-        raise ReductionError("reconstruction source basis is missing from its anchored proposal")
-    by_id = {
-        str(source.get("source_id")): source
-        for source in proposed_sources
-        if isinstance(source, Mapping) and isinstance(source.get("source_id"), str)
-    }
-    canonical_ids = [
-        str(source.get("source_id"))
-        for source in canonical_sources
-        if isinstance(source, Mapping) and isinstance(source.get("source_id"), str)
-    ]
-    if len(by_id) != len(proposed_sources) or len(canonical_ids) != len(canonical_sources):
-        raise ReductionError("reconstruction source basis contains ambiguous source identities")
-    if len(canonical_ids) != len(set(canonical_ids)):
-        raise ReductionError("reconstruction source basis repeats a proposal source")
-    source_cas_root = (canonical_root / "source_cas").resolve()
-    for source in canonical_sources:
-        if not isinstance(source, Mapping):
-            raise ReductionError("reconstruction source basis contains a malformed row")
-        proposed = by_id.get(str(source.get("source_id")))
-        if proposed is None:
-            raise ReductionError("reconstruction source is absent from its anchored proposal")
-        for field in ("url", "revision", "content_sha256"):
-            if source.get(field) != proposed.get(field):
-                raise ReductionError(
-                    f"reconstruction source {field} differs from its anchored proposal"
-                )
-        digest = str(source.get("content_sha256", "")).removeprefix("sha256:")
-        expected = source_cas_root / f"{digest}.source"
-        cas_path = source.get("cas_path")
-        if not isinstance(cas_path, str):
-            raise ReductionError("reconstruction source has no canonical CAS locator")
-        repo_root = canonical_root.parents[1]
-        observed = (repo_root / cas_path).resolve()
-        if observed != expected or not observed.is_relative_to(source_cas_root):
-            raise ReductionError("reconstruction source CAS locator is not content-addressed")
-    verified = proposal.get("verified_hashes")
-    if not isinstance(verified, Mapping) or not isinstance(verified.get("source_manifest"), str):
-        raise ReductionError("anchored proposal lacks its verified source-manifest identity")
 
 
 def project_dependency_current(

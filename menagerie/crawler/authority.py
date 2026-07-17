@@ -7,7 +7,7 @@ import json
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Iterable, Mapping, NewType, Optional, Sequence
+from typing import Any, Iterable, Iterator, Mapping, NewType, Optional, Sequence
 
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION_V3,
@@ -340,6 +340,20 @@ class RuntimeMember:
     kind: str
     provenance: str
 
+    def __iter__(self) -> Iterator[Path | str]:
+        """Yield the legacy code-member tuple for enforcement adapters.
+
+        Yields
+        ------
+        pathlib.Path | str
+            Path, digest, then kind. Provenance remains available only on the
+            typed member and is never discarded from manifest identity.
+        """
+
+        yield self.path
+        yield self.sha256
+        yield self.kind
+
 
 @dataclass(frozen=True)
 class RuntimeLookupDirectory:
@@ -371,6 +385,19 @@ class ExecutionReadManifestV2:
     runtime_members: tuple[RuntimeMember, ...]
     standard_input_asset: Optional[tuple[Path, str, str]]
     lookup_directories: tuple[RuntimeLookupDirectory, ...]
+
+    @property
+    def runtime_support(self) -> tuple[tuple[Path, str], ...]:
+        """Return exact runtime files through the legacy enforcement adapter.
+
+        Returns
+        -------
+        tuple[tuple[pathlib.Path, str], ...]
+            Every exact runtime member labeled ``runtime-file``. Lookup directories
+            are intentionally absent because they grant no descendant authority.
+        """
+
+        return tuple((member.path, "runtime-file") for member in self.runtime_members)
 
 
 @dataclass(frozen=True)
@@ -1736,8 +1763,16 @@ def _validate_nonaward_parent_projection(attempt: Mapping[str, Any]) -> None:
         ("exit_code", supervisor.get("exit_code"), parent.get("exit_code")),
         ("signal", supervisor.get("signal"), parent.get("signal")),
         ("peak_rss_bytes", supervisor.get("peak_rss_bytes"), parent.get("peak_rss_bytes")),
-        ("stdout_sha256", supervisor.get("stdout_sha256"), parent.get("stdout_sha256")),
-        ("stderr_sha256", supervisor.get("stderr_sha256"), parent.get("stderr_sha256")),
+        (
+            "stdout_sha256",
+            supervisor.get("stdout_sha256") or hash_bytes(b""),
+            parent.get("stdout_sha256"),
+        ),
+        (
+            "stderr_sha256",
+            supervisor.get("stderr_sha256") or hash_bytes(b""),
+            parent.get("stderr_sha256"),
+        ),
         ("started_at", attempt.get("started_at"), parent.get("started_at")),
         ("finished_at", attempt.get("finished_at"), parent.get("finished_at")),
     )
@@ -2315,7 +2350,7 @@ def load_current_gate_proof(gate: Mapping[str, Any]) -> Mapping[str, Any]:
     result_payload = {
         key: value
         for key, value in gate.items()
-        if key not in {"result_envelope_sha256", "payload_sha256"}
+        if key not in {"result_envelope_sha256", "payload_sha256", "ledger_seq"}
     }
     if gate.get("result_envelope_sha256") != stable_hash(result_payload):
         raise AuthorityDerivationError("current gate result-envelope self-hash is invalid")

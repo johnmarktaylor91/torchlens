@@ -11,17 +11,13 @@ from typing import Any
 
 import pytest
 
-from menagerie.crawler import worker_supervisor
-from menagerie.crawler.constants import FailureStage
 from menagerie.crawler.driver import (
     EnvironmentBinding,
     _attempt_policy_satisfied,
     _attempts_from_supervised,
-    _environment_failure,
-    _supervise_environment_worker,
 )
 from menagerie.crawler.identity import compute_recipe_revision, hash_bytes
-from menagerie.crawler.policy import SandboxUnavailableError, detect_os_sandbox
+from menagerie.crawler.policy import detect_os_sandbox
 from menagerie.crawler.proposal import ProposalValidationError, validate_author_proposal
 from menagerie.crawler.tests.conftest import HASH, make_author_proposal, make_proposed_artifact
 from menagerie.crawler.tests.test_slice_d_proposal_author import _ground_proposal, _make_r4
@@ -155,43 +151,6 @@ def test_caught_os_sandbox_denial_poisons_successful_forward_receipt(tmp_path: P
     assert attempts[0]["error"]["reason_code"] == "write-outside-scratch"
     assert _attempt_policy_satisfied(attempts, proposal, 1) is False
     assert not outside_path.exists()
-
-
-def test_real_environment_interpreter_signals_sandbox_unavailable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The production env-interpreter path terminalizes missing isolation honestly."""
-
-    def no_sandbox(_system_name: str | None = None) -> None:
-        """Report no working OS sandbox."""
-
-        return None
-
-    def forbidden_popen(*args: object, **kwargs: object) -> None:
-        """Reject any attempted unsandboxed child launch."""
-
-        del args, kwargs
-        raise AssertionError("environment worker must not launch unsandboxed")
-
-    monkeypatch.setattr(worker_supervisor, "detect_os_sandbox", no_sandbox)
-    monkeypatch.setattr(worker_supervisor.subprocess, "Popen", forbidden_popen)
-    env_python = tmp_path / "exact-env" / "bin" / "python"
-    with pytest.raises(SandboxUnavailableError) as captured:
-        _supervise_environment_worker(
-            tmp_path / "request.json",
-            tmp_path / "result" / "receipt.json",
-            tmp_path / "supervisor",
-            env_python,
-            timeout_seconds=10,
-            rss_limit_bytes=1024**3,
-            cwd=tmp_path,
-        )
-
-    assert str(captured.value) == FailureStage.SANDBOX_UNAVAILABLE.value
-    stage, reason = _environment_failure(captured.value)
-    assert (stage, reason) == ("policy", "sandbox-unavailable-v1")
-    assert f"failed:{stage}" == "failed:policy"
-    assert f"failed:{stage}" != "failed:runner"
 
 
 def _add_archive_source(

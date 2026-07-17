@@ -8,10 +8,11 @@ import os
 import shlex
 import shutil
 import sys
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Optional, Protocol, Sequence
 
-from menagerie.crawler.authority import build_authority_context
+from menagerie.crawler.authority import AuthorityContext, build_authority_context
 from menagerie.crawler.checkpoint import (
     CheckpointError,
     append_canonical_requeue_grant,
@@ -20,6 +21,8 @@ from menagerie.crawler.checkpoint import (
     create_canonical_checkpoint,
 )
 from menagerie.crawler.constants import (
+    InvocationOrigin,
+    OPERATIONAL_EVENT_SCHEMA_VERSION,
     OperationalEventStatus,
 )
 from menagerie.crawler.doctor import DoctorConfig, DoctorError, DoctorProbes, run_doctor
@@ -41,14 +44,17 @@ from menagerie.crawler.driver import (
     utc_now,
 )
 from menagerie.crawler.envs import load_environment_registry
-from menagerie.crawler.intake import create_intake_snapshot, load_intake_snapshot
+from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot, load_intake_snapshot
 from menagerie.crawler.recordio import SingleWriterError
-from menagerie.crawler.recordio import scan_jsonl
+from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import materialize_current
 from menagerie.crawler.routing import ModelRequirements, phase_routes, route_model
 from menagerie.crawler.status import funnel_counts, partition_report, wakeup_status
 from menagerie.crawler.wakeup import (
+    OperationalContext,
+    WakeupManager,
     reduce_wake_episodes,
+    render_wakeup_status,
     write_fire_intent,
 )
 
@@ -115,6 +121,13 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--full", action="store_true")
     status.add_argument("--verify-partition", action="store_true")
 
+    wake = subparsers.add_parser("wake", help="inspect or cancel durable wake episodes")
+    wake.add_argument("--records-root", type=Path)
+    wake_actions = wake.add_subparsers(dest="wake_command", required=True)
+    wake_actions.add_parser("status", help="print durable wake episode state")
+    wake_cancel = wake_actions.add_parser("cancel", help="cancel one exact wake episode")
+    wake_cancel.add_argument("episode_id")
+
     checkpoint = subparsers.add_parser("checkpoint", help="verify ledgers and disposable views")
     _add_intake_argument(checkpoint)
     checkpoint.add_argument("--records-root", type=Path)
@@ -176,6 +189,8 @@ def main(
             return _plan_command(args)
         if args.command == "status":
             return _status_command(args)
+        if args.command == "wake":
+            return _wake_command(args)
         if args.command == "checkpoint":
             return _checkpoint_command(args)
         if args.command == "teardown":
@@ -236,7 +251,6 @@ def _add_driver_config_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--notify-command")
     parser.add_argument("--run-id", default="crawler-run")
-    parser.add_argument("--scheduled-wake", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--wake-episode-id", help=argparse.SUPPRESS)
     parser.add_argument(
         "--author-command",
@@ -323,15 +337,24 @@ def _driver_command(args: argparse.Namespace, factory: DriverFactory) -> int:
 
     driver = factory(args)
     after_review = bool(getattr(args, "after_review", False))
-    scheduled_wake = bool(getattr(args, "scheduled_wake", False))
     raw_episode_id = getattr(args, "wake_episode_id", None)
     episode_id = raw_episode_id if isinstance(raw_episode_id, str) else None
-    if scheduled_wake and episode_id is None:
-        raise ValueError("scheduled wake callbacks require --wake-episode-id")
+    origin = (
+        InvocationOrigin.WAKE_CALLBACK
+        if episode_id is not None
+        else InvocationOrigin.MANUAL_RESUME
+        if args.command == "resume" or bool(getattr(args, "resume", False))
+        else InvocationOrigin.ORDINARY_RUN
+    )
+    driver.config = replace(
+        driver.config,
+        invocation_origin=origin,
+        wake_episode_id=episode_id,
+    )
     try:
         result: DriverResult = driver.run(after_review=after_review)
     except DriverLockError:
-        if not scheduled_wake:
+        if origin is not InvocationOrigin.WAKE_CALLBACK:
             raise
         if not isinstance(episode_id, str):
             raise AssertionError("validated wake episode identity was lost")
@@ -348,8 +371,14 @@ def _driver_command(args: argparse.Namespace, factory: DriverFactory) -> int:
         )
         return EXIT_OK
     output: dict[str, object] = dict(result.__dict__)
+    if result.shutdown_interruption is not None:
+        output["shutdown_interruption"] = asdict(result.shutdown_interruption)
     if bool(getattr(args, "dry_run", False)):
-        current = materialize_current(driver.paths.ledgers)
+        snapshot = load_intake_snapshot(driver.paths.intake_root)
+        current = materialize_current(
+            driver.paths.ledgers,
+            context=_snapshot_authority_context(snapshot, driver.config),
+        )
         output.update({"dry_run": True, "funnel": funnel_counts(current)})
     print(json.dumps(output, sort_keys=True))
     return EXIT_PAUSED if result.paused_reason is not None else EXIT_OK
@@ -403,8 +432,17 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
         progress_milestones=tuple(args.progress_milestones),
         notify_command=args.notify_command,
         only_status=getattr(args, "only_status", None),
+        invocation_origin=(
+            InvocationOrigin.WAKE_CALLBACK
+            if getattr(args, "wake_episode_id", None) is not None
+            else InvocationOrigin.MANUAL_RESUME
+            if args.command == "resume" or bool(getattr(args, "resume", False))
+            else InvocationOrigin.ORDINARY_RUN
+        ),
         wake_episode_id=(
-            str(args.wake_episode_id) if bool(getattr(args, "scheduled_wake", False)) else None
+            str(args.wake_episode_id)
+            if getattr(args, "wake_episode_id", None) is not None
+            else None
         ),
     )
     dependencies = DriverDependencies(
@@ -430,6 +468,23 @@ def _required_command(value: Optional[str], lane: str) -> tuple[str, ...]:
     return command
 
 
+def _snapshot_authority_context(
+    snapshot: IntakeSnapshot,
+    config: DriverConfig,
+) -> AuthorityContext:
+    """Build current projection authority for a loaded intake snapshot."""
+
+    return build_authority_context(
+        active_intake_snapshot_id=snapshot.snapshot_id,
+        active_intake_snapshot_sha256=snapshot.snapshot_sha256,
+        intake_rows=(item.to_dict() for item in snapshot.items),
+        author_model=config.author_model,
+        author_version=config.author_version,
+        checker_model=config.checker_model,
+        checker_version=config.checker_version,
+    )
+
+
 def _status_command(args: argparse.Namespace) -> int:
     """Print current funnel and optional exact partition diagnostics."""
 
@@ -443,7 +498,10 @@ def _status_command(args: argparse.Namespace) -> int:
             records_root / "attempts" / "local.jsonl",
             records_root / "gates" / "current-shard.jsonl",
         )
-    current = materialize_current(paths)
+    current = materialize_current(
+        paths,
+        context=_snapshot_authority_context(snapshot, DriverConfig()),
+    )
     operational_path = canonical_operational_ledger_path(paths.models)
     wakeups = wakeup_status(scan_jsonl(operational_path))
     output: dict[str, object] = {
@@ -457,6 +515,70 @@ def _status_command(args: argparse.Namespace) -> int:
         output["missing"] = sorted(report.missing_ids)
     if args.full:
         output["current"] = current
+    print(json.dumps(output, sort_keys=True))
+    return EXIT_OK
+
+
+def _wake_command(args: argparse.Namespace) -> int:
+    """Inspect or durably cancel one exact wake episode under the driver lock."""
+
+    records_root = args.records_root or args.repo_root / "menagerie" / "crawler" / "records"
+    operational_path = records_root / "operational" / "events.jsonl"
+    if args.wake_command == "status":
+        print(json.dumps(render_wakeup_status(reduce_wake_episodes(scan_jsonl(operational_path)))))
+        return EXIT_OK
+
+    runtime = args.repo_root / ".crawl-local"
+    owner = {
+        "pid": os.getpid(),
+        "run_id": "wake-cancel",
+        "target": "wake-control",
+        "created_at": utc_now(),
+        "episode_id": args.episode_id,
+    }
+    with DriverLock(runtime / "locks" / "driver.lock", owner):
+        with JsonlLedger(operational_path, OPERATIONAL_EVENT_SCHEMA_VERSION) as operational:
+            projection = reduce_wake_episodes(operational.records)
+            try:
+                state = projection.episodes[args.episode_id]
+            except KeyError as exc:
+                raise ValueError(f"unknown wake episode: {args.episode_id}") from exc
+            opening = next(
+                (
+                    event
+                    for event in operational.records
+                    if isinstance(event.get("details"), dict)
+                    and isinstance(event["details"].get("episode"), dict)
+                    and event["details"]["episode"].get("episode_id") == args.episode_id
+                ),
+                None,
+            )
+            if opening is None:
+                raise ValueError("wake episode lacks its owning campaign event")
+            context = OperationalContext(
+                run_id=str(opening["run_id"]),
+                machine_id=str(opening["machine_id"]),
+                queued_work_counts=dict(opening["queued_work_counts"]),
+                current_environment=(
+                    str(opening["current_environment"])
+                    if opening["current_environment"] is not None
+                    else None
+                ),
+            )
+            manager = WakeupManager(
+                runtime / "wakeups",
+                operational,
+                state.episode.callback_argv,
+                backend=state.backend,
+            )
+            manager.resolve_episode(
+                args.episode_id,
+                resolution="operator-cancelled",
+                context=context,
+                created_at=utc_now(),
+            )
+            manager.reconcile(context=context, created_at=utc_now())
+            output = render_wakeup_status(manager.projection)
     print(json.dumps(output, sort_keys=True))
     return EXIT_OK
 

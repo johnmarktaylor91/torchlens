@@ -25,6 +25,7 @@ from typing import Any, BinaryIO, Callable, Iterator, Mapping, Optional, Sequenc
 
 from menagerie.crawler.authority import (
     ExecutionReadManifest,
+    ExecutionReadManifestV2,
     WorkerLease as WorkerLease,
     completion_line_for_raw_award_receipt,
     derive_parent_attestation,
@@ -1307,7 +1308,8 @@ def _parent_owned_audit_path(
 
 
 def _request_allowed_read_paths(
-    argv: Sequence[str], manifest: Optional[ExecutionReadManifest] = None
+    argv: Sequence[str],
+    manifest: Optional[ExecutionReadManifest | ExecutionReadManifestV2] = None,
 ) -> tuple[Path, ...]:
     """Return parent bootstrap files plus one compiled read capability.
 
@@ -1357,7 +1359,10 @@ def _request_allowed_read_paths(
                         allowed.append(path)
     if manifest is not None:
         verify_execution_read_manifest(manifest)
-        allowed.extend(path for path, _digest, _kind in manifest.code_members)
+        if isinstance(manifest, ExecutionReadManifestV2):
+            allowed.extend(member.path for member in manifest.code_members)
+        else:
+            allowed.extend(path for path, _digest, _kind in manifest.code_members)
         if manifest.standard_input_asset is not None:
             allowed.append(manifest.standard_input_asset[0])
         allowed.extend(path for path, kind in manifest.runtime_support if kind == "runtime-file")
@@ -2635,7 +2640,7 @@ def run_isolated_subprocess(
     base_environment: Optional[Mapping[str, str]] = None,
     additional_write_roots: Sequence[Path] = (),
     worker_completion_challenge: Optional[str] = None,
-    execution_read_manifest: Optional[ExecutionReadManifest] = None,
+    execution_read_manifest: Optional[ExecutionReadManifest | ExecutionReadManifestV2] = None,
     shutdown_event: Optional[threading.Event] = None,
     worker_lease_handle: Optional[WorkerLeaseHandle] = None,
     request_nonce: Optional[str] = None,
@@ -3117,7 +3122,7 @@ def supervise_worker(
     timeout_seconds: float = DEFAULT_FORWARD_TIMEOUT_SECONDS,
     rss_limit_bytes: int = 12 * 1024**3,
     cwd: Optional[Path] = None,
-    execution_read_manifest: Optional[ExecutionReadManifest] = None,
+    execution_read_manifest: Optional[ExecutionReadManifest | ExecutionReadManifestV2] = None,
     worker_lease_handle: Optional[WorkerLeaseHandle] = None,
     shutdown_event: Optional[threading.Event] = None,
     on_lease_started: Optional[Callable[[WorkerLease], None]] = None,

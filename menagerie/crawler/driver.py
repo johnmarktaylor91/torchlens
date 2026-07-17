@@ -30,12 +30,18 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Protocol, Sequence
 
 from menagerie.crawler.artifact_transactions import (
+    ArtifactCheckpointError,
+    ArtifactEventKind,
     ArtifactInput,
+    ArtifactRehydrationError,
     ReconstructionInputs,
     StagedArtifact,
     publish_authorized_artifact,
+    rehydrate_artifact_transaction,
+    resolve_final_artifact_transaction,
     stage_private_artifact,
     staged_artifact_for_result,
+    validate_artifact_checkpoint,
 )
 from menagerie.crawler.author_dispatch import (
     AuthorResult,
@@ -47,19 +53,25 @@ from menagerie.crawler.author_dispatch import (
     serialize_author_result_cache,
     validate_author_result,
     validate_author_result_cache,
+    validate_author_result_mapping,
 )
 from menagerie.crawler.authority import (
+    ArtifactTransactionId,
     AuthorityDerivationError,
     AuthorityContext,
     DependencyState,
-    ExecutionReadManifest,
+    ExecutionReadManifestV2,
+    RuntimeLookupDirectory,
+    RuntimeMember,
     ShutdownInterruptionFact,
     WorkerLease,
     build_authority_context,
+    compile_execution_read_manifest_v2,
     derive_attempt_projection,
     derive_execution_identity,
     derive_runner_identity,
     derive_terminal_observation,
+    load_current_attempt_proof,
 )
 from menagerie.crawler.checker_dispatch import (
     CheckerBackoffSignal,
@@ -84,6 +96,7 @@ from menagerie.crawler.constants import (
     DEFAULT_PROGRESS_MILESTONES,
     DEFAULT_REVIEW_CHECKPOINT_AT,
     FAILURE_REASON_CODES,
+    InvocationOrigin,
     MODEL_SCHEMA_VERSION_V3,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
     OperationalEventKind,
@@ -156,8 +169,12 @@ from menagerie.crawler.modes import classify_observed_mode_receipts
 from menagerie.crawler.models import JsonObject, LedgerPaths
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
-from menagerie.crawler.policy import compile_execution_read_manifest
-from menagerie.crawler.recordio import JsonlLedger, SingleWriterError, scan_jsonl
+from menagerie.crawler.recordio import (
+    JsonlLedger,
+    SingleWriterError,
+    resolve_attempt_slot,
+    scan_jsonl,
+)
 from menagerie.crawler.reducer import (
     CanonicalReducer,
     cold_forward_policy,
@@ -191,7 +208,6 @@ from menagerie.crawler.worker_supervisor import (
 from menagerie.crawler.worker_supervisor import (
     SupervisorObservation,
     SupervisedResult,
-    run_isolated_subprocess,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -234,7 +250,6 @@ _AWARD_CLOSURE_SYMBOLS = {
         "_current_run_is_fresh",
         "_validate_artifact_identities",
         "_worker_request",
-        "_supervise_environment_worker",
         "_read_verified_worker_receipt",
         "_expected_adapter_sha256",
         "_expected_code_manifest_sha256",
@@ -328,9 +343,7 @@ _AWARD_CLOSURE_SYMBOLS = {
         "CanonicalReducer._validate_family_template",
         "CanonicalReducer._validate_deferral",
         "CanonicalReducer._validate_execution",
-        "CanonicalReducer._validate_terminal_evidence",
         "project_dependency_current",
-        "validate_reconstruction_source_binding",
     ),
     "recordio.py": (
         "_fsync_directory",
@@ -393,6 +406,18 @@ class DriverPaused(DriverError):
 
 class DriverShutdown(BaseException):
     """Typed internal control flow that cannot become an ordinary model failure."""
+
+    def __init__(self, fact: ShutdownInterruptionFact) -> None:
+        """Attach the operational-only interruption fact.
+
+        Parameters
+        ----------
+        fact:
+            Parent-owned shutdown observation, never an attempt or model fact.
+        """
+
+        super().__init__(fact.admission_boundary)
+        self.fact = fact
 
 
 @dataclass(frozen=True)
@@ -487,6 +512,7 @@ class DriverConfig:
     checker_version: str = "current"
     only_status: Optional[str] = None
     run_repair_max: int = 2
+    invocation_origin: InvocationOrigin = InvocationOrigin.ORDINARY_RUN
     wake_episode_id: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -511,6 +537,18 @@ class DriverConfig:
             raise ValueError("progress milestones must be unique")
         if self.run_repair_max < 0:
             raise ValueError("run_repair_max cannot be negative")
+        if not isinstance(self.invocation_origin, InvocationOrigin):
+            raise ValueError("invocation_origin must be a closed InvocationOrigin")
+        if (
+            self.invocation_origin is InvocationOrigin.WAKE_CALLBACK
+            and self.wake_episode_id is None
+        ):
+            raise ValueError("wake callbacks require an exact wake episode ID")
+        if (
+            self.invocation_origin is not InvocationOrigin.WAKE_CALLBACK
+            and self.wake_episode_id is not None
+        ):
+            raise ValueError("only wake callbacks may carry a wake episode ID")
 
 
 @dataclass(frozen=True)
@@ -853,6 +891,7 @@ class ForwardLane(Protocol):
         shutdown_event: Optional[threading.Event] = None,
         lifecycle_event: Optional[Callable[[str, str, WorkerLease], None]] = None,
         attempt_sink: Optional[Callable[[Mapping[str, Any]], None]] = None,
+        attempt_resolver: Optional[Callable[[int, str], Optional[Mapping[str, Any]]]] = None,
     ) -> Sequence[Mapping[str, Any]]:
         """Return complete attempt records for every required cold mode run."""
 
@@ -892,6 +931,7 @@ class UsagePauseScheduler(Protocol):
         context: OperationalContext,
         created_at: str,
         reset_at: str,
+        reset_observation: str,
     ) -> None:
         """Record the pause and schedule its exact reset wakeup."""
 
@@ -1446,6 +1486,7 @@ class SupervisedForwardLane:
         shutdown_event: Optional[threading.Event] = None,
         lifecycle_event: Optional[Callable[[str, str, WorkerLease], None]] = None,
         attempt_sink: Optional[Callable[[Mapping[str, Any]], None]] = None,
+        attempt_resolver: Optional[Callable[[int, str], Optional[Mapping[str, Any]]]] = None,
     ) -> Sequence[Mapping[str, Any]]:
         """Run each cold confirmation and fan its receipt into immutable mode attempts."""
 
@@ -1470,6 +1511,30 @@ class SupervisedForwardLane:
         )
         for cold_index in range(required_cold_runs):
             for mode in modes:
+                if shutdown.is_set():
+                    raise DriverShutdown(
+                        ShutdownInterruptionFact(
+                            invocation_id=run_id,
+                            admission_boundary="pre-slot-resolution",
+                            stable_id=stable_id,
+                            work_id=str(proposal["work_id"]),
+                            execution_identity=execution_identity,
+                            request_identity=None,
+                            lease_id=None,
+                            child_pid=None,
+                            child_start_token=None,
+                            child_pgid=None,
+                            signal=None,
+                            parent_observation=None,
+                            partial_receipt=None,
+                        )
+                    )
+                resolved_attempt = (
+                    attempt_resolver(cold_index, mode) if attempt_resolver is not None else None
+                )
+                if resolved_attempt is not None:
+                    attempts.append(dict(resolved_attempt))
+                    continue
                 root = work_root / stable_id / "forward" / f"cold-{cold_index + 1}" / mode
                 request_path = root / "request.json"
                 receipt_path = root / "result" / "receipt.json"
@@ -1563,6 +1628,37 @@ class SupervisedForwardLane:
                     shutdown_event=shutdown,
                     on_lease_started=on_started,
                 )
+                if result.observation.shutdown_requested:
+                    if lifecycle_event is not None:
+                        lifecycle_event(
+                            OperationalEventKind.WORKER_LEASE_CLOSED.value,
+                            OperationalEventStatus.WORKER_LEASE_CLOSED.value,
+                            handle.lease,
+                        )
+                    interrupted_lease = handle.lease
+                    clear_worker_lease(handle)
+                    partial_receipt = result.worker_receipt
+                    raise DriverShutdown(
+                        ShutdownInterruptionFact(
+                            invocation_id=run_id,
+                            admission_boundary="worker-supervision",
+                            stable_id=stable_id,
+                            work_id=str(proposal["work_id"]),
+                            execution_identity=execution_identity,
+                            request_identity=request_identity,
+                            lease_id=interrupted_lease.lease_id,
+                            child_pid=interrupted_lease.child_pid,
+                            child_start_token=interrupted_lease.child_start_token,
+                            child_pgid=interrupted_lease.child_pgid,
+                            signal=result.observation.signal_number,
+                            parent_observation=result.observation.to_dict(),
+                            partial_receipt=(
+                                dict(partial_receipt)
+                                if isinstance(partial_receipt, Mapping)
+                                else None
+                            ),
+                        )
+                    )
                 generated = _attempts_from_supervised(
                     artifact,
                     result,
@@ -1709,11 +1805,12 @@ class CrawlerDriver:
         }
         try:
             with DriverLock(self.paths.lock_path, owner):
-                try:
-                    return self._run_locked(after_review=after_review)
-                except Exception as exc:
-                    self._record_driver_failure(exc)
-                    raise
+                with shutdown_signal_handlers(self._shutdown_event):
+                    try:
+                        return self._run_locked(after_review=after_review)
+                    except Exception as exc:
+                        self._record_driver_failure(exc)
+                        raise
         except SingleWriterError as exc:
             raise DriverLockError(str(exc)) from exc
 
@@ -1761,6 +1858,125 @@ class CrawlerDriver:
             },
         )
 
+    def _check_shutdown(
+        self,
+        admission_boundary: str,
+        *,
+        item: Optional[WorkItem] = None,
+        work_id: Optional[str] = None,
+        execution_identity: Optional[str] = None,
+    ) -> None:
+        """Stop before an external or admission boundary once shutdown is requested.
+
+        Parameters
+        ----------
+        admission_boundary:
+            Stable inventory name for the boundary being guarded.
+        item:
+            Optional scheduled model association.
+        work_id, execution_identity:
+            Optional exact work and execution identities already derived by the caller.
+
+        Raises
+        ------
+        DriverShutdown
+            If the async-safe signal event has been set.
+        """
+
+        if not self._shutdown_event.is_set():
+            return
+        raise DriverShutdown(
+            ShutdownInterruptionFact(
+                invocation_id=self.config.run_id,
+                admission_boundary=admission_boundary,
+                stable_id=item.stable_id if item is not None else None,
+                work_id=work_id or (item.active_work_id if item is not None else None),
+                execution_identity=execution_identity,
+                request_identity=None,
+                lease_id=None,
+                child_pid=None,
+                child_start_token=None,
+                child_pgid=None,
+                signal=None,
+                parent_observation=None,
+                partial_receipt=None,
+            )
+        )
+
+    def _record_shutdown_interruption(
+        self,
+        operational: JsonlLedger,
+        fact: ShutdownInterruptionFact,
+        reducer: CanonicalReducer,
+        snapshot: IntakeSnapshot,
+    ) -> DriverResult:
+        """Persist one idempotent operational interruption and resumable state.
+
+        Parameters
+        ----------
+        operational, reducer, snapshot:
+            Locked operational writer, reducer, and active intake used for the final rebuild.
+        fact:
+            Exact parent-owned shutdown observation.
+
+        Returns
+        -------
+        DriverResult
+            Resumable shutdown disposition with no model-failure authority.
+        """
+
+        details: JsonObject = {
+            "invocation_id": fact.invocation_id,
+            "admission_boundary": fact.admission_boundary,
+            "stable_id": fact.stable_id,
+            "work_id": fact.work_id,
+            "execution_identity": fact.execution_identity,
+            "request_identity": fact.request_identity,
+            "lease_id": fact.lease_id,
+            "child_pid": fact.child_pid,
+            "child_start_token": fact.child_start_token,
+            "child_pgid": fact.child_pgid,
+            "signal": fact.signal,
+            "parent_observation": (
+                dict(fact.parent_observation) if fact.parent_observation is not None else None
+            ),
+            "partial_receipt": (
+                dict(fact.partial_receipt) if fact.partial_receipt is not None else None
+            ),
+        }
+        identity = stable_hash(details)[7:31]
+        operational.append(
+            {
+                "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+                "event_id": f"worker-shutdown-{identity}",
+                "created_at": self.dependencies.clock(),
+                "event_kind": OperationalEventKind.WORKER_SHUTDOWN_INTERRUPTED.value,
+                "status": OperationalEventStatus.SHUTDOWN_INTERRUPTED.value,
+                "provider": None,
+                "observed_response": None,
+                "reset_at": None,
+                "queued_work_counts": {"models": 0},
+                "current_environment": None,
+                "run_id": self.config.run_id,
+                "machine_id": self.config.machine_id,
+                "details": details,
+            }
+        )
+        rebuild_state(
+            self.paths.state_database,
+            snapshot.root / "items.jsonl",
+            self.paths.ledgers,
+            context=reducer.context,
+        )
+        _write_driver_state(self.paths.driver_state, {"status": "interrupted:shutdown"})
+        return DriverResult(
+            "interrupted:shutdown",
+            len(reducer.current_records),
+            self._reduced,
+            "shutdown",
+            shutdown_interruption=fact,
+        )
+
     def _run_locked(self, *, after_review: bool) -> DriverResult:
         """Run while holding both the process lock and canonical reducer locks."""
 
@@ -1797,18 +2013,24 @@ class CrawlerDriver:
                 context,
             ) as reducer,
         ):
-            self._restore_quarantined_environment_context(reducer, operational)
-            lifecycle_result = self._reconcile_lifecycle_before_admission(
-                operational, reducer, snapshot
-            )
-            if lifecycle_result is not None:
-                return lifecycle_result
-            rebuild_state(
-                self.paths.state_database,
-                snapshot.root / "items.jsonl",
-                self.paths.ledgers,
-                context=context,
-            )
+            try:
+                self._check_shutdown("lifecycle-reconciliation")
+                self._restore_quarantined_environment_context(reducer, operational)
+                lifecycle_result = self._reconcile_lifecycle_before_admission(
+                    operational, reducer, snapshot
+                )
+                if lifecycle_result is not None:
+                    return lifecycle_result
+                rebuild_state(
+                    self.paths.state_database,
+                    snapshot.root / "items.jsonl",
+                    self.paths.ledgers,
+                    context=context,
+                )
+            except DriverShutdown as shutdown:
+                return self._record_shutdown_interruption(
+                    operational, shutdown.fact, reducer, snapshot
+                )
             state = _load_driver_state(self.paths.driver_state)
             self._retry_notification_outbox(operational)
             if self._review_is_pending(operational, snapshot):
@@ -1841,9 +2063,8 @@ class CrawlerDriver:
             )
             work = self._ordered_work(snapshot, reducer.current_records, requeues)
             try:
-                signal_scope = shutdown_signal_handlers(self._shutdown_event)
-                signal_scope.__enter__()
                 for phase in self.registry.phase_order:
+                    self._check_shutdown("phase-admission")
                     phase_work = tuple(
                         item
                         for item in work
@@ -1865,6 +2086,7 @@ class CrawlerDriver:
                     )
                     variant_work = tuple(item for item in phase_work if item.is_family_variant)
                     for scheduled_work in (representative_work, variant_work):
+                        self._check_shutdown("wave-admission")
                         if not scheduled_work:
                             continue
                         pause = self._process_scheduled_work(
@@ -1884,8 +2106,16 @@ class CrawlerDriver:
                     self._reduced,
                     "review-checkpoint",
                 )
-            finally:
-                signal_scope.__exit__(None, None, None)
+            except DriverShutdown as shutdown:
+                return self._record_shutdown_interruption(
+                    operational, shutdown.fact, reducer, snapshot
+                )
+            try:
+                self._check_shutdown("completion-admission")
+            except DriverShutdown as shutdown:
+                return self._record_shutdown_interruption(
+                    operational, shutdown.fact, reducer, snapshot
+                )
             rebuild_state(
                 self.paths.state_database,
                 snapshot.root / "items.jsonl",
@@ -1923,6 +2153,10 @@ class CrawlerDriver:
                     if self.config.phase is None
                     else f"phase-terminal-partition-complete:{self.config.phase}"
                 )
+            self._resolve_active_wake_episodes(
+                operational,
+                resolution="campaign-completed",
+            )
             state.update({"status": completion_status, "last_terminal_count": len(current)})
             _write_driver_state(self.paths.driver_state, state)
             return DriverResult(completion_status, len(current), self._reduced, None)
@@ -2057,7 +2291,16 @@ class CrawlerDriver:
             deactivator=self.dependencies.wakeup_deactivator,
         )
         manager.ingest_fire_intents(context=context, created_at=now)
-        if self.config.wake_episode_id is not None:
+        if self.config.invocation_origin is InvocationOrigin.MANUAL_RESUME:
+            for active in manager.projection.active_episodes:
+                manager.resolve_episode(
+                    active.episode.episode_id,
+                    resolution="manual-resume",
+                    context=context,
+                    created_at=now,
+                )
+        if self.config.invocation_origin is InvocationOrigin.WAKE_CALLBACK:
+            assert self.config.wake_episode_id is not None
             callback = manager.handle_fire(
                 self.config.wake_episode_id,
                 fired_at=now,
@@ -2072,6 +2315,40 @@ class CrawlerDriver:
                 f"wakeup projection reconciliation failed: {reconciliation.failures}"
             )
         return None
+
+    def _resolve_active_wake_episodes(
+        self,
+        operational: JsonlLedger,
+        *,
+        resolution: str,
+    ) -> None:
+        """Durably resolve every active campaign wake episode before deactivation.
+
+        Parameters
+        ----------
+        operational:
+            Locked append-only operational ledger.
+        resolution:
+            Closed WakeupManager resolution label.
+        """
+
+        manager = WakeupManager(
+            self.paths.wakeup_root,
+            operational,
+            self._wakeup_callback_argv(),
+            installer=self.dependencies.wakeup_installer,
+            verifier=self.dependencies.wakeup_verifier,
+            deactivator=self.dependencies.wakeup_deactivator,
+        )
+        context = self._context(0, None)
+        created_at = self.dependencies.clock()
+        for active in manager.projection.active_episodes:
+            manager.resolve_episode(
+                active.episode.episode_id,
+                resolution=resolution,
+                context=context,
+                created_at=created_at,
+            )
 
     def _wakeup_callback_argv(self) -> tuple[str, ...]:
         """Return the base recurring callback command without an episode ID."""
@@ -2095,7 +2372,6 @@ class CrawlerDriver:
             self.config.target,
             "--run-id",
             self.config.run_id,
-            "--scheduled-wake",
         )
 
     def _append_worker_lifecycle_event(
@@ -2153,6 +2429,7 @@ class CrawlerDriver:
             Usage-pause reason, or ``None`` after the wave finishes.
         """
 
+        self._check_shutdown("scheduled-work-admission")
         artifacts = self._ensure_authors(work, reducer, operational, state)
         eligible_work = tuple(item for item in work if item.stable_id in artifacts)
         self._ensure_pending_run_anchors(eligible_work, artifacts, reducer, operational, state)
@@ -2831,6 +3108,25 @@ class CrawlerDriver:
 
         artifacts: dict[str, AuthorArtifact] = {}
         for item in work:
+            self._check_shutdown("author-admission", item=item)
+            canonical_artifact = self._rehydrate_final_authority(item, reducer)
+            if canonical_artifact is not None:
+                if isinstance(canonical_artifact.author_result, ProposedAuthorResult):
+                    _validate_artifact_identities(canonical_artifact, self.config)
+                    artifacts[item.stable_id] = canonical_artifact
+                    self._family_artifacts[item.stable_id] = canonical_artifact
+                else:
+                    pause = self._route_terminal_author_result(
+                        item,
+                        canonical_artifact,
+                        reducer,
+                        operational,
+                        state,
+                    )
+                    if pause is not None:
+                        raise DriverPaused(pause)
+                self.dependencies.boundary_hook("after-author", item.stable_id)
+                continue
             if item.is_family_variant:
                 representative_model = reducer.current_records.get(item.family_representative_id)
                 representative_artifact = self._family_artifacts.get(item.family_representative_id)
@@ -3099,6 +3395,138 @@ class CrawlerDriver:
             self.dependencies.boundary_hook("after-author", item.stable_id)
         self._family_artifacts.update(artifacts)
         return artifacts
+
+    def _rehydrate_final_authority(
+        self,
+        item: WorkItem,
+        reducer: CanonicalReducer,
+    ) -> Optional[AuthorArtifact]:
+        """Return canonical finalized author authority before disposable fallbacks.
+
+        Parameters
+        ----------
+        item:
+            Exact scheduled work generation.
+        reducer:
+            Locked reducer exposing active authority and artifact history.
+
+        Returns
+        -------
+        AuthorArtifact | None
+            Revalidated transaction-backed result, or ``None`` when the exact work
+            generation has no finalized artifact authority.
+
+        Raises
+        ------
+        DriverIntegrationError
+            If canonical authority is present but incomplete, ambiguous, stale, or corrupt.
+        """
+
+        if not reducer.artifact_ledger.events:
+            return None
+        has_exact_final = any(
+            event.get("stable_id") == item.stable_id
+            and event.get("work_id") == item.active_work_id
+            and event.get("event_kind")
+            in {
+                ArtifactEventKind.PUBLISHED.value,
+                ArtifactEventKind.PRIVATE_COMMITTED.value,
+            }
+            for event in reducer.artifact_ledger.events
+        )
+        if not has_exact_final:
+            # Historical transactions remain immutable audit evidence, but they do
+            # not become reconstruction authority for a new work generation.
+            return None
+        canonical_root = _canonical_crawler_root(self.paths)
+        repository_root = _canonical_repo_root(canonical_root)
+        mirrors = MirrorStore(
+            self.paths.runtime_root / "mirrors" / "public",
+            self.paths.runtime_root / "mirrors" / "private",
+            self.paths.runtime_root / "mirrors" / "local",
+        )
+        artifact_paths = tuple(sorted(self.paths.ledgers.artifacts.parent.glob("*.jsonl"))) or (
+            self.paths.ledgers.artifacts,
+        )
+        try:
+            projection = validate_artifact_checkpoint(
+                artifact_paths,
+                context=reducer.context,
+                mirrors=mirrors,
+                canonical_root=canonical_root,
+                repository_root=repository_root,
+            )
+            recorded_transaction: Optional[ArtifactTransactionId] = None
+            current = reducer.current_records.get(item.stable_id)
+            if (
+                current is not None
+                and item.requeue_work_id is None
+                and item.refresh_work_id is None
+            ):
+                authority = current.get("artifact_authority")
+                transaction_value = (
+                    authority.get("transaction_id") if isinstance(authority, Mapping) else None
+                )
+                if isinstance(transaction_value, str) and transaction_value:
+                    recorded_transaction = ArtifactTransactionId(transaction_value)
+            transaction = resolve_final_artifact_transaction(
+                projection,
+                stable_id=item.stable_id,
+                work_id=item.active_work_id,
+                transaction_id=recorded_transaction,
+            )
+            if transaction is None:
+                return None
+            inputs = transaction.reconstruction_inputs
+            if self.config.only_status is not None and inputs.proposal is None:
+                # A terminal deferral proves source/evidence custody but carries no
+                # executable proposal. The handoff author lane must create that new
+                # authority rather than treating a recommendation as runnable code.
+                return None
+            rehydrated = rehydrate_artifact_transaction(
+                transaction,
+                mirrors=mirrors,
+                staging_root=self.paths.work_root / "rehydrated-artifacts",
+            )
+            raw_result = inputs.author_result
+            campaign_id = raw_result.get("campaign_id")
+            if not isinstance(campaign_id, str) or campaign_id != _campaign_id_for_item(item):
+                raise DriverIntegrationError(
+                    "canonical author result campaign differs from active scheduled work"
+                )
+            envelope = build_author_envelope(
+                context=reducer.context,
+                work_id=item.active_work_id,
+                stable_id=item.stable_id,
+                campaign_id=campaign_id,
+                created_at=self.dependencies.clock(),
+                untrusted_hints=item.intake.to_dict(),
+                source_manifest=inputs.source_manifest,
+                allowed_model_dir=rehydrated.model_dir,
+                output_path=rehydrated.root / "author" / "result.json",
+            )
+            result = validate_author_result_mapping(raw_result, envelope)
+            staged = staged_artifact_for_result(
+                reducer.artifact_ledger,
+                stable_id=item.stable_id,
+                work_id=item.active_work_id,
+                author_result_id=result.binding.result_id,
+            )
+            if staged is None:
+                raise DriverIntegrationError(
+                    "canonical final transaction lacks its exact staged-private predecessor"
+                )
+            return AuthorArtifact(
+                author_result=result,
+                source_manifest=dict(inputs.source_manifest),
+                model_dir=rehydrated.model_dir,
+                staged=staged,
+                canonical_code_root=rehydrated.model_dir,
+            )
+        except (ArtifactCheckpointError, ArtifactRehydrationError, ValueError) as exc:
+            raise DriverIntegrationError(
+                f"canonical artifact authority cannot be rehydrated: {exc}"
+            ) from exc
 
     def _route_terminal_author_result(
         self,
@@ -3770,6 +4198,7 @@ class CrawlerDriver:
         """
 
         for attempt in range(2):
+            self._check_shutdown("external-call-admission")
             try:
                 return operation()
             except Exception as exc:  # noqa: BLE001 -- typed below before retry
@@ -3827,6 +4256,7 @@ class CrawlerDriver:
         for item in work:
             by_intent[item.route.intent].append(item)
         for intent_name in self._ordered_intents(by_intent):
+            self._check_shutdown("environment-admission")
             intent = self.registry.intents[intent_name]
             use_entered = False
             use_completed = False
@@ -3946,6 +4376,7 @@ class CrawlerDriver:
 
                 nonlocal observed_environment, observed_generation, repair_pause, use_entered
                 nonlocal use_completed
+                self._check_shutdown("environment-use-admission")
                 use_entered = True
                 environment = _environment_binding(
                     intent,
@@ -3969,6 +4400,7 @@ class CrawlerDriver:
                 self._authority_context = refreshed_context
                 gates = scan_jsonl(self.paths.ledgers.gates)
                 for item in items:
+                    self._check_shutdown("model-admission", item=item)
                     current = reducer.current_records.get(item.stable_id)
                     if (
                         award_run
@@ -4027,6 +4459,7 @@ class CrawlerDriver:
                 use_entered = False
                 use_completed = False
                 try:
+                    self._check_shutdown("environment-create-admission")
                     self.dependencies.environments.run(intent, use=use)
                 except DriverPaused:
                     raise
@@ -4133,6 +4566,12 @@ class CrawlerDriver:
         """Append honest worker attempts and return a checker pause from run repair."""
 
         execution_identity = _execution_identity(artifact.proposal, environment)
+        self._check_shutdown(
+            "forward-admission",
+            item=item,
+            work_id=str(artifact.proposal["work_id"]),
+            execution_identity=execution_identity,
+        )
         attempts = _matching_attempts(
             self.paths.ledgers.attempts,
             artifact.proposal,
@@ -4187,8 +4626,30 @@ class CrawlerDriver:
                     },
                 )
 
+            def resolve_worker_attempt(cold_index: int, mode: str) -> Optional[Mapping[str, Any]]:
+                """Authenticate one canonical deterministic slot before any capability opens."""
+
+                resolved = resolve_attempt_slot(
+                    scan_jsonl(self.paths.ledgers.attempts),
+                    work_id=str(artifact.proposal["work_id"]),
+                    execution_identity=execution_identity,
+                    cold_index=cold_index,
+                    mode=mode,
+                )
+                if resolved is None:
+                    return None
+                try:
+                    authority = load_current_attempt_proof(resolved)
+                except AuthorityDerivationError as exc:
+                    raise DriverIntegrationError(str(exc)) from exc
+                if resolved.get("result") == "succeeded" and authority is None:
+                    raise DriverIntegrationError(
+                        "canonical execution slot lacks authenticated success authority"
+                    )
+                return resolved
+
             cached: JsonObject | None = None
-            if cache.is_file():
+            if cache.is_file() and not persisted_by_lane:
                 try:
                     candidate = _read_json(cache)
                 except Exception:  # noqa: BLE001 -- disposable replay cache is regenerable
@@ -4222,6 +4683,7 @@ class CrawlerDriver:
                                 shutdown_event=self._shutdown_event,
                                 lifecycle_event=persist_worker_lifecycle,
                                 attempt_sink=persist_worker_attempt,
+                                attempt_resolver=resolve_worker_attempt,
                             )
                         )
                         attempts_persisted_by_lane = True
@@ -4776,13 +5238,21 @@ class CrawlerDriver:
     ) -> str:
         """Record a visible provider pause and schedule one idempotent reset wakeup."""
 
+        reset_observation = "observed" if signal.reset_at is not None else "guessed"
         reset_at = signal.reset_at or _future_reset(self.dependencies.clock(), signal)
         provider = "openai"
         context = self._context(queued, None)
         created_at = self.dependencies.clock()
         scheduler = self.dependencies.usage_pause_scheduler
         if scheduler is not None:
-            scheduler.schedule(signal, operational, context, created_at, reset_at)
+            scheduler.schedule(
+                signal,
+                operational,
+                context,
+                created_at,
+                reset_at,
+                reset_observation,
+            )
         else:
             manager = WakeupManager(
                 self.paths.wakeup_root,
@@ -4796,6 +5266,7 @@ class CrawlerDriver:
                 provider=provider,
                 observed_response=signal.response_excerpt,
                 reset_at=reset_at,
+                reset_observation=reset_observation,
                 context=context,
                 created_at=created_at,
             )
@@ -5303,54 +5774,6 @@ def utc_now() -> str:
     """Return an RFC 3339 UTC timestamp."""
 
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def _supervise_environment_worker(
-    request_path: Path,
-    receipt_path: Path,
-    scratch_root: Path,
-    python_executable: Path,
-    *,
-    timeout_seconds: float,
-    rss_limit_bytes: int,
-    cwd: Optional[Path],
-) -> SupervisedResult:
-    """Launch the worker with the exact env interpreter through the OS sandbox."""
-
-    receipt_path.unlink(missing_ok=True)
-    argv = (
-        str(python_executable.absolute()),
-        "-m",
-        "menagerie.crawler.worker",
-        "--request",
-        str(request_path),
-        "--receipt",
-        str(receipt_path),
-    )
-    completion_challenge = secrets.token_hex(32)
-    observation = run_isolated_subprocess(
-        argv,
-        scratch_root,
-        timeout_seconds=timeout_seconds,
-        rss_limit_bytes=rss_limit_bytes,
-        cwd=cwd,
-        additional_write_roots=(receipt_path.parent,),
-        worker_completion_challenge=completion_challenge,
-    )
-    receipt, receipt_error = _read_verified_worker_receipt(receipt_path)
-    success_attestation = observation.success_attestation_sha256
-    if receipt is not None and observation.attested_receipt_sha256 != receipt.get("receipt_sha256"):
-        success_attestation = None
-    if observation.exit_code != 0 or observation.signal_number is not None:
-        return SupervisedResult(
-            observation,
-            receipt,
-            receipt_error or ("worker-exit-nonzero" if receipt is None else None),
-            None,
-        )
-    if receipt is not None and success_attestation is None:
-        return SupervisedResult(observation, receipt, "missing-parent-success-attestation", None)
-    return SupervisedResult(observation, receipt, receipt_error, success_attestation)
 
 
 def _read_verified_worker_receipt(
@@ -6738,7 +7161,7 @@ def _compile_worker_read_manifest(
     artifact: AuthorArtifact,
     environment: EnvironmentBinding,
     execution_identity: str,
-) -> ExecutionReadManifest:
+) -> ExecutionReadManifestV2:
     """Compile the sole semantic read capability for one private artifact.
 
     Parameters
@@ -6752,7 +7175,7 @@ def _compile_worker_read_manifest(
 
     Returns
     -------
-    ExecutionReadManifest
+    ExecutionReadManifestV2
         Closed code, standard-asset, and runtime support manifest.
     """
 
@@ -6762,7 +7185,7 @@ def _compile_worker_read_manifest(
     raw_manifest = implementation.get("code_manifest", [])
     if not isinstance(raw_manifest, list):
         raise DriverIntegrationError("implementation code manifest is malformed")
-    members: list[tuple[Path, str, str]] = []
+    members: list[RuntimeMember] = []
     for row in raw_manifest:
         if not isinstance(row, Mapping):
             raise DriverIntegrationError("implementation code manifest row is malformed")
@@ -6777,7 +7200,14 @@ def _compile_worker_read_manifest(
             kind = "python-bytecode"
         else:
             raise DriverIntegrationError(f"execution code member has forbidden suffix: {path}")
-        members.append((path, str(row.get("sha256")), kind))
+        members.append(
+            RuntimeMember(
+                path=path,
+                sha256=str(row.get("sha256")),
+                kind=kind,
+                provenance="accepted-model-code-manifest",
+            )
+        )
     selected = (
         expected_standard_asset(facts["external_metadata"]["modality"])
         if implementation.get("recipe_type") == "declarative-library"
@@ -6789,18 +7219,193 @@ def _compile_worker_read_manifest(
         else None
     )
     code_identity = stable_hash(raw_manifest)
-    return compile_execution_read_manifest(
+    runtime_paths = set(_crawler_worker_runtime_paths())
+    runtime_paths.update(_environment_runtime_paths(environment))
+    runtime_members = tuple(
+        RuntimeMember(
+            path=path,
+            sha256=hash_bytes(path.read_bytes()),
+            kind=_runtime_member_kind(path, environment.python_executable.resolve()),
+            provenance=(
+                "crawler-worker-import-closure"
+                if path.is_relative_to(Path(__file__).resolve().parents[2])
+                else f"environment-generation:{environment.env_generation}"
+            ),
+        )
+        for path in sorted(runtime_paths, key=str)
+    )
+    lookup_candidates = {
+        Path(__file__).resolve().parents[2],
+        environment.prefix.resolve(),
+        *(path.resolve() for path in environment.prefix.glob("lib/python*")),
+        *(path.resolve() for path in environment.prefix.glob("lib/python*/site-packages")),
+    }
+    lookup_directories = tuple(
+        RuntimeLookupDirectory(path=path, provenance="import-lookup-scaffold")
+        for path in sorted(lookup_candidates, key=str)
+        if path.is_dir() and not path.is_symlink()
+    )
+    return compile_execution_read_manifest_v2(
         stable_id=str(proposal["stable_id"]),
         work_id=str(proposal["work_id"]),
         execution_identity=execution_identity,
         code_manifest_identity=code_identity,
+        environment_generation=environment.env_generation,
+        installed_package_inventory_sha256=environment.packages_manifest_sha256,
         code_members=tuple(members),
+        runtime_members=runtime_members,
         standard_input_asset=asset,
-        runtime_support=(
-            (environment.prefix.resolve(), "runtime-root"),
-            (Path(__file__).resolve().parents[2], "runtime-root"),
-        ),
+        lookup_directories=lookup_directories,
     )
+
+
+def _runtime_member_kind(path: Path, interpreter: Path) -> str:
+    """Classify one exact runtime file for execution-manifest v2.
+
+    Parameters
+    ----------
+    path:
+        Canonical regular runtime member.
+    interpreter:
+        Canonical selected environment interpreter.
+
+    Returns
+    -------
+    str
+        Closed v2 runtime-member kind.
+    """
+
+    if path == interpreter:
+        return "interpreter"
+    suffix = path.suffix.lower()
+    if suffix in {".py", ".pyi", ".pyx"}:
+        return "python-source"
+    if suffix == ".pyc":
+        return "python-bytecode"
+    if suffix in {".pyd", ".so"}:
+        return "native-extension"
+    if suffix == ".dylib" or ".so." in path.name.lower():
+        return "native-library"
+    if (
+        path.name
+        in {
+            "INSTALLER",
+            "METADATA",
+            "RECORD",
+            "WHEEL",
+            "entry_points.txt",
+            "pyvenv.cfg",
+        }
+        or path.parent.name == "conda-meta"
+    ):
+        return "import-metadata"
+    return "package-data"
+
+
+def _crawler_worker_runtime_paths() -> tuple[Path, ...]:
+    """Collect the exact recursive crawler-local worker import closure.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Canonical Python files seeded by the worker/supervisor/policy entry points.
+    """
+
+    package_root = Path(__file__).resolve().parent
+    repository_root = package_root.parents[1]
+    pending = [
+        package_root / "worker.py",
+        package_root / "worker_supervisor.py",
+        package_root / "policy.py",
+    ]
+    members: set[Path] = {
+        repository_root / "menagerie" / "__init__.py",
+        package_root / "__init__.py",
+    }
+    while pending:
+        path = pending.pop().resolve()
+        if path in members or not path.is_file():
+            continue
+        members.add(path)
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except (OSError, UnicodeError, SyntaxError) as exc:
+            raise DriverIntegrationError(f"worker runtime source cannot be parsed: {path}") from exc
+        module_names: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                module_names.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                module_names.append(node.module)
+        for module_name in module_names:
+            if not module_name.startswith("menagerie.crawler"):
+                continue
+            parts = module_name.split(".")[2:]
+            candidate = package_root.joinpath(*parts).with_suffix(".py")
+            if candidate.is_file():
+                pending.append(candidate)
+    return tuple(sorted(members, key=str))
+
+
+def _environment_runtime_paths(environment: EnvironmentBinding) -> tuple[Path, ...]:
+    """Collect exact installed environment files from immutable package metadata.
+
+    Parameters
+    ----------
+    environment:
+        Exact active environment generation.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Canonical unaliased interpreter, import, native, metadata, and package-data files.
+    """
+
+    paths: set[Path] = set()
+    interpreter = environment.python_executable.resolve()
+    if interpreter.is_file() and not interpreter.is_symlink() and interpreter.stat().st_nlink == 1:
+        paths.add(interpreter)
+    for metadata_path in sorted((environment.prefix / "conda-meta").glob("*.json")):
+        try:
+            value = json.loads(metadata_path.read_bytes())
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise DriverIntegrationError(
+                f"installed runtime metadata is unreadable: {metadata_path}"
+            ) from exc
+        if metadata_path.resolve() == metadata_path and metadata_path.stat().st_nlink == 1:
+            paths.add(metadata_path.resolve())
+        files = value.get("files") if isinstance(value, Mapping) else None
+        if not isinstance(files, list):
+            continue
+        for relative_value in files:
+            if not isinstance(relative_value, str):
+                continue
+            candidate = (environment.prefix / relative_value).absolute()
+            try:
+                resolved = candidate.resolve(strict=True)
+                status = candidate.stat()
+            except OSError:
+                continue
+            if (
+                candidate.is_symlink()
+                or resolved != candidate
+                or not candidate.is_file()
+                or status.st_nlink != 1
+            ):
+                continue
+            if candidate.suffix.lower() in {
+                ".bin",
+                ".ckpt",
+                ".h5",
+                ".onnx",
+                ".pt",
+                ".pth",
+                ".safetensors",
+                ".weights",
+            }:
+                continue
+            paths.add(candidate)
+    return tuple(sorted(paths, key=str))
 
 
 def _worker_request(
@@ -6808,7 +7413,7 @@ def _worker_request(
     scratch_root: Path,
     receipt_path: Path,
     execution_identity: str,
-    execution_manifest: ExecutionReadManifest,
+    execution_manifest: ExecutionReadManifestV2,
     cold_index: int,
     mode: str,
 ) -> JsonObject:
@@ -6818,6 +7423,8 @@ def _worker_request(
     facts = proposal["proposed_facts"]
     implementation = facts["implementation"]
     input_contract = deepcopy(dict(facts["input_contract"]))
+    if "code_path" in input_contract:
+        raise DriverIntegrationError("v3 execution forbids input_contract.code_path presence")
     builder_symbol = input_contract.get("builder_symbol")
     if not isinstance(builder_symbol, str) or not re.fullmatch(
         r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*", builder_symbol
@@ -8183,9 +8790,9 @@ def _normalize_gate_generation(
     )
     normalized["result_envelope_sha256"] = stable_hash(
         {
-            "checker_result_envelope_sha256": gate["result_envelope_sha256"],
-            "gate_id": normalized["gate_id"],
-            "gate_identity": normalized["gate_identity"],
+            key: value
+            for key, value in normalized.items()
+            if key not in {"result_envelope_sha256", "payload_sha256", "ledger_seq"}
         }
     )
     return normalized

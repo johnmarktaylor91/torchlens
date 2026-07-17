@@ -879,6 +879,15 @@ def test_recursive_authored_gate_blocks_ungated_website_leaf(tmp_path: Path) -> 
     item["field_checks"] = [
         check for check in item["field_checks"] if check["field"] != "website.tagline"
     ]
+    # Rebind the synthetic checker envelope so this semantic-admission test reaches
+    # the authored-leaf rule instead of correctly tripping current-proof replay first.
+    gate["result_envelope_sha256"] = stable_hash(
+        {
+            key: value
+            for key, value in gate.items()
+            if key not in {"result_envelope_sha256", "payload_sha256", "ledger_seq"}
+        }
+    )
     with CanonicalReducer(paths, stable_ids) as reducer:
         reducer.append_gate(gate)
         reducer.append_attempt(make_attempt())

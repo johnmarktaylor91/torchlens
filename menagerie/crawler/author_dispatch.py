@@ -399,6 +399,33 @@ def validate_author_result_cache(
     return _validate_author_result_mapping(result, envelope, cas_root=cas_root)
 
 
+def validate_author_result_mapping(
+    result: Mapping[str, Any],
+    envelope: Mapping[str, Any],
+    *,
+    cas_root: Union[str, Path, None] = None,
+) -> AuthorResult:
+    """Validate canonical in-memory result bytes through the production v3 parser.
+
+    Parameters
+    ----------
+    result:
+        Exact mapping retained by canonical artifact reconstruction.
+    envelope:
+        Fresh envelope binding the active work, intake, source set, and staged model root.
+    cas_root:
+        Optional source CAS root. Canonical rehydration normally omits it because the
+        source manifest and claimed bytes were already verified by artifact projection.
+
+    Returns
+    -------
+    ProposedAuthorResult | DeferRecommendation | SkipRecommendation | BlockedRecommendation
+        Revalidated exact author-result union arm.
+    """
+
+    return _validate_author_result_mapping(result, envelope, cas_root=cas_root)
+
+
 def write_envelope_atomic(envelope: Mapping[str, Any], path: Union[str, Path]) -> Path:
     """Atomically persist one deterministic work envelope.
 

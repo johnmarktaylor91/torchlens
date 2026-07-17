@@ -14,6 +14,7 @@ from typing import Any, Callable, Collection, Iterable, Mapping, Optional, Seque
 
 from menagerie.crawler.artifact_transactions import (
     ARTIFACT_RECONSTRUCTION_SCHEMA_VERSION,
+    ArtifactCheckpointProjection,
     ArtifactCheckpointError,
     ArtifactEventKind,
     artifact_reconstruction_paths,
@@ -48,10 +49,9 @@ from menagerie.crawler.licenses import (
     LicensedArtifact,
     PublicMergeRejected,
     RedistributionClass,
-    gated_authorized_artifacts,
     pre_public_merge_sweep,
 )
-from menagerie.crawler.mirrors import ArtifactManifest, MirrorStore
+from menagerie.crawler.mirrors import ArtifactManifest, ArtifactOrigin, MirrorStore
 from menagerie.crawler.models import AppendResult, JsonObject
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import (
@@ -1201,9 +1201,10 @@ def _create_canonical_checkpoint(
         raise CheckpointValidationError(
             "checkpoint AuthorityContext differs from the active intake snapshot"
         )
+    artifact_projection = ArtifactCheckpointProjection(transactions={}, objects=(), claims=())
     if has_artifact_events:
         try:
-            validate_artifact_checkpoint(
+            artifact_projection = validate_artifact_checkpoint(
                 artifact_ledgers,
                 context=authority_context,
                 mirrors=mirror_store,
@@ -1223,6 +1224,7 @@ def _create_canonical_checkpoint(
     authorized_artifacts = _validate_gated_license_decisions(
         license_inventory,
         current,
+        artifact_projection,
         promoted_model_ids=promoted_model_ids,
     )
     restricted_gated_digests = tuple(
@@ -1459,6 +1461,7 @@ def _licensed_artifact(payload: Mapping[str, Any]) -> LicensedArtifact:
 def _validate_gated_license_decisions(
     artifacts: Sequence[LicensedArtifact],
     current_models: Mapping[str, Mapping[str, Any]],
+    projection: ArtifactCheckpointProjection,
     *,
     promoted_model_ids: Collection[str],
 ) -> tuple[AuthorizedArtifact, ...]:
@@ -1482,38 +1485,92 @@ def _validate_gated_license_decisions(
         evidence decision, or fetch recipe.
     """
 
-    accepted = tuple(
-        (stable_id, model)
-        for stable_id, model in current_models.items()
-        if model.get("authored_metadata_state") == "accepted"
-    )
-    authorized_by_path: dict[Path, set[AuthorizedArtifact]] = {}
+    objects = {str(obj.object_id): obj for obj in projection.objects}
+    claims = {str(claim.claim_id): claim for claim in projection.claims}
+    selected_claim_ids: set[str] = set()
     promoted_paths: set[Path] = set()
-    for stable_id, model in accepted:
-        for authorized in gated_authorized_artifacts(model):
-            path = _normalize_path(authorized.staged_path)
-            authorized_by_path.setdefault(path, set()).add(authorized)
-            if stable_id in promoted_model_ids:
-                promoted_paths.add(path)
-    ambiguous = {path: values for path, values in authorized_by_path.items() if len(values) != 1}
-    if ambiguous:
-        raise RestrictedPublicArtifact(
-            "gated facts ambiguously authorize canonical artifact paths: "
-            f"{[path.as_posix() for path in sorted(ambiguous, key=str)]}"
+    for stable_id, model in current_models.items():
+        authority = model.get("artifact_authority")
+        if not isinstance(authority, Mapping) or authority.get("state") == "not-applicable":
+            continue
+        if authority.get("state") == ArtifactEventKind.STAGED_PRIVATE.value:
+            continue
+        transaction_id = authority.get("transaction_id")
+        claim_ids = authority.get("claim_ids")
+        if not isinstance(transaction_id, str) or not isinstance(claim_ids, list):
+            raise RestrictedPublicArtifact(
+                f"dependency-current model has malformed artifact authority: {stable_id}"
+            )
+        transactions = [
+            transaction
+            for (candidate_stable, _work_id, candidate_transaction), transaction in (
+                projection.transactions.items()
+            )
+            if candidate_stable == stable_id and str(candidate_transaction) == transaction_id
+        ]
+        if len(transactions) != 1:
+            raise RestrictedPublicArtifact(
+                f"dependency-current artifact transaction is missing or ambiguous: {stable_id}"
+            )
+        transaction = transactions[0]
+        expected_claim_ids = {str(claim.claim_id) for claim in transaction.claims}
+        if set(str(value) for value in claim_ids) != expected_claim_ids:
+            raise RestrictedPublicArtifact(
+                f"dependency-current artifact claim set differs from transaction: {stable_id}"
+            )
+        selected_claim_ids.update(expected_claim_ids)
+        if stable_id in promoted_model_ids:
+            promoted_paths.update(
+                _normalize_path(Path(claim.logical_path)) for claim in transaction.claims
+            )
+
+    authorized: list[AuthorizedArtifact] = []
+    objects_by_path: dict[Path, str] = {}
+    for claim_id in sorted(selected_claim_ids):
+        claim = claims.get(claim_id)
+        if claim is None:
+            raise RestrictedPublicArtifact(
+                f"dependency-current artifact claim is absent from projection: {claim_id}"
+            )
+        obj = objects.get(str(claim.object_id))
+        if obj is None:
+            raise RestrictedPublicArtifact(f"artifact claim has no intrinsic object: {claim_id}")
+        path = _normalize_path(Path(claim.logical_path))
+        prior_object = objects_by_path.setdefault(path, str(claim.object_id))
+        if prior_object != str(claim.object_id):
+            raise RestrictedPublicArtifact(
+                f"gated claims conflict at canonical artifact path: {path.as_posix()}"
+            )
+        redistribution = RedistributionClass(claim.license_disposition)
+        decision = LicenseDecision(
+            content_sha256=obj.content_sha256,
+            redistribution_class=redistribution,
+            evidence_ids=claim.evidence_ids,
+            rationale="normalized artifact claim accepted by canonical transaction",
         )
+        authorized.append(
+            AuthorizedArtifact(
+                staged_path=path,
+                artifact_role=claim.logical_role,
+                content_sha256=obj.content_sha256,
+                origin=ArtifactOrigin(claim.origin, claim.revision),
+                decision=decision,
+                source_id=claim.source_id,
+                fetch_recipe=claim.fetch_recipe_sha256,
+            )
+        )
+
+    authorized_by_path: dict[Path, list[AuthorizedArtifact]] = {}
+    for value in authorized:
+        authorized_by_path.setdefault(_normalize_path(value.staged_path), []).append(value)
 
     inventory_by_path = {_normalize_path(artifact.staged_path): artifact for artifact in artifacts}
     for path, artifact in inventory_by_path.items():
-        expected_values = authorized_by_path.get(path, set())
-        expected = next(iter(expected_values)) if len(expected_values) == 1 else None
-        if (
-            expected is None
-            or artifact.artifact_role != expected.artifact_role
-            or artifact.source_id != expected.source_id
-            or artifact.fetch_recipe != expected.fetch_recipe
-            or artifact.manifest.content_sha256 != expected.content_sha256
-            or artifact.manifest.origin != expected.origin
-            or artifact.decision != expected.decision
+        expected_values = authorized_by_path.get(path, [])
+        if not expected_values or all(
+            artifact.manifest.content_sha256 != expected.content_sha256
+            or artifact.decision.redistribution_class is not expected.decision.redistribution_class
+            for expected in expected_values
         ):
             raise RestrictedPublicArtifact(
                 "mirror row is outside the closed dependency-current authorized-artifact map: "
@@ -1521,7 +1578,7 @@ def _validate_gated_license_decisions(
             )
         expected_mirror = (
             "public"
-            if expected.decision.redistribution_class is RedistributionClass.PUBLIC_OK
+            if artifact.decision.redistribution_class is RedistributionClass.PUBLIC_OK
             else "private"
         )
         if artifact.manifest.mirror_class.value != expected_mirror:
@@ -1537,9 +1594,7 @@ def _validate_gated_license_decisions(
             "artifacts: "
             f"{[path.as_posix() for path in sorted(missing, key=str)]}"
         )
-    return tuple(
-        next(iter(authorized_by_path[path])) for path in sorted(authorized_by_path, key=str)
-    )
+    return tuple(authorized)
 
 
 def _validate_candidate_license_coverage(
