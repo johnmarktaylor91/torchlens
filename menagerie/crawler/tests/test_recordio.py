@@ -116,6 +116,16 @@ def test_v3_writer_reads_v2_history_but_appends_only_v3(tmp_path: Path) -> None:
         "unattested_partial",
     ):
         legacy.pop(field)
+    for field in (
+        "authority_epoch",
+        "base_environment_generation",
+        "environment_content_sha256",
+        "environment_authority_id",
+        "selected_interpreter_relative_path",
+        "selected_interpreter_digest",
+        "external_escape_records",
+    ):
+        legacy["environment"].pop(field)
     legacy["worker_receipt"].pop("output_value_sha256")
     with JsonlLedger(path, ATTEMPT_SCHEMA_VERSION) as ledger:
         ledger.append(legacy)

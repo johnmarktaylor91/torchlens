@@ -29,6 +29,8 @@ from typing import Any, IO, Literal, Mapping, Optional, Sequence, Union
 from menagerie.crawler.authority import (
     ExecutionReadManifest as ExecutionReadManifest,
     ExecutionReadManifestV2,
+    ExecutionReadManifestV3,
+    verify_execution_read_manifest_v3,
     verify_execution_read_manifest_v2,
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
@@ -754,6 +756,52 @@ def _runtime_model_data_path(path: Path) -> bool:
     return size >= _PACKAGE_BINARY_DATA_FLOOR_BYTES
 
 
+def _bytecode_source_path(path: Path) -> Optional[Path]:
+    """Return the source file corresponding to a CPython cache path.
+
+    Parameters
+    ----------
+    path:
+        Candidate resolved ``.pyc`` path.
+
+    Returns
+    -------
+    pathlib.Path | None
+        Expected source path for ``__pycache__`` bytecode, if recognizable.
+    """
+
+    if path.suffix != ".pyc" or path.parent.name != "__pycache__":
+        return None
+    match = re.fullmatch(r"(?P<stem>.+)\.[^.]+\.pyc", path.name)
+    if match is None:
+        return None
+    return path.parent.parent / f"{match.group('stem')}.py"
+
+
+def _allowed_exact_or_derived_file(path: Path, allowed_paths: Sequence[Path]) -> bool:
+    """Return whether a read is an exact file grant or derived bytecode.
+
+    Parameters
+    ----------
+    path:
+        Resolved candidate read path.
+    allowed_paths:
+        Resolved exact files and directory authorities.
+
+    Returns
+    -------
+    bool
+        True only for exact file entries or bytecode derived from an exact source
+        file entry. Directory authorities deliberately do not satisfy this helper.
+    """
+
+    exact_files = {allowed for allowed in allowed_paths if not allowed.is_dir()}
+    if path in exact_files and not _runtime_model_data_path(path):
+        return True
+    source = _bytecode_source_path(path)
+    return source is not None and source in exact_files
+
+
 def _regular_unaliased_file(path: Path) -> bool:
     """Return whether a capability path is one real, unaliased regular file.
 
@@ -960,7 +1008,7 @@ def compile_execution_read_manifest(
 
 
 def verify_execution_read_manifest(
-    manifest: ExecutionReadManifest | ExecutionReadManifestV2,
+    manifest: ExecutionReadManifest | ExecutionReadManifestV2 | ExecutionReadManifestV3,
 ) -> None:
     """Re-verify a compiled execution manifest immediately before spawn.
 
@@ -975,6 +1023,9 @@ def verify_execution_read_manifest(
         If its identity, bytes, paths, aliases, or closed kinds changed.
     """
 
+    if isinstance(manifest, ExecutionReadManifestV3):
+        verify_execution_read_manifest_v3(manifest)
+        return
     if isinstance(manifest, ExecutionReadManifestV2):
         verify_execution_read_manifest_v2(manifest)
         return
@@ -1038,6 +1089,13 @@ def _runtime_code_path_allowed(path: Path, runtime_code_roots: Sequence[Path]) -
     if not any(path == root or root in path.parents for root in roots):
         return False
     if _runtime_static_path_allowed(path):
+        return True
+    bytecode_source = _bytecode_source_path(path)
+    if (
+        bytecode_source is not None
+        and any(bytecode_source == root or root in bytecode_source.parents for root in roots)
+        and _runtime_static_path_allowed(bytecode_source)
+    ):
         return True
     if _runtime_model_data_path(path):
         return False
@@ -1756,19 +1814,29 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
             pass
         if not candidate.exists() and _runtime_import_metadata_path_allowed(candidate):
             return True
+        if self.legacy_runtime_code_roots and _runtime_import_metadata_path_allowed(candidate):
+            return True
+        if _runtime_native_code_path_allowed(candidate, self.legacy_runtime_code_roots):
+            return True
+        if _runtime_code_path_allowed(candidate, self.legacy_runtime_code_roots):
+            return True
+        if _allowed_exact_or_derived_file(candidate, self.allowed_read_paths):
+            return True
         if _runtime_model_data_path(candidate) and candidate != self.standard_input_asset:
-            return False
+            startup_pth = (
+                candidate.suffix.lower() == ".pth"
+                and candidate in self.allowed_read_paths
+                and _runtime_static_path_allowed(candidate)
+            )
+            if not startup_pth:
+                return False
         if candidate in self.allowed_read_paths:
             return True
         if any(root in candidate.parents for root in self.allowed_read_roots):
             return True
         if any(candidate == root or root in candidate.parents for root in self.allowed_roots):
             return True
-        if self.legacy_runtime_code_roots and _runtime_import_metadata_path_allowed(candidate):
-            return True
-        if _runtime_native_code_path_allowed(candidate, self.legacy_runtime_code_roots):
-            return True
-        return _runtime_code_path_allowed(candidate, self.legacy_runtime_code_roots)
+        return False
 
     def _audit_path(self, value: Any, *, writing: bool) -> None:
         """Audit one Python-level file access.

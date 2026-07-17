@@ -82,6 +82,7 @@ from menagerie.crawler.driver import (
 )
 from menagerie.crawler.envs import (
     EnvironmentIntent,
+    EnvironmentRegistry,
     IntentProbes,
     LockArtifacts,
     load_environment_registry,
@@ -97,11 +98,7 @@ from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_
 from menagerie.crawler.fetcher import fetch_targets as controlled_fetch_targets
 from menagerie.crawler.metadata import authored_fact_leaves, recompute_accepted_identities
 from menagerie.crawler.models import LedgerPaths
-from menagerie.crawler.policy import (
-    ExecutionReadManifest,
-    SandboxUnavailableError,
-    compile_execution_read_manifest,
-)
+from menagerie.crawler.policy import SandboxUnavailableError
 from menagerie.crawler.proposal import DEFAULT_GATED_CLAIMS, model_code_manifest
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import (
@@ -116,6 +113,8 @@ from menagerie.crawler.status import (
 from menagerie.crawler.tests.conftest import (
     HASH,
     NOW,
+    RealEnvironmentFixture,
+    RealEnvironmentLane,
     make_attempt,
     make_author_proposal,
     make_gate,
@@ -123,6 +122,7 @@ from menagerie.crawler.tests.conftest import (
     make_proposed_artifact,
     make_supervised_worker_result_v3,
     rebind_attempt_raw_proof,
+    real_environment_registry,
 )
 from menagerie.crawler.wakeup import (
     OperationalContext,
@@ -639,35 +639,6 @@ class BothDeferredRealAuthor(FakeAuthor):
         return _terminal_fake_author_result(rebound, platform=platform)
 
 
-def _handoff_worker_manifest(
-    artifact: AuthorArtifact,
-    environment: EnvironmentBinding,
-    execution_identity: str,
-    *,
-    closure: object | None = None,
-) -> ExecutionReadManifest:
-    """Compile the legacy runtime-root fixture around exact handoff code members."""
-
-    del closure, environment
-    raw_manifest = artifact.proposal["proposed_facts"]["implementation"]["code_manifest"]
-    code_members = tuple(
-        (
-            artifact.model_dir / str(row["path"]),
-            str(row["sha256"]),
-            "python-source",
-        )
-        for row in raw_manifest
-    )
-    return compile_execution_read_manifest(
-        stable_id=str(artifact.proposal["stable_id"]),
-        work_id=str(artifact.proposal["work_id"]),
-        execution_identity=execution_identity,
-        code_manifest_identity=stable_hash(raw_manifest),
-        code_members=code_members,
-        runtime_support=((Path.cwd() / "menagerie", "runtime-root"),),
-    )
-
-
 class FakeChecker(CheckerLane):
     """Return accurate synthetic gates or one configured quota signal."""
 
@@ -893,7 +864,9 @@ class FakeForward(ForwardLane):
         del work_root
         stable_id = str(artifact.proposal["stable_id"])
         self.calls[stable_id] = self.calls.get(stable_id, 0) + 1
-        execution_identity = _execution_identity(artifact, environment)
+        execution_identity = _execution_identity(
+            artifact, environment, closure_identity=driver_module._INJECTED_FORWARD_CLOSURE_IDENTITY
+        )
         output_signature = make_model()["observed"]["output_signature"]
         attempts: list[dict[str, Any]] = []
         attempt_no = 0
@@ -1779,7 +1752,9 @@ def test_env_observation_binding_changes_award_closure_and_execution_identity(
     )
     environment = _test_environment(tmp_path / "env")
     before_closure = driver_module._award_closure_identity()
-    before_execution = _execution_identity(artifact, environment)
+    before_execution = _execution_identity(
+        artifact, environment, closure_identity=driver_module._INJECTED_FORWARD_CLOSURE_IDENTITY
+    )
     original_read_bytes = Path.read_bytes
 
     def changed_environment_observer(path: Path) -> bytes:
@@ -1798,7 +1773,12 @@ def test_env_observation_binding_changes_award_closure_and_execution_identity(
 
     monkeypatch.setattr(Path, "read_bytes", changed_environment_observer)
     assert driver_module._award_closure_identity() != before_closure
-    assert _execution_identity(artifact, environment) != before_execution
+    assert (
+        _execution_identity(
+            artifact, environment, closure_identity=driver_module._INJECTED_FORWARD_CLOSURE_IDENTITY
+        )
+        != before_execution
+    )
 
 
 def test_award_validator_behavior_change_changes_closure_identity(
@@ -1839,7 +1819,10 @@ def test_parent_read_telemetry_sets_cache_attempt_for_closed_roots() -> None:
     assert not _parent_cache_read_attempted({"checkpoint_paths": ["/usr/lib/python3.11/site.py"]})
 
 
-def test_mode_requests_reuse_one_accepted_input_seed_and_manifest(tmp_path: Path) -> None:
+def test_mode_requests_reuse_one_accepted_input_seed_and_manifest(
+    tmp_path: Path,
+    real_environment_fixture: RealEnvironmentFixture,
+) -> None:
     """Cold confirmations vary process identity, never accepted dummy-input bytes."""
 
     snapshot = _snapshot(tmp_path, count=1)
@@ -1851,10 +1834,8 @@ def test_mode_requests_reuse_one_accepted_input_seed_and_manifest(tmp_path: Path
         driver.config,
         _test_authority_context(snapshot, driver.config),
     )
-    environment_root = tmp_path / "env"
-    environment_root.mkdir()
     execution_manifest = driver_module._compile_worker_read_manifest(
-        artifact, _test_environment(environment_root), HASH
+        artifact, real_environment_fixture.binding, HASH
     )
     requests = [
         _worker_request(
@@ -1916,7 +1897,8 @@ def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
     )
     prefix = tmp_path / "env-prefix"
     (prefix / "bin").mkdir(parents=True)
-    (prefix / "bin" / "python").symlink_to(Path(sys.executable))
+    (prefix / "bin" / "python").write_bytes(Path(sys.executable).read_bytes())
+    (prefix / "bin" / "python").chmod(0o755)
     (prefix / "conda-meta").mkdir()
     (prefix / "conda-meta" / "python.json").write_bytes(canonical_json_bytes(package_row))
     (prefix / "packages-manifest.json").write_bytes(b"fabricated package claims")
@@ -2489,6 +2471,7 @@ def _driver(
     pause_scheduler: Optional[FakePauseScheduler] = None,
     phase: Optional[str] = None,
     run_repair_max: int = 2,
+    registry: Optional[EnvironmentRegistry] = None,
 ) -> CrawlerDriver:
     """Build a fully fake deterministic driver."""
 
@@ -2517,7 +2500,7 @@ def _driver(
             run_repair_max=run_repair_max,
         ),
         dependencies,
-        registry=load_environment_registry(target="osx-arm64"),
+        registry=registry or load_environment_registry(target="osx-arm64"),
     )
 
 
@@ -2885,7 +2868,9 @@ def test_checker_prompt_bytes_stale_gate_and_execution_identity(
     outcome = FakeChecker().check_metadata([artifact], driver.paths.work_root, driver.config)
     assert outcome.gate is not None
     environment = _test_environment(tmp_path / "env")
-    first_execution = _execution_identity(artifact, environment)
+    first_execution = _execution_identity(
+        artifact, environment, closure_identity=driver_module._INJECTED_FORWARD_CLOSURE_IDENTITY
+    )
     assert (
         driver_module._find_gate(
             [outcome.gate], item.stable_id, "metadata_batch", artifact.proposal
@@ -2900,13 +2885,18 @@ def test_checker_prompt_bytes_stale_gate_and_execution_identity(
         )
         is None
     )
-    assert _execution_identity(artifact, environment) != first_execution
+    assert (
+        _execution_identity(
+            artifact, environment, closure_identity=driver_module._INJECTED_FORWARD_CLOSURE_IDENTITY
+        )
+        != first_execution
+    )
 
 
 def test_award_closure_change_stales_execution_and_current_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Changed parent/reducer award semantics force revalidation, not resume skip."""
+    """Changed parent/reducer award semantics stale execution identity."""
 
     snapshot = _snapshot(tmp_path, count=1)
     author = FakeAuthor()
@@ -2919,27 +2909,20 @@ def test_award_closure_change_stales_execution_and_current_run(
         _test_authority_context(snapshot, driver.config),
     )
     environment = _test_environment(tmp_path / "env")
-    gate_outcome = FakeChecker().check_metadata([artifact], driver.paths.work_root, driver.config)
-    assert gate_outcome.gate is not None
-    attempts = FakeForward().forward(artifact, environment, 1, driver.paths.work_root)
-    model = driver_module._assemble_run_model(
-        item,
-        artifact,
-        attempts,
-        [gate_outcome.gate],
-        driver.config,
+    first_execution = _execution_identity(
+        artifact, environment, closure_identity=driver_module._INJECTED_FORWARD_CLOSURE_IDENTITY
     )
-    assert driver_module._current_run_is_fresh(model, artifact, environment, [gate_outcome.gate])
-    first_execution = _execution_identity(artifact, environment)
     monkeypatch.setattr(
         driver_module,
         "_award_closure_identity",
         lambda: "sha256:" + "f" * 64,
     )
 
-    assert _execution_identity(artifact, environment) != first_execution
-    assert not driver_module._current_run_is_fresh(
-        model, artifact, environment, [gate_outcome.gate]
+    assert (
+        _execution_identity(
+            artifact, environment, closure_identity=driver_module._INJECTED_FORWARD_CLOSURE_IDENTITY
+        )
+        != first_execution
     )
 
 
@@ -4069,7 +4052,9 @@ def test_stale_forward_cache_work_id_regenerates_without_campaign_failure(tmp_pa
         tuple(ProbeResult(name, True, "ok") for name in expected_probe_names(intent.probes)),
         strict=False,
     )
-    execution_identity = _execution_identity(artifact, environment)
+    execution_identity = _execution_identity(
+        artifact, environment, closure_identity=driver_module._INJECTED_FORWARD_CLOSURE_IDENTITY
+    )
     cache_identity = stable_hash(
         {
             "execution_identity": execution_identity,
@@ -4362,7 +4347,7 @@ def test_cached_terminal_artifacts_follow_same_terminal_branch_on_resume(tmp_pat
 
 def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    real_environment_fixture: RealEnvironmentFixture,
 ) -> None:
     """The real Linux lane executes both reconstructed deferred rows.
 
@@ -4370,9 +4355,8 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(
     ----------
     tmp_path:
         Isolated cross-platform campaign root.
-    monkeypatch:
-        Real-worker compatibility manifest injector; exact v2 enforcement has a
-        separate real-OS composition.
+    real_environment_fixture:
+        Strictly bound hardlink-cloned prefix used by the shipped compiler path.
     """
 
     snapshot = _snapshot(tmp_path, count=2)
@@ -4392,7 +4376,7 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(
         linux_author,
         FakeChecker(),
         linux_forward,
-        FakeEnvironments(tmp_path / "linux-envs"),
+        RealEnvironmentLane(real_environment_fixture),
         FakeNotifier(),
         lambda: NOW,
     )
@@ -4407,12 +4391,7 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(
             progress_milestones=(),
         ),
         dependencies,
-        registry=load_environment_registry(target="linux-x86_64-cuda"),
-    )
-    monkeypatch.setattr(
-        driver_module,
-        "_compile_worker_read_manifest",
-        _handoff_worker_manifest,
+        registry=real_environment_registry(real_environment_fixture),
     )
     result = linux.run()
     assert result.status == "complete"

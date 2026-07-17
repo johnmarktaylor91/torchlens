@@ -4,14 +4,21 @@ from __future__ import annotations
 
 import ast
 import json
-from dataclasses import asdict, dataclass
+import os
+import stat
+import unicodedata
+from dataclasses import asdict, dataclass, field as dataclass_field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping, NewType, Optional, Sequence
 
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION_V3,
+    ENVIRONMENT_AUTHORITY_VERSION_V1,
+    ENVIRONMENT_CONTENT_MANIFEST_VERSION_V1,
+    ENVIRONMENT_GENERATION_VERSION_V2,
     EXECUTION_READ_MANIFEST_VERSION_V2,
+    EXECUTION_READ_MANIFEST_VERSION_V3,
     FAILURE_REASON_CODES,
     GATE_SCHEMA_VERSION_V3,
 )
@@ -364,6 +371,529 @@ class RuntimeLookupDirectory:
 
 
 @dataclass(frozen=True)
+class EnvironmentExternalTarget:
+    """One exact regular file reached by a sealed-prefix symlink escape."""
+
+    path: Path
+    sha256: str
+    kind: str = "regular-file"
+
+
+@dataclass(frozen=True)
+class EnvironmentContentEntry:
+    """One canonical directory, regular file, or symlink in a prefix seal."""
+
+    relative_path: str
+    entry_type: str
+    sha256: Optional[str]
+    executable: Optional[bool]
+    link_text: Optional[str]
+    resolved_target_relative_path: Optional[str]
+
+
+@dataclass(frozen=True)
+class EnvironmentContentManifestV1:
+    """Complete stable content seal for one materialized environment prefix."""
+
+    manifest_version: str
+    path_normalization: str
+    entries: tuple[EnvironmentContentEntry, ...]
+    selected_interpreter_relative_path: str
+    selected_interpreter_target_relative_path: str
+    selected_interpreter_digest: str
+    startup_pth_relative_paths: tuple[str, ...]
+    external_targets: tuple[EnvironmentExternalTarget, ...]
+    content_manifest_sha256: str
+    cheap_tree_fingerprint: str
+
+
+@dataclass(frozen=True)
+class EnvironmentAuthorityV1:
+    """Digest-bound read-only capability for one canonical environment prefix."""
+
+    authority_version: str
+    authority_id: str
+    prefix: Path
+    base_environment_generation: str
+    environment_generation: str
+    content_manifest_sha256: str
+    selected_interpreter: Path
+    selected_interpreter_relative_path: str
+    selected_interpreter_target_relative_path: str
+    selected_interpreter_digest: str
+    startup_pth_paths: tuple[Path, ...]
+    external_targets: tuple[EnvironmentExternalTarget, ...]
+    content_manifest: EnvironmentContentManifestV1
+    _cache: EnvironmentAuthorityCache = dataclass_field(compare=False, repr=False)
+
+
+def _environment_entry_payload(entry: EnvironmentContentEntry) -> JsonObject:
+    """Return one content entry's path-neutral canonical identity payload.
+
+    Parameters
+    ----------
+    entry:
+        Stable prefix-tree entry.
+
+    Returns
+    -------
+    dict[str, Any]
+        Closed JSON-compatible entry payload.
+    """
+
+    return {
+        "relative_path": entry.relative_path,
+        "entry_type": entry.entry_type,
+        "sha256": entry.sha256,
+        "executable": entry.executable,
+        "link_text": entry.link_text,
+        "resolved_target_relative_path": entry.resolved_target_relative_path,
+    }
+
+
+def _hash_regular_file_stably(path: Path, before: os.stat_result) -> str:
+    """Hash a regular file and reject concurrent metadata changes.
+
+    Parameters
+    ----------
+    path:
+        Lexical file path opened without following a different tree entry.
+    before:
+        ``lstat`` result captured immediately before the read.
+
+    Returns
+    -------
+    str
+        Exact prefixed SHA-256 digest.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If the file changes while being hashed.
+    """
+
+    import hashlib
+
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        after = path.lstat()
+    except OSError as exc:
+        raise AuthorityDerivationError(f"environment member cannot be sealed: {path}") from exc
+    stable_fields = (
+        "st_dev",
+        "st_ino",
+        "st_mode",
+        "st_size",
+        "st_mtime_ns",
+    )
+    if any(getattr(before, name) != getattr(after, name) for name in stable_fields):
+        raise AuthorityDerivationError(f"environment member changed while sealing: {path}")
+    return f"sha256:{digest.hexdigest()}"
+
+
+def _canonical_relative_path(prefix: Path, path: Path) -> str:
+    """Return a canonical NFC POSIX relative path or fail closed.
+
+    Parameters
+    ----------
+    prefix, path:
+        Canonical prefix and one lexical descendant.
+
+    Returns
+    -------
+    str
+        NFC-normalized POSIX relative path.
+    """
+
+    relative = path.relative_to(prefix).as_posix()
+    normalized = unicodedata.normalize("NFC", relative)
+    if relative != normalized or not relative or relative.startswith("/"):
+        raise AuthorityDerivationError(f"environment member path is noncanonical: {relative!r}")
+    return relative
+
+
+def _scan_environment_tree(
+    prefix: Path,
+    *,
+    hash_files: bool,
+) -> tuple[
+    tuple[EnvironmentContentEntry, ...],
+    tuple[EnvironmentExternalTarget, ...],
+    str,
+]:
+    """Enumerate one prefix without following tree symlinks.
+
+    Parameters
+    ----------
+    prefix:
+        Canonical materialized environment root.
+    hash_files:
+        Whether to hash regular-file and external-target bytes.
+
+    Returns
+    -------
+    tuple
+        Canonical entries, exact external targets, and cheap complete-tree fingerprint.
+    """
+
+    entries: list[EnvironmentContentEntry] = []
+    external_by_path: dict[Path, EnvironmentExternalTarget] = {}
+    fingerprint_rows: list[JsonObject] = []
+    pending = [prefix]
+    while pending:
+        directory = pending.pop()
+        try:
+            children = sorted(directory.iterdir(), key=lambda value: value.name.encode("utf-8"))
+        except (OSError, UnicodeError) as exc:
+            raise AuthorityDerivationError(
+                f"environment directory cannot be sealed: {directory}"
+            ) from exc
+        for path in children:
+            relative = _canonical_relative_path(prefix, path)
+            try:
+                status = path.lstat()
+            except OSError as exc:
+                raise AuthorityDerivationError(
+                    f"environment member cannot be inspected: {path}"
+                ) from exc
+            common_fingerprint: JsonObject = {
+                "relative_path": relative,
+                "mode": stat.S_IMODE(status.st_mode),
+                "size": status.st_size,
+                "mtime_ns": status.st_mtime_ns,
+            }
+            if stat.S_ISDIR(status.st_mode):
+                entry_type = "directory"
+                entries.append(
+                    EnvironmentContentEntry(relative, entry_type, None, None, None, None)
+                )
+                pending.append(path)
+            elif stat.S_ISREG(status.st_mode):
+                entry_type = "regular-file"
+                digest = _hash_regular_file_stably(path, status) if hash_files else None
+                entries.append(
+                    EnvironmentContentEntry(
+                        relative,
+                        entry_type,
+                        digest,
+                        bool(status.st_mode & 0o111),
+                        None,
+                        None,
+                    )
+                )
+            elif stat.S_ISLNK(status.st_mode):
+                entry_type = "symlink"
+                try:
+                    link_text = os.readlink(path)
+                    resolved = path.resolve(strict=True)
+                except OSError as exc:
+                    raise AuthorityDerivationError(
+                        f"environment symlink target is unavailable: {path}"
+                    ) from exc
+                target_relative: Optional[str] = None
+                if resolved.is_relative_to(prefix):
+                    target_relative = _canonical_relative_path(prefix, resolved)
+                else:
+                    try:
+                        target_status = resolved.stat()
+                    except OSError as exc:
+                        raise AuthorityDerivationError(
+                            f"environment symlink escape is unavailable: {path}"
+                        ) from exc
+                    if not stat.S_ISREG(target_status.st_mode):
+                        raise AuthorityDerivationError(
+                            f"environment symlink escapes to a non-file target: {path}"
+                        )
+                    digest = (
+                        _hash_regular_file_stably(resolved, target_status) if hash_files else ""
+                    )
+                    external_by_path[resolved] = EnvironmentExternalTarget(
+                        path=resolved,
+                        sha256=digest,
+                    )
+                    common_fingerprint["external_target"] = str(resolved)
+                    common_fingerprint["external_size"] = target_status.st_size
+                    common_fingerprint["external_mode"] = stat.S_IMODE(target_status.st_mode)
+                    common_fingerprint["external_mtime_ns"] = target_status.st_mtime_ns
+                common_fingerprint["link_text"] = link_text
+                entries.append(
+                    EnvironmentContentEntry(
+                        relative,
+                        entry_type,
+                        None,
+                        None,
+                        link_text,
+                        target_relative,
+                    )
+                )
+            else:
+                raise AuthorityDerivationError(
+                    f"environment contains a forbidden special entry: {path}"
+                )
+            common_fingerprint["entry_type"] = entry_type
+            fingerprint_rows.append(common_fingerprint)
+    entries.sort(key=lambda entry: entry.relative_path.encode("utf-8"))
+    external = tuple(
+        external_by_path[path] for path in sorted(external_by_path, key=lambda value: str(value))
+    )
+    fingerprint_rows.sort(key=lambda row: str(row["relative_path"]).encode("utf-8"))
+    return tuple(entries), external, stable_hash(fingerprint_rows)
+
+
+def _seal_environment_content(
+    prefix: Path,
+    selected_interpreter: Path,
+) -> EnvironmentContentManifestV1:
+    """Build one stable complete prefix seal with two tree enumerations.
+
+    Parameters
+    ----------
+    prefix, selected_interpreter:
+        Canonical environment root and its lexical interpreter member.
+
+    Returns
+    -------
+    EnvironmentContentManifestV1
+        Complete content identity and cheap validation token.
+    """
+
+    try:
+        canonical_prefix = prefix.resolve(strict=True)
+    except OSError as exc:
+        raise AuthorityDerivationError(f"environment prefix is unavailable: {prefix}") from exc
+    lexical_interpreter = selected_interpreter.absolute()
+    if not lexical_interpreter.is_relative_to(canonical_prefix):
+        raise AuthorityDerivationError("selected interpreter is outside the canonical prefix")
+    try:
+        resolved_interpreter = lexical_interpreter.resolve(strict=True)
+        interpreter_status = resolved_interpreter.stat()
+    except OSError as exc:
+        raise AuthorityDerivationError("selected interpreter is unavailable") from exc
+    if not resolved_interpreter.is_relative_to(canonical_prefix):
+        raise AuthorityDerivationError("selected interpreter resolves outside the canonical prefix")
+    if not stat.S_ISREG(interpreter_status.st_mode) or not interpreter_status.st_mode & 0o111:
+        raise AuthorityDerivationError("selected interpreter is not an executable regular file")
+
+    entries, external, fingerprint = _scan_environment_tree(
+        canonical_prefix,
+        hash_files=True,
+    )
+    second_entries, second_external, second_fingerprint = _scan_environment_tree(
+        canonical_prefix,
+        hash_files=False,
+    )
+    stable_shape = tuple(
+        (
+            entry.relative_path,
+            entry.entry_type,
+            entry.executable,
+            entry.link_text,
+            entry.resolved_target_relative_path,
+        )
+        for entry in entries
+    )
+    second_shape = tuple(
+        (
+            entry.relative_path,
+            entry.entry_type,
+            entry.executable,
+            entry.link_text,
+            entry.resolved_target_relative_path,
+        )
+        for entry in second_entries
+    )
+    if stable_shape != second_shape or fingerprint != second_fingerprint:
+        raise AuthorityDerivationError("environment tree changed during content sealing")
+    if tuple(target.path for target in external) != tuple(
+        target.path for target in second_external
+    ):
+        raise AuthorityDerivationError("environment symlink escapes changed during sealing")
+
+    relative_interpreter = _canonical_relative_path(canonical_prefix, lexical_interpreter)
+    target_relative = _canonical_relative_path(canonical_prefix, resolved_interpreter)
+    entries_by_path = {entry.relative_path: entry for entry in entries}
+    interpreter_entry = entries_by_path.get(target_relative)
+    if (
+        interpreter_entry is None
+        or interpreter_entry.entry_type != "regular-file"
+        or interpreter_entry.sha256 is None
+        or not interpreter_entry.executable
+    ):
+        raise AuthorityDerivationError("selected interpreter is absent from the content seal")
+    startup_pth = tuple(
+        entry.relative_path
+        for entry in entries
+        if entry.entry_type == "regular-file"
+        and entry.relative_path.endswith(".pth")
+        and "/site-packages/" in f"/{entry.relative_path}"
+    )
+    payload: JsonObject = {
+        "manifest_version": ENVIRONMENT_CONTENT_MANIFEST_VERSION_V1,
+        "path_normalization": "NFC POSIX relative paths; UTF-8 byte order; lexical-case identity",
+        "entries": [_environment_entry_payload(entry) for entry in entries],
+        "selected_interpreter_relative_path": relative_interpreter,
+        "selected_interpreter_target_relative_path": target_relative,
+        "selected_interpreter_digest": interpreter_entry.sha256,
+        "startup_pth_relative_paths": list(startup_pth),
+        "external_targets": [
+            {"path": str(target.path), "sha256": target.sha256, "kind": target.kind}
+            for target in external
+        ],
+    }
+    return EnvironmentContentManifestV1(
+        manifest_version=ENVIRONMENT_CONTENT_MANIFEST_VERSION_V1,
+        path_normalization=str(payload["path_normalization"]),
+        entries=entries,
+        selected_interpreter_relative_path=relative_interpreter,
+        selected_interpreter_target_relative_path=target_relative,
+        selected_interpreter_digest=interpreter_entry.sha256,
+        startup_pth_relative_paths=startup_pth,
+        external_targets=external,
+        content_manifest_sha256=stable_hash(payload),
+        cheap_tree_fingerprint=fingerprint,
+    )
+
+
+class EnvironmentAuthorityCache:
+    """Parent-owned seal cache for one active immutable environment prefix."""
+
+    def __init__(self) -> None:
+        """Initialize empty deterministic counters and no active authority."""
+
+        self.full_seals = 0
+        self.cheap_validations = 0
+        self.invalidations = 0
+        self.rehashes = 0
+        self._manifest: Optional[EnvironmentContentManifestV1] = None
+
+    @property
+    def manifest(self) -> Optional[EnvironmentContentManifestV1]:
+        """Return the current complete cached manifest, if any."""
+
+        return self._manifest
+
+    def _seal(self, prefix: Path, interpreter: Path) -> EnvironmentContentManifestV1:
+        """Seal one prefix and increment the deterministic full-seal counter."""
+
+        self.full_seals += 1
+        return _seal_environment_content(prefix, interpreter)
+
+    def bind(
+        self,
+        *,
+        prefix: Path,
+        selected_interpreter: Path,
+        base_environment_generation: str,
+    ) -> EnvironmentAuthorityV1:
+        """Bind a stable complete seal into generation v2 and one local authority.
+
+        Parameters
+        ----------
+        prefix, selected_interpreter:
+            Materialized environment and its selected lexical interpreter.
+        base_environment_generation:
+            Existing exact lock/export/package/probe generation.
+
+        Returns
+        -------
+        EnvironmentAuthorityV1
+            Complete digest-bound prefix capability.
+        """
+
+        base_generation = _require_hash(
+            base_environment_generation,
+            "base_environment_generation",
+        )
+        manifest = self._seal(prefix, selected_interpreter)
+        canonical_prefix = prefix.resolve(strict=True)
+        final_generation = stable_hash(
+            {
+                "version": ENVIRONMENT_GENERATION_VERSION_V2,
+                "base_environment_generation": base_generation,
+                "environment_content_sha256": manifest.content_manifest_sha256,
+            }
+        )
+        selected = canonical_prefix / manifest.selected_interpreter_relative_path
+        authority_payload = {
+            "version": ENVIRONMENT_AUTHORITY_VERSION_V1,
+            "prefix": str(canonical_prefix),
+            "selected_interpreter_relative_path": (manifest.selected_interpreter_relative_path),
+            "selected_interpreter_digest": manifest.selected_interpreter_digest,
+            "environment_generation": final_generation,
+            "environment_content_sha256": manifest.content_manifest_sha256,
+            "external_targets": [
+                {"path": str(target.path), "sha256": target.sha256, "kind": target.kind}
+                for target in manifest.external_targets
+            ],
+        }
+        self._manifest = manifest
+        return EnvironmentAuthorityV1(
+            authority_version=ENVIRONMENT_AUTHORITY_VERSION_V1,
+            authority_id=stable_hash(authority_payload),
+            prefix=canonical_prefix,
+            base_environment_generation=base_generation,
+            environment_generation=final_generation,
+            content_manifest_sha256=manifest.content_manifest_sha256,
+            selected_interpreter=selected,
+            selected_interpreter_relative_path=manifest.selected_interpreter_relative_path,
+            selected_interpreter_target_relative_path=(
+                manifest.selected_interpreter_target_relative_path
+            ),
+            selected_interpreter_digest=manifest.selected_interpreter_digest,
+            startup_pth_paths=tuple(
+                canonical_prefix / relative for relative in manifest.startup_pth_relative_paths
+            ),
+            external_targets=manifest.external_targets,
+            content_manifest=manifest,
+            _cache=self,
+        )
+
+    def verify(self, authority: EnvironmentAuthorityV1) -> None:
+        """Cheaply validate or fully rehash one bound active authority.
+
+        Parameters
+        ----------
+        authority:
+            Previously bound prefix capability.
+
+        Raises
+        ------
+        AuthorityDerivationError
+            If the complete current seal differs from the bound identity.
+        """
+
+        if authority._cache is not self or self._manifest is None:
+            raise AuthorityDerivationError("environment authority cache association is invalid")
+        self.cheap_validations += 1
+        _entries, _external, fingerprint = _scan_environment_tree(
+            authority.prefix,
+            hash_files=False,
+        )
+        if fingerprint == self._manifest.cheap_tree_fingerprint:
+            return
+        self.rehashes += 1
+        current = self._seal(
+            authority.prefix, authority.prefix / authority.selected_interpreter_relative_path
+        )
+        if (
+            current.content_manifest_sha256 != authority.content_manifest_sha256
+            or current.selected_interpreter_digest != authority.selected_interpreter_digest
+        ):
+            self.invalidations += 1
+            raise AuthorityDerivationError("environment content seal changed; authority is stale")
+        self._manifest = current
+
+    def invalidate(self) -> None:
+        """Invalidate the cached active prefix on teardown or quarantine."""
+
+        self.invalidations += 1
+        self._manifest = None
+
+
+@dataclass(frozen=True)
 class ExecutionReadManifestV2:
     """Frozen v2 worker capability with no semantic filesystem-root grants.
 
@@ -421,6 +951,49 @@ class ExecutionReadManifestV2:
 
 
 @dataclass(frozen=True)
+class ExecutionReadManifestV3:
+    """Live worker capability with one complete sealed environment authority."""
+
+    manifest_version: str
+    manifest_id: str
+    stable_id: str
+    work_id: str
+    execution_identity: str
+    code_manifest_identity: str
+    environment_generation: str
+    code_members: tuple[RuntimeMember, ...]
+    worker_members: tuple[RuntimeMember, ...]
+    environment_authority: EnvironmentAuthorityV1
+    standard_input_asset: Optional[tuple[Path, str, str]]
+    lookup_directories: tuple[RuntimeLookupDirectory, ...]
+
+    @property
+    def closure_identity(self) -> str:
+        """Return the cycle-free identity of all four read-authority partitions."""
+
+        return _executable_closure_v3_identity(
+            code_manifest_identity=self.code_manifest_identity,
+            environment_authority=self.environment_authority,
+            code_members=self.code_members,
+            worker_members=self.worker_members,
+            standard_input_asset=self.standard_input_asset,
+            lookup_directories=self.lookup_directories,
+        )
+
+    @property
+    def runtime_members(self) -> tuple[RuntimeMember, ...]:
+        """Return exact outside-prefix crawler/bootstrap members."""
+
+        return self.worker_members
+
+    @property
+    def runtime_support(self) -> tuple[tuple[Path, str], ...]:
+        """Return only exact outside-prefix files through the legacy adapter."""
+
+        return tuple((member.path, "runtime-file") for member in self.worker_members)
+
+
+@dataclass(frozen=True)
 class ExecutableClosure:
     """Verified executable members collected before execution identity exists."""
 
@@ -430,6 +1003,20 @@ class ExecutableClosure:
     installed_package_inventory_sha256: str
     code_members: tuple[RuntimeMember, ...]
     runtime_members: tuple[RuntimeMember, ...]
+    standard_input_asset: Optional[tuple[Path, str, str]]
+    lookup_directories: tuple[RuntimeLookupDirectory, ...]
+
+
+@dataclass(frozen=True)
+class ExecutableClosureV3:
+    """Verified four-part execution closure collected before request identity."""
+
+    identity: str
+    code_manifest_identity: str
+    environment_generation: str
+    code_members: tuple[RuntimeMember, ...]
+    worker_members: tuple[RuntimeMember, ...]
+    environment_authority: EnvironmentAuthorityV1
     standard_input_asset: Optional[tuple[Path, str, str]]
     lookup_directories: tuple[RuntimeLookupDirectory, ...]
 
@@ -455,6 +1042,31 @@ class ExactReadCapability:
         """
 
         return tuple(member.path for member in self.members)
+
+
+@dataclass(frozen=True)
+class EnvironmentReadCapability:
+    """Single verified read projection shared by v3 enforcement consumers."""
+
+    manifest_id: str
+    closure_identity: str
+    exact_members: tuple[RuntimeMember, ...]
+    environment_prefix: Path
+    selected_interpreter: Path
+    startup_pth_paths: tuple[Path, ...]
+    external_targets: tuple[EnvironmentExternalTarget, ...]
+    standard_input_asset: Optional[tuple[Path, str, str]]
+    lookup_directories: tuple[RuntimeLookupDirectory, ...]
+
+    @property
+    def exact_member_paths(self) -> tuple[Path, ...]:
+        """Return exact model, crawler, external, and asset file capabilities."""
+
+        paths = [member.path for member in self.exact_members]
+        paths.extend(target.path for target in self.external_targets)
+        if self.standard_input_asset is not None:
+            paths.append(self.standard_input_asset[0])
+        return tuple(dict.fromkeys(paths))
 
 
 @dataclass(frozen=True)
@@ -781,10 +1393,9 @@ def _verified_member(
     digest = _require_hash(member.sha256, f"{field}.sha256")
     try:
         resolved = path.resolve(strict=True)
-        status = path.stat()
     except OSError as exc:
         raise AuthorityDerivationError(f"{field} member is unavailable: {path}") from exc
-    if path.is_symlink() or resolved != path or not path.is_file() or status.st_nlink != 1:
+    if path.is_symlink() or resolved != path or not path.is_file():
         raise AuthorityDerivationError(f"{field} member is not an exact unaliased file: {path}")
     suffixes = _MEMBER_SUFFIXES.get(member.kind)
     lowered_name = path.name.lower()
@@ -1211,17 +1822,10 @@ def compile_execution_read_manifest_v2(
             raise AuthorityDerivationError("standard input asset path must be absolute")
         try:
             resolved = path.resolve(strict=True)
-            status = path.stat()
             observed = hash_bytes(path.read_bytes())
         except OSError as exc:
             raise AuthorityDerivationError("standard input asset is unavailable") from exc
-        if (
-            path.is_symlink()
-            or resolved != path
-            or not path.is_file()
-            or status.st_nlink != 1
-            or path in member_paths
-        ):
+        if path.is_symlink() or resolved != path or not path.is_file() or path in member_paths:
             raise AuthorityDerivationError("standard input asset is aliased or overlaps code")
         if observed != digest:
             raise AuthorityDerivationError("standard input asset digest changed")
@@ -1424,6 +2028,515 @@ def exact_read_capability(manifest: ExecutionReadManifestV2) -> ExactReadCapabil
         manifest_id=manifest.manifest_id,
         closure_identity=manifest.closure_identity,
         members=(*manifest.code_members, *manifest.runtime_members),
+        standard_input_asset=manifest.standard_input_asset,
+        lookup_directories=manifest.lookup_directories,
+    )
+
+
+def _environment_authority_payload(authority: EnvironmentAuthorityV1) -> JsonObject:
+    """Return the closed local environment-authority identity payload.
+
+    Parameters
+    ----------
+    authority:
+        Bound environment prefix authority.
+
+    Returns
+    -------
+    dict[str, Any]
+        Canonical authority payload.
+    """
+
+    return {
+        "version": authority.authority_version,
+        "prefix": str(authority.prefix),
+        "selected_interpreter_relative_path": authority.selected_interpreter_relative_path,
+        "selected_interpreter_digest": authority.selected_interpreter_digest,
+        "environment_generation": authority.environment_generation,
+        "environment_content_sha256": authority.content_manifest_sha256,
+        "external_targets": [
+            {"path": str(target.path), "sha256": target.sha256, "kind": target.kind}
+            for target in authority.external_targets
+        ],
+    }
+
+
+def verify_environment_authority(authority: EnvironmentAuthorityV1) -> None:
+    """Verify one authority's identities and current complete prefix seal.
+
+    Parameters
+    ----------
+    authority:
+        Previously bound environment capability.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If an association, interpreter, or sealed member is stale.
+    """
+
+    if not isinstance(authority, EnvironmentAuthorityV1):
+        raise AuthorityDerivationError("execution manifest lacks EnvironmentAuthorityV1")
+    if authority.authority_version != ENVIRONMENT_AUTHORITY_VERSION_V1:
+        raise AuthorityDerivationError("environment authority has the wrong discriminator")
+    if authority.authority_id != stable_hash(_environment_authority_payload(authority)):
+        raise AuthorityDerivationError("environment authority identity is rewritten")
+    expected_generation = stable_hash(
+        {
+            "version": ENVIRONMENT_GENERATION_VERSION_V2,
+            "base_environment_generation": authority.base_environment_generation,
+            "environment_content_sha256": authority.content_manifest_sha256,
+        }
+    )
+    if authority.environment_generation != expected_generation:
+        raise AuthorityDerivationError("environment generation omits or rewrites the content seal")
+    lexical_interpreter = authority.prefix / authority.selected_interpreter_relative_path
+    try:
+        resolved_interpreter = lexical_interpreter.resolve(strict=True)
+    except OSError as exc:
+        raise AuthorityDerivationError("selected interpreter is unavailable") from exc
+    expected_target = authority.prefix / authority.selected_interpreter_target_relative_path
+    if resolved_interpreter != expected_target:
+        raise AuthorityDerivationError("selected interpreter association changed")
+    if not resolved_interpreter.is_relative_to(authority.prefix):
+        raise AuthorityDerivationError("selected interpreter resolves outside the canonical prefix")
+    authority._cache.verify(authority)
+
+
+def _v3_member(
+    value: RuntimeMember | tuple[Path, str, str],
+    *,
+    provenance: str,
+) -> RuntimeMember:
+    """Normalize a typed member or public three-tuple into one RuntimeMember.
+
+    Parameters
+    ----------
+    value:
+        Typed member or path/digest/kind tuple.
+    provenance:
+        Trusted compiler provenance for tuple callers.
+
+    Returns
+    -------
+    RuntimeMember
+        Typed candidate ready for exact verification.
+    """
+
+    if isinstance(value, RuntimeMember):
+        return value
+    path, digest, kind = value
+    return RuntimeMember(path=path, sha256=digest, kind=kind, provenance=provenance)
+
+
+def _normalized_lookup_directories(
+    lookup_directories: Sequence[RuntimeLookupDirectory],
+) -> tuple[RuntimeLookupDirectory, ...]:
+    """Verify lookup scaffolds without granting descendant read authority.
+
+    Parameters
+    ----------
+    lookup_directories:
+        Candidate non-authorizing import roots.
+
+    Returns
+    -------
+    tuple[RuntimeLookupDirectory, ...]
+        Canonically sorted unique roots.
+    """
+
+    normalized: list[RuntimeLookupDirectory] = []
+    seen: set[Path] = set()
+    for directory in lookup_directories:
+        if not isinstance(directory, RuntimeLookupDirectory):
+            raise AuthorityDerivationError(
+                "lookup_directories must contain RuntimeLookupDirectory values"
+            )
+        try:
+            resolved = directory.path.resolve(strict=True)
+        except OSError as exc:
+            raise AuthorityDerivationError(
+                f"lookup directory is unavailable: {directory.path}"
+            ) from exc
+        if (
+            not directory.path.is_absolute()
+            or directory.path.is_symlink()
+            or resolved != directory.path
+            or not directory.path.is_dir()
+            or directory.path in seen
+        ):
+            raise AuthorityDerivationError(
+                f"lookup directory is unsafe or duplicated: {directory.path}"
+            )
+        seen.add(directory.path)
+        normalized.append(
+            RuntimeLookupDirectory(
+                path=directory.path,
+                provenance=_require_nonempty_string(
+                    directory.provenance,
+                    "lookup_directories.provenance",
+                ),
+            )
+        )
+    normalized.sort(key=lambda directory: (str(directory.path), directory.provenance))
+    return tuple(normalized)
+
+
+def _normalized_standard_asset(
+    standard_input_asset: Optional[tuple[Path, str, str]],
+    occupied: set[Path],
+) -> Optional[tuple[Path, str, str]]:
+    """Verify the exact selected standard input independently of prefix authority.
+
+    Parameters
+    ----------
+    standard_input_asset:
+        Optional exact asset tuple.
+    occupied:
+        Exact code/worker paths that the asset must not overlap.
+
+    Returns
+    -------
+    tuple[pathlib.Path, str, str] | None
+        Normalized exact asset.
+    """
+
+    if standard_input_asset is None:
+        return None
+    path, digest, asset_id = standard_input_asset
+    digest = _require_hash(digest, "standard_input_asset.sha256")
+    asset_id = _require_nonempty_string(asset_id, "standard_input_asset.asset_id")
+    try:
+        resolved = path.resolve(strict=True)
+        observed = hash_bytes(path.read_bytes())
+    except OSError as exc:
+        raise AuthorityDerivationError("standard input asset is unavailable") from exc
+    if not path.is_absolute() or path.is_symlink() or resolved != path or path in occupied:
+        raise AuthorityDerivationError("standard input asset is aliased or overlaps code")
+    if observed != digest:
+        raise AuthorityDerivationError("standard input asset digest changed")
+    return path, digest, asset_id
+
+
+def _validate_static_import_closure_v3(
+    members: Sequence[RuntimeMember],
+    lookup_directories: Sequence[RuntimeLookupDirectory],
+    environment_prefix: Path,
+) -> None:
+    """Require static imports outside the sealed prefix to remain exact members.
+
+    Parameters
+    ----------
+    members:
+        Exact model and crawler/bootstrap files.
+    lookup_directories:
+        Import resolution scaffolds.
+    environment_prefix:
+        Sole digest-bound semantic root.
+    """
+
+    member_paths = {member.path for member in members}
+    roots = tuple(directory.path for directory in lookup_directories)
+    for member in members:
+        if member.kind != "python-source" or member.path.suffix != ".py":
+            continue
+        for module_name in _import_names(member.path, roots):
+            missing = [
+                path
+                for path in _module_files(module_name, roots)
+                if not path.is_relative_to(environment_prefix) and path not in member_paths
+            ]
+            if missing:
+                rendered = ", ".join(str(path) for path in missing)
+                raise AuthorityDerivationError(
+                    f"static import is outside sealed environment and exact inventory: {rendered}"
+                )
+
+
+def _manifest_v3_payload(
+    *,
+    stable_id: str,
+    work_id: str,
+    execution_identity: str,
+    code_manifest_identity: str,
+    environment_authority: EnvironmentAuthorityV1,
+    code_members: Sequence[RuntimeMember],
+    worker_members: Sequence[RuntimeMember],
+    standard_input_asset: Optional[tuple[Path, str, str]],
+    lookup_directories: Sequence[RuntimeLookupDirectory],
+) -> JsonObject:
+    """Build the closed canonical execution-read-manifest v3 payload."""
+
+    def member_payload(member: RuntimeMember) -> JsonObject:
+        """Render one exact outside-prefix member."""
+
+        return {
+            "path": str(member.path),
+            "sha256": member.sha256,
+            "kind": member.kind,
+            "provenance": member.provenance,
+        }
+
+    return {
+        "manifest_version": EXECUTION_READ_MANIFEST_VERSION_V3,
+        "stable_id": stable_id,
+        "work_id": work_id,
+        "execution_identity": execution_identity,
+        "code_manifest_identity": code_manifest_identity,
+        "environment_generation": environment_authority.environment_generation,
+        "environment_authority_id": environment_authority.authority_id,
+        "environment_content_sha256": environment_authority.content_manifest_sha256,
+        "selected_interpreter_relative_path": (
+            environment_authority.selected_interpreter_relative_path
+        ),
+        "selected_interpreter_digest": environment_authority.selected_interpreter_digest,
+        "code_members": [member_payload(member) for member in code_members],
+        "worker_members": [member_payload(member) for member in worker_members],
+        "standard_input_asset": (
+            None
+            if standard_input_asset is None
+            else {
+                "path": str(standard_input_asset[0]),
+                "sha256": standard_input_asset[1],
+                "asset_id": standard_input_asset[2],
+            }
+        ),
+        "lookup_directories": [
+            {"path": str(directory.path), "provenance": directory.provenance}
+            for directory in lookup_directories
+        ],
+    }
+
+
+def _executable_closure_v3_identity(
+    *,
+    code_manifest_identity: str,
+    environment_authority: EnvironmentAuthorityV1,
+    code_members: Sequence[RuntimeMember],
+    worker_members: Sequence[RuntimeMember],
+    standard_input_asset: Optional[tuple[Path, str, str]],
+    lookup_directories: Sequence[RuntimeLookupDirectory],
+) -> str:
+    """Hash a v3 closure without the final model/request execution identity."""
+
+    payload = _manifest_v3_payload(
+        stable_id="closure-collection",
+        work_id="closure-collection",
+        execution_identity=stable_hash("executable-closure-v3-probe"),
+        code_manifest_identity=code_manifest_identity,
+        environment_authority=environment_authority,
+        code_members=code_members,
+        worker_members=worker_members,
+        standard_input_asset=standard_input_asset,
+        lookup_directories=lookup_directories,
+    )
+    payload.pop("manifest_version")
+    payload.pop("stable_id")
+    payload.pop("work_id")
+    payload.pop("execution_identity")
+    payload["closure_version"] = "menagerie.crawler.executable-closure.v2"
+    return stable_hash(payload)
+
+
+def compile_execution_read_manifest_v3(
+    *,
+    stable_id: str,
+    work_id: str,
+    execution_identity: str,
+    code_manifest_identity: str,
+    environment_authority: EnvironmentAuthorityV1,
+    code_members: Sequence[RuntimeMember | tuple[Path, str, str]],
+    worker_members: Sequence[RuntimeMember | tuple[Path, str, str]] = (),
+    standard_input_asset: Optional[tuple[Path, str, str]] = None,
+    lookup_directories: Sequence[RuntimeLookupDirectory] = (),
+) -> ExecutionReadManifestV3:
+    """Compile the sole live four-part execution read capability.
+
+    Parameters
+    ----------
+    stable_id, work_id, execution_identity, code_manifest_identity:
+        Exact request and accepted implementation associations.
+    environment_authority:
+        Complete current content-sealed prefix authority.
+    code_members, worker_members:
+        Exact model and crawler/bootstrap files outside that prefix.
+    standard_input_asset:
+        Optional exact selected standard asset.
+    lookup_directories:
+        Non-authorizing import traversal scaffolds.
+
+    Returns
+    -------
+    ExecutionReadManifestV3
+        Current live execution capability.
+    """
+
+    stable_id = _require_nonempty_string(stable_id, "stable_id")
+    work_id = _require_nonempty_string(work_id, "work_id")
+    execution_identity = _require_hash(execution_identity, "execution_identity")
+    code_manifest_identity = _require_hash(code_manifest_identity, "code_manifest_identity")
+    verify_environment_authority(environment_authority)
+    normalized_code = tuple(
+        sorted(
+            (
+                _verified_member(
+                    _v3_member(value, provenance="accepted-model-code-manifest"),
+                    allowed_kinds=_CODE_MEMBER_KINDS,
+                    field="code_members",
+                )
+                for value in code_members
+            ),
+            key=lambda member: (str(member.path), member.kind, member.provenance),
+        )
+    )
+    normalized_worker = tuple(
+        sorted(
+            (
+                _verified_member(
+                    _v3_member(value, provenance="crawler-worker-import-closure"),
+                    allowed_kinds=_RUNTIME_MEMBER_KINDS,
+                    field="worker_members",
+                )
+                for value in worker_members
+            ),
+            key=lambda member: (str(member.path), member.kind, member.provenance),
+        )
+    )
+    member_paths = [member.path for member in (*normalized_code, *normalized_worker)]
+    if len(member_paths) != len(set(member_paths)):
+        raise AuthorityDerivationError("v3 manifest has duplicate exact member paths")
+    if any(path.is_relative_to(environment_authority.prefix) for path in member_paths):
+        raise AuthorityDerivationError(
+            "environment descendants belong to the sealed unit, not exact-member partitions"
+        )
+    normalized_asset = _normalized_standard_asset(standard_input_asset, set(member_paths))
+    normalized_lookup = _normalized_lookup_directories(lookup_directories)
+    _validate_static_import_closure_v3(
+        (*normalized_code, *normalized_worker),
+        normalized_lookup,
+        environment_authority.prefix,
+    )
+    payload = _manifest_v3_payload(
+        stable_id=stable_id,
+        work_id=work_id,
+        execution_identity=execution_identity,
+        code_manifest_identity=code_manifest_identity,
+        environment_authority=environment_authority,
+        code_members=normalized_code,
+        worker_members=normalized_worker,
+        standard_input_asset=normalized_asset,
+        lookup_directories=normalized_lookup,
+    )
+    return ExecutionReadManifestV3(
+        manifest_version=EXECUTION_READ_MANIFEST_VERSION_V3,
+        manifest_id=stable_hash(payload),
+        stable_id=stable_id,
+        work_id=work_id,
+        execution_identity=execution_identity,
+        code_manifest_identity=code_manifest_identity,
+        environment_generation=environment_authority.environment_generation,
+        code_members=normalized_code,
+        worker_members=normalized_worker,
+        environment_authority=environment_authority,
+        standard_input_asset=normalized_asset,
+        lookup_directories=normalized_lookup,
+    )
+
+
+def verify_execution_read_manifest_v3(manifest: ExecutionReadManifestV3) -> None:
+    """Reverify a live v3 manifest and selected interpreter before spawn."""
+
+    if manifest.manifest_version != EXECUTION_READ_MANIFEST_VERSION_V3:
+        raise AuthorityDerivationError("execution read manifest has the wrong v3 discriminator")
+    if manifest.environment_generation != manifest.environment_authority.environment_generation:
+        raise AuthorityDerivationError("manifest and environment authority generations differ")
+    rebuilt = compile_execution_read_manifest_v3(
+        stable_id=manifest.stable_id,
+        work_id=manifest.work_id,
+        execution_identity=manifest.execution_identity,
+        code_manifest_identity=manifest.code_manifest_identity,
+        environment_authority=manifest.environment_authority,
+        code_members=manifest.code_members,
+        worker_members=manifest.worker_members,
+        standard_input_asset=manifest.standard_input_asset,
+        lookup_directories=manifest.lookup_directories,
+    )
+    if rebuilt != manifest:
+        raise AuthorityDerivationError("execution read manifest v3 is stale or rewritten")
+
+
+def collect_executable_closure_v3(
+    *,
+    code_manifest_identity: str,
+    environment_authority: EnvironmentAuthorityV1,
+    code_members: Sequence[RuntimeMember | tuple[Path, str, str]],
+    worker_members: Sequence[RuntimeMember | tuple[Path, str, str]],
+    standard_input_asset: Optional[tuple[Path, str, str]] = None,
+    lookup_directories: Sequence[RuntimeLookupDirectory] = (),
+) -> ExecutableClosureV3:
+    """Collect a verified v3 closure before execution identity derivation."""
+
+    probe = compile_execution_read_manifest_v3(
+        stable_id="closure-collection",
+        work_id="closure-collection",
+        execution_identity=stable_hash("executable-closure-v3-probe"),
+        code_manifest_identity=code_manifest_identity,
+        environment_authority=environment_authority,
+        code_members=code_members,
+        worker_members=worker_members,
+        standard_input_asset=standard_input_asset,
+        lookup_directories=lookup_directories,
+    )
+    return ExecutableClosureV3(
+        identity=probe.closure_identity,
+        code_manifest_identity=probe.code_manifest_identity,
+        environment_generation=probe.environment_generation,
+        code_members=probe.code_members,
+        worker_members=probe.worker_members,
+        environment_authority=probe.environment_authority,
+        standard_input_asset=probe.standard_input_asset,
+        lookup_directories=probe.lookup_directories,
+    )
+
+
+def compile_execution_read_manifest_v3_from_closure(
+    closure: ExecutableClosureV3,
+    *,
+    stable_id: str,
+    work_id: str,
+    execution_identity: str,
+) -> ExecutionReadManifestV3:
+    """Bind one pre-identity v3 closure to its final request associations."""
+
+    manifest = compile_execution_read_manifest_v3(
+        stable_id=stable_id,
+        work_id=work_id,
+        execution_identity=execution_identity,
+        code_manifest_identity=closure.code_manifest_identity,
+        environment_authority=closure.environment_authority,
+        code_members=closure.code_members,
+        worker_members=closure.worker_members,
+        standard_input_asset=closure.standard_input_asset,
+        lookup_directories=closure.lookup_directories,
+    )
+    if manifest.closure_identity != closure.identity:
+        raise AuthorityDerivationError("execution closure v3 changed during final binding")
+    return manifest
+
+
+def environment_read_capability(manifest: ExecutionReadManifestV3) -> EnvironmentReadCapability:
+    """Verify and project the single v3 capability for every enforcement layer."""
+
+    verify_execution_read_manifest_v3(manifest)
+    authority = manifest.environment_authority
+    return EnvironmentReadCapability(
+        manifest_id=manifest.manifest_id,
+        closure_identity=manifest.closure_identity,
+        exact_members=(*manifest.code_members, *manifest.worker_members),
+        environment_prefix=authority.prefix,
+        selected_interpreter=authority.selected_interpreter,
+        startup_pth_paths=authority.startup_pth_paths,
+        external_targets=authority.external_targets,
         standard_input_asset=manifest.standard_input_asset,
         lookup_directories=manifest.lookup_directories,
     )

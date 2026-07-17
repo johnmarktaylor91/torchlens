@@ -20,15 +20,18 @@ from menagerie.crawler.authority import AuthorityContext
 from menagerie.crawler.driver import (
     AuthorArtifact,
     DriverConfig,
-    EnvironmentBinding,
     SupervisedForwardLane,
     WorkItem,
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.licenses import LicenseDecision, RedistributionClass
-from menagerie.crawler.policy import ExecutionReadManifest, compile_execution_read_manifest
 from menagerie.crawler.proposal import model_code_manifest
 from menagerie.crawler.recordio import scan_jsonl
+from menagerie.crawler.tests.conftest import (
+    RealEnvironmentFixture,
+    RealEnvironmentLane,
+    real_environment_registry,
+)
 from menagerie.crawler.tests.test_slice_f_driver import (
     FakeAuthor,
     _driver,
@@ -127,36 +130,6 @@ class TinyAdapterAuthor(FakeAuthor):
         return _rebind_fake_author_result(artifact)
 
 
-def _worker_manifest(
-    artifact: AuthorArtifact,
-    environment: EnvironmentBinding,
-    execution_identity: str,
-    *,
-    closure: object | None = None,
-) -> ExecutionReadManifest:
-    """Compile the established real-worker test capability for one typed adapter."""
-
-    del closure, environment
-    proposal = artifact.proposal
-    raw_manifest = proposal["proposed_facts"]["implementation"]["code_manifest"]
-    code_members = tuple(
-        (
-            artifact.model_dir / str(row["path"]),
-            str(row["sha256"]),
-            "python-source",
-        )
-        for row in raw_manifest
-    )
-    return compile_execution_read_manifest(
-        stable_id=str(proposal["stable_id"]),
-        work_id=str(proposal["work_id"]),
-        execution_identity=execution_identity,
-        code_manifest_identity=stable_hash(raw_manifest),
-        code_members=code_members,
-        runtime_support=((Path.cwd() / "menagerie", "runtime-root"),),
-    )
-
-
 def _files_below(path: Path) -> list[str]:
     """Return stable relative names for every materialized file below ``path``."""
 
@@ -205,7 +178,7 @@ def _claim_specific_license_decisions(
     return decisions
 
 
-def _run_after_forward_shutdown(root: str) -> None:
+def _run_after_forward_shutdown(root: str, fixture: RealEnvironmentFixture) -> None:
     """Run the real driver under its production signal handler in a child process."""
 
     root_path = Path(root)
@@ -227,10 +200,11 @@ def _run_after_forward_shutdown(root: str) -> None:
         snapshot,
         author=TinyAdapterAuthor(),
         forward=SupervisedForwardLane(timeout_seconds=20, cwd=Path.cwd()),
+        environments=RealEnvironmentLane(fixture),
         boundary=signal_after_forward,
+        registry=real_environment_registry(fixture),
     )
     with (
-        patch.object(driver_module, "_compile_worker_read_manifest", side_effect=_worker_manifest),
         patch.object(
             driver_module.CrawlerDriver,
             "_license_decisions",
@@ -275,10 +249,11 @@ def _run_after_forward_shutdown(root: str) -> None:
         snapshot,
         author=TinyAdapterAuthor(),
         forward=SupervisedForwardLane(timeout_seconds=20, cwd=Path.cwd()),
+        environments=RealEnvironmentLane(fixture),
         boundary=reject_second_forward,
+        registry=real_environment_registry(fixture),
     )
     with (
-        patch.object(driver_module, "_compile_worker_read_manifest", side_effect=_worker_manifest),
         patch.object(
             driver_module.CrawlerDriver,
             "_license_decisions",
@@ -300,15 +275,16 @@ def _run_after_forward_shutdown(root: str) -> None:
 
 def test_signal_after_real_forward_publishes_and_awards_nothing_then_resumes(
     tmp_path: Path,
+    real_environment_fixture: RealEnvironmentFixture,
 ) -> None:
     """SIGTERM after a real v3 forward must leave the slot unawarded and resumable."""
 
     process = multiprocessing.get_context("fork").Process(
         target=_run_after_forward_shutdown,
-        args=(str(tmp_path),),
+        args=(str(tmp_path), real_environment_fixture),
     )
     process.start()
-    process.join(timeout=60)
+    process.join(timeout=300)
     if process.is_alive():
         process.terminate()
         process.join(timeout=10)

@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
+import json
+import os
 from pathlib import Path
-from typing import Any, Optional
+import subprocess
+import sys
+from typing import Any, NoReturn, Optional
 
 import pytest
 
@@ -25,6 +30,21 @@ from menagerie.crawler.constants import (
     MODEL_SCHEMA_VERSION_V3 as MODEL_SCHEMA_VERSION,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
     SourceRung,
+    EnvironmentPhase,
+)
+from menagerie.crawler.driver import EnvironmentBinding, bind_materialized_environment
+from menagerie.crawler.env_lifecycle import (
+    LifecycleResult,
+    ProbeResult,
+    SequentialEnvironmentLifecycle,
+    canonical_probe_receipt_bytes,
+    installed_package_inventory_bytes,
+)
+from menagerie.crawler.envs import (
+    EnvironmentIntent,
+    EnvironmentRegistry,
+    IntentProbes,
+    LockArtifacts,
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.licenses import (
@@ -47,6 +67,7 @@ from menagerie.crawler.mirrors import (
 )
 from menagerie.crawler.standard_inputs import ASSET_ROOT
 from menagerie.crawler.worker_supervisor import SupervisedResult, SupervisorObservation
+from menagerie.crawler.policy import detect_os_sandbox
 
 HASH = "sha256:" + "a" * 64
 OTHER_HASH = "sha256:" + "b" * 64
@@ -68,6 +89,293 @@ _FACT_KEYS = (
     "modes",
     "fidelity",
 )
+
+
+@dataclass(frozen=True)
+class RealEnvironmentFixture:
+    """Session hardlink clone and strict production binding used by compositions."""
+
+    source_prefix: Path
+    prefix: Path
+    binding: EnvironmentBinding
+    intent: EnvironmentIntent
+    probe_results: tuple[ProbeResult, ...]
+    sentinel_module: str
+    startup_pth: Path
+
+
+class RealEnvironmentLane(SequentialEnvironmentLifecycle):
+    """Expose a prebuilt strict real prefix through the production lifecycle type."""
+
+    def __init__(self, fixture: RealEnvironmentFixture) -> None:
+        """Store the already-probed hardlink clone used by real compositions.
+
+        Parameters
+        ----------
+        fixture:
+            Strictly bound session clone and its durable lifecycle artifacts.
+        """
+
+        self.fixture = fixture
+        self.events: list[str] = []
+
+    def run(
+        self,
+        intent: EnvironmentIntent,
+        *,
+        use: Any,
+    ) -> LifecycleResult:
+        """Invoke the driver callback with the prebuilt real prefix and probes.
+
+        Parameters
+        ----------
+        intent:
+            Registry intent. It must refer to the fixture's lifecycle artifacts.
+        use:
+            Driver callback that performs model work while the prefix is active.
+
+        Returns
+        -------
+        LifecycleResult
+            Minimal lifecycle result marker for tests.
+        """
+
+        if intent.lock != self.fixture.intent.lock or intent.probes != self.fixture.intent.probes:
+            raise AssertionError("real fixture lane received a non-fixture environment intent")
+        self.events.append(f"use:{intent.name}")
+        use(self.fixture.prefix, self.fixture.probe_results)
+        return LifecycleResult(
+            intent=intent.name,
+            target=intent.lock.target,
+            export_sha256=str(intent.lock.declared_export_hash),
+            probe_results=self.fixture.probe_results,
+            disk_before=0,
+            disk_after_create=0,
+            disk_after_teardown=0,
+            disk_recovery_checked=False,
+        )
+
+
+def real_environment_registry(
+    fixture: RealEnvironmentFixture,
+    *,
+    intent_name: str = "core",
+) -> EnvironmentRegistry:
+    """Return a registry mapping production routes to the real fixture intent.
+
+    Parameters
+    ----------
+    fixture:
+        Strictly bound real clone whose artifacts define the sole test intent.
+    intent_name:
+        Intent name used by ordinary PyTorch routing.
+
+    Returns
+    -------
+    EnvironmentRegistry
+        Minimal registry whose routed intent strict-binds to the fixture prefix.
+    """
+
+    intent = EnvironmentIntent(
+        name=intent_name,
+        phase=fixture.intent.phase,
+        framework=fixture.intent.framework,
+        description=fixture.intent.description,
+        split_guidance=fixture.intent.split_guidance,
+        channels=fixture.intent.channels,
+        dependencies=fixture.intent.dependencies,
+        probes=fixture.intent.probes,
+        lock=fixture.intent.lock,
+        generation=fixture.intent.generation,
+    )
+    return EnvironmentRegistry(
+        intents={intent_name: intent},
+        phase_order=(EnvironmentPhase.PYTORCH,),
+        small_set_target=True,
+        hard_cap=None,
+        global_split_guidance="round19 real fixture registry",
+    )
+
+
+def _real_environment_failure(message: str) -> NoReturn:
+    """Fail a release gate or skip an unavailable optional local composition.
+
+    Parameters
+    ----------
+    message:
+        Exact unmet real-environment prerequisite.
+    """
+
+    if os.environ.get("MENAGERIE_RELEASE_GATE") == "1":
+        pytest.fail(f"unmet-release-gate: {message}")
+    pytest.skip(message)
+    raise AssertionError("pytest.skip returned unexpectedly")
+
+
+def _real_environment_source() -> Path:
+    """Return the explicitly selected lock-built conda-family base prefix."""
+
+    value = os.environ.get("MENAGERIE_REAL_ENV_PREFIX") or os.environ.get("CONDA_PREFIX")
+    if not value:
+        _real_environment_failure("MENAGERIE_REAL_ENV_PREFIX/CONDA_PREFIX is unavailable")
+    prefix = Path(str(value)).resolve()
+    if not (prefix / "conda-meta").is_dir() or not (prefix / "bin" / "python").exists():
+        _real_environment_failure(f"selected prefix is not a materialized conda env: {prefix}")
+    return prefix
+
+
+def _fixture_intent(
+    artifact_root: Path,
+    prefix: Path,
+) -> tuple[EnvironmentIntent, tuple[ProbeResult, ...]]:
+    """Create strict lifecycle artifacts from the selected lock-built installation.
+
+    Parameters
+    ----------
+    artifact_root, prefix:
+        Outside-prefix artifact directory and hardlink clone.
+
+    Returns
+    -------
+    tuple[EnvironmentIntent, tuple[ProbeResult, ...]]
+        Exact strict binder contract and durable successful probes.
+    """
+
+    artifact_root.mkdir(parents=True)
+    package_bytes = installed_package_inventory_bytes(prefix)
+    package_value = json.loads(package_bytes)
+    package_rows = package_value["packages"]
+    lock_bytes = (
+        "@EXPLICIT\n"
+        + "".join(
+            f"{row['url']}#{str(row['sha256']).removeprefix('sha256:')}\n" for row in package_rows
+        )
+    ).encode("utf-8")
+    target = "round19-real-host"
+    lock_path = artifact_root / f"{target}.lock"
+    export_path = artifact_root / f"{target}.resolved.json"
+    export_hash_path = artifact_root / f"{target}.resolved.sha256"
+    lock_path.write_bytes(lock_bytes)
+    export_path.write_bytes(package_bytes)
+    export_hash_path.write_text(f"{hash_bytes(package_bytes)}\n", encoding="utf-8")
+    probes = IntentProbes(("torch", "menagerie_round19_sentinel"), (), ())
+    probe_results = tuple(
+        ProbeResult(f"import:{name}", True, f"real clone imported {name}")
+        for name in probes.imports
+    )
+    (artifact_root / f"{target}.probes.json").write_bytes(
+        canonical_probe_receipt_bytes(probe_results)
+    )
+    intent = EnvironmentIntent(
+        name="round19-real",
+        phase=EnvironmentPhase.PYTORCH,
+        framework="pytorch",
+        description="Round-19 lock-built hardlink-clone release fixture",
+        split_guidance="fixture-only",
+        channels=("conda-forge",),
+        dependencies=("python", "pytorch"),
+        probes=probes,
+        lock=LockArtifacts(
+            target=target,
+            lock_path=lock_path,
+            export_path=export_path,
+            export_hash_path=export_hash_path,
+            lock_bytes=lock_bytes,
+            export_bytes=package_bytes,
+            declared_export_hash=hash_bytes(package_bytes),
+        ),
+        generation=None,
+    )
+    return intent, probe_results
+
+
+@pytest.fixture(scope="session")
+def real_environment_fixture(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> RealEnvironmentFixture:
+    """Hardlink-clone, probe, and strictly seal one real Torch conda prefix."""
+
+    source = _real_environment_source()
+    root = tmp_path_factory.mktemp("round19-real-environment")
+    prefix = root / "prefix"
+    prefix.mkdir()
+    try:
+        subprocess.run(
+            ("cp", "-al", f"{source}/.", str(prefix)),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        _real_environment_failure(f"hardlink clone failed: {exc}")
+    site_candidates = sorted(prefix.glob("lib/python*/site-packages"))
+    if not site_candidates:
+        _real_environment_failure("clone has no immediate site-packages directory")
+    site_packages = site_candidates[-1]
+    overlay = root / "overlay"
+    overlay.mkdir()
+    sentinel_source = overlay / "menagerie_round19_sentinel.py"
+    sentinel_source.write_text(
+        "INTERPRETER_SENTINEL = 'round19-selected-prefix'\n", encoding="utf-8"
+    )
+    os.link(sentinel_source, site_packages / sentinel_source.name)
+    pth_source = overlay / "menagerie_round19_startup.pth"
+    pth_source.write_text(
+        "import os; os.environ['MENAGERIE_ROUND19_PTH_SENTINEL']='sealed-startup'\n",
+        encoding="utf-8",
+    )
+    startup_pth = site_packages / pth_source.name
+    os.link(pth_source, startup_pth)
+    interpreter = prefix / "bin" / "python"
+    try:
+        completed = subprocess.run(
+            (
+                str(interpreter),
+                "-B",
+                "-c",
+                "import json, os, sys, torch, menagerie_round19_sentinel as s; "
+                "print(json.dumps({'prefix':sys.prefix,'torch':torch.__version__,"
+                "'sentinel':s.INTERPRETER_SENTINEL,'pth':"
+                "os.environ.get('MENAGERIE_ROUND19_PTH_SENTINEL')}))",
+            ),
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        observation = json.loads(completed.stdout)
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+        _real_environment_failure(f"clone interpreter/Torch probe failed: {exc}")
+    if Path(str(observation["prefix"])).resolve() != prefix.resolve():
+        _real_environment_failure("clone interpreter does not report the clone prefix")
+    if observation.get("sentinel") != "round19-selected-prefix":
+        _real_environment_failure("environment-only sentinel is not importable")
+    if observation.get("pth") != "sealed-startup":
+        _real_environment_failure("sealed startup .pth effect is absent")
+    if interpreter.resolve() == Path(sys.executable).resolve():
+        _real_environment_failure("selected interpreter resolves to the driver interpreter")
+    if detect_os_sandbox() is None:
+        _real_environment_failure("required host sandbox/audit tools are unavailable")
+    regular_files = [path for path in prefix.rglob("*") if path.is_file() and not path.is_symlink()]
+    if not regular_files or any(path.stat().st_nlink <= 1 for path in regular_files):
+        _real_environment_failure("hardlink clone contains a non-hardlinked regular file")
+    if not any(path.suffix in {".so", ".dylib", ".pyd"} for path in regular_files):
+        _real_environment_failure("clone has no real native extension/library")
+    if not any(
+        "dist-info" in path.parts or path.parent.name == "conda-meta" for path in regular_files
+    ):
+        _real_environment_failure("clone has no package metadata")
+    intent, probe_results = _fixture_intent(root / "artifacts", prefix)
+    binding = bind_materialized_environment(intent, prefix, probe_results)
+    return RealEnvironmentFixture(
+        source_prefix=source,
+        prefix=prefix,
+        binding=binding,
+        intent=intent,
+        probe_results=probe_results,
+        sentinel_module="menagerie_round19_sentinel",
+        startup_pth=startup_pth,
+    )
 
 
 def make_worker_result_v3_mapping(
@@ -388,6 +696,13 @@ def make_attempt(
             "packages_manifest_sha256": HASH,
             "compiler_identity": "test-compiler",
             "sdk_identity": "test-sdk",
+            "authority_epoch": None,
+            "base_environment_generation": None,
+            "environment_content_sha256": None,
+            "environment_authority_id": None,
+            "selected_interpreter_relative_path": None,
+            "selected_interpreter_digest": None,
+            "external_escape_records": [],
         },
         "host": {
             "machine_id": "machine-test",

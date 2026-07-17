@@ -587,7 +587,14 @@
         "python",
         "packages_manifest_sha256",
         "compiler_identity",
-        "sdk_identity"
+        "sdk_identity",
+        "authority_epoch",
+        "base_environment_generation",
+        "environment_content_sha256",
+        "environment_authority_id",
+        "selected_interpreter_relative_path",
+        "selected_interpreter_digest",
+        "external_escape_records"
       ],
       "properties": {
         "family": {
@@ -625,6 +632,54 @@
         "sdk_identity": {
           "$ref": "#/$defs/nonempty_string",
           "description": "Mandatory sdk identity."
+        },
+        "authority_epoch": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Live environment-authority discriminator; null for audit-only legacy attempts."
+        },
+        "base_environment_generation": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Exact pre-seal lifecycle generation."
+        },
+        "environment_content_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Complete content-manifest digest promoted into the live generation."
+        },
+        "environment_authority_id": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Local prefix-scoped environment authority identity."
+        },
+        "selected_interpreter_relative_path": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Selected interpreter lexical path relative to the sealed prefix."
+        },
+        "selected_interpreter_digest": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Exact selected interpreter target digest."
+        },
+        "external_escape_records": {
+          "type": "array",
+          "description": "Exact regular-file targets reached by sealed-prefix symlink escapes.",
+          "items": {
+            "type": "object",
+            "description": "One external regular-file escape target bound by path and digest.",
+            "additionalProperties": false,
+            "required": ["path", "sha256", "kind"],
+            "properties": {
+              "path": {
+                "$ref": "#/$defs/nonempty_string",
+                "description": "Canonical absolute external target path."
+              },
+              "sha256": {
+                "$ref": "#/$defs/hash",
+                "description": "Exact external target content digest."
+              },
+              "kind": {
+                "const": "regular-file",
+                "description": "Closed external target kind."
+              }
+            }
+          }
         }
       }
     },
@@ -1443,13 +1498,22 @@
     "$.defer_evidence.source_ids[]": "trusted-intake",
     "$.defer_evidence.target_status": "trusted-intake",
     "$.environment.compiler_identity": "reducer-derived",
+    "$.environment.authority_epoch": "reducer-derived",
+    "$.environment.base_environment_generation": "reducer-derived",
+    "$.environment.environment_authority_id": "reducer-derived",
+    "$.environment.environment_content_sha256": "reducer-derived",
     "$.environment.env_id": "reducer-derived",
+    "$.environment.external_escape_records[].kind": "reducer-derived",
+    "$.environment.external_escape_records[].path": "reducer-derived",
+    "$.environment.external_escape_records[].sha256": "reducer-derived",
     "$.environment.family": "reducer-derived",
     "$.environment.lock_sha256": "reducer-derived",
     "$.environment.packages_manifest_sha256": "reducer-derived",
     "$.environment.python": "reducer-derived",
     "$.environment.resolved_export_sha256": "reducer-derived",
     "$.environment.sdk_identity": "reducer-derived",
+    "$.environment.selected_interpreter_digest": "reducer-derived",
+    "$.environment.selected_interpreter_relative_path": "reducer-derived",
     "$.environment.target": "reducer-derived",
     "$.error.details": "untrusted-history",
     "$.error.exception_type": "untrusted-history",

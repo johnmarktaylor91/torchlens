@@ -19,8 +19,18 @@ import pytest
 
 import menagerie.crawler.worker_supervisor as worker_supervisor_module
 from menagerie.crawler.authority import WorkerLease
+from menagerie.crawler.driver import (
+    _collect_worker_executable_closure,
+    _compile_worker_read_manifest,
+    _execution_identity,
+)
 from menagerie.crawler.identity import compute_recipe_revision, hash_bytes, stable_hash
-from menagerie.crawler.policy import compile_execution_read_manifest
+from menagerie.crawler.proposal import model_code_manifest
+from menagerie.crawler.tests.conftest import (
+    RealEnvironmentFixture,
+    make_author_proposal,
+    make_proposed_artifact,
+)
 from menagerie.crawler.worker_supervisor import (
     clear_worker_lease,
     current_boot_id,
@@ -232,10 +242,13 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
 
 def test_v3_worker_binds_raw_receipt_attestation_manifest_and_child_lease(
     tmp_path: Path,
+    real_environment_fixture: RealEnvironmentFixture,
 ) -> None:
     """One v3 success requires all four frozen security associations."""
 
-    adapter = tmp_path / "adapter.py"
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    adapter = model_dir / "adapter.py"
     adapter.write_text(
         """from __future__ import annotations
 import torch
@@ -254,17 +267,45 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
         encoding="utf-8",
     )
     adapter_digest = hash_bytes(adapter.read_bytes())
-    code_members = [{"path": str(adapter), "identity_path": "adapter.py", "sha256": adapter_digest}]
-    code_identity = stable_hash([{"path": "adapter.py", "sha256": adapter_digest}])
-    execution_identity = "sha256:" + "1" * 64
-    manifest = compile_execution_read_manifest(
-        stable_id="m_v3_supervised",
-        work_id="work-v3-supervised",
-        execution_identity=execution_identity,
-        code_manifest_identity=code_identity,
-        code_members=((adapter, adapter_digest, "python-source"),),
-        runtime_support=((Path(__file__).resolve().parents[2], "runtime-root"),),
+    code_manifest = [dict(row) for row in model_code_manifest(adapter, model_dir)]
+    code_identity = stable_hash(code_manifest)
+    proposal = make_author_proposal("m_v3_supervised")
+    proposal["work_id"] = "work-v3-supervised"
+    facts = proposal["proposed_facts"]
+    facts["implementation"].update(
+        {
+            "recipe_type": "typed-adapter",
+            "code_path": "adapter.py",
+            "code_sha256": adapter_digest,
+            "builder_symbol": "build_model",
+            "dummy_call_symbol": "make_dummy_call",
+            "library_recipe": None,
+            "code_manifest": code_manifest,
+        }
     )
+    facts["input_contract"]["args"][0]["shape"] = [1, 2]
+    facts["modes"]["meaningful_modes"] = ["eval"]
+    facts["external_metadata"]["modes"]["meaningful_modes"] = ["eval"]
+    proposal["verified_hashes"]["code"] = adapter_digest
+    proposal["verified_hashes"]["code_manifest"] = code_identity
+    proposal["proposal_sha256"] = stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+    artifact = make_proposed_artifact(proposal, {"sources": []}, model_dir)
+    environment = real_environment_fixture.binding
+    closure = _collect_worker_executable_closure(artifact, environment)
+    execution_identity = _execution_identity(
+        artifact,
+        environment,
+        closure_identity=closure.identity,
+    )
+    manifest = _compile_worker_read_manifest(
+        artifact,
+        environment,
+        execution_identity,
+        closure=closure,
+    )
+    code_members = [{"path": str(adapter), "identity_path": "adapter.py", "sha256": adapter_digest}]
     scratch = tmp_path / "scratch"
     receipt = tmp_path / "result" / "receipt.json"
     request = tmp_path / "request.json"

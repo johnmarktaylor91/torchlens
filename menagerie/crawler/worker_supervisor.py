@@ -27,6 +27,8 @@ from typing import Any, BinaryIO, Callable, Iterator, Mapping, Optional, Sequenc
 from menagerie.crawler.authority import (
     ExecutionReadManifest,
     ExecutionReadManifestV2,
+    ExecutionReadManifestV3,
+    environment_read_capability,
     exact_read_capability,
     WorkerLease as WorkerLease,
     completion_line_for_raw_award_receipt,
@@ -43,6 +45,7 @@ from menagerie.crawler.policy import (
     _PARENT_STANDARD_INPUT_ASSET_ENV,
     _MODEL_DATA_SUFFIXES,
     SandboxUnavailableError,
+    _allowed_exact_or_derived_file,
     _linux_runtime_code_roots,
     _linux_runtime_read_paths,
     _runtime_code_path_allowed,
@@ -50,6 +53,7 @@ from menagerie.crawler.policy import (
     _runtime_model_data_path,
     _runtime_native_code_path_allowed,
     _runtime_package_data_paths,
+    _runtime_static_path_allowed,
     build_safe_environment,
     detect_os_sandbox,
     generate_macos_sandbox_profile,
@@ -1665,7 +1669,9 @@ def _parent_owned_audit_path(
 
 def _request_allowed_read_paths(
     argv: Sequence[str],
-    manifest: Optional[ExecutionReadManifest | ExecutionReadManifestV2] = None,
+    manifest: Optional[
+        ExecutionReadManifest | ExecutionReadManifestV2 | ExecutionReadManifestV3
+    ] = None,
 ) -> tuple[Path, ...]:
     """Return parent bootstrap files plus one compiled read capability.
 
@@ -1715,7 +1721,12 @@ def _request_allowed_read_paths(
                         allowed.append(path)
     if manifest is not None:
         verify_execution_read_manifest(manifest)
-        if isinstance(manifest, ExecutionReadManifestV2):
+        if isinstance(manifest, ExecutionReadManifestV3):
+            capability = environment_read_capability(manifest)
+            allowed.extend(capability.exact_member_paths)
+            allowed.append(capability.environment_prefix)
+            allowed.extend(capability.startup_pth_paths)
+        elif isinstance(manifest, ExecutionReadManifestV2):
             allowed.extend(exact_read_capability(manifest).member_paths)
         else:
             allowed.extend(path for path, _digest, _kind in manifest.code_members)
@@ -1958,14 +1969,46 @@ def _read_path_is_allowed(
         pass
     if _runtime_native_code_path_allowed(candidate, runtime_roots):
         return True
+    if _system_transport_library_path_allowed(candidate):
+        return True
+    if _runtime_code_path_allowed(candidate, runtime_code_roots):
+        return True
     standard_asset = None if standard_input_asset is None else standard_input_asset.resolve()
+    if _allowed_exact_or_derived_file(candidate, allowed):
+        return True
     if _runtime_model_data_path(candidate) and candidate != standard_asset:
-        return False
+        startup_pth = (
+            candidate.suffix.lower() == ".pth"
+            and candidate in allowed
+            and _runtime_static_path_allowed(candidate)
+        )
+        if not startup_pth:
+            return False
     if any(candidate == path or path in candidate.parents for path in allowed):
         return True
     if candidate.name == "gconv-modules.cache" and "gconv" in candidate.parts:
         return True
-    return _runtime_code_path_allowed(candidate, runtime_code_roots)
+    return False
+
+
+def _system_transport_library_path_allowed(path: Path) -> bool:
+    """Return whether a path is a host native library for sandbox transport.
+
+    Parameters
+    ----------
+    path:
+        Resolved candidate path observed by parent syscall telemetry.
+
+    Returns
+    -------
+    bool
+        True for native shared libraries under conventional host library roots.
+    """
+
+    library_roots = (Path("/lib"), Path("/lib64"), Path("/usr/lib"), Path("/usr/lib64"))
+    return any(path == root or root in path.parents for root in library_roots) and (
+        path.suffix in {".so", ".dylib"} or ".so." in path.name.lower()
+    )
 
 
 def _trace_process_id(line: str) -> str:
@@ -2993,7 +3036,9 @@ def run_isolated_subprocess(
     base_environment: Optional[Mapping[str, str]] = None,
     additional_write_roots: Sequence[Path] = (),
     worker_completion_challenge: Optional[str] = None,
-    execution_read_manifest: Optional[ExecutionReadManifest | ExecutionReadManifestV2] = None,
+    execution_read_manifest: Optional[
+        ExecutionReadManifest | ExecutionReadManifestV2 | ExecutionReadManifestV3
+    ] = None,
     shutdown_event: Optional[threading.Event] = None,
     worker_lease_handle: Optional[WorkerLeaseHandle] = None,
     request_nonce: Optional[str] = None,
@@ -3060,6 +3105,12 @@ def run_isolated_subprocess(
     stdout_path = scratch_root / "stdout.log"
     stderr_path = scratch_root / "stderr.log"
     safe_environment = build_safe_environment(scratch_root, base_environment=base_environment)
+    if isinstance(execution_read_manifest, ExecutionReadManifestV3):
+        openssl_config = (
+            execution_read_manifest.environment_authority.prefix / "ssl" / "openssl.cnf"
+        )
+        if openssl_config.is_file():
+            safe_environment["OPENSSL_CONF"] = str(openssl_config)
     if worker_completion_challenge is not None:
         safe_environment[_PARENT_COMPLETION_CHALLENGE_ENV] = worker_completion_challenge
     if request_sha256 is not None:
@@ -3099,6 +3150,9 @@ def run_isolated_subprocess(
         if execution_read_manifest is None:
             macos_runtime_read_roots = discovered_roots
             runtime_package_data_paths = _runtime_package_data_paths(macos_runtime_read_roots)
+        elif isinstance(execution_read_manifest, ExecutionReadManifestV3):
+            macos_runtime_read_roots = (execution_read_manifest.environment_authority.prefix,)
+            runtime_package_data_paths = ()
         elif isinstance(execution_read_manifest, ExecutionReadManifestV2):
             macos_runtime_read_roots = ()
             runtime_package_data_paths = ()
@@ -3125,6 +3179,8 @@ def run_isolated_subprocess(
         discovered_roots = _linux_runtime_code_roots(argv, working_directory)
         if execution_read_manifest is None:
             linux_runtime_code_roots = discovered_roots
+        elif isinstance(execution_read_manifest, ExecutionReadManifestV3):
+            linux_runtime_code_roots = (execution_read_manifest.environment_authority.prefix,)
         elif isinstance(execution_read_manifest, ExecutionReadManifestV2):
             linux_runtime_code_roots = ()
         else:
@@ -3462,7 +3518,9 @@ def supervise_worker(
     timeout_seconds: float = DEFAULT_FORWARD_TIMEOUT_SECONDS,
     rss_limit_bytes: int = 12 * 1024**3,
     cwd: Optional[Path] = None,
-    execution_read_manifest: Optional[ExecutionReadManifest | ExecutionReadManifestV2] = None,
+    execution_read_manifest: Optional[
+        ExecutionReadManifest | ExecutionReadManifestV2 | ExecutionReadManifestV3
+    ] = None,
     worker_lease_handle: Optional[WorkerLeaseHandle] = None,
     shutdown_event: Optional[threading.Event] = None,
     on_lease_started: Optional[Callable[[WorkerLease], None]] = None,
@@ -3505,6 +3563,8 @@ def supervise_worker(
     request_nonce: Optional[str] = None
     if execution_read_manifest is not None:
         verify_execution_read_manifest(execution_read_manifest)
+        if not isinstance(execution_read_manifest, ExecutionReadManifestV3):
+            raise ValueError("live v3 model worker spawn requires execution-read-manifest.v3")
         if request_value.get("protocol_version") != "menagerie.crawler.worker-request.v3":
             raise ValueError("compiled execution manifests require worker-request.v3")
         if worker_lease_handle is None:
@@ -3557,8 +3617,14 @@ def supervise_worker(
     elif worker_lease_handle is not None:
         raise ValueError("worker lease inheritance requires an execution read manifest")
     receipt_path.unlink(missing_ok=True)
+    worker_executable = (
+        str(execution_read_manifest.environment_authority.selected_interpreter)
+        if isinstance(execution_read_manifest, ExecutionReadManifestV3)
+        else sys.executable
+    )
     argv = (
-        sys.executable,
+        worker_executable,
+        "-B",
         "-m",
         "menagerie.crawler.worker",
         "--request",

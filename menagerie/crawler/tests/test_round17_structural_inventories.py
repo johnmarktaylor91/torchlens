@@ -75,6 +75,26 @@ _ROUND17_CI_NODES = (
     "menagerie/crawler/tests/test_slice_f_driver.py::"
     "test_linux_handoff_attempts_both_deferred_statuses_and_supersedes",
 )
+_SUBSTITUTION_BOUNDARIES = frozenset(
+    {
+        "_compile_worker_read_manifest",
+        "_collect_worker_executable_closure",
+        "bind_materialized_environment",
+        "EnvironmentAuthorityCache",
+        "compile_execution_read_manifest_v3",
+        "compile_execution_read_manifest_v3_from_closure",
+        "environment_read_capability",
+        "verify_execution_read_manifest",
+        "verify_execution_read_manifest_v3",
+        "supervise_worker",
+        "run_isolated_subprocess",
+    }
+)
+_COMPOSITION_SOURCES = (
+    _CRAWLER_ROOT / "tests" / "test_round17_vs1_v3_composition.py",
+    _CRAWLER_ROOT / "tests" / "test_round17_vs2_shutdown_composition.py",
+    _CRAWLER_ROOT / "tests" / "test_slice_f_driver.py",
+)
 
 VS4_LANDING_MANIFEST: dict[str, Any] = {
     "findings": ("SOL-R16-07", "Fable-F5"),
@@ -219,6 +239,33 @@ def _string_constants(node: ast.AST) -> set[str]:
         for value in ast.walk(node)
         if isinstance(value, ast.Constant) and isinstance(value.value, str)
     }
+
+
+def _substitution_boundary_errors(source: str) -> tuple[str, ...]:
+    """Return AST-detected composition substitutions of live execution boundaries."""
+
+    tree, parents, names = _tree_context(source)
+    errors: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            call_name = _attribute_name(node.func)
+            if (
+                call_name in {"patch", "patch.object"}
+                or call_name.endswith(".monkeypatch.setattr")
+                or call_name.endswith("monkeypatch.setattr")
+            ):
+                rendered = " ".join(ast.unparse(arg) for arg in node.args)
+                rendered = f"{rendered} {' '.join(_string_constants(node))}"
+                for boundary in sorted(_SUBSTITUTION_BOUNDARIES):
+                    if boundary in rendered:
+                        errors.append(f"{_enclosing_definition(node, parents, names)}:{boundary}")
+        elif isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else (node.target,)
+            rendered_targets = " ".join(ast.unparse(target) for target in targets)
+            for boundary in sorted(_SUBSTITUTION_BOUNDARIES):
+                if boundary in rendered_targets:
+                    errors.append(f"{_enclosing_definition(node, parents, names)}:{boundary}")
+    return tuple(sorted(set(errors)))
 
 
 def _production_python_paths() -> tuple[Path, ...]:
@@ -656,16 +703,39 @@ def test_round17_real_composition_sources_are_not_fake_substitutes() -> None:
         driver_tests.test_linux_handoff_attempts_both_deferred_statuses_and_supersedes
     )
     module_source = _source(vs1_module)
+    shutdown_module_source = _source(vs2_module)
     assert "SupervisedForwardLane" in module_source
     assert "CanonicalReducer" in module_source
     assert "runs" in _string_constants(ast.parse(module_source))
     assert "FakeForward" not in golden
     assert "SupervisedResult(" not in golden
     assert "multiprocessing.get_context" in shutdown
+    assert "RealEnvironmentLane" in shutdown_module_source
     assert 'observation["models"] == 0' in shutdown
     assert "DisabledAuthor" in handoff
     assert "SupervisedForwardLane" in handoff
+    assert "RealEnvironmentLane" in handoff
+    assert "FakeEnvironments" not in handoff
     assert 'record["status"]["code"] for record in superseding' in handoff
+
+
+def test_real_compositions_cannot_substitute_execution_boundaries() -> None:
+    """AST tripwire forbids compiler, authority, and supervisor replacement."""
+
+    assert {
+        path.name: _substitution_boundary_errors(path.read_text(encoding="utf-8"))
+        for path in _COMPOSITION_SOURCES
+    } == {path.name: () for path in _COMPOSITION_SOURCES}
+
+    mutated = (
+        _COMPOSITION_SOURCES[0].read_text(encoding="utf-8")
+        + "\n"
+        + "def test_reintroduced_patch(monkeypatch):\n"
+        + "    monkeypatch.setattr(driver_module, '_compile_worker_read_manifest', object())\n"
+    )
+    assert _substitution_boundary_errors(mutated) == (
+        "test_reintroduced_patch:_compile_worker_read_manifest",
+    )
 
 
 def test_round17_real_compositions_are_explicitly_selected_in_ci() -> None:

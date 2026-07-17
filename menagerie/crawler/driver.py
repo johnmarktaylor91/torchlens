@@ -60,15 +60,18 @@ from menagerie.crawler.authority import (
     AuthorityDerivationError,
     AuthorityContext,
     DependencyState,
-    ExecutableClosure,
-    ExecutionReadManifestV2,
+    EnvironmentAuthorityCache,
+    EnvironmentAuthorityV1,
+    EnvironmentExternalTarget,
+    ExecutableClosureV3,
+    ExecutionReadManifestV3,
     RuntimeLookupDirectory,
     RuntimeMember,
     ShutdownInterruptionFact,
     WorkerLease,
     build_authority_context,
-    collect_executable_closure,
-    compile_execution_read_manifest_from_closure,
+    collect_executable_closure_v3,
+    compile_execution_read_manifest_v3_from_closure,
     derive_attempt_projection,
     derive_execution_identity,
     derive_runner_identity,
@@ -242,6 +245,7 @@ _RUNNER_COMMON_EXECUTION_CLOSURE = {
 _RUNNER_IDENTITY_CACHE: dict[str, str] = {}
 # Backward-compatible inspection alias for the reviewed runtime roots.
 _RUNNER_EXECUTION_CLOSURE = _RUNNER_COMMON_EXECUTION_CLOSURE
+_INJECTED_FORWARD_CLOSURE_IDENTITY = stable_hash("injected-forward-lane-executable-closure")
 _AWARD_CLOSURE_SYMBOLS = {
     "driver.py": (
         "CrawlerDriver._run_environment_work",
@@ -710,7 +714,7 @@ class ActivatedHandoffArtifact(AuthorArtifact):
 
 @dataclass(frozen=True)
 class EnvironmentBinding:
-    """Verified runtime artifacts for one exact environment generation."""
+    """Verified lifecycle facts and optional live sealed-prefix authority."""
 
     prefix: Path
     python_executable: Path
@@ -723,6 +727,15 @@ class EnvironmentBinding:
     python_version: str
     compiler_identity: str
     sdk_identity: str
+    authority_epoch: Optional[str] = None
+    base_environment_generation: Optional[str] = None
+    environment_content_sha256: Optional[str] = None
+    environment_authority_id: Optional[str] = None
+    selected_interpreter_relative_path: Optional[str] = None
+    selected_interpreter_digest: Optional[str] = None
+    external_escape_records: tuple[EnvironmentExternalTarget, ...] = ()
+    environment_authority: Optional[EnvironmentAuthorityV1] = None
+    environment_authority_cache: Optional[EnvironmentAuthorityCache] = None
 
 
 def _quarantine_environment_payload(
@@ -755,6 +768,16 @@ def _quarantine_environment_payload(
         "python_version": environment.python_version,
         "compiler_identity": environment.compiler_identity,
         "sdk_identity": environment.sdk_identity,
+        "authority_epoch": environment.authority_epoch,
+        "base_environment_generation": environment.base_environment_generation,
+        "environment_content_sha256": environment.environment_content_sha256,
+        "environment_authority_id": environment.environment_authority_id,
+        "selected_interpreter_relative_path": (environment.selected_interpreter_relative_path),
+        "selected_interpreter_digest": environment.selected_interpreter_digest,
+        "external_escape_records": [
+            {"path": str(record.path), "sha256": record.sha256, "kind": record.kind}
+            for record in environment.external_escape_records
+        ],
     }
 
 
@@ -802,6 +825,44 @@ def _environment_from_quarantine(details: Mapping[str, Any]) -> Optional[Environ
         python_version=str(value["python_version"]),
         compiler_identity=str(value["compiler_identity"]),
         sdk_identity=str(value["sdk_identity"]),
+        authority_epoch=(
+            str(value["authority_epoch"]) if isinstance(value.get("authority_epoch"), str) else None
+        ),
+        base_environment_generation=(
+            str(value["base_environment_generation"])
+            if isinstance(value.get("base_environment_generation"), str)
+            else None
+        ),
+        environment_content_sha256=(
+            str(value["environment_content_sha256"])
+            if isinstance(value.get("environment_content_sha256"), str)
+            else None
+        ),
+        environment_authority_id=(
+            str(value["environment_authority_id"])
+            if isinstance(value.get("environment_authority_id"), str)
+            else None
+        ),
+        selected_interpreter_relative_path=(
+            str(value["selected_interpreter_relative_path"])
+            if isinstance(value.get("selected_interpreter_relative_path"), str)
+            else None
+        ),
+        selected_interpreter_digest=(
+            str(value["selected_interpreter_digest"])
+            if isinstance(value.get("selected_interpreter_digest"), str)
+            else None
+        ),
+        external_escape_records=tuple(
+            EnvironmentExternalTarget(
+                path=Path(str(record["path"])),
+                sha256=str(record["sha256"]),
+                kind=str(record["kind"]),
+            )
+            for record in value.get("external_escape_records", ())
+            if isinstance(record, Mapping)
+            and all(isinstance(record.get(key), str) for key in ("path", "sha256", "kind"))
+        ),
     )
 
 
@@ -4452,15 +4513,16 @@ class CrawlerDriver:
                 nonlocal use_completed
                 self._check_shutdown("environment-use-admission")
                 use_entered = True
-                environment = _environment_binding(
-                    intent,
-                    prefix,
-                    probe_results,
-                    strict=isinstance(self.dependencies.forward, SupervisedForwardLane)
-                    and isinstance(
-                        self.dependencies.environments,
-                        SequentialEnvironmentLifecycle,
-                    ),
+                live_supervised_environment = isinstance(
+                    self.dependencies.forward, SupervisedForwardLane
+                ) and isinstance(
+                    self.dependencies.environments,
+                    SequentialEnvironmentLifecycle,
+                )
+                environment = (
+                    bind_materialized_environment(intent, prefix, probe_results)
+                    if live_supervised_environment
+                    else _environment_binding(intent, prefix, probe_results, strict=False)
                 )
                 observed_environment = environment
                 observed_generation = environment.env_generation
@@ -4639,9 +4701,13 @@ class CrawlerDriver:
     ) -> Optional[str]:
         """Append honest worker attempts and return a checker pause from run repair."""
 
-        closure = _collect_worker_executable_closure(artifact, environment)
+        closure_identity = (
+            _collect_worker_executable_closure(artifact, environment).identity
+            if isinstance(self.dependencies.forward, SupervisedForwardLane)
+            else _INJECTED_FORWARD_CLOSURE_IDENTITY
+        )
         execution_identity = _execution_identity(
-            artifact, environment, closure_identity=closure.identity
+            artifact, environment, closure_identity=closure_identity
         )
         self._check_shutdown(
             "forward-admission",
@@ -5988,7 +6054,7 @@ def _environment_binding(
                 raise DriverIntegrationError(
                     "lifecycle probe receipts differ from the committed receipt artifact"
                 )
-        generation = materialized_environment_generation(
+        base_generation = materialized_environment_generation(
             intent,
             lock_bytes=lock_bytes,
             export_bytes=export_bytes,
@@ -6000,6 +6066,18 @@ def _environment_binding(
         )
     except (EnvironmentExactnessError, EnvironmentProbeError) as exc:
         raise DriverIntegrationError(str(exc)) from exc
+    authority: Optional[EnvironmentAuthorityV1] = None
+    authority_cache: Optional[EnvironmentAuthorityCache] = None
+    generation = base_generation
+    if strict:
+        authority_cache = EnvironmentAuthorityCache()
+        authority = authority_cache.bind(
+            prefix=prefix,
+            selected_interpreter=interpreter,
+            base_environment_generation=base_generation,
+        )
+        generation = authority.environment_generation
+        interpreter = authority.selected_interpreter
     return EnvironmentBinding(
         prefix=prefix.resolve(),
         python_executable=interpreter.absolute(),
@@ -6012,7 +6090,45 @@ def _environment_binding(
         python_version=python_version,
         compiler_identity=compiler_identity,
         sdk_identity=sdk_identity,
+        authority_epoch=(authority.authority_version if authority is not None else None),
+        base_environment_generation=(
+            authority.base_environment_generation if authority is not None else None
+        ),
+        environment_content_sha256=(
+            authority.content_manifest_sha256 if authority is not None else None
+        ),
+        environment_authority_id=(authority.authority_id if authority is not None else None),
+        selected_interpreter_relative_path=(
+            authority.selected_interpreter_relative_path if authority is not None else None
+        ),
+        selected_interpreter_digest=(
+            authority.selected_interpreter_digest if authority is not None else None
+        ),
+        external_escape_records=(authority.external_targets if authority is not None else ()),
+        environment_authority=authority,
+        environment_authority_cache=authority_cache,
     )
+
+
+def bind_materialized_environment(
+    intent: EnvironmentIntent,
+    prefix: Path,
+    probe_results: Sequence[ProbeResult],
+) -> EnvironmentBinding:
+    """Strictly bind lifecycle provenance and a complete prefix content seal.
+
+    Parameters
+    ----------
+    intent, prefix, probe_results:
+        Exact committed lifecycle contract, materialized prefix, and durable probes.
+
+    Returns
+    -------
+    EnvironmentBinding
+        Sole live binding accepted by supervised model execution.
+    """
+
+    return _environment_binding(intent, prefix, probe_results, strict=True)
 
 
 def _observed_interpreter_facts(interpreter: Path) -> tuple[str, str, str, bytes]:
@@ -6878,6 +6994,11 @@ def _current_run_is_fresh(
     if proposal.get("author", {}).get("prompt_sha256") != live_author_prompt:
         return False
     facts = proposal.get("proposed_facts", {})
+    closure_identity = (
+        None
+        if environment.environment_authority is not None
+        else _INJECTED_FORWARD_CLOSURE_IDENTITY
+    )
     if model.get("authored_metadata_state") == "pending":
         untrusted = model.get("untrusted_attempt")
         retained_proposal = untrusted.get("proposal") if isinstance(untrusted, Mapping) else None
@@ -6892,7 +7013,8 @@ def _current_run_is_fresh(
             and not _fidelity_required(proposal)
             and execution.get("current")
             and execution.get("env_generation") == environment.env_generation
-            and execution.get("execution_identity") == _execution_identity(artifact, environment)
+            and execution.get("execution_identity")
+            == _execution_identity(artifact, environment, closure_identity=closure_identity)
             and model.get("provenance", {}).get("author_prompt_sha256") == live_author_prompt
         )
     if artifact.template_source_revision is not None:
@@ -6948,7 +7070,8 @@ def _current_run_is_fresh(
         return bool(
             execution.get("current")
             and execution.get("env_generation") == environment.env_generation
-            and execution.get("execution_identity") == _execution_identity(artifact, environment)
+            and execution.get("execution_identity")
+            == _execution_identity(artifact, environment, closure_identity=closure_identity)
             and model.get("provenance", {}).get("author_prompt_sha256") == live_author_prompt
         )
     for field in (
@@ -6988,7 +7111,8 @@ def _current_run_is_fresh(
     return bool(
         execution.get("current")
         and execution.get("env_generation") == environment.env_generation
-        and execution.get("execution_identity") == _execution_identity(artifact, environment)
+        and execution.get("execution_identity")
+        == _execution_identity(artifact, environment, closure_identity=closure_identity)
         and model.get("provenance", {}).get("author_prompt_sha256") == live_author_prompt
     )
 
@@ -7281,7 +7405,7 @@ def _specialize_variant_recipe(
 def _collect_worker_executable_closure(
     artifact: AuthorArtifact,
     environment: EnvironmentBinding,
-) -> ExecutableClosure:
+) -> ExecutableClosureV3:
     """Collect the sole executable closure before execution identity derivation.
 
     Parameters
@@ -7292,9 +7416,14 @@ def _collect_worker_executable_closure(
         Exact materialized runtime generation.
     Returns
     -------
-    ExecutableClosure
-        Closed code, standard-asset, and runtime member inventory.
+    ExecutableClosureV3
+        Closed exact code/crawler partitions and one sealed environment unit.
     """
+
+    if environment.environment_authority is None:
+        raise DriverIntegrationError(
+            "live supervised execution requires a sealed EnvironmentAuthorityV1 binding"
+        )
 
     proposal = artifact.proposal
     facts = proposal["proposed_facts"]
@@ -7336,20 +7465,14 @@ def _collect_worker_executable_closure(
         else None
     )
     code_identity = stable_hash(raw_manifest)
-    runtime_paths = set(_crawler_worker_runtime_paths())
-    runtime_paths.update(_environment_runtime_paths(environment))
-    runtime_members = tuple(
+    worker_members = tuple(
         RuntimeMember(
             path=path,
             sha256=hash_bytes(path.read_bytes()),
             kind=_runtime_member_kind(path, environment.python_executable.resolve()),
-            provenance=(
-                "crawler-worker-import-closure"
-                if path.is_relative_to(Path(__file__).resolve().parents[2])
-                else f"environment-generation:{environment.env_generation}"
-            ),
+            provenance="crawler-worker-import-closure",
         )
-        for path in sorted(runtime_paths, key=str)
+        for path in _crawler_worker_runtime_paths()
     )
     lookup_candidates = {
         Path(__file__).resolve().parents[2],
@@ -7362,12 +7485,11 @@ def _collect_worker_executable_closure(
         for path in sorted(lookup_candidates, key=str)
         if path.is_dir() and not path.is_symlink()
     )
-    return collect_executable_closure(
+    return collect_executable_closure_v3(
         code_manifest_identity=code_identity,
-        environment_generation=environment.env_generation,
-        installed_package_inventory_sha256=environment.packages_manifest_sha256,
+        environment_authority=environment.environment_authority,
         code_members=tuple(members),
-        runtime_members=runtime_members,
+        worker_members=worker_members,
         standard_input_asset=asset,
         lookup_directories=lookup_directories,
     )
@@ -7378,8 +7500,8 @@ def _compile_worker_read_manifest(
     environment: EnvironmentBinding,
     execution_identity: str,
     *,
-    closure: Optional[ExecutableClosure] = None,
-) -> ExecutionReadManifestV2:
+    closure: Optional[ExecutableClosureV3] = None,
+) -> ExecutionReadManifestV3:
     """Bind a verified pre-identity closure into the final worker manifest.
 
     Parameters
@@ -7393,13 +7515,13 @@ def _compile_worker_read_manifest(
 
     Returns
     -------
-    ExecutionReadManifestV2
-        Final exact-member execution capability.
+    ExecutionReadManifestV3
+        Final exact model/crawler/asset plus sealed-environment capability.
     """
 
     proposal = artifact.proposal
     collected = closure or _collect_worker_executable_closure(artifact, environment)
-    return compile_execution_read_manifest_from_closure(
+    return compile_execution_read_manifest_v3_from_closure(
         collected,
         stable_id=str(proposal["stable_id"]),
         work_id=str(proposal["work_id"]),
@@ -7495,73 +7617,12 @@ def _crawler_worker_runtime_paths() -> tuple[Path, ...]:
     return tuple(sorted(members, key=str))
 
 
-def _environment_runtime_paths(environment: EnvironmentBinding) -> tuple[Path, ...]:
-    """Collect exact installed environment files from immutable package metadata.
-
-    Parameters
-    ----------
-    environment:
-        Exact active environment generation.
-
-    Returns
-    -------
-    tuple[pathlib.Path, ...]
-        Canonical unaliased interpreter, import, native, metadata, and package-data files.
-    """
-
-    paths: set[Path] = set()
-    interpreter = environment.python_executable.resolve()
-    if interpreter.is_file() and not interpreter.is_symlink() and interpreter.stat().st_nlink == 1:
-        paths.add(interpreter)
-    for metadata_path in sorted((environment.prefix / "conda-meta").glob("*.json")):
-        try:
-            value = json.loads(metadata_path.read_bytes())
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            raise DriverIntegrationError(
-                f"installed runtime metadata is unreadable: {metadata_path}"
-            ) from exc
-        if metadata_path.resolve() == metadata_path and metadata_path.stat().st_nlink == 1:
-            paths.add(metadata_path.resolve())
-        files = value.get("files") if isinstance(value, Mapping) else None
-        if not isinstance(files, list):
-            continue
-        for relative_value in files:
-            if not isinstance(relative_value, str):
-                continue
-            candidate = (environment.prefix / relative_value).absolute()
-            try:
-                resolved = candidate.resolve(strict=True)
-                status = candidate.stat()
-            except OSError:
-                continue
-            if (
-                candidate.is_symlink()
-                or resolved != candidate
-                or not candidate.is_file()
-                or status.st_nlink != 1
-            ):
-                continue
-            if candidate.suffix.lower() in {
-                ".bin",
-                ".ckpt",
-                ".h5",
-                ".onnx",
-                ".pt",
-                ".pth",
-                ".safetensors",
-                ".weights",
-            }:
-                continue
-            paths.add(candidate)
-    return tuple(sorted(paths, key=str))
-
-
 def _worker_request(
     artifact: AuthorArtifact,
     scratch_root: Path,
     receipt_path: Path,
     execution_identity: str,
-    execution_manifest: ExecutionReadManifestV2,
+    execution_manifest: ExecutionReadManifestV3,
     cold_index: int,
     mode: str,
 ) -> JsonObject:
@@ -8068,6 +8129,22 @@ def _attempts_from_supervised(
                 "packages_manifest_sha256": environment.packages_manifest_sha256,
                 "compiler_identity": environment.compiler_identity,
                 "sdk_identity": environment.sdk_identity,
+                "authority_epoch": environment.authority_epoch,
+                "base_environment_generation": environment.base_environment_generation,
+                "environment_content_sha256": environment.environment_content_sha256,
+                "environment_authority_id": environment.environment_authority_id,
+                "selected_interpreter_relative_path": (
+                    environment.selected_interpreter_relative_path
+                ),
+                "selected_interpreter_digest": environment.selected_interpreter_digest,
+                "external_escape_records": [
+                    {
+                        "path": str(record.path),
+                        "sha256": record.sha256,
+                        "kind": record.kind,
+                    }
+                    for record in environment.external_escape_records
+                ],
             },
             "host": {
                 "machine_id": platform.node() or "unknown-machine",
@@ -9678,6 +9755,22 @@ def _driver_failure_attempt(
             "packages_manifest_sha256": environment_binding.packages_manifest_sha256,
             "compiler_identity": environment_binding.compiler_identity,
             "sdk_identity": environment_binding.sdk_identity,
+            "authority_epoch": environment_binding.authority_epoch,
+            "base_environment_generation": (environment_binding.base_environment_generation),
+            "environment_content_sha256": (environment_binding.environment_content_sha256),
+            "environment_authority_id": environment_binding.environment_authority_id,
+            "selected_interpreter_relative_path": (
+                environment_binding.selected_interpreter_relative_path
+            ),
+            "selected_interpreter_digest": (environment_binding.selected_interpreter_digest),
+            "external_escape_records": [
+                {
+                    "path": str(record.path),
+                    "sha256": record.sha256,
+                    "kind": record.kind,
+                }
+                for record in environment_binding.external_escape_records
+            ],
         }
         if environment_binding is not None
         else None

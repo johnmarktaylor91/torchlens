@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import ast
+from dataclasses import replace
 import json
 from pathlib import Path
-from typing import Any
-from unittest.mock import patch
+from typing import Any, Mapping
 
 import pytest
 
@@ -14,7 +14,6 @@ import menagerie.crawler.driver as driver_module
 from menagerie.crawler.authority import derive_mode_summary
 from menagerie.crawler.driver import SupervisedForwardLane
 from menagerie.crawler.identity import hash_bytes, stable_hash
-from menagerie.crawler.policy import compile_execution_read_manifest
 from menagerie.crawler.proposal import model_code_manifest
 from menagerie.crawler.recordio import scan_jsonl
 from menagerie.crawler.reducer import CanonicalReducer
@@ -27,14 +26,17 @@ from menagerie.crawler.tests.test_slice_f_driver import (
     _refresh_proposal_identities,
     _snapshot,
     _test_authority_context,
-    _test_environment,
 )
-from menagerie.crawler.tests.conftest import make_worker_result_v3_mapping
+from menagerie.crawler.tests.conftest import (
+    RealEnvironmentFixture,
+    make_worker_result_v3_mapping,
+)
 
 
 _TINY_ADAPTER = """from __future__ import annotations
 
 import torch
+import menagerie_round19_sentinel as round19_sentinel
 
 
 class Tiny(torch.nn.Module):
@@ -43,6 +45,7 @@ class Tiny(torch.nn.Module):
 
 
 def build_model() -> object:
+    assert round19_sentinel.INTERPRETER_SENTINEL == 'round19-selected-prefix'
     return Tiny()
 
 
@@ -85,6 +88,7 @@ VS1_LANDING_MANIFEST: dict[str, Any] = {
 )
 def test_real_v3_worker_result_awards_through_driver_and_reducer(
     tmp_path: Path,
+    real_environment_fixture: RealEnvironmentFixture,
     adapter_source: str,
     expected_divergence: str,
 ) -> None:
@@ -143,37 +147,35 @@ def test_real_v3_worker_result_awards_through_driver_and_reducer(
     )
     artifact = _rebind_fake_author_result(artifact)
 
-    environment_root = tmp_path / "current-interpreter-env"
-    environment_root.mkdir()
-    environment = _test_environment(environment_root)
-    execution_identity = driver_module._execution_identity(artifact, environment)
-    code_identity = stable_hash(code_manifest)
-    manifest = compile_execution_read_manifest(
-        stable_id=item.stable_id,
-        work_id=str(artifact.proposal["work_id"]),
-        execution_identity=execution_identity,
-        code_manifest_identity=code_identity,
-        code_members=((adapter_path, adapter_digest, "python-source"),),
-        runtime_support=((Path.cwd() / "menagerie", "runtime-root"),),
+    environment = real_environment_fixture.binding
+    context = replace(
+        context,
+        environment_generations={
+            **context.environment_generations,
+            environment.family: environment.env_generation,
+        },
     )
+
+    def append_attempt(attempt: Mapping[str, Any]) -> None:
+        """Append one attempt while satisfying the forward-lane sink contract."""
+
+        reducer.append_attempt(attempt)
+
     with CanonicalReducer(paths.ledgers, context) as reducer:
         artifact = driver._stage_author_result(item, artifact, reducer)
         gate = FakeChecker().check_metadata([artifact], paths.work_root, driver.config).gate
         assert gate is not None
         reducer.append_gate(gate)
-        # Keep this wrapper-consumption slice independent of exact-runtime-closure enforcement
-        # while exercising the production lane, lease, supervisor, worker, and attempt sink.
-        with patch.object(driver_module, "_compile_worker_read_manifest", return_value=manifest):
-            attempts = SupervisedForwardLane(timeout_seconds=20, cwd=Path.cwd()).forward(
-                artifact,
-                environment,
-                1,
-                paths.work_root,
-                worker_lock_path=paths.worker_lock,
-                worker_lease_path=paths.worker_lease,
-                run_id=driver.config.run_id,
-                attempt_sink=reducer.append_attempt,
-            )
+        attempts = SupervisedForwardLane(timeout_seconds=20, cwd=Path.cwd()).forward(
+            artifact,
+            environment,
+            1,
+            paths.work_root,
+            worker_lock_path=paths.worker_lock,
+            worker_lease_path=paths.worker_lease,
+            run_id=driver.config.run_id,
+            attempt_sink=append_attempt,
+        )
 
         for mode in ("train", "eval"):
             result_path = (
@@ -199,6 +201,35 @@ def test_real_v3_worker_result_awards_through_driver_and_reducer(
             (attempt["result"], attempt["error"]) for attempt in attempts
         ]
         assert driver_module._attempt_policy_satisfied(attempts, artifact.proposal, 1)
+        closure = driver_module._collect_worker_executable_closure(artifact, environment)
+        execution_identity = driver_module._execution_identity(
+            artifact,
+            environment,
+            closure_identity=closure.identity,
+        )
+        recomputed_manifest = driver_module._compile_worker_read_manifest(
+            artifact,
+            environment,
+            execution_identity,
+            closure=closure,
+        )
+        assert {str(attempt["execution_read_manifest_identity"]) for attempt in attempts} == {
+            recomputed_manifest.manifest_id
+        }
+        for attempt in attempts:
+            argv = list(attempt["invocation"]["argv"])
+            interpreter_index = argv.index(str(environment.python_executable))
+            assert argv[interpreter_index : interpreter_index + 4] == [
+                str(environment.python_executable),
+                "-B",
+                "-m",
+                "menagerie.crawler.worker",
+            ]
+        assert all(
+            attempt["environment"]["environment_authority_id"]
+            == environment.environment_authority_id
+            for attempt in attempts
+        )
 
         persisted = scan_jsonl(paths.ledgers.attempts)
         by_mode = {str(attempt["mode"]): attempt for attempt in persisted}

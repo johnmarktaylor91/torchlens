@@ -10,6 +10,10 @@ GATE_SCHEMA_VERSION = "menagerie.crawler.gate.v2"
 AUTHOR_PROPOSAL_SCHEMA_VERSION = "menagerie.crawler.author-proposal.v2"
 OPERATIONAL_EVENT_SCHEMA_VERSION = "menagerie.crawler.operational-event.v1"
 EXECUTION_READ_MANIFEST_VERSION_V2 = "menagerie.crawler.execution-read-manifest.v2"
+EXECUTION_READ_MANIFEST_VERSION_V3 = "menagerie.crawler.execution-read-manifest.v3"
+ENVIRONMENT_AUTHORITY_VERSION_V1 = "menagerie.crawler.environment-authority.v1"
+ENVIRONMENT_CONTENT_MANIFEST_VERSION_V1 = "menagerie.crawler.environment-content-manifest.v1"
+ENVIRONMENT_GENERATION_VERSION_V2 = "menagerie.crawler.environment-generation.v2"
 DRIVER_SHUTDOWN_STATUS = "interrupted:shutdown"
 
 # Round-14 contracts are additive during the interface freeze. Existing producers
