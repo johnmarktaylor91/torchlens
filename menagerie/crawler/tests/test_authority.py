@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import fields
+from pathlib import Path
 from typing import Any, Mapping, Optional
 
 import pytest
@@ -16,6 +17,8 @@ from menagerie.crawler.authority import (
     RuntimeLookupDirectory,
     RuntimeMember,
     ShutdownInterruptionFact,
+    authenticate_accepted_attempts,
+    compile_execution_read_manifest_v2,
     derive_attempt_projection,
     derive_dependency_vector,
     derive_execution_identity,
@@ -28,8 +31,12 @@ from menagerie.crawler.authority import (
     derive_award_closure_identity,
     derive_runner_identity,
     family_authority_projection,
+    load_current_attempt_proof,
+    load_current_gate_proof,
     raw_award_receipt_sha256,
+    resolve_exact_gate_item_membership,
     validate_currency,
+    verify_execution_read_manifest_v2,
     completion_line_for_raw_award_receipt,
 )
 from menagerie.crawler.artifact_transactions import (
@@ -38,7 +45,7 @@ from menagerie.crawler.artifact_transactions import (
 )
 from menagerie.crawler.constants import InvocationOrigin
 from menagerie.crawler.driver import DriverResult, DriverShutdown
-from menagerie.crawler.identity import stable_hash
+from menagerie.crawler.identity import hash_bytes, payload_hash, stable_hash
 
 HASH_A = "sha256:" + "a" * 64
 HASH_B = "sha256:" + "b" * 64
@@ -370,6 +377,288 @@ def _terminal_gate(predicate: str) -> dict[str, Any]:
             }
         ],
     }
+
+
+def _persisted_attempt(attempt: Mapping[str, Any]) -> dict[str, Any]:
+    """Add the canonical ledger self-hash to one attempt fixture.
+
+    Parameters
+    ----------
+    attempt:
+        Attempt fixture with a positive ledger sequence.
+
+    Returns
+    -------
+    dict[str, Any]
+        Persisted current-proof fixture.
+    """
+
+    persisted = deepcopy(dict(attempt))
+    persisted["payload_sha256"] = payload_hash(persisted)
+    return persisted
+
+
+def _current_gate(
+    item: Mapping[str, Any], *, gate_id: str = "gate-current", ledger_seq: int = 1
+) -> dict[str, Any]:
+    """Build a persisted current-v3 gate proof around one exact item.
+
+    Parameters
+    ----------
+    item:
+        Exact checker item.
+    gate_id, ledger_seq:
+        Immutable gate identity and ledger position.
+
+    Returns
+    -------
+    dict[str, Any]
+        Minimal proof-complete gate consumed by authority producers.
+    """
+
+    gate: dict[str, Any] = {
+        "schema_version": "menagerie.crawler.gate.v3",
+        "gate_id": gate_id,
+        "ledger_seq": ledger_seq,
+        "gate_kind": "metadata_batch",
+        "batch_size": 1,
+        "gate_round": 1,
+        "gate_identity": HASH_A,
+        "checker": {
+            "provider": "openai",
+            "model": "checker",
+            "version": "v1",
+            "prompt_sha256": HASH_B,
+        },
+        "items": [deepcopy(dict(item))],
+        "author_result_schema_identity": HASH_C,
+        "dispatcher_identity": HASH_D,
+    }
+    gate["result_envelope_sha256"] = stable_hash(gate)
+    gate["payload_sha256"] = payload_hash(gate)
+    return gate
+
+
+def test_manifest_v2_compiler_inventories_files_without_semantic_root_grants(
+    tmp_path: Path,
+) -> None:
+    """Exact members compile while lookup scaffolding grants no descendant bytes."""
+
+    helper_path = tmp_path / "helper.py"
+    helper_path.write_text("VALUE = 1\n", encoding="utf-8")
+    code_path = tmp_path / "adapter.py"
+    code_path.write_text("import helper\nVALUE = helper.VALUE\n", encoding="utf-8")
+    interpreter_path = tmp_path / "python-runtime"
+    interpreter_path.write_bytes(b"interpreter")
+    metadata_path = tmp_path / "RECORD"
+    metadata_path.write_text("adapter.py,sha256=fixture\n", encoding="utf-8")
+    manifest = compile_execution_read_manifest_v2(
+        stable_id="m_example",
+        work_id="work-1",
+        execution_identity=HASH_A,
+        code_manifest_identity=HASH_B,
+        environment_generation=HASH_C,
+        installed_package_inventory_sha256=HASH_D,
+        code_members=(
+            RuntimeMember(
+                code_path,
+                hash_bytes(code_path.read_bytes()),
+                "python-source",
+                "accepted-model-code",
+            ),
+            RuntimeMember(
+                helper_path,
+                hash_bytes(helper_path.read_bytes()),
+                "python-source",
+                "static-model-import",
+            ),
+        ),
+        runtime_members=(
+            RuntimeMember(
+                interpreter_path,
+                hash_bytes(interpreter_path.read_bytes()),
+                "interpreter",
+                "environment-interpreter",
+            ),
+            RuntimeMember(
+                metadata_path,
+                hash_bytes(metadata_path.read_bytes()),
+                "import-metadata",
+                "installed-record",
+            ),
+        ),
+        lookup_directories=(RuntimeLookupDirectory(tmp_path, "lookup-only"),),
+    )
+    assert manifest.manifest_version == "menagerie.crawler.execution-read-manifest.v2"
+    assert {member.path for member in manifest.runtime_members} == {
+        interpreter_path,
+        metadata_path,
+    }
+
+    unrelated = tmp_path / "undeclared.txt"
+    unrelated.write_text("not authority", encoding="utf-8")
+    verify_execution_read_manifest_v2(manifest)
+
+
+def test_manifest_v2_rejects_semantic_roots_and_detects_member_mutation(
+    tmp_path: Path,
+) -> None:
+    """A directory-shaped grant rejects and an inventoried byte change stales proof."""
+
+    helper_path = tmp_path / "undeclared_helper.py"
+    helper_path.write_text("VALUE = 1\n", encoding="utf-8")
+    importer_path = tmp_path / "importer.py"
+    importer_path.write_text("import undeclared_helper\n", encoding="utf-8")
+    with pytest.raises(AuthorityDerivationError, match="outside the executable member inventory"):
+        compile_execution_read_manifest_v2(
+            stable_id="m_example",
+            work_id="work-1",
+            execution_identity=HASH_A,
+            code_manifest_identity=HASH_B,
+            environment_generation=HASH_C,
+            installed_package_inventory_sha256=HASH_D,
+            code_members=(
+                RuntimeMember(
+                    importer_path,
+                    hash_bytes(importer_path.read_bytes()),
+                    "python-source",
+                    "accepted-model-code",
+                ),
+            ),
+            runtime_members=(),
+            lookup_directories=(RuntimeLookupDirectory(tmp_path, "lookup-only"),),
+        )
+
+    with pytest.raises(AuthorityDerivationError, match="non-file or unknown kind"):
+        compile_execution_read_manifest_v2(
+            stable_id="m_example",
+            work_id="work-1",
+            execution_identity=HASH_A,
+            code_manifest_identity=HASH_B,
+            environment_generation=HASH_C,
+            installed_package_inventory_sha256=HASH_D,
+            code_members=(),
+            runtime_members=(RuntimeMember(tmp_path, HASH_A, "runtime-root", "repository-root"),),
+        )
+
+    runtime_path = tmp_path / "worker.py"
+    runtime_path.write_text("VALUE = 1\n", encoding="utf-8")
+    manifest = compile_execution_read_manifest_v2(
+        stable_id="m_example",
+        work_id="work-1",
+        execution_identity=HASH_A,
+        code_manifest_identity=HASH_B,
+        environment_generation=HASH_C,
+        installed_package_inventory_sha256=HASH_D,
+        code_members=(),
+        runtime_members=(
+            RuntimeMember(
+                runtime_path,
+                hash_bytes(runtime_path.read_bytes()),
+                "python-source",
+                "worker-bootstrap",
+            ),
+        ),
+    )
+    runtime_path.write_text("VALUE = 2\n", encoding="utf-8")
+    with pytest.raises(AuthorityDerivationError, match="digest changed"):
+        verify_execution_read_manifest_v2(manifest)
+
+
+def test_current_proof_loaders_reject_legacy_attempts_and_gates() -> None:
+    """Readable v2 facts cannot enter any current attempt or gate authority seam."""
+
+    attempt = _persisted_attempt(_attempt())
+    attempt["schema_version"] = "menagerie.crawler.attempt.v2"
+    attempt["payload_sha256"] = payload_hash(attempt)
+    with pytest.raises(AuthorityDerivationError, match="legacy rows lack v3 proof"):
+        load_current_attempt_proof(attempt)
+
+    item = _terminal_gate("needs-cuda")["items"][0]
+    gate = _current_gate(item)
+    gate["schema_version"] = "menagerie.crawler.gate.v2"
+    gate["result_envelope_sha256"] = stable_hash(
+        {
+            key: value
+            for key, value in gate.items()
+            if key not in {"result_envelope_sha256", "payload_sha256"}
+        }
+    )
+    gate["payload_sha256"] = payload_hash(gate)
+    with pytest.raises(AuthorityDerivationError, match="legacy rows lack v3 proof"):
+        load_current_gate_proof(gate)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("legacy", "missing-raw", "missing-parent", "mutated-raw-digest"),
+)
+def test_every_award_counted_attempt_independently_replays_v3_proof(mutation: str) -> None:
+    """A non-decisive confirmation slot cannot borrow decisive-slot authority."""
+
+    decisive = _persisted_attempt(_attempt("eval", 1))
+    confirmation = _persisted_attempt(_attempt("train", 2))
+    control = authenticate_accepted_attempts(
+        [decisive["attempt_id"], confirmation["attempt_id"]],
+        [decisive, confirmation],
+        stable_id="m_example",
+        work_id="work-1",
+        execution_identity=HASH_A,
+    )
+    assert tuple(proof.attempt_id for proof in control) == (
+        decisive["attempt_id"],
+        confirmation["attempt_id"],
+    )
+    if mutation == "legacy":
+        confirmation["schema_version"] = "menagerie.crawler.attempt.v2"
+    elif mutation == "missing-raw":
+        confirmation["raw_award_receipt"] = None
+    elif mutation == "missing-parent":
+        confirmation["parent_attestation"] = None
+    else:
+        confirmation["raw_award_receipt_sha256"] = HASH_D
+    confirmation["payload_sha256"] = payload_hash(confirmation)
+
+    with pytest.raises(AuthorityDerivationError):
+        authenticate_accepted_attempts(
+            [decisive["attempt_id"], confirmation["attempt_id"]],
+            [decisive, confirmation],
+            stable_id="m_example",
+            work_id="work-1",
+            execution_identity=HASH_A,
+        )
+
+
+def test_gate_item_membership_is_exact_unique_and_ledger_owned() -> None:
+    """Caller gate IDs and duplicate item memberships cannot select publication authority."""
+
+    item = deepcopy(_terminal_gate("needs-cuda")["items"][0])
+    digest = stable_hash(item)
+    gate = _current_gate(item)
+    owning_gate, owning_item = resolve_exact_gate_item_membership(
+        [gate],
+        accepted_gate_item=item,
+        accepted_gate_item_sha256=digest,
+    )
+    assert owning_gate["gate_id"] == "gate-current"
+    assert owning_item == item
+
+    injected = deepcopy(item)
+    injected["gate_id"] = "gate-foreign"
+    with pytest.raises(AuthorityDerivationError, match="zero or multiple"):
+        resolve_exact_gate_item_membership(
+            [gate],
+            accepted_gate_item=injected,
+            accepted_gate_item_sha256=stable_hash(injected),
+        )
+
+    duplicate_gate = _current_gate(item, gate_id="gate-duplicate", ledger_seq=2)
+    with pytest.raises(AuthorityDerivationError, match="zero or multiple"):
+        resolve_exact_gate_item_membership(
+            [gate, duplicate_gate],
+            accepted_gate_item=item,
+            accepted_gate_item_sha256=digest,
+        )
 
 
 def test_attempt_projection_replays_raw_parent_and_every_consumed_projection() -> None:
