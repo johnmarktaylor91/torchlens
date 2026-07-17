@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sys
+from typing import Any
 
 import pytest
 
@@ -21,6 +22,44 @@ from menagerie.crawler.worker_supervisor import run_isolated_subprocess
 
 
 HASH = "sha256:" + "a" * 64
+
+VS3_LANDING_MANIFEST: dict[str, Any] = {
+    "findings": (
+        "SOL-R16-02",
+        "SOL-R16-04",
+        "SOL-R16-05",
+        "SOL-R16-06",
+        "Fable-F4",
+    ),
+    "production_symbols": {
+        "authority": (
+            "compile_execution_read_manifest_v2",
+            "exact_read_capability",
+            "derive_mode_summary",
+            "derive_terminal_proof",
+        ),
+        "driver": (
+            "CrawlerDriver._rehydrate_final_authority",
+            "_execution_identity",
+            "_attempts_from_supervised",
+        ),
+        "artifact_transactions": (
+            "resolve_final_artifact_transaction",
+            "rehydrate_artifact_transaction",
+        ),
+    },
+    "real_composition_nodes": (
+        "menagerie/crawler/tests/test_round17_vs3_authority_composition.py::"
+        "test_manifest_v2_real_os_policy_denies_undeclared_root_member",
+        "menagerie/crawler/tests/test_slice_f_driver.py::"
+        "test_linux_handoff_attempts_both_deferred_statuses_and_supersedes",
+        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::"
+        "test_real_v3_worker_result_awards_through_driver_and_reducer",
+        "menagerie/crawler/tests/test_reducer.py::"
+        "test_deferred_terminal_positive_capability_probe_is_persisted_and_admitted",
+    ),
+    "structural_nodes": ("test_vs3_dead_deferral_producer_is_absent",),
+}
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux real OS policy composition")

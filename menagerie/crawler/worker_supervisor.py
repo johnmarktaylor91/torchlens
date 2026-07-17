@@ -200,6 +200,14 @@ _PARENT_ATTESTATION_KEYS = frozenset(
     }
 )
 
+# Structural authority registry consumed by the Round-17 AST inventory. Every
+# ``subprocess.Popen`` edge in this module must have exactly one reviewed role.
+_SUBPROCESS_SPAWN_REGISTRY = {
+    "_emit_macos_audit_sentinel": "audit-sentinel:no-model-work",
+    "_start_macos_denial_audit": "audit-collector:no-model-work",
+    "run_isolated_subprocess": "model-worker:inherited-live-lease",
+}
+
 
 @dataclass(frozen=True)
 class SupervisorObservation:
@@ -3499,6 +3507,8 @@ def supervise_worker(
         verify_execution_read_manifest(execution_read_manifest)
         if request_value.get("protocol_version") != "menagerie.crawler.worker-request.v3":
             raise ValueError("compiled execution manifests require worker-request.v3")
+        if worker_lease_handle is None:
+            raise ValueError("v3 model worker spawn requires an inherited live worker lease")
         request_nonce_value = request_value.get("request_nonce")
         if not isinstance(request_nonce_value, str) or not request_nonce_value:
             raise ValueError("v3 worker request requires a nonce")

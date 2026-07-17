@@ -2169,6 +2169,13 @@ def _materialize_public_claims(
     return tuple(sorted(materialized))
 
 
+# Structural authority registry consumed by the Round-17 AST inventory. Initial
+# public placement has one low-level writer and one authorization-bearing caller.
+_PUBLIC_WRITER_REGISTRY = {
+    "_materialize_public_claims": "publish_authorized_artifact:committed-authorization",
+}
+
+
 def _public_authorizes_path(
     events: Sequence[Mapping[str, Any]], logical_path: str, content_sha256: str
 ) -> bool:

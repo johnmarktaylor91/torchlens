@@ -69,3 +69,33 @@ jobs:
       - name: Run smoke tests
         run: |
           ${{ matrix.pytest }}
+
+  crawler-round17:
+    name: Crawler Round 17 real compositions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install crawler OS-policy dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap strace
+
+      - name: Install crawler test dependencies
+        run: |
+          uv pip install --system -e ".[dev,tabular]"
+
+      - name: Run permanent Round 17 compositions and structural inventories
+        run: |
+          PYTHONPATH=. python -m pytest -q \
+            menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer \
+            menagerie/crawler/tests/test_round17_vs2_shutdown_composition.py::test_signal_after_real_forward_publishes_and_awards_nothing_then_resumes \
+            menagerie/crawler/tests/test_slice_f_driver.py::test_linux_handoff_attempts_both_deferred_statuses_and_supersedes \
+            menagerie/crawler/tests/test_round17_structural_inventories.py \
+            -x --tb=short
