@@ -440,13 +440,14 @@ def test_admission_boundary_inventory_is_closed() -> None:
     assert _sensitive_edge_inventory(source) == _SENSITIVE_EDGE_COUNTS
     assert driver_module._SHUTDOWN_ADMISSION_REGISTRY == {  # noqa: SLF001
         "author": "guard:author-admission",
-        "checker": "guard:external-call-admission",
+        "checker": "guard:checker-admission",
         "environment-create": "guard:environment-create-admission",
         "environment-use": "guard:environment-use-admission",
         "model": "guard:model-admission",
         "lease": "guard:forward-admission|pre-slot-resolution",
         "spawn": "guard:forward-admission|pre-slot-resolution",
         "run-model-assembly": "guard:post-attempt-pre-award",
+        "publication-admission": "guard:pre-publication-admission",
         "publication": "atomic:award-commit",
         "terminal-publication": "atomic:award-commit",
         "model-append": "atomic:award-commit",
@@ -455,8 +456,10 @@ def test_admission_boundary_inventory_is_closed() -> None:
     forward = inspect.getsource(driver_module.CrawlerDriver._forward_and_reduce)
     terminal = inspect.getsource(driver_module.CrawlerDriver._terminalize)
     assert forward.index('"post-attempt-pre-award"') < forward.index("_assemble_run_model(")
+    assert forward.index('"pre-publication-admission"') < forward.index('"pre-award-commit"')
     assert forward.index('"pre-award-commit"') < forward.index("reducer.append_model(")
     assert forward.index("reducer.append_model(") < forward.index('"post-award-commit"')
+    assert terminal.index('"pre-publication-admission"') < terminal.index('"pre-award-commit"')
     assert terminal.index('"pre-award-commit"') < terminal.index("reducer.append_model(")
     assert terminal.index("reducer.append_model(") < terminal.index('"post-award-commit"')
 

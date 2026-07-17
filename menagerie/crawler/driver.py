@@ -27,7 +27,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, Mapping, Optional, Protocol, Sequence
+from typing import Any, Callable, Mapping, Optional, Protocol, Sequence, TypeVar
 
 from menagerie.crawler.artifact_transactions import (
     ArtifactCheckpointError,
@@ -221,6 +221,8 @@ from menagerie.crawler.worker_supervisor import (
 
 LOGGER = logging.getLogger(__name__)
 
+_T = TypeVar("_T")
+
 _WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V3 "
 _EXTERNALLY_CONTROLLED_ATTEMPT_FIELDS = frozenset(
     {
@@ -375,13 +377,14 @@ _AWARD_CLOSURE_SYMBOLS = {
 }
 _SHUTDOWN_ADMISSION_REGISTRY: Mapping[str, str] = {
     "author": "guard:author-admission",
-    "checker": "guard:external-call-admission",
+    "checker": "guard:checker-admission",
     "environment-create": "guard:environment-create-admission",
     "environment-use": "guard:environment-use-admission",
     "model": "guard:model-admission",
     "lease": "guard:forward-admission|pre-slot-resolution",
     "spawn": "guard:forward-admission|pre-slot-resolution",
     "run-model-assembly": "guard:post-attempt-pre-award",
+    "publication-admission": "guard:pre-publication-admission",
     "publication": "atomic:award-commit",
     "terminal-publication": "atomic:award-commit",
     "model-append": "atomic:award-commit",
@@ -3411,7 +3414,8 @@ class CrawlerDriver:
                         self.paths.work_root,
                         self.config,
                         reducer.context,
-                    )
+                    ),
+                    admission=("author", item),
                 )
                 artifact = self._stage_author_result(item, artifact, reducer)
             except Exception as exc:  # noqa: BLE001 -- author failure belongs to this model
@@ -3689,7 +3693,8 @@ class CrawlerDriver:
         outcome = self._retry_infrastructure_call(
             lambda: self.dependencies.checker.check_terminal(
                 artifact, self.paths.work_root, self.config
-            )
+            ),
+            admission=("checker", item),
         )
         if outcome.backoff is not None:
             return self._pause_for_usage(outcome.backoff, operational, 1)
@@ -3806,7 +3811,8 @@ class CrawlerDriver:
                                 count,
                                 reducer,
                                 gate_kind="metadata_batch",
-                            )
+                            ),
+                            admission=("author", items_by_id[stable_id]),
                         ),
                         self.config,
                     )
@@ -3853,7 +3859,8 @@ class CrawlerDriver:
                     outcome = self._retry_infrastructure_call(
                         lambda: self.dependencies.checker.check_metadata(
                             batch, self.paths.work_root, self.config
-                        )
+                        ),
+                        admission=("checker", items_by_id[batch_ids[0]]),
                     )
                 except Exception as exc:  # noqa: BLE001 -- checker failure is per batch item
                     for stable_id in batch_ids:
@@ -4037,7 +4044,8 @@ class CrawlerDriver:
                                     rejected_count,
                                     reducer,
                                     gate_kind="fidelity",
-                                )
+                                ),
+                                admission=("author", item),
                             ),
                             self.config,
                         )
@@ -4079,7 +4087,8 @@ class CrawlerDriver:
                             metadata_outcome = self._retry_infrastructure_call(
                                 lambda: self.dependencies.checker.check_metadata(
                                     (artifact,), self.paths.work_root, self.config
-                                )
+                                ),
+                                admission=("checker", item),
                             )
                         except Exception as exc:  # noqa: BLE001 -- model-local checker failure
                             infrastructure = self._is_infrastructure_error(exc)
@@ -4198,7 +4207,8 @@ class CrawlerDriver:
                                     metadata_repair_count,
                                     reducer,
                                     gate_kind="metadata_batch",
-                                )
+                                ),
+                                admission=("author", item),
                             )
                         except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
                             reason = (
@@ -4242,7 +4252,8 @@ class CrawlerDriver:
                     outcome = self._retry_infrastructure_call(
                         lambda: self.dependencies.checker.check_fidelity(
                             artifact, self.paths.work_root, self.config
-                        )
+                        ),
+                        admission=("checker", item),
                     )
                 except Exception as exc:  # noqa: BLE001 -- checker failure belongs to this model
                     infrastructure = self._is_infrastructure_error(exc)
@@ -4313,13 +4324,20 @@ class CrawlerDriver:
                 self.dependencies.boundary_hook("after-gate", item.stable_id)
         return None
 
-    def _retry_infrastructure_call(self, operation: Callable[[], Any]) -> Any:
+    def _retry_infrastructure_call(
+        self,
+        operation: Callable[[], _T],
+        *,
+        admission: Optional[tuple[str, WorkItem]] = None,
+    ) -> _T:
         """Retry one external author or checker infrastructure failure once.
 
         Parameters
         ----------
         operation:
             Zero-argument external lane invocation.
+        admission:
+            Optional lane and work item for the exact signalable admission event.
 
         Returns
         -------
@@ -4333,6 +4351,10 @@ class CrawlerDriver:
         """
 
         for attempt in range(2):
+            if admission is not None:
+                lane, item = admission
+                self.dependencies.boundary_hook(f"pre-{lane}", item.stable_id)
+                self._check_shutdown(f"{lane}-admission", item=item)
             self._check_shutdown("external-call-admission")
             try:
                 return operation()
@@ -5076,6 +5098,13 @@ class CrawlerDriver:
         if current_model is not None:
             model["status"]["supersedes_revision"] = current_model["record_revision"]
 
+        self.dependencies.boundary_hook("pre-publication", item.stable_id)
+        self._check_shutdown(
+            "pre-publication-admission",
+            item=item,
+            work_id=str(artifact.proposal["work_id"]),
+            execution_identity=execution_identity,
+        )
         self.dependencies.boundary_hook("pre-award-commit", item.stable_id)
         self._check_shutdown(
             "pre-award-commit",
@@ -5241,7 +5270,8 @@ class CrawlerDriver:
                         self.paths.work_root,
                         self.config,
                         reducer.context,
-                    )
+                    ),
+                    admission=("author", item),
                 )
                 repaired = self._stage_author_result(item, repaired, reducer)
                 if not isinstance(repaired.author_result, ProposedAuthorResult):
@@ -5384,6 +5414,16 @@ class CrawlerDriver:
         if current_model is not None:
             model["status"]["supersedes_revision"] = current_model["record_revision"]
 
+        self.dependencies.boundary_hook("pre-publication", item.stable_id)
+        self._check_shutdown(
+            "pre-publication-admission",
+            item=item,
+            work_id=(
+                artifact.author_result.binding.work_id
+                if artifact is not None
+                else item.active_work_id
+            ),
+        )
         self.dependencies.boundary_hook("pre-award-commit", item.stable_id)
         self._check_shutdown(
             "pre-award-commit",
