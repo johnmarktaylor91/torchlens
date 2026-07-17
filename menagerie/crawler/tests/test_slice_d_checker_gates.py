@@ -403,6 +403,54 @@ def test_accurate_rung_check_allows_matching_fidelity_gate() -> None:
     assert metadata_decision.route is GateRoute.ACCEPT
 
 
+def test_accurate_rung_rejects_highest_applicable_mismatch_at_metadata_admission() -> None:
+    """M3 accurate routing cannot select below the highest applicable source rung."""
+
+    gate = make_gate(["m_example"])
+    gate["items"][0]["rung_check"].update(
+        {
+            "selected_rung": "R4_REIMPLEMENT",
+            "highest_applicable": "R2_VENDOR",
+            "verdict": "accurate",
+        }
+    )
+    with pytest.raises(
+        GateRoutingError,
+        match="accurate rung check requires highest_applicable == selected_rung",
+    ):
+        route_metadata_gate(gate, {}, max_repairs=2)
+
+
+@pytest.mark.parametrize(
+    ("verdict", "highest_applicable", "allowed"),
+    (
+        ("accurate", "R4_REIMPLEMENT", True),
+        ("cannot-verify", "R2_VENDOR", False),
+    ),
+)
+def test_highest_applicable_equality_is_accurate_verdict_sensitive(
+    verdict: str, highest_applicable: str, allowed: bool
+) -> None:
+    """Equal accurate and unequal cannot-verify controls take their intended routes.
+
+    Parameters
+    ----------
+    verdict, highest_applicable, allowed:
+        Rung-check control facts and expected canonical-write decision.
+    """
+
+    gate = make_gate(["m_example"])
+    gate["items"][0]["rung_check"].update(
+        {
+            "selected_rung": "R4_REIMPLEMENT",
+            "highest_applicable": highest_applicable,
+            "verdict": verdict,
+        }
+    )
+    decision = route_metadata_gate(gate, {}, max_repairs=2)[0]
+    assert decision.canonical_write_allowed is allowed
+
+
 def test_cannot_verify_rung_check_does_not_silently_accept() -> None:
     """An unresolved source-ladder check fails closed into fidelity repair."""
 

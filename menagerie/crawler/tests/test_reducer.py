@@ -10,13 +10,15 @@ from typing import Any, Mapping, Optional
 import pytest
 
 import menagerie.crawler.reducer as reducer_module
+from menagerie.crawler.artifact_transactions import ArtifactInput, stage_private_artifact
 from menagerie.crawler.constants import OPERATIONAL_EVENT_SCHEMA_VERSION
 from menagerie.crawler.family_templates import (
     instantiate_size_variant,
     specialize_size_variant_recipe,
 )
-from menagerie.crawler.identity import canonical_json_bytes, stable_hash
+from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.metadata import recompute_accepted_identities
+from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.recordio import JsonlLedger, SingleWriterError
 from menagerie.crawler.reducer import (
@@ -41,6 +43,7 @@ from menagerie.crawler.tests.conftest import (
     make_authority_context,
     make_model,
     rebind_attempt_raw_proof,
+    rebind_nonaward_parent_proof,
 )
 
 
@@ -217,6 +220,94 @@ def _attempt_for_model(model: dict[str, Any], attempt_id: str) -> dict[str, Any]
     return rebind_attempt_raw_proof(attempt)
 
 
+def _append_unprepared(reducer: ProductionCanonicalReducer, model: Mapping[str, Any]) -> Any:
+    """Append a caller-shaped model without the legacy test adapter re-projecting it.
+
+    Parameters
+    ----------
+    reducer:
+        Open production reducer wrapped by the legacy fixture adapter.
+    model:
+        Candidate whose reducer-owned projections may have been adversarially changed.
+
+    Returns
+    -------
+    Any
+        Production append result when the candidate is admitted.
+    """
+
+    return ProductionCanonicalReducer.append_model(reducer, model)
+
+
+def _rebind_gate_proof(gate: dict[str, Any]) -> dict[str, Any]:
+    """Recompute the current-v3 gate envelope proof after a fixture mutation.
+
+    Parameters
+    ----------
+    gate:
+        Mutable current-v3 checker envelope.
+
+    Returns
+    -------
+    dict[str, Any]
+        The same gate with its exact result-envelope self-hash rebound.
+    """
+
+    gate["result_envelope_sha256"] = stable_hash(
+        {
+            key: value
+            for key, value in gate.items()
+            if key not in {"result_envelope_sha256", "payload_sha256", "ledger_seq"}
+        }
+    )
+    return gate
+
+
+def _dual_mode_run_case(
+    relation: str,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Build a current-v3 dual-mode run with an exact output relationship.
+
+    Parameters
+    ----------
+    relation:
+        ``equal`` or ``structural``.
+
+    Returns
+    -------
+    tuple[dict[str, Any], dict[str, Any], dict[str, Any]]
+        Model plus authenticated train and eval attempts.
+    """
+
+    model = make_model(accepted=True)
+    model["modes"]["meaningful_modes"] = ["train", "eval"]
+    model["external_metadata"]["modes"]["meaningful_modes"] = ["train", "eval"]
+    _bind_model_identities(model)
+    train = _attempt_for_model(model, "attempt-train")
+    train["mode"] = "train"
+    train["invocation"]["mode"] = "train"
+    train["worker_receipt"]["mode"] = "train"
+    rebind_attempt_raw_proof(train)
+    evaluated = _attempt_for_model(model, "attempt-eval")
+    evaluated["ledger_seq"] = 2
+    if relation == "structural":
+        evaluated["worker_receipt"]["output_signature"] = {
+            "tree": {"tuple": [{"leaf": 0}, {"leaf": 1}]},
+            "leaves": [
+                deepcopy(model["observed"]["output_signature"]["leaves"][0]),
+                deepcopy(model["observed"]["output_signature"]["leaves"][0]),
+            ],
+        }
+    elif relation != "equal":
+        raise AssertionError(f"unsupported mode relation: {relation}")
+    rebind_attempt_raw_proof(evaluated)
+    attempt_ids = ["attempt-train", "attempt-eval"]
+    model["execution"]["accepted_attempt_ids"] = attempt_ids
+    model["status"]["attempt_ids"] = attempt_ids
+    model["observed"]["measurement_attempt_ids"] = attempt_ids
+    return model, train, evaluated
+
+
 def _terminal_case(
     status_code: str,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
@@ -264,6 +355,222 @@ def _terminal_case(
     raise AssertionError(f"unsupported terminal fixture: {status_code}")
 
 
+def _observed_defer_attempt(*, attempt_id: str, work_id: str = "work-m_example") -> dict[str, Any]:
+    """Build one schema-valid non-awarding observation for deferral proofs.
+
+    Parameters
+    ----------
+    attempt_id, work_id:
+        Immutable attempt and work-generation identities.
+
+    Returns
+    -------
+    dict[str, Any]
+        Current-v3 parent-attested observation without award authority.
+    """
+
+    attempt = make_attempt(attempt_id=attempt_id)
+    attempt["work_id"] = work_id
+    attempt["result"] = "observed"
+    attempt["environment"] = None
+    attempt["identities"]["environment"] = None
+    attempt["identities"]["execution"] = None
+    attempt["worker_receipt"]["present"] = False
+    attempt["raw_award_receipt"] = None
+    attempt["raw_award_receipt_sha256"] = None
+    attempt["supervisor_observation"]["stdout_sha256"] = None
+    attempt["supervisor_observation"]["stderr_sha256"] = None
+    attempt["supervisor_observation"]["stdout_completion_line"] = None
+    return rebind_nonaward_parent_proof(attempt)
+
+
+def _stage_deferred_admission_control(
+    reducer: ProductionCanonicalReducer,
+    tmp_path: Path,
+    *,
+    manifest_source_ids: tuple[str, ...] = ("source-1",),
+    gate_source_ids: tuple[str, ...] = ("source-1",),
+    defer_source_ids: tuple[str, ...] = ("source-1",),
+    probe_attack: Optional[str] = None,
+) -> dict[str, Any]:
+    """Stage a genuine terminal transaction and return its projected model.
+
+    Parameters
+    ----------
+    reducer, tmp_path:
+        Open production reducer and isolated physical mirror root.
+    manifest_source_ids, gate_source_ids, defer_source_ids:
+        Real source inventory, accepted gate subset, and attempted defer binding.
+    probe_attack:
+        Optional missing/wrong/negative/unsupported probe mutation.
+
+    Returns
+    -------
+    dict[str, Any]
+        Reducer-projected deferred model ready for direct admission.
+    """
+
+    model = make_model(status_code="deferred:needs-cuda")
+    model["evidence"]["excerpts"][0]["supports"].append("needs-cuda")
+    source_template = model["source_resolution"]["sources"][0]
+    contents = {
+        source_id: f"terminal source bytes for {source_id}".encode()
+        for source_id in manifest_source_ids
+    }
+    sources: list[dict[str, Any]] = []
+    artifact_inputs: list[ArtifactInput] = []
+    for index, source_id in enumerate(manifest_source_ids):
+        source = deepcopy(source_template)
+        source.update(
+            {
+                "source_id": source_id,
+                "url": f"https://example.com/{source_id}",
+                "revision": f"revision-{index}",
+                "locator": f"{source_id}.py",
+                "content_sha256": hash_bytes(contents[source_id]),
+                "byte_count": len(contents[source_id]),
+            }
+        )
+        sources.append(source)
+        artifact_inputs.append(
+            ArtifactInput(
+                content=contents[source_id],
+                content_sha256=hash_bytes(contents[source_id]),
+                logical_role="source",
+                logical_path=f"menagerie/crawler/source_cas/{source_id}.source",
+                source_id=source_id,
+                origin=ArtifactOrigin(url=str(source["url"]), revision=str(source["revision"])),
+                fetch_recipe=str(source["fetch_recipe"]),
+                evidence_ids=("evidence-1",) if source_id == "source-1" else (),
+                media_type=str(source["media_type"]),
+            )
+        )
+    model["source_resolution"]["sources"] = sources
+    source_manifest: dict[str, Any] = {"sources": deepcopy(sources)}
+    source_manifest["manifest_sha256"] = stable_hash(source_manifest["sources"])
+    payload = {
+        "arm": "DEFER_RECOMMENDATION",
+        "platform": "cuda",
+        "source_ids": list(manifest_source_ids),
+        "evidence_ids": ["evidence-1"],
+        "evidence_identity": model["evidence"]["evidence_identity"],
+        "license_identity": stable_hash(model["licenses"]),
+    }
+    payload["recommendation_sha256"] = stable_hash(payload)
+    context = reducer.context
+    author_result = {
+        "schema_version": "menagerie.crawler.author-result.v3",
+        "result_id": "result-deferred-control",
+        "result_sha256": stable_hash("pending"),
+        "kind": "DEFER_RECOMMENDATION",
+        "stable_id": "m_example",
+        "work_id": "work-m_example",
+        "campaign_id": "campaign-m_example",
+        "created_at": "2026-07-14T12:00:00Z",
+        "author_identity": context.author_model_identity,
+        "prompt_identity": context.author_prompt_identity,
+        "dispatcher_identity": context.author_dispatcher_identity,
+        "source_manifest_identity": source_manifest["manifest_sha256"],
+        "intake_snapshot_id": context.active_intake_snapshot_id,
+        "intake_snapshot_sha256": context.active_intake_snapshot_sha256,
+        "intake_item_sha256": stable_hash(context.intake_by_stable_id["m_example"]),
+        "payload": payload,
+    }
+    author_result["result_sha256"] = stable_hash(
+        {key: value for key, value in author_result.items() if key != "result_sha256"}
+    )
+    mirrors = MirrorStore(
+        tmp_path / "mirror-public",
+        tmp_path / "mirror-private",
+        tmp_path / "mirror-local",
+    )
+    stage_private_artifact(
+        tuple(artifact_inputs),
+        context=context,
+        stable_id="m_example",
+        work_id="work-m_example",
+        author_result=author_result,
+        proposal=None,
+        source_manifest=source_manifest,
+        mirrors=mirrors,
+        ledger=reducer.artifact_ledger,
+        created_at="2026-07-14T12:00:00Z",
+    )
+    gate = make_gate(["m_example"], gate_kind="fidelity")
+    gate["gate_kind"] = "terminal_disposition"
+    gate["items"][0]["terminal_disposition"] = {
+        "author_result_id": author_result["result_id"],
+        "author_result_sha256": author_result["result_sha256"],
+        "kind": author_result["kind"],
+        "predicate": "needs-cuda",
+        "verdict": "accepted",
+        "source_manifest_identity": source_manifest["manifest_sha256"],
+        "source_ids": list(gate_source_ids),
+        "evidence_identity": payload["evidence_identity"],
+        "evidence_ids": ["evidence-1"],
+        "license_identity": payload["license_identity"],
+        "findings": [],
+    }
+    _rebind_gate_proof(gate)
+    reducer.append_gate(gate)
+
+    control_attempt = _observed_defer_attempt(attempt_id="attempt-deferred-control")
+    control_attempt["defer_evidence"] = {
+        "target_status": "deferred:needs-cuda",
+        "source_ids": list(gate_source_ids),
+        "probe_attempt_ids": [],
+        "explanation": "source requires CUDA",
+    }
+    reducer.append_attempt(control_attempt)
+    bind_terminal_attempts(model, [control_attempt])
+    prepared = reducer.prepare_model(model)
+    if defer_source_ids == gate_source_ids and probe_attack is None:
+        return prepared
+
+    probes: list[dict[str, Any]] = []
+    probe_ids: list[str] = []
+    if probe_attack == "missing":
+        probe_ids = ["probe-missing"]
+    elif probe_attack in {"wrong-work", "wrong-target", "unsupported-claim"}:
+        probe = _observed_defer_attempt(
+            attempt_id=f"probe-{probe_attack}",
+            work_id=("work-other" if probe_attack == "wrong-work" else "work-m_example"),
+        )
+        if probe_attack == "wrong-target":
+            probe["defer_evidence"] = {
+                "target_status": "deferred:needs-x86",
+                "source_ids": list(gate_source_ids),
+                "probe_attempt_ids": [],
+                "explanation": "probe describes the wrong target",
+            }
+        probes = [probe]
+        probe_ids = [str(probe["attempt_id"])]
+    elif probe_attack == "negative":
+        probe = make_failed_attempt(
+            attempt_id="probe-negative", stage="environment", reason_code="probe-failed"
+        )
+        probe["work_id"] = "work-m_example"
+        probes = [probe]
+        probe_ids = ["probe-negative"]
+    elif probe_attack is not None:
+        raise AssertionError(f"unsupported probe attack: {probe_attack}")
+    for sequence, probe in enumerate(probes, start=2):
+        probe["ledger_seq"] = sequence
+        reducer.append_attempt(probe)
+
+    attempt = _observed_defer_attempt(attempt_id="attempt-deferred-adversarial")
+    attempt["attempt_no"] = len(probes) + 2
+    attempt["ledger_seq"] = len(probes) + 2
+    attempt["defer_evidence"] = {
+        "target_status": "deferred:needs-cuda",
+        "source_ids": list(defer_source_ids),
+        "probe_attempt_ids": probe_ids,
+        "explanation": "source requires CUDA",
+    }
+    reducer.append_attempt(attempt)
+    return prepared
+
+
 @pytest.mark.parametrize(
     "status_code",
     ["failed:forward", "deferred:needs-cuda", "skipped:no-description"],
@@ -281,6 +588,90 @@ def test_terminal_case_fixture_covers_later_currency_families(status_code: str) 
     assert model["status"]["code"] == status_code
     assert attempt["attempt_id"] in model["status"]["attempt_ids"]
     assert (gate is not None) == status_code.startswith("skipped:")
+
+
+def test_deferred_terminal_control_passes_production_reducer_admission(tmp_path: Path) -> None:
+    """A genuine staged v3 deferral remains the positive A-05 control.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated canonical ledgers and physical mirrors.
+    """
+
+    with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
+        prepared = _stage_deferred_admission_control(reducer, tmp_path)
+        assert _append_unprepared(reducer, prepared).appended
+
+
+@pytest.mark.parametrize(
+    ("manifest_source_ids", "gate_source_ids", "defer_source_ids"),
+    (
+        (("source-1",), ("source-1",), ("source-fabricated",)),
+        (("source-1", "source-2"), ("source-1",), ("source-1", "source-2")),
+        (("source-1", "source-2"), ("source-1", "source-2"), ("source-1",)),
+        (("source-1", "source-2"), ("source-1",), ("source-2",)),
+    ),
+)
+def test_deferred_terminal_rejects_nonexistent_extra_dropped_and_replaced_sources(
+    tmp_path: Path,
+    manifest_source_ids: tuple[str, ...],
+    gate_source_ids: tuple[str, ...],
+    defer_source_ids: tuple[str, ...],
+) -> None:
+    """A-05 defer attempts must name exactly the terminal gate's real source set.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated canonical ledgers and physical mirrors.
+    manifest_source_ids, gate_source_ids, defer_source_ids:
+        Real manifest inventory, accepted gate set, and one adversarial attempt set.
+    """
+
+    with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
+        prepared = _stage_deferred_admission_control(
+            reducer,
+            tmp_path,
+            manifest_source_ids=manifest_source_ids,
+            gate_source_ids=gate_source_ids,
+            defer_source_ids=defer_source_ids,
+        )
+        with pytest.raises(
+            ReductionError,
+            match="deferral attempt source set is not gate-exact",
+        ):
+            _append_unprepared(reducer, prepared)
+
+
+@pytest.mark.parametrize(
+    "probe_attack",
+    ["missing", "wrong-work", "wrong-target", "negative", "unsupported-claim"],
+)
+def test_deferred_terminal_rejects_missing_wrong_negative_and_unsupported_probes(
+    tmp_path: Path, probe_attack: str
+) -> None:
+    """A-05 named probes require positive same-work structured capability proof.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated canonical ledgers and physical mirrors.
+    probe_attack:
+        Missing, cross-work, wrong-target, negative, or unsupported probe mutation.
+    """
+
+    with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
+        prepared = _stage_deferred_admission_control(
+            reducer,
+            tmp_path,
+            probe_attack=probe_attack,
+        )
+        with pytest.raises(
+            ReductionError,
+            match="deferral probe lacks a structured positive same-work capability observation",
+        ):
+            _append_unprepared(reducer, prepared)
 
 
 def test_reducer_is_the_single_writer(tmp_path: Path) -> None:
@@ -589,6 +980,144 @@ def test_clean_gate_and_mode_receipt_allow_run_award(tmp_path: Path) -> None:
         result = reducer.append_model(make_model(accepted=True))
         assert result.appended
         assert reducer.current_records["m_example"]["status"]["code"] == "runs"
+
+
+@pytest.mark.parametrize(
+    ("relation", "field", "replacement"),
+    (
+        ("equal", "train_eval_divergence", "not-applicable"),
+        ("structural", "train_eval_divergence", "none"),
+        ("equal", "train_eval_divergence", "structural"),
+        ("equal", "train_eval_divergence", "statistical"),
+        ("equal", "divergence_evidence", "caller-invented comparison evidence"),
+    ),
+)
+def test_append_model_rejects_caller_mode_summary_contradictions(
+    tmp_path: Path,
+    relation: str,
+    field: str,
+    replacement: str,
+) -> None:
+    """Both-present M-01/H2 mode lies reject after reducer projection.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    relation, field, replacement:
+        Authenticated output relationship and one contradictory caller claim.
+    """
+
+    stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
+    model, train, evaluated = _dual_mode_run_case(relation)
+    gate = make_gate(stable_ids)
+    gate["items"][0]["vet_identity"] = model["accuracy_gate"]["vet_identity"]
+    _rebind_gate_proof(gate)
+    with CanonicalReducer(_paths(tmp_path), stable_ids) as reducer:
+        reducer.append_gate(gate)
+        reducer.append_attempt(train)
+        reducer.append_attempt(evaluated)
+        prepared = reducer.prepare_model(model)
+        prepared["modes"][field] = replacement
+        with pytest.raises(
+            ReductionError,
+            match=rf"modes\.{field} contradicts reducer-derived mode authority",
+        ):
+            _append_unprepared(reducer, prepared)
+
+
+@pytest.mark.parametrize("relation", ["equal", "structural"])
+def test_append_model_accepts_reducer_derived_dual_mode_controls(
+    tmp_path: Path, relation: str
+) -> None:
+    """Equal and different authenticated mode controls pass unchanged.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    relation:
+        Equal or structurally different authenticated outputs.
+    """
+
+    stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
+    model, train, evaluated = _dual_mode_run_case(relation)
+    gate = make_gate(stable_ids)
+    gate["items"][0]["vet_identity"] = model["accuracy_gate"]["vet_identity"]
+    _rebind_gate_proof(gate)
+    with CanonicalReducer(_paths(tmp_path), stable_ids) as reducer:
+        reducer.append_gate(gate)
+        reducer.append_attempt(train)
+        reducer.append_attempt(evaluated)
+        assert _append_unprepared(reducer, reducer.prepare_model(model)).appended
+
+
+def _failed_dual_mode_case() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Build a failed terminal with unique current-v3 train/eval attempts.
+
+    Returns
+    -------
+    tuple[dict[str, Any], dict[str, Any], dict[str, Any]]
+        Model and exact train/eval terminal attempts.
+    """
+
+    train = make_failed_attempt(
+        attempt_id="attempt-train", stage="forward", reason_code="exception"
+    )
+    train["mode"] = "train"
+    train["invocation"]["mode"] = "train"
+    train["worker_receipt"]["mode"] = "train"
+    evaluated = make_failed_attempt(
+        attempt_id="attempt-eval", stage="forward", reason_code="exception"
+    )
+    evaluated["attempt_no"] = 2
+    evaluated["ledger_seq"] = 2
+    model = make_model(status_code="failed:forward")
+    model["status"]["reason_code"] = "exception"
+    model["modes"]["meaningful_modes"] = ["train", "eval"]
+    bind_terminal_attempts(model, [train, evaluated])
+    return model, train, evaluated
+
+
+@pytest.mark.parametrize(
+    ("attack", "expected"),
+    (
+        ("same-attempt-both-modes", "per_mode_run contradicts reducer-derived"),
+        ("unique-attempt-wrong-mode", "per_mode_run contradicts reducer-derived"),
+        ("status-result-disagreement", "per_mode_run contradicts reducer-derived"),
+    ),
+)
+def test_terminal_mode_map_rejects_duplicate_wrong_and_status_inconsistent_attempts(
+    tmp_path: Path, attack: str, expected: str
+) -> None:
+    """A-06 caller maps cannot contradict the unique reducer-derived mode map.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    attack, expected:
+        One adversarial relationship and its production rejection rule.
+    """
+
+    model, train, evaluated = _failed_dual_mode_case()
+    with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
+        reducer.append_attempt(train)
+        reducer.append_attempt(evaluated)
+        prepared = reducer.prepare_model(model)
+        if attack == "same-attempt-both-modes":
+            prepared["modes"]["per_mode_run"]["eval"]["attempt_id"] = "attempt-train"
+        elif attack == "unique-attempt-wrong-mode":
+            prepared["modes"]["per_mode_run"] = {
+                "train": {"attempt_id": "attempt-eval", "status": "failed"},
+                "eval": {"attempt_id": "attempt-train", "status": "failed"},
+            }
+        elif attack == "status-result-disagreement":
+            prepared["modes"]["per_mode_run"]["train"]["status"] = "observed"
+        else:
+            raise AssertionError(f"unsupported attack: {attack}")
+        with pytest.raises(ReductionError, match=expected):
+            _append_unprepared(reducer, prepared)
 
 
 def test_cache_read_attempted_blocks_otherwise_valid_run(tmp_path: Path) -> None:

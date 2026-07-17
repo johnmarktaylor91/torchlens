@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import json
 import shutil
 import subprocess
@@ -17,7 +18,7 @@ import pytest
 import menagerie.crawler.checkpoint as checkpoint_module
 import menagerie.crawler.driver as driver_module
 import menagerie.crawler.reducer as reducer_module
-from menagerie.crawler.artifact_transactions import StagedArtifact
+from menagerie.crawler.artifact_transactions import ArtifactEventKind, StagedArtifact
 from menagerie.crawler.author_dispatch import (
     DeferRecommendation,
     ProposedAuthorResult,
@@ -94,8 +95,13 @@ from menagerie.crawler.proposal import DEFAULT_GATED_CLAIMS
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import (
     CanonicalReducer,
+    project_dependency_current,
 )
-from menagerie.crawler.status import assert_partition
+from menagerie.crawler.status import (
+    assert_partition,
+    completeness_report,
+    record_is_release_eligible,
+)
 from menagerie.crawler.tests.conftest import (
     HASH,
     NOW,
@@ -121,6 +127,20 @@ from menagerie.crawler.worker_supervisor import (
 
 class InjectedKill(RuntimeError):
     """Simulate an uncatchable process boundary failure in a deterministic test."""
+
+
+def assert_known_event_kinds(*event_kinds: str) -> None:
+    """Fail when a test assertion names a nonexistent artifact event kind.
+
+    Parameters
+    ----------
+    event_kinds:
+        Positive or negative event-kind names asserted by a test.
+    """
+
+    known = {kind.value for kind in ArtifactEventKind}
+    unknown = set(event_kinds) - known
+    assert not unknown, f"test names unknown artifact event kinds: {sorted(unknown)}"
 
 
 def _refresh_proposal_identities(
@@ -2562,7 +2582,8 @@ def test_family_variant_template_failure_terminalizes_its_own_lane(tmp_path: Pat
     snapshot, representative_id, variant_ids = _family_snapshot(tmp_path)
     author = FakeAuthor()
     forward = FakeForward()
-    result = _driver(tmp_path, snapshot, author=author, forward=forward).run()
+    driver = _driver(tmp_path, snapshot, author=author, forward=forward)
+    result = driver.run()
 
     assert result.status == "complete"
     assert author.calls == {representative_id: 1}
@@ -2583,6 +2604,44 @@ def test_family_variant_template_failure_terminalizes_its_own_lane(tmp_path: Pat
         assert reference["redaction"] == "externally-controlled-text-v1"
         sidecar_path = next(tmp_path.rglob(Path(reference["local_path"]).name))
         assert "must differ" in sidecar_path.read_text(encoding="utf-8")
+
+    context = driver._authority_context
+    assert context is not None
+    representative = current[representative_id]
+    superseding = deepcopy(representative)
+    superseding.pop("record_seq", None)
+    superseding.pop("record_revision", None)
+    superseding["parent_revision"] = representative["record_revision"]
+    superseding["status"]["supersedes_revision"] = representative["record_revision"]
+    superseding["notes"] = "representative metadata re-vet"
+    paths = _paths(tmp_path, snapshot)
+    with CanonicalReducer(paths.ledgers, context) as reducer:
+        reducer.append_model(reducer.prepare_model(superseding))
+
+    projection = project_dependency_current(paths.ledgers, context=context)
+    assert representative_id in projection.current_records
+    for variant_id in variant_ids:
+        assert variant_id not in projection.current_records
+        assert projection.stale_reasons[variant_id] == (
+            "variant lacks its exact current representative record"
+        )
+        assert not record_is_release_eligible(current[variant_id], projection.current_records)
+    report = completeness_report(
+        (item.stable_id for item in snapshot.items), projection.current_records
+    )
+    assert not report.complete
+    assert report.partition.missing_ids == frozenset(variant_ids)
+
+    readmitted = {
+        item.stable_id: item
+        for item in driver._ordered_work(snapshot, projection.current_records)
+        if item.stable_id in variant_ids
+    }
+    assert set(readmitted) == set(variant_ids)
+    for variant_id, item in readmitted.items():
+        assert item.refresh_work_id is not None
+        assert item.active_work_id == item.refresh_work_id
+        assert item.active_work_id != f"work-{variant_id}"
 
 
 @pytest.mark.parametrize(
@@ -4004,6 +4063,11 @@ def test_publication_failure_resumes_from_committed_authorization(
     monkeypatch.setattr(driver_module, "publish_authorized_artifact", original)
     result = _driver(tmp_path, snapshot).run()
     assert result.status == "complete"
+    assert_known_event_kinds("published")
+    assert any(
+        event["stable_id"] == failed_id and event["event_kind"] == "published"
+        for event in scan_jsonl(paths.ledgers.artifacts)
+    )
     assert {
         record["stable_id"]: record["status"]["code"] for record in scan_jsonl(paths.ledgers.models)
     } == {item.stable_id: "runs" for item in snapshot.items}
@@ -4018,11 +4082,35 @@ def test_private_deferral_avoids_public_promotion(tmp_path: Path) -> None:
     assert result.status == "complete"
     paths = _paths(tmp_path, snapshot)
     assert scan_jsonl(paths.ledgers.models)[0]["status"]["code"] == "deferred:needs-cuda"
-    event_kinds = {event["event_kind"] for event in scan_jsonl(paths.ledgers.artifacts)}
-    assert {"staged-private", "terminal-authorized", "private-committed"} <= event_kinds
-    assert "public-committed" not in event_kinds
-    public_root = paths.runtime_root / "mirrors" / "public"
-    assert not public_root.exists() or not any(public_root.rglob("*"))
+    artifact_events = scan_jsonl(paths.ledgers.artifacts)
+    asserted_kinds = (
+        "staged-private",
+        "terminal-authorized",
+        "private-committed",
+        "published",
+    )
+    assert_known_event_kinds(*asserted_kinds)
+    event_kinds = {event["event_kind"] for event in artifact_events}
+    assert set(asserted_kinds[:3]) <= event_kinds
+    assert "published" not in event_kinds
+    committed = next(
+        event for event in artifact_events if event["event_kind"] == "private-committed"
+    )
+    for claim in committed["claims"]:
+        object_row = next(
+            value for value in committed["objects"] if value["object_id"] == claim["object_id"]
+        )
+        public_object = paths.runtime_root / "mirrors" / "public" / object_row["object_key"]
+        repository_materialization = tmp_path / claim["logical_path"]
+        assert not public_object.exists()
+        assert not repository_materialization.exists()
+
+
+def test_assert_known_event_kinds_rejects_vacuous_negative_typos() -> None:
+    """The F-8 helper makes a misspelled negative event assertion fail loudly."""
+
+    with pytest.raises(AssertionError, match="unknown artifact event kinds"):
+        assert_known_event_kinds("public-committed")
 
 
 def test_transient_fidelity_checker_infrastructure_retries(tmp_path: Path) -> None:
@@ -4101,12 +4189,14 @@ def test_skip_and_evidenced_deferral_use_driver_terminalization(tmp_path: Path) 
         "terminal_disposition"
     }
     artifact_events = scan_jsonl(paths.ledgers.artifacts)
-    assert {event["event_kind"] for event in artifact_events} >= {
+    asserted_kinds = {
         "staged-private",
         "private-committed",
         "terminal-authorized",
     }
-    assert all(event["event_kind"] != "public-committed" for event in artifact_events)
+    assert_known_event_kinds(*asserted_kinds, "published")
+    assert {event["event_kind"] for event in artifact_events} >= asserted_kinds
+    assert all(event["event_kind"] != "published" for event in artifact_events)
 
 
 def test_cached_terminal_artifacts_follow_same_terminal_branch_on_resume(tmp_path: Path) -> None:

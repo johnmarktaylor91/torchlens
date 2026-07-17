@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from dataclasses import replace
 import json
 import os
+import signal
+import subprocess
 import sys
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Iterator
 
 import pytest
 
+import menagerie.crawler.worker_supervisor as worker_supervisor_module
 from menagerie.crawler.authority import WorkerLease
 from menagerie.crawler.identity import compute_recipe_revision, hash_bytes, stable_hash
 from menagerie.crawler.policy import compile_execution_read_manifest
@@ -42,6 +49,99 @@ def _timestamp_after(seconds: float) -> str:
     return (
         (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat().replace("+00:00", "Z")
     )
+
+
+def _test_lease(tmp_path: Path, *, lease_id: str = "lease-held") -> WorkerLease:
+    """Build one current-boot pre-spawn lease for recovery attacks.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated lease root.
+    lease_id:
+        Immutable synthetic lease identity.
+
+    Returns
+    -------
+    WorkerLease
+        Valid pre-spawn lease owned by this test process.
+    """
+
+    driver_token = process_start_token(os.getpid())
+    assert driver_token is not None
+    return WorkerLease(
+        lease_id=lease_id,
+        nonce=f"nonce-{lease_id}",
+        run_id="run-held",
+        stable_id="m_held",
+        work_id="work-held",
+        request_identity="sha256:" + "1" * 64,
+        execution_identity="sha256:" + "2" * 64,
+        boot_id=current_boot_id(),
+        driver_pid=os.getpid(),
+        driver_start_token=driver_token,
+        child_pid=None,
+        child_start_token=None,
+        child_pgid=None,
+        receipt_path=tmp_path / "receipt.json",
+        opened_at=_timestamp_after(-1),
+        deadline_at=_timestamp_after(30),
+    )
+
+
+@contextmanager
+def _detached_lock_holder(
+    tmp_path: Path,
+) -> Iterator[tuple[subprocess.Popen[bytes], WorkerLease, Path, Path]]:
+    """Yield a detached child that exclusively holds a production worker lease.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated lock and record root.
+
+    Yields
+    ------
+    tuple[subprocess.Popen[bytes], WorkerLease, Path, Path]
+        Child, started lease, kernel lock path, and durable record path.
+    """
+
+    lock_path = tmp_path / "locks" / "worker.lock"
+    record_path = tmp_path / "locks" / "worker-lease.json"
+    handle = open_worker_lease(lock_path, record_path, _test_lease(tmp_path))
+    assert handle.lock_fd is not None
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"],
+        pass_fds=(handle.lock_fd,),
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    token = process_start_token(child.pid)
+    deadline = time.monotonic() + 2
+    while token is None and time.monotonic() < deadline:
+        time.sleep(0.01)
+        token = process_start_token(child.pid)
+    assert token is not None
+    started = replace(
+        handle.lease,
+        child_pid=child.pid,
+        child_start_token=token,
+        child_pgid=child.pid,
+    )
+    worker_supervisor_module._atomic_write_worker_lease(record_path, started)
+    for attribute in ("lifecycle_read_fd", "lifecycle_write_fd", "lock_fd"):
+        descriptor = getattr(handle, attribute)
+        if descriptor is not None:
+            os.close(descriptor)
+            setattr(handle, attribute, None)
+    try:
+        yield child, started, lock_path, record_path
+    finally:
+        if child.poll() is None:
+            child.kill()
+        child.wait(timeout=5)
+        record_path.unlink(missing_ok=True)
 
 
 def test_supervisor_scrubs_credentials_and_enforces_timeout(tmp_path: Path) -> None:
@@ -318,3 +418,222 @@ def test_startup_recovery_classifies_a_free_never_started_lease(tmp_path: Path) 
         assert recovery.reaped is False
     finally:
         clear_worker_lease(handle)
+
+
+def test_sigkill_driver_restart_never_double_launches_detached_lock_holder(
+    tmp_path: Path,
+) -> None:
+    """A killed driver cannot outrank the detached child's inherited flock.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated process, lock, and durable lease root.
+    """
+
+    lock_path = tmp_path / "locks" / "worker.lock"
+    record_path = tmp_path / "locks" / "worker-lease.json"
+    marker_path = tmp_path / "worker-starts.txt"
+    driver_script = r"""
+import json
+import os
+import subprocess
+import sys
+import time
+from dataclasses import replace
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+from menagerie.crawler.authority import WorkerLease
+import menagerie.crawler.worker_supervisor as supervisor
+
+lock_path = Path(sys.argv[1])
+record_path = Path(sys.argv[2])
+marker_path = Path(sys.argv[3])
+now = datetime.now(timezone.utc)
+token = supervisor.process_start_token(os.getpid())
+assert token is not None
+lease = WorkerLease(
+    lease_id="lease-killed-driver",
+    nonce="nonce-killed-driver",
+    run_id="run-killed-driver",
+    stable_id="m_killed_driver",
+    work_id="work-killed-driver",
+    request_identity="sha256:" + "1" * 64,
+    execution_identity="sha256:" + "2" * 64,
+    boot_id=supervisor.current_boot_id(),
+    driver_pid=os.getpid(),
+    driver_start_token=token,
+    child_pid=None,
+    child_start_token=None,
+    child_pgid=None,
+    receipt_path=record_path.with_name("receipt.json"),
+    opened_at=(now - timedelta(seconds=1)).isoformat().replace("+00:00", "Z"),
+    deadline_at=(now + timedelta(seconds=30)).isoformat().replace("+00:00", "Z"),
+)
+handle = supervisor.open_worker_lease(lock_path, record_path, lease)
+assert handle.lock_fd is not None
+child = subprocess.Popen(
+    [
+        sys.executable,
+        "-c",
+        "from pathlib import Path; import sys,time; "
+        "Path(sys.argv[1]).open('a', encoding='utf-8').write('worker\\n'); time.sleep(60)",
+        str(marker_path),
+    ],
+    pass_fds=(handle.lock_fd,),
+    start_new_session=True,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+)
+child_token = supervisor.process_start_token(child.pid)
+assert child_token is not None
+started = replace(
+    lease,
+    child_pid=child.pid,
+    child_start_token=child_token,
+    child_pgid=child.pid,
+)
+supervisor._atomic_write_worker_lease(record_path, started)
+print(json.dumps({"child_pid": child.pid}), flush=True)
+time.sleep(60)
+"""
+    driver = subprocess.Popen(
+        [sys.executable, "-c", driver_script, str(lock_path), str(record_path), str(marker_path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    child_pid: int | None = None
+    try:
+        assert driver.stdout is not None
+        started = json.loads(driver.stdout.readline())
+        child_pid = int(started["child_pid"])
+        marker_deadline = time.monotonic() + 2
+        while not marker_path.exists() and time.monotonic() < marker_deadline:
+            time.sleep(0.01)
+        assert marker_path.read_text(encoding="utf-8").splitlines() == ["worker"]
+
+        os.kill(driver.pid, signal.SIGKILL)
+        assert driver.wait(timeout=5) == -signal.SIGKILL
+
+        replacement_script = r"""
+import json
+import sys
+from pathlib import Path
+from menagerie.crawler.worker_supervisor import reconcile_worker_lease
+recovery = reconcile_worker_lease(Path(sys.argv[1]), Path(sys.argv[2]), timeout_seconds=0.05)
+if recovery.state not in {"active", "failed-closed"}:
+    with Path(sys.argv[3]).open("a", encoding="utf-8") as handle:
+        handle.write("replacement\n")
+print(json.dumps({"state": recovery.state, "detail": recovery.detail}))
+"""
+        replacement = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                replacement_script,
+                str(lock_path),
+                str(record_path),
+                str(marker_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        recovery = json.loads(replacement.stdout)
+        assert recovery == {
+            "state": "active",
+            "detail": "verified-child-still-within-lease-deadline",
+        }
+        assert marker_path.read_text(encoding="utf-8").splitlines() == ["worker"]
+    finally:
+        if driver.poll() is None:
+            driver.kill()
+            driver.wait(timeout=5)
+        if child_pid is not None:
+            try:
+                os.killpg(child_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+
+@pytest.mark.parametrize(
+    ("attack", "expected_detail"),
+    (
+        ("pid-reuse", "child-start-token-mismatch"),
+        ("pgid-mismatch", "child-process-group-mismatch"),
+        ("stale-boot", "held-lock-from-stale-boot"),
+        ("missing-child-identity", "held-lock-without-child-identity"),
+        ("corrupt-identity", "corrupt-worker-lease:JSONDecodeError"),
+        ("unreadable-process-facts", "child-start-token-mismatch"),
+    ),
+)
+def test_held_worker_lock_identity_mismatches_fail_closed_without_guessed_kill(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    attack: str,
+    expected_detail: str,
+) -> None:
+    """Unverifiable A-02 recovery facts block admission and never guess a kill.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated held-lock root.
+    monkeypatch:
+        Pytest patch helper used to observe forbidden guessed signals.
+    attack, expected_detail:
+        One corrupted identity relationship and its exact bounded-recovery result.
+    """
+
+    with _detached_lock_holder(tmp_path) as (_child, started, lock_path, record_path):
+        assert started.child_pgid is not None
+        if attack == "pid-reuse":
+            worker_supervisor_module._atomic_write_worker_lease(
+                record_path, replace(started, child_start_token="reused-pid-token")
+            )
+        elif attack == "pgid-mismatch":
+            worker_supervisor_module._atomic_write_worker_lease(
+                record_path, replace(started, child_pgid=started.child_pgid + 1)
+            )
+        elif attack == "stale-boot":
+            worker_supervisor_module._atomic_write_worker_lease(
+                record_path, replace(started, boot_id="stale-boot-id")
+            )
+        elif attack == "missing-child-identity":
+            worker_supervisor_module._atomic_write_worker_lease(
+                record_path,
+                replace(started, child_start_token=None, child_pgid=None),
+            )
+        elif attack == "corrupt-identity":
+            record_path.write_text("{not-json\n", encoding="utf-8")
+        elif attack == "unreadable-process-facts":
+            monkeypatch.setattr(worker_supervisor_module, "process_start_token", lambda _pid: None)
+        else:
+            raise AssertionError(f"unsupported identity attack: {attack}")
+
+        killpg_calls: list[tuple[int, int]] = []
+        monkeypatch.setattr(
+            worker_supervisor_module.os,
+            "killpg",
+            lambda pgid, signal_number: killpg_calls.append((pgid, signal_number)),
+        )
+        recovery = reconcile_worker_lease(
+            lock_path,
+            record_path,
+            timeout_seconds=0.05,
+            poll_seconds=0.01,
+        )
+        assert recovery.state == "failed-closed"
+        assert recovery.detail == expected_detail
+        assert recovery.lock_held is True
+        assert recovery.reaped is False
+        assert killpg_calls == []
+        with pytest.raises(RuntimeError, match="worker lock is already held"):
+            open_worker_lease(
+                lock_path,
+                tmp_path / "locks" / "replacement-lease.json",
+                _test_lease(tmp_path, lease_id=f"replacement-{attack}"),
+            )
