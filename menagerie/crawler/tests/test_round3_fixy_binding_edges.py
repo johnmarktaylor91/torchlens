@@ -335,11 +335,9 @@ def test_native_undeclared_weight_probe_is_denied_and_reported_as_an_attempt(
 
     if result.receipt_error == "failed:sandbox-unavailable":
         pytest.skip("working Linux OS sandbox is unavailable")
-    assert result.worker_receipt is not None
-    policy = result.worker_receipt["policy_observation"]
-    assert policy["checkpoint_or_weight_read_attempted"] is True
+    assert result.worker_receipt is None
+    assert result.receipt_error == "invalid-receipt:worker-result-envelope"
     assert str(hidden) in result.observation.failed_read_probe_paths
-    assert result.worker_receipt["error"]["reason_code"] == "checkpoint-read"
     assert result.success_attestation_sha256 is None
 
 

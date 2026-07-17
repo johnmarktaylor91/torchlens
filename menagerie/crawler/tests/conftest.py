@@ -46,6 +46,7 @@ from menagerie.crawler.mirrors import (
     RetentionClass,
 )
 from menagerie.crawler.standard_inputs import ASSET_ROOT
+from menagerie.crawler.worker_supervisor import SupervisedResult, SupervisorObservation
 
 HASH = "sha256:" + "a" * 64
 OTHER_HASH = "sha256:" + "b" * 64
@@ -67,6 +68,133 @@ _FACT_KEYS = (
     "modes",
     "fidelity",
 )
+
+
+def make_worker_result_v3_mapping(
+    diagnostic: dict[str, Any],
+    *,
+    raw_award_receipt: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Build the sole synthetic worker-result.v3 wrapper mapping.
+
+    Parameters
+    ----------
+    diagnostic:
+        Nested worker-receipt.v1 diagnostic facts.
+    raw_award_receipt:
+        Optional success-only raw award receipt.
+    Returns
+    -------
+    dict[str, Any]
+        Production-shaped closed outer v3 wrapper.
+    """
+
+    normalized = deepcopy(diagnostic)
+    normalized.pop("receipt_sha256", None)
+    defaults: dict[str, Any] = {
+        "receipt_version": "menagerie.crawler.worker-receipt.v1",
+        "stable_id": "m_worker_result_fixture",
+        "source_identity": "source-worker-result-fixture",
+        "recipe_revision": HASH,
+        "observed_recipe_revision": HASH,
+        "observed_adapter_sha256": None,
+        "observed_code_manifest_sha256": HASH,
+        "observed_input_asset_sha256": None,
+        "execution_identity": HASH,
+        "seed": 0,
+        "input_seed": 0,
+        "mode": "eval",
+        "device": "cpu",
+        "framework": "pytorch",
+        "awards_runs": False,
+        "constructor_started": True,
+        "constructor_completed": True,
+        "input_completed": True,
+        "per_mode": {},
+        "declared_meaningful_modes": ["eval"],
+        "detected_meaningful_modes": ["eval"],
+        "meaningful_modes": ["eval"],
+        "train_eval_divergence": None,
+        "divergence_evidence": None,
+        "policy_observation": {
+            "network_attempted": False,
+            "socket_targets": [],
+            "checkpoint_or_weight_read_attempted": False,
+            "checkpoint_paths": [],
+            "write_outside_scratch_attempted": False,
+            "write_paths": [],
+            "credentials_present": False,
+            "torchlens_import_attempted": False,
+            "cache_read_attempted": False,
+        },
+        "error": None,
+    }
+    for key, value in defaults.items():
+        normalized.setdefault(key, value)
+    raw_digest = (
+        raw_award_receipt_sha256(raw_award_receipt) if raw_award_receipt is not None else None
+    )
+    outer_payload = {
+        "result_version": "menagerie.crawler.worker-result.v3",
+        "raw_award_receipt": deepcopy(raw_award_receipt),
+        "raw_award_receipt_sha256": raw_digest,
+        "diagnostic": normalized,
+    }
+    return {**outer_payload, "result_sha256": stable_hash(outer_payload)}
+
+
+def make_supervised_worker_result_v3(
+    observation: SupervisorObservation,
+    diagnostic: dict[str, Any],
+    *,
+    raw_award_receipt: Optional[dict[str, Any]] = None,
+    parent_attestation: Optional[dict[str, Any]] = None,
+    receipt_error: Optional[str] = None,
+    unattested_partial: Optional[dict[str, Any]] = None,
+) -> SupervisedResult:
+    """Build the sole synthetic live supervised v3 result fixture.
+
+    Parameters
+    ----------
+    observation:
+        Parent-owned process observation.
+    diagnostic:
+        Nested worker-receipt.v1 diagnostic facts.
+    raw_award_receipt:
+        Optional success-only raw award receipt.
+    parent_attestation:
+        Optional parent-owned v2 attestation.
+    receipt_error:
+        Optional supervisor loader error.
+    unattested_partial:
+        Optional non-awarding partial-result reference.
+
+    Returns
+    -------
+    SupervisedResult
+        Production-shaped outer v3 wrapper and matching supervisor projections.
+    """
+
+    outer = make_worker_result_v3_mapping(
+        diagnostic,
+        raw_award_receipt=raw_award_receipt,
+    )
+    raw_digest = outer["raw_award_receipt_sha256"]
+    success_attestation = (
+        str(parent_attestation["attestation_sha256"])
+        if raw_award_receipt is not None and parent_attestation is not None
+        else None
+    )
+    return SupervisedResult(
+        observation=observation,
+        worker_receipt=outer,
+        receipt_error=receipt_error,
+        success_attestation_sha256=success_attestation,
+        raw_award_receipt=deepcopy(raw_award_receipt),
+        raw_award_receipt_sha256=raw_digest,
+        parent_attestation=deepcopy(parent_attestation),
+        unattested_partial=deepcopy(unattested_partial),
+    )
 
 
 def make_licensed_artifact_fixture(

@@ -16,7 +16,7 @@ import pytest
 import menagerie.crawler.worker_supervisor as supervisor_module
 from menagerie.crawler.checkpoint import _externally_controlled_record_text
 from menagerie.crawler.constants import RunMode
-from menagerie.crawler.driver import _redact_attempt_diagnostics, _supervised_failure
+from menagerie.crawler.driver import _redact_attempt_diagnostics
 from menagerie.crawler.identity import (
     canonical_json_bytes,
     compute_recipe_revision,
@@ -42,6 +42,7 @@ from menagerie.crawler.tests.conftest import (
     make_authority_context,
     make_gate,
     make_model,
+    make_worker_result_v3_mapping,
     rebind_attempt_raw_proof,
 )
 from menagerie.crawler.worker import WorkerRequest, run_worker
@@ -167,8 +168,8 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
     if detect_os_sandbox("Linux") is None or shutil.which("strace") is None:
         pytest.skip("working Linux OS sandbox is unavailable")
     assert result.observation.exit_code == 0
-    assert result.worker_receipt is not None
-    assert result.receipt_error == "missing-parent-success-attestation"
+    assert result.worker_receipt is None
+    assert result.receipt_error == "invalid-receipt:worker-result-envelope"
     assert result.success_attestation_sha256 is None
 
 
@@ -204,10 +205,20 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
     if detect_os_sandbox("Linux") is None or shutil.which("strace") is None:
         pytest.skip("working Linux OS sandbox is unavailable")
     assert result.observation.exit_code == 1
-    assert result.worker_receipt is not None
-    assert result.receipt_error is None
-    receipt = result.worker_receipt
-    failure = _supervised_failure(result, receipt, {}, receipt["policy_observation"])
+    assert result.worker_receipt is None
+    assert result.receipt_error == "invalid-receipt:worker-result-envelope"
+    receipt = json.loads((tmp_path / "result" / "receipt.json").read_text(encoding="utf-8"))
+    worker_error = receipt["error"]
+    failure = {
+        "stage": "constructor",
+        "reason_code": "exception",
+        "exception_type": worker_error["exception_type"],
+        "message": worker_error["message"],
+        "traceback": worker_error["traceback"],
+        "no_traceback_reason": None,
+        "native_crash": False,
+        "details": {"receipt_error": worker_error},
+    }
     assert failure["stage"] == "constructor"
     assert failure["reason_code"] == "exception"
     assert "round9 constructor exploded" in failure["message"]
@@ -663,9 +674,8 @@ def test_supervisor_poisons_caught_dirty_policy_receipt(
             "per_mode": {"eval": {"forward_completed": True, "error": None}},
         }
         receipt_path.parent.mkdir(parents=True, exist_ok=True)
-        receipt_path.write_text(
-            json.dumps({**payload, "receipt_sha256": stable_hash(payload)}), encoding="utf-8"
-        )
+        wrapper = make_worker_result_v3_mapping(payload)
+        receipt_path.write_text(json.dumps(wrapper), encoding="utf-8")
         scratch_root.mkdir(parents=True, exist_ok=True)
         stdout_path = scratch_root / "stdout.log"
         stderr_path = scratch_root / "stderr.log"
@@ -690,15 +700,16 @@ def test_supervisor_poisons_caught_dirty_policy_receipt(
             stdout_path=str(stdout_path),
             stderr_path=str(stderr_path),
             success_attestation_sha256="a" * 64,
-            attested_receipt_sha256=stable_hash(payload),
+            attested_receipt_sha256=str(wrapper["result_sha256"]),
         )
 
     monkeypatch.setattr(supervisor_module, "run_isolated_subprocess", dirty_success)
     result = supervise_worker(request_path, receipt_path, tmp_path / "scratch")
 
     assert result.worker_receipt is not None
-    assert result.worker_receipt["error"]["reason_code"] == "network-attempt"
-    assert result.worker_receipt["per_mode"]["eval"]["error"]["reason_code"] == ("network-attempt")
+    diagnostic = result.worker_receipt["diagnostic"]
+    assert diagnostic["error"]["reason_code"] == "network-attempt"
+    assert diagnostic["per_mode"]["eval"]["error"]["reason_code"] == "network-attempt"
     assert result.receipt_error == "missing-parent-success-attestation"
     assert result.success_attestation_sha256 is None
 

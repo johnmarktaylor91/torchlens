@@ -167,8 +167,8 @@ def test_supervisor_scrubs_credentials_and_enforces_timeout(tmp_path: Path) -> N
     assert "never" not in observation.stdout_tail
 
 
-def test_supervisor_accepts_only_atomic_worker_receipt(tmp_path: Path) -> None:
-    """The standard worker succeeds in a fresh process and its receipt hash verifies."""
+def test_supervisor_rejects_atomic_flat_v1_worker_receipt(tmp_path: Path) -> None:
+    """A legacy request cannot make its atomic flat-v1 receipt live authority."""
 
     adapter = tmp_path / "adapter.py"
     adapter.write_text(
@@ -226,9 +226,8 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
     )
 
     assert result.observation.exit_code == 0
-    assert result.receipt_error is None
-    assert result.worker_receipt is not None
-    assert result.worker_receipt["awards_runs"] is False
+    assert result.receipt_error == "invalid-receipt:worker-result-envelope"
+    assert result.worker_receipt is None
 
 
 def test_v3_worker_binds_raw_receipt_attestation_manifest_and_child_lease(

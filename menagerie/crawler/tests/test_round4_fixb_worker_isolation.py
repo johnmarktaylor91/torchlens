@@ -9,8 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from menagerie.crawler.identity import compute_recipe_revision, hash_bytes, stable_hash
+from menagerie.crawler.identity import compute_recipe_revision, hash_bytes
 from menagerie.crawler.policy import detect_os_sandbox
+from menagerie.crawler.tests.conftest import make_worker_result_v3_mapping
 from menagerie.crawler.worker_supervisor import (
     _MACOS_AUDIT_COMPLETION_MARKER,
     _macos_denial_audit,
@@ -126,13 +127,9 @@ def test_linux_author_supplied_absolute_input_grant_is_refused(
         assert result.receipt_error == "failed:sandbox-unavailable"
         return
     assert result.observation.exit_code == 1
-    assert result.worker_receipt is not None
-    assert result.worker_receipt["constructor_completed"] is False
-    assert result.worker_receipt["per_mode"] == {}
-    policy = result.worker_receipt["policy_observation"]
-    assert policy["checkpoint_or_weight_read_attempted"] is True
+    assert result.worker_receipt is None
+    assert result.receipt_error == "invalid-receipt:worker-result-envelope"
     assert str(declared_input) in result.observation.failed_read_probe_paths
-    assert result.worker_receipt["error"]["reason_code"] == "checkpoint-read"
     assert result.success_attestation_sha256 is None
 
 
@@ -163,10 +160,7 @@ def _successful_receipt(path: Path) -> None:
         "per_mode": {"eval": {"forward_completed": True, "error": None}},
     }
     path.parent.mkdir(parents=True)
-    path.write_text(
-        json.dumps({**payload, "receipt_sha256": stable_hash(payload)}),
-        encoding="utf-8",
-    )
+    path.write_text(json.dumps(make_worker_result_v3_mapping(payload)), encoding="utf-8")
 
 
 @pytest.mark.parametrize(
@@ -223,8 +217,9 @@ def test_macos_invalid_parent_audit_telemetry_poisoned_closed(
     _successful_receipt(receipt_path)
     assert poison_receipt_for_sandbox_denial(receipt_path, observation) is True
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    assert receipt["policy_observation"]["checkpoint_or_weight_read_attempted"] is True
-    assert receipt["error"]["reason_code"] == "checkpoint-read"
+    diagnostic = receipt["diagnostic"]
+    assert diagnostic["policy_observation"]["checkpoint_or_weight_read_attempted"] is True
+    assert diagnostic["error"]["reason_code"] == "checkpoint-read"
 
 
 def test_macos_only_completion_marked_clean_parent_channel_is_clean() -> None:

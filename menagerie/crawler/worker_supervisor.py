@@ -17,6 +17,7 @@ import sys
 import threading
 import time
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import partial
@@ -120,6 +121,83 @@ _REQUEST_SHA256_ENV = "MENAGERIE_WORKER_REQUEST_SHA256"
 _READ_MANIFEST_ID_ENV = "MENAGERIE_EXECUTION_READ_MANIFEST_ID"
 _WORKER_LOCK_FD_ENV = "MENAGERIE_WORKER_LOCK_FD"
 _LIFECYCLE_FD_ENV = "MENAGERIE_WORKER_LIFECYCLE_FD"
+_WORKER_RESULT_VERSION = "menagerie.crawler.worker-result.v3"
+_WORKER_DIAGNOSTIC_VERSION = "menagerie.crawler.worker-receipt.v1"
+_RAW_AWARD_RECEIPT_VERSION = "menagerie.crawler.raw-award-receipt.v3"
+_PARENT_ATTESTATION_VERSION = "menagerie.crawler.parent-attestation.v2"
+_WORKER_RESULT_KEYS = frozenset(
+    {
+        "result_version",
+        "raw_award_receipt",
+        "raw_award_receipt_sha256",
+        "diagnostic",
+        "result_sha256",
+    }
+)
+_WORKER_DIAGNOSTIC_KEYS = frozenset(
+    {
+        "receipt_version",
+        "stable_id",
+        "source_identity",
+        "recipe_revision",
+        "observed_recipe_revision",
+        "observed_adapter_sha256",
+        "observed_code_manifest_sha256",
+        "observed_input_asset_sha256",
+        "execution_identity",
+        "seed",
+        "input_seed",
+        "mode",
+        "device",
+        "framework",
+        "awards_runs",
+        "constructor_started",
+        "constructor_completed",
+        "input_completed",
+        "per_mode",
+        "declared_meaningful_modes",
+        "detected_meaningful_modes",
+        "meaningful_modes",
+        "train_eval_divergence",
+        "divergence_evidence",
+        "policy_observation",
+        "error",
+    }
+)
+_RAW_AWARD_RECEIPT_KEYS = frozenset(
+    {
+        "receipt_version",
+        "request_nonce",
+        "request_sha256",
+        "stable_id",
+        "work_id",
+        "execution_identity",
+        "recipe_revision",
+        "code_manifest_identity",
+        "input_identity",
+        "requested_mode",
+        "observation",
+    }
+)
+_PARENT_ATTESTATION_KEYS = frozenset(
+    {
+        "attestation_version",
+        "request_nonce",
+        "request_sha256",
+        "completion_line_sha256",
+        "named_raw_award_receipt_sha256",
+        "exit_code",
+        "signal",
+        "timed_out",
+        "rss_exceeded",
+        "peak_rss_bytes",
+        "stdout_sha256",
+        "stderr_sha256",
+        "started_at",
+        "finished_at",
+        "attestation_sha256",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -228,6 +306,275 @@ class SupervisedResult:
     raw_award_receipt_sha256: Optional[str] = None
     parent_attestation: Optional[dict[str, Any]] = None
     unattested_partial: Optional[dict[str, Any]] = None
+
+
+@dataclass(frozen=True)
+class VerifiedWorkerResult:
+    """One closed live v3 worker result projected for semantic consumers.
+
+    Parameters
+    ----------
+    result_sha256:
+        Recomputed digest of the closed outer v3 wrapper.
+    diagnostic:
+        Closed nested worker-receipt.v1 diagnostic. It never grants award authority.
+    raw_award_receipt, raw_award_receipt_sha256, raw_observation:
+        Authenticated success-only award receipt, its digest, and its observation.
+    parent_attestation:
+        Parent-owned process and completion attestation, when available.
+    """
+
+    result_sha256: str
+    diagnostic: dict[str, Any]
+    raw_award_receipt: Optional[dict[str, Any]]
+    raw_award_receipt_sha256: Optional[str]
+    raw_observation: Optional[dict[str, Any]]
+    parent_attestation: Optional[dict[str, Any]]
+
+
+def _load_worker_result_value(
+    value: Mapping[str, Any],
+) -> tuple[Optional[dict[str, Any]], Optional[str]]:
+    """Validate and copy one closed worker-result.v3 outer envelope.
+
+    Parameters
+    ----------
+    value:
+        Parsed child result mapping.
+
+    Returns
+    -------
+    tuple[dict[str, Any] | None, str | None]
+        Closed copied wrapper or a parent-owned protocol error.
+    """
+
+    if set(value) != _WORKER_RESULT_KEYS:
+        return None, "invalid-receipt:worker-result-envelope"
+    if value.get("result_version") != _WORKER_RESULT_VERSION:
+        return None, "invalid-receipt:worker-result-version"
+    claimed_result_hash = value.get("result_sha256")
+    result_payload = {key: item for key, item in value.items() if key != "result_sha256"}
+    if not isinstance(claimed_result_hash, str) or claimed_result_hash != stable_hash(
+        result_payload
+    ):
+        return None, "invalid-receipt:result-hash-mismatch"
+    diagnostic = value.get("diagnostic")
+    if not isinstance(diagnostic, Mapping):
+        return None, "invalid-receipt:missing-diagnostic"
+    if set(diagnostic) != _WORKER_DIAGNOSTIC_KEYS:
+        return None, "invalid-receipt:diagnostic-envelope"
+    if diagnostic.get("receipt_version") != _WORKER_DIAGNOSTIC_VERSION:
+        return None, "invalid-receipt:diagnostic-version"
+    raw_receipt = value.get("raw_award_receipt")
+    raw_digest = value.get("raw_award_receipt_sha256")
+    if (raw_receipt is None) != (raw_digest is None):
+        return None, "invalid-receipt:partial-raw-award-receipt"
+    if raw_receipt is not None:
+        if not isinstance(raw_receipt, Mapping) or set(raw_receipt) != _RAW_AWARD_RECEIPT_KEYS:
+            return None, "invalid-receipt:raw-award-envelope"
+        if raw_receipt.get("receipt_version") != _RAW_AWARD_RECEIPT_VERSION:
+            return None, "invalid-receipt:raw-award-version"
+        if not isinstance(raw_digest, str) or raw_digest != stable_hash(raw_receipt):
+            return None, "invalid-receipt:raw-award-hash-mismatch"
+    return deepcopy(dict(value)), None
+
+
+def _parent_attestation_error(
+    result: SupervisedResult,
+    parent_attestation: Mapping[str, Any],
+    raw_receipt: Optional[Mapping[str, Any]],
+    raw_digest: Optional[str],
+) -> Optional[str]:
+    """Validate one parent attestation against exact supervised process facts.
+
+    Parameters
+    ----------
+    result:
+        Parent-observed supervised result.
+    parent_attestation:
+        Claimed parent attestation mapping.
+    raw_receipt, raw_digest:
+        Optional authenticated raw award receipt and digest.
+
+    Returns
+    -------
+    str | None
+        Protocol error, or ``None`` when the attestation is internally consistent.
+    """
+
+    if set(parent_attestation) != _PARENT_ATTESTATION_KEYS:
+        return "invalid-receipt:parent-attestation-envelope"
+    if parent_attestation.get("attestation_version") != _PARENT_ATTESTATION_VERSION:
+        return "invalid-receipt:parent-attestation-version"
+    payload = {
+        key: value for key, value in parent_attestation.items() if key != "attestation_sha256"
+    }
+    attestation_sha256 = parent_attestation.get("attestation_sha256")
+    if not isinstance(attestation_sha256, str) or attestation_sha256 != stable_hash(payload):
+        return "invalid-receipt:parent-attestation-hash"
+    observation = result.observation
+    expected_observation = {
+        "exit_code": observation.exit_code,
+        "signal": observation.signal_number,
+        "timed_out": observation.timed_out,
+        "rss_exceeded": observation.rss_exceeded,
+        "peak_rss_bytes": observation.peak_rss_bytes,
+        "stdout_sha256": observation.stdout_sha256,
+        "stderr_sha256": observation.stderr_sha256,
+        "started_at": observation.started_at,
+        "finished_at": observation.finished_at,
+    }
+    if any(parent_attestation.get(key) != value for key, value in expected_observation.items()):
+        return "invalid-receipt:parent-attestation-observation"
+    if raw_receipt is not None:
+        completion_line_sha256 = hash_bytes(
+            (completion_line_for_raw_award_receipt(raw_receipt) + "\n").encode("utf-8")
+        )
+        if (
+            parent_attestation.get("request_nonce") != raw_receipt.get("request_nonce")
+            or parent_attestation.get("request_sha256") != raw_receipt.get("request_sha256")
+            or parent_attestation.get("completion_line_sha256") != completion_line_sha256
+            or parent_attestation.get("named_raw_award_receipt_sha256") != raw_digest
+            or result.success_attestation_sha256 != attestation_sha256
+        ):
+            return "invalid-receipt:parent-attestation-binding"
+    return None
+
+
+def verify_supervised_worker_result(
+    result: SupervisedResult,
+    *,
+    expected_stable_id: str,
+    expected_work_id: str,
+    expected_source_identity: str,
+    expected_recipe_revision: str,
+    expected_execution_identity: str,
+    expected_code_manifest_identity: Optional[str],
+    requested_mode: Optional[str],
+) -> tuple[Optional[VerifiedWorkerResult], Optional[str]]:
+    """Project one live supervised result after v3 and association verification.
+
+    Parameters
+    ----------
+    result:
+        Live supervisor result. Flat v1 receipts are never accepted here.
+    expected_stable_id, expected_work_id, expected_source_identity:
+        Driver-owned proposal and work associations.
+    expected_recipe_revision, expected_execution_identity:
+        Driver-owned execution associations.
+    expected_code_manifest_identity:
+        Driver-owned recursive code-manifest identity.
+    requested_mode:
+        Explicit subprocess mode, or ``None`` for an all-modes diagnostic.
+
+    Returns
+    -------
+    tuple[VerifiedWorkerResult | None, str | None]
+        Verified typed projection or a closed protocol error.
+    """
+
+    if result.receipt_error not in {None, "missing-or-mismatched-v3-attestation"}:
+        return None, result.receipt_error
+    outer = result.worker_receipt
+    if not isinstance(outer, Mapping):
+        return None, "missing-receipt"
+    loaded, load_error = _load_worker_result_value(outer)
+    if loaded is None:
+        return None, load_error
+    diagnostic = loaded["diagnostic"]
+    if not isinstance(diagnostic, dict):
+        return None, "invalid-receipt:missing-diagnostic"
+    if (
+        diagnostic.get("stable_id") != expected_stable_id
+        or diagnostic.get("source_identity") != expected_source_identity
+        or diagnostic.get("recipe_revision") != expected_recipe_revision
+        or diagnostic.get("execution_identity") != expected_execution_identity
+    ):
+        return None, "invalid-receipt:identity"
+
+    raw_value = loaded.get("raw_award_receipt")
+    raw_digest_value = loaded.get("raw_award_receipt_sha256")
+    raw_receipt = dict(raw_value) if isinstance(raw_value, Mapping) else None
+    raw_digest = str(raw_digest_value) if isinstance(raw_digest_value, str) else None
+    raw_observation: Optional[dict[str, Any]] = None
+    if raw_receipt is not None:
+        if (
+            raw_receipt.get("stable_id") != expected_stable_id
+            or raw_receipt.get("work_id") != expected_work_id
+            or raw_receipt.get("recipe_revision") != expected_recipe_revision
+            or raw_receipt.get("execution_identity") != expected_execution_identity
+            or raw_receipt.get("code_manifest_identity") != expected_code_manifest_identity
+            or raw_receipt.get("requested_mode") != requested_mode
+        ):
+            return None, "invalid-receipt:raw-award-identity"
+        observation_value = raw_receipt.get("observation")
+        if not isinstance(observation_value, Mapping):
+            return None, "invalid-receipt:raw-award-observation"
+        raw_observation = deepcopy(dict(observation_value))
+        per_mode = diagnostic.get("per_mode")
+        diagnostic_mode = (
+            per_mode.get(requested_mode)
+            if isinstance(per_mode, Mapping) and requested_mode is not None
+            else None
+        )
+        if not isinstance(diagnostic_mode, Mapping):
+            return None, "invalid-receipt:raw-award-mode"
+        shared_fields = set(raw_observation) & set(diagnostic_mode)
+        if any(raw_observation.get(key) != diagnostic_mode.get(key) for key in shared_fields):
+            return None, "invalid-receipt:raw-diagnostic-mismatch"
+        if (
+            raw_observation.get("observed_recipe_revision")
+            != diagnostic.get("observed_recipe_revision")
+            or raw_observation.get("observed_adapter_sha256")
+            != diagnostic.get("observed_adapter_sha256")
+            or raw_observation.get("observed_code_manifest_sha256")
+            != diagnostic.get("observed_code_manifest_sha256")
+            or raw_observation.get("observed_input_asset_sha256")
+            != diagnostic.get("observed_input_asset_sha256")
+        ):
+            return None, "invalid-receipt:raw-diagnostic-identity"
+        if result.raw_award_receipt != raw_receipt or result.raw_award_receipt_sha256 != raw_digest:
+            return None, "invalid-receipt:supervisor-raw-award-mismatch"
+    elif result.raw_award_receipt is not None or result.raw_award_receipt_sha256 is not None:
+        return None, "invalid-receipt:unexpected-supervisor-raw-award"
+
+    parent = result.parent_attestation
+    parent_copy = deepcopy(parent) if isinstance(parent, Mapping) else None
+    if parent_copy is not None:
+        parent_error = _parent_attestation_error(result, parent_copy, raw_receipt, raw_digest)
+        if parent_error is not None:
+            return None, parent_error
+    if raw_receipt is not None and parent_copy is None:
+        return None, "missing-parent-success-attestation"
+    return (
+        VerifiedWorkerResult(
+            result_sha256=str(loaded["result_sha256"]),
+            diagnostic=deepcopy(diagnostic),
+            raw_award_receipt=raw_receipt,
+            raw_award_receipt_sha256=raw_digest,
+            raw_observation=raw_observation,
+            parent_attestation=parent_copy,
+        ),
+        None,
+    )
+
+
+def worker_result_outer_for_diagnostics(result: SupervisedResult) -> Optional[dict[str, Any]]:
+    """Copy the opaque outer worker result for shutdown-only diagnostics.
+
+    Parameters
+    ----------
+    result:
+        Interrupted supervised result.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Opaque outer bytes as parsed by the supervisor, without semantic projection.
+    """
+
+    value = result.worker_receipt
+    return deepcopy(value) if isinstance(value, dict) else None
 
 
 @dataclass(frozen=True)
@@ -2471,21 +2818,13 @@ def _poison_receipt_for_policy_failure(
         return False
     if not isinstance(loaded, dict):
         return False
-    v3_result = loaded.get("result_version") == "menagerie.crawler.worker-result.v3"
-    if v3_result:
-        result_payload = {key: value for key, value in loaded.items() if key != "result_sha256"}
-        if loaded.get("result_sha256") != stable_hash(result_payload):
-            return False
-        diagnostic = loaded.get("diagnostic")
-        if not isinstance(diagnostic, Mapping):
-            return False
-        payload = dict(diagnostic)
-    else:
-        if loaded.get("receipt_version") != "menagerie.crawler.worker-receipt.v1":
-            return False
-        payload = {key: value for key, value in loaded.items() if key != "receipt_sha256"}
-        if loaded.get("receipt_sha256") != stable_hash(payload):
-            return False
+    verified, load_error = _load_worker_result_value(loaded)
+    if verified is None or load_error is not None:
+        return False
+    diagnostic = verified.get("diagnostic")
+    if not isinstance(diagnostic, Mapping):
+        return False
+    payload = dict(diagnostic)
     policy_value = payload.get("policy_observation")
     if not isinstance(policy_value, Mapping):
         return False
@@ -2532,16 +2871,13 @@ def _poison_receipt_for_policy_failure(
             else:
                 per_mode[str(mode)] = mode_value
         payload["per_mode"] = per_mode
-    if v3_result:
-        record_payload = {
-            "result_version": "menagerie.crawler.worker-result.v3",
-            "raw_award_receipt": None,
-            "raw_award_receipt_sha256": None,
-            "diagnostic": payload,
-        }
-        record = {**record_payload, "result_sha256": stable_hash(record_payload)}
-    else:
-        record = {**payload, "receipt_sha256": stable_hash(payload)}
+    record_payload = {
+        "result_version": _WORKER_RESULT_VERSION,
+        "raw_award_receipt": None,
+        "raw_award_receipt_sha256": None,
+        "diagnostic": payload,
+    }
+    record = {**record_payload, "result_sha256": stable_hash(record_payload)}
     _atomic_rewrite_receipt(receipt_path, record)
     return True
 
@@ -2588,8 +2924,9 @@ def _caught_policy_reason(receipt: Mapping[str, Any]) -> Optional[str]:
     """
 
     diagnostic = receipt.get("diagnostic")
-    source = diagnostic if isinstance(diagnostic, Mapping) else receipt
-    policy = source.get("policy_observation")
+    if not isinstance(diagnostic, Mapping):
+        return None
+    policy = diagnostic.get("policy_observation")
     if not isinstance(policy, Mapping):
         return None
     reasons = (
@@ -3092,26 +3429,7 @@ def _load_receipt(path: Path) -> tuple[Optional[dict[str, Any]], Optional[str]]:
         return None, f"invalid-receipt:{type(exc).__name__}"
     if not isinstance(value, dict):
         return None, "invalid-receipt:not-an-object"
-    if value.get("result_version") == "menagerie.crawler.worker-result.v3":
-        claimed_result_hash = value.get("result_sha256")
-        result_payload = {key: item for key, item in value.items() if key != "result_sha256"}
-        if claimed_result_hash != stable_hash(result_payload):
-            return None, "invalid-receipt:result-hash-mismatch"
-        raw_receipt = value.get("raw_award_receipt")
-        raw_digest = value.get("raw_award_receipt_sha256")
-        if (raw_receipt is None) != (raw_digest is None):
-            return None, "invalid-receipt:partial-raw-award-receipt"
-        if raw_receipt is not None:
-            if not isinstance(raw_receipt, Mapping) or raw_digest != stable_hash(raw_receipt):
-                return None, "invalid-receipt:raw-award-hash-mismatch"
-        if not isinstance(value.get("diagnostic"), Mapping):
-            return None, "invalid-receipt:missing-diagnostic"
-        return value, None
-    claimed_hash = value.get("receipt_sha256")
-    payload = {key: item for key, item in value.items() if key != "receipt_sha256"}
-    if claimed_hash != stable_hash(payload):
-        return None, "invalid-receipt:hash-mismatch"
-    return value, None
+    return _load_worker_result_value(value)
 
 
 def supervise_worker(
@@ -3330,6 +3648,12 @@ def supervise_worker(
                     stable_hash(diagnostic) if isinstance(diagnostic, Mapping) else None
                 ),
             }
+        parent_attestation = success_parent_attestation or build_parent_attestation(
+            request_nonce=request_nonce,
+            request_sha256=request_sha256,
+            completion=None,
+            observation=observation,
+        )
         return SupervisedResult(
             observation=observation,
             worker_receipt=receipt,
@@ -3341,11 +3665,11 @@ def supervise_worker(
             ),
             raw_award_receipt=raw_receipt,
             raw_award_receipt_sha256=raw_digest,
-            parent_attestation=success_parent_attestation,
+            parent_attestation=parent_attestation,
             unattested_partial=partial,
         )
     success_attestation = observation.success_attestation_sha256
-    if receipt is not None and observation.attested_receipt_sha256 != receipt.get("receipt_sha256"):
+    if receipt is None or observation.attested_receipt_sha256 != receipt.get("result_sha256"):
         success_attestation = None
     if observation.exit_code != 0 or observation.signal_number is not None:
         return SupervisedResult(

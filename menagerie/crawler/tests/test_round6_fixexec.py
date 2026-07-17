@@ -11,8 +11,9 @@ from typing import Any
 
 import pytest
 
-from menagerie.crawler.identity import compute_recipe_revision, hash_bytes, stable_hash
+from menagerie.crawler.identity import compute_recipe_revision, hash_bytes
 from menagerie.crawler.policy import detect_os_sandbox
+from menagerie.crawler.tests.conftest import make_worker_result_v3_mapping
 from menagerie.crawler.worker_supervisor import (
     SupervisedResult,
     _parse_linux_denial_audit,
@@ -182,7 +183,7 @@ def test_each_explicit_mode_runs_in_a_fresh_process_without_train_state_leak(
 
     adapter = tmp_path / "stateful_adapter.py"
     adapter.write_text(_adapter_source(stateful=True), encoding="utf-8")
-    train, _train_receipt_path = _run_mode(
+    train, train_receipt_path = _run_mode(
         tmp_path / "train", adapter, mode="train", cold_index=0, input_seed=17
     )
     _require_linux_sandbox(train)
@@ -190,11 +191,14 @@ def test_each_explicit_mode_runs_in_a_fresh_process_without_train_state_leak(
         tmp_path / "eval", adapter, mode="eval", cold_index=0, input_seed=17
     )
 
-    assert train.worker_receipt is not None
-    assert set(train.worker_receipt["per_mode"]) == {"train"}
-    assert train.worker_receipt["per_mode"]["train"]["forward_completed"] is True
-    assert eval_result.worker_receipt is not None
-    eval_receipt = eval_result.worker_receipt
+    assert train.worker_receipt is None
+    assert train.receipt_error == "invalid-receipt:worker-result-envelope"
+    train_receipt = json.loads(train_receipt_path.read_text(encoding="utf-8"))
+    assert set(train_receipt["per_mode"]) == {"train"}
+    assert train_receipt["per_mode"]["train"]["forward_completed"] is True
+    assert eval_result.worker_receipt is None
+    assert eval_result.receipt_error == "invalid-receipt:worker-result-envelope"
+    eval_receipt = json.loads(eval_receipt_path.read_text(encoding="utf-8"))
     assert set(eval_receipt["per_mode"]) == {"eval"}
     assert eval_receipt["per_mode"]["eval"]["forward_completed"] is False
     assert (
@@ -224,7 +228,8 @@ def test_stateless_modes_and_cold_confirmations_use_fresh_processes_and_fixed_in
             )
             if not results:
                 _require_linux_sandbox(result)
-            assert result.worker_receipt is not None
+            assert result.worker_receipt is None
+            assert result.receipt_error == "invalid-receipt:worker-result-envelope"
             results.append(result)
             receipts.append(json.loads(receipt_path.read_text(encoding="utf-8")))
 
@@ -269,7 +274,7 @@ def _successful_receipt(path: Path) -> dict[str, Any]:
         "error": None,
         "per_mode": {"eval": {"forward_completed": True, "error": None}},
     }
-    receipt = {**payload, "receipt_sha256": stable_hash(payload)}
+    receipt = make_worker_result_v3_mapping(payload)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(receipt), encoding="utf-8")
     return receipt
@@ -307,9 +312,9 @@ def test_linux_undeclared_read_attempts_poison_even_when_the_open_fails(
     _successful_receipt(failed_receipt_path)
     assert poison_receipt_for_sandbox_denial(failed_receipt_path, failed) is True
     assert (
-        json.loads(failed_receipt_path.read_text(encoding="utf-8"))["policy_observation"][
-            "checkpoint_or_weight_read_attempted"
-        ]
+        json.loads(failed_receipt_path.read_text(encoding="utf-8"))["diagnostic"][
+            "policy_observation"
+        ]["checkpoint_or_weight_read_attempted"]
         is True
     )
 
@@ -318,7 +323,7 @@ def test_linux_undeclared_read_attempts_poison_even_when_the_open_fails(
     successful_receipt_path = tmp_path / "receipts" / "successful-read.json"
     _successful_receipt(successful_receipt_path)
     assert poison_receipt_for_sandbox_denial(successful_receipt_path, successful) is True
-    poisoned = json.loads(successful_receipt_path.read_text(encoding="utf-8"))
+    poisoned = json.loads(successful_receipt_path.read_text(encoding="utf-8"))["diagnostic"]
     assert poisoned["policy_observation"]["checkpoint_or_weight_read_attempted"] is True
     assert poisoned["error"]["reason_code"] == "checkpoint-read"
     assert poisoned["per_mode"]["eval"]["error"]["reason_code"] == "checkpoint-read"

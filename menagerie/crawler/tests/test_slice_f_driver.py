@@ -31,7 +31,6 @@ from menagerie.crawler.authority import (
     build_authority_context,
     completion_line_for_raw_award_receipt,
     derive_parent_attestation,
-    raw_award_receipt_sha256,
 )
 from menagerie.crawler.checker_dispatch import CheckerBackoffSignal
 from menagerie.crawler.checkpoint import (
@@ -110,6 +109,7 @@ from menagerie.crawler.tests.conftest import (
     make_gate,
     make_model,
     make_proposed_artifact,
+    make_supervised_worker_result_v3,
     rebind_attempt_raw_proof,
 )
 from menagerie.crawler.wakeup import (
@@ -2045,7 +2045,9 @@ def test_parent_refuses_observed_adapter_digest_mismatch() -> None:
     )
 
     assert (
-        _receipt_envelope_error(SupervisedResult(observation, receipt, None), proposal, HASH)
+        _receipt_envelope_error(
+            make_supervised_worker_result_v3(observation, receipt), proposal, HASH
+        )
         == "invalid-receipt:identity"
     )
 
@@ -2099,11 +2101,9 @@ def test_detected_mode_expansion_is_award_blocking_revision_evidence(tmp_path: P
         started_at=NOW,
         finished_at=NOW,
     )
-    result = SupervisedResult(
+    result = make_supervised_worker_result_v3(
         observation,
         receipt,
-        None,
-        HASH,
         parent_attestation=build_parent_attestation(
             request_nonce="nonce-detected-mode",
             request_sha256=HASH,
@@ -2234,14 +2234,11 @@ def test_parent_accepts_one_requested_mode_from_dual_mode_receipt(tmp_path: Path
             started_at=NOW,
             finished_at=NOW,
         )
-        return SupervisedResult(
+        return make_supervised_worker_result_v3(
             observation,
             receipt,
-            None,
-            str(parent_attestation["attestation_sha256"]),
-            raw_receipt,
-            raw_award_receipt_sha256(raw_receipt),
-            parent_attestation,
+            raw_award_receipt=raw_receipt,
+            parent_attestation=parent_attestation,
         )
 
     train_result = supervised_result("train")

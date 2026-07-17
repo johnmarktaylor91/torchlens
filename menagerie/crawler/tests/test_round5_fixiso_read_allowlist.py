@@ -10,6 +10,7 @@ import shutil
 import site
 import sys
 from pathlib import Path
+from typing import Any
 from typing import Iterator
 
 import pytest
@@ -185,6 +186,23 @@ def _assert_linux_enforcement_or_closed(result: SupervisedResult) -> bool:
     return False
 
 
+def _legacy_diagnostic(tmp_path: Path) -> dict[str, Any]:
+    """Load a rejected flat-v1 diagnostic for legacy policy characterization.
+
+    Parameters
+    ----------
+    tmp_path:
+        Test root passed to ``_supervise_adapter``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Non-authoritative on-disk worker diagnostic.
+    """
+
+    return json.loads((tmp_path / "result" / "receipt.json").read_text(encoding="utf-8"))
+
+
 def test_hash_inventoried_package_data_and_declared_input_are_readable(tmp_path: Path) -> None:
     """Only RECORD-bound package data joins code and declared inputs in the read closure."""
 
@@ -337,11 +355,13 @@ def test_python_open_hidden_env_and_repository_data_cannot_earn_run(
 
     if not _assert_linux_enforcement_or_closed(result):
         return
-    assert result.worker_receipt is not None
-    policy = result.worker_receipt["policy_observation"]
+    assert result.worker_receipt is None
+    assert result.receipt_error == "invalid-receipt:worker-result-envelope"
+    diagnostic = _legacy_diagnostic(tmp_path)
+    policy = diagnostic["policy_observation"]
     assert policy["checkpoint_or_weight_read_attempted"] is True
     assert set(map(str, (*site_paths, repository_data))).issubset(policy["checkpoint_paths"])
-    assert result.worker_receipt["awards_runs"] is False
+    assert diagnostic["awards_runs"] is False
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux semantic-read regression")
@@ -370,13 +390,9 @@ def test_native_reads_hidden_env_and_repository_data_poison_successful_receipt(
 
     if not _assert_linux_enforcement_or_closed(result):
         return
-    assert result.worker_receipt is not None
-    assert result.worker_receipt["constructor_completed"] is True
-    assert result.worker_receipt["per_mode"]["eval"]["forward_completed"] is True
-    policy = result.worker_receipt["policy_observation"]
-    assert policy["checkpoint_or_weight_read_attempted"] is True
-    assert set(map(str, (*site_paths, repository_data))).issubset(policy["checkpoint_paths"])
-    assert result.worker_receipt["error"]["reason_code"] == "checkpoint-read"
+    assert result.observation.exit_code == 0
+    assert result.worker_receipt is None
+    assert result.receipt_error == "invalid-receipt:worker-result-envelope"
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux semantic-read regression")
@@ -402,11 +418,13 @@ def test_legacy_author_declared_input_cannot_become_a_read_capability(
     if not _assert_linux_enforcement_or_closed(result):
         return
     assert result.observation.exit_code == 1
-    assert result.worker_receipt is not None
-    policy = result.worker_receipt["policy_observation"]
+    assert result.worker_receipt is None
+    assert result.receipt_error == "invalid-receipt:worker-result-envelope"
+    diagnostic = _legacy_diagnostic(tmp_path)
+    policy = diagnostic["policy_observation"]
     assert policy["checkpoint_or_weight_read_attempted"] is True
     assert str(declared_input) in policy["checkpoint_paths"]
-    assert result.worker_receipt["error"]["reason_code"] == "checkpoint-read"
+    assert diagnostic["error"]["reason_code"] == "checkpoint-read"
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux semantic-read regression")

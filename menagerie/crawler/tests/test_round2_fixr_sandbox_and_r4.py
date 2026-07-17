@@ -61,8 +61,10 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux denial-audit regression")
-def test_caught_os_sandbox_denial_poisons_successful_forward_receipt(tmp_path: Path) -> None:
-    """A caught native write denial becomes failed:policy and cannot satisfy run award."""
+def test_caught_os_sandbox_denial_in_flat_v1_cannot_satisfy_run_award(
+    tmp_path: Path,
+) -> None:
+    """A caught denial under legacy flat-v1 execution remains non-awarding."""
 
     if detect_os_sandbox("Linux") is None or shutil.which("strace") is None:
         pytest.skip("working Linux sandbox denial broker is unavailable")
@@ -112,14 +114,8 @@ def test_caught_os_sandbox_denial_poisons_successful_forward_receipt(tmp_path: P
     )
 
     assert result.observation.exit_code == 0
-    assert result.worker_receipt is not None
-    policy = result.worker_receipt["policy_observation"]
-    assert policy["write_outside_scratch_attempted"] is True
-    assert str(outside_path) in policy["write_paths"]
-    assert result.worker_receipt["per_mode"]["eval"]["forward_completed"] is True
-    assert result.worker_receipt["per_mode"]["eval"]["error"]["reason_code"] == (
-        "write-outside-scratch"
-    )
+    assert result.worker_receipt is None
+    assert result.receipt_error == "invalid-receipt:worker-result-envelope"
     environment = EnvironmentBinding(
         prefix=tmp_path / "env",
         python_executable=Path(sys.executable),
@@ -147,8 +143,8 @@ def test_caught_os_sandbox_denial_poisons_successful_forward_receipt(tmp_path: P
 
     assert len(attempts) == 1
     assert attempts[0]["result"] == "failed"
-    assert attempts[0]["stage"] == "policy"
-    assert attempts[0]["error"]["reason_code"] == "write-outside-scratch"
+    assert attempts[0]["stage"] == "runner"
+    assert attempts[0]["error"]["reason_code"] == "protocol-violation"
     assert _attempt_policy_satisfied(attempts, proposal, 1) is False
     assert not outside_path.exists()
 

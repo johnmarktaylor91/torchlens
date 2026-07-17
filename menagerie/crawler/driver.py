@@ -197,6 +197,7 @@ from menagerie.crawler.status import (
 )
 from menagerie.crawler.wakeup import OperationalContext, WakeupManager, reduce_wake_episodes
 from menagerie.crawler.worker_supervisor import (
+    VerifiedWorkerResult,
     clear_worker_lease,
     current_boot_id,
     open_worker_lease,
@@ -204,6 +205,8 @@ from menagerie.crawler.worker_supervisor import (
     reconcile_worker_lease,
     shutdown_signal_handlers,
     supervise_worker,
+    verify_supervised_worker_result,
+    worker_result_outer_for_diagnostics,
 )
 from menagerie.crawler.worker_supervisor import (
     SupervisorObservation,
@@ -1637,7 +1640,7 @@ class SupervisedForwardLane:
                         )
                     interrupted_lease = handle.lease
                     clear_worker_lease(handle)
-                    partial_receipt = result.worker_receipt
+                    partial_receipt = worker_result_outer_for_diagnostics(result)
                     raise DriverShutdown(
                         ShutdownInterruptionFact(
                             invocation_id=run_id,
@@ -1682,10 +1685,13 @@ class SupervisedForwardLane:
                         handle.lease,
                     )
                 clear_worker_lease(handle)
-                raw_receipt = result.worker_receipt
-                raw_per_mode = (
-                    raw_receipt.get("per_mode") if isinstance(raw_receipt, Mapping) else None
+                verified, _verification_error = _verified_worker_result(
+                    result,
+                    proposal,
+                    execution_identity,
+                    requested_mode=mode,
                 )
+                raw_per_mode = verified.diagnostic.get("per_mode") if verified is not None else None
                 raw_mode_receipt = (
                     raw_per_mode.get(mode) if isinstance(raw_per_mode, Mapping) else None
                 )
@@ -7654,6 +7660,44 @@ def _expected_input_asset_id(proposal: Mapping[str, Any]) -> Optional[str]:
     return selected["asset_id"] if selected is not None else None
 
 
+def _verified_worker_result(
+    result: SupervisedResult,
+    proposal: Mapping[str, Any],
+    execution_identity: str,
+    *,
+    requested_mode: Optional[str],
+) -> tuple[Optional[VerifiedWorkerResult], Optional[str]]:
+    """Project a live worker-result.v3 against current driver associations.
+
+    Parameters
+    ----------
+    result:
+        Parent-observed live worker result.
+    proposal:
+        Current accepted author proposal.
+    execution_identity:
+        Parent-computed execution identity.
+    requested_mode:
+        Explicit mode assigned to the subprocess, or ``None`` for all modes.
+
+    Returns
+    -------
+    tuple[VerifiedWorkerResult | None, str | None]
+        Typed projection or its closed protocol error.
+    """
+
+    return verify_supervised_worker_result(
+        result,
+        expected_stable_id=str(proposal.get("stable_id")),
+        expected_work_id=str(proposal.get("work_id")),
+        expected_source_identity=str(proposal.get("source_identity")),
+        expected_recipe_revision=str(proposal.get("recipe_revision")),
+        expected_execution_identity=execution_identity,
+        expected_code_manifest_identity=_expected_code_manifest_sha256(proposal),
+        requested_mode=requested_mode,
+    )
+
+
 def _attempts_from_supervised(
     artifact: AuthorArtifact,
     result: SupervisedResult,
@@ -7690,33 +7734,26 @@ def _attempts_from_supervised(
 
     proposal = artifact.proposal
     facts = proposal["proposed_facts"]
-    receipt = deepcopy(result.worker_receipt or {})
+    verified, verification_error = _verified_worker_result(
+        result,
+        proposal,
+        execution_identity,
+        requested_mode=requested_mode,
+    )
+    receipt = deepcopy(verified.diagnostic) if verified is not None else {}
     policy_value = receipt.get("policy_observation", {})
     policy = dict(policy_value) if isinstance(policy_value, Mapping) else {}
     policy["cache_read_attempted"] = bool(policy.get("cache_read_attempted")) or (
         _parent_cache_read_attempted(policy)
     )
     receipt["policy_observation"] = policy
-    parent_result = SupervisedResult(
-        result.observation,
-        receipt or None,
-        result.receipt_error,
-        result.success_attestation_sha256,
-        result.raw_award_receipt,
-        result.raw_award_receipt_sha256,
-        result.parent_attestation,
-        result.unattested_partial,
-    )
-    envelope_error = _receipt_envelope_error(
-        parent_result,
-        proposal,
-        execution_identity,
-        requested_mode=requested_mode,
+    envelope_error = verification_error or _receipt_envelope_error(
+        result, proposal, execution_identity, requested_mode=requested_mode
     )
     if policy.get("cache_read_attempted"):
         envelope_error = "failed:policy-cache-read"
     effective_result = (
-        parent_result
+        result
         if envelope_error is None
         else SupervisedResult(result.observation, None, envelope_error, None)
     )
@@ -7750,12 +7787,12 @@ def _attempts_from_supervised(
         mode_receipt = per_mode.get(mode, {}) if isinstance(per_mode, Mapping) else {}
         succeeded = bool(
             envelope_error is None
+            and verified is not None
             and result.observation.exit_code == 0
             and result.observation.signal_number is None
-            and result.success_attestation_sha256 is not None
-            and result.raw_award_receipt is not None
-            and result.raw_award_receipt_sha256 is not None
-            and result.parent_attestation is not None
+            and verified.raw_award_receipt is not None
+            and verified.raw_observation is not None
+            and verified.parent_attestation is not None
             and mode_receipt.get("constructor_started")
             and mode_receipt.get("constructor_completed")
             and mode_receipt.get("input_completed")
@@ -7793,7 +7830,13 @@ def _attempts_from_supervised(
                     },
                 )
             else:
-                failure = _supervised_failure(effective_result, receipt, mode_receipt, policy)
+                failure = _supervised_failure(
+                    effective_result,
+                    receipt,
+                    mode_receipt,
+                    policy,
+                    worker_result_present=verified is not None,
+                )
             attempt_stage = failure["stage"]
             attempt_mode = mode if attempt_stage == "forward" else None
             error = {
@@ -7801,10 +7844,8 @@ def _attempts_from_supervised(
                 "root_cause_fingerprint": stable_hash(failure),
             }
         worker_receipt = {
-            "present": result.worker_receipt is not None,
-            "receipt_sha256": (
-                result.success_attestation_sha256 if succeeded else receipt.get("receipt_sha256")
-            ),
+            "present": verified is not None,
+            "receipt_sha256": (verified.result_sha256 if verified is not None else None),
             "observed_recipe_revision": receipt.get("observed_recipe_revision"),
             "observed_adapter_sha256": receipt.get("observed_adapter_sha256"),
             "observed_code_manifest_sha256": receipt.get("observed_code_manifest_sha256"),
@@ -7828,14 +7869,14 @@ def _attempts_from_supervised(
             "forward_seconds": mode_receipt.get("forward_seconds"),
         }
         if succeeded:
-            raw_award_receipt = result.raw_award_receipt
-            if not isinstance(raw_award_receipt, Mapping):
+            if verified is None or verified.raw_observation is None:
                 raise DriverIntegrationError("successful worker result lacks a raw award receipt")
-            raw_observation = raw_award_receipt.get("observation", {})
-            if not isinstance(raw_observation, Mapping):
-                raise DriverIntegrationError("raw award receipt observation is malformed")
-            worker_receipt = deepcopy(dict(raw_observation))
-        parent_attestation = deepcopy(result.parent_attestation)
+            worker_receipt = deepcopy(verified.raw_observation)
+        parent_attestation = (
+            deepcopy(verified.parent_attestation)
+            if verified is not None
+            else deepcopy(result.parent_attestation)
+        )
         attempt: JsonObject = {
             "schema_version": ATTEMPT_SCHEMA_VERSION_V3,
             "attempt_id": attempt_id,
@@ -7918,9 +7959,7 @@ def _attempts_from_supervised(
                 "stdout_bytes": observation.stdout_bytes,
                 "stdout_tail": observation.stdout_tail,
                 "stdout_completion_line": (
-                    _attested_completion_line(observation.stdout_tail)
-                    if result.success_attestation_sha256 is not None
-                    else None
+                    _attested_completion_line(observation.stdout_tail) if succeeded else None
                 ),
                 "stderr_sha256": observation.stderr_sha256,
                 "stderr_bytes": observation.stderr_bytes,
@@ -7949,8 +7988,12 @@ def _attempts_from_supervised(
                 execution_read_manifest_identity
                 or stable_hash("direct-supervised-execution-manifest")
             ),
-            "raw_award_receipt": (deepcopy(result.raw_award_receipt) if succeeded else None),
-            "raw_award_receipt_sha256": (result.raw_award_receipt_sha256 if succeeded else None),
+            "raw_award_receipt": (
+                deepcopy(verified.raw_award_receipt) if succeeded and verified is not None else None
+            ),
+            "raw_award_receipt_sha256": (
+                verified.raw_award_receipt_sha256 if succeeded and verified is not None else None
+            ),
             "parent_attestation": parent_attestation,
             "unattested_partial": (None if succeeded else deepcopy(result.unattested_partial)),
         }
@@ -8264,35 +8307,15 @@ def _receipt_envelope_error(
         legacy all-modes request.
     """
 
-    if result.receipt_error is not None:
-        return result.receipt_error
-    receipt = result.worker_receipt
-    if not isinstance(receipt, Mapping):
-        return "missing-receipt"
-    required_top = {
-        "receipt_version",
-        "stable_id",
-        "source_identity",
-        "recipe_revision",
-        "observed_recipe_revision",
-        "observed_adapter_sha256",
-        "observed_code_manifest_sha256",
-        "observed_input_asset_sha256",
-        "execution_identity",
-        "mode",
-        "constructor_started",
-        "constructor_completed",
-        "input_completed",
-        "declared_meaningful_modes",
-        "detected_meaningful_modes",
-        "meaningful_modes",
-        "per_mode",
-        "policy_observation",
-        "error",
-        "receipt_sha256",
-    }
-    if not required_top <= set(receipt):
-        return "invalid-receipt:incomplete-envelope"
+    verified, verification_error = _verified_worker_result(
+        result,
+        proposal,
+        execution_identity,
+        requested_mode=requested_mode,
+    )
+    if verified is None:
+        return verification_error or "invalid-receipt:worker-result-v3"
+    receipt = verified.diagnostic
     successful_exit = result.observation.exit_code == 0 and result.observation.signal_number is None
     expected_adapter = _expected_adapter_sha256(proposal)
     expected_manifest = _expected_code_manifest_sha256(proposal)
@@ -8312,8 +8335,7 @@ def _receipt_envelope_error(
         _expected_input_asset_id(proposal),
     )
     if (
-        receipt.get("receipt_version") != "menagerie.crawler.worker-receipt.v1"
-        or receipt.get("stable_id") != proposal.get("stable_id")
+        receipt.get("stable_id") != proposal.get("stable_id")
         or receipt.get("source_identity") != proposal.get("source_identity")
         or receipt.get("recipe_revision") != proposal.get("recipe_revision")
         or receipt.get("execution_identity") != execution_identity
@@ -8383,7 +8405,7 @@ def _receipt_envelope_error(
             return "invalid-receipt:mode-envelope"
         validated_modes = tuple(str(mode) for mode in per_mode)
     elif requested_mode is not None:
-        if result.success_attestation_sha256 is None:
+        if verified.parent_attestation is None:
             return "missing-parent-success-attestation"
         if (
             requested_mode not in proposal_modes
@@ -8394,7 +8416,7 @@ def _receipt_envelope_error(
             return "invalid-receipt:mode-envelope"
         validated_modes = (requested_mode,)
     else:
-        if result.success_attestation_sha256 is None:
+        if verified.parent_attestation is None:
             return "missing-parent-success-attestation"
         if receipt_mode is not None or set(per_mode) != mode_set:
             return "invalid-receipt:mode-envelope"
@@ -8453,6 +8475,8 @@ def _receipt_envelope_error(
     }
     if not isinstance(policy, Mapping) or not required_policy <= set(policy):
         return "invalid-receipt:policy-envelope"
+    if successful_exit and verified.raw_award_receipt is None:
+        return "missing-authenticated-raw-award-receipt"
     if successful_exit and receipt.get("error") is not None:
         return "invalid-receipt:success-with-error"
     if not successful_exit and not (
@@ -8472,8 +8496,25 @@ def _supervised_failure(
     receipt: Mapping[str, Any],
     mode_receipt: Mapping[str, Any],
     policy: Mapping[str, Any],
+    *,
+    worker_result_present: bool,
 ) -> JsonObject:
-    """Classify a failed worker observation into its actual closed stage and reason."""
+    """Classify a failed worker observation into its actual closed stage and reason.
+
+    Parameters
+    ----------
+    result:
+        Parent-observed result, possibly replaced with a projection error.
+    receipt, mode_receipt, policy:
+        Verified non-awarding diagnostic facts.
+    worker_result_present:
+        Whether the central v3 projection accepted an outer worker result.
+
+    Returns
+    -------
+    dict[str, Any]
+        Closed attempt failure fields.
+    """
 
     policy_reasons = (
         ("network_attempted", "network-attempt"),
@@ -8521,7 +8562,7 @@ def _supervised_failure(
             native_crash=True,
             details={"signal": observation.signal_number},
         )
-    if result.worker_receipt is None:
+    if not worker_result_present:
         if result.receipt_error in {"failed:policy", "failed:sandbox-unavailable"}:
             return _attempt_error_fields(
                 "policy",
