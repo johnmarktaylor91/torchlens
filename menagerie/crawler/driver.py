@@ -366,6 +366,20 @@ _AWARD_CLOSURE_SYMBOLS = {
     ),
     "state.py": ("_select_current",),
 }
+_SHUTDOWN_ADMISSION_REGISTRY: Mapping[str, str] = {
+    "author": "guard:author-admission",
+    "checker": "guard:external-call-admission",
+    "environment-create": "guard:environment-create-admission",
+    "environment-use": "guard:environment-use-admission",
+    "model": "guard:model-admission",
+    "lease": "guard:forward-admission|pre-slot-resolution",
+    "spawn": "guard:forward-admission|pre-slot-resolution",
+    "run-model-assembly": "guard:post-attempt-pre-award",
+    "publication": "atomic:award-commit",
+    "terminal-publication": "atomic:award-commit",
+    "model-append": "atomic:award-commit",
+    "post-award-observation": "guard:post-award-commit",
+}
 _AWARD_CLOSURE_SCHEMAS = (
     "schemas/attempt-v3.schema.json",
     "schemas/author-proposal-v3.schema.json",
@@ -4882,6 +4896,13 @@ class CrawlerDriver:
             self.dependencies.boundary_hook("after-forward", item.stable_id)
         if not award_run:
             return None
+        self.dependencies.boundary_hook("post-attempt-pre-award", item.stable_id)
+        self._check_shutdown(
+            "post-attempt-pre-award",
+            item=item,
+            work_id=str(artifact.proposal["work_id"]),
+            execution_identity=execution_identity,
+        )
         gates = scan_jsonl(self.paths.ledgers.gates)
         representative_model = (
             reducer.current_records.get(item.family_representative_id)
@@ -4931,11 +4952,23 @@ class CrawlerDriver:
         )
         if current_model is not None:
             model["status"]["supersedes_revision"] = current_model["record_revision"]
+
+        self.dependencies.boundary_hook("pre-award-commit", item.stable_id)
+        self._check_shutdown(
+            "pre-award-commit",
+            item=item,
+            work_id=str(artifact.proposal["work_id"]),
+            execution_identity=execution_identity,
+        )
+        self.dependencies.boundary_hook("award-commit-entered", item.stable_id)
+        # Graceful-shutdown atomic award section: publication authorization and
+        # materialization must remain check-free through the canonical model append.
         if model.get("authored_metadata_state") == "accepted":
             self._authorize_and_publish_artifact(artifact, model, gates, reducer)
         result = reducer.append_model(reducer.prepare_model(model))
         if result.appended:
             self._reduced += 1
+        self._check_shutdown("post-award-commit")
         self.dependencies.boundary_hook("after-reduce", item.stable_id)
         current_records = reducer.current_records
         snapshot = self._policy_snapshot()
@@ -5225,11 +5258,26 @@ class CrawlerDriver:
         )
         if current_model is not None:
             model["status"]["supersedes_revision"] = current_model["record_revision"]
+
+        self.dependencies.boundary_hook("pre-award-commit", item.stable_id)
+        self._check_shutdown(
+            "pre-award-commit",
+            item=item,
+            work_id=(
+                artifact.author_result.binding.work_id
+                if artifact is not None
+                else item.active_work_id
+            ),
+        )
+        self.dependencies.boundary_hook("award-commit-entered", item.stable_id)
+        # Terminal materialization and its model append share the same graceful-
+        # shutdown atomic section as a successful run award.
         if artifact is not None:
             self._authorize_terminal_artifact(artifact, model, gates, reducer)
         result = reducer.append_model(reducer.prepare_model(model))
         if result.appended:
             self._reduced += 1
+        self._check_shutdown("post-award-commit")
         self.dependencies.boundary_hook("after-reduce", item.stable_id)
         current_records = reducer.current_records
         snapshot = self._policy_snapshot()
