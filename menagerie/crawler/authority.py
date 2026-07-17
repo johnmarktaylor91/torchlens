@@ -2,14 +2,25 @@
 
 from __future__ import annotations
 
+import ast
 import json
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable, Mapping, NewType, Optional, Sequence
 
-from menagerie.crawler.constants import FAILURE_REASON_CODES
-from menagerie.crawler.identity import compute_execution_identity, hash_bytes, stable_hash
+from menagerie.crawler.constants import (
+    ATTEMPT_SCHEMA_VERSION_V3,
+    EXECUTION_READ_MANIFEST_VERSION_V2,
+    FAILURE_REASON_CODES,
+    GATE_SCHEMA_VERSION_V3,
+)
+from menagerie.crawler.identity import (
+    compute_execution_identity,
+    hash_bytes,
+    payload_hash,
+    stable_hash,
+)
 from menagerie.crawler.models import JsonObject
 
 _RAW_AWARD_RECEIPT_VERSION = "menagerie.crawler.raw-award-receipt.v3"
@@ -63,6 +74,32 @@ _POLICY_SEQUENCE_FIELDS = ("socket_targets", "checkpoint_paths", "write_paths")
 _STATUS_RUNNER_STAGES = frozenset(
     {"environment", "import", "constructor", "input", "forward", "resource", "policy", "runner"}
 )
+_LEGACY_PROOF_RULE = "legacy rows lack v3 proof material required for current authority"
+_CODE_MEMBER_KINDS = frozenset(
+    {
+        "native-extension",
+        "native-source",
+        "python-bytecode",
+        "python-source",
+    }
+)
+_RUNTIME_MEMBER_KINDS = frozenset(
+    {
+        "import-metadata",
+        "interpreter",
+        "native-extension",
+        "native-library",
+        "package-data",
+        "python-bytecode",
+        "python-source",
+    }
+)
+_MEMBER_SUFFIXES = {
+    "native-extension": frozenset({".dylib", ".pyd", ".so"}),
+    "native-source": frozenset({".c", ".cc", ".cpp", ".cu", ".cuh", ".h", ".hpp"}),
+    "python-bytecode": frozenset({".pyc"}),
+    "python-source": frozenset({".py", ".pyi", ".pyx"}),
+}
 
 
 class AuthorityDerivationError(ValueError):
@@ -619,6 +656,511 @@ def _require_hash(value: object, field: str) -> str:
     return digest
 
 
+def _verified_member(
+    member: RuntimeMember,
+    *,
+    allowed_kinds: frozenset[str],
+    field: str,
+) -> RuntimeMember:
+    """Return one normalized exact executable-closure member.
+
+    Parameters
+    ----------
+    member:
+        Typed member supplied by the trusted closure collector.
+    allowed_kinds:
+        Closed kinds valid for the member's manifest partition.
+    field:
+        Diagnostic partition name.
+
+    Returns
+    -------
+    RuntimeMember
+        Normalized member with an absolute canonical path.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If the path is a root/directory/alias, the kind is invalid, or bytes differ.
+    """
+
+    if not isinstance(member, RuntimeMember):
+        raise AuthorityDerivationError(f"{field} must contain RuntimeMember values")
+    path = member.path
+    if not path.is_absolute():
+        raise AuthorityDerivationError(f"{field} member path must be absolute: {path}")
+    if member.kind not in allowed_kinds:
+        raise AuthorityDerivationError(
+            f"{field} member has a non-file or unknown kind: {member.kind}"
+        )
+    _require_nonempty_string(member.provenance, f"{field}.provenance")
+    digest = _require_hash(member.sha256, f"{field}.sha256")
+    try:
+        resolved = path.resolve(strict=True)
+        status = path.stat()
+    except OSError as exc:
+        raise AuthorityDerivationError(f"{field} member is unavailable: {path}") from exc
+    if path.is_symlink() or resolved != path or not path.is_file() or status.st_nlink != 1:
+        raise AuthorityDerivationError(f"{field} member is not an exact unaliased file: {path}")
+    suffixes = _MEMBER_SUFFIXES.get(member.kind)
+    lowered_name = path.name.lower()
+    if suffixes is not None and path.suffix.lower() not in suffixes:
+        if member.kind not in {"native-extension"} or ".so." not in lowered_name:
+            raise AuthorityDerivationError(
+                f"{field} member kind does not match its file suffix: {path}"
+            )
+    if member.kind == "native-library" and not (
+        path.suffix.lower() in {".dylib", ".so"} or ".so." in lowered_name
+    ):
+        raise AuthorityDerivationError(f"{field} native library has an invalid suffix: {path}")
+    try:
+        observed = hash_bytes(path.read_bytes())
+    except OSError as exc:
+        raise AuthorityDerivationError(f"{field} member cannot be read: {path}") from exc
+    if observed != digest:
+        raise AuthorityDerivationError(f"{field} member digest changed: {path}")
+    return RuntimeMember(
+        path=path,
+        sha256=digest,
+        kind=member.kind,
+        provenance=member.provenance,
+    )
+
+
+def _manifest_v2_payload(
+    *,
+    stable_id: str,
+    work_id: str,
+    execution_identity: str,
+    code_manifest_identity: str,
+    environment_generation: str,
+    installed_package_inventory_sha256: str,
+    code_members: Sequence[RuntimeMember],
+    runtime_members: Sequence[RuntimeMember],
+    standard_input_asset: Optional[tuple[Path, str, str]],
+    lookup_directories: Sequence[RuntimeLookupDirectory],
+) -> JsonObject:
+    """Build the canonical JSON identity payload for manifest v2.
+
+    Parameters
+    ----------
+    stable_id, work_id, execution_identity, code_manifest_identity,
+    environment_generation, installed_package_inventory_sha256:
+        Exact request, implementation, and environment associations.
+    code_members, runtime_members:
+        Exact verified semantic file capabilities.
+    standard_input_asset:
+        Optional exact selected standard-input member.
+    lookup_directories:
+        Non-authorizing lookup and mount scaffolding.
+
+    Returns
+    -------
+    dict[str, Any]
+        Canonical JSON-compatible identity payload.
+    """
+
+    def member_payload(member: RuntimeMember) -> JsonObject:
+        """Render one typed member into canonical JSON."""
+
+        return {
+            "path": str(member.path),
+            "sha256": member.sha256,
+            "kind": member.kind,
+            "provenance": member.provenance,
+        }
+
+    return {
+        "manifest_version": EXECUTION_READ_MANIFEST_VERSION_V2,
+        "stable_id": stable_id,
+        "work_id": work_id,
+        "execution_identity": execution_identity,
+        "code_manifest_identity": code_manifest_identity,
+        "environment_generation": environment_generation,
+        "installed_package_inventory_sha256": installed_package_inventory_sha256,
+        "code_members": [member_payload(member) for member in code_members],
+        "runtime_members": [member_payload(member) for member in runtime_members],
+        "standard_input_asset": (
+            None
+            if standard_input_asset is None
+            else {
+                "path": str(standard_input_asset[0]),
+                "sha256": standard_input_asset[1],
+                "asset_id": standard_input_asset[2],
+            }
+        ),
+        "lookup_directories": [
+            {"path": str(directory.path), "provenance": directory.provenance}
+            for directory in lookup_directories
+        ],
+    }
+
+
+def _import_names(path: Path, lookup_directories: Sequence[Path]) -> tuple[str, ...]:
+    """Return statically resolvable module names imported by one Python source.
+
+    Parameters
+    ----------
+    path:
+        Exact Python source member.
+    lookup_directories:
+        Ordered import lookup scaffolding.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Absolute module names named by imports and literal dynamic-import calls.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If source parsing or a relative-import package association fails.
+    """
+
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, UnicodeError, SyntaxError) as exc:
+        raise AuthorityDerivationError(
+            f"executable Python member cannot be parsed: {path}"
+        ) from exc
+    containing_roots = [root for root in lookup_directories if path.is_relative_to(root)]
+    containing_roots.sort(key=lambda root: len(root.parts), reverse=True)
+    package_parts: tuple[str, ...] = ()
+    if containing_roots:
+        relative = path.relative_to(containing_roots[0])
+        package_parts = relative.parent.parts
+        if path.name == "__init__.py":
+            package_parts = relative.parent.parts
+    names: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.extend(alias.name for alias in node.names)
+            continue
+        if isinstance(node, ast.ImportFrom):
+            if node.level:
+                if not containing_roots or node.level > len(package_parts) + 1:
+                    raise AuthorityDerivationError(
+                        f"relative import cannot be bound to a lookup package: {path}"
+                    )
+                retained = len(package_parts) - (node.level - 1)
+                base_parts = (*package_parts[:retained],)
+            else:
+                base_parts = ()
+            module_parts = tuple(node.module.split(".")) if node.module else ()
+            base = ".".join((*base_parts, *module_parts))
+            if base:
+                names.append(base)
+            for alias in node.names:
+                if alias.name != "*":
+                    child = ".".join(value for value in (base, alias.name) if value)
+                    if child:
+                        names.append(child)
+            continue
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        function_name: Optional[str] = None
+        if isinstance(node.func, ast.Name):
+            function_name = node.func.id
+        elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+            function_name = f"{node.func.value.id}.{node.func.attr}"
+        literal = node.args[0]
+        if (
+            function_name in {"__import__", "importlib.import_module"}
+            and isinstance(literal, ast.Constant)
+            and isinstance(literal.value, str)
+            and literal.value
+        ):
+            names.append(literal.value)
+    return tuple(dict.fromkeys(names))
+
+
+def _module_files(module_name: str, lookup_directories: Sequence[Path]) -> tuple[Path, ...]:
+    """Resolve one module name to its exact importable files under lookup scaffolding.
+
+    Parameters
+    ----------
+    module_name:
+        Absolute dotted module name.
+    lookup_directories:
+        Ordered non-authorizing import roots.
+
+    Returns
+    -------
+    tuple[Path, ...]
+        Package initializers plus the module source/bytecode/native file, or empty
+        when the module is built-in, frozen, or outside the supplied lookup closure.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If multiple lookup roots resolve the same named module differently.
+    """
+
+    parts = tuple(part for part in module_name.split(".") if part)
+    if not parts:
+        return ()
+    resolutions: list[tuple[Path, ...]] = []
+    for root in lookup_directories:
+        package_files: list[Path] = []
+        for index in range(1, len(parts)):
+            initializer = root.joinpath(*parts[:index], "__init__.py")
+            if initializer.is_file():
+                package_files.append(initializer.resolve())
+        leaf_base = root.joinpath(*parts)
+        candidates = [leaf_base.with_suffix(".py"), leaf_base / "__init__.py"]
+        try:
+            candidates.extend(sorted(leaf_base.parent.glob(f"{leaf_base.name}*.so")))
+            candidates.extend(sorted(leaf_base.parent.glob(f"{leaf_base.name}*.pyd")))
+        except OSError:
+            pass
+        leaves = tuple(candidate.resolve() for candidate in candidates if candidate.is_file())
+        if len(leaves) > 1:
+            raise AuthorityDerivationError(
+                f"static import resolves to multiple executable files: {module_name}"
+            )
+        if leaves:
+            resolutions.append(tuple(dict.fromkeys((*package_files, leaves[0]))))
+    if len(resolutions) > 1:
+        raise AuthorityDerivationError(
+            f"static import is ambiguous across lookup directories: {module_name}"
+        )
+    return resolutions[0] if resolutions else ()
+
+
+def _validate_static_import_closure(
+    members: Sequence[RuntimeMember],
+    lookup_directories: Sequence[RuntimeLookupDirectory],
+) -> None:
+    """Require every statically resolvable Python import to be an exact member.
+
+    Parameters
+    ----------
+    members:
+        Complete model/runtime member inventory.
+    lookup_directories:
+        Non-authorizing roots used only to resolve named imports.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If a source imports executable bytes that are absent from the inventory.
+    """
+
+    member_paths = {member.path for member in members}
+    roots = tuple(directory.path for directory in lookup_directories)
+    for member in members:
+        if member.kind != "python-source" or member.path.suffix != ".py":
+            continue
+        for module_name in _import_names(member.path, roots):
+            missing = [
+                path for path in _module_files(module_name, roots) if path not in member_paths
+            ]
+            if missing:
+                rendered = ", ".join(str(path) for path in missing)
+                raise AuthorityDerivationError(
+                    f"static import is outside the executable member inventory: {rendered}"
+                )
+
+
+def compile_execution_read_manifest_v2(
+    *,
+    stable_id: str,
+    work_id: str,
+    execution_identity: str,
+    code_manifest_identity: str,
+    environment_generation: str,
+    installed_package_inventory_sha256: str,
+    code_members: Sequence[RuntimeMember],
+    runtime_members: Sequence[RuntimeMember],
+    standard_input_asset: Optional[tuple[Path, str, str]] = None,
+    lookup_directories: Sequence[RuntimeLookupDirectory] = (),
+) -> ExecutionReadManifestV2:
+    """Compile an exact byte-inventoried executable closure into manifest v2.
+
+    Parameters
+    ----------
+    stable_id, work_id:
+        Exact model and work-generation association.
+    execution_identity, code_manifest_identity, environment_generation,
+    installed_package_inventory_sha256:
+        Exact execution, model-code, environment, and installed-inventory identities.
+    code_members:
+        Accepted model-code files, each already classified with exact provenance.
+    runtime_members:
+        Worker/bootstrap, interpreter, import, native-loader, metadata, and package-data files.
+    standard_input_asset:
+        Optional selected standard input as absolute path, digest, and asset ID.
+    lookup_directories:
+        Directory scaffolding used for lookup or mounts. It grants no descendant capability.
+
+    Returns
+    -------
+    ExecutionReadManifestV2
+        Frozen manifest whose identity includes every semantic file and association.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If an identity, member, digest, path, kind, alias, or partition is invalid.
+
+    Notes
+    -----
+    This producer intentionally accepts only an exact member inventory. Repository or
+    environment roots cannot be expressed as semantic members, and lookup directories
+    are excluded from the authorized member set consumed by enforcement layers.
+    """
+
+    stable_id = _require_nonempty_string(stable_id, "stable_id")
+    work_id = _require_nonempty_string(work_id, "work_id")
+    execution_identity = _require_hash(execution_identity, "execution_identity")
+    code_manifest_identity = _require_hash(code_manifest_identity, "code_manifest_identity")
+    environment_generation = _require_hash(environment_generation, "environment_generation")
+    installed_package_inventory_sha256 = _require_hash(
+        installed_package_inventory_sha256,
+        "installed_package_inventory_sha256",
+    )
+    normalized_code = tuple(
+        sorted(
+            (
+                _verified_member(member, allowed_kinds=_CODE_MEMBER_KINDS, field="code_members")
+                for member in code_members
+            ),
+            key=lambda member: (str(member.path), member.kind, member.provenance),
+        )
+    )
+    normalized_runtime = tuple(
+        sorted(
+            (
+                _verified_member(
+                    member,
+                    allowed_kinds=_RUNTIME_MEMBER_KINDS,
+                    field="runtime_members",
+                )
+                for member in runtime_members
+            ),
+            key=lambda member: (str(member.path), member.kind, member.provenance),
+        )
+    )
+    member_paths = [member.path for member in (*normalized_code, *normalized_runtime)]
+    if len(member_paths) != len(set(member_paths)):
+        raise AuthorityDerivationError(
+            "execution closure contains a duplicate or cross-partition member path"
+        )
+
+    normalized_asset: Optional[tuple[Path, str, str]] = None
+    if standard_input_asset is not None:
+        path, digest, asset_id = standard_input_asset
+        digest = _require_hash(digest, "standard_input_asset.sha256")
+        asset_id = _require_nonempty_string(asset_id, "standard_input_asset.asset_id")
+        if not path.is_absolute():
+            raise AuthorityDerivationError("standard input asset path must be absolute")
+        try:
+            resolved = path.resolve(strict=True)
+            status = path.stat()
+            observed = hash_bytes(path.read_bytes())
+        except OSError as exc:
+            raise AuthorityDerivationError("standard input asset is unavailable") from exc
+        if (
+            path.is_symlink()
+            or resolved != path
+            or not path.is_file()
+            or status.st_nlink != 1
+            or path in member_paths
+        ):
+            raise AuthorityDerivationError("standard input asset is aliased or overlaps code")
+        if observed != digest:
+            raise AuthorityDerivationError("standard input asset digest changed")
+        normalized_asset = (path, digest, asset_id)
+
+    normalized_lookup: list[RuntimeLookupDirectory] = []
+    seen_lookup: set[Path] = set()
+    for directory in lookup_directories:
+        if not isinstance(directory, RuntimeLookupDirectory):
+            raise AuthorityDerivationError(
+                "lookup_directories must contain RuntimeLookupDirectory values"
+            )
+        path = directory.path
+        provenance = _require_nonempty_string(directory.provenance, "lookup_directories.provenance")
+        try:
+            resolved = path.resolve(strict=True)
+        except OSError as exc:
+            raise AuthorityDerivationError(f"lookup directory is unavailable: {path}") from exc
+        if (
+            not path.is_absolute()
+            or path.is_symlink()
+            or resolved != path
+            or not path.is_dir()
+            or path in seen_lookup
+        ):
+            raise AuthorityDerivationError(f"lookup directory is unsafe or duplicated: {path}")
+        seen_lookup.add(path)
+        normalized_lookup.append(RuntimeLookupDirectory(path=path, provenance=provenance))
+    normalized_lookup.sort(key=lambda directory: (str(directory.path), directory.provenance))
+    _validate_static_import_closure(
+        (*normalized_code, *normalized_runtime),
+        normalized_lookup,
+    )
+
+    payload = _manifest_v2_payload(
+        stable_id=stable_id,
+        work_id=work_id,
+        execution_identity=execution_identity,
+        code_manifest_identity=code_manifest_identity,
+        environment_generation=environment_generation,
+        installed_package_inventory_sha256=installed_package_inventory_sha256,
+        code_members=normalized_code,
+        runtime_members=normalized_runtime,
+        standard_input_asset=normalized_asset,
+        lookup_directories=normalized_lookup,
+    )
+    return ExecutionReadManifestV2(
+        manifest_version=EXECUTION_READ_MANIFEST_VERSION_V2,
+        manifest_id=stable_hash(payload),
+        stable_id=stable_id,
+        work_id=work_id,
+        execution_identity=execution_identity,
+        code_manifest_identity=code_manifest_identity,
+        environment_generation=environment_generation,
+        installed_package_inventory_sha256=installed_package_inventory_sha256,
+        code_members=normalized_code,
+        runtime_members=normalized_runtime,
+        standard_input_asset=normalized_asset,
+        lookup_directories=tuple(normalized_lookup),
+    )
+
+
+def verify_execution_read_manifest_v2(manifest: ExecutionReadManifestV2) -> None:
+    """Reverify every manifest-v2 byte and association immediately before spawn.
+
+    Parameters
+    ----------
+    manifest:
+        Previously compiled frozen v2 executable closure.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If the version, identity, path, kind, provenance, or any member byte changed.
+    """
+
+    if manifest.manifest_version != EXECUTION_READ_MANIFEST_VERSION_V2:
+        raise AuthorityDerivationError("execution read manifest has the wrong v2 discriminator")
+    rebuilt = compile_execution_read_manifest_v2(
+        stable_id=manifest.stable_id,
+        work_id=manifest.work_id,
+        execution_identity=manifest.execution_identity,
+        code_manifest_identity=manifest.code_manifest_identity,
+        environment_generation=manifest.environment_generation,
+        installed_package_inventory_sha256=manifest.installed_package_inventory_sha256,
+        code_members=manifest.code_members,
+        runtime_members=manifest.runtime_members,
+        standard_input_asset=manifest.standard_input_asset,
+        lookup_directories=manifest.lookup_directories,
+    )
+    if rebuilt != manifest:
+        raise AuthorityDerivationError("execution read manifest identity is stale or rewritten")
+
+
 def _closed_mapping(value: Mapping[str, Any], expected_fields: frozenset[str], field: str) -> None:
     """Require an exact closed mapping key set.
 
@@ -1127,6 +1669,197 @@ def derive_attempt_projection(
     )
 
 
+def _validate_current_ledger_binding(record: Mapping[str, Any], field: str) -> None:
+    """Validate the immutable ledger sequence and payload self-hash.
+
+    Parameters
+    ----------
+    record:
+        Canonical persisted attempt or gate row.
+    field:
+        Diagnostic record kind.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If the record lacks a positive sequence or exact payload digest.
+    """
+
+    ledger_seq = record.get("ledger_seq")
+    if not isinstance(ledger_seq, int) or isinstance(ledger_seq, bool) or ledger_seq < 1:
+        raise AuthorityDerivationError(f"current {field} proof requires a positive ledger_seq")
+    digest = _require_hash(record.get("payload_sha256"), f"{field}.payload_sha256")
+    if digest != payload_hash(record):
+        raise AuthorityDerivationError(f"current {field} proof has an invalid payload self-hash")
+
+
+def _validate_nonaward_parent_projection(attempt: Mapping[str, Any]) -> None:
+    """Authenticate parent-owned proof for a non-awarding current attempt.
+
+    Parameters
+    ----------
+    attempt:
+        Current failed or observed attempt with no award receipt.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If the parent proof is incomplete, rewritten, or disagrees with projections.
+    """
+
+    parent = attempt.get("parent_attestation")
+    if not isinstance(parent, Mapping):
+        raise AuthorityDerivationError("current non-award attempt lacks parent proof material")
+    _closed_mapping(parent, _PARENT_ATTESTATION_FIELDS, "parent_attestation")
+    if parent.get("attestation_version") != _PARENT_ATTESTATION_VERSION:
+        raise AuthorityDerivationError("parent attestation has the wrong protocol version")
+    unhashed = {key: value for key, value in parent.items() if key != "attestation_sha256"}
+    if parent.get("attestation_sha256") != stable_hash(unhashed):
+        raise AuthorityDerivationError("parent attestation self hash is invalid")
+    _require_nonempty_string(parent.get("request_nonce"), "parent_attestation.request_nonce")
+    for name in ("request_sha256", "stdout_sha256", "stderr_sha256"):
+        _require_hash(parent.get(name), f"parent_attestation.{name}")
+    for name in ("completion_line_sha256", "named_raw_award_receipt_sha256"):
+        value = parent.get(name)
+        if value is not None:
+            _require_hash(value, f"parent_attestation.{name}")
+    if parent.get("named_raw_award_receipt_sha256") is not None:
+        raise AuthorityDerivationError("non-award parent proof cannot name an award receipt")
+    if any(
+        attempt.get(name) is not None for name in ("raw_award_receipt", "raw_award_receipt_sha256")
+    ):
+        raise AuthorityDerivationError("non-success attempt cannot retain award proof material")
+    supervisor = attempt.get("supervisor_observation")
+    if not isinstance(supervisor, Mapping):
+        raise AuthorityDerivationError("current non-award attempt lacks supervisor proof")
+    comparisons = (
+        ("exit_code", supervisor.get("exit_code"), parent.get("exit_code")),
+        ("signal", supervisor.get("signal"), parent.get("signal")),
+        ("peak_rss_bytes", supervisor.get("peak_rss_bytes"), parent.get("peak_rss_bytes")),
+        ("stdout_sha256", supervisor.get("stdout_sha256"), parent.get("stdout_sha256")),
+        ("stderr_sha256", supervisor.get("stderr_sha256"), parent.get("stderr_sha256")),
+        ("started_at", attempt.get("started_at"), parent.get("started_at")),
+        ("finished_at", attempt.get("finished_at"), parent.get("finished_at")),
+    )
+    mismatch = next((name for name, projected, proved in comparisons if projected != proved), None)
+    if mismatch is not None:
+        raise AuthorityDerivationError(f"non-award attempt contradicts parent proof at {mismatch}")
+    result = attempt.get("result")
+    error = attempt.get("error")
+    if result == "failed":
+        if (
+            not isinstance(error, Mapping)
+            or error.get("stage") != attempt.get("stage")
+            or error.get("reason_code")
+            not in FAILURE_REASON_CODES.get(str(attempt.get("stage")), frozenset())
+        ):
+            raise AuthorityDerivationError("current failed attempt lacks exact typed error proof")
+        _require_hash(error.get("root_cause_fingerprint"), "attempt.error.root_cause_fingerprint")
+    elif result != "observed" or error is not None:
+        raise AuthorityDerivationError("current non-award attempt has an invalid result/error arm")
+
+
+def load_current_attempt_proof(
+    attempt: Mapping[str, Any], *, require_award: bool = False
+) -> Optional[AttemptAuthority]:
+    """Load one persisted attempt only when it carries current v3 proof authority.
+
+    Parameters
+    ----------
+    attempt:
+        Canonical persisted attempt row.
+    require_award:
+        Whether the consumer requires independently authenticated success authority.
+
+    Returns
+    -------
+    AttemptAuthority | None
+        Authenticated success projection, or ``None`` for a valid failed/observed proof.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If the row is legacy, unbound, malformed, or unsuitable for award authority.
+    """
+
+    if attempt.get("schema_version") != ATTEMPT_SCHEMA_VERSION_V3:
+        raise AuthorityDerivationError(_LEGACY_PROOF_RULE)
+    _validate_current_ledger_binding(attempt, "attempt")
+    _require_nonempty_string(attempt.get("attempt_id"), "attempt.attempt_id")
+    result = attempt.get("result")
+    if result == "succeeded":
+        raw = attempt.get("raw_award_receipt")
+        parent = attempt.get("parent_attestation")
+        if not isinstance(raw, Mapping) or not isinstance(parent, Mapping):
+            raise AuthorityDerivationError("current success attempt lacks retained v3 raw proof")
+        return derive_attempt_projection(raw, parent, candidate_attempt=attempt)
+    if require_award:
+        raise AuthorityDerivationError("accepted award attempt is not a v3 authenticated success")
+    _validate_nonaward_parent_projection(attempt)
+    return None
+
+
+def authenticate_accepted_attempts(
+    accepted_attempt_ids: Sequence[str],
+    attempts: Sequence[Mapping[str, Any]],
+    *,
+    stable_id: Optional[str] = None,
+    work_id: Optional[str] = None,
+    execution_identity: Optional[str] = None,
+) -> tuple[AttemptAuthority, ...]:
+    """Independently authenticate every attempt counted toward a run award.
+
+    Parameters
+    ----------
+    accepted_attempt_ids:
+        Exact unique ordered award-counted attempt IDs, including confirmation slots.
+    attempts:
+        Canonical append-only attempt history.
+    stable_id, work_id, execution_identity:
+        Optional exact associations the integrator already resolved for the candidate model.
+
+    Returns
+    -------
+    tuple[AttemptAuthority, ...]
+        Verified projections in the caller's accepted-attempt order.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If an ID is duplicated/missing/ambiguous or any individual proof fails replay.
+    """
+
+    if isinstance(accepted_attempt_ids, (str, bytes)):
+        raise AuthorityDerivationError("accepted attempt IDs must be a unique ordered sequence")
+    ordered_ids = tuple(
+        _require_nonempty_string(value, "accepted_attempt_ids[]") for value in accepted_attempt_ids
+    )
+    if len(ordered_ids) != len(set(ordered_ids)):
+        raise AuthorityDerivationError("accepted attempt IDs must be unique")
+    index: dict[str, list[Mapping[str, Any]]] = {}
+    for attempt in attempts:
+        attempt_id = attempt.get("attempt_id")
+        if isinstance(attempt_id, str):
+            index.setdefault(attempt_id, []).append(attempt)
+    projections: list[AttemptAuthority] = []
+    for attempt_id in ordered_ids:
+        matches = index.get(attempt_id, [])
+        if len(matches) != 1:
+            raise AuthorityDerivationError(
+                f"accepted attempt {attempt_id} is missing or ambiguous in the immutable ledger"
+            )
+        projection = load_current_attempt_proof(matches[0], require_award=True)
+        assert projection is not None
+        if stable_id is not None and projection.stable_id != stable_id:
+            raise AuthorityDerivationError("accepted attempt belongs to another stable ID")
+        if work_id is not None and projection.work_id != work_id:
+            raise AuthorityDerivationError("accepted attempt belongs to another work generation")
+        if execution_identity is not None and projection.execution_identity != execution_identity:
+            raise AuthorityDerivationError("accepted attempt has a stale execution identity")
+        projections.append(projection)
+    return tuple(projections)
+
+
 def _authenticated_observation(
     attempt: Mapping[str, Any],
 ) -> tuple[AttemptAuthority, Mapping[str, Any]]:
@@ -1536,6 +2269,114 @@ def _gate_order(gate: Mapping[str, Any]) -> tuple[int, int, str]:
         ledger_seq if isinstance(ledger_seq, int) else -1,
         str(gate.get("gate_id", "")),
     )
+
+
+def load_current_gate_proof(gate: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Load one gate envelope only when its current v3 proof bindings replay.
+
+    Parameters
+    ----------
+    gate:
+        Canonical persisted gate envelope.
+
+    Returns
+    -------
+    Mapping[str, Any]
+        The exact input gate after proof validation.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If the gate is legacy or any immutable checker/gate binding is absent or stale.
+    """
+
+    if gate.get("schema_version") != GATE_SCHEMA_VERSION_V3:
+        raise AuthorityDerivationError(_LEGACY_PROOF_RULE)
+    _validate_current_ledger_binding(gate, "gate")
+    _require_nonempty_string(gate.get("gate_id"), "gate.gate_id")
+    for field in (
+        "gate_identity",
+        "result_envelope_sha256",
+        "author_result_schema_identity",
+        "dispatcher_identity",
+    ):
+        _require_hash(gate.get(field), f"gate.{field}")
+    checker = gate.get("checker")
+    if not isinstance(checker, Mapping):
+        raise AuthorityDerivationError("current gate proof lacks its checker envelope")
+    for field in ("provider", "model", "version"):
+        _require_nonempty_string(checker.get(field), f"gate.checker.{field}")
+    _require_hash(checker.get("prompt_sha256"), "gate.checker.prompt_sha256")
+    items = gate.get("items")
+    if not isinstance(items, Sequence) or isinstance(items, (str, bytes)):
+        raise AuthorityDerivationError("current gate proof has a malformed item sequence")
+    if gate.get("batch_size") != len(items):
+        raise AuthorityDerivationError("current gate proof has a partial item batch")
+    result_payload = {
+        key: value
+        for key, value in gate.items()
+        if key not in {"result_envelope_sha256", "payload_sha256"}
+    }
+    if gate.get("result_envelope_sha256") != stable_hash(result_payload):
+        raise AuthorityDerivationError("current gate result-envelope self-hash is invalid")
+    return gate
+
+
+def resolve_exact_gate_item_membership(
+    gates: Sequence[Mapping[str, Any]],
+    *,
+    accepted_gate_item: Mapping[str, Any],
+    accepted_gate_item_sha256: str,
+) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """Resolve one exact item to its unique immutable current-v3 owning gate.
+
+    Parameters
+    ----------
+    gates:
+        Canonical append-only gate history.
+    accepted_gate_item:
+        Exact caller-held item bytes. Caller-shaped ``gate_id`` is never consulted.
+    accepted_gate_item_sha256:
+        Independently retained digest of the exact accepted item.
+
+    Returns
+    -------
+    tuple[Mapping[str, Any], Mapping[str, Any]]
+        Unique authenticated owning gate and its exact ledger item.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If the digest is stale, authority is legacy, or membership is missing/ambiguous.
+    """
+
+    item_digest = _require_hash(accepted_gate_item_sha256, "accepted_gate_item_sha256")
+    if stable_hash(dict(accepted_gate_item)) != item_digest:
+        raise AuthorityDerivationError("accepted gate item digest does not bind caller bytes")
+    matches: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
+    legacy_match = False
+    for gate in gates:
+        items = gate.get("items")
+        if not isinstance(items, Sequence) or isinstance(items, (str, bytes)):
+            continue
+        for item in items:
+            if (
+                isinstance(item, Mapping)
+                and stable_hash(dict(item)) == item_digest
+                and item == accepted_gate_item
+            ):
+                if gate.get("schema_version") != GATE_SCHEMA_VERSION_V3:
+                    legacy_match = True
+                    continue
+                load_current_gate_proof(gate)
+                matches.append((gate, item))
+    if not matches and legacy_match:
+        raise AuthorityDerivationError(_LEGACY_PROOF_RULE)
+    if len(matches) != 1:
+        raise AuthorityDerivationError(
+            "accepted gate item has zero or multiple exact current-v3 ledger memberships"
+        )
+    return matches[0]
 
 
 def _matching_gate_items(
