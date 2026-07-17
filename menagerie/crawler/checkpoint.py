@@ -15,6 +15,7 @@ from typing import Any, Callable, Collection, Iterable, Mapping, Optional, Seque
 from menagerie.crawler.artifact_transactions import (
     ARTIFACT_RECONSTRUCTION_SCHEMA_VERSION,
     ArtifactCheckpointError,
+    ArtifactEventKind,
     artifact_reconstruction_paths,
     validate_artifact_checkpoint,
 )
@@ -52,14 +53,10 @@ from menagerie.crawler.licenses import (
 )
 from menagerie.crawler.mirrors import ArtifactManifest, MirrorStore
 from menagerie.crawler.models import AppendResult, JsonObject
-from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import (
-    ReductionError,
     default_ledger_paths,
-    materialize_current,
     project_dependency_current,
-    validate_reconstruction_source_binding,
 )
 from menagerie.crawler.status import checkpoint_consistency_report
 from menagerie.crawler.tools.rebuild_views import rebuild_views
@@ -94,10 +91,6 @@ class RestrictedPublicArtifact(CheckpointValidationError):
 
 class ReconstructionValidationError(CheckpointValidationError):
     """Raised when a canonical reconstruction transaction is not reproducible."""
-
-
-class StaleReconstructionError(ReconstructionValidationError):
-    """Raised when a valid historical family reconstruction needs full-author fallback."""
 
 
 @dataclass(frozen=True)
@@ -166,24 +159,6 @@ class GeneratedMetadataDisposition:
     disposition: str
     generator: str
     provenance: str
-
-
-@dataclass(frozen=True)
-class ValidatedReconstruction:
-    """Side-effect-free result of validating one canonical reconstruction.
-
-    Parameters
-    ----------
-    manifest, proposal, source_manifest:
-        Validated immutable reconstruction facts.
-    model_root:
-        Resolved canonical model-code root.
-    """
-
-    manifest: JsonObject
-    proposal: JsonObject
-    source_manifest: JsonObject
-    model_root: Path
 
 
 GitRunner = Callable[[Sequence[str], Path], GitCommandResult]
@@ -526,7 +501,7 @@ def record_review_signoff(
             for key in ("policy_key", "intake_snapshot_id", "review_threshold"):
                 if key in policy:
                     event["details"][key] = policy[key]
-    if canonical_path is not None:
+    if canonical_path is not None and canonical_path != ledger.path:
         append_canonical_operational_event(canonical_path, event)
     return record_operational_event(ledger, event)
 
@@ -1239,7 +1214,12 @@ def _create_canonical_checkpoint(
             raise CheckpointValidationError(str(exc)) from exc
     manifest_root = canonical_root / "mirrors"
     public_artifacts, license_inventory, mirror_manifests = _derive_mirror_facts(manifest_root)
-    promoted_model_ids = _committed_promotion_model_ids(canonical_root)
+    promoted_model_ids = frozenset(
+        str(event["stable_id"])
+        for ledger_path in artifact_ledgers
+        for event in scan_jsonl(ledger_path)
+        if event.get("event_kind") == ArtifactEventKind.PUBLISHED.value
+    )
     authorized_artifacts = _validate_gated_license_decisions(
         license_inventory,
         current,
@@ -1476,61 +1456,6 @@ def _licensed_artifact(payload: Mapping[str, Any]) -> LicensedArtifact:
     )
 
 
-def _committed_promotion_model_ids(canonical_root: Path) -> frozenset[str]:
-    """Return model IDs whose mirror publication transaction committed.
-
-    The promotion commit marker is written only after code/source publication,
-    exact mirror-row coverage, and the persisted license report all validate.
-    Accepted metadata without this marker therefore authorizes a future
-    publication but does not require mirror inventory rows yet.
-
-    Parameters
-    ----------
-    canonical_root:
-        Canonical crawler root containing reconstruction transactions.
-
-    Returns
-    -------
-    frozenset[str]
-        Stable IDs with a structurally valid durable promotion marker and its
-        companion reconstruction manifest.
-
-    Raises
-    ------
-    ReconstructionValidationError
-        If a marker is malformed, misplaced, or lacks its reconstruction.
-    """
-
-    promoted: set[str] = set()
-    reconstruction_root = canonical_root / "reconstruction"
-    for marker_path in sorted(reconstruction_root.rglob("*.commit.json")):
-        marker = _read_json_object(marker_path, "canonical reconstruction commit marker")
-        stable_id = marker.get("stable_id")
-        if (
-            set(marker)
-            != {
-                "schema_version",
-                "stable_id",
-                "transaction_id",
-                "proposal_sha256",
-            }
-            or marker.get("schema_version") != "menagerie.crawler.promotion-commit.v1"
-            or not isinstance(stable_id, str)
-            or not stable_id
-            or marker_path.name != f"{stable_id}.commit.json"
-        ):
-            raise ReconstructionValidationError(
-                f"canonical promotion marker is malformed or misplaced: {marker_path}"
-            )
-        reconstruction_path = marker_path.with_name(f"{stable_id}.json")
-        if not reconstruction_path.is_file():
-            raise ReconstructionValidationError(
-                f"canonical promotion marker lacks its reconstruction: {marker_path}"
-            )
-        promoted.add(stable_id)
-    return frozenset(promoted)
-
-
 def _validate_gated_license_decisions(
     artifacts: Sequence[LicensedArtifact],
     current_models: Mapping[str, Mapping[str, Any]],
@@ -1546,7 +1471,7 @@ def _validate_gated_license_decisions(
     current_models:
         Dependency-current records that passed reducer semantic replay.
     promoted_model_ids:
-        Models with a durable promotion commit marker. Only their complete
+        Models with a durable artifact-ledger ``published`` event. Only their complete
         authorized artifact sets must already appear in the mirror inventory.
 
     Raises
@@ -2485,342 +2410,6 @@ def reconstruction_transaction_id(
     )
 
 
-def canonical_reconstruction_source_manifest(
-    source_manifest: Mapping[str, Any], canonical_root: Path, repo_root: Path
-) -> JsonObject:
-    """Derive the durable source-manifest basis used by promotion and validation.
-
-    Parameters
-    ----------
-    source_manifest, canonical_root, repo_root:
-        Pre-promotion source facts and resolved canonical/worktree roots.
-
-    Returns
-    -------
-    dict[str, Any]
-        Canonical source facts with content-addressed repository locators.
-
-    Raises
-    ------
-    ReconstructionValidationError
-        If a source row has no canonical content digest.
-    """
-
-    sources = source_manifest.get("sources")
-    if not isinstance(sources, list):
-        raise ReconstructionValidationError("source manifest requires a source list")
-    canonical_sources: list[JsonObject] = []
-    for value in sources:
-        if not isinstance(value, Mapping) or not isinstance(value.get("content_sha256"), str):
-            raise ReconstructionValidationError("source manifest row has no content digest")
-        source = dict(value)
-        digest = str(source["content_sha256"]).removeprefix("sha256:")
-        destination = canonical_root / "source_cas" / f"{digest}.source"
-        source["cas_path"] = destination.relative_to(repo_root).as_posix()
-        canonical_sources.append(source)
-    return {
-        **{key: value for key, value in source_manifest.items() if key != "sources"},
-        "sources": canonical_sources,
-        "manifest_sha256": stable_hash(canonical_sources),
-    }
-
-
-def validate_canonical_reconstruction(
-    reconstruction_path: Path,
-    canonical_root: Path,
-    *,
-    authority_context: AuthorityContext,
-    expected_stable_id: Optional[str] = None,
-    canonical_gates: Optional[Sequence[Mapping[str, Any]]] = None,
-    current_models: Optional[Mapping[str, Mapping[str, Any]]] = None,
-) -> ValidatedReconstruction:
-    """Validate a canonical reconstruction transaction without side effects.
-
-    The validation binds the reconstruction and commit marker identities, embedded
-    proposal, canonical source manifest/CAS bytes, immutable intake snapshot bytes,
-    and the complete recursive model-code import manifest.
-
-    Parameters
-    ----------
-    reconstruction_path:
-        Canonical reconstruction JSON path.
-    canonical_root:
-        Canonical ``menagerie/crawler`` root.
-    expected_stable_id:
-        Optional caller-owned model identity.
-    authority_context:
-        Mandatory active intake and dependency authority.
-    canonical_gates, current_models:
-        Optional preloaded append-only gate ledger and materialized current records.
-
-    Returns
-    -------
-    ValidatedReconstruction
-        Validated facts and resolved model-code root.
-
-    Raises
-    ------
-    ReconstructionValidationError
-        If any identity, path, digest, or referenced byte is missing or stale.
-    """
-
-    root = canonical_root.resolve()
-    repo_root = (
-        root.parents[1] if root.name == "crawler" and root.parent.name == "menagerie" else root
-    )
-    manifest = _read_json_object(reconstruction_path, "canonical reconstruction")
-    schema_version = manifest.get("schema_version")
-    if schema_version != "menagerie.crawler.reconstruction.v2":
-        raise ReconstructionValidationError(
-            "canonical reconstruction requires committed reconstruction.v2"
-        )
-    stable_id = manifest.get("stable_id")
-    if (
-        not isinstance(stable_id, str)
-        or not stable_id
-        or reconstruction_path.stem != stable_id
-        or (expected_stable_id is not None and stable_id != expected_stable_id)
-    ):
-        raise ReconstructionValidationError("canonical reconstruction stable-id binding changed")
-
-    proposal_value = manifest.get("proposal")
-    source_value = manifest.get("source_manifest")
-    if not isinstance(proposal_value, Mapping) or not isinstance(source_value, Mapping):
-        raise ReconstructionValidationError("canonical reconstruction lacks proposal/source facts")
-    proposal = dict(proposal_value)
-    source_manifest = dict(source_value)
-    proposal_digest = stable_hash(
-        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
-    )
-    if (
-        proposal.get("stable_id") != stable_id
-        or proposal.get("proposal_sha256") != proposal_digest
-        or manifest.get("proposal_sha256") != proposal_digest
-    ):
-        raise ReconstructionValidationError("canonical reconstruction proposal binding changed")
-    gates = (
-        tuple(canonical_gates)
-        if canonical_gates is not None
-        else _canonical_gate_rows(root / "records")
-    )
-    models = (
-        current_models
-        if current_models is not None
-        else materialize_current(default_ledger_paths(root / "records"), context=authority_context)
-    )
-    if not _reconstruction_has_canonical_anchor(
-        manifest,
-        proposal,
-        proposal_digest,
-        gates,
-        models,
-    ):
-        proposed_facts = proposal.get("proposed_facts")
-        website = proposed_facts.get("website") if isinstance(proposed_facts, Mapping) else None
-        if (
-            not isinstance(models.get(stable_id), Mapping)
-            and isinstance(website, Mapping)
-            and website.get("kind") == "size-variant-template"
-        ):
-            raise StaleReconstructionError(
-                "family reconstruction is stale; full-author fallback is required"
-            )
-        raise ReconstructionValidationError(
-            "canonical reconstruction is not anchored to an accepted gate or current proposal"
-        )
-
-    transaction_id = manifest.get("transaction_id")
-    if not isinstance(transaction_id, str) or _HASH_PATTERN.fullmatch(transaction_id) is None:
-        raise ReconstructionValidationError("canonical reconstruction transaction-id is invalid")
-    marker_path = reconstruction_path.with_name(f"{stable_id}.commit.json")
-    marker = _read_json_object(marker_path, "canonical reconstruction commit marker")
-    if (
-        set(marker)
-        != {
-            "schema_version",
-            "stable_id",
-            "transaction_id",
-            "proposal_sha256",
-        }
-        or marker.get("schema_version") != "menagerie.crawler.promotion-commit.v1"
-    ):
-        raise ReconstructionValidationError("canonical reconstruction marker schema is invalid")
-
-    source_manifest_path = _resolve_reconstruction_reference(
-        repo_root, manifest.get("source_manifest_path"), "source_manifest_path"
-    )
-    if _read_json_object(source_manifest_path, "canonical source manifest") != source_manifest:
-        raise ReconstructionValidationError("canonical source manifest bytes changed")
-    sources = source_manifest.get("sources")
-    if not isinstance(sources, list) or source_manifest.get("manifest_sha256") != stable_hash(
-        sources
-    ):
-        raise ReconstructionValidationError("canonical source manifest digest changed")
-    try:
-        validate_reconstruction_source_binding(proposal, source_manifest, root)
-    except ReductionError as exc:
-        raise ReconstructionValidationError(str(exc)) from exc
-    for source in sources:
-        if not isinstance(source, Mapping):
-            raise ReconstructionValidationError("canonical source manifest row is malformed")
-        source_path = _resolve_reconstruction_reference(
-            repo_root, source.get("cas_path"), "source CAS path"
-        )
-        relative_source = source_path.relative_to(repo_root)
-        licensed_source = _reconstruction_license_artifact(root, relative_source)
-        if licensed_source is None:
-            raise ReconstructionValidationError(
-                "canonical source CAS lacks an exact public/private mirror row"
-            )
-        if (
-            licensed_source.artifact_role != "source"
-            or licensed_source.manifest.content_sha256 != source.get("content_sha256")
-        ):
-            raise ReconstructionValidationError("canonical source CAS mirror authorization changed")
-        if licensed_source.manifest.mirror_class.value == "private":
-            if source_path.exists():
-                raise ReconstructionValidationError(
-                    "private source bytes appear in the public repository tree"
-                )
-        else:
-            try:
-                digest = hash_bytes(source_path.read_bytes())
-            except OSError as exc:
-                raise ReconstructionValidationError("canonical source CAS byte is missing") from exc
-            if digest != source.get("content_sha256"):
-                raise ReconstructionValidationError("canonical source CAS digest changed")
-
-    intake_id = manifest.get("intake_snapshot_id")
-    if not isinstance(intake_id, str) or not intake_id:
-        raise ReconstructionValidationError("reconstruction intake snapshot identity is missing")
-    intake_root = root / "records" / "intake" / intake_id
-    try:
-        snapshot = load_intake_snapshot(intake_root)
-    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError, IntakeError) as exc:
-        raise ReconstructionValidationError(
-            "canonical intake snapshot is not reconstructable"
-        ) from exc
-    intake_manifest = _read_json_object(intake_root / "manifest.json", "canonical intake manifest")
-    snapshot_items = [item.to_dict() for item in snapshot.items]
-    source_digests = intake_manifest.get("sources")
-    if not isinstance(source_digests, Mapping):
-        raise ReconstructionValidationError("canonical intake source inventory is malformed")
-    for name, expected_digest in source_digests.items():
-        if not isinstance(name, str):
-            raise ReconstructionValidationError("canonical intake source name is malformed")
-        source_root = (intake_root / "sources").resolve()
-        source_path = (source_root / name).resolve()
-        if not source_path.is_relative_to(source_root):
-            raise ReconstructionValidationError("canonical intake source path escapes snapshot")
-        try:
-            observed_digest = hash_bytes(source_path.read_bytes())
-        except OSError as exc:
-            raise ReconstructionValidationError("canonical intake source byte is missing") from exc
-        if observed_digest != expected_digest:
-            raise ReconstructionValidationError("canonical intake source digest changed")
-    if (
-        snapshot.snapshot_id != intake_id
-        or snapshot.snapshot_sha256 != manifest.get("intake_snapshot_sha256")
-        or intake_manifest.get("items") != snapshot_items
-        or intake_manifest.get("item_count") != len(snapshot_items)
-    ):
-        raise ReconstructionValidationError("canonical intake snapshot binding changed")
-    matching_items = [item for item in snapshot_items if item.get("stable_id") == stable_id]
-    intake_item_sha256 = stable_hash(matching_items[0]) if len(matching_items) == 1 else None
-    if (
-        len(matching_items) != 1
-        or manifest.get("intake_item") != matching_items[0]
-        or manifest.get("intake_item_sha256") != intake_item_sha256
-        or authority_context.intake_by_stable_id.get(stable_id) != matching_items[0]
-    ):
-        raise ReconstructionValidationError("canonical reconstruction intake-item binding changed")
-    expected_transaction_id = reconstruction_transaction_id(
-        stable_id,
-        proposal_digest,
-        source_manifest,
-        str(intake_item_sha256),
-    )
-    if (
-        transaction_id != expected_transaction_id
-        or marker.get("stable_id") != stable_id
-        or marker.get("transaction_id") != expected_transaction_id
-        or marker.get("proposal_sha256") != proposal_digest
-    ):
-        raise ReconstructionValidationError(
-            "canonical reconstruction transaction basis or commit marker is stale"
-        )
-
-    model_root = _resolve_reconstruction_reference(
-        repo_root, manifest.get("canonical_code_root"), "canonical_code_root"
-    )
-    proposed_facts = proposal.get("proposed_facts")
-    implementation = (
-        proposed_facts.get("implementation") if isinstance(proposed_facts, Mapping) else None
-    )
-    if not isinstance(implementation, Mapping):
-        raise ReconstructionValidationError("canonical proposal implementation is malformed")
-    code_value = implementation.get("code_path")
-    code_storage = manifest.get("code_storage", "public-repository")
-    if code_storage not in {"public-repository", "private-mirror"}:
-        raise ReconstructionValidationError("canonical code storage class is invalid")
-    if isinstance(code_value, str) and code_storage == "public-repository":
-        if Path(code_value).is_absolute():
-            raise ReconstructionValidationError("canonical model entry point must be relative")
-        declared_manifest = implementation.get("code_manifest")
-        if not isinstance(declared_manifest, list) or not declared_manifest:
-            raise ReconstructionValidationError("canonical recursive code manifest is missing")
-        try:
-            observed_manifest = [
-                dict(row) for row in model_code_manifest(model_root / code_value, model_root)
-            ]
-        except (OSError, ProposalValidationError) as exc:
-            raise ReconstructionValidationError(
-                "canonical model code is not reconstructable"
-            ) from exc
-        verified_hashes = proposal.get("verified_hashes")
-        if (
-            observed_manifest != declared_manifest
-            or not isinstance(verified_hashes, Mapping)
-            or verified_hashes.get("code") != implementation.get("code_sha256")
-            or verified_hashes.get("code_manifest") != stable_hash(observed_manifest)
-        ):
-            raise ReconstructionValidationError("canonical recursive code manifest changed")
-    elif isinstance(code_value, str):
-        declared_manifest = implementation.get("code_manifest")
-        if not isinstance(declared_manifest, list) or not declared_manifest:
-            raise ReconstructionValidationError("canonical recursive code manifest is missing")
-        for member in declared_manifest:
-            if not isinstance(member, Mapping) or not isinstance(member.get("path"), str):
-                raise ReconstructionValidationError("canonical recursive code row is malformed")
-            member_path = _resolve_reconstruction_reference(
-                repo_root,
-                (model_root / str(member["path"])).relative_to(repo_root).as_posix(),
-                "private code member",
-            )
-            relative_member = member_path.relative_to(repo_root)
-            licensed_member = _reconstruction_license_artifact(root, relative_member)
-            if (
-                licensed_member is None
-                or licensed_member.artifact_role != "code"
-                or licensed_member.manifest.mirror_class.value != "private"
-                or licensed_member.manifest.content_sha256 != member.get("sha256")
-                or member_path.exists()
-            ):
-                raise ReconstructionValidationError(
-                    "private code member lacks an exact private-only mirror row"
-                )
-        verified_hashes = proposal.get("verified_hashes")
-        if (
-            not isinstance(verified_hashes, Mapping)
-            or verified_hashes.get("code") != implementation.get("code_sha256")
-            or verified_hashes.get("code_manifest") != stable_hash(declared_manifest)
-        ):
-            raise ReconstructionValidationError("private recursive code manifest changed")
-    elif implementation.get("code_manifest") is not None:
-        raise ReconstructionValidationError("declarative reconstruction carries code members")
-    return ValidatedReconstruction(manifest, proposal, source_manifest, model_root)
-
-
 def _reconstruction_license_artifact(
     canonical_root: Path, staged_path: Path
 ) -> Optional[LicensedArtifact]:
@@ -3096,10 +2685,6 @@ def _derive_candidate_paths(
             if path.is_file() and path.suffix in _ALLOWLIST_SUFFIXES:
                 paths.add(path.relative_to(repo_root))
     reconstruction_root = canonical_root / "reconstruction"
-    canonical_gates = _canonical_gate_rows(canonical_root / "records")
-    current_models = materialize_current(
-        default_ledger_paths(canonical_root / "records"), context=authority_context
-    )
     for reconstruction in reconstruction_root.rglob("*.json"):
         if reconstruction.name.endswith(".commit.json"):
             continue
@@ -3108,12 +2693,8 @@ def _derive_candidate_paths(
             # The caller validates v1 documents from the independent artifact
             # ledger plus mandatory AuthorityContext before candidate derivation.
             continue
-        validate_canonical_reconstruction(
-            reconstruction,
-            canonical_root,
-            authority_context=authority_context,
-            canonical_gates=canonical_gates,
-            current_models=current_models,
+        raise CheckpointValidationError(
+            f"legacy reconstruction is not artifact-ledger authority: {reconstruction}"
         )
     if not paths:
         raise CheckpointValidationError(

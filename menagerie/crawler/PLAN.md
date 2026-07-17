@@ -1721,8 +1721,8 @@ The implementation is not ready for the real crawl until tests prove all of the 
     per meaningful mode; deterministic 2% membership and env-generation re-verification are correct.
 13. Metadata Codex outage does not block eligible mechanical R1/R2 execution; completion remains false and
     pending work is visible. Required R3/R4 fidelity outage shows `forward-observed-but-blocked`.
-14. Claude usage exhaustion records exact reset time, schedules a one-shot wake, resumes idempotently, and a
-    simultaneous live process/wakeup cannot obtain two locks.
+14. Claude usage exhaustion records exact reset time, schedules a recurring wake episode until a durable
+    resolution fact, resumes idempotently, and a simultaneous live process/wakeup cannot obtain two locks.
 15. Codex rate limit backs off with jitter and quota reset schedules a wake without silent loss.
 16. Every intake ID has exactly one current terminal status; duplicate, missing, and workflow rows prevent
     completion.

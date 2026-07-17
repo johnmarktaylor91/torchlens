@@ -537,12 +537,16 @@ def bind_terminal_attempts(model: dict[str, Any], attempts: list[dict[str, Any]]
         The updated model fixture.
     """
 
-    from menagerie.crawler.reducer import _terminal_observation_from_attempts
+    from menagerie.crawler.authority import derive_terminal_observation
 
     attempt_ids = [str(attempt["attempt_id"]) for attempt in attempts]
     model["status"]["attempt_ids"] = attempt_ids
     model["execution"]["accepted_attempt_ids"] = []
-    model["observed"] = _terminal_observation_from_attempts(attempts)
+    model["observed"] = derive_terminal_observation(
+        attempts,
+        stable_id=str(model["stable_id"]),
+        work_id=str(attempts[0]["work_id"]) if attempts else "not-applicable",
+    )
     model["modes"]["per_mode_run"] = {
         str(attempt["mode"]): {
             "attempt_id": attempt["attempt_id"],

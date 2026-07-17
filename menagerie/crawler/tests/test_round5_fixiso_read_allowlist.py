@@ -150,11 +150,9 @@ def _supervise_adapter(
         "recipe_revision": recipe_revision,
     }
     if declared_input is not None:
+        # An author-controlled input_contract path is descriptive only; v3 has
+        # no shadow input-manifest field that can grant the worker a read.
         request["input_contract"] = {"code_path": str(declared_input)}
-        request["input_manifest"] = {
-            "validated_model_root": str(tmp_path),
-            "validated_input_code_path": str(declared_input),
-        }
     request_path.write_text(json.dumps(request), encoding="utf-8")
     return supervise_worker(
         request_path,

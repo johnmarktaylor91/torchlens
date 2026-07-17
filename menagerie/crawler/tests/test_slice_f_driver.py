@@ -1254,7 +1254,7 @@ class FakeNotifier(Notifier):
 
 
 class FakePauseScheduler(UsagePauseScheduler):
-    """Use the real idempotent wakeup records with a no-op OS activator."""
+    """Use the real idempotent wakeup records with a no-op OS installer."""
 
     def __init__(self, root: Path) -> None:
         """Store the fake wakeup definition root and call count."""
@@ -1475,8 +1475,8 @@ def test_runner_execution_manifest_is_compositional_by_selected_modality(
         ),
         (
             "reducer.py",
-            b'_WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V1 "',
-            b'_WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V2 "',
+            b'                raise ReductionError("model environment generation contradicts its attempt proof")',
+            b'                raise ReductionError("model environment generation contradicts replayed attempt proof")',
         ),
         (
             "schema.py",
@@ -1515,8 +1515,8 @@ def test_runner_execution_manifest_is_compositional_by_selected_modality(
         ),
         (
             "checkpoint.py",
-            b"    root = canonical_root.resolve()\n",
-            b"    root = canonical_root.absolute()\n",
+            b'                and item.get("campaign_root_work_id") == campaign_root\n',
+            b'                and item.get("campaign_root_work_id") == work_id\n',
         ),
         (
             "reducer.py",
@@ -2631,7 +2631,7 @@ def test_resume_is_lock_safe_and_duplicate_free_at_critical_boundaries(
 
 
 def test_changed_source_and_input_supersede_run_and_force_reexecution(tmp_path: Path) -> None:
-    """Stable-ID membership cannot reuse a run after dependent bytes change."""
+    """A changed intake projection cannot reuse runs under stable membership."""
 
     snapshot = _snapshot(tmp_path)
     first_forward = FakeForward()
@@ -2642,10 +2642,34 @@ def test_changed_source_and_input_supersede_run_and_force_reexecution(tmp_path: 
     for item in snapshot.items:
         (paths.work_root / item.stable_id / "driver-author-artifact.json").unlink()
 
+    # Rerun eligibility is projection-driven: changing only a private author cache must
+    # never invalidate canonical state.  Preserve the natural keys (and therefore stable
+    # IDs) while changing the immutable intake bytes that authorize the next generation.
+    _write_jsonl(
+        tmp_path / "master.jsonl",
+        [
+            {
+                "name": f"Example{index}",
+                "zoo": "fixtures",
+                "variant": "base",
+                "source_url": f"https://example.com/changed/{index}",
+            }
+            for index in range(len(snapshot.items))
+        ],
+    )
+    changed_snapshot = create_intake_snapshot(
+        tmp_path / "master.jsonl",
+        tmp_path / "deferred.jsonl",
+        tmp_path / "intake",
+    )
+    assert [item.stable_id for item in changed_snapshot.items] == [
+        item.stable_id for item in snapshot.items
+    ]
+
     second_forward = FakeForward()
     second = _driver(
         tmp_path,
-        snapshot,
+        changed_snapshot,
         author=ChangedInputAuthor(),
         forward=second_forward,
     ).run()
@@ -3009,8 +3033,9 @@ def test_runtime_mode_expansion_terminalizes_only_after_repair_cap(tmp_path: Pat
     model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[-1]
 
     assert result.status == "complete"
-    assert model["status"]["code"] == "failed:source"
-    assert model["status"]["reason_code"] == "identity-unresolved"
+    # Exhausting a v3 run-mode repair is a driver protocol failure; it is not
+    # evidence that the independently resolved public source became invalid.
+    assert model["status"]["code"] == "failed:runner"
     assert model["status"]["reason_code"] == "protocol-violation"
     assert author.calls == {stable_id: 3}
     repair_requests = sorted(
@@ -3437,7 +3462,10 @@ def test_author_failure_retains_exact_intake_discovery_url(tmp_path: Path) -> No
 
     assert result.status == "complete"
     model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[-1]
-    assert model["status"]["code"] == "failed:runner"
+    # The retained discovery URL preserves source provenance, but it does not
+    # turn a failed author/source resolution into a runner observation.
+    assert model["status"]["code"] == "failed:source"
+    assert model["status"]["reason_code"] == "identity-unresolved"
     assert model["source_resolution"]["mandatory_link_status"] == "ok"
     assert model["source_resolution"]["sources"] == [
         {
@@ -3461,7 +3489,7 @@ def test_author_failure_retains_exact_intake_discovery_url(tmp_path: Path) -> No
 
 
 def test_mode_normalization_failure_terminalizes_and_continues(tmp_path: Path) -> None:
-    """Malformed post-author modes fail one model without aborting the phase tail."""
+    """A schema-invalid v3 author result fails one model without aborting the phase tail."""
 
     snapshot = _snapshot(tmp_path, count=10)
     failed_id = snapshot.items[0].stable_id
@@ -3476,8 +3504,10 @@ def test_mode_normalization_failure_terminalizes_and_continues(tmp_path: Path) -
         record["stable_id"]: record
         for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
     }
-    assert models[failed_id]["status"]["code"] == "failed:runner"
-    assert models[failed_id]["status"]["reason_code"] == "protocol-violation"
+    # The v3 result union rejects the malformed mode before it can become a
+    # staged proposal or runner input, so the failure remains author/source-owned.
+    assert models[failed_id]["status"]["code"] == "failed:source"
+    assert models[failed_id]["status"]["reason_code"] == "identity-unresolved"
     assert sum(record["status"]["code"] == "runs" for record in models.values()) == 9
 
 
@@ -4326,16 +4356,28 @@ def test_fidelity_repair_metadata_reenters_bounded_repair_loop(tmp_path: Path) -
 
 
 @pytest.mark.parametrize(
-    ("checker_type", "reason_code"),
+    ("checker_type", "driver_status", "status_code", "reason_code"),
     [
-        (InaccurateChecker, "inaccurate-cap-exhausted"),
-        (CannotVerifyChecker, "cannot-verify-cap-exhausted"),
-        (FailingMetadataChecker, "checker-contract-invalid"),
+        (
+            InaccurateChecker,
+            "terminal-partition-complete",
+            "failed:accuracy-gate",
+            "inaccurate-cap-exhausted",
+        ),
+        (
+            CannotVerifyChecker,
+            "terminal-partition-complete",
+            "failed:accuracy-gate",
+            "cannot-verify-cap-exhausted",
+        ),
+        (FailingMetadataChecker, "complete", "failed:runner", "protocol-violation"),
     ],
 )
 def test_r3_metadata_terminal_precedes_fidelity_without_driver_abort(
     tmp_path: Path,
     checker_type: type[CheckerLane],
+    driver_status: str,
+    status_code: str,
     reason_code: str,
 ) -> None:
     """R3 metadata rejection terminalizes honestly with no invented fidelity gate."""
@@ -4347,9 +4389,11 @@ def test_r3_metadata_terminal_precedes_fidelity_without_driver_abort(
         author=FidelityAuthor(),
         checker=checker_type(),
     ).run()
-    assert result.status == "terminal-partition-complete"
+    # A rejected checker decision is accuracy-gate authority; a checker
+    # transport/contract exception never fabricates such a decision and stays runner-owned.
+    assert result.status == driver_status
     models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
-    assert {record["status"]["code"] for record in models} == {"failed:accuracy-gate"}
+    assert {record["status"]["code"] for record in models} == {status_code}
     assert {record["status"]["reason_code"] for record in models} == {reason_code}
     assert all(record["fidelity"]["current"] is False for record in models)
     assert all(record["fidelity"]["gate_id"] is None for record in models)

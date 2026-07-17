@@ -610,7 +610,6 @@ class WakeupManager:
         installer: Optional[DefinitionAction] = None,
         verifier: Optional[DefinitionVerifier] = None,
         deactivator: Optional[DefinitionAction] = None,
-        activator: Optional[DefinitionAction] = None,
         health_threshold_fires: int = DEFAULT_HEALTH_THRESHOLD_FIRES,
     ) -> None:
         """Bind scheduler effects and the canonical operational writer.
@@ -627,9 +626,6 @@ class WakeupManager:
             Explicit backend or feature-detection controls.
         installer, verifier, deactivator:
             Injectable OS scheduler operations.
-        activator:
-            Compatibility spelling for an injected installer; it does not restore
-            one-shot semantics.
         health_threshold_fires:
             Fire count that emits one visible degraded-health fact.
         """
@@ -638,18 +634,14 @@ class WakeupManager:
             raise WakeupConfigurationError("callback argv must contain non-empty arguments")
         if health_threshold_fires <= 0:
             raise WakeupConfigurationError("health threshold must be positive")
-        if installer is not None and activator is not None:
-            raise WakeupConfigurationError("pass installer or activator, not both")
         self.root = wakeup_root
         self.ledger = ledger
         self.callback_argv = tuple(callback_argv)
         self.backend = backend or detect_wakeup_backend(
             platform_name=platform_name, command_exists=command_exists
         )
-        self.installer = installer or activator or _install_wakeup
-        self.verifier = verifier or (
-            (lambda _definition: True) if activator is not None else _verify_wakeup
-        )
+        self.installer = installer or _install_wakeup
+        self.verifier = verifier or _verify_wakeup
         self.deactivator = deactivator or _deactivate_wakeup
         self.health_threshold_fires = health_threshold_fires
 

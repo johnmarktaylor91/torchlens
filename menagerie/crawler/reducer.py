@@ -362,46 +362,6 @@ def expected_standard_asset(modality: object) -> Optional[dict[str, str]]:
     }
 
 
-def _parent_success_attestation_matches(attempt: Mapping[str, Any]) -> bool:
-    """Return whether an attempt carries the recomputable parent success witness.
-
-    Parameters
-    ----------
-    attempt:
-        Persisted worker attempt with projected receipt and supervisor facts.
-
-    Returns
-    -------
-    bool
-        True only when the receipt digest is the domain-separated parent attestation,
-        not the child's forgeable self hash.
-    """
-
-    receipt = attempt.get("worker_receipt", {})
-    observation = attempt.get("supervisor_observation", {})
-    if not isinstance(receipt, Mapping) or not isinstance(observation, Mapping):
-        return False
-    completion_line = observation.get("stdout_completion_line")
-    if not isinstance(completion_line, str) or not completion_line.startswith(
-        _WORKER_COMPLETION_PREFIX
-    ):
-        return False
-    expected = stable_hash(
-        {
-            "version": "menagerie.crawler.parent-success-attestation.v1",
-            "completion_line": completion_line,
-            "exit_code": observation.get("exit_code"),
-            "signal": observation.get("signal"),
-            "wall_seconds": observation.get("wall_seconds"),
-            "cpu_seconds": observation.get("cpu_seconds"),
-            "peak_rss_bytes": observation.get("peak_rss_bytes"),
-            "stdout_sha256": observation.get("stdout_sha256"),
-            "stderr_sha256": observation.get("stderr_sha256"),
-        }
-    )
-    return receipt.get("receipt_sha256") == expected
-
-
 def output_signature_error(signature: object) -> Optional[str]:
     """Return why an output signature is not a complete pytree contract.
 
@@ -744,42 +704,6 @@ def _record_attempt_ids(record: Mapping[str, Any]) -> tuple[str, ...]:
             if value is not None and str(value) not in referenced:
                 referenced.append(str(value))
     return tuple(referenced)
-
-
-def _terminal_observation_from_attempts(
-    attempts: Sequence[Mapping[str, Any]],
-) -> JsonObject:
-    """Derive the canonical best-effort terminal observation from exact attempts."""
-
-    receipt: Mapping[str, Any] = {}
-    supervisor: Mapping[str, Any] = {}
-    for attempt in reversed(attempts):
-        candidate = attempt.get("worker_receipt", {})
-        if isinstance(candidate, Mapping) and candidate.get("present"):
-            receipt = candidate
-            observed_supervisor = attempt.get("supervisor_observation", {})
-            supervisor = observed_supervisor if isinstance(observed_supervisor, Mapping) else {}
-            break
-    output = receipt.get("output_signature")
-    if not isinstance(output, Mapping) or not {"tree", "leaves"}.issubset(output):
-        output = {"tree": None, "leaves": []}
-    snippet = "driver-owned terminal disposition; no run awarded"
-    return {
-        "parameter_count_total": int(receipt.get("parameter_count_total") or 0),
-        "parameter_count_trainable": int(receipt.get("parameter_count_trainable") or 0),
-        "native_framework": receipt.get("native_framework"),
-        "delegated_method": receipt.get("delegated_method"),
-        "output_signature": dict(output),
-        "input_kind": str(receipt.get("input_kind") or "random-fallback"),
-        "input_asset": receipt.get("input_asset"),
-        "input_note": str(receipt.get("input_note") or "No complete worker input receipt."),
-        "constructor_seconds": float(receipt.get("constructor_seconds") or 0.0),
-        "forward_seconds": float(receipt.get("forward_seconds") or 0.0),
-        "peak_rss_bytes": int(supervisor.get("peak_rss_bytes") or 0),
-        "measurement_attempt_ids": [str(attempt["attempt_id"]) for attempt in attempts],
-        "snippet": snippet,
-        "snippet_sha256": stable_hash(snippet),
-    }
 
 
 class CanonicalReducer:
@@ -2317,7 +2241,6 @@ class CanonicalReducer:
             or proposal.get("stable_id") != model.get("stable_id")
         ):
             raise ReductionError("pending metadata run proposal identity is stale")
-        self._validate_pending_reconstruction_anchor(model, proposal)
         proposed_facts = proposal.get("proposed_facts")
         if not isinstance(proposed_facts, Mapping):
             raise ReductionError("pending metadata run proposal facts are incomplete")
@@ -2355,61 +2278,6 @@ class CanonicalReducer:
             or model.get("implementation", {}).get("recipe_revision") != identities.recipe
         ):
             raise ReductionError("pending metadata mechanical identities are stale")
-
-    def _validate_pending_reconstruction_anchor(
-        self, model: Mapping[str, Any], proposal: Mapping[str, Any]
-    ) -> None:
-        """Bind a production pending run to its exact canonical reconstruction.
-
-        Parameters
-        ----------
-        model, proposal:
-            Candidate pending model and its explicitly retained untrusted proposal.
-
-        Raises
-        ------
-        ReductionError
-            If canonical reconstruction bytes do not match the proposal being appended.
-        """
-
-        records_root = self.ledger_paths.models.parent.parent
-        canonical_root = records_root.parent
-        production_layout = (
-            records_root.name == "records"
-            and canonical_root.name == "crawler"
-            and canonical_root.parent.name == "menagerie"
-        )
-        if not production_layout:
-            return
-        from menagerie.crawler.checkpoint import (  # noqa: PLC0415
-            ReconstructionValidationError,
-            validate_canonical_reconstruction,
-        )
-
-        stable_id = str(model.get("stable_id"))
-        prefix = stable_id.removeprefix("m_")[:2] or "__"
-        reconstruction = canonical_root / "reconstruction" / prefix / f"{stable_id}.json"
-        candidate_current = {
-            **self._validation_current_records(),
-            stable_id: dict(model),
-        }
-        try:
-            validated = validate_canonical_reconstruction(
-                reconstruction,
-                canonical_root,
-                authority_context=self.context,
-                expected_stable_id=stable_id,
-                canonical_gates=self._gates.records,
-                current_models=candidate_current,
-            )
-        except (OSError, ReconstructionValidationError) as exc:
-            raise ReductionError(
-                "pending metadata run lacks an exact canonical reconstruction anchor"
-            ) from exc
-        if validated.proposal != dict(proposal):
-            raise ReductionError(
-                "pending metadata run proposal differs from canonical reconstruction"
-            )
 
     def _is_fidelity_repair_failure(self, model: Mapping[str, Any]) -> bool:
         """Return whether a runner terminal is an evidenced fidelity-repair failure.
@@ -2755,7 +2623,14 @@ class CanonicalReducer:
             if attempt.get("stable_id") != model.get("stable_id"):
                 raise ReductionError("terminal evidence attempt belongs to another model")
             attempts.append(attempt)
-        expected_observed = _terminal_observation_from_attempts(attempts)
+        work_ids = {str(attempt.get("work_id")) for attempt in attempts}
+        if len(work_ids) > 1:
+            raise ReductionError("terminal observation spans multiple work generations")
+        expected_observed = derive_terminal_observation(
+            attempts,
+            stable_id=str(model.get("stable_id")),
+            work_id=next(iter(work_ids), DependencyState.NOT_APPLICABLE.value),
+        )
         if model.get("observed") != expected_observed:
             raise ReductionError("terminal observed facts contradict referenced attempt receipts")
         mode_attempt_ids = {
@@ -3508,9 +3383,6 @@ def project_dependency_current(
     cursor = 0
     for stable_id, record in ordered_current:
         try:
-            currency_error = validate_currency(context, record)
-            if currency_error is not None:
-                raise ReductionError(currency_error)
             index = by_revision[str(record.get("record_revision"))]
             while cursor < index:
                 prior = models[cursor]

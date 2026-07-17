@@ -58,6 +58,7 @@ from menagerie.crawler.authority import (
     derive_attempt_projection,
     derive_execution_identity,
     derive_runner_identity,
+    derive_terminal_observation,
 )
 from menagerie.crawler.checker_dispatch import (
     CheckerBackoffSignal,
@@ -67,16 +68,11 @@ from menagerie.crawler.checker_dispatch import (
 )
 from menagerie.crawler.checkpoint import (
     FunnelSnapshot,
-    ReconstructionValidationError,
-    StaleReconstructionError,
     append_canonical_requeue_grant,
-    canonical_reconstruction_source_manifest,
     canonical_operational_ledger_path,
     canonical_requeue_grants_path,
     record_checkpoint_review,
     record_review_signoff,
-    reconstruction_transaction_id,
-    validate_canonical_reconstruction,
 )
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION_V3,
@@ -146,12 +142,7 @@ from menagerie.crawler.licenses import (
     LicenseDecision,
     LicenseEvidence,
     LicenseEvidenceStatus,
-    LicensedArtifact,
-    RedistributionClass,
-    classify_redistribution,
-    pre_public_merge_sweep,
     recompute_license_decision,
-    store_licensed_artifact,
 )
 from menagerie.crawler.metadata import (
     MetadataValidationError,
@@ -162,7 +153,7 @@ from menagerie.crawler.metadata import (
 )
 from menagerie.crawler.modes import classify_observed_mode_receipts
 from menagerie.crawler.models import JsonObject, LedgerPaths
-from menagerie.crawler.mirrors import ArtifactManifest, ArtifactOrigin, MirrorClass, MirrorStore
+from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.policy import compile_execution_read_manifest
 from menagerie.crawler.recordio import JsonlLedger, SingleWriterError, scan_jsonl
@@ -171,8 +162,6 @@ from menagerie.crawler.reducer import (
     cold_forward_policy,
     default_ledger_paths,
     expected_standard_asset,
-    intake_variant_bindings_from_rows,
-    materialize_current,
     output_signature_error,
 )
 from menagerie.crawler.routing import (
@@ -282,10 +271,7 @@ _AWARD_CLOSURE_SYMBOLS = {
         "_validate_representative",
     ),
     "proposal.py": ("validate_author_proposal",),
-    "checkpoint.py": (
-        "validate_canonical_reconstruction",
-        "_reconstruction_has_canonical_anchor",
-    ),
+    "checkpoint.py": ("_reconstruction_has_canonical_anchor",),
     "gates.py": (
         "MetadataRouteDecision",
         "FidelityRouteDecision",
@@ -322,7 +308,6 @@ _AWARD_CLOSURE_SYMBOLS = {
     "reducer.py": (
         "expected_standard_asset",
         "output_signature_error",
-        "_parent_success_attestation_matches",
         "_select_current",
         "_records_root",
         "_revision_work_ids",
@@ -1859,6 +1844,10 @@ class CrawlerDriver:
                         if item.route.phase is phase
                         and (
                             item.stable_id not in reducer.current_records
+                            or reducer.current_records[item.stable_id].get(
+                                "authored_metadata_state"
+                            )
+                            == "pending"
                             or item.requeue_active
                             or self.config.only_status is not None
                         )
@@ -1946,6 +1935,12 @@ class CrawlerDriver:
         """
 
         generations = dict(reducer.context.environment_generations)
+        for attempt in scan_jsonl(self.paths.ledgers.attempts):
+            environment = attempt.get("environment")
+            generation = attempt.get("identities", {}).get("environment")
+            family = environment.get("family") if isinstance(environment, Mapping) else None
+            if isinstance(family, str) and family and isinstance(generation, str):
+                generations[family] = generation
         for event in operational.records:
             details = event.get("details", {})
             if (
@@ -2839,6 +2834,7 @@ class CrawlerDriver:
                     )
                     and representative_artifact is not None
                 ):
+                    assert representative_model is not None
                     variant = _instantiate_variant_artifact(
                         item,
                         representative_artifact,
@@ -3808,112 +3804,6 @@ class CrawlerDriver:
                     return True
             current = current.__cause__ or current.__context__
         return False
-
-    def _promote_or_terminalize(
-        self,
-        item: WorkItem,
-        artifact: AuthorArtifact,
-        reducer: CanonicalReducer,
-        operational: JsonlLedger,
-        state: JsonObject,
-    ) -> Optional[AuthorArtifact]:
-        """Promote one artifact or append an honest model-local publication failure.
-
-        Parameters
-        ----------
-        item, artifact:
-            Model and independently checked author artifact.
-        reducer, operational, state:
-            Durable model, event, and cursor stores.
-
-        Returns
-        -------
-        AuthorArtifact | None
-            Promoted artifact, or ``None`` after terminalizing a failed publication.
-        """
-
-        try:
-            return self._promote_artifact(item, artifact)
-        except Exception as exc:  # noqa: BLE001 -- publication failure belongs to one model
-            reason = (
-                "protocol-violation"
-                if isinstance(exc, DriverIntegrationError)
-                else "internal-error"
-            )
-            attempt = _driver_failure_attempt(
-                item,
-                artifact,
-                "runner",
-                reason,
-                exc,
-                self.config,
-                diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
-                environment=None,
-                created_at=self.dependencies.clock(),
-            )
-            persisted_attempt = reducer.append_attempt(attempt).record
-            self._terminalize(
-                item,
-                artifact,
-                "failed:runner",
-                reason,
-                str(exc),
-                (persisted_attempt,),
-                reducer,
-                operational,
-                state,
-            )
-            return None
-
-    def _promote_artifact(self, item: WorkItem, artifact: AuthorArtifact) -> AuthorArtifact:
-        """Promote accepted authored code and persist its canonical model root."""
-
-        canonical_root = _canonical_crawler_root(self.paths)
-        redistribution = (
-            artifact.proposal.get("proposed_facts", {})
-            .get("licenses", {})
-            .get("redistribution_class")
-        )
-        private_deferral = (
-            artifact.terminal_status is not None
-            and artifact.terminal_status.startswith("deferred:")
-            and redistribution in {"restricted-private", "manifest-only"}
-        )
-        if private_deferral:
-            promoted = artifact
-        elif artifact.terminal_status is not None and artifact.terminal_status.startswith(
-            "deferred:"
-        ):
-            promoted = _promote_and_publish_accepted_artifact(item, artifact, self.paths)
-        else:
-            promoted = (
-                _promote_and_publish_accepted_artifact(item, artifact, self.paths)
-                if canonical_root.name == "crawler" and canonical_root.parent.name == "menagerie"
-                else _promote_accepted_code(artifact, self.paths)
-            )
-        cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
-        value = _read_json(cache) if cache.is_file() else {}
-        value.update(
-            {
-                "proposal": promoted.proposal,
-                "source_manifest": promoted.source_manifest,
-                "model_dir": str(promoted.model_dir),
-                "terminal_status": promoted.terminal_status,
-                "terminal_reason_code": promoted.terminal_reason_code,
-                "terminal_detail": promoted.terminal_detail,
-                "defer_evidence": promoted.defer_evidence,
-                "campaign_root_work_id": promoted.campaign_root_work_id,
-                "template_source_revision": promoted.template_source_revision,
-                "canonical_code_root": (
-                    str(promoted.canonical_code_root)
-                    if promoted.canonical_code_root is not None
-                    else None
-                ),
-            }
-        )
-        value["artifact_identity"] = _artifact_cache_identity(item, promoted, self.config)
-        _write_json_atomic(cache, value)
-        return promoted
 
     def _run_environment_work(
         self,
@@ -5159,7 +5049,6 @@ class CrawlerDriver:
             report_path=str(report_path),
             context=self._context(0, None),
             created_at=self.dependencies.clock(),
-            canonical_ledger_path=canonical_path,
             policy_identity={
                 "policy_key": policy_key,
                 "intake_snapshot_id": intake_snapshot_id,
@@ -6279,51 +6168,6 @@ def _normalize_artifact_modes(artifact: AuthorArtifact, config: DriverConfig) ->
     return replace(artifact, author_result=rebound)
 
 
-def _artifact_from_cache(value: Mapping[str, Any], config: DriverConfig) -> AuthorArtifact:
-    """Rehydrate and normalize one driver-owned author cache record.
-
-    Parameters
-    ----------
-    value:
-        Parsed author artifact cache.
-    config:
-        Current driver identity configuration.
-
-    Returns
-    -------
-    AuthorArtifact
-        Fully normalized cached artifact.
-    """
-
-    proposal = value.get("proposal")
-    source_manifest = value.get("source_manifest")
-    if not isinstance(proposal, Mapping) or not isinstance(source_manifest, Mapping):
-        raise DriverIntegrationError("cached author artifact is missing proposal/source facts")
-    artifact = AuthorArtifact(
-        proposal=dict(proposal),
-        source_manifest=dict(source_manifest),
-        model_dir=Path(str(value["model_dir"])),
-        terminal_status=value.get("terminal_status"),
-        terminal_reason_code=value.get("terminal_reason_code"),
-        terminal_detail=value.get("terminal_detail"),
-        defer_evidence=(
-            dict(value["defer_evidence"])
-            if isinstance(value.get("defer_evidence"), Mapping)
-            else None
-        ),
-        campaign_root_work_id=str(value.get("campaign_root_work_id") or proposal.get("work_id")),
-        canonical_code_root=(
-            Path(str(value["canonical_code_root"])) if value.get("canonical_code_root") else None
-        ),
-        template_source_revision=(
-            str(value["template_source_revision"])
-            if value.get("template_source_revision")
-            else None
-        ),
-    )
-    return _normalize_artifact_modes(artifact, config)
-
-
 def _bind_model_code_manifest(proposal: JsonObject, model_dir: Path) -> bool:
     """Bind every recursively imported model-local module into proposal identities.
 
@@ -6599,97 +6443,6 @@ def _current_run_is_fresh(
     )
 
 
-def _artifact_cache_identity(item: WorkItem, artifact: AuthorArtifact, config: DriverConfig) -> str:
-    """Recompute a cached author artifact identity from every dependent byte."""
-
-    source_bytes: list[JsonObject] = []
-    for source in artifact.source_manifest.get("sources", []):
-        if not isinstance(source, Mapping):
-            return "invalid-source-manifest"
-        path_value = source.get("cas_path")
-        if not isinstance(path_value, str) or not Path(path_value).is_file():
-            return "invalid-source-manifest"
-        data = Path(path_value).read_bytes()
-        digest = hash_bytes(data)
-        if digest != source.get("content_sha256"):
-            return "invalid-source-manifest"
-        source_bytes.append(
-            {
-                "source_id": source.get("source_id"),
-                "content_sha256": digest,
-                "bytes": len(data),
-            }
-        )
-    implementation = artifact.proposal.get("proposed_facts", {}).get("implementation", {})
-    code_digest: Optional[str] = None
-    code_value = implementation.get("code_path") if isinstance(implementation, Mapping) else None
-    if isinstance(code_value, str):
-        code_path = Path(code_value)
-        if code_path.is_absolute():
-            return "legacy-absolute-code-path"
-        code_path = artifact.model_dir / code_path
-        if not code_path.is_file():
-            return "invalid-code-path"
-        manifest = implementation.get("code_manifest")
-        if not isinstance(manifest, list) or not manifest:
-            return "invalid-code-manifest"
-        observed_manifest: list[JsonObject] = []
-        for member in manifest:
-            if not isinstance(member, Mapping) or not isinstance(member.get("path"), str):
-                return "invalid-code-manifest"
-            relative = Path(str(member["path"]))
-            if relative.is_absolute():
-                return "invalid-code-manifest"
-            member_path = (artifact.model_dir / relative).resolve()
-            if (
-                not member_path.is_relative_to(artifact.model_dir.resolve())
-                or not member_path.is_file()
-            ):
-                return "invalid-code-manifest"
-            digest = hash_bytes(member_path.read_bytes())
-            if digest != member.get("sha256"):
-                return "invalid-code-manifest"
-            observed_manifest.append({"path": relative.as_posix(), "sha256": digest})
-        code_digest = stable_hash(observed_manifest)
-    if isinstance(implementation, Mapping):
-        patches = implementation.get("patches", [])
-        if not isinstance(patches, list):
-            return "invalid-patch-path"
-        for patch in patches:
-            if not isinstance(patch, Mapping) or not isinstance(patch.get("path"), str):
-                return "invalid-patch-path"
-            if Path(str(patch["path"])).is_absolute():
-                return "legacy-absolute-patch-path"
-    prompt_path = Path(__file__).with_name("prompts") / "claude_crawler_author_v2.txt"
-    prompt_digest = hash_bytes(prompt_path.read_bytes())
-    return stable_hash(
-        {
-            "intake": item.intake.to_dict(),
-            "proposal": artifact.proposal,
-            "source_manifest": artifact.source_manifest,
-            "source_bytes": source_bytes,
-            "code_manifest_sha256": code_digest,
-            "author_prompt_sha256": prompt_digest,
-            "checker": {
-                "prompt_sha256": _checker_prompt_hash(),
-                "model": config.checker_model,
-                "version": config.checker_version,
-            },
-            "target": config.target,
-            "requeue": {
-                "grant_ids": list(item.explicit_grants),
-                "work_id": item.requeue_work_id,
-            },
-            "terminal": {
-                "status": artifact.terminal_status,
-                "reason": artifact.terminal_reason_code,
-                "detail": artifact.terminal_detail,
-                "defer_evidence": artifact.defer_evidence,
-            },
-        }
-    )
-
-
 def _canonical_crawler_root(paths: DriverPaths) -> Path:
     """Return the canonical ``menagerie/crawler`` root for driver ledgers.
 
@@ -6729,1248 +6482,6 @@ def _canonical_repo_root(canonical_root: Path) -> Path:
     if canonical_root.name == "crawler" and canonical_root.parent.name == "menagerie":
         return canonical_root.parents[1]
     return canonical_root
-
-
-def _rehydrate_canonical_artifact(item: WorkItem, paths: DriverPaths) -> Optional[AuthorArtifact]:
-    """Reconstruct an accepted artifact before considering author/network lanes.
-
-    Parameters
-    ----------
-    item, paths:
-        Current intake work item and canonical driver paths.
-
-    Returns
-    -------
-    AuthorArtifact | None
-        Hash-verified canonical artifact, or ``None`` when none was published.
-    """
-
-    _recover_incomplete_promotion(paths.runtime_root / "promotion-transactions" / item.stable_id)
-    try:
-        canonical_root = _canonical_crawler_root(paths)
-    except DriverIntegrationError:
-        return None
-    prefix = item.stable_id.removeprefix("m_")[:2] or "__"
-    manifest_path = canonical_root / "reconstruction" / prefix / f"{item.stable_id}.json"
-    if not manifest_path.is_file():
-        return None
-    try:
-        snapshot_rows = [value.to_dict() for value in load_intake_snapshot(paths.intake_root).items]
-        validated = validate_canonical_reconstruction(
-            manifest_path,
-            canonical_root,
-            expected_stable_id=item.stable_id,
-            expected_intake_item=item.intake.to_dict(),
-            canonical_gates=scan_jsonl(paths.ledgers.gates),
-            current_models=materialize_current(
-                paths.ledgers,
-                intake_ids=(str(value["stable_id"]) for value in snapshot_rows),
-                intake_variant_bindings=intake_variant_bindings_from_rows(snapshot_rows),
-            ),
-        )
-    except StaleReconstructionError:
-        return None
-    except ReconstructionValidationError as exc:
-        raise DriverIntegrationError(str(exc)) from exc
-    value = validated.manifest
-    proposal = deepcopy(validated.proposal)
-    implementation = proposal.get("proposed_facts", {}).get("implementation", {})
-    code_value = implementation.get("code_path") if isinstance(implementation, Mapping) else None
-    if isinstance(code_value, str) and Path(code_value).is_absolute():
-        return None
-    repo_root = _canonical_repo_root(canonical_root)
-    model_dir = validated.model_root
-    runtime_mirrors = MirrorStore(
-        repo_root / ".crawl-local" / "mirrors" / "public",
-        repo_root / ".crawl-local" / "mirrors" / "private",
-        repo_root / ".crawl-local" / "mirrors" / "local",
-    )
-    source_manifest = deepcopy(validated.source_manifest)
-    sources = source_manifest.get("sources", [])
-    if not isinstance(sources, list):
-        raise DriverIntegrationError("reconstruction source manifest is malformed")
-    for source in sources:
-        if not isinstance(source, dict) or not isinstance(source.get("cas_path"), str):
-            raise DriverIntegrationError("reconstruction source row has no canonical CAS path")
-        relative = Path(str(source["cas_path"]))
-        if relative.is_absolute():
-            raise DriverIntegrationError(
-                "reconstruction source CAS path must be repository-relative"
-            )
-        resolved = (repo_root / relative).resolve()
-        if resolved.is_file():
-            if hash_bytes(resolved.read_bytes()) != source.get("content_sha256"):
-                raise DriverIntegrationError("reconstruction source CAS digest changed")
-            source["cas_path"] = str(resolved)
-        else:
-            licensed = _driver_license_artifact(canonical_root, relative)
-            if (
-                licensed is None
-                or licensed.manifest.mirror_class is not MirrorClass.PRIVATE
-                or licensed.manifest.content_sha256 != source.get("content_sha256")
-            ):
-                raise DriverIntegrationError(
-                    "private reconstruction source lacks its exact mirror object"
-                )
-            runtime_mirrors.fetch(licensed.manifest)
-            source["cas_path"] = str(
-                runtime_mirrors.root(MirrorClass.PRIVATE) / licensed.manifest.object_key
-            )
-    if isinstance(code_value, str) and value.get("code_storage") == "private-mirror":
-        code_manifest = implementation.get("code_manifest")
-        if not isinstance(code_manifest, list) or not code_manifest:
-            raise DriverIntegrationError("private reconstruction code manifest is missing")
-        materialized = (
-            paths.work_root
-            / item.stable_id
-            / "private-reconstruction"
-            / str(proposal["proposal_sha256"]).removeprefix("sha256:")
-        )
-        for member in code_manifest:
-            if not isinstance(member, Mapping) or not isinstance(member.get("path"), str):
-                raise DriverIntegrationError("private reconstruction code row is malformed")
-            relative_member = Path(str(member["path"]))
-            logical_member = model_dir.relative_to(repo_root) / relative_member
-            licensed = _driver_license_artifact(canonical_root, logical_member)
-            if (
-                licensed is None
-                or licensed.manifest.mirror_class is not MirrorClass.PRIVATE
-                or licensed.manifest.content_sha256 != member.get("sha256")
-            ):
-                raise DriverIntegrationError(
-                    "private reconstruction code lacks its exact mirror object"
-                )
-            content = runtime_mirrors.fetch(licensed.manifest)
-            destination = materialized / relative_member
-            if destination.is_file():
-                if hash_bytes(destination.read_bytes()) != member.get("sha256"):
-                    raise DriverIntegrationError(
-                        "materialized private reconstruction code conflicts"
-                    )
-            else:
-                _atomic_materialize_bytes(destination, content)
-        model_dir = materialized
-    if isinstance(code_value, str):
-        code_path = (model_dir / code_value).resolve()
-        if not code_path.is_relative_to(model_dir) or hash_bytes(code_path.read_bytes()) != (
-            implementation.get("code_sha256")
-        ):
-            raise DriverIntegrationError("reconstruction accepted code digest changed")
-    return AuthorArtifact(
-        proposal=proposal,
-        source_manifest=source_manifest,
-        model_dir=model_dir,
-        campaign_root_work_id=str(value.get("campaign_root_work_id") or proposal["work_id"]),
-        canonical_code_root=model_dir if isinstance(code_value, str) else None,
-    )
-
-
-def _driver_license_artifact(canonical_root: Path, staged_path: Path) -> Optional[LicensedArtifact]:
-    """Return one unique committed mirror row for a logical artifact path.
-
-    Parameters
-    ----------
-    canonical_root:
-        Canonical crawler root containing public/private manifests.
-    staged_path:
-        Repository-relative logical artifact path.
-
-    Returns
-    -------
-    LicensedArtifact | None
-        Unique parsed artifact, or ``None`` when absent.
-
-    Raises
-    ------
-    DriverIntegrationError
-        If the manifests repeat the logical path.
-    """
-
-    matches: list[LicensedArtifact] = []
-    for name in ("public-manifest.jsonl", "private-manifest.jsonl"):
-        manifest_path = canonical_root / "mirrors" / name
-        if not manifest_path.is_file():
-            continue
-        for row in scan_jsonl(manifest_path, validate=False):
-            if row.get("staged_path") == staged_path.as_posix():
-                matches.append(_licensed_artifact_from_row(row))
-    if len(matches) > 1:
-        raise DriverIntegrationError("mirror manifests repeat a logical artifact path")
-    return matches[0] if matches else None
-
-
-def _atomic_materialize_bytes(destination: Path, content: bytes) -> None:
-    """Atomically materialize verified private bytes for local execution.
-
-    Parameters
-    ----------
-    destination, content:
-        Local runtime path and exact mirror-verified content.
-    """
-
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
-    try:
-        with temporary.open("xb") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, destination)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
-def _promote_and_publish_accepted_artifact(
-    item: WorkItem, artifact: AuthorArtifact, paths: DriverPaths
-) -> AuthorArtifact:
-    """Publish one crash-atomic code/source/reconstruction/license transaction.
-
-    Parameters
-    ----------
-    item, artifact, paths:
-        Accepted gated artifact, its intake identity, and canonical roots.
-
-    Returns
-    -------
-    AuthorArtifact
-        Canonically rebound artifact safe for worker execution.
-    """
-
-    canonical_root = _canonical_crawler_root(paths)
-    repo_root = _canonical_repo_root(canonical_root)
-    transaction_source_manifest = canonical_reconstruction_source_manifest(
-        artifact.source_manifest, canonical_root, repo_root
-    )
-    transaction_id = reconstruction_transaction_id(
-        item.stable_id,
-        str(artifact.proposal.get("proposal_sha256")),
-        transaction_source_manifest,
-        stable_hash(item.intake.to_dict()),
-    )
-    transaction_root = paths.runtime_root / "promotion-transactions" / item.stable_id
-    _recover_incomplete_promotion(transaction_root)
-    destinations, marker_path = _promotion_transaction_destinations(
-        item, artifact, paths, transaction_id
-    )
-    _begin_promotion_transaction(transaction_root, transaction_id, destinations)
-    try:
-        promoted = _promote_and_publish_transaction_body(item, artifact, paths, transaction_id)
-        _validate_complete_promotion(item, promoted, paths)
-        _write_json_atomic(
-            marker_path,
-            {
-                "schema_version": "menagerie.crawler.promotion-commit.v1",
-                "stable_id": item.stable_id,
-                "transaction_id": transaction_id,
-                "proposal_sha256": artifact.proposal.get("proposal_sha256"),
-            },
-        )
-    except BaseException:
-        _rollback_promotion_transaction(transaction_root)
-        raise
-    shutil.rmtree(transaction_root, ignore_errors=True)
-    return promoted
-
-
-def _promote_and_publish_transaction_body(
-    item: WorkItem,
-    artifact: AuthorArtifact,
-    paths: DriverPaths,
-    transaction_id: str,
-) -> AuthorArtifact:
-    """Materialize every member of one prepared promotion transaction.
-
-    Parameters
-    ----------
-    item, artifact, paths, transaction_id:
-        Accepted artifact, canonical roots, and immutable transaction identity.
-
-    Returns
-    -------
-    AuthorArtifact
-        Canonically rebound artifact pending its atomic commit marker.
-    """
-
-    canonical_root = _canonical_crawler_root(paths)
-    repo_root = _canonical_repo_root(canonical_root)
-    proposal = artifact.proposal
-    facts = proposal.get("proposed_facts", {})
-    implementation = facts.get("implementation", {}) if isinstance(facts, Mapping) else {}
-    code_value = implementation.get("code_path") if isinstance(implementation, Mapping) else None
-    if isinstance(code_value, str) and Path(code_value).is_absolute():
-        raise DriverIntegrationError(
-            "legacy absolute accepted code path requires a fresh proposal and gate"
-        )
-    license_bindings = _gated_path_license_bindings(proposal, artifact.source_manifest)
-    code_license = license_bindings["__code__"]
-    prefix = item.stable_id.removeprefix("m_")[:2] or "__"
-    rung = str(facts.get("source_resolution", {}).get("rung"))
-    root_name = "adapters" if rung in {"R1_LIBRARY", "R2_VENDOR"} else "ports"
-    logical_code_root = canonical_root / root_name / prefix / item.stable_id
-    code_public = classify_redistribution(code_license[0]) is RedistributionClass.PUBLIC_OK
-    promoted = _promote_accepted_code(artifact, paths) if code_public else artifact
-
-    canonical_sources: list[JsonObject] = []
-    licensed_paths: list[tuple[Path, tuple[LicenseEvidence, ...], ArtifactOrigin, str]] = []
-    logical_paths: dict[Path, Path] = {}
-    raw_sources = artifact.source_manifest.get("sources", [])
-    if not isinstance(raw_sources, list):
-        raise DriverIntegrationError("accepted source manifest must contain a source list")
-    for raw_source in raw_sources:
-        if not isinstance(raw_source, Mapping):
-            raise DriverIntegrationError("accepted source manifest row must be an object")
-        source = deepcopy(dict(raw_source))
-        cas_value = source.get("cas_path")
-        digest = source.get("content_sha256")
-        if not isinstance(cas_value, str) or not isinstance(digest, str):
-            raise DriverIntegrationError("accepted source manifest row is not reconstructable")
-        local_cas = Path(cas_value)
-        if hash_bytes(local_cas.read_bytes()) != digest:
-            raise DriverIntegrationError("accepted source CAS digest changed before promotion")
-        destination = canonical_root / "source_cas" / f"{digest.removeprefix('sha256:')}.source"
-        source_id = str(source.get("source_id"))
-        source_license = license_bindings.get(source_id)
-        if source_license is None:
-            raise DriverIntegrationError(
-                f"accepted source CAS has no exact gated license disposition: {source_id}"
-            )
-        source_public = classify_redistribution(source_license[0]) is RedistributionClass.PUBLIC_OK
-        if source_public:
-            _atomic_promote_file(local_cas, destination)
-            publication_path = destination
-        else:
-            publication_path = local_cas
-            logical_paths[publication_path] = destination.relative_to(repo_root)
-        source["cas_path"] = destination.relative_to(repo_root).as_posix()
-        canonical_sources.append(source)
-        licensed_paths.append((publication_path, *source_license))
-    canonical_source_manifest: JsonObject = {
-        **{
-            key: deepcopy(value)
-            for key, value in artifact.source_manifest.items()
-            if key != "sources"
-        },
-        "sources": canonical_sources,
-        "manifest_sha256": stable_hash(canonical_sources),
-    }
-
-    intake_snapshot = load_intake_snapshot(paths.intake_root)
-    intake_destination = canonical_root / "records" / "intake" / intake_snapshot.snapshot_id
-    _atomic_promote_tree(paths.intake_root.resolve(), intake_destination)
-    source_manifest_path = canonical_root / "source_manifests" / prefix / f"{item.stable_id}.json"
-    _write_json_atomic(source_manifest_path, canonical_source_manifest)
-    code_root_relative = (
-        logical_code_root.relative_to(repo_root)
-        if isinstance(code_value, str)
-        else canonical_root.relative_to(repo_root)
-    )
-    reconstruction = {
-        "schema_version": "menagerie.crawler.reconstruction.v2",
-        "stable_id": item.stable_id,
-        "transaction_id": transaction_id,
-        "proposal": proposal,
-        "proposal_sha256": proposal.get("proposal_sha256"),
-        "canonical_code_root": code_root_relative.as_posix(),
-        "code_storage": "public-repository" if code_public else "private-mirror",
-        "source_manifest": canonical_source_manifest,
-        "source_manifest_path": source_manifest_path.relative_to(repo_root).as_posix(),
-        "intake_snapshot_id": intake_snapshot.snapshot_id,
-        "intake_snapshot_sha256": intake_snapshot.snapshot_sha256,
-        "intake_item": item.intake.to_dict(),
-        "intake_item_sha256": stable_hash(item.intake.to_dict()),
-        "campaign_root_work_id": promoted.campaign_root_work_id or proposal["work_id"],
-    }
-    family_authorization = _family_variant_reconstruction_authorization(
-        proposal, canonical_source_manifest, paths
-    )
-    if family_authorization is not None:
-        reconstruction["family_variant_authorization"] = family_authorization
-    reconstruction_path = canonical_root / "reconstruction" / prefix / f"{item.stable_id}.json"
-    _write_json_atomic(reconstruction_path, reconstruction)
-
-    code_manifest = implementation.get("code_manifest")
-    if isinstance(code_manifest, list):
-        for member in code_manifest:
-            if not isinstance(member, Mapping) or not isinstance(member.get("path"), str):
-                raise DriverIntegrationError("accepted code manifest row is malformed")
-            relative = Path(str(member["path"]))
-            publication_path = promoted.model_dir / relative
-            logical_path = logical_code_root / relative
-            if not code_public:
-                logical_paths[publication_path] = logical_path.relative_to(repo_root)
-            licensed_paths.append((publication_path, *code_license))
-    patches = implementation.get("patches")
-    if isinstance(patches, list):
-        patch_root = canonical_root / "patches" / prefix / item.stable_id
-        for patch in patches:
-            if not isinstance(patch, Mapping) or not isinstance(patch.get("path"), str):
-                raise DriverIntegrationError("accepted patch row is malformed")
-            relative = Path(str(patch["path"]))
-            publication_path = (
-                patch_root / relative if code_public else artifact.model_dir / relative
-            )
-            if not code_public:
-                logical_paths[publication_path] = (patch_root / relative).relative_to(repo_root)
-            licensed_paths.append((publication_path, *code_license))
-    published = _publish_licensed_paths(
-        repo_root,
-        canonical_root,
-        tuple(sorted(licensed_paths, key=lambda value: str(value[0]))),
-        logical_paths=logical_paths,
-    )
-
-    rebound_source = deepcopy(canonical_source_manifest)
-    published_by_path = {value.staged_path: value for value in published}
-    mirror_root = repo_root / ".crawl-local" / "mirrors"
-    for source in rebound_source["sources"]:
-        relative = Path(str(source["cas_path"]))
-        licensed = published_by_path.get(relative)
-        if licensed is None:
-            raise DriverIntegrationError("promoted source lacks its exact mirror row")
-        if licensed.manifest.mirror_class is MirrorClass.PUBLIC:
-            source["cas_path"] = str((repo_root / relative).resolve())
-        else:
-            source["cas_path"] = str(
-                mirror_root / licensed.manifest.mirror_class.value / licensed.manifest.object_key
-            )
-    return replace(
-        promoted,
-        source_manifest=rebound_source,
-        canonical_code_root=(promoted.model_dir if isinstance(code_manifest, list) else None),
-    )
-
-
-def _family_variant_reconstruction_authorization(
-    proposal: Mapping[str, Any],
-    source_manifest: Mapping[str, Any],
-    paths: DriverPaths,
-) -> Optional[JsonObject]:
-    """Bind a derived variant to its representative's exact accepted proposal.
-
-    Parameters
-    ----------
-    proposal, source_manifest:
-        Exact derived proposal and canonical source transaction being promoted.
-    paths:
-        Canonical ledgers and reconstruction roots containing representative authority.
-
-    Returns
-    -------
-    dict[str, Any] | None
-        Hash-closed representative/variant authorization, or ``None`` for an
-        independently gated non-variant proposal.
-
-    Raises
-    ------
-    DriverIntegrationError
-        If a claimed family variant lacks an exact current gate/reconstruction anchor.
-    """
-
-    proposed_facts = proposal.get("proposed_facts")
-    website = proposed_facts.get("website") if isinstance(proposed_facts, Mapping) else None
-    if not isinstance(website, Mapping) or website.get("kind") != "size-variant-template":
-        return None
-    identity = proposed_facts.get("identity") if isinstance(proposed_facts, Mapping) else None
-    representative_id = (
-        identity.get("family_representative_id") if isinstance(identity, Mapping) else None
-    )
-    if not isinstance(representative_id, str) or not representative_id:
-        raise DriverIntegrationError("family variant has no representative proposal authority")
-    current = materialize_current(paths.ledgers)
-    representative = current.get(representative_id)
-    if not isinstance(representative, Mapping):
-        raise DriverIntegrationError("family variant representative is not dependency-current")
-    representative_revision = representative.get("record_revision")
-    representative_gate_id = representative.get("accuracy_gate", {}).get("gate_id")
-    canonical_root = _canonical_crawler_root(paths)
-    prefix = representative_id.removeprefix("m_")[:2] or "__"
-    representative_path = canonical_root / "reconstruction" / prefix / f"{representative_id}.json"
-    if not representative_path.is_file():
-        raise DriverIntegrationError("family variant representative reconstruction is missing")
-    representative_reconstruction = _read_json(representative_path)
-    representative_proposal_digest = representative_reconstruction.get("proposal_sha256")
-    representative_proposal = representative_reconstruction.get("proposal")
-    if (
-        not isinstance(representative_proposal_digest, str)
-        or not isinstance(representative_proposal, Mapping)
-        or representative_proposal.get("proposal_sha256") != representative_proposal_digest
-        or stable_hash(
-            {
-                key: value
-                for key, value in representative_proposal.items()
-                if key != "proposal_sha256"
-            }
-        )
-        != representative_proposal_digest
-    ):
-        raise DriverIntegrationError("family variant representative proposal binding changed")
-    gate_matches = [
-        item
-        for gate in scan_jsonl(paths.ledgers.gates)
-        if gate.get("gate_id") == representative_gate_id
-        and gate.get("gate_kind") == "metadata_batch"
-        for item in gate.get("items", [])
-        if isinstance(item, Mapping)
-        and item.get("stable_id") == representative_id
-        and item.get("verified_hashes", {}).get("proposal") == representative_proposal_digest
-        and item.get("verdict") == "accurate"
-        and item.get("integrity", {}).get("verdict") == "accurate"
-        and item.get("rung_check", {}).get("verdict") == "accurate"
-    ]
-    if len(gate_matches) != 1:
-        raise DriverIntegrationError(
-            "family variant representative proposal lacks one exact accepted gate"
-        )
-    payload: JsonObject = {
-        "representative_stable_id": representative_id,
-        "representative_record_revision": representative_revision,
-        "representative_gate_id": representative_gate_id,
-        "representative_proposal_sha256": representative_proposal_digest,
-        "derived_proposal_sha256": proposal.get("proposal_sha256"),
-        "derived_source_manifest_sha256": source_manifest.get("manifest_sha256"),
-        "derived_source_facts_sha256": stable_hash(
-            proposed_facts.get("source_resolution") if isinstance(proposed_facts, Mapping) else None
-        ),
-        "derived_evidence_facts_sha256": stable_hash(
-            proposed_facts.get("evidence") if isinstance(proposed_facts, Mapping) else None
-        ),
-    }
-    payload["authorization_sha256"] = stable_hash(payload)
-    return payload
-
-
-def _promotion_transaction_destinations(
-    item: WorkItem,
-    artifact: AuthorArtifact,
-    paths: DriverPaths,
-    transaction_id: str,
-) -> tuple[tuple[Path, ...], Path]:
-    """Enumerate every path that one promotion transaction may expose.
-
-    Parameters
-    ----------
-    item, artifact, paths, transaction_id:
-        Accepted artifact and immutable publication identity.
-
-    Returns
-    -------
-    tuple[tuple[pathlib.Path, ...], pathlib.Path]
-        Rollback inventory and the final atomic commit-marker path.
-    """
-
-    del transaction_id
-    canonical_root = _canonical_crawler_root(paths)
-    prefix = item.stable_id.removeprefix("m_")[:2] or "__"
-    facts = artifact.proposal.get("proposed_facts", {})
-    implementation = facts.get("implementation", {}) if isinstance(facts, Mapping) else {}
-    rung = str(facts.get("source_resolution", {}).get("rung"))
-    root_name = "adapters" if rung in {"R1_LIBRARY", "R2_VENDOR"} else "ports"
-    destinations: list[Path] = [
-        canonical_root / "records" / "intake" / load_intake_snapshot(paths.intake_root).snapshot_id,
-        canonical_root / "source_manifests" / prefix / f"{item.stable_id}.json",
-        canonical_root / "reconstruction" / prefix / f"{item.stable_id}.json",
-        canonical_root / "mirrors" / "public-manifest.jsonl",
-        canonical_root / "mirrors" / "private-manifest.jsonl",
-        canonical_root / "license_reports" / "current.json",
-    ]
-    code_value = implementation.get("code_path") if isinstance(implementation, Mapping) else None
-    if isinstance(code_value, str):
-        destinations.append(canonical_root / root_name / prefix / item.stable_id)
-        destinations.append(canonical_root / "patches" / prefix / item.stable_id)
-    raw_sources = artifact.source_manifest.get("sources", [])
-    if isinstance(raw_sources, list):
-        for source in raw_sources:
-            if isinstance(source, Mapping) and isinstance(source.get("content_sha256"), str):
-                digest = str(source["content_sha256"]).removeprefix("sha256:")
-                destinations.append(canonical_root / "source_cas" / f"{digest}.source")
-    marker = canonical_root / "reconstruction" / prefix / f"{item.stable_id}.commit.json"
-    destinations.append(marker)
-    return tuple(dict.fromkeys(destinations)), marker
-
-
-def _begin_promotion_transaction(
-    transaction_root: Path, transaction_id: str, destinations: Sequence[Path]
-) -> None:
-    """Persist rollback facts before exposing any transaction member.
-
-    Parameters
-    ----------
-    transaction_root, transaction_id, destinations:
-        Private transaction root, immutable identity, and complete output set.
-    """
-
-    transaction_root.mkdir(parents=True, exist_ok=True)
-    backup_root = transaction_root / "backups"
-    entries: list[JsonObject] = []
-    for index, destination in enumerate(destinations):
-        existed = destination.exists()
-        backup: Optional[Path] = None
-        if destination.is_file():
-            backup = backup_root / f"{index}.bin"
-            backup.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(destination, backup)
-        entries.append(
-            {
-                "path": str(destination),
-                "existed": existed,
-                "was_directory": destination.is_dir(),
-                "backup": str(backup) if backup is not None else None,
-            }
-        )
-    _write_json_atomic(
-        transaction_root / "journal.json",
-        {
-            "schema_version": "menagerie.crawler.promotion-transaction.v1",
-            "transaction_id": transaction_id,
-            "entries": entries,
-        },
-    )
-
-
-def _recover_incomplete_promotion(transaction_root: Path) -> None:
-    """Roll back a transaction left incomplete by a previous process crash.
-
-    Parameters
-    ----------
-    transaction_root:
-        Private stable-ID transaction root.
-    """
-
-    if not transaction_root.exists():
-        return
-    if (transaction_root / "journal.json").is_file():
-        _rollback_promotion_transaction(transaction_root)
-    else:
-        shutil.rmtree(transaction_root, ignore_errors=True)
-
-
-def _rollback_promotion_transaction(transaction_root: Path) -> None:
-    """Restore pre-transaction bytes and remove newly exposed paths.
-
-    Parameters
-    ----------
-    transaction_root:
-        Private transaction root containing its fsynced journal and backups.
-    """
-
-    journal_path = transaction_root / "journal.json"
-    if not journal_path.is_file():
-        shutil.rmtree(transaction_root, ignore_errors=True)
-        return
-    journal = _read_json(journal_path)
-    entries = journal.get("entries", [])
-    if not isinstance(entries, list):
-        raise DriverIntegrationError("promotion transaction journal is malformed")
-    for entry in reversed(entries):
-        if not isinstance(entry, Mapping) or not isinstance(entry.get("path"), str):
-            raise DriverIntegrationError("promotion transaction journal entry is malformed")
-        destination = Path(str(entry["path"]))
-        if not bool(entry.get("existed")):
-            if destination.is_dir():
-                shutil.rmtree(destination)
-            else:
-                destination.unlink(missing_ok=True)
-            continue
-        backup_value = entry.get("backup")
-        if isinstance(backup_value, str):
-            backup = Path(backup_value)
-            if not backup.is_file():
-                raise DriverIntegrationError("promotion rollback backup is missing")
-            _restore_file_atomic(backup, destination)
-    shutil.rmtree(transaction_root, ignore_errors=True)
-
-
-def _restore_file_atomic(source: Path, destination: Path) -> None:
-    """Atomically restore one backed-up file over a partial transaction write.
-
-    Parameters
-    ----------
-    source, destination:
-        Private backup and canonical destination.
-    """
-
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.rollback.tmp")
-    shutil.copyfile(source, temporary)
-    with temporary.open("rb") as handle:
-        os.fsync(handle.fileno())
-    os.replace(temporary, destination)
-
-
-def _validate_complete_promotion(
-    item: WorkItem, artifact: AuthorArtifact, paths: DriverPaths
-) -> None:
-    """Validate complete reconstruction and per-path license coverage pre-commit.
-
-    Parameters
-    ----------
-    item, artifact, paths:
-        Promoted artifact and canonical roots awaiting the commit marker.
-    """
-
-    canonical_root = _canonical_crawler_root(paths)
-    repo_root = _canonical_repo_root(canonical_root)
-    prefix = item.stable_id.removeprefix("m_")[:2] or "__"
-    reconstruction = canonical_root / "reconstruction" / prefix / f"{item.stable_id}.json"
-    if not reconstruction.is_file():
-        raise DriverIntegrationError("promotion transaction lacks reconstruction facts")
-    reconstruction_value = _read_json(reconstruction)
-    rows = [
-        *scan_jsonl(canonical_root / "mirrors" / "public-manifest.jsonl", validate=False),
-        *scan_jsonl(canonical_root / "mirrors" / "private-manifest.jsonl", validate=False),
-    ]
-    by_path = [str(row.get("staged_path")) for row in rows]
-    promoted_paths: list[Path] = []
-    proposal = reconstruction_value.get("proposal")
-    facts = proposal.get("proposed_facts") if isinstance(proposal, Mapping) else None
-    implementation = facts.get("implementation") if isinstance(facts, Mapping) else None
-    code_root_value = reconstruction_value.get("canonical_code_root")
-    if isinstance(implementation, Mapping) and isinstance(code_root_value, str):
-        code_root = repo_root / code_root_value
-        code_manifest = implementation.get("code_manifest")
-        if isinstance(code_manifest, list):
-            promoted_paths.extend(
-                code_root / str(member["path"])
-                for member in code_manifest
-                if isinstance(member, Mapping) and isinstance(member.get("path"), str)
-            )
-        patch_root = canonical_root / "patches" / prefix / item.stable_id
-        patches = implementation.get("patches")
-        if isinstance(patches, list):
-            promoted_paths.extend(
-                patch_root / str(patch["path"])
-                for patch in patches
-                if isinstance(patch, Mapping) and isinstance(patch.get("path"), str)
-            )
-    source_manifest = reconstruction_value.get("source_manifest")
-    sources = source_manifest.get("sources", []) if isinstance(source_manifest, Mapping) else []
-    for source in sources:
-        if isinstance(source, Mapping) and isinstance(source.get("cas_path"), str):
-            promoted_paths.append(repo_root / str(source["cas_path"]))
-    for path in promoted_paths:
-        relative = path.resolve().relative_to(repo_root).as_posix()
-        if by_path.count(relative) != 1:
-            raise DriverIntegrationError(
-                f"promotion transaction lacks exactly one license row: {relative}"
-            )
-    report_rows = scan_jsonl(canonical_root / "license_reports" / "current.json", validate=False)
-    if len(report_rows) != 1 or report_rows[0].get("passed") is not True:
-        raise DriverIntegrationError("promotion transaction lacks a passing license report")
-
-
-def _gated_code_license_evidence(
-    proposal: Mapping[str, Any],
-) -> tuple[tuple[LicenseEvidence, ...], ArtifactOrigin, str]:
-    """Derive public-compatible license evidence from current gated facts.
-
-    Parameters
-    ----------
-    proposal:
-        Independently accepted proposal.
-
-    Returns
-    -------
-    tuple[tuple[LicenseEvidence, ...], ArtifactOrigin, str]
-        Literal evidence, exact source origin, and deterministic fetch recipe.
-    """
-
-    return _gated_path_license_bindings(proposal, {"sources": []})["__code__"]
-
-
-def _gated_path_license_bindings(
-    proposal: Mapping[str, Any], source_manifest: Mapping[str, Any]
-) -> dict[str, tuple[tuple[LicenseEvidence, ...], ArtifactOrigin, str]]:
-    """Map code and each fetched source to one exact gated disposition.
-
-    Parameters
-    ----------
-    proposal:
-        Independently accepted proposal containing license and source facts.
-    source_manifest:
-        Exact fetched-source manifest whose CAS members may be promoted.
-
-    Returns
-    -------
-    dict[str, tuple[tuple[LicenseEvidence, ...], ArtifactOrigin, str]]
-        ``__code__`` plus one binding per fetched ``source_id``.
-
-    Raises
-    ------
-    DriverIntegrationError
-        If a promoted path is ambiguous, unmatched, ungrounded, or disagrees with
-        the exact source origin.
-    """
-
-    facts = proposal.get("proposed_facts", {})
-    licenses = facts.get("licenses", {}) if isinstance(facts, Mapping) else {}
-    if not isinstance(licenses, Mapping) or licenses.get("redistribution_class") not in {
-        "public-compatible",
-        "restricted-private",
-        "manifest-only",
-        "not-applicable",
-    }:
-        raise DriverIntegrationError("accepted-code promotion has no closed redistribution class")
-    code = licenses.get("code")
-    if not isinstance(code, Mapping) or code.get("status") not in {
-        "declared",
-        "custom",
-        "not-found",
-    }:
-        raise DriverIntegrationError("accepted-code promotion requires explicit gated code license")
-    evidence_block = facts.get("evidence", {})
-    excerpts = evidence_block.get("excerpts", []) if isinstance(evidence_block, Mapping) else []
-    by_id = {
-        excerpt.get("evidence_id"): excerpt for excerpt in excerpts if isinstance(excerpt, Mapping)
-    }
-    sources = facts.get("source_resolution", {}).get("sources", [])
-    source_facts = {
-        str(value.get("source_id")): value
-        for value in sources
-        if isinstance(value, Mapping) and isinstance(value.get("source_id"), str)
-    }
-    dispositions = [code]
-    data = licenses.get("data")
-    if isinstance(data, Mapping) and data.get("source_id") is not None:
-        dispositions.append(data)
-    extra = licenses.get("source_dispositions", [])
-    if not isinstance(extra, list) or any(not isinstance(value, Mapping) for value in extra):
-        raise DriverIntegrationError("gated per-source license dispositions are malformed")
-    dispositions.extend(value for value in extra if isinstance(value, Mapping))
-
-    def binding(
-        finding: Mapping[str, Any],
-    ) -> tuple[tuple[LicenseEvidence, ...], ArtifactOrigin, str]:
-        """Build one literal-evidence, origin, and fetch-recipe binding."""
-
-        source_id = finding.get("source_id")
-        source = source_facts.get(str(source_id))
-        if not isinstance(source, Mapping):
-            raise DriverIntegrationError("gated license source has no exact origin")
-        findings: list[LicenseEvidence] = []
-        for evidence_id in finding.get("evidence_ids", []):
-            excerpt = by_id.get(evidence_id)
-            if not isinstance(excerpt, Mapping):
-                raise DriverIntegrationError(
-                    "gated license disposition references missing literal evidence"
-                )
-            findings.append(
-                LicenseEvidence(
-                    evidence_id=str(evidence_id),
-                    source_id=str(source_id),
-                    locator=str(finding.get("locator") or excerpt.get("locator")),
-                    excerpt=str(excerpt.get("text")),
-                    status=LicenseEvidenceStatus(str(finding.get("status"))),
-                    spdx=(
-                        str(finding.get("spdx"))
-                        if finding.get("spdx") not in {None, "NOASSERTION"}
-                        else None
-                    ),
-                )
-            )
-        if not findings:
-            raise DriverIntegrationError("promotion requires literal per-path license evidence")
-        evidence = tuple(findings)
-        fetch_recipe = source.get("fetch_recipe")
-        if not isinstance(fetch_recipe, str) or not fetch_recipe:
-            raise DriverIntegrationError("gated license source has no exact fetch recipe")
-        return (
-            evidence,
-            ArtifactOrigin(str(source["url"]), str(source["revision"])),
-            fetch_recipe,
-        )
-
-    result = {"__code__": binding(code)}
-    raw_sources = source_manifest.get("sources", [])
-    if not isinstance(raw_sources, list):
-        raise DriverIntegrationError("accepted source manifest must contain a source list")
-    for raw_source in raw_sources:
-        if not isinstance(raw_source, Mapping) or not isinstance(raw_source.get("source_id"), str):
-            raise DriverIntegrationError("accepted source manifest row has no source identity")
-        source_id = str(raw_source["source_id"])
-        matches = [value for value in dispositions if value.get("source_id") == source_id]
-        if len(matches) != 1:
-            raise DriverIntegrationError(
-                f"promoted source path requires exactly one gated disposition: {source_id}"
-            )
-        source = source_facts.get(source_id)
-        if not isinstance(source, Mapping):
-            raise DriverIntegrationError(f"source manifest origin is ungrounded: {source_id}")
-        for field in ("url", "revision"):
-            observed = raw_source.get(field)
-            if observed is not None and observed != source.get(field):
-                raise DriverIntegrationError(
-                    f"source manifest {field} disagrees with gated origin: {source_id}"
-                )
-        result[source_id] = binding(matches[0])
-    return result
-
-
-def _publish_licensed_paths(
-    repo_root: Path,
-    canonical_root: Path,
-    paths: Sequence[tuple[Path, tuple[LicenseEvidence, ...], ArtifactOrigin, str]],
-    *,
-    logical_paths: Optional[Mapping[Path, Path]] = None,
-) -> tuple[LicensedArtifact, ...]:
-    """Publish public/private rows and regenerate the public sweep report.
-
-    Parameters
-    ----------
-    repo_root, canonical_root, paths:
-        Repository roots and source files individually bound to current gated
-        license facts, exact origins, and fetch recipes.
-    logical_paths:
-        Optional source-file to canonical logical-path mapping for private bytes
-        that must never be copied below the public repository root.
-
-    Returns
-    -------
-    tuple[LicensedArtifact, ...]
-        Exact stored public/private artifacts in input order.
-    """
-
-    runtime = repo_root / ".crawl-local" / "mirrors"
-    mirrors = MirrorStore(runtime / "public", runtime / "private", runtime / "local")
-    manifest_root = canonical_root / "mirrors"
-    public_path = manifest_root / "public-manifest.jsonl"
-    private_path = manifest_root / "private-manifest.jsonl"
-    lock_path = runtime.parent / "locks" / "license-manifest.lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+b") as lock_handle:
-        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
-        existing_public = scan_jsonl(public_path, validate=False) if public_path.is_file() else []
-        existing_private = (
-            scan_jsonl(private_path, validate=False) if private_path.is_file() else []
-        )
-        rows_by_path: dict[str, tuple[str, JsonObject]] = {}
-        for manifest_class, existing_rows in (
-            ("public", existing_public),
-            ("private", existing_private),
-        ):
-            for raw_row in existing_rows:
-                row = dict(raw_row)
-                staged_path = row.get("staged_path")
-                if not isinstance(staged_path, str) or staged_path in rows_by_path:
-                    raise DriverIntegrationError(
-                        "canonical license inventory contains a duplicate path"
-                    )
-                rows_by_path[staged_path] = (manifest_class, row)
-        seen_paths: set[Path] = set()
-        additions: dict[str, list[JsonObject]] = {"public": [], "private": []}
-        stored: list[LicensedArtifact] = []
-        logical = dict(logical_paths or {})
-        for path, evidence, origin, fetch_recipe in paths:
-            relative = logical[path] if path in logical else path.relative_to(repo_root)
-            if relative in seen_paths:
-                raise DriverIntegrationError("promotion path has ambiguous license bindings")
-            seen_paths.add(relative)
-            if not evidence or len({finding.source_id for finding in evidence}) != 1:
-                raise DriverIntegrationError("promotion path has no exact gated source identity")
-            artifact_role = _license_artifact_role(relative)
-            artifact = store_licensed_artifact(
-                mirrors,
-                path.read_bytes(),
-                staged_path=relative,
-                origin=origin,
-                evidence=evidence,
-                media_type=(
-                    "text/x-python" if path.suffix == ".py" else "application/octet-stream"
-                ),
-            )
-            artifact = replace(
-                artifact,
-                artifact_role=artifact_role,
-                source_id=evidence[0].source_id,
-                fetch_recipe=fetch_recipe,
-            )
-            stored.append(artifact)
-            row = {
-                "staged_path": relative.as_posix(),
-                "artifact_role": artifact_role,
-                "source_id": evidence[0].source_id,
-                "fetch_recipe": fetch_recipe,
-                "manifest": artifact.manifest.to_dict(),
-                "decision": artifact.decision.to_dict(),
-            }
-            manifest_class = artifact.manifest.mirror_class.value
-            previous_value = rows_by_path.get(relative.as_posix())
-            previous = previous_value[1] if previous_value is not None else None
-            if previous is not None:
-                if previous_value is None or previous_value[0] != manifest_class:
-                    raise DriverIntegrationError(
-                        "licensed path changed its immutable public/private boundary"
-                    )
-                previous_manifest = previous.get("manifest")
-                if isinstance(previous_manifest, Mapping):
-                    row["manifest"]["verified_at"] = previous_manifest.get("verified_at")
-                if previous != row:
-                    raise DriverIntegrationError(
-                        "licensed path conflicts with its immutable canonical row"
-                    )
-                continue
-            rows_by_path[relative.as_posix()] = (manifest_class, row)
-            additions[manifest_class].append(row)
-        public_inventory = tuple(
-            _licensed_artifact_from_row(row) for row in (*existing_public, *additions["public"])
-        )
-        report = pre_public_merge_sweep(public_inventory, mirrors)
-        for manifest_class, manifest_path in (
-            ("public", public_path),
-            ("private", private_path),
-        ):
-            if not additions[manifest_class] and manifest_path.is_file():
-                continue
-            manifest_path.parent.mkdir(parents=True, exist_ok=True)
-            with manifest_path.open("ab") as handle:
-                for row in additions[manifest_class]:
-                    handle.write(canonical_json_bytes(row) + b"\n")
-                handle.flush()
-                os.fsync(handle.fileno())
-        _write_jsonl_atomic(canonical_root / "license_reports" / "current.json", [report.to_dict()])
-    return tuple(stored)
-
-
-def _license_artifact_role(staged_path: Path) -> str:
-    """Return the closed artifact role implied by one canonical path.
-
-    Parameters
-    ----------
-    staged_path:
-        Repository-relative logical artifact path.
-
-    Returns
-    -------
-    str
-        ``source``, ``code``, or ``patch``.
-
-    Raises
-    ------
-    DriverIntegrationError
-        If the path is outside the closed promoted-artifact roots.
-    """
-
-    parts = staged_path.parts
-    if (
-        parts[:3] != ("menagerie", "crawler", "source_cas")
-        and parts[:3]
-        != (
-            "menagerie",
-            "crawler",
-            "adapters",
-        )
-        and parts[:3] != ("menagerie", "crawler", "ports")
-        and parts[:3]
-        != (
-            "menagerie",
-            "crawler",
-            "patches",
-        )
-    ):
-        raise DriverIntegrationError("licensed path is outside the closed artifact-role roots")
-    return {
-        "source_cas": "source",
-        "adapters": "code",
-        "ports": "code",
-        "patches": "patch",
-    }[parts[2]]
-
-
-def _licensed_artifact_from_row(row: Mapping[str, Any]) -> LicensedArtifact:
-    """Parse one driver-owned canonical public manifest row.
-
-    Parameters
-    ----------
-    row:
-        Persisted public manifest object.
-
-    Returns
-    -------
-    LicensedArtifact
-        Typed sweep input.
-    """
-
-    manifest = ArtifactManifest.from_dict(dict(row["manifest"]))
-    decision_raw = row["decision"]
-    if not isinstance(decision_raw, Mapping):
-        raise DriverIntegrationError("canonical license decision is malformed")
-    decision = LicenseDecision(
-        content_sha256=str(decision_raw["content_sha256"]),
-        redistribution_class=RedistributionClass(str(decision_raw["redistribution_class"])),
-        evidence_ids=tuple(str(value) for value in decision_raw.get("evidence_ids", [])),
-        rationale=str(decision_raw["rationale"]),
-    )
-    artifact_role = row.get("artifact_role")
-    source_id = row.get("source_id")
-    fetch_recipe = row.get("fetch_recipe")
-    if any(
-        not isinstance(value, str) or not value
-        for value in (artifact_role, source_id, fetch_recipe)
-    ):
-        raise DriverIntegrationError("canonical license row lacks its artifact authorization")
-    return LicensedArtifact(
-        Path(str(row["staged_path"])),
-        manifest,
-        decision,
-        str(artifact_role),
-        str(source_id),
-        str(fetch_recipe),
-    )
-
-
-def _promote_accepted_code(artifact: AuthorArtifact, paths: DriverPaths) -> AuthorArtifact:
-    """Atomically copy accepted authored code into its canonical repository root.
-
-    Parameters
-    ----------
-    artifact:
-        Independently gated artifact still rooted in disposable author staging.
-    paths:
-        Driver paths used to derive the canonical crawler repository root.
-
-    Returns
-    -------
-    AuthorArtifact
-        Artifact rebound to the canonical accepted-code directory.
-    """
-
-    proposal = artifact.proposal
-    facts = proposal.get("proposed_facts", {})
-    implementation = facts.get("implementation", {}) if isinstance(facts, Mapping) else {}
-    if (
-        not isinstance(implementation, Mapping)
-        or implementation.get("recipe_type") == "declarative-library"
-    ):
-        return artifact
-    code_value = implementation.get("code_path")
-    code_digest = implementation.get("code_sha256")
-    if not isinstance(code_value, str) or not isinstance(code_digest, str):
-        raise DriverIntegrationError("accepted typed adapter lacks a code path/digest")
-    source_root = artifact.model_dir.resolve()
-    source_code = Path(code_value)
-    if source_code.is_absolute():
-        raise DriverIntegrationError(
-            "legacy absolute accepted code path requires a fresh proposal and gate"
-        )
-    source_code = source_root / source_code
-    source_code = source_code.resolve()
-    if source_root != source_code and source_root not in source_code.parents:
-        raise DriverIntegrationError("accepted authored code escapes its model staging root")
-    if hash_bytes(source_code.read_bytes()) != code_digest:
-        raise DriverIntegrationError("accepted authored code changed before canonical promotion")
-    stable_id = str(proposal["stable_id"])
-    prefix = stable_id.removeprefix("m_")[:2] or "__"
-    rung = str(facts.get("source_resolution", {}).get("rung"))
-    root_name = "adapters" if rung in {"R1_LIBRARY", "R2_VENDOR"} else "ports"
-    canonical_root = _canonical_crawler_root(paths)
-    destination = canonical_root / root_name / prefix / stable_id
-    _atomic_promote_tree(source_root, destination)
-    promoted_code = destination / source_code.relative_to(source_root)
-    if hash_bytes(promoted_code.read_bytes()) != code_digest:
-        raise DriverIntegrationError("canonical promoted code digest changed")
-    patches = implementation.get("patches", [])
-    if isinstance(patches, list):
-        patch_root = canonical_root / "patches" / prefix / stable_id
-        for patch in patches:
-            if not isinstance(patch, Mapping) or not isinstance(patch.get("path"), str):
-                continue
-            patch_path = Path(str(patch["path"]))
-            if patch_path.is_absolute():
-                raise DriverIntegrationError(
-                    "legacy absolute accepted patch path requires a fresh proposal and gate"
-                )
-            relative_patch = patch_path
-            patch_path = source_root / patch_path
-            patch_path = patch_path.resolve()
-            if source_root != patch_path and source_root not in patch_path.parents:
-                raise DriverIntegrationError("accepted patch escapes its model staging root")
-            expected = patch.get("sha256")
-            if not isinstance(expected, str) or hash_bytes(patch_path.read_bytes()) != expected:
-                raise DriverIntegrationError("accepted patch changed before canonical promotion")
-            _atomic_promote_file(patch_path, patch_root / relative_patch)
-    return replace(artifact, model_dir=destination, canonical_code_root=destination)
-
-
-def _atomic_promote_tree(source: Path, destination: Path) -> None:
-    """Promote one authored-code tree without exposing a partial destination."""
-
-    if not source.is_dir() or source.is_symlink():
-        raise DriverIntegrationError("authored model staging root must be a real directory")
-    source_files = tuple(sorted(path for path in source.rglob("*") if path.is_file()))
-    if any(path.is_symlink() for path in source.rglob("*")):
-        raise DriverIntegrationError("authored model staging tree cannot contain symlinks")
-    expected = {
-        path.relative_to(source).as_posix(): hash_bytes(path.read_bytes()) for path in source_files
-    }
-    if destination.is_dir():
-        observed = {
-            path.relative_to(destination).as_posix(): hash_bytes(path.read_bytes())
-            for path in sorted(destination.rglob("*"))
-            if path.is_file()
-        }
-        if observed != expected:
-            raise DriverIntegrationError("canonical accepted-code destination conflicts")
-        return
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
-    if temporary.exists():
-        shutil.rmtree(temporary)
-    shutil.copytree(source, temporary)
-    os.replace(temporary, destination)
-    descriptor = os.open(destination.parent, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
-
-
-def _atomic_promote_file(source: Path, destination: Path) -> None:
-    """Promote one accepted patch file with atomic replacement semantics."""
-
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.is_file():
-        if destination.read_bytes() != source.read_bytes():
-            raise DriverIntegrationError("canonical accepted-patch destination conflicts")
-        return
-    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
-    shutil.copyfile(source, temporary)
-    with temporary.open("rb") as handle:
-        os.fsync(handle.fileno())
-    os.replace(temporary, destination)
-    descriptor = os.open(destination.parent, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
-
-
-def _bind_requeue_artifact(item: WorkItem, artifact: AuthorArtifact) -> AuthorArtifact:
-    """Bind an explicitly granted work generation into an authored proposal.
-
-    Parameters
-    ----------
-    item:
-        Routed intake item with its latest durable requeue binding.
-    artifact:
-        Newly authored artifact to bind.
-
-    Returns
-    -------
-    AuthorArtifact
-        Artifact whose work and proposal identities name the granted generation.
-    """
-
-    if item.requeue_work_id is None:
-        return artifact
-    proposal = deepcopy(artifact.proposal)
-    proposal["work_id"] = item.requeue_work_id
-    proposal["proposal_sha256"] = stable_hash(
-        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
-    )
-    return replace(
-        artifact,
-        proposal=proposal,
-        campaign_root_work_id=item.requeue_work_id,
-    )
 
 
 def _usable_family_representative(model: Mapping[str, Any] | None, representative_id: str) -> bool:
@@ -8705,7 +7216,10 @@ def _attempts_from_supervised(
             "forward_seconds": mode_receipt.get("forward_seconds"),
         }
         if succeeded:
-            raw_observation = result.raw_award_receipt.get("observation", {})
+            raw_award_receipt = result.raw_award_receipt
+            if not isinstance(raw_award_receipt, Mapping):
+                raise DriverIntegrationError("successful worker result lacks a raw award receipt")
+            raw_observation = raw_award_receipt.get("observation", {})
             if not isinstance(raw_observation, Mapping):
                 raise DriverIntegrationError("raw award receipt observation is malformed")
             worker_receipt = deepcopy(dict(raw_observation))
@@ -10750,39 +9264,6 @@ def _placeholder_facts(
     }
 
 
-def _terminal_observation(attempts: Sequence[Mapping[str, Any]]) -> JsonObject:
-    """Return best-effort schema-complete observations without fabricating a receipt."""
-
-    receipt: Mapping[str, Any] = {}
-    supervisor: Mapping[str, Any] = {}
-    for attempt in reversed(attempts):
-        candidate = attempt.get("worker_receipt", {})
-        if candidate.get("present"):
-            receipt = candidate
-            supervisor = attempt.get("supervisor_observation", {})
-            break
-    output = receipt.get("output_signature")
-    if not isinstance(output, Mapping) or not {"tree", "leaves"}.issubset(output):
-        output = {"tree": None, "leaves": []}
-    snippet = "driver-owned terminal disposition; no run awarded"
-    return {
-        "parameter_count_total": int(receipt.get("parameter_count_total") or 0),
-        "parameter_count_trainable": int(receipt.get("parameter_count_trainable") or 0),
-        "native_framework": receipt.get("native_framework"),
-        "delegated_method": receipt.get("delegated_method"),
-        "output_signature": dict(output),
-        "input_kind": str(receipt.get("input_kind") or "random-fallback"),
-        "input_asset": receipt.get("input_asset"),
-        "input_note": str(receipt.get("input_note") or "No complete worker input receipt."),
-        "constructor_seconds": float(receipt.get("constructor_seconds") or 0.0),
-        "forward_seconds": float(receipt.get("forward_seconds") or 0.0),
-        "peak_rss_bytes": int(supervisor.get("peak_rss_bytes") or 0),
-        "measurement_attempt_ids": [str(attempt["attempt_id"]) for attempt in attempts],
-        "snippet": snippet,
-        "snippet_sha256": stable_hash(snippet),
-    }
-
-
 def _assemble_terminal_model(
     item: WorkItem,
     artifact: Optional[AuthorArtifact],
@@ -11017,7 +9498,17 @@ def _assemble_terminal_model(
             "discovery_sources": [item.intake.discovery_source],
         },
         **facts,
-        "observed": _terminal_observation(attempts),
+        "observed": derive_terminal_observation(
+            attempts,
+            stable_id=item.stable_id,
+            work_id=(
+                artifact.author_result.binding.work_id
+                if artifact is not None
+                else str(attempts[-1].get("work_id"))
+                if attempts
+                else item.active_work_id
+            ),
+        ),
         "modes": {
             **deepcopy(dict(facts["modes"])),
             "per_mode_run": {
@@ -11063,7 +9554,7 @@ def _assemble_terminal_model(
             "env_generation": (
                 str(environment_attempt["identities"]["environment"])
                 if environment_attempt is not None
-                else DependencyState.NOT_APPLICABLE.value
+                else stable_hash({"environment": DependencyState.NOT_APPLICABLE.value})
             ),
             "accepted_attempt_ids": [],
             "confirmation_policy": "single-mechanical",
@@ -11681,30 +10172,6 @@ def _framework_phase(item: IntakeItem) -> str:
     """Return the configured scheduler phase for one intake row."""
 
     return "pytorch" if _framework_from_intake(item) == "pytorch" else "native-tail"
-
-
-def _artifact_terminal_status(
-    artifact: AuthorArtifact,
-) -> Optional[tuple[str, Optional[str]]]:
-    """Return an explicit non-execution author disposition."""
-
-    if artifact.terminal_status is not None:
-        return artifact.terminal_status, artifact.terminal_reason_code
-    return None
-
-
-def _r5_terminal_status(artifact: AuthorArtifact) -> Optional[str]:
-    """Infer the closed epistemic skip only after its metadata gate accepts."""
-
-    resolution = artifact.proposal.get("proposed_facts", {}).get("source_resolution", {})
-    if resolution.get("rung") != "R5_SKIP":
-        return None
-    if resolution.get("sufficiency_gap"):
-        return "skipped:insufficient-description"
-    decision = str(resolution.get("decision", "")).lower()
-    if "not-a-real-nn" in decision or "not a real" in decision:
-        return "skipped:not-a-real-NN"
-    return "skipped:no-description"
 
 
 def _environment_failure(exc: Exception) -> tuple[str, str]:

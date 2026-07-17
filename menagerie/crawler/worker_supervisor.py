@@ -1653,7 +1653,16 @@ def _complete_trace_records(lines: Sequence[str]) -> Optional[tuple[str, ...]]:
             completed.append(f"{prefix}{resumed.group('suffix')}")
             continue
         completed.append(line)
-    return None if pending else tuple(completed)
+    terminated_processes = {
+        _trace_process_id(line) for line in lines if _TERMINAL_TRACE_PATTERN.search(line)
+    }
+    benign_terminal_pending = {"read", "wait4", "exit_group"}
+    if pending and not all(
+        process_id in terminated_processes and syscall in benign_terminal_pending
+        for process_id, syscall in pending
+    ):
+        return None
+    return tuple(completed)
 
 
 def _read_only_open_result(line: str) -> Optional[int]:
@@ -3292,6 +3301,7 @@ def supervise_worker(
                 association_clean = False
             else:
                 assert completion is not None
+                assert raw_receipt is not None
                 success_parent_attestation = derive_parent_attestation(
                     raw_receipt,
                     str(completion["completion_line"]),

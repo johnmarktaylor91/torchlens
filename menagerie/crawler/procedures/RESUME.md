@@ -23,7 +23,8 @@ already-running result and exits.
 Pending metadata gates remain visible; eligible mechanical work may continue, but completion does
 not become true. R3/R4 forward observations remain blocked until fidelity is current. Claude or
 checker usage limits record the provider, exact reset time, queued counts, and current environment.
-The configured one-shot wakeup reacquires the same lock and resumes the first unsatisfied identity.
+The configured recurring wake episode reacquires the same lock until a durable resume, completion,
+cancellation, or supersession fact resolves it, then removes its scheduler projection.
 
 At the blocking 1000-model review, ordinary resume remains paused. After JMT signs off, use:
 

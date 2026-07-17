@@ -9,8 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from menagerie.crawler.cli import build_parser as build_crawler_parser
-from menagerie.crawler.constants import MODEL_SCHEMA_VERSION
+from menagerie.crawler.constants import MODEL_SCHEMA_VERSION_V3
 from menagerie.crawler.identity import canonical_json_bytes
+from menagerie.crawler.intake import create_intake_snapshot
 from menagerie.crawler.licenses import (
     LicenseEvidence,
     LicenseEvidenceStatus,
@@ -55,16 +56,22 @@ def test_verify_prompts_passes_shipped_files_and_rejects_mutation(tmp_path: Path
 def test_rebuild_views_is_deterministic_and_ignores_stale_database(tmp_path: Path) -> None:
     """Canonical JSONL yields identical view hashes despite stale derived state."""
 
+    master = tmp_path / "master.jsonl"
+    deferred = tmp_path / "deferred.jsonl"
+    _write_jsonl(master, [{"name": "Example", "zoo": "fixtures", "variant": "base"}])
+    _write_jsonl(deferred, [])
+    snapshot = create_intake_snapshot(master, deferred, tmp_path / "intake")
     records = tmp_path / "records"
     ledgers = LedgerPaths(
         records / "models" / "current-shard.jsonl",
         records / "attempts" / "local.jsonl",
         records / "gates" / "current-shard.jsonl",
     )
-    with JsonlLedger(ledgers.models, MODEL_SCHEMA_VERSION) as ledger:
-        ledger.append(make_model(accepted=True))
-    intake = tmp_path / "items.jsonl"
-    _write_jsonl(intake, [{"stable_id": "m_example"}])
+    # The rebuild path projects the unified v3 ledger; opening it as v2 would
+    # exercise a removed shadow schema instead of current-only append behavior.
+    with JsonlLedger(ledgers.models, MODEL_SCHEMA_VERSION_V3) as ledger:
+        ledger.append(make_model(snapshot.items[0].stable_id, accepted=True))
+    intake = snapshot.root / "items.jsonl"
     database = tmp_path / "state.sqlite"
     args = [
         "--intake",

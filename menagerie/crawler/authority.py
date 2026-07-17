@@ -1751,10 +1751,35 @@ def _derive_gate_failure(
     """
 
     gate_kind = "metadata_batch" if stage == "accuracy-gate" else "fidelity"
+    active = _matching_gate_items(
+        gates,
+        stable_id=stable_id,
+        work_id=work_id,
+        gate_kind=gate_kind,
+    )
+    campaign_ids = {
+        str(item.get("campaign_root_work_id"))
+        for _gate, item in active
+        if isinstance(item.get("campaign_root_work_id"), str)
+    }
+    if len(campaign_ids) > 1:
+        raise AuthorityDerivationError(f"failed:{stage} spans multiple repair campaigns")
+    campaign_id = next(iter(campaign_ids), None)
     rejected: list[tuple[Mapping[str, Any], Mapping[str, Any], str]] = []
-    for gate, item in _matching_gate_items(
-        gates, stable_id=stable_id, work_id=work_id, gate_kind=gate_kind
-    ):
+    history = (
+        [
+            (gate, item)
+            for gate in sorted(gates, key=_gate_order)
+            if gate.get("gate_kind") == gate_kind
+            for item in gate.get("items", ())
+            if isinstance(item, Mapping)
+            and item.get("stable_id") == stable_id
+            and item.get("campaign_root_work_id") == campaign_id
+        ]
+        if campaign_id is not None
+        else active
+    )
+    for gate, item in history:
         if gate_kind == "metadata_batch":
             accepted = bool(
                 item.get("verdict") == "accurate"
