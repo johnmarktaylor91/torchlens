@@ -583,6 +583,36 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     return _matches(module, _ALLOWED_FORWARD_OP_MODULES)
 
 
+def is_denied_operator_gadget(func: Callable[..., Any]) -> bool:
+    """Return whether ``func`` is an ``operator`` / ``_operator`` gadget to DENY.
+
+    The ``operator`` / ``_operator`` root is carved OUT of the stdlib/builtin denial
+    (``_ALLOWED_STDLIB_ROOTS``) so the legitimate pure operators (``operator:neg`` et
+    al.) still resolve on the FOREIGN resolution paths (the intervention resolver's
+    custom/foreign tail and the trusted-unpickler foreign tail). Without an additional
+    POSITIVE name filter that carve-out would re-admit the generic operator GADGETS --
+    ``attrgetter`` / ``methodcaller`` / ``call`` / ``getitem`` / ``setitem`` /
+    ``delitem`` / the in-place ``iadd`` / ``imul`` / ... mutators -- which enable an
+    RCE chain (``attrgetter('__globals__')(identity)`` -> ``__builtins__`` ->
+    ``__import__`` -> ``os.system``).
+
+    This REUSES ``is_pure_forward_callable``'s operator branch: it returns ``True``
+    (DENY) only when the resolved callable's REAL (capture-unwrapped) module is
+    ``operator`` / ``_operator`` AND its terminal name is NOT in the pure-forward
+    ``_ALLOWED_OPERATOR_NAMES`` allowlist. Any non-operator callable returns ``False``
+    (not this gate's concern -- the caller applies the torch / stdlib / denylist gates
+    separately). ``operator:neg`` / ``_operator:neg`` return ``False`` (ALLOWED);
+    ``operator:attrgetter`` / ``_operator:setitem`` return ``True`` (DENIED even under
+    operator trust).
+    """
+
+    real = _unwrap_capture_wrapper(func)
+    module = str(getattr(real, "__module__", "") or "")
+    if module not in _OPERATOR_MODULES:
+        return False
+    return _terminal_callable_name(real) not in _ALLOWED_OPERATOR_NAMES
+
+
 # Extras-gated "appliance" subpackages whose ``__init__`` imports FOREIGN
 # third-party dependencies; a callable resolved from one of these ran foreign
 # top-level code on import and must never be treated as inert first-party code.
