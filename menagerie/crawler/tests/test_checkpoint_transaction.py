@@ -54,6 +54,7 @@ from menagerie.crawler.tests.conftest import (
     HASH,
     NOW,
     _bind_model_identities,
+    bind_handoff_execution,
     make_licensed_artifact_fixture,
     rebind_nonaward_parent_proof,
     bind_terminal_attempts,
@@ -466,7 +467,7 @@ def _clean_state(
             source = model["source_resolution"]["sources"][0]
             source["content_sha256"] = hash_bytes(source_bytes)
             source["byte_count"] = len(source_bytes)
-            source_manifest = {
+            source_manifest: dict[str, Any] = {
                 "sources": [dict(source)],
             }
             source_manifest["manifest_sha256"] = stable_hash(source_manifest["sources"])
@@ -498,9 +499,18 @@ def _clean_state(
                     "license_identity": stable_hash(model["licenses"]),
                 }
             )
+            if status_code.startswith("deferred:"):
+                handoff_proposal = make_author_proposal(stable_id)
+                payload["handoff_execution"] = bind_handoff_execution(
+                    handoff_proposal,
+                    context=context,
+                    work_id=f"work-{stable_id}",
+                    campaign_id=f"campaign-{stable_id}",
+                    source_manifest_identity=source_manifest["manifest_sha256"],
+                )
             payload["recommendation_sha256"] = stable_hash(payload)
             author_result = {
-                "schema_version": "menagerie.crawler.author-result.v3",
+                "schema_version": "menagerie.crawler.author-result.v4",
                 "result_id": f"result-{stable_id}",
                 "result_sha256": HASH,
                 "kind": payload["arm"],
@@ -552,6 +562,16 @@ def _clean_state(
             gate["items"][0]["terminal_disposition"] = {
                 "author_result_id": author_result["result_id"],
                 "author_result_sha256": author_result["result_sha256"],
+                "handoff_proposal_id": (
+                    payload["handoff_execution"]["proposal"]["proposal_id"]
+                    if status_code.startswith("deferred:")
+                    else None
+                ),
+                "handoff_sha256": (
+                    payload["handoff_execution"]["handoff_sha256"]
+                    if status_code.startswith("deferred:")
+                    else None
+                ),
                 "kind": author_result["kind"],
                 "predicate": status_code.split(":", 1)[1],
                 "verdict": "accepted",

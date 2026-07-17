@@ -131,10 +131,12 @@ def _worker_manifest(
     artifact: AuthorArtifact,
     environment: EnvironmentBinding,
     execution_identity: str,
+    *,
+    closure: object | None = None,
 ) -> ExecutionReadManifest:
     """Compile the established real-worker test capability for one typed adapter."""
 
-    del environment
+    del closure, environment
     proposal = artifact.proposal
     raw_manifest = proposal["proposed_facts"]["implementation"]["code_manifest"]
     code_members = tuple(

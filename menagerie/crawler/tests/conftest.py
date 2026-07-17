@@ -346,7 +346,7 @@ def make_attempt(
         Complete attempt.v2 payload.
     """
 
-    model = {
+    model: dict[str, Any] = {
         "schema_version": ATTEMPT_SCHEMA_VERSION,
         "attempt_id": attempt_id,
         "ledger_seq": 1,
@@ -453,6 +453,7 @@ def make_attempt(
                     }
                 ],
             },
+            "output_value_sha256": HASH,
             "input_kind": "standard-image",
             "input_asset": (
                 f"standard:image.ppm:{hash_bytes((ASSET_ROOT / 'image.ppm').read_bytes())}"
@@ -494,6 +495,7 @@ def make_attempt(
         },
         "error": None,
         "defer_evidence": None,
+        "capability_observation": None,
     }
     reference = make_model(stable_id, accepted=True)
     facts = _model_facts(reference)
@@ -623,6 +625,7 @@ def make_failed_attempt(
             "mode": mode,
             "input_signature": None,
             "output_signature": None,
+            "output_value_sha256": None,
             "input_kind": None,
             "input_asset": None,
             "input_note": "worker was not invoked for this synthetic failure",
@@ -1482,6 +1485,60 @@ def make_author_proposal(stable_id: str = "m_example") -> dict[str, Any]:
         {key: value for key, value in proposal.items() if key != "proposal_sha256"}
     )
     return proposal
+
+
+def bind_handoff_execution(
+    proposal: dict[str, Any],
+    *,
+    context: AuthorityContext,
+    work_id: str,
+    campaign_id: str,
+    source_manifest_identity: str,
+) -> dict[str, Any]:
+    """Bind a proposal into one schema-valid executable deferral handoff.
+
+    Parameters
+    ----------
+    proposal:
+        Complete proposal fixture to bind in place.
+    context:
+        Active authority context supplying intake and dispatcher identities.
+    work_id, campaign_id, source_manifest_identity:
+        Exact terminal-result associations.
+
+    Returns
+    -------
+    dict[str, Any]
+        Closed handoff execution mapping.
+    """
+
+    stable_id = str(proposal["stable_id"])
+    proposal.update(
+        {
+            "work_id": work_id,
+            "campaign_id": campaign_id,
+            "intake_snapshot_id": context.active_intake_snapshot_id,
+            "intake_snapshot_sha256": context.active_intake_snapshot_sha256,
+            "intake_item_sha256": stable_hash(context.intake_by_stable_id[stable_id]),
+            "source_manifest_identity": source_manifest_identity,
+            "dispatcher_identity": context.author_dispatcher_identity,
+        }
+    )
+    proposal["author"]["prompt_sha256"] = context.author_prompt_identity
+    proposal["verified_hashes"]["source_manifest"] = source_manifest_identity
+    implementation = proposal["proposed_facts"]["implementation"]
+    proposal["proposal_sha256"] = stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+    code_manifest_identity = stable_hash(implementation.get("code_manifest") or [])
+    handoff = {
+        "proposal": proposal,
+        "proposal_sha256": proposal["proposal_sha256"],
+        "code_manifest_identity": code_manifest_identity,
+        "source_manifest_identity": source_manifest_identity,
+    }
+    handoff["handoff_sha256"] = stable_hash(handoff)
+    return handoff
 
 
 def make_proposed_artifact(

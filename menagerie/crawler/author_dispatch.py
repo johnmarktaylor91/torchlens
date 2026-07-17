@@ -88,6 +88,17 @@ class ProposedAuthorResult:
 
 
 @dataclass(frozen=True)
+class HandoffExecution:
+    """Separately authenticated executable proposal carried by a terminal deferral."""
+
+    proposal: JsonObject
+    proposal_sha256: str
+    code_manifest_identity: str
+    source_manifest_identity: str
+    handoff_sha256: str
+
+
+@dataclass(frozen=True)
 class DeferRecommendation:
     """A hash-bound CUDA/x86 recommendation awaiting a terminal gate."""
 
@@ -98,6 +109,7 @@ class DeferRecommendation:
     evidence_identity: str
     license_identity: str
     recommendation_sha256: str
+    handoff_execution: HandoffExecution | None = None
 
 
 @dataclass(frozen=True)
@@ -506,6 +518,38 @@ def _validate_author_result_mapping(
         return ProposedAuthorResult(binding, deepcopy(dict(proposal)), report)
     _validate_recommendation_hash(payload)
     if kind is AuthorResultKind.DEFER_RECOMMENDATION:
+        handoff_value = _required_mapping(
+            payload.get("handoff_execution"), "defer handoff_execution"
+        )
+        handoff_proposal = _required_mapping(
+            handoff_value.get("proposal"), "defer handoff proposal"
+        )
+        _validate_proposal_binding(handoff_proposal, binding)
+        proposal_sha256 = str(handoff_value["proposal_sha256"])
+        code_manifest_identity = str(handoff_value["code_manifest_identity"])
+        source_manifest_identity = str(handoff_value["source_manifest_identity"])
+        handoff_sha256 = str(handoff_value["handoff_sha256"])
+        implementation = handoff_proposal.get("proposed_facts", {}).get("implementation", {})
+        code_manifest = (
+            implementation.get("code_manifest") or [] if isinstance(implementation, Mapping) else []
+        )
+        expected_handoff = stable_hash(
+            {
+                "proposal": handoff_proposal,
+                "proposal_sha256": proposal_sha256,
+                "code_manifest_identity": code_manifest_identity,
+                "source_manifest_identity": source_manifest_identity,
+            }
+        )
+        if (
+            handoff_proposal.get("proposal_sha256") != proposal_sha256
+            or not isinstance(code_manifest, list)
+            or stable_hash(code_manifest) != code_manifest_identity
+            or source_manifest_identity != binding.source_manifest_identity
+            or handoff_proposal.get("source_manifest_identity") != source_manifest_identity
+            or handoff_sha256 != expected_handoff
+        ):
+            raise AuthorDispatchError("defer handoff execution identity is inconsistent")
         return DeferRecommendation(
             binding=binding,
             platform=str(payload["platform"]),
@@ -514,6 +558,13 @@ def _validate_author_result_mapping(
             evidence_identity=str(payload["evidence_identity"]),
             license_identity=str(payload["license_identity"]),
             recommendation_sha256=str(payload["recommendation_sha256"]),
+            handoff_execution=HandoffExecution(
+                proposal=deepcopy(dict(handoff_proposal)),
+                proposal_sha256=proposal_sha256,
+                code_manifest_identity=code_manifest_identity,
+                source_manifest_identity=source_manifest_identity,
+                handoff_sha256=handoff_sha256,
+            ),
         )
     if kind is AuthorResultKind.SKIP_RECOMMENDATION:
         return SkipRecommendation(

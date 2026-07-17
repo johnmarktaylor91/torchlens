@@ -105,9 +105,11 @@ use inaccurate for empty, irrelevant, misleading, invented, or spam-like terms. 
 be empty because this is a relevance judgment, while checked_source_ids and a specific reason remain required.
 
 For a `terminal_disposition` envelope, check exactly one DEFER_RECOMMENDATION, SKIP_RECOMMENDATION, or
-BLOCKED author-result.v3 arm. Recompute and bind the exact result, source-manifest, evidence-pack, and
+BLOCKED author-result.v4 arm. Recompute and bind the exact result, source-manifest, evidence-pack, and
 license identities; resolve every source_id and evidence_id; require each excerpt's supports to cover the
-typed platform, R5, or blocked-prerequisite predicate; and emit accepted, rejected, or cannot-verify in the
+typed platform, R5, or blocked-prerequisite predicate. For DEFER_RECOMMENDATION, also verify the complete
+handoff proposal, proposal/code-manifest/source-manifest hashes, and handoff_sha256; and emit accepted,
+rejected, or cannot-verify in the
 closed terminal_disposition item. This verdict remains advisory to the reducer and never awards a terminal.
 
 DECISION RULE

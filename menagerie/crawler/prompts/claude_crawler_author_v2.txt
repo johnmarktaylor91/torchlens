@@ -152,10 +152,13 @@ OUTPUT
 Write exactly one UTF-8 JSON object to <allowed_output_root>/result.json using a temporary file, flush,
 fsync, and atomic rename. Use required_result_schema exactly. Important information must be in typed fields,
 never only prose. Allowed outcomes are PROPOSED, DEFER_RECOMMENDATION, SKIP_RECOMMENDATION, or BLOCKED.
-Every outcome is an advisory author-result.v3 arm and must repeat the envelope's exact stable/work/campaign,
+Every outcome is an advisory author-result.v4 arm and must repeat the envelope's exact stable/work/campaign,
 author/prompt/dispatcher, source-manifest, and intake identities. PROPOSED embeds one complete
 author-proposal.v3. DEFER_RECOMMENDATION may recommend only cuda or x86 and binds exact source/evidence/
-license identities. SKIP_RECOMMENDATION may recommend only one closed R5 status and binds its exact search,
+license identities. It must also retain a complete author-proposal.v3 in handoff_execution, bind its
+proposal hash, code-manifest identity (the empty-list digest for declarative recipes), source-manifest
+identity, and compute handoff_sha256 over those exact preceding fields. SKIP_RECOMMENDATION may recommend
+only one closed R5 status and binds its exact search,
 source/evidence/license identities. BLOCKED binds one closed stage/reason and exact prerequisite evidence.
 Compute every arm's recommendation/result hash over the exact closed payload. Do not output runs, accurate,
 a fidelity verdict, or a terminal award. End after result.json is written.

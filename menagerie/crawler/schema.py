@@ -20,6 +20,7 @@ from menagerie.crawler.constants import (
     AUTHOR_PROPOSAL_SCHEMA_VERSION,
     AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
     AUTHOR_RESULT_SCHEMA_VERSION,
+    AUTHOR_RESULT_SCHEMA_VERSION_V3,
     GATE_SCHEMA_VERSION,
     GATE_SCHEMA_VERSION_V3,
     LEGACY_UNTRUSTED_SCHEMA_VERSIONS,
@@ -38,7 +39,8 @@ SCHEMA_FILES = {
     ATTEMPT_SCHEMA_VERSION_V3: "attempt-v3.schema.json",
     GATE_SCHEMA_VERSION_V3: "gate-v3.schema.json",
     AUTHOR_PROPOSAL_SCHEMA_VERSION_V3: "author-proposal-v3.schema.json",
-    AUTHOR_RESULT_SCHEMA_VERSION: "author-result-v3.schema.json",
+    AUTHOR_RESULT_SCHEMA_VERSION_V3: "author-result-v3.schema.json",
+    AUTHOR_RESULT_SCHEMA_VERSION: "author-result-v4.schema.json",
     ARTIFACT_EVENT_SCHEMA_VERSION: "artifact-event-v1.schema.json",
     OPERATIONAL_EVENT_SCHEMA_VERSION: "operational-event-v1.schema.json",
 }
@@ -413,6 +415,33 @@ def owned_schema_leaves_from_schema(
     declared = schema.get("x-authority-ownership")
     if not isinstance(declared, Mapping):
         raise SchemaOwnershipError("schema must declare x-authority-ownership")
+    inherited_version = schema.get("x-authority-ownership-base")
+    if inherited_version is not None:
+        if not isinstance(inherited_version, str):
+            raise SchemaOwnershipError("schema ownership base must be a schema version")
+        try:
+            inherited = load_schema(inherited_version).get("x-authority-ownership")
+        except KeyError as exc:
+            raise SchemaOwnershipError("schema ownership base is unsupported") from exc
+        if not isinstance(inherited, Mapping):
+            raise SchemaOwnershipError("schema ownership base has no ownership mapping")
+        declared = {**inherited, **declared}
+    prefix_copies = schema.get("x-authority-ownership-prefix-copies", {})
+    if not isinstance(prefix_copies, Mapping) or any(
+        not isinstance(source, str) or not isinstance(target, str)
+        for source, target in prefix_copies.items()
+    ):
+        raise SchemaOwnershipError("schema ownership prefix copies must map string prefixes")
+    copied: dict[str, object] = {}
+    for source, target in prefix_copies.items():
+        copied.update(
+            {
+                f"{target}{path.removeprefix(source)}": owner
+                for path, owner in declared.items()
+                if str(path).startswith(source)
+            }
+        )
+    declared = {**declared, **copied}
     leaves = schema_leaf_paths(schema)
     declared_paths = frozenset(str(path) for path in declared)
     missing = sorted(leaves - declared_paths)

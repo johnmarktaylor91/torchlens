@@ -679,6 +679,8 @@
       "required": [
         "author_result_id",
         "author_result_sha256",
+        "handoff_proposal_id",
+        "handoff_sha256",
         "kind",
         "predicate",
         "verdict",
@@ -697,6 +699,14 @@
         "author_result_sha256": {
           "$ref": "#/$defs/hash",
           "description": "Digest of the exact typed author-result bytes."
+        },
+        "handoff_proposal_id": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Executable handoff proposal identity for a platform deferral."
+        },
+        "handoff_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Digest of the complete executable handoff bundle."
         },
         "kind": {
           "enum": [
@@ -802,6 +812,8 @@
     "$.items[].stable_id": "trusted-intake",
     "$.items[].terminal_disposition.author_result_id": "author-gated",
     "$.items[].terminal_disposition.author_result_sha256": "author-gated",
+    "$.items[].terminal_disposition.handoff_proposal_id": "author-gated",
+    "$.items[].terminal_disposition.handoff_sha256": "author-gated",
     "$.items[].terminal_disposition.evidence_identity": "author-gated",
     "$.items[].terminal_disposition.evidence_ids[]": "author-gated",
     "$.items[].terminal_disposition.findings[]": "author-gated",

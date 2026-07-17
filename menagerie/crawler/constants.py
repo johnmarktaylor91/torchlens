@@ -19,7 +19,8 @@ MODEL_SCHEMA_VERSION_V3 = "menagerie.crawler.model.v3"
 ATTEMPT_SCHEMA_VERSION_V3 = "menagerie.crawler.attempt.v3"
 GATE_SCHEMA_VERSION_V3 = "menagerie.crawler.gate.v3"
 AUTHOR_PROPOSAL_SCHEMA_VERSION_V3 = "menagerie.crawler.author-proposal.v3"
-AUTHOR_RESULT_SCHEMA_VERSION = "menagerie.crawler.author-result.v3"
+AUTHOR_RESULT_SCHEMA_VERSION_V3 = "menagerie.crawler.author-result.v3"
+AUTHOR_RESULT_SCHEMA_VERSION = "menagerie.crawler.author-result.v4"
 ARTIFACT_EVENT_SCHEMA_VERSION = "menagerie.crawler.artifact-event.v1"
 
 CURRENT_SCHEMA_VERSIONS = frozenset(
@@ -40,6 +41,7 @@ LEGACY_UNTRUSTED_SCHEMA_VERSIONS = frozenset(
         ATTEMPT_SCHEMA_VERSION,
         GATE_SCHEMA_VERSION,
         AUTHOR_PROPOSAL_SCHEMA_VERSION,
+        AUTHOR_RESULT_SCHEMA_VERSION_V3,
     }
 )
 

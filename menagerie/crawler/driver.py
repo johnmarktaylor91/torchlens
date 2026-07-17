@@ -60,13 +60,15 @@ from menagerie.crawler.authority import (
     AuthorityDerivationError,
     AuthorityContext,
     DependencyState,
+    ExecutableClosure,
     ExecutionReadManifestV2,
     RuntimeLookupDirectory,
     RuntimeMember,
     ShutdownInterruptionFact,
     WorkerLease,
     build_authority_context,
-    compile_execution_read_manifest_v2,
+    collect_executable_closure,
+    compile_execution_read_manifest_from_closure,
     derive_attempt_projection,
     derive_execution_identity,
     derive_runner_identity,
@@ -156,6 +158,7 @@ from menagerie.crawler.licenses import (
     LicenseDecision,
     LicenseEvidence,
     LicenseEvidenceStatus,
+    RedistributionClass,
     recompute_license_decision,
 )
 from menagerie.crawler.metadata import (
@@ -383,7 +386,7 @@ _SHUTDOWN_ADMISSION_REGISTRY: Mapping[str, str] = {
 _AWARD_CLOSURE_SCHEMAS = (
     "schemas/attempt-v3.schema.json",
     "schemas/author-proposal-v3.schema.json",
-    "schemas/author-result-v3.schema.json",
+    "schemas/author-result-v4.schema.json",
     "schemas/gate-v3.schema.json",
     "schemas/model-v3.schema.json",
 )
@@ -682,15 +685,27 @@ class AuthorArtifact:
     def proposal(self) -> JsonObject:
         """Return the proposed arm or reject terminal-outcome misuse."""
 
-        if not isinstance(self.author_result, ProposedAuthorResult):
-            raise DriverIntegrationError("terminal author result has no executable proposal")
-        return self.author_result.proposal
+        if isinstance(self.author_result, ProposedAuthorResult):
+            return self.author_result.proposal
+        if (
+            isinstance(self.author_result, DeferRecommendation)
+            and self.author_result.handoff_execution is not None
+        ):
+            return self.author_result.handoff_execution.proposal
+        raise DriverIntegrationError("terminal author result has no executable proposal")
 
     @property
     def campaign_root_work_id(self) -> str:
         """Return the exact v3 campaign lineage identity."""
 
         return self.author_result.binding.campaign_id
+
+
+@dataclass(frozen=True)
+class ActivatedHandoffArtifact(AuthorArtifact):
+    """Durably reconstructed executable authority for a target-host deferral resume."""
+
+    handoff_sha256: str = ""
 
 
 @dataclass(frozen=True)
@@ -1511,7 +1526,10 @@ class SupervisedForwardLane:
             raise ValueError("cold_runs must be positive")
         proposal = artifact.proposal
         stable_id = str(proposal["stable_id"])
-        execution_identity = _execution_identity(proposal, environment)
+        closure = _collect_worker_executable_closure(artifact, environment)
+        execution_identity = _execution_identity(
+            artifact, environment, closure_identity=closure.identity
+        )
         rung = proposal.get("proposed_facts", {}).get("source_resolution", {}).get("rung")
         reducer_policy = cold_forward_policy(stable_id, rung)
         required_cold_runs = reducer_policy.required_cold_forwards
@@ -1556,9 +1574,7 @@ class SupervisedForwardLane:
                 request_path = root / "request.json"
                 receipt_path = root / "result" / "receipt.json"
                 manifest = _compile_worker_read_manifest(
-                    artifact,
-                    environment,
-                    execution_identity,
+                    artifact, environment, execution_identity, closure=closure
                 )
                 request = _worker_request(
                     artifact,
@@ -2842,13 +2858,16 @@ class CrawlerDriver:
                     media_type=str(row.get("media_type") or "application/octet-stream"),
                 )
             )
-        proposal = (
+        execution_proposal = (
             artifact.author_result.proposal
             if isinstance(artifact.author_result, ProposedAuthorResult)
+            else artifact.author_result.handoff_execution.proposal
+            if isinstance(artifact.author_result, DeferRecommendation)
+            and artifact.author_result.handoff_execution is not None
             else None
         )
-        if proposal is not None:
-            implementation = proposal.get("proposed_facts", {}).get("implementation", {})
+        if execution_proposal is not None:
+            implementation = execution_proposal.get("proposed_facts", {}).get("implementation", {})
             primary = inputs[0]
             for role, field in (("code", "code_manifest"), ("patch", "patches")):
                 rows = implementation.get(field, []) if isinstance(implementation, Mapping) else []
@@ -2897,7 +2916,11 @@ class CrawlerDriver:
             stable_id=item.stable_id,
             work_id=artifact.author_result.binding.work_id,
             author_result=artifact.author_result.binding.raw_result,
-            proposal=proposal,
+            proposal=(
+                artifact.author_result.proposal
+                if isinstance(artifact.author_result, ProposedAuthorResult)
+                else None
+            ),
             source_manifest=artifact.source_manifest,
             mirrors=mirrors,
             ledger=reducer.artifact_ledger,
@@ -3014,6 +3037,7 @@ class CrawlerDriver:
             reconstruction_inputs=ReconstructionInputs(
                 author_result=artifact.author_result.binding.raw_result,
                 proposal=artifact.proposal,
+                handoff_execution=None,
                 source_manifest=artifact.source_manifest,
                 accepted_gate_item=gate_item,
             ),
@@ -3091,11 +3115,22 @@ class CrawlerDriver:
             self.paths.runtime_root / "mirrors" / "private",
             self.paths.runtime_root / "mirrors" / "local",
         )
+        terminal_decisions = {
+            claim_id: replace(
+                decision,
+                redistribution_class=RedistributionClass.RESTRICTED_PRIVATE,
+                rationale=(
+                    f"terminal private custody; public redistribution withheld: "
+                    f"{decision.rationale}"
+                ),
+            )
+            for claim_id, decision in self._license_decisions(artifact).items()
+        }
         authorization = reducer.authorize_publication(
             model,
             artifact.staged,
             gate_item,
-            self._license_decisions(artifact),
+            terminal_decisions,
             mirrors,
             terminal=True,
         )
@@ -3106,6 +3141,13 @@ class CrawlerDriver:
             reconstruction_inputs=ReconstructionInputs(
                 author_result=artifact.author_result.binding.raw_result,
                 proposal=None,
+                handoff_execution=(
+                    artifact.author_result.binding.raw_result.get("payload", {}).get(
+                        "handoff_execution"
+                    )
+                    if isinstance(artifact.author_result, DeferRecommendation)
+                    else None
+                ),
                 source_manifest=artifact.source_manifest,
                 accepted_gate_item=gate_item,
             ),
@@ -3131,7 +3173,9 @@ class CrawlerDriver:
             self._check_shutdown("author-admission", item=item)
             canonical_artifact = self._rehydrate_final_authority(item, reducer)
             if canonical_artifact is not None:
-                if isinstance(canonical_artifact.author_result, ProposedAuthorResult):
+                if isinstance(canonical_artifact, (ActivatedHandoffArtifact,)) or isinstance(
+                    canonical_artifact.author_result, ProposedAuthorResult
+                ):
                     _validate_artifact_identities(canonical_artifact, self.config)
                     artifacts[item.stable_id] = canonical_artifact
                     self._family_artifacts[item.stable_id] = canonical_artifact
@@ -3498,11 +3542,8 @@ class CrawlerDriver:
             if transaction is None:
                 return None
             inputs = transaction.reconstruction_inputs
-            if self.config.only_status is not None and inputs.proposal is None:
-                # A terminal deferral proves source/evidence custody but carries no
-                # executable proposal. The handoff author lane must create that new
-                # authority rather than treating a recommendation as runnable code.
-                return None
+            if self.config.only_status is not None and inputs.handoff_execution is None:
+                raise DriverIntegrationError("handoff-authority-unavailable")
             rehydrated = rehydrate_artifact_transaction(
                 transaction,
                 mirrors=mirrors,
@@ -3536,12 +3577,25 @@ class CrawlerDriver:
                 raise DriverIntegrationError(
                     "canonical final transaction lacks its exact staged-private predecessor"
                 )
-            return AuthorArtifact(
+            artifact_type = (
+                ActivatedHandoffArtifact if self.config.only_status is not None else AuthorArtifact
+            )
+            return artifact_type(
                 author_result=result,
                 source_manifest=dict(inputs.source_manifest),
                 model_dir=rehydrated.model_dir,
                 staged=staged,
                 canonical_code_root=rehydrated.model_dir,
+                **(
+                    {
+                        "handoff_sha256": str(
+                            transaction.reconstruction_inputs.handoff_execution["handoff_sha256"]
+                        )
+                    }
+                    if artifact_type is ActivatedHandoffArtifact
+                    and transaction.reconstruction_inputs.handoff_execution is not None
+                    else {}
+                ),
             )
         except (ArtifactCheckpointError, ArtifactRehydrationError, ValueError) as exc:
             raise DriverIntegrationError(
@@ -4585,7 +4639,10 @@ class CrawlerDriver:
     ) -> Optional[str]:
         """Append honest worker attempts and return a checker pause from run repair."""
 
-        execution_identity = _execution_identity(artifact.proposal, environment)
+        closure = _collect_worker_executable_closure(artifact, environment)
+        execution_identity = _execution_identity(
+            artifact, environment, closure_identity=closure.identity
+        )
         self._check_shutdown(
             "forward-admission",
             item=item,
@@ -4963,7 +5020,9 @@ class CrawlerDriver:
         self.dependencies.boundary_hook("award-commit-entered", item.stable_id)
         # Graceful-shutdown atomic award section: publication authorization and
         # materialization must remain check-free through the canonical model append.
-        if model.get("authored_metadata_state") == "accepted":
+        if model.get("authored_metadata_state") == "accepted" and not isinstance(
+            artifact, ActivatedHandoffArtifact
+        ):
             self._authorize_and_publish_artifact(artifact, model, gates, reducer)
         result = reducer.append_model(reducer.prepare_model(model))
         if result.appended:
@@ -6718,9 +6777,10 @@ def _bind_model_code_manifest(proposal: JsonObject, model_dir: Path) -> bool:
 
 
 def _execution_identity(
-    proposal: Mapping[str, Any],
+    artifact: AuthorArtifact,
     environment: EnvironmentBinding,
     *,
+    closure_identity: Optional[str] = None,
     host_os: Optional[str] = None,
     machine_class: Optional[str] = None,
 ) -> str:
@@ -6728,8 +6788,10 @@ def _execution_identity(
 
     Parameters
     ----------
-    proposal, environment:
-        Exact proposal and committed environment generation.
+    artifact, environment:
+        Exact executable artifact and committed environment generation.
+    closure_identity:
+        Optional already-collected executable closure identity.
     host_os, machine_class:
         OS and architecture of the host that executed the attempt. Live calls
         default to the current host; historical replay supplies recorded facts.
@@ -6740,6 +6802,10 @@ def _execution_identity(
         Exact execution identity.
     """
 
+    proposal = artifact.proposal
+    effective_closure_identity = (
+        closure_identity or _collect_worker_executable_closure(artifact, environment).identity
+    )
     facts = proposal["proposed_facts"]
     implementation = facts["implementation"]
     external = facts.get("external_metadata")
@@ -6759,6 +6825,7 @@ def _execution_identity(
             "checker_prompt": _checker_prompt_hash(),
             "vet_identity": proposal.get("vet_identity"),
             "fidelity_identity": proposal.get("fidelity_identity"),
+            "executable_closure_identity": effective_closure_identity,
         }
     )
     return derive_execution_identity(
@@ -6825,7 +6892,7 @@ def _current_run_is_fresh(
             and not _fidelity_required(proposal)
             and execution.get("current")
             and execution.get("env_generation") == environment.env_generation
-            and execution.get("execution_identity") == _execution_identity(proposal, environment)
+            and execution.get("execution_identity") == _execution_identity(artifact, environment)
             and model.get("provenance", {}).get("author_prompt_sha256") == live_author_prompt
         )
     if artifact.template_source_revision is not None:
@@ -6881,7 +6948,7 @@ def _current_run_is_fresh(
         return bool(
             execution.get("current")
             and execution.get("env_generation") == environment.env_generation
-            and execution.get("execution_identity") == _execution_identity(proposal, environment)
+            and execution.get("execution_identity") == _execution_identity(artifact, environment)
             and model.get("provenance", {}).get("author_prompt_sha256") == live_author_prompt
         )
     for field in (
@@ -6921,7 +6988,7 @@ def _current_run_is_fresh(
     return bool(
         execution.get("current")
         and execution.get("env_generation") == environment.env_generation
-        and execution.get("execution_identity") == _execution_identity(proposal, environment)
+        and execution.get("execution_identity") == _execution_identity(artifact, environment)
         and model.get("provenance", {}).get("author_prompt_sha256") == live_author_prompt
     )
 
@@ -7211,12 +7278,11 @@ def _specialize_variant_recipe(
     facts["input_contract"] = input_contract
 
 
-def _compile_worker_read_manifest(
+def _collect_worker_executable_closure(
     artifact: AuthorArtifact,
     environment: EnvironmentBinding,
-    execution_identity: str,
-) -> ExecutionReadManifestV2:
-    """Compile the sole semantic read capability for one private artifact.
+) -> ExecutableClosure:
+    """Collect the sole executable closure before execution identity derivation.
 
     Parameters
     ----------
@@ -7224,13 +7290,10 @@ def _compile_worker_read_manifest(
         Privately staged proposed result.
     environment:
         Exact materialized runtime generation.
-    execution_identity:
-        Reducer-compatible execution identity.
-
     Returns
     -------
-    ExecutionReadManifestV2
-        Closed code, standard-asset, and runtime support manifest.
+    ExecutableClosure
+        Closed code, standard-asset, and runtime member inventory.
     """
 
     proposal = artifact.proposal
@@ -7299,10 +7362,7 @@ def _compile_worker_read_manifest(
         for path in sorted(lookup_candidates, key=str)
         if path.is_dir() and not path.is_symlink()
     )
-    return compile_execution_read_manifest_v2(
-        stable_id=str(proposal["stable_id"]),
-        work_id=str(proposal["work_id"]),
-        execution_identity=execution_identity,
+    return collect_executable_closure(
         code_manifest_identity=code_identity,
         environment_generation=environment.env_generation,
         installed_package_inventory_sha256=environment.packages_manifest_sha256,
@@ -7310,6 +7370,40 @@ def _compile_worker_read_manifest(
         runtime_members=runtime_members,
         standard_input_asset=asset,
         lookup_directories=lookup_directories,
+    )
+
+
+def _compile_worker_read_manifest(
+    artifact: AuthorArtifact,
+    environment: EnvironmentBinding,
+    execution_identity: str,
+    *,
+    closure: Optional[ExecutableClosure] = None,
+) -> ExecutionReadManifestV2:
+    """Bind a verified pre-identity closure into the final worker manifest.
+
+    Parameters
+    ----------
+    artifact, environment:
+        Exact executable artifact and materialized environment generation.
+    execution_identity:
+        Reducer-compatible execution identity derived from the closure.
+    closure:
+        Optional already-collected closure reused across meaningful modes.
+
+    Returns
+    -------
+    ExecutionReadManifestV2
+        Final exact-member execution capability.
+    """
+
+    proposal = artifact.proposal
+    collected = closure or _collect_worker_executable_closure(artifact, environment)
+    return compile_execution_read_manifest_from_closure(
+        collected,
+        stable_id=str(proposal["stable_id"]),
+        work_id=str(proposal["work_id"]),
+        execution_identity=execution_identity,
     )
 
 
@@ -7906,6 +8000,7 @@ def _attempts_from_supervised(
             "mode": mode,
             "input_signature": mode_receipt.get("input_signature"),
             "output_signature": mode_receipt.get("output_signature"),
+            "output_value_sha256": mode_receipt.get("output_value_sha256"),
             "input_kind": mode_receipt.get("input_kind"),
             "input_asset": mode_receipt.get("input_asset"),
             "input_note": str(mode_receipt.get("input_note") or "worker receipt unavailable"),
@@ -8032,6 +8127,7 @@ def _attempts_from_supervised(
             },
             "error": error,
             "defer_evidence": None,
+            "capability_observation": None,
             "execution_read_manifest_identity": (
                 execution_read_manifest_identity
                 or stable_hash("direct-supervised-execution-manifest")
@@ -9656,6 +9752,7 @@ def _driver_failure_attempt(
             "mode": None,
             "input_signature": None,
             "output_signature": None,
+            "output_value_sha256": None,
             "input_kind": None,
             "input_asset": None,
             "input_note": "worker was not invoked for this driver-observed failure",
@@ -9707,6 +9804,7 @@ def _driver_failure_attempt(
             },
         },
         "defer_evidence": None,
+        "capability_observation": None,
         "execution_read_manifest_identity": stable_hash("worker-not-invoked"),
         "raw_award_receipt": None,
         "raw_award_receipt_sha256": None,
@@ -9718,47 +9816,6 @@ def _driver_failure_attempt(
             "diagnostic_sha256": None,
         },
     }
-    return _redact_attempt_diagnostics(attempt, None, diagnostics_root)
-
-
-def _driver_deferral_attempt(
-    item: WorkItem,
-    artifact: AuthorArtifact,
-    status_code: str,
-    evidence: Mapping[str, Any],
-    config: DriverConfig,
-    *,
-    diagnostics_root: Path,
-    created_at: str,
-) -> JsonObject:
-    """Build one observed driver attempt retaining positive platform evidence."""
-
-    if evidence.get("target_status") != status_code:
-        raise DriverIntegrationError("deferral evidence target does not match terminal status")
-    if not evidence.get("source_ids") and not evidence.get("probe_attempt_ids"):
-        raise DriverIntegrationError("deferral evidence requires source or focused-probe IDs")
-    marker = RuntimeError(str(evidence.get("explanation") or status_code))
-    attempt = _driver_failure_attempt(
-        item,
-        artifact,
-        "environment",
-        "probe-failed",
-        marker,
-        config,
-        diagnostics_root=diagnostics_root,
-        environment=item.route.intent,
-        created_at=created_at,
-    )
-    attempt["attempt_id"] = stable_hash(
-        {
-            "work_id": artifact.proposal["work_id"],
-            "status_code": status_code,
-            "defer_evidence": evidence,
-        }
-    )
-    attempt["result"] = "observed"
-    attempt["error"] = None
-    attempt["defer_evidence"] = deepcopy(dict(evidence))
     return _redact_attempt_diagnostics(attempt, None, diagnostics_root)
 
 

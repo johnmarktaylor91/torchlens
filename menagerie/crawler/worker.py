@@ -937,6 +937,7 @@ def _raw_award_receipt(
         "mode": mode_observation.get("mode"),
         "input_signature": mode_observation.get("input_signature"),
         "output_signature": mode_observation.get("output_signature"),
+        "output_value_sha256": mode_observation.get("output_value_sha256"),
         "input_kind": mode_observation.get("input_kind"),
         "input_asset": mode_observation.get("input_asset"),
         "input_note": str(mode_observation.get("input_note", "")),

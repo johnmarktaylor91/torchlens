@@ -357,9 +357,9 @@ def validate_terminal_disposition_gate(
         "work_id": binding.work_id,
         "campaign_root_work_id": binding.campaign_id,
     }
-    for field, value in expected_item.items():
-        if item.get(field) != value:
-            raise GateRoutingError(f"terminal gate item {field} does not match author result")
+    for item_field, item_value in expected_item.items():
+        if item.get(item_field) != item_value:
+            raise GateRoutingError(f"terminal gate item {item_field} does not match author result")
     terminal = item.get("terminal_disposition")
     if not isinstance(terminal, Mapping):
         raise GateRoutingError("terminal gate item lacks terminal_disposition")
@@ -373,15 +373,27 @@ def validate_terminal_disposition_gate(
     exact = {
         "author_result_id": binding.result_id,
         "author_result_sha256": binding.result_sha256,
+        "handoff_proposal_id": (
+            result.handoff_execution.proposal["proposal_id"]
+            if isinstance(result, DeferRecommendation) and result.handoff_execution is not None
+            else None
+        ),
+        "handoff_sha256": (
+            result.handoff_execution.handoff_sha256
+            if isinstance(result, DeferRecommendation) and result.handoff_execution is not None
+            else None
+        ),
         "kind": expected_kind,
         "predicate": expected_predicate,
         "source_manifest_identity": binding.source_manifest_identity,
         "evidence_identity": result.evidence_identity,
         "license_identity": result.license_identity,
     }
-    for field, value in exact.items():
-        if terminal.get(field) != value:
-            raise GateRoutingError(f"terminal disposition {field} does not match author result")
+    for terminal_field, terminal_value in exact.items():
+        if terminal.get(terminal_field) != terminal_value:
+            raise GateRoutingError(
+                f"terminal disposition {terminal_field} does not match author result"
+            )
     gate_source_ids = _unique_string_tuple(terminal.get("source_ids"), "terminal source_ids")
     if set(gate_source_ids) != set(result_source_ids):
         raise GateRoutingError("terminal disposition source IDs do not exactly match result")

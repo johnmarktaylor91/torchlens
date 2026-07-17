@@ -1586,6 +1586,21 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
                 path.resolve() for path in (*allowed_read_paths, *parent_allowed_read_paths)
             )
         )
+        self.allowed_read_roots = tuple(path for path in self.allowed_read_paths if path.is_dir())
+        self.legacy_runtime_code_roots = (
+            tuple(
+                dict.fromkeys(
+                    (
+                        *(Path(value).resolve() for value in sys.path if value),
+                        Path(sys.prefix).resolve(),
+                        Path(sys.base_prefix).resolve(),
+                        *self.allowed_read_roots,
+                    )
+                )
+            )
+            if self.allowed_read_roots
+            else ()
+        )
         parent_standard_asset = os.environ.get(_PARENT_STANDARD_INPUT_ASSET_ENV)
         standard_asset_candidates = [standard_input_asset]
         if parent_standard_asset:
@@ -1598,18 +1613,6 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
                 "checkpoint-read", "conflicting parent and worker standard input assets"
             )
         self.standard_input_asset = next(iter(normalized_assets), None)
-        self.environment_search_paths = frozenset(
-            Path(value).resolve() for value in sys.path if isinstance(value, str) and value
-        )
-        self.runtime_code_roots = tuple(
-            dict.fromkeys(
-                (
-                    *self.environment_search_paths,
-                    Path(sys.prefix).resolve(),
-                    Path(sys.base_prefix).resolve(),
-                )
-            )
-        )
         self.observation = PolicyObservation(
             credentials_present=any(_contains_credential_name(name) for name in os.environ)
         )
@@ -1746,25 +1749,26 @@ class ExecutionPolicy(AbstractContextManager[PolicyObservation]):
             return True
         if any(candidate == root or root in candidate.parents for root in _SPECIAL_READ_ROOTS):
             return True
-        if _runtime_import_metadata_path_allowed(candidate):
-            return True
         try:
             if candidate.is_dir():
                 return True
         except OSError:
             pass
-        if _runtime_native_code_path_allowed(candidate, self.runtime_code_roots):
+        if not candidate.exists() and _runtime_import_metadata_path_allowed(candidate):
             return True
         if _runtime_model_data_path(candidate) and candidate != self.standard_input_asset:
             return False
-        if any(
-            candidate == allowed or allowed in candidate.parents
-            for allowed in self.allowed_read_paths
-        ):
+        if candidate in self.allowed_read_paths:
+            return True
+        if any(root in candidate.parents for root in self.allowed_read_roots):
             return True
         if any(candidate == root or root in candidate.parents for root in self.allowed_roots):
             return True
-        return _runtime_code_path_allowed(candidate, self.runtime_code_roots)
+        if self.legacy_runtime_code_roots and _runtime_import_metadata_path_allowed(candidate):
+            return True
+        if _runtime_native_code_path_allowed(candidate, self.legacy_runtime_code_roots):
+            return True
+        return _runtime_code_path_allowed(candidate, self.legacy_runtime_code_roots)
 
     def _audit_path(self, value: Any, *, writing: bool) -> None:
         """Audit one Python-level file access.

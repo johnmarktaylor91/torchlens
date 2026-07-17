@@ -52,7 +52,8 @@ from menagerie.crawler.models import AppendResult, JsonObject
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
 
-ARTIFACT_RECONSTRUCTION_SCHEMA_VERSION = "menagerie.crawler.artifact-reconstruction.v1"
+ARTIFACT_RECONSTRUCTION_SCHEMA_VERSION_V1 = "menagerie.crawler.artifact-reconstruction.v1"
+ARTIFACT_RECONSTRUCTION_SCHEMA_VERSION = "menagerie.crawler.artifact-reconstruction.v2"
 
 
 class ArtifactTransactionError(RuntimeError):
@@ -136,6 +137,7 @@ class ReconstructionInputs:
 
     author_result: Mapping[str, Any]
     proposal: Optional[Mapping[str, Any]]
+    handoff_execution: Optional[Mapping[str, Any]]
     source_manifest: Mapping[str, Any]
     accepted_gate_item: Mapping[str, Any]
 
@@ -656,7 +658,15 @@ def _validate_context_result(
     author_result: Mapping[str, Any],
     proposal: Optional[Mapping[str, Any]],
     source_manifest: Mapping[str, Any],
-) -> tuple[str, Optional[str], str, tuple[str, ...]]:
+) -> tuple[
+    str,
+    Optional[str],
+    Optional[str],
+    Optional[str],
+    Optional[Mapping[str, Any]],
+    str,
+    tuple[str, ...],
+]:
     """Validate typed author, proposal, source, and intake bindings.
 
     Parameters
@@ -666,8 +676,9 @@ def _validate_context_result(
 
     Returns
     -------
-    tuple[str, str | None, str, tuple[str, ...]]
-        Result ID, proposal ID, source-manifest identity, and exact source set.
+    tuple[str, str | None, str | None, str | None, Mapping | None, str, tuple[str, ...]]
+        Result ID, ordinary proposal ID, handoff proposal/hash/proposal, source-manifest
+        identity, and exact source set.
 
     Raises
     ------
@@ -714,6 +725,9 @@ def _validate_context_result(
     payload = author_result.get("payload")
     embedded = payload.get("proposal") if isinstance(payload, Mapping) else None
     proposal_id: Optional[str] = None
+    handoff_proposal_id: Optional[str] = None
+    handoff_sha256: Optional[str] = None
+    handoff_proposal: Optional[Mapping[str, Any]] = None
     if kind == "PROPOSED":
         if not isinstance(proposal, Mapping) or not isinstance(embedded, Mapping):
             raise ArtifactBindingError("PROPOSED author result requires its exact proposal")
@@ -763,9 +777,56 @@ def _validate_context_result(
                     "proposal source fields differ from controlled-fetch manifest"
                 )
         proposal_id = str(proposal["proposal_id"])
+    elif kind == "DEFER_RECOMMENDATION":
+        if proposal is not None or embedded is not None or not isinstance(payload, Mapping):
+            raise ArtifactBindingError("terminal deferral cannot masquerade as PROPOSED")
+        handoff = payload.get("handoff_execution")
+        candidate = handoff.get("proposal") if isinstance(handoff, Mapping) else None
+        if not isinstance(handoff, Mapping) or not isinstance(candidate, Mapping):
+            raise ArtifactBindingError("terminal deferral lacks executable handoff authority")
+        try:
+            validate_payload(candidate, AUTHOR_PROPOSAL_SCHEMA_VERSION_V3)
+        except PayloadValidationError as exc:
+            raise ArtifactBindingError(f"invalid handoff proposal: {exc}") from exc
+        implementation = candidate.get("proposed_facts", {}).get("implementation", {})
+        code_manifest = (
+            implementation.get("code_manifest") or [] if isinstance(implementation, Mapping) else []
+        )
+        handoff_basis = {
+            "proposal": candidate,
+            "proposal_sha256": handoff.get("proposal_sha256"),
+            "code_manifest_identity": handoff.get("code_manifest_identity"),
+            "source_manifest_identity": handoff.get("source_manifest_identity"),
+        }
+        if (
+            candidate.get("proposal_sha256") != handoff.get("proposal_sha256")
+            or candidate.get("stable_id") != stable_id
+            or candidate.get("work_id") != work_id
+            or candidate.get("source_manifest_identity") != source_identity
+            or candidate.get("intake_snapshot_id") != context.active_intake_snapshot_id
+            or candidate.get("intake_snapshot_sha256") != context.active_intake_snapshot_sha256
+            or candidate.get("intake_item_sha256") != stable_hash(intake_item)
+            or candidate.get("dispatcher_identity") != context.author_dispatcher_identity
+            or not isinstance(code_manifest, list)
+            or stable_hash(code_manifest) != handoff.get("code_manifest_identity")
+            or handoff.get("source_manifest_identity") != source_identity
+            or handoff.get("handoff_sha256") != stable_hash(handoff_basis)
+        ):
+            raise ArtifactBindingError("terminal executable handoff binding changed")
+        handoff_proposal = candidate
+        handoff_proposal_id = str(candidate["proposal_id"])
+        handoff_sha256 = str(handoff["handoff_sha256"])
     elif proposal is not None or embedded is not None:
         raise ArtifactBindingError("non-proposed author result cannot carry a proposal")
-    return str(author_result["result_id"]), proposal_id, source_identity, source_ids
+    return (
+        str(author_result["result_id"]),
+        proposal_id,
+        handoff_proposal_id,
+        handoff_sha256,
+        handoff_proposal,
+        source_identity,
+        source_ids,
+    )
 
 
 def _validate_artifact_inputs(
@@ -930,6 +991,8 @@ def _transaction_id(
     work_id: str,
     result_id: str,
     proposal_id: Optional[str],
+    handoff_proposal_id: Optional[str],
+    handoff_sha256: Optional[str],
     source_manifest_identity: str,
     source_ids: Sequence[str],
     objects: Sequence[MirrorObject],
@@ -940,7 +1003,8 @@ def _transaction_id(
 
     Parameters
     ----------
-    stable_id, work_id, result_id, proposal_id, source_manifest_identity,
+    stable_id, work_id, result_id, proposal_id, handoff_proposal_id, handoff_sha256,
+    source_manifest_identity,
     source_ids, objects, claims, context:
         Complete private-stage authority basis.
 
@@ -957,6 +1021,8 @@ def _transaction_id(
                 "work_id": work_id,
                 "author_result_id": result_id,
                 "proposal_id": proposal_id,
+                "handoff_proposal_id": handoff_proposal_id,
+                "handoff_sha256": handoff_sha256,
                 "source_manifest_identity": source_manifest_identity,
                 "source_ids": sorted(source_ids),
                 "object_ids": sorted(str(value.object_id) for value in objects),
@@ -1015,6 +1081,8 @@ def _event_payload(
     context: AuthorityContext,
     author_result_id: str,
     proposal_id: Optional[str],
+    handoff_proposal_id: Optional[str],
+    handoff_sha256: Optional[str],
     source_manifest_identity: str,
     source_ids: Sequence[str],
     objects: Sequence[tuple[MirrorObject, str]],
@@ -1031,7 +1099,7 @@ def _event_payload(
     Parameters
     ----------
     transaction_id, predecessor_event_id, event_kind, created_at, stable_id,
-    work_id, context, author_result_id, proposal_id,
+    work_id, context, author_result_id, proposal_id, handoff_proposal_id, handoff_sha256,
     source_manifest_identity, source_ids, objects, claims, gate_id,
     gate_item_sha256, dependency_vector_sha256, authorization_id,
     reconstruction, publication_inventory:
@@ -1055,6 +1123,8 @@ def _event_payload(
         "intake_snapshot_sha256": context.active_intake_snapshot_sha256,
         "author_result_id": author_result_id,
         "proposal_id": proposal_id,
+        "handoff_proposal_id": handoff_proposal_id,
+        "handoff_sha256": handoff_sha256,
         "source_manifest_identity": source_manifest_identity,
         "source_ids": sorted(source_ids),
         "objects": [
@@ -1284,6 +1354,8 @@ def validate_artifact_event_chains(
                     "intake_snapshot_sha256",
                     "author_result_id",
                     "proposal_id",
+                    "handoff_proposal_id",
+                    "handoff_sha256",
                     "source_manifest_identity",
                     "source_ids",
                 )
@@ -1421,14 +1493,25 @@ def stage_private_artifact(
         Verified private-custody transaction.
     """
 
-    result_id, proposal_id, source_identity, source_ids = _validate_context_result(
+    (
+        result_id,
+        proposal_id,
+        handoff_proposal_id,
+        handoff_sha256,
+        handoff_proposal,
+        source_identity,
+        source_ids,
+    ) = _validate_context_result(
         context, stable_id, work_id, author_result, proposal, source_manifest
     )
-    _validate_artifact_inputs(artifacts, source_manifest, proposal)
+    execution_proposal = proposal if proposal is not None else handoff_proposal
+    _validate_artifact_inputs(artifacts, source_manifest, execution_proposal)
     objects_by_id: dict[MirrorObjectId, MirrorObject] = {}
     custody_keys: dict[MirrorObjectId, str] = {}
     claims: list[ArtifactClaim] = []
-    proposal_value: DependencyValue = proposal_id or DependencyState.NOT_APPLICABLE
+    proposal_value: DependencyValue = (
+        proposal_id or handoff_proposal_id or DependencyState.NOT_APPLICABLE
+    )
     for artifact in sorted(
         artifacts,
         key=lambda value: (
@@ -1481,6 +1564,8 @@ def stage_private_artifact(
         work_id=work_id,
         result_id=result_id,
         proposal_id=proposal_id,
+        handoff_proposal_id=handoff_proposal_id,
+        handoff_sha256=handoff_sha256,
         source_manifest_identity=source_identity,
         source_ids=source_ids,
         objects=objects,
@@ -1497,6 +1582,8 @@ def stage_private_artifact(
         context=context,
         author_result_id=result_id,
         proposal_id=proposal_id,
+        handoff_proposal_id=handoff_proposal_id,
+        handoff_sha256=handoff_sha256,
         source_manifest_identity=source_identity,
         source_ids=source_ids,
         objects=tuple((obj, custody_keys[obj.object_id]) for obj in objects),
@@ -1776,6 +1863,8 @@ def append_artifact_authorization(
         if (
             not isinstance(terminal, Mapping)
             or terminal.get("author_result_id") != staged.event["author_result_id"]
+            or terminal.get("handoff_proposal_id") != staged.event.get("handoff_proposal_id")
+            or terminal.get("handoff_sha256") != staged.event.get("handoff_sha256")
             or terminal.get("source_manifest_identity") != staged.event["source_manifest_identity"]
             or sorted(terminal.get("source_ids", [])) != staged.event["source_ids"]
         ):
@@ -1849,6 +1938,8 @@ def append_artifact_authorization(
         context=context,
         author_result_id=str(staged.event["author_result_id"]),
         proposal_id=staged.event.get("proposal_id"),
+        handoff_proposal_id=staged.event.get("handoff_proposal_id"),
+        handoff_sha256=staged.event.get("handoff_sha256"),
         source_manifest_identity=str(staged.event["source_manifest_identity"]),
         source_ids=tuple(str(value) for value in staged.event["source_ids"]),
         objects=objects,
@@ -1882,7 +1973,15 @@ def _validate_reconstruction_inputs(
         If any input differs from the staged or authorized transaction.
     """
 
-    result_id, proposal_id, source_identity, source_ids = _validate_context_result(
+    (
+        result_id,
+        proposal_id,
+        handoff_proposal_id,
+        handoff_sha256,
+        _handoff_proposal,
+        source_identity,
+        source_ids,
+    ) = _validate_context_result(
         context,
         authorization.stable_id,
         authorization.work_id,
@@ -1893,6 +1992,14 @@ def _validate_reconstruction_inputs(
     if (
         result_id != staged.event["author_result_id"]
         or proposal_id != staged.event.get("proposal_id")
+        or handoff_proposal_id != staged.event.get("handoff_proposal_id")
+        or handoff_sha256 != staged.event.get("handoff_sha256")
+        or (dict(inputs.handoff_execution) if inputs.handoff_execution is not None else None)
+        != (
+            dict(inputs.author_result.get("payload", {}).get("handoff_execution", {}))
+            if inputs.author_result.get("kind") == "DEFER_RECOMMENDATION"
+            else None
+        )
         or source_identity != staged.event["source_manifest_identity"]
         or list(source_ids) != staged.event["source_ids"]
         or stable_hash(inputs.accepted_gate_item) != authorization.accepted_gate_item_sha256
@@ -2171,6 +2278,13 @@ def _reconstruction_document(
         "family_binding": deepcopy(dict(family_binding)) if family_binding is not None else None,
         "author_result": deepcopy(dict(inputs.author_result)),
         "proposal": deepcopy(dict(inputs.proposal)) if inputs.proposal is not None else None,
+        "handoff_execution": (
+            deepcopy(dict(inputs.handoff_execution))
+            if inputs.handoff_execution is not None
+            else None
+        ),
+        "handoff_proposal_id": staged.event.get("handoff_proposal_id"),
+        "handoff_sha256": staged.event.get("handoff_sha256"),
         "source_manifest": deepcopy(dict(inputs.source_manifest)),
         "source_ids": list(staged.event["source_ids"]),
         "accepted_gate_id": authorization.accepted_gate_id,
@@ -2315,6 +2429,8 @@ def publish_authorized_artifact(
         context=context,
         author_result_id=str(staged.event["author_result_id"]),
         proposal_id=staged.event.get("proposal_id"),
+        handoff_proposal_id=staged.event.get("handoff_proposal_id"),
+        handoff_sha256=staged.event.get("handoff_sha256"),
         source_manifest_identity=str(staged.event["source_manifest_identity"]),
         source_ids=tuple(str(value) for value in staged.event["source_ids"]),
         objects=objects_with_keys,
@@ -2337,6 +2453,8 @@ def publish_authorized_artifact(
         context=context,
         author_result_id=str(staged.event["author_result_id"]),
         proposal_id=staged.event.get("proposal_id"),
+        handoff_proposal_id=staged.event.get("handoff_proposal_id"),
+        handoff_sha256=staged.event.get("handoff_sha256"),
         source_manifest_identity=str(staged.event["source_manifest_identity"]),
         source_ids=tuple(str(value) for value in staged.event["source_ids"]),
         objects=objects_with_keys,
@@ -2427,7 +2545,15 @@ def _validate_reconstruction_document(
     assert isinstance(source_manifest, Mapping)
     assert isinstance(gate_item, Mapping)
     try:
-        result_id, proposal_id, source_identity, source_ids = _validate_context_result(
+        (
+            result_id,
+            proposal_id,
+            handoff_proposal_id,
+            handoff_sha256,
+            _handoff_proposal,
+            source_identity,
+            source_ids,
+        ) = _validate_context_result(
             context,
             stable_id,
             str(final_event["work_id"]),
@@ -2440,6 +2566,16 @@ def _validate_reconstruction_document(
     if (
         result_id != final_event["author_result_id"]
         or proposal_id != final_event.get("proposal_id")
+        or handoff_proposal_id != final_event.get("handoff_proposal_id")
+        or handoff_sha256 != final_event.get("handoff_sha256")
+        or document.get("handoff_proposal_id") != final_event.get("handoff_proposal_id")
+        or document.get("handoff_sha256") != final_event.get("handoff_sha256")
+        or document.get("handoff_execution")
+        != (
+            result.get("payload", {}).get("handoff_execution")
+            if result.get("kind") == "DEFER_RECOMMENDATION"
+            else None
+        )
         or source_identity != final_event["source_manifest_identity"]
         or list(source_ids) != final_event["source_ids"]
         or document.get("source_ids") != final_event["source_ids"]
@@ -2694,6 +2830,11 @@ def validate_artifact_checkpoint(
                     if isinstance(document.get("proposal"), Mapping)
                     else None
                 ),
+                handoff_execution=(
+                    deepcopy(dict(document["handoff_execution"]))
+                    if isinstance(document.get("handoff_execution"), Mapping)
+                    else None
+                ),
                 source_manifest=deepcopy(dict(document["source_manifest"])),
                 accepted_gate_item=deepcopy(dict(document["accepted_gate_item"])),
             ),
@@ -2915,6 +3056,9 @@ def _rehydration_targets(
         )
 
     proposal = inputs.proposal
+    if proposal is None and isinstance(inputs.handoff_execution, Mapping):
+        candidate = inputs.handoff_execution.get("proposal")
+        proposal = dict(candidate) if isinstance(candidate, Mapping) else None
     implementation: Optional[Mapping[str, Any]] = None
     if proposal is not None:
         facts = proposal.get("proposed_facts")

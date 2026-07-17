@@ -123,7 +123,7 @@ def _blocked_result(
     Returns
     -------
     dict[str, Any]
-        Valid ``author-result.v3`` mapping.
+        Valid ``author-result.v4`` mapping.
     """
 
     payload = {
@@ -333,6 +333,8 @@ def _gate_item(stable_id: str, result: dict[str, Any], source_identity: str) -> 
             "verdict": "accepted",
             "author_result_id": result["result_id"],
             "author_result_sha256": result["result_sha256"],
+            "handoff_proposal_id": None,
+            "handoff_sha256": None,
             "source_manifest_identity": source_identity,
             "source_ids": ["src-upstream"],
         },
@@ -462,6 +464,7 @@ def _commit_private(
         reconstruction_inputs=ReconstructionInputs(
             author_result=result,
             proposal=None,
+            handoff_execution=None,
             source_manifest=source_manifest,
             accepted_gate_item=gate_item,
         ),
@@ -623,6 +626,7 @@ def test_publication_occurs_only_after_committed_public_authorization(tmp_path: 
             reconstruction_inputs=ReconstructionInputs(
                 author_result=result,
                 proposal=proposal,
+                handoff_execution=None,
                 source_manifest=source_manifest,
                 accepted_gate_item=gate_item,
             ),
@@ -709,6 +713,7 @@ def test_publication_capability_without_ledger_authorization_writes_nothing(
                 reconstruction_inputs=ReconstructionInputs(
                     author_result=result,
                     proposal=None,
+                    handoff_execution=None,
                     source_manifest=source_manifest,
                     accepted_gate_item={},
                 ),

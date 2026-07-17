@@ -3,7 +3,7 @@
 This data dictionary is the human companion to the executable JSON Schemas in `menagerie/crawler/schemas/`. “Mandatory” means the field is required by its enclosing schema object; “Best-effort” means it may be null, omitted by a branch, or records an observation that is not guaranteed to exist. Closed vocabularies and cross-field conditions remain authoritative in the schemas.
 
 Current v3 amendment: `input_contract.code_path` is absent from `model.v3`,
-`author-proposal.v3`, and embedded `author-result.v3`; either null or string presence rejects. The field
+`author-proposal.v3`, and embedded `author-result.v4`; either null or string presence rejects. The field
 listed below belongs only to readable untrusted `model.v2` history. The distinct current-v3 fields
 `implementation.code_path` and `implementation.source_to_code_map[].code_path` remain mandatory where
 their enclosing recipe requires them.

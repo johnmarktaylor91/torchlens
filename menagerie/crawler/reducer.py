@@ -1789,14 +1789,24 @@ class CanonicalReducer:
             artifact_claim_ids=tuple(claim.claim_id for claim in claims),
         )
         public_object_ids = tuple(
-            claim.object_id
-            for claim in claims
-            if claim.license_disposition == RedistributionClass.PUBLIC_OK.value
+            sorted(
+                {
+                    claim.object_id
+                    for claim in claims
+                    if claim.license_disposition == RedistributionClass.PUBLIC_OK.value
+                },
+                key=str,
+            )
         )
         private_object_ids = tuple(
-            claim.object_id
-            for claim in claims
-            if claim.license_disposition != RedistributionClass.PUBLIC_OK.value
+            sorted(
+                {
+                    claim.object_id
+                    for claim in claims
+                    if claim.license_disposition != RedistributionClass.PUBLIC_OK.value
+                },
+                key=str,
+            )
         )
         authorization = PublicationAuthorization(
             authorization_id=authorization_id,

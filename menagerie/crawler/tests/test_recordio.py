@@ -108,6 +108,7 @@ def test_v3_writer_reads_v2_history_but_appends_only_v3(tmp_path: Path) -> None:
     legacy = make_attempt()
     legacy["schema_version"] = ATTEMPT_SCHEMA_VERSION
     for field in (
+        "capability_observation",
         "execution_read_manifest_identity",
         "raw_award_receipt",
         "raw_award_receipt_sha256",
@@ -115,6 +116,7 @@ def test_v3_writer_reads_v2_history_but_appends_only_v3(tmp_path: Path) -> None:
         "unattested_partial",
     ):
         legacy.pop(field)
+    legacy["worker_receipt"].pop("output_value_sha256")
     with JsonlLedger(path, ATTEMPT_SCHEMA_VERSION) as ledger:
         ledger.append(legacy)
 

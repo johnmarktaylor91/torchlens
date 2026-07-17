@@ -20,7 +20,7 @@ from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_
 from menagerie.crawler.metadata import recompute_accepted_identities
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
 from menagerie.crawler.models import LedgerPaths
-from menagerie.crawler.recordio import JsonlLedger, SingleWriterError
+from menagerie.crawler.recordio import JsonlLedger, SingleWriterError, scan_jsonl
 from menagerie.crawler.reducer import (
     CanonicalReducer as ProductionCanonicalReducer,
     ReductionError,
@@ -36,12 +36,14 @@ from menagerie.crawler.status import (
 from menagerie.crawler.tests.conftest import (
     _bind_model_identities,
     _model_facts,
+    bind_handoff_execution,
     bind_terminal_attempts,
     make_attempt,
     make_failed_attempt,
     make_gate,
     make_authority_context,
     make_model,
+    make_author_proposal,
     rebind_attempt_raw_proof,
     rebind_nonaward_parent_proof,
 )
@@ -456,10 +458,17 @@ def _stage_deferred_admission_control(
         "evidence_identity": model["evidence"]["evidence_identity"],
         "license_identity": stable_hash(model["licenses"]),
     }
-    payload["recommendation_sha256"] = stable_hash(payload)
     context = reducer.context
+    payload["handoff_execution"] = bind_handoff_execution(
+        make_author_proposal("m_example"),
+        context=context,
+        work_id="work-m_example",
+        campaign_id="campaign-m_example",
+        source_manifest_identity=source_manifest["manifest_sha256"],
+    )
+    payload["recommendation_sha256"] = stable_hash(payload)
     author_result = {
-        "schema_version": "menagerie.crawler.author-result.v3",
+        "schema_version": "menagerie.crawler.author-result.v4",
         "result_id": "result-deferred-control",
         "result_sha256": stable_hash("pending"),
         "kind": "DEFER_RECOMMENDATION",
@@ -503,6 +512,8 @@ def _stage_deferred_admission_control(
         "author_result_sha256": author_result["result_sha256"],
         "kind": author_result["kind"],
         "predicate": "needs-cuda",
+        "handoff_proposal_id": payload["handoff_execution"]["proposal"]["proposal_id"],
+        "handoff_sha256": payload["handoff_execution"]["handoff_sha256"],
         "verdict": "accepted",
         "source_manifest_identity": source_manifest["manifest_sha256"],
         "source_ids": list(gate_source_ids),
@@ -531,11 +542,19 @@ def _stage_deferred_admission_control(
     probe_ids: list[str] = []
     if probe_attack == "missing":
         probe_ids = ["probe-missing"]
-    elif probe_attack in {"wrong-work", "wrong-target", "unsupported-claim"}:
+    elif probe_attack in {"positive", "wrong-work", "wrong-target", "unsupported-claim"}:
         probe = _observed_defer_attempt(
             attempt_id=f"probe-{probe_attack}",
             work_id=("work-other" if probe_attack == "wrong-work" else "work-m_example"),
         )
+        probe["capability_observation"] = {
+            "claim": (
+                "needs-x86"
+                if probe_attack in {"wrong-target", "unsupported-claim"}
+                else "needs-cuda"
+            ),
+            "supported": True,
+        }
         if probe_attack == "wrong-target":
             probe["defer_evidence"] = {
                 "target_status": "deferred:needs-x86",
@@ -568,6 +587,9 @@ def _stage_deferred_admission_control(
         "explanation": "source requires CUDA",
     }
     reducer.append_attempt(attempt)
+    if probe_attack == "positive":
+        bind_terminal_attempts(model, [control_attempt, *probes, attempt])
+        return reducer.prepare_model(model)
     return prepared
 
 
@@ -602,6 +624,36 @@ def test_deferred_terminal_control_passes_production_reducer_admission(tmp_path:
     with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
         prepared = _stage_deferred_admission_control(reducer, tmp_path)
         assert _append_unprepared(reducer, prepared).appended
+
+
+def test_deferred_terminal_positive_capability_probe_is_persisted_and_admitted(
+    tmp_path: Path,
+) -> None:
+    """A schema-valid positive capability probe must make A-05 admission reachable.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated canonical ledgers and physical mirrors.
+    """
+
+    with CanonicalReducer(_paths(tmp_path), ["m_example"]) as reducer:
+        prepared = _stage_deferred_admission_control(
+            reducer,
+            tmp_path,
+            probe_attack="positive",
+        )
+        assert _append_unprepared(reducer, prepared).appended
+        probes = [
+            attempt
+            for attempt in scan_jsonl(reducer.ledger_paths.attempts)
+            if attempt.get("capability_observation") is not None
+        ]
+        assert len(probes) == 1
+        assert probes[0]["capability_observation"] == {
+            "claim": "needs-cuda",
+            "supported": True,
+        }
 
 
 @pytest.mark.parametrize(

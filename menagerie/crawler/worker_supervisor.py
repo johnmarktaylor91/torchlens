@@ -27,6 +27,7 @@ from typing import Any, BinaryIO, Callable, Iterator, Mapping, Optional, Sequenc
 from menagerie.crawler.authority import (
     ExecutionReadManifest,
     ExecutionReadManifestV2,
+    exact_read_capability,
     WorkerLease as WorkerLease,
     completion_line_for_raw_award_receipt,
     derive_parent_attestation,
@@ -1707,14 +1708,21 @@ def _request_allowed_read_paths(
     if manifest is not None:
         verify_execution_read_manifest(manifest)
         if isinstance(manifest, ExecutionReadManifestV2):
-            allowed.extend(member.path for member in manifest.code_members)
+            allowed.extend(exact_read_capability(manifest).member_paths)
         else:
             allowed.extend(path for path, _digest, _kind in manifest.code_members)
+            allowed.extend(
+                path for path, kind in manifest.runtime_support if kind == "runtime-root"
+            )
         if manifest.standard_input_asset is not None:
             allowed.append(manifest.standard_input_asset[0])
         allowed.extend(path for path, kind in manifest.runtime_support if kind == "runtime-file")
     return tuple(
-        dict.fromkeys(path.resolve() for path in allowed if path.is_absolute() and path.is_file())
+        dict.fromkeys(
+            path.resolve()
+            for path in allowed
+            if path.is_absolute() and (path.is_file() or path.is_dir())
+        )
     )
 
 
@@ -3082,6 +3090,10 @@ def run_isolated_subprocess(
         discovered_roots = _runtime_read_roots(argv, working_directory)
         if execution_read_manifest is None:
             macos_runtime_read_roots = discovered_roots
+            runtime_package_data_paths = _runtime_package_data_paths(macos_runtime_read_roots)
+        elif isinstance(execution_read_manifest, ExecutionReadManifestV2):
+            macos_runtime_read_roots = ()
+            runtime_package_data_paths = ()
         else:
             declared_runtime_roots = tuple(
                 path
@@ -3091,7 +3103,7 @@ def run_isolated_subprocess(
             macos_runtime_read_roots = tuple(
                 dict.fromkeys((*discovered_roots[:-1], *declared_runtime_roots))
             )
-        runtime_package_data_paths = _runtime_package_data_paths(macos_runtime_read_roots)
+            runtime_package_data_paths = _runtime_package_data_paths(macos_runtime_read_roots)
         profile_path = scratch_root / "worker-sandbox.sb"
         profile_path.write_text(
             generate_macos_sandbox_profile(
@@ -3105,6 +3117,8 @@ def run_isolated_subprocess(
         discovered_roots = _linux_runtime_code_roots(argv, working_directory)
         if execution_read_manifest is None:
             linux_runtime_code_roots = discovered_roots
+        elif isinstance(execution_read_manifest, ExecutionReadManifestV2):
+            linux_runtime_code_roots = ()
         else:
             declared_runtime_roots = tuple(
                 path

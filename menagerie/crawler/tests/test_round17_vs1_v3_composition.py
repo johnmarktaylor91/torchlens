@@ -5,9 +5,13 @@ from __future__ import annotations
 import ast
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
+import pytest
+
 import menagerie.crawler.driver as driver_module
+from menagerie.crawler.authority import derive_mode_summary
 from menagerie.crawler.driver import SupervisedForwardLane
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.policy import compile_execution_read_manifest
@@ -47,7 +51,12 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
     return ((torch.zeros(1, 2, device=device),), {})
 """
 
-VS1_LANDING_MANIFEST = {
+_MODE_ADAPTER = _TINY_ADAPTER.replace(
+    "return value + 1",
+    "return value + (1 if self.training else 2)",
+)
+
+VS1_LANDING_MANIFEST: dict[str, Any] = {
     "findings": ("SOL-R16-01",),
     "production_symbols": {
         "driver": (
@@ -70,8 +79,24 @@ VS1_LANDING_MANIFEST = {
 }
 
 
-def test_real_v3_worker_result_awards_through_driver_and_reducer(tmp_path: Path) -> None:
-    """A real supervised v3 worker success must earn one canonical ``runs`` revision."""
+@pytest.mark.parametrize(
+    ("adapter_source", "expected_divergence"),
+    ((_TINY_ADAPTER, "none"), (_MODE_ADAPTER, "statistical")),
+)
+def test_real_v3_worker_result_awards_through_driver_and_reducer(
+    tmp_path: Path,
+    adapter_source: str,
+    expected_divergence: str,
+) -> None:
+    """Real persisted value digests must reach none/statistical mode authority.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated campaign root.
+    adapter_source, expected_divergence:
+        Real adapter bytes and their authenticated mode classification.
+    """
 
     snapshot = _snapshot(tmp_path, count=1)
     paths = _paths(tmp_path, snapshot)
@@ -81,7 +106,7 @@ def test_real_v3_worker_result_awards_through_driver_and_reducer(tmp_path: Path)
     artifact = FakeAuthor().author(item, paths.work_root, driver.config, context)
 
     adapter_path = artifact.model_dir / "adapter.py"
-    adapter_path.write_text(_TINY_ADAPTER, encoding="utf-8")
+    adapter_path.write_text(adapter_source, encoding="utf-8")
     adapter_digest = hash_bytes(adapter_path.read_bytes())
     code_manifest = [dict(row) for row in model_code_manifest(adapter_path, artifact.model_dir)]
     proposal = artifact.proposal
@@ -98,8 +123,10 @@ def test_real_v3_worker_result_awards_through_driver_and_reducer(tmp_path: Path)
         }
     )
     facts["input_contract"]["args"][0]["shape"] = [1, 2]
-    facts["modes"]["meaningful_modes"] = ["eval"]
-    facts["external_metadata"]["modes"]["meaningful_modes"] = ["eval"]
+    facts["modes"]["meaningful_modes"] = ["train", "eval"]
+    facts["modes"]["train_eval_divergence"] = expected_divergence
+    facts["external_metadata"]["modes"]["meaningful_modes"] = ["train", "eval"]
+    facts["external_metadata"]["modes"]["train_eval_divergence"] = expected_divergence
     facts["evidence"]["excerpts"][0]["supports"] = sorted(
         set(facts["evidence"]["excerpts"][0]["supports"])
         | {
@@ -119,7 +146,7 @@ def test_real_v3_worker_result_awards_through_driver_and_reducer(tmp_path: Path)
     environment_root = tmp_path / "current-interpreter-env"
     environment_root.mkdir()
     environment = _test_environment(environment_root)
-    execution_identity = driver_module._execution_identity(artifact.proposal, environment)
+    execution_identity = driver_module._execution_identity(artifact, environment)
     code_identity = stable_hash(code_manifest)
     manifest = compile_execution_read_manifest(
         stable_id=item.stable_id,
@@ -148,31 +175,37 @@ def test_real_v3_worker_result_awards_through_driver_and_reducer(tmp_path: Path)
                 attempt_sink=reducer.append_attempt,
             )
 
-        result_path = (
-            paths.work_root
-            / item.stable_id
-            / "forward"
-            / "cold-1"
-            / "eval"
-            / "result"
-            / "receipt.json"
-        )
-        wrapper = json.loads(result_path.read_text(encoding="utf-8"))
-        assert wrapper["result_version"] == "menagerie.crawler.worker-result.v3"
-        assert wrapper["raw_award_receipt"] is not None
-        synthetic = make_worker_result_v3_mapping(
-            wrapper["diagnostic"],
-            raw_award_receipt=wrapper["raw_award_receipt"],
-        )
-        assert set(synthetic) == set(wrapper)
-        assert set(synthetic["diagnostic"]) == set(wrapper["diagnostic"])
-        assert synthetic["result_version"] == wrapper["result_version"]
+        for mode in ("train", "eval"):
+            result_path = (
+                paths.work_root
+                / item.stable_id
+                / "forward"
+                / "cold-1"
+                / mode
+                / "result"
+                / "receipt.json"
+            )
+            wrapper = json.loads(result_path.read_text(encoding="utf-8"))
+            assert wrapper["result_version"] == "menagerie.crawler.worker-result.v3"
+            assert wrapper["raw_award_receipt"] is not None, wrapper["diagnostic"]
+            synthetic = make_worker_result_v3_mapping(
+                wrapper["diagnostic"],
+                raw_award_receipt=wrapper["raw_award_receipt"],
+            )
+            assert set(synthetic) == set(wrapper)
+            assert set(synthetic["diagnostic"]) == set(wrapper["diagnostic"])
+            assert synthetic["result_version"] == wrapper["result_version"]
         assert all(attempt["result"] == "succeeded" for attempt in attempts), [
             (attempt["result"], attempt["error"]) for attempt in attempts
         ]
         assert driver_module._attempt_policy_satisfied(attempts, artifact.proposal, 1)
 
         persisted = scan_jsonl(paths.ledgers.attempts)
+        by_mode = {str(attempt["mode"]): attempt for attempt in persisted}
+        summary = derive_mode_summary(by_mode["train"], by_mode["eval"])
+        assert summary.comparison_state == "verified"
+        assert summary.classification == expected_divergence
+        assert summary.compared_fields == ("output_signature", "output_value_sha256")
         model = driver_module._assemble_run_model(
             item,
             artifact,
@@ -184,6 +217,35 @@ def test_real_v3_worker_result_awards_through_driver_and_reducer(tmp_path: Path)
 
     assert appended.record["status"]["code"] == "runs"
     assert len(scan_jsonl(paths.ledgers.models)) == 1
+    assert driver_module._current_run_is_fresh(
+        appended.record,
+        artifact,
+        environment,
+        [gate],
+    )
+    prior_execution_identity = str(appended.record["execution"]["execution_identity"])
+    adapter_path.write_text(f"{adapter_source}\nMUTATED_MEMBER = True\n", encoding="utf-8")
+    mutated_digest = hash_bytes(adapter_path.read_bytes())
+    mutated_manifest = [dict(row) for row in model_code_manifest(adapter_path, artifact.model_dir)]
+    artifact.proposal["proposed_facts"]["implementation"]["code_sha256"] = mutated_digest
+    artifact.proposal["proposed_facts"]["implementation"]["code_manifest"] = mutated_manifest
+    artifact.proposal["verified_hashes"]["code"] = mutated_digest
+    artifact.proposal["verified_hashes"]["code_manifest"] = stable_hash(mutated_manifest)
+    _refresh_proposal_identities(
+        artifact.proposal,
+        checker_model=driver.config.checker_model,
+        checker_version=driver.config.checker_version,
+    )
+    mutated_artifact = _rebind_fake_author_result(artifact)
+    assert driver_module._execution_identity(mutated_artifact, environment) != (
+        prior_execution_identity
+    )
+    assert not driver_module._current_run_is_fresh(
+        appended.record,
+        mutated_artifact,
+        environment,
+        [gate],
+    )
 
 
 def test_driver_has_no_direct_supervised_worker_receipt_reads() -> None:

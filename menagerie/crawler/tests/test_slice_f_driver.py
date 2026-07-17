@@ -18,9 +18,16 @@ import pytest
 import menagerie.crawler.checkpoint as checkpoint_module
 import menagerie.crawler.driver as driver_module
 import menagerie.crawler.reducer as reducer_module
-from menagerie.crawler.artifact_transactions import ArtifactEventKind, StagedArtifact
+from menagerie.crawler.artifact_transactions import (
+    ArtifactCheckpointProjection,
+    ArtifactEventKind,
+    ArtifactTransactionId,
+    ArtifactTransactionProjection,
+    StagedArtifact,
+)
 from menagerie.crawler.author_dispatch import (
     DeferRecommendation,
+    HandoffExecution,
     ProposedAuthorResult,
     SkipRecommendation,
     build_author_envelope,
@@ -62,6 +69,7 @@ from menagerie.crawler.driver import (
     EnvironmentBinding,
     ForwardLane,
     Notifier,
+    SupervisedForwardLane,
     UsagePauseScheduler,
     WorkItem,
     _execution_identity,
@@ -89,8 +97,12 @@ from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_
 from menagerie.crawler.fetcher import fetch_targets as controlled_fetch_targets
 from menagerie.crawler.metadata import authored_fact_leaves, recompute_accepted_identities
 from menagerie.crawler.models import LedgerPaths
-from menagerie.crawler.policy import SandboxUnavailableError
-from menagerie.crawler.proposal import DEFAULT_GATED_CLAIMS
+from menagerie.crawler.policy import (
+    ExecutionReadManifest,
+    SandboxUnavailableError,
+    compile_execution_read_manifest,
+)
+from menagerie.crawler.proposal import DEFAULT_GATED_CLAIMS, model_code_manifest
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import (
     CanonicalReducer,
@@ -238,6 +250,15 @@ def _terminal_fake_author_result(
     license_identity = stable_hash({"license": "restricted-private"})
     payload: dict[str, Any]
     if platform is not None:
+        handoff = {
+            "proposal": artifact.proposal,
+            "proposal_sha256": artifact.proposal["proposal_sha256"],
+            "code_manifest_identity": stable_hash(
+                artifact.proposal["proposed_facts"]["implementation"].get("code_manifest", [])
+            ),
+            "source_manifest_identity": artifact.proposal["source_manifest_identity"],
+        }
+        handoff["handoff_sha256"] = stable_hash(handoff)
         payload = {
             "arm": "DEFER_RECOMMENDATION",
             "platform": platform,
@@ -245,6 +266,7 @@ def _terminal_fake_author_result(
             "evidence_ids": ["evidence-1"],
             "evidence_identity": evidence_identity,
             "license_identity": license_identity,
+            "handoff_execution": handoff,
             "recommendation_sha256": HASH,
         }
     else:
@@ -282,6 +304,13 @@ def _terminal_fake_author_result(
             evidence_identity,
             license_identity,
             str(payload["recommendation_sha256"]),
+            HandoffExecution(
+                proposal=artifact.proposal,
+                proposal_sha256=str(handoff["proposal_sha256"]),
+                code_manifest_identity=str(handoff["code_manifest_identity"]),
+                source_manifest_identity=str(handoff["source_manifest_identity"]),
+                handoff_sha256=str(handoff["handoff_sha256"]),
+            ),
         )
         if platform is not None
         else SkipRecommendation(
@@ -391,7 +420,7 @@ class FakeAuthor(AuthorLane):
             checker_version=config.checker_version,
         )
         raw_result = {
-            "schema_version": "menagerie.crawler.author-result.v3",
+            "schema_version": "menagerie.crawler.author-result.v4",
             "result_id": stable_hash(
                 {
                     "stable_id": item.stable_id,
@@ -537,6 +566,106 @@ class BothDeferredAuthor(FakeAuthor):
         artifact = super().author(item, work_root, config, context)
         platform = "cuda" if len(self.calls) == 1 else "x86"
         return _terminal_fake_author_result(artifact, platform=platform)
+
+
+_HANDOFF_ADAPTER = """from __future__ import annotations
+
+import torch
+
+
+class Tiny(torch.nn.Module):
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        return value + 1
+
+
+def build_model() -> object:
+    return Tiny()
+
+
+def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[str, object]]:
+    del seed
+    return ((torch.zeros(1, 2, device=device),), {})
+"""
+
+
+class BothDeferredRealAuthor(FakeAuthor):
+    """Retain one real typed adapter in each durable platform handoff."""
+
+    def author(
+        self,
+        item: WorkItem,
+        work_root: Path,
+        config: DriverConfig,
+        context: AuthorityContext,
+    ) -> AuthorArtifact:
+        """Return a deferral whose nested proposal runs in the real worker."""
+
+        artifact = super().author(item, work_root, config, context)
+        adapter_path = artifact.model_dir / "adapter.py"
+        adapter_path.write_text(_HANDOFF_ADAPTER, encoding="utf-8")
+        adapter_digest = hash_bytes(adapter_path.read_bytes())
+        code_manifest = [dict(row) for row in model_code_manifest(adapter_path, artifact.model_dir)]
+        facts = artifact.proposal["proposed_facts"]
+        facts["implementation"].update(
+            {
+                "recipe_type": "typed-adapter",
+                "code_path": "adapter.py",
+                "code_sha256": adapter_digest,
+                "builder_symbol": "build_model",
+                "dummy_call_symbol": "make_dummy_call",
+                "library_recipe": None,
+                "code_manifest": code_manifest,
+            }
+        )
+        facts["input_contract"]["args"][0]["shape"] = [1, 2]
+        facts["modes"]["meaningful_modes"] = ["eval"]
+        facts["external_metadata"]["modes"]["meaningful_modes"] = ["eval"]
+        facts["evidence"]["excerpts"][0]["supports"] = sorted(
+            set(facts["evidence"]["excerpts"][0]["supports"])
+            | {
+                "implementation.code_manifest[].path",
+                "implementation.code_manifest[].sha256",
+            }
+        )
+        artifact.proposal["verified_hashes"]["code"] = adapter_digest
+        artifact.proposal["verified_hashes"]["code_manifest"] = stable_hash(code_manifest)
+        _refresh_proposal_identities(
+            artifact.proposal,
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
+        rebound = _rebind_fake_author_result(artifact)
+        platform = "cuda" if len(self.calls) == 1 else "x86"
+        return _terminal_fake_author_result(rebound, platform=platform)
+
+
+def _handoff_worker_manifest(
+    artifact: AuthorArtifact,
+    environment: EnvironmentBinding,
+    execution_identity: str,
+    *,
+    closure: object | None = None,
+) -> ExecutionReadManifest:
+    """Compile the legacy runtime-root fixture around exact handoff code members."""
+
+    del closure, environment
+    raw_manifest = artifact.proposal["proposed_facts"]["implementation"]["code_manifest"]
+    code_members = tuple(
+        (
+            artifact.model_dir / str(row["path"]),
+            str(row["sha256"]),
+            "python-source",
+        )
+        for row in raw_manifest
+    )
+    return compile_execution_read_manifest(
+        stable_id=str(artifact.proposal["stable_id"]),
+        work_id=str(artifact.proposal["work_id"]),
+        execution_identity=execution_identity,
+        code_manifest_identity=stable_hash(raw_manifest),
+        code_members=code_members,
+        runtime_support=((Path.cwd() / "menagerie", "runtime-root"),),
+    )
 
 
 class FakeChecker(CheckerLane):
@@ -695,6 +824,16 @@ class FakeChecker(CheckerLane):
         item["terminal_disposition"] = {
             "author_result_id": binding.result_id,
             "author_result_sha256": binding.result_sha256,
+            "handoff_proposal_id": (
+                result.handoff_execution.proposal["proposal_id"]
+                if isinstance(result, DeferRecommendation) and result.handoff_execution is not None
+                else None
+            ),
+            "handoff_sha256": (
+                result.handoff_execution.handoff_sha256
+                if isinstance(result, DeferRecommendation) and result.handoff_execution is not None
+                else None
+            ),
             "kind": kind,
             "predicate": predicate,
             "verdict": "accepted",
@@ -754,7 +893,7 @@ class FakeForward(ForwardLane):
         del work_root
         stable_id = str(artifact.proposal["stable_id"])
         self.calls[stable_id] = self.calls.get(stable_id, 0) + 1
-        execution_identity = _execution_identity(artifact.proposal, environment)
+        execution_identity = _execution_identity(artifact, environment)
         output_signature = make_model()["observed"]["output_signature"]
         attempts: list[dict[str, Any]] = []
         attempt_no = 0
@@ -1640,7 +1779,7 @@ def test_env_observation_binding_changes_award_closure_and_execution_identity(
     )
     environment = _test_environment(tmp_path / "env")
     before_closure = driver_module._award_closure_identity()
-    before_execution = _execution_identity(artifact.proposal, environment)
+    before_execution = _execution_identity(artifact, environment)
     original_read_bytes = Path.read_bytes
 
     def changed_environment_observer(path: Path) -> bytes:
@@ -1659,7 +1798,7 @@ def test_env_observation_binding_changes_award_closure_and_execution_identity(
 
     monkeypatch.setattr(Path, "read_bytes", changed_environment_observer)
     assert driver_module._award_closure_identity() != before_closure
-    assert _execution_identity(artifact.proposal, environment) != before_execution
+    assert _execution_identity(artifact, environment) != before_execution
 
 
 def test_award_validator_behavior_change_changes_closure_identity(
@@ -2746,7 +2885,7 @@ def test_checker_prompt_bytes_stale_gate_and_execution_identity(
     outcome = FakeChecker().check_metadata([artifact], driver.paths.work_root, driver.config)
     assert outcome.gate is not None
     environment = _test_environment(tmp_path / "env")
-    first_execution = _execution_identity(artifact.proposal, environment)
+    first_execution = _execution_identity(artifact, environment)
     assert (
         driver_module._find_gate(
             [outcome.gate], item.stable_id, "metadata_batch", artifact.proposal
@@ -2761,7 +2900,7 @@ def test_checker_prompt_bytes_stale_gate_and_execution_identity(
         )
         is None
     )
-    assert _execution_identity(artifact.proposal, environment) != first_execution
+    assert _execution_identity(artifact, environment) != first_execution
 
 
 def test_award_closure_change_stales_execution_and_current_run(
@@ -2791,14 +2930,14 @@ def test_award_closure_change_stales_execution_and_current_run(
         driver.config,
     )
     assert driver_module._current_run_is_fresh(model, artifact, environment, [gate_outcome.gate])
-    first_execution = _execution_identity(artifact.proposal, environment)
+    first_execution = _execution_identity(artifact, environment)
     monkeypatch.setattr(
         driver_module,
         "_award_closure_identity",
         lambda: "sha256:" + "f" * 64,
     )
 
-    assert _execution_identity(artifact.proposal, environment) != first_execution
+    assert _execution_identity(artifact, environment) != first_execution
     assert not driver_module._current_run_is_fresh(
         model, artifact, environment, [gate_outcome.gate]
     )
@@ -3930,7 +4069,7 @@ def test_stale_forward_cache_work_id_regenerates_without_campaign_failure(tmp_pa
         tuple(ProbeResult(name, True, "ok") for name in expected_probe_names(intent.probes)),
         strict=False,
     )
-    execution_identity = _execution_identity(artifact.proposal, environment)
+    execution_identity = _execution_identity(artifact, environment)
     cache_identity = stable_hash(
         {
             "execution_identity": execution_identity,
@@ -4221,11 +4360,23 @@ def test_cached_terminal_artifacts_follow_same_terminal_branch_on_resume(tmp_pat
     assert scan_jsonl(paths.ledgers.models) == first_models
 
 
-def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(tmp_path: Path) -> None:
-    """The Linux selector executes exactly both deferred rows and appends current revisions."""
+def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The real Linux lane executes both reconstructed deferred rows.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated cross-platform campaign root.
+    monkeypatch:
+        Real-worker compatibility manifest injector; exact v2 enforcement has a
+        separate real-OS composition.
+    """
 
     snapshot = _snapshot(tmp_path, count=2)
-    first = _driver(tmp_path, snapshot, author=BothDeferredAuthor()).run()
+    first = _driver(tmp_path, snapshot, author=BothDeferredRealAuthor()).run()
     assert first.status == "complete"
     paths = _paths(tmp_path, snapshot)
     deferred = scan_jsonl(paths.ledgers.models)
@@ -4233,9 +4384,10 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(tmp_path: 
         "deferred:needs-cuda",
         "deferred:needs-x86",
     }
+    shutil.rmtree(paths.work_root)
 
-    linux_author = FakeAuthor()
-    linux_forward = FakeForward()
+    linux_author = DisabledAuthor()
+    linux_forward = SupervisedForwardLane(timeout_seconds=20, cwd=Path.cwd())
     dependencies = DriverDependencies(
         linux_author,
         FakeChecker(),
@@ -4257,10 +4409,23 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(tmp_path: 
         dependencies,
         registry=load_environment_registry(target="linux-x86_64-cuda"),
     )
+    monkeypatch.setattr(
+        driver_module,
+        "_compile_worker_read_manifest",
+        _handoff_worker_manifest,
+    )
     result = linux.run()
     assert result.status == "complete"
-    assert set(linux_author.calls) == {item.stable_id for item in snapshot.items}
-    assert set(linux_forward.calls) == {item.stable_id for item in snapshot.items}
+    resumed_attempts = [
+        attempt
+        for attempt in scan_jsonl(paths.ledgers.attempts)
+        if attempt["result"] == "succeeded"
+    ]
+    resumed_runs = len(resumed_attempts)
+    assert resumed_runs > 0
+    assert {attempt["stable_id"] for attempt in resumed_attempts} == {
+        item.stable_id for item in snapshot.items
+    }
     revisions = scan_jsonl(paths.ledgers.models)
     assert len(revisions) == 4
     deferred_by_id = {record["stable_id"]: record for record in deferred}
@@ -4270,6 +4435,83 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(tmp_path: 
         record["parent_revision"] == deferred_by_id[str(record["stable_id"])]["record_revision"]
         for record in superseding
     )
+
+
+def test_linux_code_less_deferral_fails_visibly_without_failed_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Missing durable handoff authority must abort instead of consulting the author.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated two-platform campaign root.
+    monkeypatch:
+        Projection fault injector simulating historical code-less authority.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    assert _driver(tmp_path, snapshot, author=BothDeferredAuthor()).run().status == "complete"
+    paths = _paths(tmp_path, snapshot)
+    before = scan_jsonl(paths.ledgers.models)
+    original_resolver = driver_module.resolve_final_artifact_transaction
+
+    def code_less_transaction(
+        projection: ArtifactCheckpointProjection,
+        *,
+        stable_id: str,
+        work_id: str,
+        transaction_id: Optional[ArtifactTransactionId] = None,
+    ) -> Optional[ArtifactTransactionProjection]:
+        """Remove only the executable handoff from an otherwise valid projection."""
+
+        transaction = original_resolver(
+            projection,
+            stable_id=stable_id,
+            work_id=work_id,
+            transaction_id=transaction_id,
+        )
+        assert transaction is not None
+        return replace(
+            transaction,
+            reconstruction_inputs=replace(
+                transaction.reconstruction_inputs,
+                handoff_execution=None,
+            ),
+        )
+
+    monkeypatch.setattr(
+        driver_module,
+        "resolve_final_artifact_transaction",
+        code_less_transaction,
+    )
+    dependencies = DriverDependencies(
+        DisabledAuthor(),
+        FakeChecker(),
+        FakeForward(),
+        FakeEnvironments(tmp_path / "linux-envs"),
+        FakeNotifier(),
+        lambda: NOW,
+    )
+    linux = CrawlerDriver(
+        paths,
+        DriverConfig(
+            target="linux-x86_64-cuda",
+            only_status="deferred:*",
+            run_id="linux-code-less-handoff",
+            machine_id="linux-machine",
+            review_checkpoint_at=None,
+            progress_milestones=(),
+        ),
+        dependencies,
+        registry=load_environment_registry(target="linux-x86_64-cuda"),
+    )
+
+    with pytest.raises(DriverIntegrationError, match="handoff-authority-unavailable"):
+        linux.run()
+    assert scan_jsonl(paths.ledgers.models) == before
+    assert all(model["status"]["code"] != "failed:source" for model in before)
 
 
 def test_linux_only_status_cli_and_config_are_closed() -> None:

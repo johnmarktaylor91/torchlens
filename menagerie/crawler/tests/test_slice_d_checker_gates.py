@@ -509,6 +509,8 @@ def test_terminal_disposition_gate_resolves_exact_advisory_references() -> None:
         "author_result_sha256": HASH,
         "kind": "DEFER_RECOMMENDATION",
         "predicate": "needs-cuda",
+        "handoff_proposal_id": None,
+        "handoff_sha256": None,
         "verdict": "accepted",
         "source_manifest_identity": HASH,
         "source_ids": ["source-1"],

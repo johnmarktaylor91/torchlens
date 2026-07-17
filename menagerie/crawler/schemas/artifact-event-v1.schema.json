@@ -8,7 +8,8 @@
     "schema_version", "artifact_event_id", "ledger_seq", "payload_sha256",
     "transaction_id", "predecessor_event_id", "event_kind", "created_at",
     "stable_id", "work_id", "intake_snapshot_id", "intake_snapshot_sha256",
-    "author_result_id", "proposal_id", "source_manifest_identity", "source_ids",
+    "author_result_id", "proposal_id", "handoff_proposal_id", "handoff_sha256",
+    "source_manifest_identity", "source_ids",
     "objects", "claims", "gate_id", "gate_item_sha256", "dependency_vector_sha256",
     "authorization_id", "reconstruction", "publication_inventory"
   ],
@@ -27,6 +28,8 @@
     "intake_snapshot_sha256": {"$ref": "#/$defs/hash", "description": "Digest of the exact active intake snapshot."},
     "author_result_id": {"$ref": "#/$defs/nonempty_string", "description": "Exact typed author-result identity."},
     "proposal_id": {"$ref": "#/$defs/nullable_string", "description": "Exact proposal identity when the result proposed artifacts."},
+    "handoff_proposal_id": {"$ref": "#/$defs/nullable_string", "description": "Exact separately authenticated handoff proposal identity for a platform deferral."},
+    "handoff_sha256": {"$ref": "#/$defs/nullable_hash", "description": "Digest of the complete executable handoff bundle."},
     "source_manifest_identity": {"$ref": "#/$defs/hash", "description": "Exact frozen source-manifest identity."},
     "source_ids": {"$ref": "#/$defs/string_array", "description": "Exact source identity set retained by this transaction."},
     "objects": {"type": "array", "items": {"$ref": "#/$defs/mirror_object"}, "description": "Intrinsic content objects in private or public custody."},

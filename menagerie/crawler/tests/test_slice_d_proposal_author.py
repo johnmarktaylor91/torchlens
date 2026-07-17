@@ -31,7 +31,7 @@ from menagerie.crawler.proposal import (
     model_code_manifest,
     validate_author_proposal,
 )
-from menagerie.crawler.tests.conftest import make_author_proposal
+from menagerie.crawler.tests.conftest import bind_handoff_execution, make_author_proposal
 
 
 def _ground_proposal(tmp_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -566,8 +566,9 @@ def test_advisory_author_result_arms_are_production_parsed(
         (Path(__file__).parents[1] / "prompts" / "claude_crawler_author_v2.txt").read_bytes()
     )
     proposal["author"]["prompt_sha256"] = prompt_hash
+    context = _author_context(proposal, prompt_hash)
     envelope = build_author_envelope(
-        context=_author_context(proposal, prompt_hash),
+        context=context,
         work_id=proposal["work_id"],
         stable_id=proposal["stable_id"],
         campaign_id="campaign-1",
@@ -577,6 +578,14 @@ def test_advisory_author_result_arms_are_production_parsed(
         allowed_model_dir=tmp_path,
         output_path=tmp_path / "result.json",
     )
+    if kind == "DEFER_RECOMMENDATION":
+        payload["handoff_execution"] = bind_handoff_execution(
+            proposal,
+            context=context,
+            work_id=str(proposal["work_id"]),
+            campaign_id="campaign-1",
+            source_manifest_identity=str(manifest["manifest_sha256"]),
+        )
     payload["recommendation_sha256"] = stable_hash(payload)
     raw = _author_result(envelope, kind, payload)
     (tmp_path / "result.json").write_text(json.dumps(raw))
@@ -612,7 +621,7 @@ def _author_context(proposal: dict[str, Any], prompt_hash: str) -> AuthorityCont
 
 
 def _author_result(envelope: dict[str, Any], kind: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Build one exact self-hashed author-result.v3 fixture."""
+    """Build one exact self-hashed author-result.v4 fixture."""
 
     result = {
         **envelope["expected_result"],

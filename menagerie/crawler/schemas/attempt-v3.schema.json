@@ -30,6 +30,7 @@
     "policy_observation",
     "error",
     "defer_evidence",
+    "capability_observation",
     "execution_read_manifest_identity",
     "raw_award_receipt",
     "raw_award_receipt_sha256",
@@ -170,6 +171,13 @@
         }
       ],
       "description": "Mandatory defer evidence."
+    },
+    "capability_observation": {
+      "oneOf": [
+        {"$ref": "#/$defs/capability_observation"},
+        {"type": "null"}
+      ],
+      "description": "Optional parent-observed focused platform capability result."
     },
     "execution_read_manifest_identity": {
       "$ref": "#/$defs/hash",
@@ -770,6 +778,7 @@
         "mode",
         "input_signature",
         "output_signature",
+        "output_value_sha256",
         "input_kind",
         "input_asset",
         "input_note",
@@ -856,6 +865,10 @@
         },
         "output_signature": {
           "description": "Mandatory output signature."
+        },
+        "output_value_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Canonical worker-observed output-value digest when representable."
         },
         "input_kind": {
           "oneOf": [
@@ -1274,6 +1287,15 @@
         }
       }
     },
+    "capability_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim", "supported"],
+      "properties": {
+        "claim": {"enum": ["needs-cuda", "needs-x86"], "description": "Exact focused platform claim."},
+        "supported": {"type": "boolean", "description": "Parent-observed support result."}
+      }
+    },
     "parent_attestation": {
       "type": "object",
       "additionalProperties": false,
@@ -1410,6 +1432,8 @@
     }
   },
   "x-authority-ownership": {
+    "$.capability_observation.claim": "parent-observed",
+    "$.capability_observation.supported": "parent-observed",
     "$.actor": "reducer-derived",
     "$.attempt_id": "reducer-derived",
     "$.attempt_no": "reducer-derived",
@@ -1523,6 +1547,7 @@
     "$.raw_award_receipt.observation.observed_input_asset_sha256": "worker-observed",
     "$.raw_award_receipt.observation.observed_recipe_revision": "worker-observed",
     "$.raw_award_receipt.observation.output_signature": "worker-observed",
+    "$.raw_award_receipt.observation.output_value_sha256": "worker-observed",
     "$.raw_award_receipt.observation.parameter_count_total": "worker-observed",
     "$.raw_award_receipt.observation.parameter_count_trainable": "worker-observed",
     "$.raw_award_receipt.observation.present": "worker-observed",
@@ -1590,6 +1615,7 @@
     "$.worker_receipt.observed_input_asset_sha256": "worker-observed",
     "$.worker_receipt.observed_recipe_revision": "worker-observed",
     "$.worker_receipt.output_signature": "worker-observed",
+    "$.worker_receipt.output_value_sha256": "worker-observed",
     "$.worker_receipt.parameter_count_total": "worker-observed",
     "$.worker_receipt.parameter_count_trainable": "worker-observed",
     "$.worker_receipt.present": "worker-observed",

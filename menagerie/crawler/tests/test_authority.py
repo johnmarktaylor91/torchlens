@@ -367,6 +367,8 @@ def _terminal_gate(predicate: str) -> dict[str, Any]:
                 "rung_check": {"selected_rung": "R5_SKIP", "verdict": "accurate"},
                 "terminal_disposition": {
                     "predicate": predicate,
+                    "handoff_proposal_id": None,
+                    "handoff_sha256": None,
                     "verdict": "accepted",
                     "source_manifest_identity": HASH_A,
                     "source_ids": ["source-1"],

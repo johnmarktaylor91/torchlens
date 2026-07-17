@@ -387,6 +387,26 @@ class ExecutionReadManifestV2:
     lookup_directories: tuple[RuntimeLookupDirectory, ...]
 
     @property
+    def closure_identity(self) -> str:
+        """Return the pre-execution identity of every verified closure member.
+
+        Returns
+        -------
+        str
+            Cycle-free executable closure identity.
+        """
+
+        return _executable_closure_identity(
+            code_manifest_identity=self.code_manifest_identity,
+            environment_generation=self.environment_generation,
+            installed_package_inventory_sha256=self.installed_package_inventory_sha256,
+            code_members=self.code_members,
+            runtime_members=self.runtime_members,
+            standard_input_asset=self.standard_input_asset,
+            lookup_directories=self.lookup_directories,
+        )
+
+    @property
     def runtime_support(self) -> tuple[tuple[Path, str], ...]:
         """Return exact runtime files through the legacy enforcement adapter.
 
@@ -398,6 +418,43 @@ class ExecutionReadManifestV2:
         """
 
         return tuple((member.path, "runtime-file") for member in self.runtime_members)
+
+
+@dataclass(frozen=True)
+class ExecutableClosure:
+    """Verified executable members collected before execution identity exists."""
+
+    identity: str
+    code_manifest_identity: str
+    environment_generation: str
+    installed_package_inventory_sha256: str
+    code_members: tuple[RuntimeMember, ...]
+    runtime_members: tuple[RuntimeMember, ...]
+    standard_input_asset: Optional[tuple[Path, str, str]]
+    lookup_directories: tuple[RuntimeLookupDirectory, ...]
+
+
+@dataclass(frozen=True)
+class ExactReadCapability:
+    """Verified exact-member projection shared by every enforcement layer."""
+
+    manifest_id: str
+    closure_identity: str
+    members: tuple[RuntimeMember, ...]
+    standard_input_asset: Optional[tuple[Path, str, str]]
+    lookup_directories: tuple[RuntimeLookupDirectory, ...]
+
+    @property
+    def member_paths(self) -> tuple[Path, ...]:
+        """Return exact authorized regular files in canonical order.
+
+        Returns
+        -------
+        tuple[pathlib.Path, ...]
+            Exact semantic file capabilities.
+        """
+
+        return tuple(member.path for member in self.members)
 
 
 @dataclass(frozen=True)
@@ -611,7 +668,7 @@ def build_authority_context(
         family_bindings=family_bindings,
         author_prompt_identity=author_prompt,
         author_model_identity=author_identity,
-        author_schema_identity=content_identity("schemas/author-result-v3.schema.json"),
+        author_schema_identity=content_identity("schemas/author-result-v4.schema.json"),
         author_dispatcher_identity=content_identity("author_dispatch.py"),
         checker_prompt_identity=checker_prompt,
         checker_model_identity=checker_identity,
@@ -821,6 +878,77 @@ def _manifest_v2_payload(
             for directory in lookup_directories
         ],
     }
+
+
+def _executable_closure_identity(
+    *,
+    code_manifest_identity: str,
+    environment_generation: str,
+    installed_package_inventory_sha256: str,
+    code_members: Sequence[RuntimeMember],
+    runtime_members: Sequence[RuntimeMember],
+    standard_input_asset: Optional[tuple[Path, str, str]],
+    lookup_directories: Sequence[RuntimeLookupDirectory],
+) -> str:
+    """Hash verified executable members without an execution-identity cycle.
+
+    Parameters
+    ----------
+    code_manifest_identity, environment_generation, installed_package_inventory_sha256:
+        Frozen implementation and environment associations.
+    code_members, runtime_members, standard_input_asset, lookup_directories:
+        Exact semantic files, selected input, and non-authorizing traversal scaffolds.
+
+    Returns
+    -------
+    str
+        Canonical pre-execution closure identity.
+    """
+
+    def member_payload(member: RuntimeMember) -> JsonObject:
+        """Render one exact member for closure hashing.
+
+        Parameters
+        ----------
+        member:
+            Verified executable member.
+
+        Returns
+        -------
+        dict[str, Any]
+            Canonical member payload.
+        """
+
+        return {
+            "path": str(member.path),
+            "sha256": member.sha256,
+            "kind": member.kind,
+            "provenance": member.provenance,
+        }
+
+    return stable_hash(
+        {
+            "closure_version": "menagerie.crawler.executable-closure.v1",
+            "code_manifest_identity": code_manifest_identity,
+            "environment_generation": environment_generation,
+            "installed_package_inventory_sha256": installed_package_inventory_sha256,
+            "code_members": [member_payload(member) for member in code_members],
+            "runtime_members": [member_payload(member) for member in runtime_members],
+            "standard_input_asset": (
+                None
+                if standard_input_asset is None
+                else {
+                    "path": str(standard_input_asset[0]),
+                    "sha256": standard_input_asset[1],
+                    "asset_id": standard_input_asset[2],
+                }
+            ),
+            "lookup_directories": [
+                {"path": str(directory.path), "provenance": directory.provenance}
+                for directory in lookup_directories
+            ],
+        }
+    )
 
 
 def _import_names(path: Path, lookup_directories: Sequence[Path]) -> tuple[str, ...]:
@@ -1186,6 +1314,119 @@ def verify_execution_read_manifest_v2(manifest: ExecutionReadManifestV2) -> None
     )
     if rebuilt != manifest:
         raise AuthorityDerivationError("execution read manifest identity is stale or rewritten")
+
+
+def collect_executable_closure(
+    *,
+    code_manifest_identity: str,
+    environment_generation: str,
+    installed_package_inventory_sha256: str,
+    code_members: Sequence[RuntimeMember],
+    runtime_members: Sequence[RuntimeMember],
+    standard_input_asset: Optional[tuple[Path, str, str]] = None,
+    lookup_directories: Sequence[RuntimeLookupDirectory] = (),
+) -> ExecutableClosure:
+    """Collect and verify an executable closure before execution identity derivation.
+
+    Parameters
+    ----------
+    code_manifest_identity, environment_generation, installed_package_inventory_sha256:
+        Frozen implementation and environment associations.
+    code_members, runtime_members, standard_input_asset, lookup_directories:
+        Candidate exact members, selected input, and non-authorizing scaffolds.
+
+    Returns
+    -------
+    ExecutableClosure
+        Normalized byte-verified closure with a cycle-free identity.
+    """
+
+    probe_identity = stable_hash("executable-closure-pre-identity-probe")
+    probe = compile_execution_read_manifest_v2(
+        stable_id="closure-collection",
+        work_id="closure-collection",
+        execution_identity=probe_identity,
+        code_manifest_identity=code_manifest_identity,
+        environment_generation=environment_generation,
+        installed_package_inventory_sha256=installed_package_inventory_sha256,
+        code_members=code_members,
+        runtime_members=runtime_members,
+        standard_input_asset=standard_input_asset,
+        lookup_directories=lookup_directories,
+    )
+    return ExecutableClosure(
+        identity=probe.closure_identity,
+        code_manifest_identity=probe.code_manifest_identity,
+        environment_generation=probe.environment_generation,
+        installed_package_inventory_sha256=probe.installed_package_inventory_sha256,
+        code_members=probe.code_members,
+        runtime_members=probe.runtime_members,
+        standard_input_asset=probe.standard_input_asset,
+        lookup_directories=probe.lookup_directories,
+    )
+
+
+def compile_execution_read_manifest_from_closure(
+    closure: ExecutableClosure,
+    *,
+    stable_id: str,
+    work_id: str,
+    execution_identity: str,
+) -> ExecutionReadManifestV2:
+    """Bind one pre-identity closure to final request associations.
+
+    Parameters
+    ----------
+    closure:
+        Verified cycle-free executable closure.
+    stable_id, work_id, execution_identity:
+        Final model, work-generation, and execution associations.
+
+    Returns
+    -------
+    ExecutionReadManifestV2
+        Final exact-member execution capability.
+    """
+
+    manifest = compile_execution_read_manifest_v2(
+        stable_id=stable_id,
+        work_id=work_id,
+        execution_identity=execution_identity,
+        code_manifest_identity=closure.code_manifest_identity,
+        environment_generation=closure.environment_generation,
+        installed_package_inventory_sha256=closure.installed_package_inventory_sha256,
+        code_members=closure.code_members,
+        runtime_members=closure.runtime_members,
+        standard_input_asset=closure.standard_input_asset,
+        lookup_directories=closure.lookup_directories,
+    )
+    if manifest.closure_identity != closure.identity:
+        raise AuthorityDerivationError("execution closure changed during final manifest binding")
+    return manifest
+
+
+def exact_read_capability(manifest: ExecutionReadManifestV2) -> ExactReadCapability:
+    """Verify and project one manifest into exact semantic read authority.
+
+    Parameters
+    ----------
+    manifest:
+        Final v2 manifest to reverify.
+
+    Returns
+    -------
+    ExactReadCapability
+        Exact member paths and non-authorizing lookup scaffolds.
+    """
+
+    verify_execution_read_manifest_v2(manifest)
+    return ExactReadCapability(
+        manifest_id=manifest.manifest_id,
+        closure_identity=manifest.closure_identity,
+        members=(*manifest.code_members, *manifest.runtime_members),
+        standard_input_asset=manifest.standard_input_asset,
+        lookup_directories=manifest.lookup_directories,
+    )
 
 
 def _closed_mapping(value: Mapping[str, Any], expected_fields: frozenset[str], field: str) -> None:

@@ -251,7 +251,7 @@ files are the executable expression of them.
 ### 5.0 Round-14 interface freeze and schema ownership
 
 The current contract discriminators are `attempt.v3`, `model.v3`, `author-proposal.v3`,
-`author-result.v3`, `gate.v3`, `artifact-event.v1`, and `operational-event.v1`. Sections 5.1--5.3 retain
+`author-result.v4`, `gate.v3`, `artifact-event.v1`, and `operational-event.v1`. Sections 5.1--5.3 retain
 the v2 shapes because those rows remain readable immutable history; they are not current authority.
 The executable v3 files add the closed raw receipt/parent attestation, mandatory dependency and artifact/
 family authority, discriminated author recommendation, and terminal-disposition gate shapes.
@@ -273,8 +273,19 @@ member is a `RuntimeMember {path, sha256, kind, provenance}` naming one exact re
 Every `RuntimeLookupDirectory {path, provenance}` is traversal or mount scaffolding only and grants no
 descendant read or execute authority. The manifest identity is recomputed from every listed field,
 including all member digests and both environment identities. No repository root, environment root, or
-other semantic root grant is a v2 member. Phase 0 freezes this shape; the closure compiler, driver,
-supervisor, worker policy, and OS renderers switch to it in the ordered executable-capability phase.
+other semantic root grant is a v2 member. The driver collects this closed digest-bound inventory before
+deriving execution identity, binds the closure identity into execution currency, and then binds that same
+closure into the final manifest. The supervisor, worker policy, and OS renderers consume only exact v2
+members; lookup directories authorize traversal, never descendant bytes.
+
+Current `author-result.v4` deferrals contain a separately authenticated `handoff_execution` with one
+complete `author-proposal.v3`, its proposal and code-manifest identities, the terminal source-manifest
+identity, and a digest over all handoff fields. Artifact reconstruction v2 retains that handoff and its
+gate bindings so a clean Linux deferred-handoff run rehydrates and executes before consulting the author
+lane. A historical code-less deferral is visibly `handoff-authority-unavailable`; it is never converted to
+`failed:source`. Attempt v3 also persists authenticated `worker_receipt.output_value_sha256` and the
+parent-owned nullable `capability_observation`, making none/statistical mode comparison and positive
+platform probes representable.
 
 Shutdown control flow uses `DriverShutdown(BaseException)`, never an ordinary exception. One interrupted
 invocation produces only `worker-shutdown-interrupted` / `interrupted:shutdown` operational evidence and
@@ -1570,10 +1581,13 @@ OUTPUT
 Write exactly one UTF-8 JSON object to <allowed_output_root>/result.json using a temporary file, flush,
 fsync, and atomic rename. Use required_result_schema exactly. Important information must be in typed fields,
 never only prose. Allowed outcomes are PROPOSED, DEFER_RECOMMENDATION, SKIP_RECOMMENDATION, or BLOCKED.
-Every outcome is an advisory author-result.v3 arm and must repeat the envelope's exact stable/work/campaign,
+Every outcome is an advisory author-result.v4 arm and must repeat the envelope's exact stable/work/campaign,
 author/prompt/dispatcher, source-manifest, and intake identities. PROPOSED embeds one complete
 author-proposal.v3. DEFER_RECOMMENDATION may recommend only cuda or x86 and binds exact source/evidence/
-license identities. SKIP_RECOMMENDATION may recommend only one closed R5 status and binds its exact search,
+license identities. It must also retain a complete author-proposal.v3 in handoff_execution, bind its
+proposal hash, code-manifest identity (the empty-list digest for declarative recipes), source-manifest
+identity, and compute handoff_sha256 over those exact preceding fields. SKIP_RECOMMENDATION may recommend
+only one closed R5 status and binds its exact search,
 source/evidence/license identities. BLOCKED binds one closed stage/reason and exact prerequisite evidence.
 Compute every arm's recommendation/result hash over the exact closed payload. Do not output runs, accurate,
 a fidelity verdict, or a terminal award. End after result.json is written.
@@ -1689,9 +1703,11 @@ use inaccurate for empty, irrelevant, misleading, invented, or spam-like terms. 
 be empty because this is a relevance judgment, while checked_source_ids and a specific reason remain required.
 
 For a `terminal_disposition` envelope, check exactly one DEFER_RECOMMENDATION, SKIP_RECOMMENDATION, or
-BLOCKED author-result.v3 arm. Recompute and bind the exact result, source-manifest, evidence-pack, and
+BLOCKED author-result.v4 arm. Recompute and bind the exact result, source-manifest, evidence-pack, and
 license identities; resolve every source_id and evidence_id; require each excerpt's supports to cover the
-typed platform, R5, or blocked-prerequisite predicate; and emit accepted, rejected, or cannot-verify in the
+typed platform, R5, or blocked-prerequisite predicate. For DEFER_RECOMMENDATION, also verify the complete
+handoff proposal, proposal/code-manifest/source-manifest hashes, and handoff_sha256; and emit accepted,
+rejected, or cannot-verify in the
 closed terminal_disposition item. This verdict remains advisory to the reducer and never awards a terminal.
 
 DECISION RULE
