@@ -14,11 +14,14 @@ from menagerie.crawler.artifact_transactions import (
     ArtifactEventLedger,
     ArtifactInput,
     ArtifactPublicationError,
+    ArtifactRehydrationError,
     ReconstructionInputs,
     append_artifact_authorization,
     derive_artifact_claims,
     derive_publication_authorization_id,
     publish_authorized_artifact,
+    rehydrate_artifact_transaction,
+    resolve_final_artifact_transaction,
     stage_private_artifact,
     validate_artifact_checkpoint,
 )
@@ -267,13 +270,14 @@ def _vector(
     source_manifest_identity: str,
     claim_ids: tuple[ArtifactClaimId, ...] = (),
     proposal_identity: DependencyValue = DependencyState.NOT_APPLICABLE,
+    checker_gate_identity: str = "gate-terminal",
 ) -> DependencyVector:
     """Build a transaction-bound dependency vector.
 
     Parameters
     ----------
     context, stable_id, transaction_id, result_id, source_manifest_identity,
-    claim_ids, proposal_identity:
+    claim_ids, proposal_identity, checker_gate_identity:
         Exact authority axes and optional accepted claim set.
 
     Returns
@@ -295,7 +299,7 @@ def _vector(
         source_manifest_identity=source_manifest_identity,
         proposal_identity=proposal_identity,
         author_result_identity=result_id,
-        checker_gate_identity="gate-terminal",
+        checker_gate_identity=checker_gate_identity,
         recipe_revision=DependencyState.NOT_APPLICABLE,
         runner_identity=DependencyState.NOT_APPLICABLE,
         award_closure_identity=DependencyState.NOT_APPLICABLE,
@@ -560,6 +564,7 @@ def test_publication_occurs_only_after_committed_public_authorization(tmp_path: 
             result["result_id"],
             source_manifest["manifest_sha256"],
             proposal_identity=proposal["proposal_id"],
+            checker_gate_identity="gate-public",
         )
         decision = LicenseDecision(
             content_sha256=digest,
@@ -748,12 +753,150 @@ def test_two_models_share_one_object_but_retain_independent_claims(tmp_path: Pat
         assert first.objects[0].object_id == second.objects[0].object_id
         assert first.custody_claims[0].claim_id != second.custody_claims[0].claim_id
         assert len(tuple(mirrors.iter_objects(MirrorClass.PRIVATE))) == 1
-        validate_artifact_checkpoint(
+        projection = validate_artifact_checkpoint(
             (ledger_path,),
             context=context,
             mirrors=mirrors,
             canonical_root=canonical,
             repository_root=repo,
+        )
+        assert len(projection.objects) == 1
+        assert len(projection.claims) == 2
+        assert len(projection.transactions) == 2
+        assert {claim.stable_id for claim in projection.claims} == {"m_one", "m_two"}
+
+
+def test_final_transaction_rehydrates_from_private_mirror_only(tmp_path: Path) -> None:
+    """A verified final transaction restores exact bytes into disposable staging."""
+
+    repo = tmp_path / "repo"
+    canonical = repo / "menagerie" / "crawler"
+    ledger_path = canonical / "records" / "artifacts" / "shard.jsonl"
+    context = _context("m_one")
+    mirrors = _mirrors(tmp_path)
+    with ArtifactEventLedger(ledger_path) as ledger:
+        staged, _published = _commit_private(
+            "m_one",
+            content=b"rehydrated source bytes",
+            context=context,
+            mirrors=mirrors,
+            ledger=ledger,
+            canonical_root=canonical,
+            repository_root=repo,
+            evidence_id="ev-one",
+        )
+    projection = validate_artifact_checkpoint(
+        (ledger_path,),
+        context=context,
+        mirrors=mirrors,
+        canonical_root=canonical,
+        repository_root=repo,
+    )
+    transaction = resolve_final_artifact_transaction(
+        projection,
+        stable_id="m_one",
+        work_id="work-m_one",
+        transaction_id=staged.transaction_id,
+    )
+    assert transaction is not None
+
+    rehydrated = rehydrate_artifact_transaction(
+        transaction,
+        mirrors=mirrors,
+        staging_root=tmp_path / "disposable",
+    )
+
+    assert rehydrated.transaction == transaction
+    assert tuple(rehydrated.claim_paths.values())[0].read_bytes() == b"rehydrated source bytes"
+    assert rehydrated.root.is_relative_to(tmp_path / "disposable")
+
+
+def test_rehydrator_rejects_corrupt_private_custody(tmp_path: Path) -> None:
+    """Canonical reconstruction never falls through after private bytes mutate."""
+
+    repo = tmp_path / "repo"
+    canonical = repo / "menagerie" / "crawler"
+    ledger_path = canonical / "records" / "artifacts" / "shard.jsonl"
+    context = _context("m_one")
+    mirrors = _mirrors(tmp_path)
+    with ArtifactEventLedger(ledger_path) as ledger:
+        staged, _published = _commit_private(
+            "m_one",
+            content=b"custody bytes",
+            context=context,
+            mirrors=mirrors,
+            ledger=ledger,
+            canonical_root=canonical,
+            repository_root=repo,
+            evidence_id="ev-one",
+        )
+    projection = validate_artifact_checkpoint(
+        (ledger_path,),
+        context=context,
+        mirrors=mirrors,
+        canonical_root=canonical,
+        repository_root=repo,
+    )
+    transaction = resolve_final_artifact_transaction(
+        projection,
+        stable_id="m_one",
+        work_id="work-m_one",
+        transaction_id=staged.transaction_id,
+    )
+    assert transaction is not None
+    private_path = mirrors.address(transaction.objects[0].content_sha256, MirrorClass.PRIVATE)
+    private_path.write_bytes(b"corrupt")
+
+    with pytest.raises(ArtifactRehydrationError, match="private custody is unavailable"):
+        rehydrate_artifact_transaction(
+            transaction,
+            mirrors=mirrors,
+            staging_root=tmp_path / "disposable",
+        )
+
+
+def test_unrecorded_final_transaction_selection_rejects_ambiguity(tmp_path: Path) -> None:
+    """Two final candidates for one active work never gain latest-row authority."""
+
+    repo = tmp_path / "repo"
+    canonical = repo / "menagerie" / "crawler"
+    ledger_path = canonical / "records" / "artifacts" / "shard.jsonl"
+    context = _context("m_one")
+    mirrors = _mirrors(tmp_path)
+    with ArtifactEventLedger(ledger_path) as ledger:
+        _commit_private(
+            "m_one",
+            content=b"first authority",
+            context=context,
+            mirrors=mirrors,
+            ledger=ledger,
+            canonical_root=canonical,
+            repository_root=repo,
+            evidence_id="ev-one",
+        )
+        _commit_private(
+            "m_one",
+            content=b"second authority",
+            context=context,
+            mirrors=mirrors,
+            ledger=ledger,
+            canonical_root=canonical,
+            repository_root=repo,
+            evidence_id="ev-two",
+        )
+    projection = validate_artifact_checkpoint(
+        (ledger_path,),
+        context=context,
+        mirrors=mirrors,
+        canonical_root=canonical,
+        repository_root=repo,
+    )
+
+    with pytest.raises(ArtifactRehydrationError, match="multiple final"):
+        resolve_final_artifact_transaction(
+            projection,
+            stable_id="m_one",
+            work_id="work-m_one",
         )
 
 
