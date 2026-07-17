@@ -8,10 +8,14 @@ import pytest
 
 from menagerie.crawler.constants import ATTEMPT_SCHEMA_VERSION, ATTEMPT_SCHEMA_VERSION_V3
 from menagerie.crawler.recordio import (
+    AttemptSlotResolutionError,
     JsonlLedger,
     LedgerCorruptionError,
+    LedgerConflictError,
     SingleWriterError,
+    deterministic_attempt_id,
     recover_torn_tail,
+    resolve_attempt_slot,
     scan_jsonl,
 )
 from menagerie.crawler.schema import PayloadValidationError
@@ -162,3 +166,73 @@ def test_v3_writer_reads_v2_history_but_appends_only_v3(tmp_path: Path) -> None:
         ATTEMPT_SCHEMA_VERSION,
         ATTEMPT_SCHEMA_VERSION_V3,
     ]
+
+
+def test_resolve_attempt_slot_reuses_one_exact_current_row() -> None:
+    """The canonical ledger row satisfies its deterministic slot without replay."""
+
+    work_id = "work-m_example"
+    execution_identity = "sha256:" + "e" * 64
+    attempt_id = deterministic_attempt_id(
+        work_id=work_id,
+        execution_identity=execution_identity,
+        cold_index=0,
+        mode="eval",
+    )
+    attempt = make_attempt(attempt_id=attempt_id, execution_identity=execution_identity)
+
+    resolved = resolve_attempt_slot(
+        (attempt,),
+        work_id=work_id,
+        execution_identity=execution_identity,
+        cold_index=0,
+        mode="eval",
+    )
+
+    assert resolved == attempt
+    assert resolved is not attempt
+
+
+@pytest.mark.parametrize("mutation", ["legacy", "mode", "duplicate"])
+def test_resolve_attempt_slot_rejects_noncanonical_same_id(mutation: str) -> None:
+    """Legacy, contradictory, and duplicate same-ID rows fail closed."""
+
+    work_id = "work-m_example"
+    execution_identity = "sha256:" + "e" * 64
+    attempt_id = deterministic_attempt_id(
+        work_id=work_id,
+        execution_identity=execution_identity,
+        cold_index=0,
+        mode="eval",
+    )
+    attempt = make_attempt(attempt_id=attempt_id, execution_identity=execution_identity)
+    records = [attempt]
+    if mutation == "legacy":
+        attempt["schema_version"] = ATTEMPT_SCHEMA_VERSION
+    elif mutation == "mode":
+        attempt["mode"] = "train"
+    else:
+        records.append(dict(attempt))
+
+    with pytest.raises(AttemptSlotResolutionError):
+        resolve_attempt_slot(
+            records,
+            work_id=work_id,
+            execution_identity=execution_identity,
+            cold_index=0,
+            mode="eval",
+        )
+
+
+def test_attempt_timestamp_change_remains_an_immutable_conflict(tmp_path: Path) -> None:
+    """M-02 retains timestamp fields in logical replay comparisons."""
+
+    path = tmp_path / "attempts.jsonl"
+    attempt = make_attempt()
+    attempt.pop("ledger_seq")
+    attempt.pop("payload_sha256")
+    with JsonlLedger(path, ATTEMPT_SCHEMA_VERSION_V3) as ledger:
+        ledger.append(attempt)
+        attempt["finished_at"] = "2026-07-16T12:00:01Z"
+        with pytest.raises(LedgerConflictError):
+            ledger.append(attempt)

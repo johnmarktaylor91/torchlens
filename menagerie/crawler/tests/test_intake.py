@@ -107,3 +107,37 @@ def test_load_rejects_changed_manifest_source_without_reconstruction(tmp_path: P
 
     with pytest.raises(IntakeError, match="source digest changed"):
         load_intake_snapshot(snapshot.root)
+
+
+def test_load_rejects_self_consistent_forged_snapshot_id(tmp_path: Path) -> None:
+    """A rewritten display ID cannot replace the digest-derived intake identity."""
+
+    master = tmp_path / "master.jsonl"
+    deferred = tmp_path / "deferred.jsonl"
+    _write_jsonl(master, [{"name": "TinyNet", "zoo": "fixtures", "variant": "base"}])
+    _write_jsonl(deferred, [])
+    snapshot = create_intake_snapshot(master, deferred, tmp_path / "snapshots")
+    manifest_path = snapshot.root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["snapshot_id"] = "intake-forged-display-id"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(IntakeError, match="snapshot_id is not derived"):
+        load_intake_snapshot(snapshot.root)
+
+
+def test_load_accepts_renamed_snapshot_directory(tmp_path: Path) -> None:
+    """Directory basenames remain non-authoritative for an unchanged snapshot."""
+
+    master = tmp_path / "master.jsonl"
+    deferred = tmp_path / "deferred.jsonl"
+    _write_jsonl(master, [{"name": "TinyNet", "zoo": "fixtures", "variant": "base"}])
+    _write_jsonl(deferred, [])
+    snapshot = create_intake_snapshot(master, deferred, tmp_path / "snapshots")
+    renamed = tmp_path / "renamed-intake-directory"
+    snapshot.root.rename(renamed)
+
+    loaded = load_intake_snapshot(renamed)
+
+    assert loaded.snapshot_id == snapshot.snapshot_id
+    assert loaded.root == renamed

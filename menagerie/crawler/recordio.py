@@ -9,7 +9,7 @@ import os
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator, Mapping, Optional, Sequence, Union
+from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.constants import (
     ARTIFACT_EVENT_SCHEMA_VERSION,
@@ -21,7 +21,7 @@ from menagerie.crawler.constants import (
     MODEL_SCHEMA_VERSION_V3,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
 )
-from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, payload_hash
+from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, payload_hash, stable_hash
 from menagerie.crawler.models import AppendResult, JsonObject, TailRecoveryEvidence
 from menagerie.crawler.schema import SCHEMA_FILES, PayloadValidationError, validate_payload
 
@@ -59,6 +59,10 @@ class TornTailError(LedgerError):
 
 class LedgerConflictError(LedgerError):
     """Raised when one immutable identity maps to different payload bytes."""
+
+
+class AttemptSlotResolutionError(LedgerError):
+    """Raised when canonical history cannot satisfy one deterministic v3 slot."""
 
 
 def _utc_now() -> str:
@@ -105,6 +109,131 @@ def _logical_payload(record: Mapping[str, Any]) -> JsonObject:
 
     omitted = {"payload_sha256", "ledger_seq", "record_revision", "record_seq"}
     return {key: deepcopy(value) for key, value in record.items() if key not in omitted}
+
+
+def deterministic_attempt_id(
+    *, work_id: str, execution_identity: str, cold_index: int, mode: str
+) -> str:
+    """Derive the immutable identity for one execution slot.
+
+    Parameters
+    ----------
+    work_id, execution_identity:
+        Exact work generation and executable dependency closure.
+    cold_index:
+        Zero-based cold-run index.
+    mode:
+        Exact isolated execution mode.
+
+    Returns
+    -------
+    str
+        Canonical attempt identity used by the ledger and worker request.
+
+    Raises
+    ------
+    ValueError
+        If any slot component is empty or the cold index is negative.
+    """
+
+    if not work_id.strip() or not execution_identity.strip() or not mode.strip():
+        raise ValueError("attempt slot identities and mode must be non-empty")
+    if cold_index < 0:
+        raise ValueError("attempt slot cold_index must be non-negative")
+    return stable_hash(
+        {
+            "work_id": work_id,
+            "execution_identity": execution_identity,
+            "cold_index": cold_index,
+            "mode": mode,
+        }
+    )
+
+
+def resolve_attempt_slot(
+    records: Iterable[Mapping[str, Any]],
+    *,
+    work_id: str,
+    execution_identity: str,
+    cold_index: int,
+    mode: str,
+) -> Optional[JsonObject]:
+    """Resolve one deterministic slot from canonical attempt history.
+
+    The function intentionally performs no scratch lookup and never chooses a
+    highest or latest record. A matching v2, duplicate, or slot-contradictory row
+    is visible immutable history but cannot silently satisfy or rerun the slot.
+    Raw-receipt and parent-proof authentication remains the reducer's authority
+    boundary; the Phase-2 integrator supplies only authenticated current-v3 rows.
+
+    Parameters
+    ----------
+    records:
+        Canonical attempt rows, including immutable legacy history.
+    work_id, execution_identity, cold_index, mode:
+        Exact slot tuple used to derive the attempt identity.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Defensive copy of the sole exact v3 row, or ``None`` when absent.
+
+    Raises
+    ------
+    AttemptSlotResolutionError
+        If same-ID history is duplicate, legacy, malformed, or contradicts the
+        exact slot tuple.
+    """
+
+    attempt_id = deterministic_attempt_id(
+        work_id=work_id,
+        execution_identity=execution_identity,
+        cold_index=cold_index,
+        mode=mode,
+    )
+    matches = [record for record in records if record.get("attempt_id") == attempt_id]
+    if not matches:
+        return None
+    if len(matches) != 1:
+        raise AttemptSlotResolutionError(
+            f"deterministic attempt slot has duplicate canonical rows: {attempt_id}"
+        )
+    record = matches[0]
+    if record.get("schema_version") != ATTEMPT_SCHEMA_VERSION_V3:
+        raise AttemptSlotResolutionError(
+            f"deterministic attempt slot is not current v3: {attempt_id}"
+        )
+    try:
+        validate_payload(record, ATTEMPT_SCHEMA_VERSION_V3)
+    except PayloadValidationError as exc:
+        raise AttemptSlotResolutionError(
+            f"deterministic attempt slot has an invalid v3 row: {attempt_id}"
+        ) from exc
+    identities = record.get("identities")
+    retries = record.get("retries")
+    invocation = record.get("invocation")
+    raw_receipt = record.get("raw_award_receipt")
+    observed_modes = {
+        value
+        for value in (
+            record.get("mode"),
+            invocation.get("mode") if isinstance(invocation, Mapping) else None,
+            raw_receipt.get("requested_mode") if isinstance(raw_receipt, Mapping) else None,
+        )
+        if value is not None
+    }
+    if (
+        record.get("work_id") != work_id
+        or not isinstance(identities, Mapping)
+        or identities.get("execution") != execution_identity
+        or not isinstance(retries, Mapping)
+        or retries.get("stage_attempt") != cold_index + 1
+        or observed_modes - {mode}
+    ):
+        raise AttemptSlotResolutionError(
+            f"deterministic attempt row contradicts its exact slot: {attempt_id}"
+        )
+    return deepcopy(dict(record))
 
 
 def _identity_key(record: Mapping[str, Any]) -> tuple[Any, ...]:

@@ -195,6 +195,23 @@ class IntakeSnapshot:
     created: bool
 
 
+def _snapshot_id(snapshot_sha256: str) -> str:
+    """Derive the canonical display identity from a full snapshot digest.
+
+    Parameters
+    ----------
+    snapshot_sha256:
+        Canonical prefixed SHA-256 digest of the snapshot basis.
+
+    Returns
+    -------
+    str
+        Canonical ``intake-<20 hex>`` identity.
+    """
+
+    return f"intake-{snapshot_sha256.removeprefix('sha256:')[:20]}"
+
+
 def _read_jsonl(path: Path) -> list[JsonObject]:
     """Read a JSONL discovery stream as object rows.
 
@@ -429,7 +446,7 @@ def create_intake_snapshot(
         "items": [item.to_dict() for item in items],
     }
     snapshot_sha256 = stable_hash(snapshot_basis)
-    snapshot_id = f"intake-{snapshot_sha256.removeprefix('sha256:')[:20]}"
+    snapshot_id = _snapshot_id(snapshot_sha256)
     snapshot_root = output_root / snapshot_id
     manifest = {
         **snapshot_basis,
@@ -568,6 +585,8 @@ def load_intake_snapshot(snapshot_root: Path) -> IntakeSnapshot:
     )
     if expected != manifest_value.get("snapshot_sha256"):
         raise IntakeError("intake manifest digest does not match its contents")
+    if manifest_value.get("snapshot_id") != _snapshot_id(expected):
+        raise IntakeError("intake snapshot_id is not derived from its immutable digest")
     return IntakeSnapshot(
         snapshot_id=str(manifest_value["snapshot_id"]),
         snapshot_sha256=expected,

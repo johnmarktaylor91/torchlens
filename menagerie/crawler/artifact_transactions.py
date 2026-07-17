@@ -75,6 +75,10 @@ class ArtifactCheckpointError(ArtifactTransactionError):
     """Raised when ledger, reconstruction, or physical inventory diverges."""
 
 
+class ArtifactRehydrationError(ArtifactCheckpointError):
+    """Raised when final authority cannot be materialized from private custody."""
+
+
 class ArtifactEventKind(str, Enum):
     """Closed artifact-event transitions from the frozen schema."""
 
@@ -176,6 +180,21 @@ class ArtifactCheckpointProjection:
         """Defensively freeze the transaction index after construction."""
 
         object.__setattr__(self, "transactions", MappingProxyType(dict(self.transactions)))
+
+
+@dataclass(frozen=True)
+class RehydratedArtifactTransaction:
+    """Disposable transaction-addressed materialization of final artifact authority."""
+
+    transaction: ArtifactTransactionProjection
+    root: Path
+    model_dir: Path
+    claim_paths: Mapping[ArtifactClaimId, Path]
+
+    def __post_init__(self) -> None:
+        """Defensively freeze the claim-to-staged-path index."""
+
+        object.__setattr__(self, "claim_paths", MappingProxyType(dict(self.claim_paths)))
 
 
 @dataclass(frozen=True)
@@ -2442,6 +2461,66 @@ def _validate_reconstruction_document(
         raise ArtifactCheckpointError("reconstruction object/claim inventory changed")
 
 
+def _validate_projection_dependencies(
+    document: Mapping[str, Any],
+    final_event: Mapping[str, Any],
+    context: AuthorityContext,
+) -> None:
+    """Validate projection-critical dependency axes against active authority.
+
+    Parameters
+    ----------
+    document, final_event, context:
+        Verified reconstruction, final ledger event, and active trust roots.
+
+    Raises
+    ------
+    ArtifactCheckpointError
+        If an identity needed by reconstruction or checkpoint selection is stale.
+    """
+
+    vector = document.get("dependency_vector")
+    result = document.get("author_result")
+    proposal = document.get("proposal")
+    claims = document.get("claims")
+    if (
+        not isinstance(vector, Mapping)
+        or not isinstance(result, Mapping)
+        or not isinstance(claims, list)
+    ):
+        raise ArtifactCheckpointError("reconstruction dependency projection is malformed")
+    proposal_identity = (
+        str(proposal.get("proposal_id"))
+        if isinstance(proposal, Mapping)
+        else DependencyState.NOT_APPLICABLE.value
+    )
+    expected = {
+        "intake_snapshot_id": context.active_intake_snapshot_id,
+        "intake_snapshot_sha256": context.active_intake_snapshot_sha256,
+        "intake_item_sha256": stable_hash(
+            context.intake_by_stable_id[str(final_event["stable_id"])]
+        ),
+        "author_result_schema_identity": context.author_schema_identity,
+        "author_dispatcher_identity": context.author_dispatcher_identity,
+        "author_prompt_identity": context.author_prompt_identity,
+        "checker_prompt_identity": context.checker_prompt_identity,
+        "terminal_rule_identity": context.terminal_policy_identity,
+        "source_manifest_identity": final_event["source_manifest_identity"],
+        "proposal_identity": proposal_identity,
+        "author_result_identity": result.get("result_id"),
+        "checker_gate_identity": final_event["gate_id"],
+        "artifact_transaction_id": final_event["transaction_id"],
+        "artifact_claim_ids": sorted(str(row["claim_id"]) for row in claims),
+        "publication_policy_identity": context.publication_policy_identity,
+    }
+    for field, expected_value in expected.items():
+        observed = vector.get(field)
+        if field == "artifact_claim_ids" and isinstance(observed, list):
+            observed = sorted(str(value) for value in observed)
+        if observed != expected_value:
+            raise ArtifactCheckpointError(f"reconstruction dependency vector is stale at {field}")
+
+
 def validate_artifact_checkpoint(
     artifact_ledger_paths: Iterable[Path],
     *,
@@ -2449,14 +2528,20 @@ def validate_artifact_checkpoint(
     mirrors: MirrorStore,
     canonical_root: Path,
     repository_root: Path,
-) -> None:
-    """Validate artifact authority, immutable reconstruction, and mirror inventory.
+) -> ArtifactCheckpointProjection:
+    """Validate and project artifact authority, reconstruction, and mirror inventory.
 
     Parameters
     ----------
     artifact_ledger_paths, context, mirrors, canonical_root, repository_root:
         Complete artifact ledger shards, mandatory active trust roots, physical
         mirrors, canonical crawler root, and public repository root.
+
+    Returns
+    -------
+    ArtifactCheckpointProjection
+        Immutable normalized final transactions, intrinsic objects, and accepted
+        claims shared by reconstruction and checkpoint consumers.
 
     Raises
     ------
@@ -2473,6 +2558,7 @@ def validate_artifact_checkpoint(
     object_rows: dict[MirrorObjectId, MirrorObject] = {}
     custody_claims: dict[ArtifactClaimId, ArtifactClaim] = {}
     accepted_claims: dict[ArtifactClaimId, ArtifactClaim] = {}
+    transactions: dict[ArtifactProjectionKey, ArtifactTransactionProjection] = {}
     for transaction_id, chain in by_transaction.items():
         if len(chain) == 1 and chain[0]["event_kind"] == ArtifactEventKind.STAGED_PRIVATE.value:
             for row in chain[0]["objects"]:
@@ -2524,6 +2610,7 @@ def validate_artifact_checkpoint(
         if not isinstance(document, Mapping):
             raise ArtifactCheckpointError("committed reconstruction must be an object")
         _validate_reconstruction_document(document, final_event, authorization_event, context)
+        _validate_projection_dependencies(document, final_event, context)
         claim_ids = sorted(str(row["claim_id"]) for row in final_event["claims"])
         if list(reconstruction.get("claim_ids", [])) != claim_ids:
             raise ArtifactCheckpointError("reconstruction claim set differs from final event")
@@ -2544,6 +2631,12 @@ def validate_artifact_checkpoint(
                 raise ArtifactCheckpointError(f"accepted claim collision: {claim.claim_id}")
         final_claims = tuple(_parse_claim(row) for row in final_event["claims"])
         publishes = final_event["event_kind"] == ArtifactEventKind.PUBLISHED.value
+        if publishes and authorization_event["event_kind"] != (
+            ArtifactEventKind.PUBLICATION_AUTHORIZED.value
+        ):
+            raise ArtifactCheckpointError(
+                f"published transaction lacks publication authorization: {transaction_id}"
+            )
         selected_claims = tuple(
             claim
             for claim in final_claims
@@ -2575,6 +2668,41 @@ def validate_artifact_checkpoint(
             raise ArtifactCheckpointError(
                 f"final publication inventory differs from claims: {transaction_id}"
             )
+        if publishes and not selected_claims:
+            raise ArtifactCheckpointError(
+                f"published transaction has no public-compatible claim: {transaction_id}"
+            )
+        key = (
+            str(final_event["stable_id"]),
+            str(final_event["work_id"]),
+            ArtifactTransactionId(transaction_id),
+        )
+        projection = ArtifactTransactionProjection(
+            stable_id=key[0],
+            work_id=key[1],
+            transaction_id=key[2],
+            final_event_id=str(final_event["artifact_event_id"]),
+            final_event_kind=str(final_event["event_kind"]),
+            authorization_id=str(final_event["authorization_id"]),
+            accepted_gate_id=str(final_event["gate_id"]),
+            reconstruction_path=reconstruction_path,
+            reconstruction_sha256=str(reconstruction["sha256"]),
+            reconstruction_inputs=ReconstructionInputs(
+                author_result=deepcopy(dict(document["author_result"])),
+                proposal=(
+                    deepcopy(dict(document["proposal"]))
+                    if isinstance(document.get("proposal"), Mapping)
+                    else None
+                ),
+                source_manifest=deepcopy(dict(document["source_manifest"])),
+                accepted_gate_item=deepcopy(dict(document["accepted_gate_item"])),
+            ),
+            objects=tuple(sorted(final_objects.values(), key=lambda value: str(value.object_id))),
+            claims=tuple(sorted(final_claims, key=lambda value: str(value.claim_id))),
+        )
+        previous_projection = transactions.setdefault(key, projection)
+        if previous_projection != projection:
+            raise ArtifactCheckpointError(f"final transaction projection collision: {key!r}")
     all_claims = {**custody_claims, **accepted_claims}
     for claim in all_claims.values():
         if claim.object_id not in object_rows:
@@ -2644,6 +2772,294 @@ def validate_artifact_checkpoint(
             raise ArtifactCheckpointError(
                 f"private-only materialization appears in repository: {claim.logical_path}"
             )
+    return ArtifactCheckpointProjection(
+        transactions=transactions,
+        objects=tuple(sorted(object_rows.values(), key=lambda value: str(value.object_id))),
+        claims=tuple(sorted(accepted_claims.values(), key=lambda value: str(value.claim_id))),
+    )
+
+
+def resolve_final_artifact_transaction(
+    projection: ArtifactCheckpointProjection,
+    *,
+    stable_id: str,
+    work_id: str,
+    transaction_id: Optional[ArtifactTransactionId] = None,
+) -> Optional[ArtifactTransactionProjection]:
+    """Resolve exact final authority without latest-transaction selection.
+
+    Parameters
+    ----------
+    projection:
+        Fully verified normalized artifact authority.
+    stable_id, work_id:
+        Exact active model and work generation.
+    transaction_id:
+        Preferred transaction recorded by current model authority. When present,
+        absence is an error rather than permission to choose another transaction.
+
+    Returns
+    -------
+    ArtifactTransactionProjection | None
+        Sole exact final transaction, or ``None`` when no final authority exists.
+
+    Raises
+    ------
+    ArtifactRehydrationError
+        If recorded authority is missing/wrong or unrecorded final authority is
+        ambiguous for the active work generation.
+    """
+
+    if transaction_id is not None:
+        exact = projection.transactions.get((stable_id, work_id, transaction_id))
+        if exact is None:
+            raise ArtifactRehydrationError(
+                "recorded artifact transaction is absent from exact final authority"
+            )
+        return exact
+    matches = tuple(
+        transaction
+        for (candidate_stable, candidate_work, _candidate_id), transaction in (
+            projection.transactions.items()
+        )
+        if candidate_stable == stable_id and candidate_work == work_id
+    )
+    if len(matches) > 1:
+        raise ArtifactRehydrationError(
+            "active work has multiple final artifact transactions and no recorded selection"
+        )
+    return matches[0] if matches else None
+
+
+def _rehydration_targets(
+    transaction: ArtifactTransactionProjection,
+) -> Mapping[ArtifactClaimId, Path]:
+    """Validate exact claim coverage and derive disposable relative targets.
+
+    Parameters
+    ----------
+    transaction:
+        Verified final transaction selected from the normalized projection.
+
+    Returns
+    -------
+    Mapping[ArtifactClaimId, pathlib.Path]
+        Claim-keyed paths relative to the transaction staging directory.
+
+    Raises
+    ------
+    ArtifactRehydrationError
+        If claims, source lineage, logical paths, or executable manifests differ.
+    """
+
+    objects = {obj.object_id: obj for obj in transaction.objects}
+    if len(objects) != len(transaction.objects):
+        raise ArtifactRehydrationError("rehydration object inventory has duplicate identities")
+    inputs = transaction.reconstruction_inputs
+    sources_value = inputs.source_manifest.get("sources")
+    if not isinstance(sources_value, list) or any(
+        not isinstance(row, Mapping) for row in sources_value
+    ):
+        raise ArtifactRehydrationError("rehydration source manifest is malformed")
+    sources = {str(row["source_id"]): row for row in sources_value}
+    if len(sources) != len(sources_value):
+        raise ArtifactRehydrationError("rehydration source IDs are not unique")
+    by_role: dict[str, list[ArtifactClaim]] = {"source": [], "code": [], "patch": []}
+    seen_logical_paths: set[str] = set()
+    for claim in transaction.claims:
+        if (
+            claim.stable_id != transaction.stable_id
+            or claim.work_id != transaction.work_id
+            or _dependency_value(claim.gate_id) != transaction.accepted_gate_id
+            or _dependency_value(claim.authorization_id) != transaction.authorization_id
+        ):
+            raise ArtifactRehydrationError("rehydration claim lineage differs from transaction")
+        if claim.logical_role not in by_role:
+            raise ArtifactRehydrationError(
+                f"rehydration claim has unsupported role: {claim.logical_role}"
+            )
+        try:
+            _safe_relative_path(claim.logical_path)
+        except ArtifactBindingError as exc:
+            raise ArtifactRehydrationError(str(exc)) from exc
+        if claim.logical_path in seen_logical_paths:
+            raise ArtifactRehydrationError(
+                f"rehydration has duplicate logical path: {claim.logical_path}"
+            )
+        seen_logical_paths.add(claim.logical_path)
+        obj = objects.get(claim.object_id)
+        source = sources.get(claim.source_id)
+        if obj is None or source is None:
+            raise ArtifactRehydrationError("rehydration claim lacks its exact object or source")
+        if claim.origin != source.get("url") or claim.revision != source.get("revision"):
+            raise ArtifactRehydrationError("rehydration claim origin differs from source manifest")
+        by_role[claim.logical_role].append(claim)
+    source_claim_ids = {claim.source_id for claim in by_role["source"]}
+    if source_claim_ids != set(sources) or len(by_role["source"]) != len(sources):
+        raise ArtifactRehydrationError("rehydration source claims differ from exact source set")
+    targets: dict[ArtifactClaimId, Path] = {}
+    for claim in by_role["source"]:
+        obj = objects[claim.object_id]
+        source = sources[claim.source_id]
+        expected_size = source.get("fetched_bytes_len", source.get("byte_count"))
+        if (
+            obj.content_sha256 != source.get("content_sha256")
+            or expected_size not in {None, obj.byte_count}
+            or source.get("media_type") not in {None, obj.media_type}
+        ):
+            raise ArtifactRehydrationError(
+                f"rehydration source object differs from manifest: {claim.source_id}"
+            )
+        targets[claim.claim_id] = Path("sources") / (
+            f"{obj.content_sha256.removeprefix('sha256:')}.source"
+        )
+
+    proposal = inputs.proposal
+    implementation: Optional[Mapping[str, Any]] = None
+    if proposal is not None:
+        facts = proposal.get("proposed_facts")
+        candidate = facts.get("implementation") if isinstance(facts, Mapping) else None
+        if not isinstance(candidate, Mapping):
+            raise ArtifactRehydrationError("rehydration proposal implementation is malformed")
+        implementation = candidate
+    for role, field in (("code", "code_manifest"), ("patch", "patches")):
+        raw_rows = implementation.get(field, []) if implementation is not None else []
+        if not isinstance(raw_rows, list):
+            raise ArtifactRehydrationError(f"rehydration proposal {field} is malformed")
+        unmatched = list(by_role[role])
+        for row in raw_rows:
+            if (
+                not isinstance(row, Mapping)
+                or not isinstance(row.get("path"), str)
+                or not isinstance(row.get("sha256"), str)
+            ):
+                raise ArtifactRehydrationError(f"rehydration proposal {field} row is malformed")
+            try:
+                relative = _safe_relative_path(str(row["path"]))
+            except ArtifactBindingError as exc:
+                raise ArtifactRehydrationError(str(exc)) from exc
+            declared_parts = PurePosixPath(str(row["path"])).parts
+            matches = [
+                claim
+                for claim in unmatched
+                if PurePosixPath(claim.logical_path).parts[-len(declared_parts) :] == declared_parts
+                and objects[claim.object_id].content_sha256 == row["sha256"]
+            ]
+            if len(matches) != 1:
+                raise ArtifactRehydrationError(
+                    f"rehydration executable claim differs from {field}: {row['path']}"
+                )
+            claim = matches[0]
+            unmatched.remove(claim)
+            target = Path("model") / relative
+            if target in targets.values():
+                raise ArtifactRehydrationError(
+                    f"rehydration executable target conflicts: {relative.as_posix()}"
+                )
+            targets[claim.claim_id] = target
+        if unmatched:
+            raise ArtifactRehydrationError(
+                f"rehydration has unexpected executable claims for {field}"
+            )
+    if set(targets) != {claim.claim_id for claim in transaction.claims}:
+        raise ArtifactRehydrationError("rehydration omitted one or more final claims")
+    return MappingProxyType(targets)
+
+
+def rehydrate_artifact_transaction(
+    transaction: ArtifactTransactionProjection,
+    *,
+    mirrors: MirrorStore,
+    staging_root: Path,
+) -> RehydratedArtifactTransaction:
+    """Materialize exact final code, patch, and source claims from private custody.
+
+    Parameters
+    ----------
+    transaction:
+        Exact final transaction selected from a verified projection.
+    mirrors:
+        Canonical public/private/local mirror roots. Reads are forced through the
+        retained private custody copy even for public-compatible claims.
+    staging_root:
+        Disposable root beneath which a transaction-addressed directory is created.
+
+    Returns
+    -------
+    RehydratedArtifactTransaction
+        Verified staged handle containing raw reconstruction inputs and claim paths.
+
+    Raises
+    ------
+    ArtifactRehydrationError
+        If custody bytes, paths, coverage, aliases, or existing staged bytes differ.
+    """
+
+    targets = _rehydration_targets(transaction)
+    for component in (transaction.stable_id, transaction.work_id, str(transaction.transaction_id)):
+        pure = PurePosixPath(component)
+        if not component or pure.is_absolute() or len(pure.parts) != 1 or component in {".", ".."}:
+            raise ArtifactRehydrationError(
+                f"rehydration transaction address has unsafe component: {component!r}"
+            )
+    root = (
+        staging_root / transaction.stable_id / transaction.work_id / str(transaction.transaction_id)
+    )
+    cursor = staging_root
+    for component in (
+        transaction.stable_id,
+        transaction.work_id,
+        str(transaction.transaction_id),
+    ):
+        if cursor.is_symlink():
+            raise ArtifactRehydrationError(
+                f"rehydration staging ancestor cannot be a symlink: {cursor}"
+            )
+        cursor /= component
+    if root.is_symlink():
+        raise ArtifactRehydrationError("rehydration root cannot be a symlink")
+    expected_relative = set(targets.values())
+    if root.exists():
+        for path in root.rglob("*"):
+            if path.is_symlink():
+                raise ArtifactRehydrationError(f"rehydration staging alias is forbidden: {path}")
+        observed = {path.relative_to(root) for path in root.rglob("*") if path.is_file()}
+        if observed - expected_relative:
+            raise ArtifactRehydrationError(
+                f"rehydration staging has extra files: {sorted(map(str, observed - expected_relative))}"
+            )
+    objects = {obj.object_id: obj for obj in transaction.objects}
+    claim_paths: dict[ArtifactClaimId, Path] = {}
+    for claim in transaction.claims:
+        obj = objects[claim.object_id]
+        try:
+            content = mirrors.fetch_object(obj, custody_class=MirrorClass.PRIVATE)
+        except RuntimeError as exc:
+            raise ArtifactRehydrationError(
+                f"private custody is unavailable for claim {claim.claim_id}: {exc}"
+            ) from exc
+        destination = root / targets[claim.claim_id]
+        try:
+            if destination.is_symlink():
+                raise ArtifactRehydrationError(
+                    f"rehydration destination cannot be a symlink: {destination}"
+                )
+            _atomic_write_immutable(destination, content)
+        except ArtifactPublicationError as exc:
+            raise ArtifactRehydrationError(str(exc)) from exc
+        if destination.is_symlink() or destination.stat().st_nlink != 1:
+            raise ArtifactRehydrationError(f"rehydration destination has an alias: {destination}")
+        if hash_bytes(destination.read_bytes()) != obj.content_sha256:
+            raise ArtifactRehydrationError(
+                f"rehydration destination changed after write: {destination}"
+            )
+        claim_paths[claim.claim_id] = destination
+    return RehydratedArtifactTransaction(
+        transaction=transaction,
+        root=root,
+        model_dir=root / "model",
+        claim_paths=claim_paths,
+    )
 
 
 def artifact_reconstruction_paths(

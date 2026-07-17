@@ -9,6 +9,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Optional
 
+from menagerie.crawler.authority import MirrorObject
 from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.models import JsonObject
 
@@ -342,6 +343,77 @@ class MirrorStore:
             raise MirrorHashMismatchError(
                 f"mirror size mismatch: expected {manifest.byte_count}, got {len(content)}"
             )
+        return content
+
+    def fetch_object(
+        self,
+        obj: MirrorObject,
+        *,
+        custody_class: Optional[MirrorClass] = None,
+    ) -> bytes:
+        """Fetch and verify one normalized object projection.
+
+        ``custody_class`` permits the reconstruction consumer to recover a public
+        claim from the mandatory retained private copy with the same digest. It
+        changes only the physical store selected for reading; all intrinsic size,
+        media, address, and digest checks remain strict.
+
+        Parameters
+        ----------
+        obj:
+            Intrinsic object row from the normalized artifact projection.
+        custody_class:
+            Optional physical mirror class to read instead of ``obj.mirror_class``.
+
+        Returns
+        -------
+        bytes
+            Exact verified object bytes.
+
+        Raises
+        ------
+        MirrorManifestError
+            If the object row or selected physical address is malformed or missing.
+        MirrorHashMismatchError
+            If the selected bytes differ from the normalized object identity.
+        """
+
+        try:
+            projected_class = MirrorClass(obj.mirror_class)
+        except ValueError as exc:
+            raise MirrorManifestError(
+                f"normalized object has unsupported mirror class: {obj.mirror_class!r}"
+            ) from exc
+        selected_class = custody_class or projected_class
+        selected_path = self.address(obj.content_sha256, selected_class)
+        expected_key = selected_path.relative_to(self.root(selected_class)).as_posix()
+        if obj.object_key != expected_key:
+            raise MirrorManifestError(
+                f"normalized object key {obj.object_key!r} is not canonical {expected_key!r}"
+            )
+        try:
+            if selected_path.is_symlink() or not selected_path.is_file():
+                raise MirrorManifestError(
+                    f"normalized mirror object is not a regular unaliased file: {selected_path}"
+                )
+            content = selected_path.read_bytes()
+        except OSError as exc:
+            raise MirrorManifestError(
+                f"normalized mirror object is unavailable: {selected_path}"
+            ) from exc
+        observed = hash_bytes(content)
+        if observed != obj.content_sha256:
+            raise MirrorHashMismatchError(
+                f"normalized mirror object hash mismatch: expected {obj.content_sha256}, "
+                f"got {observed}"
+            )
+        if len(content) != obj.byte_count:
+            raise MirrorHashMismatchError(
+                f"normalized mirror object size mismatch: expected {obj.byte_count}, "
+                f"got {len(content)}"
+            )
+        if not obj.media_type.strip():
+            raise MirrorManifestError("normalized mirror object media type must be non-empty")
         return content
 
     def iter_objects(
