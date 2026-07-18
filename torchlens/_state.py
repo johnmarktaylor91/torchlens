@@ -443,6 +443,14 @@ _escape_detector_mode: str = "off"
 
 _completeness_witness_mode: str = "off"
 """Dispatcher completeness witness mode: ``"off"`` or diagnostic ``"shadow"``."""
+
+_runnable_ledger_armed: bool = False
+"""Whether the r35 event-lifecycle ledger requires wrapper ownership tokens.
+
+Armed only around a runnable-eligible (``intervention_ready``) capture forward so
+the dispatch census can attribute raised / host-returning aten events to their
+exact wrapper owner even when both diagnostic shadow modes are off.
+"""
 _prepared_models: weakref.WeakSet[Any] = weakref.WeakSet()
 """Models that have already been through ``_prepare_model_once()``.
 

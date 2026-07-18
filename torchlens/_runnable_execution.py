@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import nullcontext
 from itertools import count
@@ -115,7 +116,7 @@ def run_loaded_sparse_trace(
             "on_divergence must be DivergencePolicy.RAISE or DivergencePolicy.RETURN_DIVERGED."
         ) from exc
     descriptor, readiness, callables = _require_loaded_sparse_provider(trace)
-    slot_values, input_checks = _bind_runtime_inputs(descriptor, inputs)
+    slot_values, input_checks, input_alias_unresolved = _bind_runtime_inputs(descriptor, inputs)
     input_byte_digests = _snapshot_input_byte_digests(descriptor, slot_values)
     _raise_first_divergence(input_checks, divergence_policy, fork=None)
     prepared_state = prepare_runnable_state(trace, seed=seed)
@@ -133,6 +134,7 @@ def run_loaded_sparse_trace(
             slot_values=slot_values,
             input_byte_digests=input_byte_digests,
             input_checks=input_checks,
+            input_alias_unresolved=input_alias_unresolved,
             prepared_state=prepared_state,
             fork=fork,
         )
@@ -184,6 +186,7 @@ def _execute_loaded_sparse_transaction(
     slot_values: dict[str, torch.Tensor],
     input_byte_digests: Mapping[str, str],
     input_checks: tuple[ContractCheck, ...],
+    input_alias_unresolved: bool,
     prepared_state: PreparedRunnableState,
     fork: Any,
 ) -> RunResult:
@@ -279,17 +282,6 @@ def _execute_loaded_sparse_transaction(
         )
     )
     _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
-    nontensor_inputs_match = all(
-        check.passed
-        for check in contract_checks
-        if check.name.startswith("input_literal:") or check.name.startswith("input_nontensor_tree:")
-    )
-    input_alias_unreproducible = any(
-        not check.passed for check in contract_checks if check.name == "input_alias_topology"
-    )
-    input_metadata_mismatch = any(
-        not check.passed for check in contract_checks if check.name.startswith("input_metadata:")
-    )
     mode_sensitive_op_unwitnessed = _mode_sensitive_op_unwitnessed(descriptor)
     tensor_derived_scalar_stale = _tensor_derived_scalar_stale(
         descriptor, slot_values, witness_source_snapshots
@@ -298,28 +290,15 @@ def _execute_loaded_sparse_transaction(
     output_container_spec = _output_container_spec(fork)
     container_reconstruction_lossy = _container_spec_reconstruction_lossy(output_container_spec)
     output_not_reproduced = _output_not_reproduced(descriptor, output_container_spec)
-    numeric_attestation, attestation_check = _numeric_attestation_check(
-        descriptor,
-        prepared_state,
-        slot_values=slot_values,
-        attestation_slot_values=attestation_slot_values,
-        input_byte_digests=input_byte_digests,
-        trace=trace,
-        nontensor_inputs_match=nontensor_inputs_match,
-        host_rng_unreproduced=host_rng_unreproduced,
-        tensor_derived_scalar_stale=tensor_derived_scalar_stale,
-        unbound_state_escape_stale=unbound_state_escape_stale,
-        container_reconstruction_lossy=container_reconstruction_lossy,
-        output_not_reproduced=output_not_reproduced,
-        input_alias_unreproducible=input_alias_unreproducible,
-        input_metadata_mismatch=input_metadata_mismatch,
-        mode_sensitive_op_unwitnessed=mode_sensitive_op_unwitnessed,
-    )
-    if attestation_check is not None:
-        contract_checks.append(attestation_check)
-        if not attestation_check.passed:
-            _raise_numeric_attestation_failure(fork, attestation_check)
-    path_faithfulness, mismatch = _path_faithfulness(
+    # r35 I3 (corr2_7): settle the PROVISIONAL path verdict from ALL non-numeric
+    # contract checks and static/dynamic ceilings FIRST; numeric attestation is
+    # strictly downstream of it. A verdict that is not VERIFIED -- including one
+    # inherited monotonically from a prior poisoned run of the source Trace --
+    # makes attestation NOT_APPLICABLE before any archive byte is read, so
+    # ATTESTED can never coexist with DIVERGED/UNVERIFIABLE/poisoned, and every
+    # FUTURE contract check automatically caps attestation through this same
+    # derivation (no parallel Boolean flag list).
+    provisional_verdict, provisional_mismatch = _path_faithfulness(
         descriptor,
         contract_checks,
         host_rng_unreproduced=host_rng_unreproduced,
@@ -328,7 +307,30 @@ def _execute_loaded_sparse_transaction(
         container_reconstruction_lossy=container_reconstruction_lossy,
         output_not_reproduced=output_not_reproduced,
         mode_sensitive_op_unwitnessed=mode_sensitive_op_unwitnessed,
+        input_alias_unresolved=input_alias_unresolved,
     )
+    eligibility_verdict = provisional_verdict
+    inherited_status = fork.__dict__.get("_runnable_path_faithfulness")
+    if (
+        isinstance(inherited_status, PathFaithfulness)
+        and inherited_status is not PathFaithfulness.VERIFIED
+        and eligibility_verdict is PathFaithfulness.VERIFIED
+    ):
+        eligibility_verdict = inherited_status
+    numeric_attestation, attestation_check = _numeric_attestation_check(
+        descriptor,
+        prepared_state,
+        slot_values=slot_values,
+        attestation_slot_values=attestation_slot_values,
+        input_byte_digests=input_byte_digests,
+        trace=trace,
+        provisional_verdict=eligibility_verdict,
+    )
+    if attestation_check is not None:
+        contract_checks.append(attestation_check)
+        if not attestation_check.passed:
+            _raise_numeric_attestation_failure(fork, attestation_check)
+    path_faithfulness, mismatch = provisional_verdict, provisional_mismatch
     path_faithfulness, mismatch = mark_trace_path_status(
         fork,
         path_faithfulness,
@@ -815,8 +817,12 @@ def _input_literal_contract_checks(
 def _bind_runtime_inputs(
     descriptor: SparseRunDescriptor,
     inputs: Any,
-) -> tuple[dict[str, torch.Tensor], tuple[ContractCheck, ...]]:
-    """Bind and defensively clone public input leaves by persisted model sites."""
+) -> tuple[dict[str, torch.Tensor], tuple[ContractCheck, ...], bool]:
+    """Bind and defensively clone public input leaves by persisted model sites.
+
+    Returns the bound clone map, the ordered input contract checks, and the
+    ``input_alias_topology_unresolved`` ceiling flag (r35 decision D).
+    """
 
     input_slots = tuple(
         slot for slot in descriptor.tensor_slots if slot.role is TensorSlotRole.MODEL_INPUT
@@ -945,8 +951,11 @@ def _bind_runtime_inputs(
     checks.extend(_input_literal_contract_checks(descriptor, inputs, positions))
     checks.extend(_input_metadata_contract_checks(descriptor, inputs, positions))
     checks.extend(_input_nontensor_tree_contract_checks(descriptor, inputs, positions))
-    checks.extend(_input_alias_topology_checks(descriptor, input_slots, raw_values))
-    return values, tuple(checks)
+    alias_checks, input_alias_unresolved = _input_alias_topology_checks(
+        descriptor, input_slots, raw_values
+    )
+    checks.extend(alias_checks)
+    return values, tuple(checks), input_alias_unresolved
 
 
 def _model_input_version_closure(descriptor: SparseRunDescriptor) -> set[str]:
@@ -1114,11 +1123,123 @@ def _footprints_overlap(left: tuple[int, int, int], right: tuple[int, int, int])
     return left[1] < right[2] and right[1] < left[2]
 
 
+_ALIAS_ENUMERATION_ELEMENT_CAP = 65536
+"""Exact-enumeration bound (inclusive, per view) for the alias proof engine."""
+
+
+def _stride_gcd(value: torch.Tensor) -> int:
+    """Return the gcd of a view's nonzero element strides over nonsingleton dims.
+
+    Zero strides (broadcast) and singleton dimensions contribute no reachable
+    offset variation and drop out. ``0`` means the view touches exactly one
+    element (scalar, all-broadcast, or all-singleton).
+    """
+
+    result = 0
+    for size, stride in zip(value.shape, value.stride()):
+        if int(size) > 1 and int(stride) != 0:
+            result = math.gcd(result, abs(int(stride)))
+    return result
+
+
+def _touched_element_offsets(value: torch.Tensor) -> set[int]:
+    """Enumerate the exact storage element offsets a strided view touches.
+
+    Bounded by ``_ALIAS_ENUMERATION_ELEMENT_CAP`` at the call site; runs under
+    ``pause_logging`` so the integer arithmetic is never captured.
+    """
+
+    with _state.pause_logging():
+        offset = int(value.storage_offset())
+        if value.numel() == 0:
+            return set()
+        if value.dim() == 0:
+            return {offset}
+        index_grid = torch.ones(tuple(value.shape), dtype=torch.int8).nonzero()
+        strides = torch.tensor([int(s) for s in value.stride()], dtype=torch.int64)
+        offsets = (index_grid.to(torch.int64) * strides).sum(dim=1) + offset
+        return {int(item) for item in torch.unique(offsets)}
+
+
+def _touched_bytes_relation(left: torch.Tensor, right: torch.Tensor) -> str:
+    """Three-valued exact touched-byte relation for two same-storage-capable views.
+
+    r35 decision D (corr2_1): returns ``"overlap"`` only on a PROOF of shared
+    touched bytes, ``"disjoint"`` only on a PROOF of disjointness, and
+    ``"unknown"`` otherwise. Proof layers, in order: distinct storages / empty
+    views / disjoint bounding byte intervals (exact); identical geometry
+    (exact overlap); an element-grid-normalized residue/GCD proof (disjointness
+    only -- applicable when both views share element size, so their byte starts
+    are automatically congruent on the element grid and all strides are element
+    multiples); and bounded exact enumeration of touched offsets up to
+    65,536 logical elements per view (byte-range expansion for mixed element
+    sizes). No bounding-box overlap alone is an overlap proof, and no
+    complexity cap is a disjointness proof.
+    """
+
+    left_footprint = _tensor_storage_footprint(left)
+    right_footprint = _tensor_storage_footprint(right)
+    if left_footprint is None or right_footprint is None:
+        return "unknown"
+    if left_footprint[0] != right_footprint[0]:
+        return "disjoint"
+    try:
+        left_numel = int(left.numel())
+        right_numel = int(right.numel())
+        left_esize = int(left.element_size())
+        right_esize = int(right.element_size())
+    except (RuntimeError, TypeError, ValueError):
+        return "unknown"
+    if left_numel == 0 or right_numel == 0:
+        return "disjoint"
+    if not _footprints_overlap(left_footprint, right_footprint):
+        return "disjoint"
+    if (
+        left_esize == right_esize
+        and left_footprint[1] == right_footprint[1]
+        and tuple(left.shape) == tuple(right.shape)
+        and tuple(left.stride()) == tuple(right.stride())
+    ):
+        return "overlap"
+    if left_esize == right_esize:
+        # Element-grid residue proof: every touched element offset of a view is
+        # congruent to its start modulo the gcd of its nonzero strides, so a
+        # start-residue disagreement modulo gcd(g_left, g_right) proves
+        # disjointness. A congruence NEVER proves overlap.
+        left_start = int(left.storage_offset())
+        right_start = int(right.storage_offset())
+        combined = math.gcd(_stride_gcd(left), _stride_gcd(right))
+        if combined == 0:
+            # Both views touch exactly one element inside overlapping bounds.
+            return "overlap" if left_start == right_start else "disjoint"
+        if (left_start - right_start) % combined != 0:
+            return "disjoint"
+    if (
+        left_numel <= _ALIAS_ENUMERATION_ELEMENT_CAP
+        and right_numel <= _ALIAS_ENUMERATION_ELEMENT_CAP
+    ):
+        try:
+            left_offsets = _touched_element_offsets(left)
+            right_offsets = _touched_element_offsets(right)
+        except (RuntimeError, TypeError, ValueError):
+            return "unknown"
+        if left_esize == right_esize:
+            return "overlap" if left_offsets & right_offsets else "disjoint"
+        left_bytes = {
+            offset * left_esize + byte for offset in left_offsets for byte in range(left_esize)
+        }
+        right_bytes = {
+            offset * right_esize + byte for offset in right_offsets for byte in range(right_esize)
+        }
+        return "overlap" if left_bytes & right_bytes else "disjoint"
+    return "unknown"
+
+
 def _input_alias_topology_checks(
     descriptor: SparseRunDescriptor,
     input_slots: Sequence[TensorSlotDescriptor],
     raw_values: Mapping[str, torch.Tensor],
-) -> tuple[ContractCheck, ...]:
+) -> tuple[tuple[ContractCheck, ...], bool]:
     """Fail closed on runtime input aliasing unreproducible against a de-aliased capture.
 
     Torch capture clones each model-input leaf before the forward (``safe_copy_args``), and
@@ -1162,30 +1283,37 @@ def _input_alias_topology_checks(
         for j in range(i + 1, len(resolved)):
             if resolved[i][1] is resolved[j][1]:
                 aliased_pairs.add(_ordered_pair(resolved[i][0], resolved[j][0]))
-    # Storage aliasing: two input sites whose element byte spans OVERLAP.
-    footprints: list[tuple[str, tuple[int, int, int]]] = []
-    for slot_id, value in resolved:
-        footprint = _tensor_storage_footprint(value)
-        if footprint is not None:
-            footprints.append((slot_id, footprint))
-    for i in range(len(footprints)):
-        for j in range(i + 1, len(footprints)):
-            if _footprints_overlap(footprints[i][1], footprints[j][1]):
-                aliased_pairs.add(_ordered_pair(footprints[i][0], footprints[j][0]))
+    # Storage aliasing (r35 decision D): the three-valued touched-byte engine.
+    # PROVED overlap is an observed contradiction (failed check -> DIVERGED);
+    # PROVED disjointness passes; ``unknown`` is the
+    # ``input_alias_topology_unresolved`` unverifiability ceiling -- never
+    # ``overlap`` by assumption and never VERIFIED.
+    unresolved = False
+    for i in range(len(resolved)):
+        for j in range(i + 1, len(resolved)):
+            left_id, left = resolved[i]
+            right_id, right = resolved[j]
+            if left is right:
+                continue  # identity already recorded above
+            relation = _touched_bytes_relation(left, right)
+            if relation == "overlap":
+                aliased_pairs.add(_ordered_pair(left_id, right_id))
+            elif relation == "unknown":
+                unresolved = True
     if not aliased_pairs:
-        return ()
+        return (), unresolved
     return (
         _contract_check(
             "input_alias_topology",
             False,
             RunnableErrorCode.INPUT_TREE_MISMATCH,
-            "Runtime model inputs alias (same object or overlapping storage spans); capture "
-            "de-aliases inputs (independent per-slot clones), so the recorded taken path "
-            "cannot reproduce an identity or storage-aliasing dependence and must not be "
-            "blessed VERIFIED.",
+            "Runtime model inputs alias (same object or proven-overlapping touched "
+            "bytes); capture de-aliases inputs (independent per-slot clones), so the "
+            "recorded taken path cannot reproduce an identity or storage-aliasing "
+            "dependence and must not be blessed VERIFIED.",
             details=(("aliased_input_slot_pairs", repr(sorted(aliased_pairs))),),
         ),
-    )
+    ), unresolved
 
 
 def _clone_state_values(
@@ -3006,6 +3134,7 @@ def _path_faithfulness(
     container_reconstruction_lossy: bool = False,
     output_not_reproduced: bool = False,
     mode_sensitive_op_unwitnessed: bool = False,
+    input_alias_unresolved: bool = False,
 ) -> tuple[PathFaithfulness, RunnableDiagnostic | None]:
     """Classify exact three-state path faithfulness after all honesty checks."""
 
@@ -3013,6 +3142,13 @@ def _path_faithfulness(
     if failed is not None:
         return PathFaithfulness.DIVERGED, failed.diagnostic
     if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
+        return PathFaithfulness.UNVERIFIABLE, None
+    if input_alias_unresolved:
+        # r35 decision D: the three-valued alias engine could prove neither
+        # overlap nor disjointness for a same-storage input pair. Unknown is not
+        # an observed contradiction (never DIVERGED by assumption) and not a
+        # proof of equivalence (never VERIFIED): the honest ceiling is
+        # UNVERIFIABLE (``input_alias_topology_unresolved``).
         return PathFaithfulness.UNVERIFIABLE, None
     if mode_sensitive_op_unwitnessed:
         # A BatchNorm/InstanceNorm op in the taken path is train/eval mode-sensitive, but the
@@ -3063,8 +3199,22 @@ def _run_report(
     first_mismatch: RunnableDiagnostic | None,
     numeric_attestation: NumericAttestationStatus,
 ) -> RunReport:
-    """Build the settled sparse run-report surface."""
+    """Build the settled sparse run-report surface.
 
+    r35 I3 tripwire-on-the-tripwire: ``attested`` structurally implies a
+    ``verified``, unpoisoned path. The prohibited combination is asserted
+    unrepresentable at construction, so no future code path can emit an
+    internally contradictory positive numeric claim.
+    """
+
+    poisoned = path_faithfulness is not PathFaithfulness.VERIFIED
+    if numeric_attestation is NumericAttestationStatus.ATTESTED and (
+        path_faithfulness is not PathFaithfulness.VERIFIED or poisoned
+    ):
+        raise RuntimeError(
+            "Internal invariant violation: numeric_attestation=attested requires "
+            f"a verified, unpoisoned path (got {path_faithfulness.value!r})."
+        )
     return RunReport(
         readiness=readiness,
         state_source=state.state_source,
@@ -3075,7 +3225,7 @@ def _run_report(
         path_faithfulness=path_faithfulness,
         first_mismatch=first_mismatch,
         numeric_attestation=numeric_attestation,
-        poisoned=path_faithfulness is not PathFaithfulness.VERIFIED,
+        poisoned=poisoned,
     )
 
 
@@ -3087,17 +3237,17 @@ def _numeric_attestation_check(
     attestation_slot_values: Mapping[str, torch.Tensor],
     input_byte_digests: Mapping[str, str],
     trace: Any,
-    nontensor_inputs_match: bool = True,
-    host_rng_unreproduced: bool = False,
-    tensor_derived_scalar_stale: bool = False,
-    unbound_state_escape_stale: bool = False,
-    container_reconstruction_lossy: bool = False,
-    output_not_reproduced: bool = False,
-    input_alias_unreproducible: bool = False,
-    input_metadata_mismatch: bool = False,
-    mode_sensitive_op_unwitnessed: bool = False,
+    provisional_verdict: PathFaithfulness,
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
     """Compare recomputed saved slots with the independent activation archive.
+
+    r35 I3 (corr2_7): eligibility DERIVES from the settled provisional path
+    verdict -- computed from every non-numeric contract check and every static/
+    dynamic ceiling, including the fork's inherited monotonic mark -- instead of
+    a parallel Boolean flag list. Any verdict that is not ``verified`` returns
+    ``not_applicable`` before a single archive byte is read, so ``attested``
+    structurally implies ``verified`` and every future contract check
+    automatically caps attestation.
 
     Parameters
     ----------
@@ -3114,9 +3264,8 @@ def _numeric_attestation_check(
         Model-input byte digests captured before any in-place sparse call.
     trace:
         Loaded source Trace retaining inspection-only archived activations.
-    nontensor_inputs_match:
-        Whether every witnessed non-tensor input leaf matched its recorded
-        capture-time value. A changed non-tensor input forces ``not_applicable``.
+    provisional_verdict:
+        Settled non-numeric path verdict (inherited monotonic marks folded in).
 
     Returns
     -------
@@ -3124,60 +3273,15 @@ def _numeric_attestation_check(
         Applicability/result status and the aggregate byte-exact tripwire check.
     """
 
-    if host_rng_unreproduced:
-        # Python/NumPy-RNG control flow replayed off its captured seed: the recorded
-        # taken path is not guaranteed to be the branch a fresh seeded call takes, so
-        # a byte-exact attestation would dishonestly bless a possibly-stale result.
+    if provisional_verdict is not PathFaithfulness.VERIFIED:
+        # Not a settled VERIFIED path: attestation is not applicable and the
+        # archive is never opened (no comparison before a non-numeric verdict).
         return NumericAttestationStatus.NOT_APPLICABLE, None
-    if not nontensor_inputs_match:
-        # A changed non-tensor input means the recorded taken path may not apply,
-        # so recomputed slots must never be attested against the capture archive.
-        return NumericAttestationStatus.NOT_APPLICABLE, None
-    if tensor_derived_scalar_stale:
-        # A tensor->host escape source slot recomputed differently: the sparse
-        # replay cannot recompute the baked constant / taken branch, so a byte-exact
-        # attestation would dishonestly bless a possibly-stale result.
-        return NumericAttestationStatus.NOT_APPLICABLE, None
-    if unbound_state_escape_stale:
-        # An unbound state slot (read only through an untraced host path) was staged
-        # with a value differing from capture, so the recorded taken path may not
-        # apply; a byte-exact attestation would dishonestly bless a stale result.
-        return NumericAttestationStatus.NOT_APPLICABLE, None
-    if input_alias_unreproducible:
-        # Runtime inputs alias (share storage) while an in-place op mutates a model
-        # input, but capture de-aliases inputs, so the recorded taken path cannot
-        # reproduce the aliased mutation. The run diverges; attesting recomputed slots
-        # against the de-aliased archive would be an internally inconsistent false positive.
-        return NumericAttestationStatus.NOT_APPLICABLE, None
-    if input_metadata_mismatch:
-        # The capture-time forward READ a metadata predicate (layout / requires_grad) on a
-        # model input and the runtime input differs on that witnessed fact (r27-H2). The
-        # input VALUES may be byte-identical (a layout twin), so the original-input digest
-        # gate alone would attest a run whose recorded taken path is invalid for this
-        # input -- an internally inconsistent ATTESTED alongside a DIVERGED path.
-        return NumericAttestationStatus.NOT_APPLICABLE, None
-    if mode_sensitive_op_unwitnessed:
-        # A mode-sensitive op (BatchNorm/InstanceNorm) replays without a declared train/eval
-        # mode, so ``_path_faithfulness`` ceils this run at UNVERIFIABLE. A byte-exact ATTESTED
-        # alongside an UNVERIFIABLE mode-unanchored path is an internally inconsistent positive.
-        return NumericAttestationStatus.NOT_APPLICABLE, None
-    if output_not_reproduced:
-        # The captured forward returned a HOST-ESCAPED non-tensor scalar (or otherwise
-        # unrepresentable value): the sparse DAG emitted a dropped ``None`` that was
-        # never produced or compared, so ``_path_faithfulness`` ceils this run at
-        # UNVERIFIABLE. Attesting selected internal slots as ATTESTED while the output
-        # itself was never reproduced is internally inconsistent -- a false positive.
-        return NumericAttestationStatus.NOT_APPLICABLE, None
-    if container_reconstruction_lossy:
-        # The output container reconstructs lossily (computed non-field state, a
-        # ``__slots__`` layout, or a data-descriptor field), so ``_path_faithfulness``
-        # ceils this run at UNVERIFIABLE. A byte-exact ATTESTED alongside an
-        # UNVERIFIABLE path would be an internally inconsistent false positive.
-        return NumericAttestationStatus.NOT_APPLICABLE, None
-    if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
-        # Incomplete witness coverage (e.g. an opaque non-tensor input leaf that
-        # cannot be re-verified) makes the path only UNVERIFIABLE, so a byte-exact
-        # attestation would dishonestly bless a possibly-wrong replayed path.
+    if descriptor.ambient_context.attestation_ineligible_context:
+        # Positive capture-time nondeterministic-context marking (decision E /
+        # H_B_RESOLUTION R1): cudnn.benchmark or a CUDA-nondeterministic op
+        # captured without deterministic algorithms cannot promise reproducible
+        # bytes -- fail-safe ineligibility, never a spurious tripwire raise.
         return NumericAttestationStatus.NOT_APPLICABLE, None
     layer = descriptor.payload_layers.activations
     if not layer.present:

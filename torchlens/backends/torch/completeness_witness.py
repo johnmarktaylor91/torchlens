@@ -24,7 +24,7 @@ import threading
 import time
 import warnings
 import weakref
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -198,7 +198,15 @@ class _DispatchCallsite:
 
 @dataclass
 class _DispatchEvent:
-    """One aten dispatcher event and its exact live wrapper owner, if any."""
+    """One aten dispatcher event and its exact live wrapper owner, if any.
+
+    r35 I2: every event carries a lifecycle ``outcome`` -- ``started`` (armed),
+    then ``returned_tensor`` / ``returned_host_or_none`` / ``raised`` -- so the
+    runnable ledger can discharge every observed event as an accounted call, an
+    exact witness, an audited opaque boundary, or an explicit incomplete fact.
+    Only safe facts are recorded for a raise: operator, owner identity, and the
+    exception type module+qualname -- never exception objects/messages/tracebacks.
+    """
 
     operator: str
     owner: ExpectedOriginalToken | None
@@ -206,6 +214,8 @@ class _DispatchEvent:
     in_replacement_hook: bool = False
     mutates: bool = False
     state_view_accessor: bool = False
+    outcome: str = "started"
+    exception_type: str | None = None
 
 
 @dataclass
@@ -219,6 +229,7 @@ class _WitnessState:
     callback_ns: int = 0
     census: bool = True
     record_escapes: bool = False
+    ledger: bool = False
     # (source_tensor, version_at_escape, byte_snapshot) for each mutable zero-copy alias
     # (``numpy`` / ``__array__``) handed to the host this forward. Checked for host write-back
     # at forward end. Strong refs keep the aliased storage alive until the comparison.
@@ -1665,6 +1676,7 @@ class _CompletenessDispatchMode(TorchDispatchMode):
         del types
         started = time.perf_counter_ns()
         in_scope = False
+        event: _DispatchEvent | None = None
         try:
             in_scope = (
                 threading.get_ident() == self.state.owner_thread_id
@@ -1672,24 +1684,32 @@ class _CompletenessDispatchMode(TorchDispatchMode):
                 and _state._active_trace is self.state.trace
                 and _is_aten_operator(func)
             )
-            if in_scope and self.state.census:
+            if in_scope and (self.state.census or self.state.ledger):
                 owner = _active_token()
+                # The frame-walking callsite/replacement/state-view facts are census
+                # diagnostics; ledger-only events defer the replacement-hook probe to
+                # OUTCOME time (only raised / host-returning events need it).
                 callsite = (
-                    _dispatch_callsite() if owner is None or owner.func_call_id is None else None
+                    _dispatch_callsite()
+                    if self.state.census and (owner is None or owner.func_call_id is None)
+                    else None
                 )
-                in_replacement_hook = _in_replacement_hook_frame()
+                in_replacement_hook = _in_replacement_hook_frame() if self.state.census else False
                 mutates = _is_mutating_operator(func)
-                state_view_accessor = _is_buffer_state_view_dispatch(func, owner, mutates, args)
-                self.state.events.append(
-                    _DispatchEvent(
-                        _operator_name(func),
-                        owner,
-                        callsite,
-                        in_replacement_hook,
-                        mutates,
-                        state_view_accessor,
-                    )
+                state_view_accessor = (
+                    _is_buffer_state_view_dispatch(func, owner, mutates, args)
+                    if self.state.census
+                    else False
                 )
+                event = _DispatchEvent(
+                    _operator_name(func),
+                    owner,
+                    callsite,
+                    in_replacement_hook,
+                    mutates,
+                    state_view_accessor,
+                )
+                self.state.events.append(event)
             # Per-consumption host write-back sample (r16-H1 TOCTOU): if a mutable zero-copy alias
             # is live and THIS traced op consumes a watched source whose bytes were transiently
             # written, catch it now -- BEFORE redispatch reads the mutated input -- rather than only
@@ -1698,7 +1718,25 @@ class _CompletenessDispatchMode(TorchDispatchMode):
                 _sample_writeback_at_consumption(self.state, args, kwargs)
         finally:
             self.state.callback_ns += time.perf_counter_ns() - started
-        result = func(*args, **(kwargs or {}))
+        try:
+            result = func(*args, **(kwargs or {}))
+        except BaseException as exc:
+            # r35 I2 lifecycle ledger: an op that RAISED left no captured artifact,
+            # so a branch taken *because* it raised has no witness anchor. Record
+            # only safe facts (type module+qualname) and re-raise unchanged.
+            if event is not None:
+                event.outcome = "raised"
+                event.exception_type = f"{type(exc).__module__}.{type(exc).__qualname__}"
+                if not event.in_replacement_hook:
+                    event.in_replacement_hook = _in_replacement_hook_frame()
+            raise
+        if event is not None:
+            if _dispatch_result_holds_tensor(result):
+                event.outcome = "returned_tensor"
+            else:
+                event.outcome = "returned_host_or_none"
+                if not event.in_replacement_hook:
+                    event.in_replacement_hook = _in_replacement_hook_frame()
         # Escape recording needs the OUTPUT: a tensor->host escape is any aten dispatch
         # returning a NON-TENSOR host value from a tensor operand (equal/allclose/
         # is_nonzero/_local_scalar_dense). Recorded after redispatch so the result is
@@ -1710,6 +1748,98 @@ class _CompletenessDispatchMode(TorchDispatchMode):
             finally:
                 self.state.callback_ns += time.perf_counter_ns() - escape_started
         return result
+
+
+def _dispatch_result_holds_tensor(result: Any) -> bool:
+    """Return whether an aten dispatch result contains any tensor (one level deep)."""
+
+    if isinstance(result, torch.Tensor):
+        return True
+    if isinstance(result, (list, tuple)):
+        return any(isinstance(item, torch.Tensor) for item in result)
+    return False
+
+
+_RUNNABLE_LEDGER_FACTS: "weakref.WeakKeyDictionary[Any, list[dict[str, Any]]]" = (
+    weakref.WeakKeyDictionary()
+)
+"""Per-trace undischarged event-lifecycle facts (r35 I2, hon2_1).
+
+Each fact is a safe, value-free record naming the site of an event the census
+could not discharge: a caught in-forward raise (``caught_exception_control``),
+an unmodeled successful host/``None`` return (``unmodeled_host_return``), or a
+mutation-capable unknown (``opaque_side_effect``). The runnable producer maps a
+non-empty fact list to an INCOMPLETE witness-completeness downgrade, so every
+run of that artifact ceilings at ``unverifiable`` + ``not_applicable``.
+"""
+
+
+def runnable_ledger_facts(trace: Any) -> tuple[Mapping[str, Any], ...]:
+    """Return the recorded undischarged lifecycle facts for one trace."""
+
+    return tuple(_RUNNABLE_LEDGER_FACTS.get(trace, ()))
+
+
+def _finalize_runnable_ledger(state: _WitnessState) -> None:
+    """Discharge every observed dispatch event or record an incomplete fact (r35 I2).
+
+    Discharge rules (owner-accounted; no exception-type or framework-file
+    exemptions): a raised or host-returning subevent whose enclosing wrapper
+    owner became an accounted modeled call is discharged (replaying the owner
+    replays its internal fallback); an exact audited opaque boundary is
+    discharged by its existing narrow row; a host-return witnessed by the exact
+    escape net (``HOST_ESCAPE_OPERATORS``), a ``.data``-accessor state view, and
+    genuine replacement-hook construction are discharged. Everything else is an
+    explicit incomplete fact. This finalize runs only when the forward COMPLETED
+    -- so an undischarged raise means the exception was caught before forward
+    completion: exception-driven control flow the sparse replay cannot witness.
+    """
+
+    facts: list[dict[str, Any]] = []
+    for event in state.events:
+        owner = event.owner
+        owner_accounted = owner is not None and owner.capture_accounted is True
+        audited_opaque = owner is not None and _is_expected_opaque_dispatch(event.operator, owner)
+        if event.outcome == "raised":
+            if owner_accounted or audited_opaque or event.in_replacement_hook:
+                continue
+            facts.append(
+                {
+                    "kind": "caught_exception_control",
+                    "operator": event.operator,
+                    "owner_wrapper": owner.wrapper_name if owner is not None else None,
+                    "owner_func_name": owner.func_name if owner is not None else None,
+                    "exception_type": event.exception_type,
+                    "mutates": bool(event.mutates),
+                }
+            )
+        elif event.outcome == "returned_host_or_none":
+            if owner_accounted or audited_opaque or event.in_replacement_hook:
+                continue
+            # ``_operator_name`` yields overload-qualified names (``aten.equal.default``);
+            # the escape-net allowlist holds overload-stripped base names.
+            base_operator = (
+                event.operator.rsplit(".", 1)[0]
+                if event.operator.count(".") >= 2
+                else event.operator
+            )
+            if base_operator in HOST_ESCAPE_OPERATORS:
+                # Witnessed exactly by the tensor->host escape net.
+                continue
+            if event.state_view_accessor:
+                continue
+            facts.append(
+                {
+                    "kind": "opaque_side_effect" if event.mutates else "unmodeled_host_return",
+                    "operator": event.operator,
+                    "owner_wrapper": owner.wrapper_name if owner is not None else None,
+                    "owner_func_name": owner.func_name if owner is not None else None,
+                    "exception_type": None,
+                    "mutates": bool(event.mutates),
+                }
+            )
+    if facts:
+        _RUNNABLE_LEDGER_FACTS.setdefault(state.trace, []).extend(facts)
 
 
 def _whole_storage_uint8(source: torch.Tensor) -> torch.Tensor:
@@ -2658,6 +2788,7 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
         guard_pass_index,
         census=(mode == "shadow"),
         record_escapes=record_escapes,
+        ledger=record_escapes,
     )
     mode_context = _CompletenessDispatchMode(state)
     # A runnable capture additionally observes census-INVISIBLE ``.tolist()`` /
@@ -2665,12 +2796,21 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
     # mechanism feeds one uniform source-witness pass. The patch is a pure observer,
     # restored unconditionally, and is skipped entirely for the non-runnable census path.
     if record_escapes:
-        with _observe_invisible_host_escapes(state), mode_context:
-            try:
-                yield
-            finally:
-                if mode == "shadow":
-                    _finalize_census(state)
+        # r35 I2: arm wrapper ownership tokens so raised / host-returning dispatch
+        # events can be attributed to their exact wrapper owner (the ledger's
+        # owner-accounted discharge rule) even with both shadow modes off.
+        prior_ledger_armed = _state._runnable_ledger_armed
+        _state._runnable_ledger_armed = True
+        try:
+            with _observe_invisible_host_escapes(state), mode_context:
+                try:
+                    yield
+                finally:
+                    if mode == "shadow":
+                        _finalize_census(state)
+                    _finalize_runnable_ledger(state)
+        finally:
+            _state._runnable_ledger_armed = prior_ledger_armed
         return
     with mode_context:
         try:

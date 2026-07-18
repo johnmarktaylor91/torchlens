@@ -100,7 +100,11 @@ def _diagnostic_edge_armed() -> bool:
         ``True`` when a shared one-shot token is required.
     """
 
-    return _state._escape_detector_mode == "shadow" or _state._completeness_witness_mode == "shadow"
+    return (
+        _state._escape_detector_mode == "shadow"
+        or _state._completeness_witness_mode == "shadow"
+        or _state._runnable_ledger_armed
+    )
 
 
 _KNOWN_TORCH_FREE_PREFIXES = (

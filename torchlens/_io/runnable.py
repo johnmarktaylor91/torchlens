@@ -509,6 +509,29 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # to the cooked parent, but the original host write bypassed the ordinary labelled tensor
         # path, so the descriptor cannot honestly prove full path fidelity.
         completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
+    ledger_facts = _runnable_ledger_facts_for_trace(trace)
+    if ledger_facts and completeness is WitnessCompleteness.COMPLETE:
+        # r35 I2 (hon2_1): the event-lifecycle ledger recorded an UNDISCHARGED
+        # dispatch outcome -- a caught in-forward raise (exception-driven control
+        # flow: the taken path was decided by whether an op raised, a channel no
+        # tensor witness can see), an unmodeled successful host/None return, or a
+        # mutation-capable unknown. The sparse DAG cannot recompute or observe
+        # that decision, so EVERY run of this artifact (original or changed
+        # input) must ceiling at UNVERIFIABLE + NOT_APPLICABLE, never a silent
+        # false VERIFIED. A raise-free model records zero facts (no over-trigger).
+        completeness = (
+            WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
+            if any(bool(fact.get("mutates")) for fact in ledger_facts)
+            else WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
+        )
+    if (
+        getattr(trace, "capture_verified", None) is False
+        and completeness is WitnessCompleteness.COMPLETE
+    ):
+        # r35 I2 completion: a capture whose own verification tripwire fired
+        # (unaccounted dispatches, escaped callables, unverified transform
+        # routes) cannot claim complete witness coverage for replay either.
+        completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
     diagnostics.extend(_preflight_output_contracts(trace, ops))
     ambient_context = _ambient_execution_context(trace, calls, registry_entries, slot_drafts)
     if ambient_context is None:
@@ -585,6 +608,16 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     )
     assert_sparse_core_has_no_tensor_payload(descriptor)
     return descriptor
+
+
+def _runnable_ledger_facts_for_trace(trace: Any) -> tuple[Mapping[str, Any], ...]:
+    """Read the capture-time event-lifecycle ledger facts for one trace (r35 I2)."""
+
+    try:
+        from ..backends.torch.completeness_witness import runnable_ledger_facts
+    except ImportError:  # pragma: no cover - torch backend always present for runnable
+        return ()
+    return runnable_ledger_facts(trace)
 
 
 def _normalize_trace_numpy_scalar_metadata(trace: Any) -> None:
