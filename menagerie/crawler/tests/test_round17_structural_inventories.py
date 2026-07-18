@@ -298,6 +298,14 @@ ROUND21_VS1_PROOF_REGISTRY: dict[str, str] = {
     ),
 }
 
+ROUND21_VS2_PROOF_REGISTRY: dict[str, str] = {
+    **ROUND21_VS1_PROOF_REGISTRY,
+    "P02": (
+        "menagerie/crawler/tests/test_round21_fingerprint_composition.py::"
+        "test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
+    ),
+}
+
 
 def _source(module: Any) -> str:
     """Return one imported production module's exact source text."""

@@ -235,6 +235,16 @@ Changing any byte causes the reducer to stop treating dependent attempts or verd
 facts remain history. An environment-generation change requires re-execution of all accepted models in
 that env; the previous success is not current.
 
+The parent-owned environment-authority cache fingerprints every directory, regular file, symlink, and
+exact external target using its path/type/link binding plus full mode, size, `mtime_ns`, `ctime_ns`,
+device, and inode. Device and inode are freshness triggers, not semantic content identity, and link
+count is never consulted. A cheap mismatch performs one complete rehash. If the sealed bytes and
+semantic manifest remain identical (including clone-time hardlink ctime churn), only that authority's
+cheap baseline is refreshed; otherwise the authority is invalidated as stale. The remaining cache
+evasion requires a privileged or out-of-band actor able to preserve every cheap field, an unsupported
+coarse filesystem rejected by the release fixture, or the narrow final-verification-to-child-read
+TOCTOU window. Ordinary writes change `ctime_ns` and therefore cannot use that residual.
+
 `model.v3.dependency_vector` is closed and stage-sensitive. Every axis is an exact identity or the typed
 state `not-applicable`/`pending-untrusted`; `null` never means “not checked.” It binds intake,
 author-result schema/dispatcher, applicable prompts, terminal rule/status proof, present proposal/result/

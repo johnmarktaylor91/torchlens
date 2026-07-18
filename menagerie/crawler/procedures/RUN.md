@@ -66,3 +66,10 @@ The first command must exit with the documented paused code after two real `runs
 resume command succeeds only after all ten expected rows have authenticated forward attempts and
 current `runs` revisions. A terminal partition of source failures is an acceptance failure and exits
 nonzero even though the deterministic driver itself reached terminality.
+
+Environment freshness checks cover the complete sealed tree and exact external targets with full mode,
+size, `mtime_ns`, `ctime_ns`, device, and inode triggers. A hardlink clone may change shared-inode ctime;
+the first subsequent check rehashes once and, when content is byte-identical, refreshes only the local
+authority's cheap baseline without changing its authority or generation. A changed content digest
+invalidates the authority before spawn. Only a privileged/out-of-band actor preserving every cheap
+field, a release-rejected coarse filesystem, or the final verify/read TOCTOU can defer detection.

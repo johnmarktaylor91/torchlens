@@ -438,7 +438,10 @@ def _environment_entry_payload(entry: EnvironmentContentEntry) -> JsonObject:
     }
 
 
-def _hash_regular_file_stably(path: Path, before: os.stat_result) -> str:
+def _hash_regular_file_stably(
+    path: Path,
+    before: os.stat_result,
+) -> tuple[str, os.stat_result]:
     """Hash a regular file and reject concurrent metadata changes.
 
     Parameters
@@ -450,8 +453,8 @@ def _hash_regular_file_stably(path: Path, before: os.stat_result) -> str:
 
     Returns
     -------
-    str
-        Exact prefixed SHA-256 digest.
+    tuple[str, os.stat_result]
+        Exact prefixed SHA-256 digest and the stable post-read metadata baseline.
 
     Raises
     ------
@@ -461,24 +464,30 @@ def _hash_regular_file_stably(path: Path, before: os.stat_result) -> str:
 
     import hashlib
 
-    digest = hashlib.sha256()
-    try:
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
-        after = path.lstat()
-    except OSError as exc:
-        raise AuthorityDerivationError(f"environment member cannot be sealed: {path}") from exc
-    stable_fields = (
+    semantic_fields = (
         "st_dev",
         "st_ino",
         "st_mode",
         "st_size",
         "st_mtime_ns",
     )
-    if any(getattr(before, name) != getattr(after, name) for name in stable_fields):
-        raise AuthorityDerivationError(f"environment member changed while sealing: {path}")
-    return f"sha256:{digest.hexdigest()}"
+    for attempt in range(2):
+        digest = hashlib.sha256()
+        try:
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            after = path.lstat()
+        except OSError as exc:
+            raise AuthorityDerivationError(f"environment member cannot be sealed: {path}") from exc
+        if any(getattr(before, name) != getattr(after, name) for name in semantic_fields):
+            raise AuthorityDerivationError(f"environment member changed while sealing: {path}")
+        if before.st_ctime_ns == after.st_ctime_ns:
+            return f"sha256:{digest.hexdigest()}", after
+        if attempt == 1:
+            raise AuthorityDerivationError(f"environment member changed while sealing: {path}")
+        before = after
+    raise AssertionError("stable environment hash loop exhausted")
 
 
 def _canonical_relative_path(prefix: Path, path: Path) -> str:
@@ -548,9 +557,12 @@ def _scan_environment_tree(
                 ) from exc
             common_fingerprint: JsonObject = {
                 "relative_path": relative,
-                "mode": stat.S_IMODE(status.st_mode),
+                "mode": status.st_mode,
                 "size": status.st_size,
                 "mtime_ns": status.st_mtime_ns,
+                "ctime_ns": status.st_ctime_ns,
+                "st_dev": status.st_dev,
+                "st_ino": status.st_ino,
             }
             if stat.S_ISDIR(status.st_mode):
                 entry_type = "directory"
@@ -560,7 +572,20 @@ def _scan_environment_tree(
                 pending.append(path)
             elif stat.S_ISREG(status.st_mode):
                 entry_type = "regular-file"
-                digest = _hash_regular_file_stably(path, status) if hash_files else None
+                if hash_files:
+                    digest, status = _hash_regular_file_stably(path, status)
+                    common_fingerprint.update(
+                        {
+                            "mode": status.st_mode,
+                            "size": status.st_size,
+                            "mtime_ns": status.st_mtime_ns,
+                            "ctime_ns": status.st_ctime_ns,
+                            "st_dev": status.st_dev,
+                            "st_ino": status.st_ino,
+                        }
+                    )
+                else:
+                    digest = None
                 entries.append(
                     EnvironmentContentEntry(
                         relative,
@@ -594,17 +619,25 @@ def _scan_environment_tree(
                         raise AuthorityDerivationError(
                             f"environment symlink escapes to a non-file target: {path}"
                         )
-                    digest = (
-                        _hash_regular_file_stably(resolved, target_status) if hash_files else ""
-                    )
+                    if hash_files:
+                        digest, target_status = _hash_regular_file_stably(
+                            resolved,
+                            target_status,
+                        )
+                    else:
+                        digest = ""
                     external_by_path[resolved] = EnvironmentExternalTarget(
                         path=resolved,
                         sha256=digest,
                     )
                     common_fingerprint["external_target"] = str(resolved)
+                    common_fingerprint["external_entry_type"] = "regular-file"
                     common_fingerprint["external_size"] = target_status.st_size
-                    common_fingerprint["external_mode"] = stat.S_IMODE(target_status.st_mode)
+                    common_fingerprint["external_mode"] = target_status.st_mode
                     common_fingerprint["external_mtime_ns"] = target_status.st_mtime_ns
+                    common_fingerprint["external_ctime_ns"] = target_status.st_ctime_ns
+                    common_fingerprint["external_st_dev"] = target_status.st_dev
+                    common_fingerprint["external_st_ino"] = target_status.st_ino
                 common_fingerprint["link_text"] = link_text
                 entries.append(
                     EnvironmentContentEntry(
@@ -896,6 +929,8 @@ class EnvironmentAuthorityCache:
             self._manifest = None
             self._authority = None
             raise AuthorityDerivationError("environment content seal changed; authority is stale")
+        # Hardlink-clone creation can change source-inode ctime without changing bytes.
+        # Keep the bound semantic identity and re-baseline only this authority's cheap fields.
         self._manifest = current
 
     def assert_active(self, authority: EnvironmentAuthorityV1) -> None:
