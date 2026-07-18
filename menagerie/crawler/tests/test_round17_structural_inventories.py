@@ -306,6 +306,85 @@ ROUND21_VS2_PROOF_REGISTRY: dict[str, str] = {
     ),
 }
 
+ROUND21_VS3_PROOF_REGISTRY: dict[str, str] = {
+    **ROUND21_VS2_PROOF_REGISTRY,
+    "P03": (
+        "menagerie/crawler/tests/test_round21_scale_composition.py::"
+        "test_round21_pass_and_spawn_validation_walks_are_constant_bounded"
+    ),
+    "T03": (
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
+        "test_round21_verification_tree_walk_inventory_is_closed"
+    ),
+}
+
+
+def test_round21_verification_tree_walk_inventory_is_closed() -> None:
+    """Every complete prefix walk and v3 reuse site stays explicitly registered."""
+
+    authority_source = _source(authority_module)
+    tree, parents, names = _tree_context(authority_source)
+    observed_walks = Counter(
+        _enclosing_definition(node, parents, names)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and _attribute_name(node.func) == "_scan_environment_tree"
+    )
+    assert observed_walks == Counter(authority_module._ENVIRONMENT_TREE_WALK_REGISTRY)  # noqa: SLF001
+
+    required_token_sites = {
+        "authority.py": {
+            "collect_executable_closure_v3",
+            "compile_execution_read_manifest_v3_from_closure",
+            "environment_read_capability",
+            "verify_execution_read_manifest_v3",
+        },
+        "driver.py": {
+            "CrawlerDriver._forward_and_reduce",
+            "CrawlerDriver._run_environment_work",
+            "SupervisedForwardLane.forward",
+            "_collect_worker_executable_closure",
+            "_compile_worker_read_manifest",
+        },
+        "policy.py": {"generate_macos_sandbox_profile", "verify_execution_read_manifest"},
+        "worker_supervisor.py": {
+            "_request_allowed_read_paths",
+            "run_isolated_subprocess",
+            "supervise_worker",
+        },
+    }
+    modules = {
+        "authority.py": authority_module,
+        "driver.py": driver_module,
+        "policy.py": __import__("menagerie.crawler.policy", fromlist=["policy"]),
+        "worker_supervisor.py": supervisor_module,
+    }
+    verification_calls = {
+        "cache.verify",
+        "_collect_worker_executable_closure",
+        "_compile_worker_read_manifest",
+        "_current_run_is_fresh",
+        "_forward_and_reduce",
+        "collect_executable_closure_v3",
+        "compile_execution_read_manifest_v3",
+        "compile_execution_read_manifest_v3_from_closure",
+        "environment_read_capability",
+        "supervise_worker",
+        "verify_environment_authority",
+        "verify_execution_read_manifest",
+        "verify_execution_read_manifest_v3",
+    }
+    for filename, required_owners in required_token_sites.items():
+        source = _source(modules[filename])
+        module_tree, module_parents, module_names = _tree_context(source)
+        token_owners = {
+            _enclosing_definition(node, module_parents, module_names)
+            for node in ast.walk(module_tree)
+            if isinstance(node, ast.Call)
+            and any(_attribute_name(node.func).endswith(name) for name in verification_calls)
+            and any(keyword.arg == "verification_token" for keyword in node.keywords)
+        }
+        assert required_owners <= token_owners
+
 
 def _source(module: Any) -> str:
     """Return one imported production module's exact source text."""

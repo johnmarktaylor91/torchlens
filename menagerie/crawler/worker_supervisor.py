@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, BinaryIO, Callable, Iterator, Mapping, Optional, Sequence
 
 from menagerie.crawler.authority import (
+    EnvironmentVerificationToken,
     ExecutionReadManifestV2,
     ExecutionReadManifestV3,
     environment_read_capability,
@@ -1669,6 +1670,8 @@ def _parent_owned_audit_path(
 def _request_allowed_read_paths(
     argv: Sequence[str],
     manifest: Optional[ExecutionReadManifestV2 | ExecutionReadManifestV3] = None,
+    *,
+    verification_token: Optional[EnvironmentVerificationToken] = None,
 ) -> tuple[Path, ...]:
     """Return parent bootstrap files plus one compiled read capability.
 
@@ -1678,6 +1681,8 @@ def _request_allowed_read_paths(
         Original unsandboxed command vector.
     manifest:
         Frozen trusted capability compiled outside author-controlled request data.
+    verification_token:
+        Optional cache-created spawn proof shared by every v3 projection consumer.
 
     Returns
     -------
@@ -1717,9 +1722,15 @@ def _request_allowed_read_paths(
                     if path.is_file():
                         allowed.append(path)
     if manifest is not None:
-        verify_execution_read_manifest(manifest)
+        verify_execution_read_manifest(
+            manifest,
+            verification_token=verification_token,
+        )
         if isinstance(manifest, ExecutionReadManifestV3):
-            capability = environment_read_capability(manifest)
+            capability = environment_read_capability(
+                manifest,
+                verification_token=verification_token,
+            )
             allowed.extend(capability.exact_member_paths)
             allowed.append(capability.environment_prefix)
             allowed.extend(capability.startup_pth_paths)
@@ -3034,6 +3045,7 @@ def run_isolated_subprocess(
     request_nonce: Optional[str] = None,
     request_sha256: Optional[str] = None,
     on_lease_started: Optional[Callable[[WorkerLease], None]] = None,
+    verification_token: Optional[EnvironmentVerificationToken] = None,
 ) -> SupervisorObservation:
     """Launch a fresh credential-scrubbed subprocess inside an OS sandbox.
 
@@ -3068,6 +3080,8 @@ def run_isolated_subprocess(
     on_lease_started:
         Single-writer callback invoked after trusted child bootstrap has fsynced
         PID/start-token/PGID and before model execution is polled.
+    verification_token:
+        Cache-created spawn proof shared by compiler, projection, renderer, and supervisor.
 
     Returns
     -------
@@ -3087,7 +3101,10 @@ def run_isolated_subprocess(
     if (request_nonce is None) != (request_sha256 is None):
         raise ValueError("request nonce and digest must be supplied together")
     if execution_read_manifest is not None:
-        verify_execution_read_manifest(execution_read_manifest)
+        verify_execution_read_manifest(
+            execution_read_manifest,
+            verification_token=verification_token,
+        )
     scratch_root.mkdir(parents=True, exist_ok=True)
     write_roots = (scratch_root.resolve(), *(path.resolve() for path in additional_write_roots))
     for root in write_roots:
@@ -3122,7 +3139,11 @@ def run_isolated_subprocess(
         safe_environment[_WORKER_LOCK_FD_ENV] = str(worker_lease_handle.lock_fd)
         safe_environment[_LIFECYCLE_FD_ENV] = str(worker_lease_handle.lifecycle_read_fd)
     working_directory = (cwd or Path.cwd()).resolve()
-    allowed_read_paths = _request_allowed_read_paths(argv, execution_read_manifest)
+    allowed_read_paths = _request_allowed_read_paths(
+        argv,
+        execution_read_manifest,
+        verification_token=verification_token,
+    )
     safe_environment[_PARENT_ALLOWED_READ_PATHS_ENV] = json.dumps(
         [str(path) for path in allowed_read_paths],
         ensure_ascii=True,
@@ -3153,6 +3174,7 @@ def run_isolated_subprocess(
                 allowed_read_paths=(*allowed_read_paths, *runtime_package_data_paths),
                 runtime_read_roots=macos_runtime_read_roots,
                 execution_read_manifest=execution_read_manifest,
+                verification_token=verification_token,
             ),
             encoding="utf-8",
         )
@@ -3215,6 +3237,12 @@ def run_isolated_subprocess(
     peak_rss = 0
     try:
         with stdout_path.open("wb") as stdout_handle, stderr_path.open("wb") as stderr_handle:
+            if isinstance(execution_read_manifest, ExecutionReadManifestV3):
+                if verification_token is None:
+                    raise ValueError("v3 worker spawn lacks a cache verification token")
+                execution_read_manifest.environment_authority._cache.mark_spawned(
+                    verification_token
+                )
             process = subprocess.Popen(
                 list(sandboxed_argv),
                 cwd=working_directory,
@@ -3489,6 +3517,7 @@ def supervise_worker(
     worker_lease_handle: Optional[WorkerLeaseHandle] = None,
     shutdown_event: Optional[threading.Event] = None,
     on_lease_started: Optional[Callable[[WorkerLease], None]] = None,
+    verification_token: Optional[EnvironmentVerificationToken] = None,
 ) -> SupervisedResult:
     """Launch the standard worker and attach only a verified atomic receipt.
 
@@ -3510,12 +3539,31 @@ def supervise_worker(
         Driver-owned event polled during supervision.
     on_lease_started:
         Single-writer callback for the durable ``worker-lease-started`` event.
+    verification_token:
+        Optional cache-created spawn proof. Direct v3 callers receive one here when absent.
 
     Returns
     -------
     SupervisedResult
         Parent observation plus an optional verified child receipt.
     """
+
+    if isinstance(execution_read_manifest, ExecutionReadManifestV3) and verification_token is None:
+        authority = execution_read_manifest.environment_authority
+        with authority._cache.spawn_verification(authority) as created_token:
+            return supervise_worker(
+                request_path,
+                receipt_path,
+                scratch_root,
+                timeout_seconds=timeout_seconds,
+                rss_limit_bytes=rss_limit_bytes,
+                cwd=cwd,
+                execution_read_manifest=execution_read_manifest,
+                worker_lease_handle=worker_lease_handle,
+                shutdown_event=shutdown_event,
+                on_lease_started=on_lease_started,
+                verification_token=created_token,
+            )
 
     request_bytes = request_path.read_bytes()
     request_sha256 = hash_bytes(request_bytes)
@@ -3527,7 +3575,10 @@ def supervise_worker(
         raise ValueError("worker request must be an object")
     request_nonce: Optional[str] = None
     if execution_read_manifest is not None:
-        verify_execution_read_manifest(execution_read_manifest)
+        verify_execution_read_manifest(
+            execution_read_manifest,
+            verification_token=verification_token,
+        )
         if not isinstance(execution_read_manifest, ExecutionReadManifestV3):
             raise ValueError("live v3 model worker spawn requires execution-read-manifest.v3")
         if request_value.get("protocol_version") != "menagerie.crawler.worker-request.v3":
@@ -3614,6 +3665,7 @@ def supervise_worker(
             request_nonce=request_nonce,
             request_sha256=request_sha256 if request_nonce is not None else None,
             on_lease_started=on_lease_started,
+            verification_token=verification_token,
         )
     except SandboxUnavailableError:
         observation = _sandbox_unavailable_observation(argv, scratch_root, working_directory)

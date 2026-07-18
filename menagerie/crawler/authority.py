@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+from contextlib import contextmanager
 import json
 import os
 import stat
@@ -106,6 +107,10 @@ _MEMBER_SUFFIXES = {
     "native-source": frozenset({".c", ".cc", ".cpp", ".cu", ".cuh", ".h", ".hpp"}),
     "python-bytecode": frozenset({".pyc"}),
     "python-source": frozenset({".py", ".pyi", ".pyx"}),
+}
+_ENVIRONMENT_TREE_WALK_REGISTRY: Mapping[str, int] = {
+    "EnvironmentAuthorityCache._walk_and_validate": 1,
+    "_seal_environment_content": 2,
 }
 
 
@@ -412,6 +417,68 @@ class EnvironmentAuthorityV1:
     external_targets: tuple[EnvironmentExternalTarget, ...]
     content_manifest: EnvironmentContentManifestV1
     _cache: EnvironmentAuthorityCache = dataclass_field(compare=False, repr=False)
+
+
+_VERIFICATION_TOKEN_SECRET = object()
+
+
+class EnvironmentVerificationToken:
+    """Opaque cache-created proof of one complete current prefix observation."""
+
+    __slots__ = (
+        "_active",
+        "_authority_id",
+        "_cache",
+        "_epoch",
+        "_observed_fingerprint",
+        "_purpose",
+        "_sequence",
+        "_spawn_marked",
+    )
+
+    def __init__(
+        self,
+        *,
+        cache: EnvironmentAuthorityCache,
+        authority_id: str,
+        epoch: int,
+        sequence: int,
+        purpose: str,
+        observed_fingerprint: str,
+        secret: object,
+    ) -> None:
+        """Initialize a cache-owned token inaccessible to ordinary callers.
+
+        Parameters
+        ----------
+        cache, authority_id, epoch, sequence, purpose, observed_fingerprint:
+            Exact cache, authority, lifecycle epoch, issuance sequence, closed purpose,
+            and complete observed cheap fingerprint bound by this proof.
+        secret:
+            Module-private constructor capability held only by the cache.
+        """
+
+        if secret is not _VERIFICATION_TOKEN_SECRET:
+            raise TypeError("environment verification tokens are cache-created only")
+        self._cache = cache
+        self._authority_id = authority_id
+        self._epoch = epoch
+        self._sequence = sequence
+        self._purpose = purpose
+        self._observed_fingerprint = observed_fingerprint
+        self._active = True
+        self._spawn_marked = False
+
+    def __reduce__(self) -> str | tuple[Any, ...]:
+        """Reject serialization of process-local verification authority.
+
+        Raises
+        ------
+        TypeError
+            Always; verification tokens cannot cross a process boundary.
+        """
+
+        raise TypeError("environment verification tokens are not serializable")
 
 
 def _environment_entry_payload(entry: EnvironmentContentEntry) -> JsonObject:
@@ -785,8 +852,16 @@ class EnvironmentAuthorityCache:
 
         self.full_seals = 0
         self.cheap_validations = 0
+        self.cheap_tree_walks = 0
+        self.lstat_tree_walks = 0
+        self.currentness_passes = 0
+        self.spawn_validations = 0
+        self.real_spawns = 0
         self.invalidations = 0
         self.rehashes = 0
+        self._epoch = 0
+        self._verification_sequence = 0
+        self._active_currentness_token: Optional[EnvironmentVerificationToken] = None
         self._manifest: Optional[EnvironmentContentManifestV1] = None
         self._authority: Optional[EnvironmentAuthorityV1] = None
 
@@ -806,6 +881,7 @@ class EnvironmentAuthorityCache:
         """Seal one prefix and increment the deterministic full-seal counter."""
 
         self.full_seals += 1
+        self.lstat_tree_walks += 2
         return _seal_environment_content(prefix, interpreter)
 
     def bind(
@@ -814,6 +890,7 @@ class EnvironmentAuthorityCache:
         prefix: Path,
         selected_interpreter: Path,
         base_environment_generation: str,
+        validate_active: bool = True,
     ) -> EnvironmentAuthorityV1:
         """Bind a stable complete seal into generation v2 and one local authority.
 
@@ -823,6 +900,9 @@ class EnvironmentAuthorityCache:
             Materialized environment and its selected lexical interpreter.
         base_environment_generation:
             Existing exact lock/export/package/probe generation.
+        validate_active:
+            Whether an already-bound matching authority receives an immediate standalone
+            validation. The driver defers this one check to its cache-owned pass token.
 
         Returns
         -------
@@ -846,7 +926,8 @@ class EnvironmentAuthorityCache:
                 raise AuthorityDerivationError(
                     "active environment authority cache cannot be rebound to different inputs"
                 )
-            self.verify(active)
+            if validate_active:
+                self.verify(active)
             return active
         manifest = self._seal(prefix, selected_interpreter)
         final_generation = stable_hash(
@@ -893,13 +974,20 @@ class EnvironmentAuthorityCache:
         self._authority = authority
         return authority
 
-    def verify(self, authority: EnvironmentAuthorityV1) -> None:
+    def verify(
+        self,
+        authority: EnvironmentAuthorityV1,
+        *,
+        verification_token: Optional[EnvironmentVerificationToken] = None,
+    ) -> None:
         """Cheaply validate or fully rehash one bound active authority.
 
         Parameters
         ----------
         authority:
             Previously bound prefix capability.
+        verification_token:
+            Cache-created pass or spawn proof that reuses its complete observation.
 
         Raises
         ------
@@ -907,16 +995,36 @@ class EnvironmentAuthorityCache:
             If the complete current seal differs from the bound identity.
         """
 
+        if verification_token is not None:
+            self._assert_verification_token(authority, verification_token)
+            return
+        self._walk_and_validate(authority)
+
+    def _walk_and_validate(self, authority: EnvironmentAuthorityV1) -> None:
+        """Perform exactly one complete cheap walk and validate its fingerprint.
+
+        Parameters
+        ----------
+        authority:
+            Active authority whose entire prefix and external targets are observed.
+        """
+
         self.assert_active(authority)
         manifest = self._manifest
         assert manifest is not None
         self.cheap_validations += 1
+        self.cheap_tree_walks += 1
+        self.lstat_tree_walks += 1
         _entries, _external, fingerprint = _scan_environment_tree(
             authority.prefix,
             hash_files=False,
         )
         if fingerprint == manifest.cheap_tree_fingerprint:
             return
+        self._epoch += 1
+        if self._active_currentness_token is not None:
+            self._active_currentness_token._active = False
+            self._active_currentness_token = None
         self.rehashes += 1
         current = self._seal(
             authority.prefix, authority.prefix / authority.selected_interpreter_relative_path
@@ -932,6 +1040,155 @@ class EnvironmentAuthorityCache:
         # Hardlink-clone creation can change source-inode ctime without changing bytes.
         # Keep the bound semantic identity and re-baseline only this authority's cheap fields.
         self._manifest = current
+
+    def _issue_token(
+        self,
+        authority: EnvironmentAuthorityV1,
+        purpose: str,
+    ) -> EnvironmentVerificationToken:
+        """Return one opaque token after a fresh complete cheap walk.
+
+        Parameters
+        ----------
+        authority:
+            Exact active prefix capability.
+        purpose:
+            Closed ``currentness-pass`` or ``spawn`` use class.
+
+        Returns
+        -------
+        EnvironmentVerificationToken
+            Process-local proof bound to the post-validation cache epoch and fingerprint.
+        """
+
+        self._walk_and_validate(authority)
+        manifest = self._manifest
+        if manifest is None:
+            raise AuthorityDerivationError(
+                "environment authority was invalidated during validation"
+            )
+        self._verification_sequence += 1
+        return EnvironmentVerificationToken(
+            cache=self,
+            authority_id=authority.authority_id,
+            epoch=self._epoch,
+            sequence=self._verification_sequence,
+            purpose=purpose,
+            observed_fingerprint=manifest.cheap_tree_fingerprint,
+            secret=_VERIFICATION_TOKEN_SECRET,
+        )
+
+    @contextmanager
+    def currentness_pass(
+        self,
+        authority: EnvironmentAuthorityV1,
+    ) -> Iterator[EnvironmentVerificationToken]:
+        """Yield one reusable complete observation for a scheduling/currentness pass.
+
+        Parameters
+        ----------
+        authority:
+            Exact active prefix capability shared by all models in the pass.
+
+        Yields
+        ------
+        EnvironmentVerificationToken
+            Pass-only proof that cannot authorize a worker spawn.
+        """
+
+        if self._active_currentness_token is not None:
+            raise AuthorityDerivationError("environment currentness passes cannot be nested")
+        token = self._issue_token(authority, "currentness-pass")
+        self.currentness_passes += 1
+        self._active_currentness_token = token
+        try:
+            yield token
+        finally:
+            token._active = False
+            if self._active_currentness_token is token:
+                self._active_currentness_token = None
+
+    @contextmanager
+    def spawn_verification(
+        self,
+        authority: EnvironmentAuthorityV1,
+    ) -> Iterator[EnvironmentVerificationToken]:
+        """Yield one fresh one-shot observation for a single worker spawn.
+
+        Parameters
+        ----------
+        authority:
+            Exact active prefix capability checked immediately before spawn setup.
+
+        Yields
+        ------
+        EnvironmentVerificationToken
+            Spawn-only proof reusable by compiler, projection, renderer, and supervisor.
+        """
+
+        self.spawn_validations += 1
+        token = self._issue_token(authority, "spawn")
+        try:
+            yield token
+        finally:
+            token._active = False
+
+    def mark_spawned(self, verification_token: EnvironmentVerificationToken) -> None:
+        """Consume one spawn token at the actual subprocess boundary.
+
+        Parameters
+        ----------
+        verification_token:
+            Active spawn-purpose proof passed through every pre-spawn consumer.
+        """
+
+        authority = self._authority
+        if authority is None:
+            raise AuthorityDerivationError("environment authority is unavailable at spawn")
+        self._assert_verification_token(
+            authority,
+            verification_token,
+            required_purpose="spawn",
+        )
+        if verification_token._spawn_marked:
+            raise AuthorityDerivationError("environment spawn token was already consumed")
+        verification_token._spawn_marked = True
+        self.real_spawns += 1
+
+    def _assert_verification_token(
+        self,
+        authority: EnvironmentAuthorityV1,
+        verification_token: EnvironmentVerificationToken,
+        *,
+        required_purpose: Optional[str] = None,
+    ) -> None:
+        """Require one active token to match every cache/authority binding field.
+
+        Parameters
+        ----------
+        authority:
+            Authority entering a verification consumer.
+        verification_token:
+            Opaque cache-issued proof.
+        required_purpose:
+            Optional exact purpose required by a spawn-only boundary.
+        """
+
+        self.assert_active(authority)
+        manifest = self._manifest
+        if (
+            not isinstance(verification_token, EnvironmentVerificationToken)
+            or not verification_token._active
+            or verification_token._cache is not self
+            or verification_token._authority_id != authority.authority_id
+            or verification_token._epoch != self._epoch
+            or not 0 < verification_token._sequence <= self._verification_sequence
+            or manifest is None
+            or verification_token._observed_fingerprint != manifest.cheap_tree_fingerprint
+            or verification_token._purpose not in {"currentness-pass", "spawn"}
+            or (required_purpose is not None and verification_token._purpose != required_purpose)
+        ):
+            raise AuthorityDerivationError("environment verification token is stale or mismatched")
 
     def assert_active(self, authority: EnvironmentAuthorityV1) -> None:
         """Require one authority to belong to this active lifecycle cache.
@@ -960,6 +1217,10 @@ class EnvironmentAuthorityCache:
         if self._manifest is None and self._authority is None:
             return
         self.invalidations += 1
+        self._epoch += 1
+        if self._active_currentness_token is not None:
+            self._active_currentness_token._active = False
+            self._active_currentness_token = None
         self._manifest = None
         self._authority = None
 
@@ -2132,13 +2393,19 @@ def _environment_authority_payload(authority: EnvironmentAuthorityV1) -> JsonObj
     }
 
 
-def verify_environment_authority(authority: EnvironmentAuthorityV1) -> None:
+def verify_environment_authority(
+    authority: EnvironmentAuthorityV1,
+    *,
+    verification_token: Optional[EnvironmentVerificationToken] = None,
+) -> None:
     """Verify one authority's identities and current complete prefix seal.
 
     Parameters
     ----------
     authority:
         Previously bound environment capability.
+    verification_token:
+        Optional cache-created pass or spawn proof reusing one complete tree walk.
 
     Raises
     ------
@@ -2171,7 +2438,7 @@ def verify_environment_authority(authority: EnvironmentAuthorityV1) -> None:
         raise AuthorityDerivationError("selected interpreter association changed")
     if not resolved_interpreter.is_relative_to(authority.prefix):
         raise AuthorityDerivationError("selected interpreter resolves outside the canonical prefix")
-    authority._cache.verify(authority)
+    authority._cache.verify(authority, verification_token=verification_token)
 
 
 def _v3_member(
@@ -2420,6 +2687,7 @@ def compile_execution_read_manifest_v3(
     worker_members: Sequence[RuntimeMember | tuple[Path, str, str]] = (),
     standard_input_asset: Optional[tuple[Path, str, str]] = None,
     lookup_directories: Sequence[RuntimeLookupDirectory] = (),
+    verification_token: Optional[EnvironmentVerificationToken] = None,
 ) -> ExecutionReadManifestV3:
     """Compile the sole live four-part execution read capability.
 
@@ -2435,6 +2703,8 @@ def compile_execution_read_manifest_v3(
         Optional exact selected standard asset.
     lookup_directories:
         Non-authorizing import traversal scaffolds.
+    verification_token:
+        Optional cache-created proof shared across the current pass or spawn.
 
     Returns
     -------
@@ -2446,7 +2716,10 @@ def compile_execution_read_manifest_v3(
     work_id = _require_nonempty_string(work_id, "work_id")
     execution_identity = _require_hash(execution_identity, "execution_identity")
     code_manifest_identity = _require_hash(code_manifest_identity, "code_manifest_identity")
-    verify_environment_authority(environment_authority)
+    verify_environment_authority(
+        environment_authority,
+        verification_token=verification_token,
+    )
     normalized_code = tuple(
         sorted(
             (
@@ -2514,8 +2787,12 @@ def compile_execution_read_manifest_v3(
     )
 
 
-def verify_execution_read_manifest_v3(manifest: ExecutionReadManifestV3) -> None:
-    """Reverify a live v3 manifest and selected interpreter before spawn."""
+def verify_execution_read_manifest_v3(
+    manifest: ExecutionReadManifestV3,
+    *,
+    verification_token: Optional[EnvironmentVerificationToken] = None,
+) -> None:
+    """Reverify a live v3 manifest and interpreter with one shared observation."""
 
     if manifest.manifest_version != EXECUTION_READ_MANIFEST_VERSION_V3:
         raise AuthorityDerivationError("execution read manifest has the wrong v3 discriminator")
@@ -2531,6 +2808,7 @@ def verify_execution_read_manifest_v3(manifest: ExecutionReadManifestV3) -> None
         worker_members=manifest.worker_members,
         standard_input_asset=manifest.standard_input_asset,
         lookup_directories=manifest.lookup_directories,
+        verification_token=verification_token,
     )
     if rebuilt != manifest:
         raise AuthorityDerivationError("execution read manifest v3 is stale or rewritten")
@@ -2544,8 +2822,23 @@ def collect_executable_closure_v3(
     worker_members: Sequence[RuntimeMember | tuple[Path, str, str]],
     standard_input_asset: Optional[tuple[Path, str, str]] = None,
     lookup_directories: Sequence[RuntimeLookupDirectory] = (),
+    verification_token: Optional[EnvironmentVerificationToken] = None,
 ) -> ExecutableClosureV3:
-    """Collect a verified v3 closure before execution identity derivation."""
+    """Collect a verified v3 closure before execution identity derivation.
+
+    Parameters
+    ----------
+    code_manifest_identity, environment_authority, code_members, worker_members,
+    standard_input_asset, lookup_directories:
+        Exact four-part execution closure inputs.
+    verification_token:
+        Optional cache-created proof shared by the enclosing pass or spawn.
+
+    Returns
+    -------
+    ExecutableClosureV3
+        Verified pre-execution closure.
+    """
 
     probe = compile_execution_read_manifest_v3(
         stable_id="closure-collection",
@@ -2557,6 +2850,7 @@ def collect_executable_closure_v3(
         worker_members=worker_members,
         standard_input_asset=standard_input_asset,
         lookup_directories=lookup_directories,
+        verification_token=verification_token,
     )
     return ExecutableClosureV3(
         identity=probe.closure_identity,
@@ -2576,8 +2870,24 @@ def compile_execution_read_manifest_v3_from_closure(
     stable_id: str,
     work_id: str,
     execution_identity: str,
+    verification_token: Optional[EnvironmentVerificationToken] = None,
 ) -> ExecutionReadManifestV3:
-    """Bind one pre-identity v3 closure to its final request associations."""
+    """Bind one pre-identity v3 closure to its final request associations.
+
+    Parameters
+    ----------
+    closure:
+        Previously verified executable closure.
+    stable_id, work_id, execution_identity:
+        Exact final request associations.
+    verification_token:
+        Optional cache-created proof shared by the enclosing pass or spawn.
+
+    Returns
+    -------
+    ExecutionReadManifestV3
+        Final request-bound execution capability.
+    """
 
     manifest = compile_execution_read_manifest_v3(
         stable_id=stable_id,
@@ -2589,16 +2899,24 @@ def compile_execution_read_manifest_v3_from_closure(
         worker_members=closure.worker_members,
         standard_input_asset=closure.standard_input_asset,
         lookup_directories=closure.lookup_directories,
+        verification_token=verification_token,
     )
     if manifest.closure_identity != closure.identity:
         raise AuthorityDerivationError("execution closure v3 changed during final binding")
     return manifest
 
 
-def environment_read_capability(manifest: ExecutionReadManifestV3) -> EnvironmentReadCapability:
+def environment_read_capability(
+    manifest: ExecutionReadManifestV3,
+    *,
+    verification_token: Optional[EnvironmentVerificationToken] = None,
+) -> EnvironmentReadCapability:
     """Verify and project the single v3 capability for every enforcement layer."""
 
-    verify_execution_read_manifest_v3(manifest)
+    verify_execution_read_manifest_v3(
+        manifest,
+        verification_token=verification_token,
+    )
     authority = manifest.environment_authority
     return EnvironmentReadCapability(
         manifest_id=manifest.manifest_id,

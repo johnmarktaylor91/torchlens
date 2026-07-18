@@ -27,6 +27,7 @@ from types import ModuleType
 from typing import Any, IO, Literal, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.authority import (
+    EnvironmentVerificationToken,
     ExecutionReadManifestV2,
     ExecutionReadManifestV3,
     environment_read_capability,
@@ -206,6 +207,7 @@ def generate_macos_sandbox_profile(
     allowed_read_paths: Sequence[Path] = (),
     runtime_read_roots: Sequence[Path] = (),
     execution_read_manifest: Optional[ExecutionReadManifestV2 | ExecutionReadManifestV3] = None,
+    verification_token: Optional[EnvironmentVerificationToken] = None,
 ) -> str:
     """Generate a deterministic sandbox-exec profile for offline execution.
 
@@ -221,6 +223,8 @@ def generate_macos_sandbox_profile(
         Optional shipped execution capability. A live v3 manifest is freshly verified
         and is the only source of a read-only environment-prefix grant. Legacy manifests
         can contribute exact files only and never a root grant.
+    verification_token:
+        Optional cache-created spawn proof shared by all v3 profile consumers.
 
     Returns
     -------
@@ -247,7 +251,10 @@ def generate_macos_sandbox_profile(
     environment_prefix: Optional[Path] = None
     manifest_read_paths: tuple[Path, ...] = ()
     if isinstance(execution_read_manifest, ExecutionReadManifestV3):
-        capability = environment_read_capability(execution_read_manifest)
+        capability = environment_read_capability(
+            execution_read_manifest,
+            verification_token=verification_token,
+        )
         environment_prefix = capability.environment_prefix
         manifest_read_paths = capability.exact_member_paths
     elif isinstance(execution_read_manifest, ExecutionReadManifestV2):
@@ -834,6 +841,8 @@ def _allowed_exact_or_derived_file(path: Path, allowed_paths: Sequence[Path]) ->
 
 def verify_execution_read_manifest(
     manifest: ExecutionReadManifestV2 | ExecutionReadManifestV3,
+    *,
+    verification_token: Optional[EnvironmentVerificationToken] = None,
 ) -> None:
     """Re-verify a compiled execution manifest immediately before spawn.
 
@@ -841,6 +850,8 @@ def verify_execution_read_manifest(
     ----------
     manifest:
         Frozen trusted capability to verify.
+    verification_token:
+        Optional cache-created proof shared by the enclosing pass or spawn.
 
     Raises
     ------
@@ -849,7 +860,10 @@ def verify_execution_read_manifest(
     """
 
     if isinstance(manifest, ExecutionReadManifestV3):
-        verify_execution_read_manifest_v3(manifest)
+        verify_execution_read_manifest_v3(
+            manifest,
+            verification_token=verification_token,
+        )
         return
     if isinstance(manifest, ExecutionReadManifestV2):
         verify_execution_read_manifest_v2(manifest)

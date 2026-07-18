@@ -22,6 +22,7 @@ import sys
 import threading
 import traceback
 from collections import Counter, defaultdict
+from contextlib import nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
@@ -63,6 +64,7 @@ from menagerie.crawler.authority import (
     EnvironmentAuthorityCache,
     EnvironmentAuthorityV1,
     EnvironmentExternalTarget,
+    EnvironmentVerificationToken,
     ExecutableClosureV3,
     ExecutionReadManifestV3,
     RuntimeLookupDirectory,
@@ -1583,14 +1585,43 @@ class SupervisedForwardLane:
         lifecycle_event: Optional[Callable[[str, str, WorkerLease], None]] = None,
         attempt_sink: Optional[Callable[[Mapping[str, Any]], None]] = None,
         attempt_resolver: Optional[Callable[[int, str], Optional[Mapping[str, Any]]]] = None,
+        closure: Optional[ExecutableClosureV3] = None,
     ) -> Sequence[Mapping[str, Any]]:
-        """Run each cold confirmation and fan its receipt into immutable mode attempts."""
+        """Run each cold confirmation and fan its receipt into immutable mode attempts.
+
+        Parameters
+        ----------
+        artifact, environment, cold_runs, work_root:
+            Exact staged proposal, bound runtime, requested confirmations, and work root.
+        worker_lock_path, worker_lease_path, run_id, shutdown_event, lifecycle_event,
+        attempt_sink, attempt_resolver:
+            Existing driver-owned worker lifecycle, persistence, and resume boundaries.
+        closure:
+            Optional closure already collected once for this artifact in the scheduling pass.
+
+        Returns
+        -------
+        collections.abc.Sequence[collections.abc.Mapping[str, Any]]
+            Authenticated immutable mode attempts.
+        """
 
         if cold_runs < 1:
             raise ValueError("cold_runs must be positive")
         proposal = artifact.proposal
         stable_id = str(proposal["stable_id"])
-        closure = _collect_worker_executable_closure(artifact, environment)
+        authority = environment.environment_authority
+        cache = environment.environment_authority_cache
+        if authority is None or cache is None:
+            raise DriverIntegrationError(
+                "live supervised execution requires a lifecycle-owned environment authority"
+            )
+        if closure is None:
+            with cache.currentness_pass(authority) as verification_token:
+                closure = _collect_worker_executable_closure(
+                    artifact,
+                    environment,
+                    verification_token=verification_token,
+                )
         execution_identity = _execution_identity(
             artifact, environment, closure_identity=closure.identity
         )
@@ -1637,94 +1668,100 @@ class SupervisedForwardLane:
                 root = work_root / stable_id / "forward" / f"cold-{cold_index + 1}" / mode
                 request_path = root / "request.json"
                 receipt_path = root / "result" / "receipt.json"
-                manifest = _compile_worker_read_manifest(
-                    artifact, environment, execution_identity, closure=closure
-                )
-                request = _worker_request(
-                    artifact,
-                    root,
-                    receipt_path,
-                    execution_identity,
-                    manifest,
-                    cold_index,
-                    mode,
-                )
-                _write_json_atomic(request_path, request)
-                request_identity = hash_bytes(request_path.read_bytes())
-                driver_token = process_start_token(os.getpid())
-                if driver_token is None:
-                    raise DriverIntegrationError("cannot establish driver process identity")
-                opened = datetime.now(timezone.utc)
-                lease = WorkerLease(
-                    lease_id=stable_hash(
-                        {
-                            "run_id": run_id,
-                            "stable_id": stable_id,
-                            "work_id": proposal["work_id"],
-                            "execution_identity": execution_identity,
-                            "cold_index": cold_index,
-                            "mode": mode,
-                            "request_identity": request_identity,
-                        }
-                    ),
-                    nonce=str(request["request_nonce"]),
-                    run_id=run_id,
-                    stable_id=stable_id,
-                    work_id=str(proposal["work_id"]),
-                    request_identity=request_identity,
-                    execution_identity=execution_identity,
-                    boot_id=current_boot_id(),
-                    driver_pid=os.getpid(),
-                    driver_start_token=driver_token,
-                    child_pid=None,
-                    child_start_token=None,
-                    child_pgid=None,
-                    receipt_path=receipt_path,
-                    opened_at=opened.isoformat().replace("+00:00", "Z"),
-                    deadline_at=(opened + timedelta(seconds=effective_timeout))
-                    .isoformat()
-                    .replace("+00:00", "Z"),
-                )
+                with cache.spawn_verification(authority) as spawn_verification:
+                    manifest = _compile_worker_read_manifest(
+                        artifact,
+                        environment,
+                        execution_identity,
+                        closure=closure,
+                        verification_token=spawn_verification,
+                    )
+                    request = _worker_request(
+                        artifact,
+                        root,
+                        receipt_path,
+                        execution_identity,
+                        manifest,
+                        cold_index,
+                        mode,
+                    )
+                    _write_json_atomic(request_path, request)
+                    request_identity = hash_bytes(request_path.read_bytes())
+                    driver_token = process_start_token(os.getpid())
+                    if driver_token is None:
+                        raise DriverIntegrationError("cannot establish driver process identity")
+                    opened = datetime.now(timezone.utc)
+                    lease = WorkerLease(
+                        lease_id=stable_hash(
+                            {
+                                "run_id": run_id,
+                                "stable_id": stable_id,
+                                "work_id": proposal["work_id"],
+                                "execution_identity": execution_identity,
+                                "cold_index": cold_index,
+                                "mode": mode,
+                                "request_identity": request_identity,
+                            }
+                        ),
+                        nonce=str(request["request_nonce"]),
+                        run_id=run_id,
+                        stable_id=stable_id,
+                        work_id=str(proposal["work_id"]),
+                        request_identity=request_identity,
+                        execution_identity=execution_identity,
+                        boot_id=current_boot_id(),
+                        driver_pid=os.getpid(),
+                        driver_start_token=driver_token,
+                        child_pid=None,
+                        child_start_token=None,
+                        child_pgid=None,
+                        receipt_path=receipt_path,
+                        opened_at=opened.isoformat().replace("+00:00", "Z"),
+                        deadline_at=(opened + timedelta(seconds=effective_timeout))
+                        .isoformat()
+                        .replace("+00:00", "Z"),
+                    )
 
-                def on_opened(value: WorkerLease) -> None:
-                    """Append the lock-ordered opened lifecycle event."""
+                    def on_opened(value: WorkerLease) -> None:
+                        """Append the lock-ordered opened lifecycle event."""
 
-                    if lifecycle_event is not None:
-                        lifecycle_event(
-                            OperationalEventKind.WORKER_LEASE_OPENED.value,
-                            OperationalEventStatus.WORKER_LEASE_OPEN.value,
-                            value,
-                        )
+                        if lifecycle_event is not None:
+                            lifecycle_event(
+                                OperationalEventKind.WORKER_LEASE_OPENED.value,
+                                OperationalEventStatus.WORKER_LEASE_OPEN.value,
+                                value,
+                            )
 
-                handle = open_worker_lease(
-                    lock_path,
-                    lease_path,
-                    lease,
-                    on_lock_acquired=on_opened,
-                )
+                    handle = open_worker_lease(
+                        lock_path,
+                        lease_path,
+                        lease,
+                        on_lock_acquired=on_opened,
+                    )
 
-                def on_started(value: WorkerLease) -> None:
-                    """Append the exact child-start lifecycle event."""
+                    def on_started(value: WorkerLease) -> None:
+                        """Append the exact child-start lifecycle event."""
 
-                    if lifecycle_event is not None:
-                        lifecycle_event(
-                            OperationalEventKind.WORKER_LEASE_STARTED.value,
-                            OperationalEventStatus.WORKER_LEASE_ACTIVE.value,
-                            value,
-                        )
+                        if lifecycle_event is not None:
+                            lifecycle_event(
+                                OperationalEventKind.WORKER_LEASE_STARTED.value,
+                                OperationalEventStatus.WORKER_LEASE_ACTIVE.value,
+                                value,
+                            )
 
-                result = supervise_worker(
-                    request_path,
-                    receipt_path,
-                    root / "supervisor",
-                    timeout_seconds=effective_timeout,
-                    rss_limit_bytes=self.rss_limit_bytes,
-                    cwd=self.cwd,
-                    execution_read_manifest=manifest,
-                    worker_lease_handle=handle,
-                    shutdown_event=shutdown,
-                    on_lease_started=on_started,
-                )
+                    result = supervise_worker(
+                        request_path,
+                        receipt_path,
+                        root / "supervisor",
+                        timeout_seconds=effective_timeout,
+                        rss_limit_bytes=self.rss_limit_bytes,
+                        cwd=self.cwd,
+                        execution_read_manifest=manifest,
+                        worker_lease_handle=handle,
+                        shutdown_event=shutdown,
+                        on_lease_started=on_started,
+                        verification_token=spawn_verification,
+                    )
                 if result.observation.shutdown_requested:
                     if lifecycle_event is not None:
                         lifecycle_event(
@@ -4616,6 +4653,7 @@ class CrawlerDriver:
                             prefix,
                             probe_results,
                             authority_cache=authority_cache,
+                            defer_currentness_validation=True,
                         )
                     except AuthorityDerivationError:
                         if prior_authority is not None:
@@ -4645,62 +4683,89 @@ class CrawlerDriver:
                 reducer.update_context(refreshed_context)
                 self._authority_context = refreshed_context
                 gates = scan_jsonl(self.paths.ledgers.gates)
-                for item in items:
-                    self._check_shutdown("model-admission", item=item)
-                    current = reducer.current_records.get(item.stable_id)
-                    fresh = bool(
-                        award_run
-                        and current is not None
-                        and _current_run_is_fresh(
-                            current,
+                authority = environment.environment_authority
+                cache = environment.environment_authority_cache
+                if live_supervised_environment and (authority is None or cache is None):
+                    raise DriverIntegrationError(
+                        "live currentness pass lacks lifecycle-owned environment authority"
+                    )
+                pass_context = (
+                    cache.currentness_pass(authority)
+                    if cache is not None and authority is not None
+                    else nullcontext(None)
+                )
+                with pass_context as verification_token:
+                    for item in items:
+                        self._check_shutdown("model-admission", item=item)
+                        current = reducer.current_records.get(item.stable_id)
+                        closure = (
+                            _collect_worker_executable_closure(
+                                artifacts[item.stable_id],
+                                environment,
+                                verification_token=verification_token,
+                            )
+                            if live_supervised_environment
+                            else None
+                        )
+                        fresh = bool(
+                            award_run
+                            and current is not None
+                            and _current_run_is_fresh(
+                                current,
+                                artifacts[item.stable_id],
+                                environment,
+                                gates,
+                                representative_model=(
+                                    reducer.current_records.get(item.family_representative_id)
+                                    if item.is_family_variant
+                                    else None
+                                ),
+                                closure_identity=(
+                                    closure.identity if closure is not None else None
+                                ),
+                                verification_token=verification_token,
+                            )
+                        )
+                        if fresh or currentness_validation_only:
+                            if current is None:
+                                continue
+                            completed_work.append(
+                                {
+                                    "stable_id": item.stable_id,
+                                    "record_revision": current["record_revision"],
+                                    "work_identity": _quarantine_work_identity(
+                                        item, artifacts[item.stable_id]
+                                    ),
+                                }
+                            )
+                            continue
+                        repair_pause = self._forward_and_reduce(
+                            item,
                             artifacts[item.stable_id],
                             environment,
-                            gates,
-                            representative_model=(
-                                reducer.current_records.get(item.family_representative_id)
-                                if item.is_family_variant
-                                else None
-                            ),
+                            reducer,
+                            operational,
+                            state,
+                            award_run=award_run,
+                            closure=closure,
+                            verification_token=verification_token,
                         )
-                    )
-                    if fresh or currentness_validation_only:
-                        if current is None:
-                            continue
-                        completed_work.append(
-                            {
-                                "stable_id": item.stable_id,
-                                "record_revision": current["record_revision"],
-                                "work_identity": _quarantine_work_identity(
-                                    item, artifacts[item.stable_id]
-                                ),
-                            }
+                        artifacts[item.stable_id] = self._family_artifacts.get(
+                            item.stable_id, artifacts[item.stable_id]
                         )
-                        continue
-                    repair_pause = self._forward_and_reduce(
-                        item,
-                        artifacts[item.stable_id],
-                        environment,
-                        reducer,
-                        operational,
-                        state,
-                        award_run=award_run,
-                    )
-                    artifacts[item.stable_id] = self._family_artifacts.get(
-                        item.stable_id, artifacts[item.stable_id]
-                    )
-                    current = reducer.current_records.get(item.stable_id)
-                    if current is not None:
-                        completed_work.append(
-                            {
-                                "stable_id": item.stable_id,
-                                "record_revision": current["record_revision"],
-                                "work_identity": _quarantine_work_identity(
-                                    item, artifacts[item.stable_id]
-                                ),
-                            }
-                        )
-                    if repair_pause is not None:
-                        break
+                        current = reducer.current_records.get(item.stable_id)
+                        if current is not None:
+                            completed_work.append(
+                                {
+                                    "stable_id": item.stable_id,
+                                    "record_revision": current["record_revision"],
+                                    "work_identity": _quarantine_work_identity(
+                                        item, artifacts[item.stable_id]
+                                    ),
+                                }
+                            )
+                        if repair_pause is not None:
+                            break
                 use_completed = True
 
             environment_failure: Exception | None = None
@@ -4854,14 +4919,38 @@ class CrawlerDriver:
         state: JsonObject,
         *,
         award_run: bool,
+        closure: Optional[ExecutableClosureV3] = None,
+        verification_token: Optional[EnvironmentVerificationToken] = None,
     ) -> Optional[str]:
-        """Append honest worker attempts and return a checker pause from run repair."""
+        """Append honest worker attempts and return a checker pause from run repair.
 
-        closure_identity = (
-            _collect_worker_executable_closure(artifact, environment).identity
-            if isinstance(self.dependencies.forward, SupervisedForwardLane)
-            else _INJECTED_FORWARD_CLOSURE_IDENTITY
-        )
+        Parameters
+        ----------
+        item, artifact, environment, reducer, operational, state:
+            Exact scheduled work, authority, ledgers, and durable driver state.
+        award_run:
+            Whether successful attempts may advance to run award.
+        closure:
+            Optional closure already collected once for this artifact in the pass.
+        verification_token:
+            Optional cache-created currentness-pass proof used for closure collection.
+
+        Returns
+        -------
+        str | None
+            Checker pause reason, or ``None`` after ordinary reduction.
+        """
+
+        if isinstance(self.dependencies.forward, SupervisedForwardLane):
+            collected_closure = closure or _collect_worker_executable_closure(
+                artifact,
+                environment,
+                verification_token=verification_token,
+            )
+            closure_identity = collected_closure.identity
+        else:
+            collected_closure = None
+            closure_identity = _INJECTED_FORWARD_CLOSURE_IDENTITY
         execution_identity = _execution_identity(
             artifact, environment, closure_identity=closure_identity
         )
@@ -4969,7 +5058,7 @@ class CrawlerDriver:
                 )
             else:
                 try:
-                    if persisted_by_lane:
+                    if isinstance(self.dependencies.forward, SupervisedForwardLane):
                         generated = tuple(
                             self.dependencies.forward.forward(
                                 artifact,
@@ -4983,6 +5072,7 @@ class CrawlerDriver:
                                 lifecycle_event=persist_worker_lifecycle,
                                 attempt_sink=persist_worker_attempt,
                                 attempt_resolver=resolve_worker_attempt,
+                                closure=collected_closure,
                             )
                         )
                         attempts_persisted_by_lane = True
@@ -5121,6 +5211,15 @@ class CrawlerDriver:
                         return pause
                     repaired = repaired_artifacts[item.stable_id]
                     self._family_artifacts[item.stable_id] = repaired
+                    repaired_closure = (
+                        _collect_worker_executable_closure(
+                            repaired,
+                            environment,
+                            verification_token=verification_token,
+                        )
+                        if isinstance(self.dependencies.forward, SupervisedForwardLane)
+                        else None
+                    )
                     return self._forward_and_reduce(
                         item,
                         repaired,
@@ -5129,6 +5228,8 @@ class CrawlerDriver:
                         operational,
                         state,
                         award_run=award_run,
+                        closure=repaired_closure,
+                        verification_token=verification_token,
                     )
                 failure = next(
                     (
@@ -6166,6 +6267,7 @@ def _environment_binding(
     *,
     strict: bool,
     authority_cache: Optional[EnvironmentAuthorityCache] = None,
+    defer_currentness_validation: bool = False,
 ) -> EnvironmentBinding:
     """Bind exact lifecycle, probe, package, and interpreter observations.
 
@@ -6177,6 +6279,9 @@ def _environment_binding(
         Whether all production provenance and selected-interpreter facts are mandatory.
     authority_cache:
         Lifecycle-owned collector required for strict binding. ``None`` never constructs a cache.
+    defer_currentness_validation:
+        Whether a matching active authority will be validated by the immediately enclosing
+        cache-owned scheduling/currentness pass instead of by this binding call.
 
     Returns
     -------
@@ -6277,6 +6382,7 @@ def _environment_binding(
             prefix=prefix,
             selected_interpreter=interpreter,
             base_environment_generation=base_generation,
+            validate_active=not defer_currentness_validation,
         )
         generation = authority.environment_generation
         interpreter = authority.selected_interpreter
@@ -6318,6 +6424,7 @@ def bind_materialized_environment(
     probe_results: Sequence[ProbeResult],
     *,
     authority_cache: EnvironmentAuthorityCache,
+    defer_currentness_validation: bool = False,
 ) -> EnvironmentBinding:
     """Strictly bind lifecycle provenance and a complete prefix content seal.
 
@@ -6327,6 +6434,9 @@ def bind_materialized_environment(
         Exact committed lifecycle contract, materialized prefix, and durable probes.
     authority_cache:
         Sole cache owned by the active lifecycle prefix.
+    defer_currentness_validation:
+        Whether the driver will immediately validate the returned authority with one
+        currentness-pass token shared by every scheduled model.
 
     Returns
     -------
@@ -6340,6 +6450,7 @@ def bind_materialized_environment(
         probe_results,
         strict=True,
         authority_cache=authority_cache,
+        defer_currentness_validation=defer_currentness_validation,
     )
 
 
@@ -7221,6 +7332,8 @@ def _current_run_is_fresh(
     gates: Sequence[Mapping[str, Any]],
     *,
     representative_model: Optional[Mapping[str, Any]] = None,
+    closure_identity: Optional[str] = None,
+    verification_token: Optional[EnvironmentVerificationToken] = None,
 ) -> bool:
     """Return whether a current run still binds all independently current inputs.
 
@@ -7230,6 +7343,10 @@ def _current_run_is_fresh(
         Current canonical run and exact live dependencies.
     representative_model:
         Current family representative for a templated size variant.
+    closure_identity:
+        Optional executable closure already collected once for this artifact in the pass.
+    verification_token:
+        Optional cache-created currentness-pass proof shared by every model.
 
     Returns
     -------
@@ -7243,7 +7360,7 @@ def _current_run_is_fresh(
         return False
     if authority is not None and cache is not None:
         try:
-            cache.assert_active(authority)
+            cache.verify(authority, verification_token=verification_token)
         except AuthorityDerivationError:
             return False
     if model.get("status", {}).get("kind") != "runs":
@@ -7257,10 +7374,14 @@ def _current_run_is_fresh(
     if proposal.get("author", {}).get("prompt_sha256") != live_author_prompt:
         return False
     facts = proposal.get("proposed_facts", {})
-    closure_identity = (
-        None
-        if environment.environment_authority is not None
-        else _INJECTED_FORWARD_CLOSURE_IDENTITY
+    effective_closure_identity = (
+        closure_identity
+        if closure_identity is not None
+        else (
+            None
+            if environment.environment_authority is not None
+            else _INJECTED_FORWARD_CLOSURE_IDENTITY
+        )
     )
     if model.get("authored_metadata_state") == "pending":
         untrusted = model.get("untrusted_attempt")
@@ -7277,7 +7398,11 @@ def _current_run_is_fresh(
             and execution.get("current")
             and execution.get("env_generation") == environment.env_generation
             and execution.get("execution_identity")
-            == _execution_identity(artifact, environment, closure_identity=closure_identity)
+            == _execution_identity(
+                artifact,
+                environment,
+                closure_identity=effective_closure_identity,
+            )
             and model.get("provenance", {}).get("author_prompt_sha256") == live_author_prompt
         )
     if artifact.template_source_revision is not None:
@@ -7334,7 +7459,11 @@ def _current_run_is_fresh(
             execution.get("current")
             and execution.get("env_generation") == environment.env_generation
             and execution.get("execution_identity")
-            == _execution_identity(artifact, environment, closure_identity=closure_identity)
+            == _execution_identity(
+                artifact,
+                environment,
+                closure_identity=effective_closure_identity,
+            )
             and model.get("provenance", {}).get("author_prompt_sha256") == live_author_prompt
         )
     for field in (
@@ -7375,7 +7504,11 @@ def _current_run_is_fresh(
         execution.get("current")
         and execution.get("env_generation") == environment.env_generation
         and execution.get("execution_identity")
-        == _execution_identity(artifact, environment, closure_identity=closure_identity)
+        == _execution_identity(
+            artifact,
+            environment,
+            closure_identity=effective_closure_identity,
+        )
         and model.get("provenance", {}).get("author_prompt_sha256") == live_author_prompt
     )
 
@@ -7729,6 +7862,8 @@ def _specialize_variant_recipe(
 def _collect_worker_executable_closure(
     artifact: AuthorArtifact,
     environment: EnvironmentBinding,
+    *,
+    verification_token: Optional[EnvironmentVerificationToken] = None,
 ) -> ExecutableClosureV3:
     """Collect the sole executable closure before execution identity derivation.
 
@@ -7738,6 +7873,8 @@ def _collect_worker_executable_closure(
         Privately staged proposed result.
     environment:
         Exact materialized runtime generation.
+    verification_token:
+        Optional cache-created proof shared by the enclosing pass or spawn.
     Returns
     -------
     ExecutableClosureV3
@@ -7816,6 +7953,7 @@ def _collect_worker_executable_closure(
         worker_members=worker_members,
         standard_input_asset=asset,
         lookup_directories=lookup_directories,
+        verification_token=verification_token,
     )
 
 
@@ -7825,6 +7963,7 @@ def _compile_worker_read_manifest(
     execution_identity: str,
     *,
     closure: Optional[ExecutableClosureV3] = None,
+    verification_token: Optional[EnvironmentVerificationToken] = None,
 ) -> ExecutionReadManifestV3:
     """Bind a verified pre-identity closure into the final worker manifest.
 
@@ -7836,6 +7975,8 @@ def _compile_worker_read_manifest(
         Reducer-compatible execution identity derived from the closure.
     closure:
         Optional already-collected closure reused across meaningful modes.
+    verification_token:
+        Optional cache-created proof shared across every compilation consumer.
 
     Returns
     -------
@@ -7844,12 +7985,17 @@ def _compile_worker_read_manifest(
     """
 
     proposal = artifact.proposal
-    collected = closure or _collect_worker_executable_closure(artifact, environment)
+    collected = closure or _collect_worker_executable_closure(
+        artifact,
+        environment,
+        verification_token=verification_token,
+    )
     return compile_execution_read_manifest_v3_from_closure(
         collected,
         stable_id=str(proposal["stable_id"]),
         work_id=str(proposal["work_id"]),
         execution_identity=execution_identity,
+        verification_token=verification_token,
     )
 
 
