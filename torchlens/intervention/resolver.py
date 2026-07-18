@@ -31,6 +31,7 @@ from ..ir.container_registry import Role
 from ..utils._callable_safety import (
     _DENIED_MODULES,
     _matches,
+    is_denied_operator_gadget,
     is_denied_stdlib_or_builtin_module,
     is_inert_first_party_callable,
     is_pure_forward_callable,
@@ -479,6 +480,25 @@ def resolve_function_registry_key(
                             "from the torch namespace."
                         )
 
+            # OPERATOR GADGET name-scope (r33, A-R32-1). The ``operator`` /
+            # ``_operator`` root is carved out of the stdlib denial so ``operator:neg``
+            # survives, but that carve-out must NOT re-admit the generic operator
+            # gadgets (``attrgetter`` / ``methodcaller`` / ``call`` / ``getitem`` /
+            # ``setitem`` / ``delitem`` / the in-place ``iadd`` / ``imul`` / ...
+            # mutators) that enable an RCE chain (``attrgetter('__globals__')`` ->
+            # ``__import__`` -> ``os.system``). Applied on ALL foreign sub-branches
+            # above (torchlens-walk-to-foreign AND genuinely-foreign), where the
+            # ``is_pure_forward_callable`` gate is otherwise only applied to the torch
+            # namespace. When the RESOLVED real module is ``operator`` / ``_operator``,
+            # require the terminal name in the pure-forward operator allowlist.
+            if callable(obj) and is_denied_operator_gadget(obj):
+                raise UntrustedCallableError(
+                    "Refusing bundle-supplied custom callable "
+                    f"{module_name}:{qualname}: it resolves to a generic operator gadget "
+                    f"({unsafe_callable_reason(obj)}); only the pure arithmetic / "
+                    "comparison / bitwise / index operators resolve from "
+                    "operator/_operator, even under trust."
+                )
             if not callable(obj):
                 raise TypeError(f"{key.import_path!r} resolved to non-callable {obj!r}")
             return cast(Callable[..., Any], obj)
@@ -524,7 +544,13 @@ def _import_ref_registry_key(module_name: str, qualname: str) -> FunctionRegistr
             return FunctionRegistryKey("torch", terminal, dispatch_kind)
         if module_name == "torch.nn.functional":
             return FunctionRegistryKey("torch.nn.functional", terminal, dispatch_kind)
-        if module_name == "operator":
+        # Route BOTH ``operator`` and its C accelerator ``_operator`` onto the fixed,
+        # name-allowlisted operator root (r33, A-R32-1): the fixed root purity-gate
+        # restricts operator to ``_ALLOWED_OPERATOR_NAMES``, so ``_operator:neg`` still
+        # resolves while ``_operator:attrgetter`` / ``_operator:setitem`` are DENIED --
+        # instead of ``_operator:*`` falling through to the foreign ``custom`` tail
+        # (which, before r33, applied no operator name filter).
+        if module_name in {"operator", "_operator"}:
             return FunctionRegistryKey("operator", terminal, dispatch_kind)
     if module_name in {"torch._tensor", "torch.Tensor"} and "." not in qualname:
         return FunctionRegistryKey("torch.Tensor", terminal, "method")

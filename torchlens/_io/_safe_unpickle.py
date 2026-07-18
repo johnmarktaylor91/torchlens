@@ -87,6 +87,7 @@ import os
 import pickle
 import sys
 from dataclasses import dataclass
+from types import ModuleType
 from typing import Any, BinaryIO, Collection, Mapping
 
 import torch
@@ -1141,6 +1142,18 @@ class SafeBundleUnpickler(pickle.Unpickler):
                     "Blocked mapping (module globals) resolved via a dotted name during "
                     f"trusted bundle metadata unpickle: {module}.{name}."
                 )
+            # A resolved MODULE object (A-R32-2): a bare module has no ``__module__``, so
+            # the resolved-real-module denylist recheck below falls back to the (trusted,
+            # non-stdlib) PICKLED module name and ADMITS it -- defeating
+            # ``_stdlib_or_builtin_denied``. A bare module is never a legitimate foreign
+            # recipe callable/type. Refuse it outright, mirroring the mapping refusal
+            # above (``isinstance(obj, dict)`` misses modules).
+            if isinstance(obj, ModuleType):
+                raise pickle.UnpicklingError(
+                    "Blocked module object resolved via a dotted name during trusted "
+                    f"bundle metadata unpickle: {module}.{name}. A bare module is never a "
+                    "legitimate foreign recipe callable/type."
+                )
             # RE-ENFORCE the DENYLIST on the RESOLVED object's REAL module, NEVER the
             # pickled string. A DOTTED ``name`` attribute-walks off the trusted module
             # and can land on a callable from a DIFFERENT, denied module:
@@ -1181,6 +1194,25 @@ class SafeBundleUnpickler(pickle.Unpickler):
                         "Blocked side-effecting torch callable (resolved real module "
                         f"{resolved_owner!r}) reached via a dotted name during trusted "
                         f"bundle metadata unpickle: {module}.{name}."
+                    )
+            # OPERATOR GADGET name-scope (r33, A-R32-1 / E-r32-1): the ``operator`` /
+            # ``_operator`` root is carved out of the stdlib denial so ``operator.neg``
+            # survives, but that carve-out must NOT re-admit the generic operator
+            # gadgets (``attrgetter`` / ``methodcaller`` / ``call`` / ``getitem`` /
+            # ``setitem`` / ``delitem`` / the in-place ``iadd`` / ``imul`` / ...
+            # mutators) that enable an RCE chain (``attrgetter('__globals__')`` ->
+            # ``__import__`` -> ``os.system``). Deny any resolved ``operator`` /
+            # ``_operator`` callable whose terminal name is not a pure forward operator,
+            # even under trust. Parity with the intervention resolver.
+            if callable(obj):
+                from ..utils._callable_safety import is_denied_operator_gadget
+
+                if is_denied_operator_gadget(obj):
+                    raise pickle.UnpicklingError(
+                        "Blocked generic operator gadget (resolved real module "
+                        f"{resolved_owner!r}) reached during trusted bundle metadata "
+                        f"unpickle: {module}.{name}. Only pure arithmetic / comparison / "
+                        "bitwise / index operators resolve from operator/_operator."
                     )
             return obj
         # 3. Default (untrusted): LOAD-TOLERATE as an inert deferred reference. The
