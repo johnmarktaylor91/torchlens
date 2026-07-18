@@ -1268,15 +1268,67 @@ def _parse_diagnostic(value: Mapping[str, Any]) -> RunnableDiagnostic:
     )
 
 
+def _validate_literal_atom_value(kind: "LiteralAtomKind", value: Any) -> None:
+    """Enforce that an atom's JSON value matches its declared ``kind``.
+
+    ROBUSTNESS (secC informational note). ``LiteralAtom`` is a *scalar* grammar
+    node: downstream witness / decode logic assumes an atom carries the scalar its
+    ``kind`` promises (e.g. ``bool(...)`` / ``.get(...)`` on a witness
+    ``observed_value``). The encoder (``_io/runnable.py``) only ever emits one JSON
+    type per kind, but a hand-edited ``manifest.json`` could tag ``kind="int"`` on a
+    list / dict / string, which decodes inertly yet makes scalar-assuming logic
+    inconsistent. Reject the type mismatch at parse so the grammar invariant is
+    upheld. (A genuine container value has its own ``LiteralSequence`` /
+    ``LiteralMapping`` node; it never rides on a scalar atom.) ``bool`` is a subclass
+    of ``int`` in Python, so ``INT`` explicitly excludes ``bool`` (and vice versa) to
+    match the encoder's distinct ``BOOL`` / ``INT`` kinds; JSON ``float`` never
+    parses as ``int``/``bool`` so ``FLOAT`` needs no such exclusion.
+    """
+
+    if kind in (LiteralAtomKind.NONE, LiteralAtomKind.ELLIPSIS):
+        if value is not None:
+            raise ValueError(
+                f"Runnable literal atom kind {kind.value!r} requires a null value, "
+                f"got {type(value).__name__}."
+            )
+    elif kind is LiteralAtomKind.BOOL:
+        if not isinstance(value, bool):
+            raise ValueError(
+                f"Runnable literal atom kind 'bool' requires a bool value, "
+                f"got {type(value).__name__}."
+            )
+    elif kind is LiteralAtomKind.INT:
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError(
+                f"Runnable literal atom kind 'int' requires an int value, "
+                f"got {type(value).__name__}."
+            )
+    elif kind is LiteralAtomKind.FLOAT:
+        if not isinstance(value, float):
+            raise ValueError(
+                f"Runnable literal atom kind 'float' requires a float value, "
+                f"got {type(value).__name__}."
+            )
+    elif kind in (LiteralAtomKind.STR, LiteralAtomKind.NONFINITE_FLOAT):
+        if not isinstance(value, str):
+            raise ValueError(
+                f"Runnable literal atom kind {kind.value!r} requires a str value, "
+                f"got {type(value).__name__}."
+            )
+
+
 def _parse_literal(value: Any) -> NonTensorLiteral:
     """Parse one recursively tagged non-tensor literal."""
 
     mapping = _mapping_item(value, "literal")
     keys = set(mapping)
     if keys == {"kind", "value"}:
+        kind = LiteralAtomKind(_string(mapping, "kind"))
+        atom_value = mapping["value"]
+        _validate_literal_atom_value(kind, atom_value)
         return LiteralAtom(
-            kind=LiteralAtomKind(_string(mapping, "kind")),
-            value=cast(Any, mapping["value"]),
+            kind=kind,
+            value=cast(Any, atom_value),
         )
     if keys == {"qualname"}:
         return LiteralTorchSymbol(qualname=_string(mapping, "qualname"))
