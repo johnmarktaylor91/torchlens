@@ -19,10 +19,7 @@ import menagerie.crawler.checkpoint as checkpoint_module
 import menagerie.crawler.driver as driver_module
 import menagerie.crawler.reducer as reducer_module
 from menagerie.crawler.artifact_transactions import (
-    ArtifactCheckpointProjection,
     ArtifactEventKind,
-    ArtifactTransactionId,
-    ArtifactTransactionProjection,
     StagedArtifact,
 )
 from menagerie.crawler.author_dispatch import (
@@ -93,14 +90,14 @@ from menagerie.crawler.env_lifecycle import (
     ProbeResult,
     expected_probe_names,
 )
-from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
+from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot, load_intake_snapshot
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.fetcher import fetch_targets as controlled_fetch_targets
 from menagerie.crawler.metadata import authored_fact_leaves, recompute_accepted_identities
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.policy import SandboxUnavailableError
 from menagerie.crawler.proposal import DEFAULT_GATED_CLAIMS, model_code_manifest
-from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
+from menagerie.crawler.recordio import JsonlLedger, payload_hash, scan_jsonl
 from menagerie.crawler.reducer import (
     CanonicalReducer,
     project_dependency_current,
@@ -525,12 +522,18 @@ class OneModelRepairFailure(FakeAuthor):
 class DisabledAuthor(AuthorLane):
     """Fail if a reconstruction-capable path re-enters authoring."""
 
+    def __init__(self) -> None:
+        """Initialize the forbidden author-call counter."""
+
+        self.calls = 0
+
     def author(
         self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
     ) -> AuthorArtifact:
         """Raise because canonical handoff facts must be consumed first."""
 
         del item, work_root, config, context
+        self.calls += 1
         raise AssertionError("author lane must remain disabled")
 
 
@@ -1556,6 +1559,90 @@ def _paths(tmp_path: Path, snapshot: IntakeSnapshot) -> DriverPaths:
             tmp_path / "records" / "attempts.jsonl",
             tmp_path / "records" / "gates.jsonl",
         ),
+    )
+
+
+def _copy_clean_clone_handoff_authority(
+    source_paths: DriverPaths,
+    source_snapshot: IntakeSnapshot,
+    clone_root: Path,
+) -> tuple[IntakeSnapshot, DriverPaths]:
+    """Copy only canonical handoff authority and authorized private objects.
+
+    Parameters
+    ----------
+    source_paths:
+        Source campaign paths containing finalized deferral transactions.
+    source_snapshot:
+        Exact immutable intake authority used by the source campaign.
+    clone_root:
+        Fresh campaign root that receives no disposable source state.
+
+    Returns
+    -------
+    tuple[IntakeSnapshot, DriverPaths]
+        Reloaded clone snapshot and paths rooted entirely in the clone.
+    """
+
+    clone_intake = clone_root / "intake"
+    shutil.copytree(source_snapshot.root, clone_intake)
+    shutil.copytree(source_paths.ledgers.models.parent, clone_root / "records")
+    source_reconstruction = source_paths.ledgers.models.parent.parent / "reconstruction"
+    shutil.copytree(source_reconstruction, clone_root / "reconstruction")
+
+    final_events = tuple(
+        event
+        for event in scan_jsonl(source_paths.ledgers.artifacts)
+        if event["event_kind"] == ArtifactEventKind.PRIVATE_COMMITTED.value
+    )
+    object_keys = {
+        str(row["object_key"])
+        for event in final_events
+        for row in event["objects"]
+        if row["mirror_class"] == "private"
+    }
+    source_private = source_paths.runtime_root / "mirrors" / "private"
+    clone_private = clone_root / "runtime" / "mirrors" / "private"
+    for object_key in sorted(object_keys):
+        source = source_private / object_key
+        destination = clone_private / object_key
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+
+    clone_snapshot = load_intake_snapshot(clone_intake)
+    return clone_snapshot, _paths(clone_root, clone_snapshot)
+
+
+def _make_final_transaction_proposal_less(artifact_ledger: Path) -> None:
+    """Persist one schema-valid legacy event chain without handoff proposal fields.
+
+    Parameters
+    ----------
+    artifact_ledger:
+        Fresh-clone artifact ledger containing exactly one finalized transaction.
+    """
+
+    rows = scan_jsonl(artifact_ledger)
+    predecessor_by_transaction: dict[str, str] = {}
+    rewritten: list[dict[str, Any]] = []
+    for source in rows:
+        event = deepcopy(source)
+        transaction_id = str(event["transaction_id"])
+        event["predecessor_event_id"] = predecessor_by_transaction.get(transaction_id)
+        event["handoff_proposal_id"] = None
+        event["handoff_sha256"] = None
+        event["artifact_event_id"] = stable_hash(
+            {
+                key: value
+                for key, value in event.items()
+                if key not in {"artifact_event_id", "created_at", "ledger_seq", "payload_sha256"}
+            }
+        )
+        predecessor_by_transaction[transaction_id] = str(event["artifact_event_id"])
+        event["payload_sha256"] = payload_hash(event)
+        rewritten.append(event)
+    artifact_ledger.write_bytes(
+        b"".join(canonical_json_bytes(event) + b"\n" for event in rewritten)
     )
 
 
@@ -4348,8 +4435,9 @@ def test_cached_terminal_artifacts_follow_same_terminal_branch_on_resume(tmp_pat
 def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(
     tmp_path: Path,
     real_environment_fixture: RealEnvironmentFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The real Linux lane executes both reconstructed deferred rows.
+    """A clean clone executes only canonical deferred handoff authority.
 
     Parameters
     ----------
@@ -4357,56 +4445,144 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(
         Isolated cross-platform campaign root.
     real_environment_fixture:
         Strictly bound hardlink-cloned prefix used by the shipped compiler path.
+    monkeypatch:
+        Fetch-lane guard; compiler, authority, and supervisor remain unpatched.
     """
 
-    snapshot = _snapshot(tmp_path, count=2)
-    first = _driver(tmp_path, snapshot, author=BothDeferredRealAuthor()).run()
+    source_root = tmp_path / "source-campaign"
+    source_root.mkdir()
+    snapshot = _snapshot(source_root, count=2)
+    first = _driver(source_root, snapshot, author=BothDeferredRealAuthor()).run()
     assert first.status == "complete"
-    paths = _paths(tmp_path, snapshot)
-    deferred = scan_jsonl(paths.ledgers.models)
+    source_paths = _paths(source_root, snapshot)
+    deferred = scan_jsonl(source_paths.ledgers.models)
     assert {record["status"]["code"] for record in deferred} == {
         "deferred:needs-cuda",
         "deferred:needs-x86",
     }
-    shutil.rmtree(paths.work_root)
+    source_finals = [
+        event
+        for event in scan_jsonl(source_paths.ledgers.artifacts)
+        if event["event_kind"] == ArtifactEventKind.PRIVATE_COMMITTED.value
+    ]
+    assert len(source_finals) == 2
+    assert len({event["transaction_id"] for event in source_finals}) == 2
+    assert len({event["handoff_sha256"] for event in source_finals}) == 2
+    assert all(event["handoff_proposal_id"] is not None for event in source_finals)
+    assert all(event["reconstruction"] is not None for event in source_finals)
+
+    old_source_cas = tuple(source_paths.work_root.rglob("source-cas"))
+    assert len(old_source_cas) == 2
+    old_cache = source_paths.runtime_root / "caches" / "forbidden-cache"
+    old_cache.mkdir(parents=True)
+    (old_cache / "sentinel.bin").write_bytes(b"must not transfer")
+    clone_root = tmp_path / "clean-clone"
+    clone_snapshot, paths = _copy_clean_clone_handoff_authority(source_paths, snapshot, clone_root)
+    assert clone_snapshot.snapshot_sha256 == snapshot.snapshot_sha256
+    assert {path.name for path in clone_root.iterdir()} == {
+        "intake",
+        "records",
+        "reconstruction",
+        "runtime",
+    }
+    assert set((paths.runtime_root / "mirrors").iterdir()) == {
+        paths.runtime_root / "mirrors" / "private"
+    }
+    assert not paths.work_root.exists()
+    assert not (paths.runtime_root / "caches").exists()
+    assert not (paths.runtime_root / "source-cas").exists()
+    shutil.rmtree(source_root)
+    assert not source_root.exists()
+    assert all(not path.exists() for path in old_source_cas)
+    assert not old_cache.exists()
+
+    fetch_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    def disabled_fetch(*args: Any, **kwargs: Any) -> None:
+        """Record and reject any attempt to leave canonical private custody."""
+
+        fetch_calls.append((args, kwargs))
+        raise AssertionError("fetch fallback must remain disabled")
+
+    monkeypatch.setattr(driver_module, "fetch_targets", disabled_fetch)
 
     linux_author = DisabledAuthor()
+    linux_checker = FakeChecker()
     linux_forward = SupervisedForwardLane(timeout_seconds=20, cwd=Path.cwd())
+    linux_environments = RealEnvironmentLane(real_environment_fixture)
+    linux_registry = real_environment_registry(real_environment_fixture)
+    linux_environment = driver_module.bind_materialized_environment(
+        linux_registry.intents["core"],
+        real_environment_fixture.prefix,
+        real_environment_fixture.probe_results,
+    )
     dependencies = DriverDependencies(
         linux_author,
-        FakeChecker(),
+        linux_checker,
         linux_forward,
-        RealEnvironmentLane(real_environment_fixture),
+        linux_environments,
         FakeNotifier(),
         lambda: NOW,
     )
-    linux = CrawlerDriver(
-        paths,
-        DriverConfig(
-            target="linux-x86_64-cuda",
-            only_status="deferred:*",
-            run_id="linux-handoff",
-            machine_id="linux-machine",
-            review_checkpoint_at=None,
-            progress_milestones=(),
-        ),
-        dependencies,
-        registry=real_environment_registry(real_environment_fixture),
-    )
+
+    def linux_handoff_driver() -> CrawlerDriver:
+        """Build the exact repeated handoff-linux command composition."""
+
+        return CrawlerDriver(
+            paths,
+            DriverConfig(
+                target="linux-x86_64-cuda",
+                only_status="deferred:*",
+                run_id="linux-handoff",
+                machine_id="linux-machine",
+                review_checkpoint_at=None,
+                progress_milestones=(),
+            ),
+            dependencies,
+            registry=linux_registry,
+        )
+
+    linux = linux_handoff_driver()
     result = linux.run()
-    assert result.status == "complete"
+    assert result.status == "terminal-partition-complete"
     resumed_attempts = [
         attempt
         for attempt in scan_jsonl(paths.ledgers.attempts)
         if attempt["result"] == "succeeded"
     ]
-    resumed_runs = len(resumed_attempts)
-    assert resumed_runs > 0
+    assert len(resumed_attempts) == 2
     assert {attempt["stable_id"] for attempt in resumed_attempts} == {
         item.stable_id for item in snapshot.items
     }
+    expected_adapter_sha256 = hash_bytes(_HANDOFF_ADAPTER.encode("utf-8"))
+    assert {
+        attempt["worker_receipt"]["observed_adapter_sha256"] for attempt in resumed_attempts
+    } == {expected_adapter_sha256}
+    reconstructed_adapters = tuple(paths.work_root.rglob("model/adapter.py"))
+    assert len(reconstructed_adapters) == 2
+    assert all(
+        path.read_bytes() == _HANDOFF_ADAPTER.encode("utf-8") for path in reconstructed_adapters
+    )
+
+    for attempt in resumed_attempts:
+        artifact = linux._family_artifacts[str(attempt["stable_id"])]
+        closure = driver_module._collect_worker_executable_closure(artifact, linux_environment)
+        execution_identity = driver_module._execution_identity(
+            artifact,
+            linux_environment,
+            closure_identity=closure.identity,
+        )
+        manifest = driver_module._compile_worker_read_manifest(
+            artifact,
+            linux_environment,
+            execution_identity,
+            closure=closure,
+        )
+        assert attempt["execution_read_manifest_identity"] == manifest.manifest_id
+
     revisions = scan_jsonl(paths.ledgers.models)
     assert len(revisions) == 4
+    assert revisions[:2] == deferred
     deferred_by_id = {record["stable_id"]: record for record in deferred}
     superseding = revisions[-len(snapshot.items) :]
     assert {record["status"]["code"] for record in superseding} == {"runs"}
@@ -4414,62 +4590,100 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(
         record["parent_revision"] == deferred_by_id[str(record["stable_id"])]["record_revision"]
         for record in superseding
     )
+    assert all(
+        record["status"]["supersedes_revision"]
+        == deferred_by_id[str(record["stable_id"])]["record_revision"]
+        for record in superseding
+    )
+    current = {record["stable_id"]: record for record in superseding}
+    assert_partition((item.stable_id for item in snapshot.items), current)
+
+    operational = scan_jsonl(paths.operational_ledger)
+    worker_started = [
+        event for event in operational if event["event_kind"] == "worker-lease-started"
+    ]
+    worker_closed = [event for event in operational if event["event_kind"] == "worker-lease-closed"]
+    assert len(worker_started) == len(worker_closed) == 2
+    assert {event["details"]["lease_id"] for event in worker_started} == {
+        event["details"]["lease_id"] for event in worker_closed
+    }
+    assert not paths.worker_lease.exists()
+
+    forbidden_roots = (source_root, *old_source_cas, old_cache)
+    for attempt in resumed_attempts:
+        policy = attempt["policy_observation"]
+        assert not policy["network_attempted"]
+        assert not policy["cache_read_attempted"]
+        assert not policy["checkpoint_or_weight_read_attempted"]
+        assert policy["socket_targets"] == []
+        assert all(
+            not str(path).startswith(str(root))
+            for path in policy["checkpoint_paths"]
+            for root in forbidden_roots
+        )
+        assert str(source_root) not in canonical_json_bytes(attempt).decode("utf-8")
+    assert fetch_calls == []
+    assert linux_author.calls == 0
+    assert linux_checker.metadata_calls == 0
+    assert linux_checker.fidelity_calls == 0
+    assert linux_environments.events == ["use:core"]
+
+    canonical_ledgers = tuple(sorted((clone_root / "records").rglob("*.jsonl")))
+    before_third = {
+        path.relative_to(clone_root).as_posix(): path.read_bytes() for path in canonical_ledgers
+    }
+    third = linux_handoff_driver().run()
+    assert third.status == "terminal-partition-complete"
+    after_third = {
+        path.relative_to(clone_root).as_posix(): path.read_bytes()
+        for path in sorted((clone_root / "records").rglob("*.jsonl"))
+    }
+    assert after_third == before_third
+    assert linux_environments.events == ["use:core"]
+    assert fetch_calls == []
+    assert linux_author.calls == 0
+    assert linux_checker.metadata_calls == 0
+    assert linux_checker.fidelity_calls == 0
 
 
 def test_linux_code_less_deferral_fails_visibly_without_failed_source(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Missing durable handoff authority must abort instead of consulting the author.
+    """A persisted proposal-less legacy final aborts before every active lane.
 
     Parameters
     ----------
     tmp_path:
         Isolated two-platform campaign root.
-    monkeypatch:
-        Projection fault injector simulating historical code-less authority.
     """
 
-    snapshot = _snapshot(tmp_path, count=1)
-    assert _driver(tmp_path, snapshot, author=BothDeferredAuthor()).run().status == "complete"
-    paths = _paths(tmp_path, snapshot)
-    before = scan_jsonl(paths.ledgers.models)
-    original_resolver = driver_module.resolve_final_artifact_transaction
+    source_root = tmp_path / "legacy-source"
+    source_root.mkdir()
+    snapshot = _snapshot(source_root, count=1)
+    assert _driver(source_root, snapshot, author=BothDeferredAuthor()).run().status == "complete"
+    source_paths = _paths(source_root, snapshot)
+    clone_root = tmp_path / "legacy-clean-clone"
+    clone_snapshot, paths = _copy_clean_clone_handoff_authority(source_paths, snapshot, clone_root)
+    _make_final_transaction_proposal_less(paths.ledgers.artifacts)
+    shutil.rmtree(source_root)
+    assert not source_root.exists()
 
-    def code_less_transaction(
-        projection: ArtifactCheckpointProjection,
-        *,
-        stable_id: str,
-        work_id: str,
-        transaction_id: Optional[ArtifactTransactionId] = None,
-    ) -> Optional[ArtifactTransactionProjection]:
-        """Remove only the executable handoff from an otherwise valid projection."""
-
-        transaction = original_resolver(
-            projection,
-            stable_id=stable_id,
-            work_id=work_id,
-            transaction_id=transaction_id,
-        )
-        assert transaction is not None
-        return replace(
-            transaction,
-            reconstruction_inputs=replace(
-                transaction.reconstruction_inputs,
-                handoff_execution=None,
-            ),
-        )
-
-    monkeypatch.setattr(
-        driver_module,
-        "resolve_final_artifact_transaction",
-        code_less_transaction,
+    guarded_ledgers = (
+        paths.ledgers.models,
+        paths.ledgers.attempts,
+        paths.ledgers.gates,
+        paths.ledgers.artifacts,
     )
+    before = {path: path.read_bytes() if path.exists() else None for path in guarded_ledgers}
+    linux_author = DisabledAuthor()
+    linux_checker = FakeChecker()
+    linux_forward = FakeForward()
+    linux_environments = FakeEnvironments(clone_root / "forbidden-environments")
     dependencies = DriverDependencies(
-        DisabledAuthor(),
-        FakeChecker(),
-        FakeForward(),
-        FakeEnvironments(tmp_path / "linux-envs"),
+        linux_author,
+        linux_checker,
+        linux_forward,
+        linux_environments,
         FakeNotifier(),
         lambda: NOW,
     )
@@ -4487,10 +4701,20 @@ def test_linux_code_less_deferral_fails_visibly_without_failed_source(
         registry=load_environment_registry(target="linux-x86_64-cuda"),
     )
 
-    with pytest.raises(DriverIntegrationError, match="handoff-authority-unavailable"):
+    with pytest.raises(DriverIntegrationError) as caught:
         linux.run()
-    assert scan_jsonl(paths.ledgers.models) == before
-    assert all(model["status"]["code"] != "failed:source" for model in before)
+    assert str(caught.value) == "handoff-authority-unavailable"
+    after = {path: path.read_bytes() if path.exists() else None for path in guarded_ledgers}
+    assert after == before
+    models = scan_jsonl(paths.ledgers.models)
+    assert all(model["status"]["code"] != "failed:source" for model in models)
+    assert linux_author.calls == 0
+    assert linux_checker.metadata_calls == 0
+    assert linux_checker.fidelity_calls == 0
+    assert linux_forward.calls == {}
+    assert linux_environments.events == []
+    assert not linux_environments.root.exists()
+    assert clone_snapshot.snapshot_sha256 == snapshot.snapshot_sha256
 
 
 def test_linux_only_status_cli_and_config_are_closed() -> None:

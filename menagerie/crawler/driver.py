@@ -2103,6 +2103,7 @@ class CrawlerDriver:
             checker_version=self.config.checker_version,
         )
         self._authority_context = context
+        _assert_persisted_handoff_authority_available(self.paths, self.config.only_status)
         self.paths.runtime_root.mkdir(parents=True, exist_ok=True)
         with (
             JsonlLedger(
@@ -3755,6 +3756,8 @@ class CrawlerDriver:
         """Run metadata batches and required per-model fidelity gates durably."""
 
         for item in work:
+            if isinstance(artifacts[item.stable_id], ActivatedHandoffArtifact):
+                continue
             artifacts[item.stable_id] = _require_legacy_audit_fidelity(
                 item, artifacts[item.stable_id], self.config
             )
@@ -3763,7 +3766,8 @@ class CrawlerDriver:
         pending_ids = {
             item.stable_id
             for item in work
-            if not _metadata_gate_accepted(
+            if not isinstance(artifacts[item.stable_id], ActivatedHandoffArtifact)
+            and not _metadata_gate_accepted(
                 persisted, item.stable_id, artifacts[item.stable_id].proposal
             )
         }
@@ -3981,6 +3985,8 @@ class CrawlerDriver:
             ):
                 continue
             artifact = artifacts[item.stable_id]
+            if isinstance(artifact, ActivatedHandoffArtifact):
+                continue
             if not _fidelity_required(artifact.proposal):
                 continue
             while True:
@@ -7177,6 +7183,67 @@ def _canonical_crawler_root(paths: DriverPaths) -> Path:
     if candidate.name != "records":
         raise DriverIntegrationError("canonical model ledger is not below a records root")
     return candidate.parent
+
+
+def _assert_persisted_handoff_authority_available(
+    paths: DriverPaths,
+    only_status: Optional[str],
+) -> None:
+    """Reject selected legacy deferrals before reducer projection can hide them.
+
+    Parameters
+    ----------
+    paths:
+        Canonical model and artifact ledger paths for the active campaign.
+    only_status:
+        Closed Linux deferred-handoff selector, or ``None`` outside handoff mode.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If an exact selected deferred model names a finalized transaction whose
+        persisted executable handoff proposal fields are absent.
+    """
+
+    if only_status is None:
+        return
+    selected_statuses = (
+        {"deferred:needs-cuda", "deferred:needs-x86"}
+        if only_status == "deferred:*"
+        else {only_status}
+    )
+    latest: dict[str, Mapping[str, Any]] = {}
+    for persisted_model in scan_jsonl(paths.ledgers.models):
+        latest[str(persisted_model["stable_id"])] = persisted_model
+    artifact_paths = tuple(sorted(paths.ledgers.artifacts.parent.glob("*.jsonl"))) or (
+        paths.ledgers.artifacts,
+    )
+    final_events = tuple(
+        event
+        for artifact_path in artifact_paths
+        for event in scan_jsonl(artifact_path)
+        if event.get("event_kind")
+        in {ArtifactEventKind.PUBLISHED.value, ArtifactEventKind.PRIVATE_COMMITTED.value}
+    )
+    for model in latest.values():
+        status = model.get("status")
+        if not isinstance(status, Mapping) or status.get("code") not in selected_statuses:
+            continue
+        authority = model.get("artifact_authority")
+        transaction_id = authority.get("transaction_id") if isinstance(authority, Mapping) else None
+        if not isinstance(transaction_id, str) or not transaction_id:
+            continue
+        matching = tuple(
+            event
+            for event in final_events
+            if event.get("stable_id") == model.get("stable_id")
+            and event.get("transaction_id") == transaction_id
+        )
+        if len(matching) == 1 and (
+            matching[0].get("handoff_proposal_id") is None
+            or matching[0].get("handoff_sha256") is None
+        ):
+            raise DriverIntegrationError("handoff-authority-unavailable")
 
 
 def _canonical_repo_root(canonical_root: Path) -> Path:
