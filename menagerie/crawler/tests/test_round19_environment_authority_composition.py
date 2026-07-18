@@ -21,13 +21,22 @@ from menagerie.crawler.authority import (
     compile_execution_read_manifest_v3,
     verify_execution_read_manifest_v3,
 )
-from menagerie.crawler.driver import AuthorArtifact, SupervisedForwardLane
+from menagerie.crawler.driver import (
+    AuthorArtifact,
+    SupervisedForwardLane,
+)
 from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.intake import create_intake_snapshot
 from menagerie.crawler.policy import detect_os_sandbox, generate_macos_sandbox_profile
 from menagerie.crawler.proposal import model_code_manifest
 from menagerie.crawler.recordio import scan_jsonl
 from menagerie.crawler.reducer import CanonicalReducer
-from menagerie.crawler.tests.conftest import RealEnvironmentFixture
+from menagerie.crawler.tests.conftest import (
+    RealEnvironmentFixture,
+    RealEnvironmentLane,
+    real_environment_registry,
+)
+from menagerie.crawler.tests.dry_run_support import DRY_RUN_CASES, TinyModelAuthor
 from menagerie.crawler.tests.test_slice_f_driver import (
     FakeAuthor,
     FakeChecker,
@@ -37,6 +46,7 @@ from menagerie.crawler.tests.test_slice_f_driver import (
     _refresh_proposal_identities,
     _snapshot,
     _test_authority_context,
+    _write_jsonl,
 )
 
 
@@ -214,6 +224,138 @@ def test_hardlinked_prefix_is_one_sealed_authority_and_mutation_stales(
         cache.verify(authority)
     assert cache.rehashes == 1
     assert cache.full_seals == 2
+
+
+def test_real_multi_model_cache_closes_currentness_and_quarantines_mutation(
+    tmp_path: Path,
+    real_environment_fixture: RealEnvironmentFixture,
+) -> None:
+    """One lifecycle cache serves repeated currentness and rejects changed prefix bytes."""
+
+    master = tmp_path / "cache-master.jsonl"
+    deferred = tmp_path / "cache-deferred.jsonl"
+    _write_jsonl(
+        master,
+        [
+            {"name": case.name, "zoo": "cache-fixtures", "variant": "base"}
+            for case in (DRY_RUN_CASES[0], DRY_RUN_CASES[1], DRY_RUN_CASES[3])
+        ],
+    )
+    _write_jsonl(deferred, [])
+    snapshot = create_intake_snapshot(master, deferred, tmp_path / "intake")
+    paths = _paths(tmp_path, snapshot)
+    environments = RealEnvironmentLane(real_environment_fixture)
+    driver = _driver(
+        tmp_path,
+        snapshot,
+        author=TinyModelAuthor(),
+        checker=FakeChecker(),
+        forward=SupervisedForwardLane(timeout_seconds=20, cwd=Path.cwd()),
+        environments=environments,
+        registry=real_environment_registry(real_environment_fixture),
+    )
+
+    first = driver.run()
+    assert first.status == "complete"
+    initial_models = scan_jsonl(paths.ledgers.models)
+    initial_attempts = scan_jsonl(paths.ledgers.attempts)
+    assert len(initial_models) == 3
+    assert {row["status"]["code"] for row in initial_models} == {"runs"}
+    assert all(row["result"] == "succeeded" for row in initial_attempts)
+    prior_revisions = {str(row["record_revision"]) for row in initial_models}
+    prior_execution_identities = {
+        str(row["execution"]["execution_identity"]) for row in initial_models
+    }
+
+    second = driver.run()
+    cheap_after_second = environments.environment_authority_cache.cheap_validations
+    third = driver.run()
+    cheap_after_third = environments.environment_authority_cache.cheap_validations
+    full_seals_while_unchanged = environments.environment_authority_cache.full_seals
+    rehashes_while_unchanged = environments.environment_authority_cache.rehashes
+    assert second.status == third.status == "complete"
+    assert scan_jsonl(paths.ledgers.models) == initial_models
+    assert scan_jsonl(paths.ledgers.attempts) == initial_attempts
+
+    authority = real_environment_fixture.binding.environment_authority
+    assert authority is not None
+    relative_member = next(
+        entry.relative_path
+        for entry in authority.content_manifest.entries
+        if entry.entry_type == "regular-file"
+        and entry.relative_path.startswith("include/")
+        and entry.relative_path.endswith(".h")
+        and not entry.relative_path.startswith("conda-meta/")
+    )
+    changed = real_environment_fixture.prefix / relative_member
+    source = real_environment_fixture.source_prefix / relative_member
+    original_mode = changed.stat().st_mode
+    changed.unlink()
+    changed.write_bytes(source.read_bytes() + b"\n# round19 cache mutation\n")
+    changed.chmod(original_mode)
+    try:
+        mutated = driver.run()
+    finally:
+        changed.unlink()
+        os.link(source, changed)
+
+    cache = environments.environment_authority_cache
+    final_models = scan_jsonl(paths.ledgers.models)
+    final_attempts = scan_jsonl(paths.ledgers.attempts)
+    latest_by_id = {str(row["stable_id"]): row for row in final_models}
+    new_attempts = final_attempts[len(initial_attempts) :]
+    integrity_quarantines = [
+        event
+        for event in scan_jsonl(paths.operational_ledger)
+        if event.get("details", {}).get("disposition") == "environment-integrity-quarantined"
+    ]
+
+    assert {
+        "first_status": first.status,
+        "cheap_second_pass": cheap_after_second > 0,
+        "cheap_third_pass_increased": cheap_after_third > cheap_after_second,
+        "one_full_seal_while_unchanged": full_seals_while_unchanged == 1,
+        "zero_rehashes_while_unchanged": rehashes_while_unchanged == 0,
+        "mutation_added_one_cheap_validation": (cache.cheap_validations == cheap_after_third + 1),
+        "full_seals": cache.full_seals,
+        "rehashes": cache.rehashes,
+        "invalidations": cache.invalidations,
+        "mutation_status": mutated.status,
+        "integrity_quarantines": len(integrity_quarantines),
+        "terminal_environment_revisions": all(
+            row["status"]["code"] == "failed:environment" for row in latest_by_id.values()
+        ),
+        "new_runs": sum(row["status"]["code"] == "runs" for row in final_models) - 3,
+        "stale_prior_revisions": prior_revisions.isdisjoint(
+            {str(row["record_revision"]) for row in latest_by_id.values()}
+        ),
+        "new_environment_failures": len(new_attempts) == 3
+        and all(
+            row["result"] == "failed" and row["stage"] == "environment" for row in new_attempts
+        ),
+        "old_identity_awards": any(
+            row["result"] == "succeeded"
+            and row.get("identities", {}).get("execution") in prior_execution_identities
+            for row in new_attempts
+        ),
+    } == {
+        "first_status": "complete",
+        "cheap_second_pass": True,
+        "cheap_third_pass_increased": True,
+        "one_full_seal_while_unchanged": True,
+        "zero_rehashes_while_unchanged": True,
+        "mutation_added_one_cheap_validation": True,
+        "full_seals": 2,
+        "rehashes": 1,
+        "invalidations": 1,
+        "mutation_status": "complete",
+        "integrity_quarantines": 1,
+        "terminal_environment_revisions": True,
+        "new_runs": 0,
+        "stale_prior_revisions": True,
+        "new_environment_failures": True,
+        "old_identity_awards": False,
+    }
 
 
 def test_outside_selected_interpreter_is_rejected_at_binding(tmp_path: Path) -> None:

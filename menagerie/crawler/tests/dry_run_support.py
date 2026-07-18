@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from menagerie.crawler.authority import AuthorityContext
+from menagerie.crawler.authority import EnvironmentAuthorityCache
 from menagerie.crawler.constants import EnvironmentPhase
 from menagerie.crawler.driver import (
     AuthorArtifact,
@@ -240,6 +241,11 @@ class TinyModelAuthor(FakeAuthor):
         )
         facts = proposal["proposed_facts"]
         facts["identity"]["canonical_name"] = case.name
+        if case.name == "DryRunMLP":
+            facts["identity"]["canonical_name"] = "MLP"
+            facts["taxonomy"]["family"] = "MLP"
+            facts["external_metadata"]["family"] = "MLP"
+            facts["external_metadata"]["architecture_class"] = ["MLP"]
         facts["external_metadata"]["modality"] = list(case.modality)
         facts["external_metadata"]["modes"] = {
             "meaningful_modes": ["train", "eval"],
@@ -280,22 +286,90 @@ class TinyModelAuthor(FakeAuthor):
         )
         proposal["verified_hashes"]["code"] = hash_bytes(adapter_bytes)
         proposal["verified_hashes"]["code_manifest"] = stable_hash(code_manifest)
-        if case.fidelity_required:
-            fidelity_identity = stable_hash(
-                {"stable_id": item.stable_id, "kind": "dry-run-fidelity"}
-            )
-            proposal["fidelity_identity"] = fidelity_identity
-            facts["source_resolution"]["rung"] = "R3_PORT"
-            facts["fidelity"].update(
-                {
-                    "required": True,
-                    "reason": "dry-run typed port exercises the fidelity lane",
-                    "verdict": None,
-                    "fidelity_identity": fidelity_identity,
-                    "gate_id": None,
-                    "current": False,
-                }
-            )
+        fidelity_identity = stable_hash({"stable_id": item.stable_id, "kind": "dry-run-fidelity"})
+        proposal["fidelity_identity"] = fidelity_identity
+        resolution = facts["source_resolution"]
+        resolution["rung"] = "R3_PORT"
+        resolution["attempted_rungs"] = [
+            {
+                "rung": rung,
+                "result": "selected" if rung == "R3_PORT" else "unavailable",
+                "reason_code": "documented-search",
+                "evidence_ids": ["evidence-1"],
+            }
+            for rung in ("R1_LIBRARY", "R2_VENDOR", "R3_PORT")
+        ]
+        excerpt = facts["evidence"]["excerpts"][0]
+        port_text = (
+            f"{excerpt['text']} The staged source code is a faithful port of the documented "
+            f"forward architecture and input contract for {case.name}, using "
+            f"{' '.join(case.modality)} modality with {case.divergence} train eval divergence. "
+            f"The grounded family is {facts['taxonomy']['family']}."
+        )
+        port_bytes = port_text.encode("utf-8")
+        excerpt.update(
+            {
+                "locator": f"bytes:0-{len(port_bytes)}",
+                "text": port_text,
+                "text_sha256": hash_bytes(port_bytes),
+            }
+        )
+        implementation["source_to_code_map"] = [
+            {
+                "material_item": "documented forward architecture",
+                "source_id": "source-1",
+                "source_locator": excerpt["locator"],
+                "evidence_ids": ["evidence-1"],
+                "code_path": "adapter.py",
+                "code_locator": "complete typed adapter",
+                "disposition": "faithful-port",
+            }
+        ]
+        excerpt["supports"] = sorted(
+            set(excerpt["supports"])
+            | {
+                "implementation.source_to_code_map[].code_locator",
+                "implementation.source_to_code_map[].code_path",
+                "implementation.source_to_code_map[].disposition",
+                "implementation.source_to_code_map[].evidence_ids[]",
+                "implementation.source_to_code_map[].material_item",
+                "implementation.source_to_code_map[].source_id",
+                "implementation.source_to_code_map[].source_locator",
+            }
+        )
+        source_row = resolution["sources"][0]
+        source_row.update(
+            {
+                "content_sha256": hash_bytes(port_bytes),
+                "byte_count": len(port_bytes),
+            }
+        )
+        manifest_row = artifact.source_manifest["sources"][0]
+        Path(str(manifest_row["cas_path"])).write_bytes(port_bytes)
+        manifest_row.update(
+            {
+                "content_sha256": hash_bytes(port_bytes),
+                "byte_count": len(port_bytes),
+            }
+        )
+        source_manifest_identity = stable_hash(artifact.source_manifest["sources"])
+        artifact.source_manifest["manifest_sha256"] = source_manifest_identity
+        proposal["source_manifest_identity"] = source_manifest_identity
+        proposal["verified_hashes"]["source_manifest"] = source_manifest_identity
+        facts["fidelity"].update(
+            {
+                "required": True,
+                "reason": (
+                    "dry-run typed port exercises structural fidelity"
+                    if case.fidelity_required
+                    else "dry-run typed port requires canonical fidelity"
+                ),
+                "verdict": None,
+                "fidelity_identity": fidelity_identity,
+                "gate_id": None,
+                "current": False,
+            }
+        )
         _refresh_proposal_identities(
             proposal,
             checker_model=config.checker_model,
@@ -351,6 +425,8 @@ class MaterializedDryRunEnvironment(SequentialEnvironmentLifecycle):
         self.prefix = prefix
         self.intent = intent
         self.probe_results = probe_results
+        self._active = prefix
+        self._authority_cache = EnvironmentAuthorityCache()
 
     def run(
         self,

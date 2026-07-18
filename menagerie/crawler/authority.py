@@ -769,12 +769,19 @@ class EnvironmentAuthorityCache:
         self.invalidations = 0
         self.rehashes = 0
         self._manifest: Optional[EnvironmentContentManifestV1] = None
+        self._authority: Optional[EnvironmentAuthorityV1] = None
 
     @property
     def manifest(self) -> Optional[EnvironmentContentManifestV1]:
         """Return the current complete cached manifest, if any."""
 
         return self._manifest
+
+    @property
+    def authority(self) -> Optional[EnvironmentAuthorityV1]:
+        """Return the active authority so quarantine can retain its stale identity."""
+
+        return self._authority
 
     def _seal(self, prefix: Path, interpreter: Path) -> EnvironmentContentManifestV1:
         """Seal one prefix and increment the deterministic full-seal counter."""
@@ -808,8 +815,21 @@ class EnvironmentAuthorityCache:
             base_environment_generation,
             "base_environment_generation",
         )
-        manifest = self._seal(prefix, selected_interpreter)
         canonical_prefix = prefix.resolve(strict=True)
+        active = self._authority
+        if active is not None:
+            if (
+                active.prefix != canonical_prefix
+                or active.selected_interpreter != selected_interpreter.absolute()
+                or active.base_environment_generation != base_generation
+            ):
+                self.invalidate()
+                raise AuthorityDerivationError(
+                    "active environment authority cache cannot be rebound to different inputs"
+                )
+            self.verify(active)
+            return active
+        manifest = self._seal(prefix, selected_interpreter)
         final_generation = stable_hash(
             {
                 "version": ENVIRONMENT_GENERATION_VERSION_V2,
@@ -830,8 +850,7 @@ class EnvironmentAuthorityCache:
                 for target in manifest.external_targets
             ],
         }
-        self._manifest = manifest
-        return EnvironmentAuthorityV1(
+        authority = EnvironmentAuthorityV1(
             authority_version=ENVIRONMENT_AUTHORITY_VERSION_V1,
             authority_id=stable_hash(authority_payload),
             prefix=canonical_prefix,
@@ -851,6 +870,9 @@ class EnvironmentAuthorityCache:
             content_manifest=manifest,
             _cache=self,
         )
+        self._manifest = manifest
+        self._authority = authority
+        return authority
 
     def verify(self, authority: EnvironmentAuthorityV1) -> None:
         """Cheaply validate or fully rehash one bound active authority.
@@ -866,14 +888,15 @@ class EnvironmentAuthorityCache:
             If the complete current seal differs from the bound identity.
         """
 
-        if authority._cache is not self or self._manifest is None:
-            raise AuthorityDerivationError("environment authority cache association is invalid")
+        self.assert_active(authority)
+        manifest = self._manifest
+        assert manifest is not None
         self.cheap_validations += 1
         _entries, _external, fingerprint = _scan_environment_tree(
             authority.prefix,
             hash_files=False,
         )
-        if fingerprint == self._manifest.cheap_tree_fingerprint:
+        if fingerprint == manifest.cheap_tree_fingerprint:
             return
         self.rehashes += 1
         current = self._seal(
@@ -884,14 +907,40 @@ class EnvironmentAuthorityCache:
             or current.selected_interpreter_digest != authority.selected_interpreter_digest
         ):
             self.invalidations += 1
+            self._manifest = None
+            self._authority = None
             raise AuthorityDerivationError("environment content seal changed; authority is stale")
         self._manifest = current
+
+    def assert_active(self, authority: EnvironmentAuthorityV1) -> None:
+        """Require one authority to belong to this active lifecycle cache.
+
+        Parameters
+        ----------
+        authority:
+            Prefix authority already validated for the current scheduling pass.
+
+        Raises
+        ------
+        AuthorityDerivationError
+            If the cache was invalidated or belongs to another authority.
+        """
+
+        if (
+            authority._cache is not self
+            or self._manifest is None
+            or self._authority is not authority
+        ):
+            raise AuthorityDerivationError("environment authority cache association is invalid")
 
     def invalidate(self) -> None:
         """Invalidate the cached active prefix on teardown or quarantine."""
 
+        if self._manifest is None and self._authority is None:
+            return
         self.invalidations += 1
         self._manifest = None
+        self._authority = None
 
 
 @dataclass(frozen=True)

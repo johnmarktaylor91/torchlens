@@ -2163,6 +2163,13 @@ class CrawlerDriver:
                 frozenset(intake_ids),
             )
             work = self._ordered_work(snapshot, reducer.current_records, requeues)
+            validate_live_environment_currentness = isinstance(
+                self.dependencies.forward,
+                SupervisedForwardLane,
+            ) and isinstance(
+                self.dependencies.environments,
+                SequentialEnvironmentLifecycle,
+            )
             try:
                 for phase in self.registry.phase_order:
                     self._check_shutdown("phase-admission")
@@ -2180,26 +2187,47 @@ class CrawlerDriver:
                             or self.config.only_status is not None
                         )
                     )
-                    if not phase_work:
-                        continue
-                    representative_work = tuple(
-                        item for item in phase_work if not item.is_family_variant
+                    currentness_work = tuple(
+                        item
+                        for item in work
+                        if validate_live_environment_currentness
+                        and item.route.phase is phase
+                        and item not in phase_work
+                        and reducer.current_records.get(item.stable_id, {})
+                        .get("status", {})
+                        .get("kind")
+                        == "runs"
                     )
-                    variant_work = tuple(item for item in phase_work if item.is_family_variant)
-                    for scheduled_work in (representative_work, variant_work):
-                        self._check_shutdown("wave-admission")
-                        if not scheduled_work:
-                            continue
-                        pause = self._process_scheduled_work(
-                            scheduled_work, reducer, operational, state
+                    if not phase_work and not currentness_work:
+                        continue
+                    for scheduled_group, currentness_validation_only in (
+                        (phase_work, False),
+                        (currentness_work, True),
+                    ):
+                        representative_work = tuple(
+                            item for item in scheduled_group if not item.is_family_variant
                         )
-                        if pause is not None:
-                            return DriverResult(
-                                "paused:usage-limit",
-                                len(reducer.current_records),
-                                0,
-                                pause,
+                        variant_work = tuple(
+                            item for item in scheduled_group if item.is_family_variant
+                        )
+                        for scheduled_work in (representative_work, variant_work):
+                            self._check_shutdown("wave-admission")
+                            if not scheduled_work:
+                                continue
+                            pause = self._process_scheduled_work(
+                                scheduled_work,
+                                reducer,
+                                operational,
+                                state,
+                                currentness_validation_only=currentness_validation_only,
                             )
+                            if pause is not None:
+                                return DriverResult(
+                                    "paused:usage-limit",
+                                    len(reducer.current_records),
+                                    0,
+                                    pause,
+                                )
             except DriverPaused:
                 return DriverResult(
                     "paused:review-checkpoint",
@@ -2284,14 +2312,25 @@ class CrawlerDriver:
                 generations[family] = generation
         for event in operational.records:
             details = event.get("details", {})
-            if (
-                event.get("event_kind") != OperationalEventKind.CAMPAIGN_HEALTH.value
-                or not isinstance(details, Mapping)
-                or details.get("disposition") != "environment-cleanup-quarantined"
-            ):
+            if event.get(
+                "event_kind"
+            ) != OperationalEventKind.CAMPAIGN_HEALTH.value or not isinstance(details, Mapping):
+                continue
+            disposition = details.get("disposition")
+            intent = details.get("intent")
+            if disposition == "environment-integrity-quarantined":
+                generation = details.get("env_generation")
+                if (
+                    isinstance(intent, str)
+                    and intent
+                    and isinstance(generation, str)
+                    and generation
+                ):
+                    generations[intent] = generation
+                continue
+            if disposition != "environment-cleanup-quarantined":
                 continue
             environment = _environment_from_quarantine(details)
-            intent = details.get("intent")
             if environment is not None and isinstance(intent, str) and intent:
                 generations[intent] = environment.env_generation
         if generations == dict(reducer.context.environment_generations):
@@ -2514,6 +2553,8 @@ class CrawlerDriver:
         reducer: CanonicalReducer,
         operational: JsonlLedger,
         state: JsonObject,
+        *,
+        currentness_validation_only: bool = False,
     ) -> Optional[str]:
         """Author/template, gate, and execute one representative-ordered work wave.
 
@@ -2523,6 +2564,8 @@ class CrawlerDriver:
             Representatives or their later-scheduled family variants.
         reducer, operational, state:
             Current locked canonical and driver state.
+        currentness_validation_only:
+            Validate already-complete runs against the live environment without republishing them.
 
         Returns
         -------
@@ -2557,6 +2600,7 @@ class CrawlerDriver:
                 operational,
                 state,
                 award_run=True,
+                currentness_validation_only=currentness_validation_only,
             )
             return pause
         return self._run_environment_work(
@@ -2566,6 +2610,7 @@ class CrawlerDriver:
             operational,
             state,
             award_run=True,
+            currentness_validation_only=currentness_validation_only,
         )
 
     def _ensure_pending_run_anchors(
@@ -4412,8 +4457,24 @@ class CrawlerDriver:
         state: JsonObject,
         *,
         award_run: bool,
+        currentness_validation_only: bool = False,
     ) -> Optional[str]:
-        """Run grouped environments and return a checker pause from mode repair."""
+        """Run grouped environments and return a checker pause from mode repair.
+
+        Parameters
+        ----------
+        work, artifacts, reducer, operational, state:
+            Scheduled work, executable authority, and locked canonical state.
+        award_run:
+            Whether successful attempts may become canonical runs.
+        currentness_validation_only:
+            Validate complete runs through the live cache without executing or republishing them.
+
+        Returns
+        -------
+        str | None
+            Checker pause reason, or ``None`` after all environments finish.
+        """
 
         by_intent: dict[str, list[WorkItem]] = defaultdict(list)
         for item in work:
@@ -4541,17 +4602,38 @@ class CrawlerDriver:
                 nonlocal use_completed
                 self._check_shutdown("environment-use-admission")
                 use_entered = True
+                environment_lane = self.dependencies.environments
                 live_supervised_environment = isinstance(
                     self.dependencies.forward, SupervisedForwardLane
-                ) and isinstance(
-                    self.dependencies.environments,
-                    SequentialEnvironmentLifecycle,
-                )
-                environment = (
-                    bind_materialized_environment(intent, prefix, probe_results)
-                    if live_supervised_environment
-                    else _environment_binding(intent, prefix, probe_results, strict=False)
-                )
+                ) and isinstance(environment_lane, SequentialEnvironmentLifecycle)
+                if live_supervised_environment:
+                    assert isinstance(environment_lane, SequentialEnvironmentLifecycle)
+                    authority_cache = environment_lane.active_authority_cache(prefix)
+                    prior_authority = authority_cache.authority
+                    try:
+                        environment = bind_materialized_environment(
+                            intent,
+                            prefix,
+                            probe_results,
+                            authority_cache=authority_cache,
+                        )
+                    except AuthorityDerivationError:
+                        if prior_authority is not None:
+                            observed_environment = _stale_environment_binding(
+                                intent,
+                                prefix,
+                                probe_results,
+                                authority=prior_authority,
+                            )
+                            observed_generation = observed_environment.env_generation
+                        raise
+                else:
+                    environment = _environment_binding(
+                        intent,
+                        prefix,
+                        probe_results,
+                        strict=False,
+                    )
                 observed_environment = environment
                 observed_generation = environment.env_generation
                 refreshed_generations = dict(reducer.context.environment_generations)
@@ -4566,7 +4648,7 @@ class CrawlerDriver:
                 for item in items:
                     self._check_shutdown("model-admission", item=item)
                     current = reducer.current_records.get(item.stable_id)
-                    if (
+                    fresh = bool(
                         award_run
                         and current is not None
                         and _current_run_is_fresh(
@@ -4580,7 +4662,10 @@ class CrawlerDriver:
                                 else None
                             ),
                         )
-                    ):
+                    )
+                    if fresh or currentness_validation_only:
+                        if current is None:
+                            continue
                         completed_work.append(
                             {
                                 "stable_id": item.stable_id,
@@ -4628,6 +4713,49 @@ class CrawlerDriver:
                 except DriverPaused:
                     raise
                 except Exception as exc:  # noqa: BLE001 -- lifecycle phase decides ownership
+                    if use_entered and isinstance(exc, AuthorityDerivationError):
+                        observed_generation = (
+                            observed_generation
+                            or reducer.context.environment_generations.get(intent.name)
+                        )
+                        event_identity = stable_hash(
+                            {
+                                "disposition": "environment-integrity-quarantined",
+                                "intent": intent.name,
+                                "target": intent.lock.target,
+                                "env_generation": observed_generation,
+                                "artifact_identity": cleanup_artifact_identity(),
+                                "failure_type": f"{type(exc).__module__}.{type(exc).__qualname__}",
+                            }
+                        )[7:31]
+                        operational.append(
+                            {
+                                "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+                                "event_id": f"environment-integrity-{event_identity}",
+                                "created_at": self.dependencies.clock(),
+                                "event_kind": OperationalEventKind.CAMPAIGN_HEALTH.value,
+                                "status": OperationalEventStatus.RUNNER_FAILED.value,
+                                "provider": None,
+                                "observed_response": None,
+                                "reset_at": None,
+                                "queued_work_counts": {"models": len(by_intent[intent_name])},
+                                "current_environment": intent.name,
+                                "run_id": self.config.run_id,
+                                "machine_id": self.config.machine_id,
+                                "details": {
+                                    "disposition": "environment-integrity-quarantined",
+                                    "intent": intent.name,
+                                    "target": intent.lock.target,
+                                    "artifact_identity": cleanup_artifact_identity(),
+                                    "env_generation": observed_generation,
+                                    "failure_type": (
+                                        f"{type(exc).__module__}.{type(exc).__qualname__}"
+                                    ),
+                                },
+                            }
+                        )
+                        environment_failure = exc
+                        break
                     if use_completed:
                         cleanup_identity = cleanup_artifact_identity()
                         event_identity = stable_hash(
@@ -4699,7 +4827,7 @@ class CrawlerDriver:
                     environment_failure,
                     self.config,
                     diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
-                    environment=intent.name,
+                    environment=observed_environment or intent.name,
                     created_at=self.dependencies.clock(),
                 )
                 persisted = reducer.append_attempt(attempt).record
@@ -5419,6 +5547,16 @@ class CrawlerDriver:
         )
         if current_model is not None:
             model["status"]["supersedes_revision"] = current_model["record_revision"]
+        prior_artifact_authority = (
+            current_model.get("artifact_authority") if current_model is not None else None
+        )
+        retain_prior_artifact_authority = bool(
+            artifact is not None
+            and isinstance(prior_artifact_authority, Mapping)
+            and prior_artifact_authority.get("state") in {"private-committed", "published"}
+        )
+        if retain_prior_artifact_authority:
+            model["artifact_authority"] = deepcopy(dict(prior_artifact_authority))
 
         self.dependencies.boundary_hook("pre-publication", item.stable_id)
         self._check_shutdown(
@@ -5443,7 +5581,7 @@ class CrawlerDriver:
         self.dependencies.boundary_hook("award-commit-entered", item.stable_id)
         # Terminal materialization and its model append share the same graceful-
         # shutdown atomic section as a successful run award.
-        if artifact is not None:
+        if artifact is not None and not retain_prior_artifact_authority:
             self._authorize_terminal_artifact(artifact, model, gates, reducer)
         result = reducer.append_model(reducer.prepare_model(model))
         if result.appended:
@@ -6027,8 +6165,24 @@ def _environment_binding(
     probe_results: Sequence[ProbeResult],
     *,
     strict: bool,
+    authority_cache: Optional[EnvironmentAuthorityCache] = None,
 ) -> EnvironmentBinding:
-    """Bind exact lifecycle, probe, package, and interpreter observations."""
+    """Bind exact lifecycle, probe, package, and interpreter observations.
+
+    Parameters
+    ----------
+    intent, prefix, probe_results:
+        Declared environment, materialized prefix, and observed probe results.
+    strict:
+        Whether all production provenance and selected-interpreter facts are mandatory.
+    authority_cache:
+        Lifecycle-owned collector required for strict binding. ``None`` never constructs a cache.
+
+    Returns
+    -------
+    EnvironmentBinding
+        Exact observed environment binding.
+    """
 
     fallback_artifact_hash = hash_bytes(b"test-environment-artifact")
     fallback_url = "https://example.test/test-environment.conda"
@@ -6113,10 +6267,12 @@ def _environment_binding(
     except (EnvironmentExactnessError, EnvironmentProbeError) as exc:
         raise DriverIntegrationError(str(exc)) from exc
     authority: Optional[EnvironmentAuthorityV1] = None
-    authority_cache: Optional[EnvironmentAuthorityCache] = None
     generation = base_generation
     if strict:
-        authority_cache = EnvironmentAuthorityCache()
+        if authority_cache is None:
+            raise DriverIntegrationError(
+                "strict environment binding requires the active lifecycle authority cache"
+            )
         authority = authority_cache.bind(
             prefix=prefix,
             selected_interpreter=interpreter,
@@ -6160,6 +6316,8 @@ def bind_materialized_environment(
     intent: EnvironmentIntent,
     prefix: Path,
     probe_results: Sequence[ProbeResult],
+    *,
+    authority_cache: EnvironmentAuthorityCache,
 ) -> EnvironmentBinding:
     """Strictly bind lifecycle provenance and a complete prefix content seal.
 
@@ -6167,6 +6325,8 @@ def bind_materialized_environment(
     ----------
     intent, prefix, probe_results:
         Exact committed lifecycle contract, materialized prefix, and durable probes.
+    authority_cache:
+        Sole cache owned by the active lifecycle prefix.
 
     Returns
     -------
@@ -6174,7 +6334,55 @@ def bind_materialized_environment(
         Sole live binding accepted by supervised model execution.
     """
 
-    return _environment_binding(intent, prefix, probe_results, strict=True)
+    return _environment_binding(
+        intent,
+        prefix,
+        probe_results,
+        strict=True,
+        authority_cache=authority_cache,
+    )
+
+
+def _stale_environment_binding(
+    intent: EnvironmentIntent,
+    prefix: Path,
+    probe_results: Sequence[ProbeResult],
+    *,
+    authority: EnvironmentAuthorityV1,
+) -> EnvironmentBinding:
+    """Retain invalidated authority facts solely for honest quarantine proof.
+
+    Parameters
+    ----------
+    intent, prefix, probe_results:
+        Lifecycle contract and observations that preceded the failed cache validation.
+    authority:
+        Exact previously active authority invalidated by the changed prefix.
+
+    Returns
+    -------
+    EnvironmentBinding
+        Non-active binding carrying the stale generation into failure attempts.
+    """
+
+    base = _environment_binding(intent, prefix, probe_results, strict=False)
+    if base.env_generation != authority.base_environment_generation:
+        raise DriverIntegrationError(
+            "invalidated authority base generation contradicts current lifecycle facts"
+        )
+    return replace(
+        base,
+        prefix=authority.prefix,
+        python_executable=authority.selected_interpreter,
+        env_generation=authority.environment_generation,
+        authority_epoch=authority.authority_version,
+        base_environment_generation=authority.base_environment_generation,
+        environment_content_sha256=authority.content_manifest_sha256,
+        environment_authority_id=authority.authority_id,
+        selected_interpreter_relative_path=authority.selected_interpreter_relative_path,
+        selected_interpreter_digest=authority.selected_interpreter_digest,
+        external_escape_records=authority.external_targets,
+    )
 
 
 def _observed_interpreter_facts(interpreter: Path) -> tuple[str, str, str, bytes]:
@@ -7029,6 +7237,15 @@ def _current_run_is_fresh(
         Whether no canonical rewrite or execution is required.
     """
 
+    authority = environment.environment_authority
+    cache = environment.environment_authority_cache
+    if (authority is None) != (cache is None):
+        return False
+    if authority is not None and cache is not None:
+        try:
+            cache.assert_active(authority)
+        except AuthorityDerivationError:
+            return False
     if model.get("status", {}).get("kind") != "runs":
         return False
     proposal = artifact.proposal

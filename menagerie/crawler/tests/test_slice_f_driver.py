@@ -32,6 +32,7 @@ from menagerie.crawler.author_dispatch import (
 )
 from menagerie.crawler.authority import (
     AuthorityContext,
+    EnvironmentAuthorityCache,
     build_authority_context,
     completion_line_for_raw_award_receipt,
     derive_parent_attestation,
@@ -2014,6 +2015,7 @@ def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
         prefix,
         (probe_result,),
         strict=True,
+        authority_cache=EnvironmentAuthorityCache(),
     )
     assert binding.lock_sha256 == hash_bytes(lock_bytes)
     assert binding.resolved_export_sha256 == hash_bytes(export_bytes)
@@ -2038,6 +2040,7 @@ def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
         prefix,
         (changed_result,),
         strict=True,
+        authority_cache=EnvironmentAuthorityCache(),
     )
     assert changed_probe.env_generation != binding.env_generation
 
@@ -2072,6 +2075,7 @@ def test_environment_binding_hashes_real_bytes_and_launches_prefix_python(
         prefix,
         (probe_result,),
         strict=True,
+        authority_cache=EnvironmentAuthorityCache(),
     )
     assert prefix_observed.python_version == "prefix-python-9.9"
     assert prefix_observed.compiler_identity == "prefix-compiler"
@@ -4515,6 +4519,7 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(
         linux_registry.intents["core"],
         real_environment_fixture.prefix,
         real_environment_fixture.probe_results,
+        authority_cache=linux_environments.active_authority_cache(real_environment_fixture.prefix),
     )
     dependencies = DriverDependencies(
         linux_author,

@@ -15,6 +15,7 @@ import pytest
 import menagerie.crawler.artifact_transactions as artifact_module
 import menagerie.crawler.authority as authority_module
 import menagerie.crawler.driver as driver_module
+import menagerie.crawler.env_lifecycle as lifecycle_module
 import menagerie.crawler.worker_supervisor as supervisor_module
 from menagerie.crawler.constants import ATTEMPT_SCHEMA_VERSION_V3
 from menagerie.crawler.schema import (
@@ -102,7 +103,7 @@ _ROUND19_RELEASE_NODE_INVENTORY = {
     ),
     "cache": (
         "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
-        "test_hardlinked_prefix_is_one_sealed_authority_and_mutation_stales"
+        "test_real_multi_model_cache_closes_currentness_and_quarantines_mutation"
     ),
     "structural": "menagerie/crawler/tests/test_round17_structural_inventories.py",
     "macos-positive-negative": (
@@ -771,6 +772,23 @@ def test_round17_real_composition_sources_are_not_fake_substitutes() -> None:
     assert "MaterializedDryRunEnvironment" in dry_run_support
     assert "SupervisedForwardLane" in dry_run_support
     assert "FakeEnvironments" not in dry_run_support
+
+
+def test_environment_cache_has_one_lifecycle_owner_and_no_default_collector() -> None:
+    """Live scheduling and currentness must share one lifecycle-owned cache."""
+
+    lifecycle_source = _source(lifecycle_module)
+    driver_source = _source(driver_module)
+    binder_signature = inspect.signature(driver_module.bind_materialized_environment)
+    assert lifecycle_source.count("EnvironmentAuthorityCache()") == 1
+    assert "EnvironmentAuthorityCache()" not in driver_source
+    assert binder_signature.parameters["authority_cache"].default is inspect.Signature.empty
+    assert "active_authority_cache(" in inspect.getsource(
+        driver_module.CrawlerDriver._run_environment_work
+    )
+    assert "cache.assert_active(authority)" in inspect.getsource(
+        driver_module._current_run_is_fresh
+    )
 
 
 def test_real_compositions_cannot_substitute_execution_boundaries() -> None:

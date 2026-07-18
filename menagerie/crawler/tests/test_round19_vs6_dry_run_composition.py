@@ -189,7 +189,7 @@ def test_documented_dry_run_and_resume_use_real_environment(
         "mode:eval": 2,
         "mode:train": 2,
         "models:total": 2,
-        "rung:R1_LIBRARY": 2,
+        "rung:R3_PORT": 2,
         "status:runs": 2,
     }
 
@@ -217,8 +217,7 @@ def test_documented_dry_run_and_resume_use_real_environment(
         "mode:eval": 10,
         "mode:train": 10,
         "models:total": 10,
-        "rung:R1_LIBRARY": 9,
-        "rung:R3_PORT": 1,
+        "rung:R3_PORT": 10,
         "status:runs": 10,
     }
     attempts = scan_jsonl(attempt_path)

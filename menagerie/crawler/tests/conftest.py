@@ -16,6 +16,7 @@ import pytest
 from menagerie.crawler.author_dispatch import AuthorResultBinding, ProposedAuthorResult
 from menagerie.crawler.authority import (
     AuthorityContext,
+    EnvironmentAuthorityCache,
     build_authority_context,
     completion_line_for_raw_award_receipt,
     derive_parent_attestation,
@@ -118,6 +119,8 @@ class RealEnvironmentLane(SequentialEnvironmentLifecycle):
 
         self.fixture = fixture
         self.events: list[str] = []
+        self._active = fixture.prefix
+        self._authority_cache = EnvironmentAuthorityCache()
 
     def run(
         self,
@@ -366,7 +369,12 @@ def real_environment_fixture(
     ):
         _real_environment_failure("clone has no package metadata")
     intent, probe_results = _fixture_intent(root / "artifacts", prefix)
-    binding = bind_materialized_environment(intent, prefix, probe_results)
+    binding = bind_materialized_environment(
+        intent,
+        prefix,
+        probe_results,
+        authority_cache=EnvironmentAuthorityCache(),
+    )
     return RealEnvironmentFixture(
         source_prefix=source,
         prefix=prefix,

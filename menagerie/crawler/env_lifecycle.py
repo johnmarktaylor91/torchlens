@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
+from menagerie.crawler.authority import EnvironmentAuthorityCache
 from menagerie.crawler.envs import EnvironmentIntent, IntentProbes
 from menagerie.crawler.effort import EffortTracker
 from menagerie.crawler.identity import canonical_json_bytes, compute_env_generation, hash_bytes
@@ -152,6 +153,51 @@ class SequentialEnvironmentLifecycle:
         self._minimum_free_bytes = minimum_free_bytes
         self._recovery_tolerance_bytes = recovery_tolerance_bytes
         self._active: Path | None = None
+        self._authority_cache: EnvironmentAuthorityCache | None = None
+
+    @property
+    def environment_authority_cache(self) -> EnvironmentAuthorityCache:
+        """Return the cache owned by the currently active immutable prefix.
+
+        Returns
+        -------
+        EnvironmentAuthorityCache
+            Sole collector shared by scheduling, currentness, recovery, and spawn checks.
+
+        Raises
+        ------
+        EnvironmentBusyError
+            If no prefix is active or its cache has already been invalidated.
+        """
+
+        if self._active is None or self._authority_cache is None:
+            raise EnvironmentBusyError("no active environment authority cache exists")
+        return self._authority_cache
+
+    def active_authority_cache(self, prefix: Path) -> EnvironmentAuthorityCache:
+        """Return the lifecycle cache only for its exact active prefix.
+
+        Parameters
+        ----------
+        prefix:
+            Materialized prefix entering the lifecycle's use callback.
+
+        Returns
+        -------
+        EnvironmentAuthorityCache
+            Active lifecycle-owned collector.
+
+        Raises
+        ------
+        EnvironmentBusyError
+            If the requested prefix is not the active lifecycle prefix.
+        """
+
+        if self._active is None or prefix.resolve(strict=True) != self._active.resolve(strict=True):
+            raise EnvironmentBusyError(
+                "environment authority cache requested for an inactive prefix"
+            )
+        return self.environment_authority_cache
 
     def run(
         self,
@@ -231,6 +277,7 @@ class SequentialEnvironmentLifecycle:
             probe_results = validate_probe_receipts(intent.probes, raw_probe_results)
             receipt_path = intent.lock.lock_path.with_name(f"{intent.lock.target}.probes.json")
             _atomic_write(receipt_path, canonical_probe_receipt_bytes(probe_results))
+            self._authority_cache = EnvironmentAuthorityCache()
             use(prefix, probe_results)
         finally:
             try:
@@ -241,6 +288,9 @@ class SequentialEnvironmentLifecycle:
                         f"environment removal failed for {intent.name}: {exc}"
                     ) from exc
             finally:
+                if self._authority_cache is not None:
+                    self._authority_cache.invalidate()
+                    self._authority_cache = None
                 self._active = None
         try:
             disk_after_teardown = self._disk_free(self._env_root)
