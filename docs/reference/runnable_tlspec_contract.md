@@ -587,6 +587,18 @@ sampling), and the only unobservable surface (a raw `data_ptr()` pointer) fails 
 storage during the forward is an opaque host write-back (`unverifiable`), while a read-only exposure
 of either stays `verified`.
 
+A third, pathological boundary is an autograd property read off an input-*derived view* rather than
+the input leaf. Direct-leaf autograd reads (`requires_grad`, gradient presence, `_version`,
+`output_nr`) are witnessed in the input contract, so a model that branches on a *leaf* input's
+autograd state fails closed when that state differs at run time. A model that instead branches on
+`x.view(-1).requires_grad` — an autograd property read through a non-leaf view of an input — is a
+documented residual and may stay `verified` even when the branch would differ. This is accepted
+rather than closed because a view's `requires_grad` is always equal to its base leaf's, so no
+faithful model gains information by reading it off the view instead of the leaf; and closing it would
+require instrumenting TorchLens's own per-op autograd reads on the core capture hot path, imposing
+capture-wide risk for a case no real model exercises. The residual is the conservative engineering
+choice, not a divergence the runnable path claims to catch.
+
 ## 12. Optional-payload API spelling and docs lockstep
 
 `include_weights` and `include_activations` are confirmed on `tl.save`/`Trace.save` with
