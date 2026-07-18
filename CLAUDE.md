@@ -228,21 +228,27 @@ Loaded sparse runnable traces accept `trace.load_state_dict(sd)` to strictly val
 stage canonically named parameter and persistent-buffer tensors. The method never executes the DAG
 or writes tensor payloads into the sparse descriptor. Run preflight selects explicitly staged user
 state, then optional embedded capture state, then the versioned
-`torchlens_role_init_v1` fallback; random reports name every initialized slot.
+`torchlens_role_init_v2` fallback (degenerate-total: empty slots consume zero RNG); random reports
+name every initialized slot.
 
 `tl.save(trace, path, level="runnable", include_weights=True)` bundles the full capture-time
 `state_dict` (all named parameters plus persistent buffers) as the separate, schema-versioned
 `state_dict_v1` blob family. The default is `include_weights=False`, so the sparse core stays
 tensor-value-free. Load validates embedded state through the same strict binder; run reports
 `embedded_capture_state`, never a reconstructed model, and a later `load_state_dict()` overrides it.
+Used NON-persistent buffers always ship in the REQUIRED `runnable_nonpersistent_buffer_v1` family
+(declared state, not gated on either include flag; the save discloses it).
 
 `tl.save(trace, path, level="runnable", include_activations=True)` independently archives exactly
 the activations already retained by the capture-time `save=` decision, including retained raw and
-transformed outputs, as `selected_activation_v1`. Load exposes them through
+transformed outputs, as `selected_activation_v2` with physical `InputAttestationFingerprint`
+eligibility records. Load exposes them through
 `trace.archived_activations` for inspection. They never seed the sparse DAG. On original-input runs
 with embedded or capture-equivalent staged state, recomputed saved raw slots are compared by exact
 bytes and report `attested`; the first mismatch raises `numeric_attestation_failed` and rolls back.
-Changed-input, random-state, and non-equivalent-state runs report `not_applicable`.
+Changed-input (logical or physical), random-state, non-equivalent-state, and
+nondeterministic-capture-context runs report `not_applicable`; `attested` always implies
+`verified`.
 
 ### Sparse runnable execution
 
@@ -257,8 +263,15 @@ Trace refused by validation, export, faithful comparison, and path-assuming inte
 Incomplete witness coverage is `unverifiable`, never `verified`; numeric attestation is
 `not_applicable` for sparse-only or ineligible activation-payload runs.
 
+Runnable descriptors are `sparse_recorded_taken_path_v2`: per-call `CallExecutionContext` and the
+capture-scoped `AmbientExecutionContext` are REQUIRED and EXPLICIT, restored at replay or refused
+typed; a legacy v1 artifact loads analysis-only with a typed readiness refusal (absent context is
+never defaulted).
+
 The declared state model is the capture-time `state_dict` (named parameters plus persistent buffers)
-and the taken-path DAG. `verified` is faithfulness against a *fresh* live-model run from that state on
+PLUS the capture-time values of used non-persistent buffers (the required
+`runnable_nonpersistent_buffer_v1` family), and the taken-path DAG. `verified` is faithfulness
+against a *fresh* live-model run from that state on
 the given inputs (oracle 1) — NOT reproduction of a specific already-run instance's later, differently
 branched forwards. Hidden non-`state_dict` Python state mutated *across* forwards (an arbitrary
 attribute, or a retained activation-derived handle — a kept `numpy()`/`untyped_storage()` view or a

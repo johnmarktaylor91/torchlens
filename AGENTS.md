@@ -155,13 +155,24 @@ pytest tests/ -m "not slow" -x --tb=short
 17a. `include_weights=True` is runnable-save-only and bundles the full capture-time `state_dict`
     (named parameters plus persistent buffers) in a separate `state_dict_v1` blob family. The
     sparse core remains tensor-value-free; load uses the ordinary strict binder and reports
-    `embedded_capture_state`, never a reconstructed model.
+    `embedded_capture_state`, never a reconstructed model. Used NON-persistent buffers are always
+    shipped in the REQUIRED `runnable_nonpersistent_buffer_v1` family (not gated on either include
+    flag) and are part of the declared state model -- a default runnable save of such a model
+    carries those tensor values (disclosed via the manifest and a one-time save warning).
 17b. `include_activations=True` is runnable-save-only and archives exactly the capture-time
-    `save=`-selected `out`/`transformed_out` payloads in a separate `selected_activation_v1`
-    family. `Trace.archived_activations` is inspection/attestation-only and never seeds execution.
+    `save=`-selected `out`/`transformed_out` payloads in a separate `selected_activation_v2`
+    family, whose eligibility metadata includes physical `InputAttestationFingerprint` records.
+    `Trace.archived_activations` is inspection/attestation-only and never seeds execution.
     Original-input, capture-equivalent real-state runs must byte-attest saved raw slots before
-    exposure; mismatch raises `numeric_attestation_failed` with rollback, while changed-input or
-    random/non-equivalent-state runs report `not_applicable`.
+    exposure; mismatch raises `numeric_attestation_failed` with rollback, while changed-input
+    (logical OR physical), random/non-equivalent-state, and nondeterministic-capture-context runs
+    report `not_applicable`. `attested` implies `verified` and unpoisoned, always.
+17c. Runnable descriptors are `sparse_recorded_taken_path_v2`: every call carries a REQUIRED
+    explicit `CallExecutionContext` (autocast with affirmative disabled state + grad/inference
+    mode) and the descriptor carries one `AmbientExecutionContext` (defaults, matmul precision,
+    determinism, TF32/cuDNN flags, SDP toggles), both restored at replay or refused typed. Absent
+    context records only ever mean a legacy v1 artifact, which loads analysis-only with a typed
+    readiness refusal -- never a defaulted replay.
 18. `Trace.run(inputs=..., seed=...)` is transactional for live and loaded sparse providers, runs
     internal sparse calls under `pause_logging()`, and returns `RunResult(output, trace, report)`.
     Stage 6 enforces input/state, per-call/output, and control-witness honesty before exposure;

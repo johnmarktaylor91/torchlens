@@ -31,13 +31,18 @@ from ..intervention.types import (
 from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 from ..ir.container_registry import ModelSite, Role
 from ..runnable import (
+    RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
     RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
     RUNNABLE_CALL_RECIPE_VERSION,
     RUNNABLE_INITIALIZER_POLICY_VERSION,
     RUNNABLE_TLSPEC_SCHEMA_VERSION,
     ActivationPayloadLayerDescriptor,
     ActivationPayloadMember,
+    AmbientExecutionContext,
+    AutocastDeviceContext,
+    CallExecutionContext,
     CallableRegistryEntry,
+    InputAttestationFingerprint,
     ControlWitness,
     ControlWitnessKind,
     InputSlotBinding,
@@ -120,6 +125,153 @@ class _SlotDraft:
 
 class _UnsupportedLiteralError(ValueError):
     """Internal signal for a value outside the frozen literal grammar."""
+
+
+def _call_execution_context(representative: Any) -> CallExecutionContext | None:
+    """Build the required v2 per-call execution context from captured op state.
+
+    Reads the op's ``func_autocast_state`` (recorded at the call's execution
+    point), including the reserved ``__execution__`` grad/inference entry. A
+    missing or shapeless record returns ``None`` so the producer fails closed
+    with a typed diagnostic -- context is REQUIRED and EXPLICIT in v2, never
+    defaulted.
+    """
+
+    state = getattr(representative, "func_autocast_state", None)
+    if not isinstance(state, Mapping):
+        return None
+    execution = state.get("__execution__")
+    if not isinstance(execution, Mapping) or "grad_enabled" not in execution:
+        return None
+    autocast_entries: list[AutocastDeviceContext] = []
+    for device_type in sorted(key for key in state if not str(key).startswith("__")):
+        entry = state[device_type]
+        if not isinstance(entry, Mapping) or "enabled" not in entry:
+            return None
+        dtype = entry.get("dtype")
+        autocast_entries.append(
+            AutocastDeviceContext(
+                device_type=str(device_type),
+                enabled=bool(entry["enabled"]),
+                dtype=None if dtype is None else str(dtype),
+            )
+        )
+    return CallExecutionContext(
+        autocast=tuple(autocast_entries),
+        grad_enabled=bool(execution["grad_enabled"]),
+        inference_mode=bool(execution.get("inference_mode", False)),
+    )
+
+
+# Torch ops documented CUDA-nondeterministic in their FORWARD kernels (the
+# transpose-conv cuDNN atomicAdd scatter family plus the documented index/scatter
+# accumulation set). Used ONLY for the fail-safe positive attestation-ineligibility
+# marking (H_B_RESOLUTION R1): a capture running one of these on a CUDA device
+# WITHOUT ``use_deterministic_algorithms(True)`` cannot promise byte-reproducible
+# activations, so its descriptor is marked ineligible at capture (``not_applicable``
+# at run, never a false ATTESTED and never a spurious NumericAttestationError).
+_CUDA_NONDETERMINISTIC_QUALNAME_TAILS: frozenset[str] = frozenset(
+    {
+        "conv_transpose1d",
+        "conv_transpose2d",
+        "conv_transpose3d",
+        "scatter_add",
+        "scatter_add_",
+        "scatter_reduce",
+        "scatter_reduce_",
+        "index_add",
+        "index_add_",
+        "index_copy",
+        "index_copy_",
+        "index_put",
+        "index_put_",
+        "put_",
+        "bincount",
+        "histc",
+        "grid_sample",
+        "grid_sampler_2d",
+        "grid_sampler_3d",
+        "embedding_bag",
+        "median",
+        "kthvalue",
+        "ctc_loss",
+    }
+)
+
+
+def _descriptor_has_cuda_nondeterministic_call(
+    calls: Sequence[RunnableCallDescriptor],
+    registry_entries: Sequence[CallableRegistryEntry],
+    slot_drafts: Mapping[str, _SlotDraft],
+) -> bool:
+    """Return whether a documented CUDA-nondeterministic op runs on a CUDA device."""
+
+    qualname_by_registry = {
+        entry.registry_id: str(getattr(entry.key, "qualname", "") or "")
+        for entry in registry_entries
+    }
+    for call in calls:
+        tail = qualname_by_registry.get(call.registry_id, "").rsplit(".", 1)[-1]
+        if tail not in _CUDA_NONDETERMINISTIC_QUALNAME_TAILS:
+            continue
+        involved_slot_ids = [argument.slot_id for argument in call.tensor_arguments]
+        involved_slot_ids.extend(call.output_slot_ids)
+        for slot_id in involved_slot_ids:
+            draft = slot_drafts.get(slot_id)
+            if draft is not None and draft.device_type == "cuda":
+                return True
+    return False
+
+
+def _ambient_execution_context(
+    trace: Any,
+    calls: Sequence[RunnableCallDescriptor],
+    registry_entries: Sequence[CallableRegistryEntry],
+    slot_drafts: Mapping[str, _SlotDraft],
+) -> AmbientExecutionContext | None:
+    """Build the required v2 capture-scoped ambient context, or ``None`` if absent.
+
+    ``attestation_ineligible_context`` is the POSITIVE capture-time marking for a
+    nondeterministic execution context: ``cudnn.benchmark=True`` (autotuner
+    kernel selection) or a documented CUDA-nondeterministic op running without
+    ``use_deterministic_algorithms(True)`` (H_B_RESOLUTION R1). Fail-safe: the
+    mark only widens ``not_applicable``, never a positive claim.
+    """
+
+    snapshot = getattr(trace, "_runnable_capture_ambient", None)
+    if not isinstance(snapshot, Mapping) or "default_dtype" not in snapshot:
+        return None
+
+    def _optional_bool(name: str) -> bool | None:
+        value = snapshot.get(name)
+        return None if value is None else bool(value)
+
+    def _optional_str(name: str) -> str | None:
+        value = snapshot.get(name)
+        return None if value is None else str(value)
+
+    cudnn_benchmark = _optional_bool("cudnn_benchmark")
+    deterministic = _optional_bool("deterministic_algorithms")
+    ineligible = bool(cudnn_benchmark) or (
+        deterministic is not True
+        and _descriptor_has_cuda_nondeterministic_call(calls, registry_entries, slot_drafts)
+    )
+    return AmbientExecutionContext(
+        default_dtype=str(snapshot["default_dtype"]),
+        default_device=str(snapshot.get("default_device", "cpu")),
+        float32_matmul_precision=_optional_str("float32_matmul_precision"),
+        deterministic_algorithms=deterministic,
+        deterministic_algorithms_warn_only=_optional_bool("deterministic_algorithms_warn_only"),
+        cuda_matmul_allow_tf32=_optional_bool("cuda_matmul_allow_tf32"),
+        cudnn_allow_tf32=_optional_bool("cudnn_allow_tf32"),
+        cudnn_deterministic=_optional_bool("cudnn_deterministic"),
+        cudnn_benchmark=cudnn_benchmark,
+        cudnn_enabled=_optional_bool("cudnn_enabled"),
+        flash_sdp_enabled=_optional_bool("flash_sdp_enabled"),
+        mem_efficient_sdp_enabled=_optional_bool("mem_efficient_sdp_enabled"),
+        math_sdp_enabled=_optional_bool("math_sdp_enabled"),
+        attestation_ineligible_context=ineligible,
+    )
 
 
 def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
@@ -222,6 +374,21 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             )
             continue
 
+        execution_context = _call_execution_context(representative)
+        if execution_context is None:
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.EXECUTION_CONTEXT_UNAVAILABLE,
+                    "Computational call has no captured execution context "
+                    "(autocast + grad/inference mode); v2 runnable descriptors "
+                    "require an explicit per-call context record.",
+                    registry_id=registry_id,
+                    affected_ops=tuple(str(op.label) for op in call_ops),
+                    detection_stage="producer_execution_context",
+                )
+            )
+            continue
+
         tensor_args, literal_args, has_unmodelled_host_write = _build_call_arguments(
             representative,
             template,
@@ -262,7 +429,10 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
                 output_slot_ids=output_slot_ids,
                 parent_call_ids=parent_call_ids,
                 is_inplace=bool(getattr(representative, "is_inplace", False)),
-                runtime_fingerprint=_runtime_fingerprint(representative, func_id, call_ops),
+                runtime_fingerprint=_runtime_fingerprint(
+                    representative, func_id, call_ops, execution_context
+                ),
+                execution_context=execution_context,
             )
         )
 
@@ -340,6 +510,35 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # path, so the descriptor cannot honestly prove full path fidelity.
         completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
     diagnostics.extend(_preflight_output_contracts(trace, ops))
+    ambient_context = _ambient_execution_context(trace, calls, registry_entries, slot_drafts)
+    if ambient_context is None:
+        diagnostics.append(
+            _diagnostic(
+                RunnableErrorCode.EXECUTION_CONTEXT_UNAVAILABLE,
+                "Capture recorded no ambient execution context; v2 runnable "
+                "descriptors require the explicit capture-scoped backend context "
+                "record (re-capture with this TorchLens version).",
+                detection_stage="producer_execution_context",
+            )
+        )
+        # Failed-preflight placeholder only: this descriptor can never be written
+        # as runnable, and the placeholder is marked attestation-ineligible.
+        ambient_context = AmbientExecutionContext(
+            default_dtype=str(torch.get_default_dtype()),
+            default_device="cpu",
+            float32_matmul_precision=None,
+            deterministic_algorithms=None,
+            deterministic_algorithms_warn_only=None,
+            cuda_matmul_allow_tf32=None,
+            cudnn_allow_tf32=None,
+            cudnn_deterministic=None,
+            cudnn_benchmark=None,
+            cudnn_enabled=None,
+            flash_sdp_enabled=None,
+            mem_efficient_sdp_enabled=None,
+            math_sdp_enabled=None,
+            attestation_ineligible_context=True,
+        )
     diagnostics = _deduplicate_diagnostics(diagnostics)
     preflight = ProducerPreflight(passed=not diagnostics, diagnostics=tuple(diagnostics))
     descriptor = SparseRunDescriptor(
@@ -362,7 +561,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             ),
             activations=PayloadLayerDescriptor(
                 present=False,
-                schema="selected_activation_v1",
+                schema=RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
             ),
         ),
         callable_registry=tuple(registry_entries),
@@ -371,6 +570,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         control_witnesses=tuple(witnesses),
         witness_completeness=completeness,
         rng_profile=_build_rng_profile(trace),
+        ambient_context=ambient_context,
         compatibility=RunnableCompatibility(
             torchlens_version=TORCHLENS_VERSION,
             python_version=platform.python_version(),
@@ -527,6 +727,7 @@ def with_activation_payload(
     members: tuple[ActivationPayloadMember, ...],
     original_input_digests: tuple[SlotByteDigest, ...],
     capture_state_digests: tuple[StateByteDigest, ...],
+    input_fingerprints: tuple[InputAttestationFingerprint, ...],
 ) -> SparseRunDescriptor:
     """Declare one separately stored selected-activation payload family.
 
@@ -540,6 +741,9 @@ def with_activation_payload(
         Available capture-input slot digests used only for attestation eligibility.
     capture_state_digests:
         Capture-time state digests used to recognize equivalent real state.
+    input_fingerprints:
+        Physical identity fingerprints of the live capture-time input slots
+        (required in ``selected_activation_v2``).
 
     Returns
     -------
@@ -553,10 +757,11 @@ def with_activation_payload(
             descriptor.payload_layers,
             activations=ActivationPayloadLayerDescriptor(
                 present=True,
-                schema="selected_activation_v1",
+                schema=RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
                 members=members,
                 original_input_digests=original_input_digests,
                 capture_state_digests=capture_state_digests,
+                input_fingerprints=input_fingerprints,
             ),
         ),
     )
@@ -2581,20 +2786,35 @@ def _preflight_output_contracts(trace: Any, ops: Sequence[Any]) -> list[Runnable
 
     diagnostics: list[RunnableDiagnostic] = []
     output_ops = [op for op in ops if bool(getattr(op, "is_output", False))]
-    # r33 R32-B1: capture flagged a lossy multi-tensor collapse -- an unsupported top-level
-    # container (bare ``set`` / ``frozenset``) whose N output tensors mapped to the SAME empty
-    # path and collapsed to ONE output slot (KIND + N-1 elements dropped). Only one slot survives,
-    # so the multi-output contract below cannot see the loss; refuse the runnable save here (fail
-    # closed) rather than let the loaded run reconstruct a single Tensor and bless it VERIFIED.
-    if getattr(trace, "__dict__", {}).get("_runnable_output_multitensor_collapse", False):
+    # r35 I1 (decision B, subsumes r33 R32-B1): a runnable save requires a POSITIVE
+    # capture-time losslessness proof of the model output -- exact root kind,
+    # recursively supported children, encodable literal leaves, and a tensor-leaf/
+    # typed-path bijection. Refuse-unless-proved: an absent or failed proof refuses
+    # the runnable save uniformly (bare/nested/one-tensor/empty sets, frozensets and
+    # subclasses, opaque tensor holders, duplicate paths, BFS fallback), never a
+    # save-then-UNVERIFIABLE landmine and never an advertise-then-crash artifact.
+    losslessness = getattr(trace, "__dict__", {}).get("_runnable_output_losslessness")
+    if not isinstance(losslessness, Mapping) or not losslessness.get("lossless", False):
+        reason = (
+            str(losslessness.get("reason", "unknown"))
+            if isinstance(losslessness, Mapping)
+            else "losslessness_not_proven"
+        )
+        root_type = (
+            str(losslessness.get("root_type", "unknown"))
+            if isinstance(losslessness, Mapping)
+            else "unknown"
+        )
         diagnostics.append(
             _diagnostic(
                 RunnableErrorCode.MISSING_OUTPUT_CONTAINER_CONTRACT,
-                "Model output is an unsupported top-level container (e.g. a bare set/frozenset) "
-                "whose tensors collapse to a single output slot with no container contract; "
-                "runnable replay would silently drop elements and mis-report the container kind.",
+                "Model output is not provably lossless for runnable replay "
+                f"(root {root_type!r}, reason {reason!r}); runnable replay could "
+                "silently drop elements or mis-report the container kind, so the "
+                "save is refused. Ordinary analysis save levels remain available.",
                 affected_ops=tuple(str(op.label) for op in output_ops),
                 detection_stage="producer_output_binding",
+                details=(("reason", reason), ("root_type", root_type)),
             )
         )
         return diagnostics
@@ -3007,8 +3227,17 @@ def _torch_symbol_qualname(value: Any) -> str | None:
     return None
 
 
-def _runtime_fingerprint(op: Any, func_id: FunctionRegistryKey, call_ops: Sequence[Any]) -> str:
-    """Hash the recorded runtime call signature without tensor values."""
+def _runtime_fingerprint(
+    op: Any,
+    func_id: FunctionRegistryKey,
+    call_ops: Sequence[Any],
+    execution_context: CallExecutionContext,
+) -> str:
+    """Hash the recorded runtime call signature without tensor values.
+
+    The canonical serialized per-call execution context participates in the
+    fingerprint (v2): a context change is a signature-relevant replay fact.
+    """
 
     payload = {
         "callable": {
@@ -3025,6 +3254,18 @@ def _runtime_fingerprint(op: Any, func_id: FunctionRegistryKey, call_ops: Sequen
             {"shape": list(_shape_tuple(item.shape) or ()), "dtype": _dtype_name(item)}
             for item in call_ops
         ],
+        "execution_context": {
+            "autocast": [
+                {
+                    "device_type": entry.device_type,
+                    "enabled": entry.enabled,
+                    "dtype": entry.dtype,
+                }
+                for entry in execution_context.autocast
+            ],
+            "grad_enabled": execution_context.grad_enabled,
+            "inference_mode": execution_context.inference_mode,
+        },
     }
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return sha256(serialized.encode("utf-8")).hexdigest()

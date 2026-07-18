@@ -288,12 +288,14 @@ def save(
                 activation_members,
                 original_input_digests,
                 capture_state_digests,
+                input_fingerprints,
             ) = _capture_activation_blob_specs(trace, sparse_run_descriptor)
             sparse_run_descriptor = with_activation_payload(
                 sparse_run_descriptor,
                 members=activation_members,
                 original_input_digests=original_input_digests,
                 capture_state_digests=capture_state_digests,
+                input_fingerprints=input_fingerprints,
             )
         sparse_run_json = sparse_descriptor_to_json(sparse_run_descriptor)
         include_outs = False
@@ -595,6 +597,7 @@ def _capture_activation_blob_specs(
     tuple[ActivationPayloadMember, ...],
     tuple[SlotByteDigest, ...],
     tuple[StateByteDigest, ...],
+    tuple[Any, ...],
 ]:
     """Collect capture-selected activation blobs and attestation eligibility digests.
 
@@ -618,6 +621,7 @@ def _capture_activation_blob_specs(
     """
 
     from .._runnable_state import runnable_tensor_byte_digest
+    from .._runnable_execution import build_input_attestation_fingerprint
     from ..runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
 
     slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
@@ -627,6 +631,7 @@ def _capture_activation_blob_specs(
     blob_specs: list[BlobSpec] = []
     members: list[ActivationPayloadMember] = []
     input_digests: list[SlotByteDigest] = []
+    input_fingerprints: list[Any] = []
     for op in trace.layer_list:
         op_label = str(op.label)
         slot_id = f"slot:{op_label}"
@@ -634,11 +639,14 @@ def _capture_activation_blob_specs(
             continue
         out = _physical_op_payload(op, "out")
         if bool(getattr(op, "is_input", False)) and isinstance(out, torch.Tensor):
-            input_digests.append(
-                SlotByteDigest(
-                    slot_id=slot_id,
-                    byte_digest=runnable_tensor_byte_digest(out),
-                )
+            digest = runnable_tensor_byte_digest(out)
+            input_digests.append(SlotByteDigest(slot_id=slot_id, byte_digest=digest))
+            # hon1_3 (H-a): the physical fingerprint is built from the LIVE retained
+            # in-memory input value that seeded the captured forward (never from the
+            # serialized payload, which contiguifies strides). The run side
+            # fingerprints the executed clone on the same basis.
+            input_fingerprints.append(
+                build_input_attestation_fingerprint(slot_id, out, byte_digest=digest)
             )
         if not bool(getattr(op, "has_saved_activation", False)):
             continue
@@ -689,7 +697,13 @@ def _capture_activation_blob_specs(
         )
         for name, value in sorted(cast(Mapping[str, torch.Tensor], state).items())
     )
-    return blob_specs, tuple(members), tuple(input_digests), state_digests
+    return (
+        blob_specs,
+        tuple(members),
+        tuple(input_digests),
+        state_digests,
+        tuple(input_fingerprints),
+    )
 
 
 def _physical_op_payload(op: Any, field_name: str) -> Any:
@@ -1070,6 +1084,21 @@ def _load_trace_payload(
     return trace
 
 
+def _is_legacy_runnable_readiness(trace: Trace) -> bool:
+    """Return whether load-time readiness marked a LEGACY analysis-only capability.
+
+    Decision G: legacy v1 artifacts load for analysis with a typed readiness
+    refusal; their payload blob families stay unbound because no supported
+    descriptor exists to validate them against.
+    """
+
+    from ..runnable import LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS
+
+    readiness = trace.__dict__.get("_runnable_readiness")
+    capability = getattr(readiness, "capability", None)
+    return isinstance(capability, str) and capability in LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS
+
+
 def _bind_embedded_nonpersistent_buffer_payload(
     trace: Trace,
     *,
@@ -1103,6 +1132,10 @@ def _bind_embedded_nonpersistent_buffer_payload(
         entry for entry in manifest.tensors if entry.kind == _RUNNABLE_NONPERSISTENT_BUFFER_KIND
     )
     if descriptor is None:
+        if _is_legacy_runnable_readiness(trace):
+            # Decision G: legacy v1 artifacts load analysis-only; their payload
+            # blobs stay unbound because no supported descriptor can validate them.
+            return
         if entries:
             raise TorchLensIOError(
                 "Non-persistent buffer payloads require a parsed sparse runnable descriptor."
@@ -1180,6 +1213,8 @@ def _bind_embedded_weight_payload(
         entry for entry in manifest.tensors if entry.kind == _RUNNABLE_WEIGHT_KIND
     )
     if descriptor is None:
+        if _is_legacy_runnable_readiness(trace):
+            return
         if weight_entries:
             raise TorchLensIOError(
                 "Weight payload blobs require a parsed sparse runnable descriptor."
@@ -1252,6 +1287,8 @@ def _bind_archived_activation_payload(
         if entry.kind == _RUNNABLE_ACTIVATION_KIND
     }
     if descriptor is None:
+        if _is_legacy_runnable_readiness(trace):
+            return
         if activation_entries:
             raise TorchLensIOError(
                 "Activation payload blobs require a parsed sparse runnable descriptor."
@@ -1267,7 +1304,9 @@ def _bind_archived_activation_payload(
         return
     if not isinstance(declared, ActivationPayloadLayerDescriptor):
         raise TorchLensIOError("Runnable activation payload metadata is incomplete.")
-    if declared.schema != "selected_activation_v1":
+    from ..runnable import RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION
+
+    if declared.schema != RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION:
         raise TorchLensIOError(
             f"Unsupported runnable activation payload schema {declared.schema!r}."
         )

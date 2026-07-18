@@ -255,8 +255,8 @@ def test_runnable_save_emits_frozen_sparse_descriptor_and_value_free_recipe(
 
     assert manifest["schema_version"] == 2
     assert manifest["save_level"] == "runnable"
-    assert run["capability"] == "sparse_recorded_taken_path_v1"
-    assert run["call_recipe"] == "non_tensor_args_and_tensor_slots_v1"
+    assert run["capability"] == "sparse_recorded_taken_path_v2"
+    assert run["call_recipe"] == "non_tensor_args_tensor_slots_and_context_v2"
     assert run["preflight"] == {"passed": True, "diagnostics": []}
     assert run["unsupported_sites"] == []
     assert run["payload_layers"] == {
@@ -265,7 +265,7 @@ def test_runnable_save_emits_frozen_sparse_descriptor_and_value_free_recipe(
             "present": False,
             "schema": "runnable_nonpersistent_buffer_v1",
         },
-        "activations": {"present": False, "schema": "selected_activation_v1"},
+        "activations": {"present": False, "schema": "selected_activation_v2"},
     }
 
     registry_ids = [entry["registry_id"] for entry in run["callable_registry"]]

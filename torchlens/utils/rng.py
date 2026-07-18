@@ -265,6 +265,15 @@ def log_current_autocast_state() -> dict[str, dict[str, Any]]:
         Dict mapping device name to ``{"enabled": bool, "dtype": torch.dtype}``.
     """
     state: dict[str, dict[str, Any]] = {}
+    # r35 corr2_8: record the grad/inference execution mode alongside autocast in the
+    # same per-op KEEP field, under a reserved non-device key. ``enabled`` stays False
+    # so every autocast consumer (AutocastRestore) skips it structurally.
+    state["__execution__"] = {
+        "enabled": False,
+        "dtype": None,
+        "grad_enabled": bool(torch.is_grad_enabled()),
+        "inference_mode": bool(torch.is_inference_mode_enabled()),
+    }
     for device in _AUTOCAST_DEVICES:
         try:
             # Routed through the version-neutral shim so TorchLens runs on
@@ -319,6 +328,10 @@ class AutocastRestore:
         """
 
         for device, state in self._autocast_state.items():
+            if device.startswith("__"):
+                # Reserved non-device entries (e.g. ``__execution__`` grad/inference
+                # mode) are not autocast device records and open no context here.
+                continue
             if state["enabled"]:
                 autocast = cast(Any, getattr(torch.amp, "autocast"))
                 ctx = autocast(device, dtype=state["dtype"])

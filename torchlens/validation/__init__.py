@@ -274,6 +274,17 @@ def _schema_with_deferred_runnable_version_consts(schema: dict[str, Any]) -> dic
         field_schema = run_schema.get(field_name)
         if isinstance(field_schema, dict):
             field_schema.pop("const", None)
+    # Legacy v1 activation layers carry "selected_activation_v1"; the exact-value
+    # check is likewise deferred to structured load-time readiness.
+    activations_schema = (
+        run_schema.get("payload_layers", {})
+        .get("properties", {})
+        .get("activations", {})
+        .get("properties", {})
+        .get("schema")
+    )
+    if isinstance(activations_schema, dict):
+        activations_schema.pop("const", None)
     return deferred
 
 
@@ -299,6 +310,8 @@ def _validate_sparse_run_descriptor(
     """
 
     from ..runnable import (
+        LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
+        RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
         RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
         RUNNABLE_CALL_RECIPE_VERSION,
         RUNNABLE_INITIALIZER_POLICY_VERSION,
@@ -307,6 +320,7 @@ def _validate_sparse_run_descriptor(
 
     if not isinstance(value, dict):
         raise ValueError("Runnable .tlspec manifests require object run descriptor.")
+    is_legacy_capability = value.get("capability") in LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS
     required = {
         "capability",
         "backend",
@@ -327,6 +341,10 @@ def _validate_sparse_run_descriptor(
         "preflight",
         "unsupported_sites",
     }
+    if not is_legacy_capability:
+        # v2 requires the EXPLICIT capture-scoped ambient execution context; a
+        # legacy v1 descriptor predates it and stays analysis-only at readiness.
+        required.add("ambient_context")
     if set(value) != required:
         missing = sorted(required - set(value))
         extra = sorted(set(value) - required)
@@ -361,7 +379,11 @@ def _validate_sparse_run_descriptor(
         raise ValueError("Runnable descriptor payload_layers fields mismatch.")
     expected_payload_schemas = {
         "weights": "state_dict_v1",
-        "activations": "selected_activation_v1",
+        "activations": (
+            "selected_activation_v1"
+            if is_legacy_capability
+            else RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION
+        ),
     }
     if "nonpersistent_buffers" in payload_layers:
         expected_payload_schemas["nonpersistent_buffers"] = "runnable_nonpersistent_buffer_v1"
@@ -379,6 +401,9 @@ def _validate_sparse_run_descriptor(
                 "capture_state_digests",
             }
         )
+        if layer_name == "activations" and layer_present is True and not is_legacy_capability:
+            # selected_activation_v2 requires the physical input fingerprints.
+            required_layer_fields = set(required_layer_fields) | {"input_fingerprints"}
         if not isinstance(layer, dict) or set(layer) != required_layer_fields:
             raise ValueError(f"Runnable descriptor payload_layers.{layer_name} fields mismatch.")
         if not isinstance(layer.get("present"), bool):
@@ -392,7 +417,10 @@ def _validate_sparse_run_descriptor(
             )
     activations = payload_layers["activations"]
     if activations["present"]:
-        for field_name in ("members", "original_input_digests", "capture_state_digests"):
+        array_fields = ["members", "original_input_digests", "capture_state_digests"]
+        if not is_legacy_capability:
+            array_fields.append("input_fingerprints")
+        for field_name in array_fields:
             if not isinstance(activations[field_name], list):
                 raise ValueError(
                     f"Runnable descriptor payload_layers.activations.{field_name} must be an array."

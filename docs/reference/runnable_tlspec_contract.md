@@ -1,6 +1,8 @@
 # Sparse runnable `.tlspec` frozen contract
 
-Status: **AUTHORITATIVE AND FROZEN** for `sparse_recorded_taken_path_v1`.
+Status: **AUTHORITATIVE AND FROZEN** for `sparse_recorded_taken_path_v2` (this document is the
+explicit, versioned contract amendment superseding the frozen `sparse_recorded_taken_path_v1`
+text; v1 artifacts remain covered by the legacy posture in section 1a).
 
 This is the single implementation contract for the complete sparse runnable `.tlspec` surface. The
 definitions in `torchlens.runnable` are its behavior-free typed mirror. A disagreement between this
@@ -15,19 +17,37 @@ attestation. It does not change the ordinary capture path or analysis save level
 
 | Name | Frozen value |
 |---|---|
-| sparse capability/schema | `sparse_recorded_taken_path_v1` |
-| call recipe | `non_tensor_args_and_tensor_slots_v1` |
+| sparse capability/schema | `sparse_recorded_taken_path_v2` |
+| call recipe | `non_tensor_args_tensor_slots_and_context_v2` |
 | callable-ref schema | integer `1` |
 | state binding | `module_path_role_v1` |
 | input binding | `model_site_io_role_v1` |
 | control-witness schema | `scalar_bool_and_arm_entry_v1` |
-| initializer policy | `torchlens_role_init_v1` |
+| initializer policy | `torchlens_role_init_v2` |
 | optional weight payload schema | `state_dict_v1` |
-| optional activation payload schema | `selected_activation_v1` |
+| **required** non-persistent buffer payload schema | `runnable_nonpersistent_buffer_v1` |
+| optional activation payload schema | `selected_activation_v2` |
 
 The constant is exactly
-`RUNNABLE_TLSPEC_SCHEMA_VERSION = "sparse_recorded_taken_path_v1"`. It is a capability version, not
+`RUNNABLE_TLSPEC_SCHEMA_VERSION = "sparse_recorded_taken_path_v2"`. It is a capability version, not
 the existing whole-bundle `TLSPEC_VERSION` or JSON manifest schema version.
+
+v2 execution-context records are **REQUIRED and EXPLICIT**: every call descriptor carries a
+`CallExecutionContext` (per-device autocast with disabled state written affirmatively, plus
+grad/inference mode) and the descriptor carries one capture-scoped `AmbientExecutionContext`.
+The parser REJECTS their absence. An absent context record therefore only ever means a legacy v1
+artifact, which is analysis-only (section 1a) -- absence is never interpreted as "disabled" or
+any other default.
+
+## 1a. Legacy `sparse_recorded_taken_path_v1` posture
+
+A v1 artifact loads for ordinary analysis. Its `.run()` capability is a typed readiness refusal
+(`run_capability_unavailable`) naming the missing execution-context class; the actionable remedy
+is re-capturing and re-saving under v2. A compatibility replay of a v1 artifact is admissible only
+when every v2-required fact is provable from immutable v1 artifact metadata -- caller ambient
+state, current backend defaults, an output dtype/value, or the absence of an old field is never
+such a proof -- and no such prover ships in this revision. Legacy payload blob families stay
+unbound on an analysis-only legacy load.
 
 The complete `TensorSlotRole` values are `model_input`, `parameter`, `buffer`, `intermediate`,
 `constant_like_tensor`, `rng_source`, and `output`. `constant_like_tensor` is a classification, not
@@ -118,31 +138,66 @@ fields.
 
 | Field | Type / exact value |
 |---|---|
-| `capability` | `sparse_recorded_taken_path_v1` |
+| `capability` | `sparse_recorded_taken_path_v2` |
 | `backend` | string; only `torch` executes in rung 1 |
-| `call_recipe` | `non_tensor_args_and_tensor_slots_v1` |
+| `call_recipe` | `non_tensor_args_tensor_slots_and_context_v2` |
 | `callable_ref_schema` | integer `1` |
 | `state_binding` | `module_path_role_v1` |
 | `input_binding` | `model_site_io_role_v1` |
 | `control_witness` | `scalar_bool_and_arm_entry_v1` |
-| `initializer_policy_version` | `torchlens_role_init_v1` |
+| `initializer_policy_version` | `torchlens_role_init_v2` |
 | `payload_layers` | `PayloadLayersDescriptor` |
 | `callable_registry` | tuple of `CallableRegistryEntry` |
 | `calls` | tuple of `RunnableCallDescriptor` |
 | `tensor_slots` | tuple of `TensorSlotDescriptor` |
 | `control_witnesses` | tuple of `ControlWitness` |
 | `witness_completeness` | `WitnessCompleteness` |
+| `rng_profile` | `RunnableRngProfile` |
+| `ambient_context` | `AmbientExecutionContext` (REQUIRED, explicit) |
 | `compatibility` | `RunnableCompatibility` |
 | `preflight` | `ProducerPreflight` |
 | `unsupported_sites` | tuple of `RunnableDiagnostic`; empty for a runnable claim |
 
-`PayloadLayersDescriptor` has exactly `weights` and `activations`. Weights use
-`PayloadLayerDescriptor(present: bool, schema: str)`. Activations use that same two-field form while
-absent; when present, `ActivationPayloadLayerDescriptor` additionally carries exact
-`members`, `original_input_digests`, and `capture_state_digests`. Each member identifies its blob,
-slot, call, op label, `out`/`transformed_out` field, and logical byte digest. Schemas are respectively
-`state_dict_v1` and `selected_activation_v1`. Any payload bytes/references live outside the sparse
-core.
+`PayloadLayersDescriptor` has exactly `weights`, `nonpersistent_buffers`, and `activations`.
+Weights and non-persistent buffers use `PayloadLayerDescriptor(present: bool, schema: str)`.
+Activations use that same two-field form while absent; when present,
+`ActivationPayloadLayerDescriptor` additionally carries exact `members`,
+`original_input_digests`, `capture_state_digests`, and `input_fingerprints`. Each member
+identifies its blob, slot, call, op label, `out`/`transformed_out` field, and logical byte digest.
+Each `InputAttestationFingerprint` records the physical identity of one live capture-time
+model-input slot: logical byte digest, device type/index, layout, exact sizes/strides/storage
+offset, contiguity/channels-last flags, conjugate/negative bits, base-Tensor-vs-subclass
+classification, grad/inference metadata, and data-pointer alignment class -- captured from the
+live in-memory value that seeded the captured forward, never from an archived payload (payload
+serialization contiguifies strides). Schemas are respectively `state_dict_v1`,
+`runnable_nonpersistent_buffer_v1`, and `selected_activation_v2`. Any payload bytes/references
+live outside the sparse core.
+
+### Execution-context records
+
+`AmbientExecutionContext` (one per descriptor, capture-scoped) records exactly: `default_dtype`,
+`default_device`, `float32_matmul_precision`, `deterministic_algorithms` (+`_warn_only`),
+`cuda_matmul_allow_tf32`, `cudnn_allow_tf32`, `cudnn_deterministic`, `cudnn_benchmark`,
+`cudnn_enabled`, `flash_sdp_enabled`, `mem_efficient_sdp_enabled`, `math_sdp_enabled`, and
+`attestation_ineligible_context`. Every control the producing runtime exposes is recorded
+affirmatively (explicit `false`); `null` means only "the producer runtime did not expose this
+control" (feature-detected through `utils/_torch_compat.py` with named `HAS_*` flags).
+
+`attestation_ineligible_context` is the POSITIVE capture-time marking for a nondeterministic
+execution context: `cudnn.benchmark=true`, or a documented CUDA-nondeterministic op (the
+transpose-conv atomicAdd family and the documented index/scatter accumulation set) running on a
+CUDA device without `use_deterministic_algorithms(True)`. Such a capture can replay and verify
+its path, but byte-exact numeric attestation is `not_applicable` -- fail-safe, never a false
+`attested` and never a spurious `numeric_attestation_failed`. Users who want transpose-conv
+attestation on CUDA should capture (and replay) under `torch.use_deterministic_algorithms(True)`.
+
+`CallExecutionContext` (one REQUIRED per call descriptor) records the per-device autocast state
+(`device_type`, `enabled`, portable dtype name -- disabled state written affirmatively) and the
+grad/inference mode at the call's capture-time execution point. Replay enters exactly this context
+tightly around the resolved call (actively entering `enabled=False` autocast so a caller's ambient
+autocast cannot contaminate a disabled capture) and restores the caller's context on every exit.
+Context entry never saves/restores RNG. A recorded context the runtime cannot enter or restore is
+a typed refusal (`execution_context_unavailable`), never a silent ambient passthrough.
 
 `RunnableCompatibility` has exactly `torchlens_version: str`, `python_version: str`,
 `backend_version: str`, `descriptor_version: str`, `call_recipe_version: str`,
@@ -167,6 +222,7 @@ output_slot_ids: tuple[str, ...]
 parent_call_ids: tuple[str, ...]
 is_inplace: bool
 runtime_fingerprint: str
+execution_context: CallExecutionContext
 ```
 
 `TensorArgumentRef` is `argument_path: tuple[str | int, ...]` plus `slot_id: str`.
@@ -175,8 +231,9 @@ positional index or `kwargs`, a keyword name, then container components. No path
 lists; together they completely describe args/kwargs. Parent IDs and list order define schedule;
 existing graph edge-use/version metadata remains authoritative for repeated uses and mutation.
 
-`runtime_fingerprint` is a non-executable digest of signature facts and call recipe. Its algorithm
-is producer-versioned and diagnostic; the registry key is callable identity.
+`runtime_fingerprint` is a non-executable digest of signature facts and call recipe, including
+the canonical serialized `execution_context`. Its algorithm is producer-versioned and diagnostic;
+the registry key is callable identity.
 
 ### Tensor slot
 
@@ -276,21 +333,46 @@ analysis output but must not write runnable capability. It rejects when:
 The hard invariant is:
 
 > The sparse core contains zero tensor values, tensor blob files, tensor blob references,
-> executable callables, and import instructions.
+> executable callables, and import instructions. Tensor payloads live only in the declared
+> external blob families: the optional `state_dict_v1` and `selected_activation_v2` families,
+> and the REQUIRED `runnable_nonpersistent_buffer_v1` family.
 
-Forbidden content includes op outputs/transformed outputs, inputs, activations, gradients, child
-tensor versions, tensor args/templates, parameters, buffers, `state_dict`, state snapshots,
-`_buffer_initial_values`, live handles/models, tensor RNG snapshots, callable pickles, executable
-code, and custom import paths.
+Forbidden sparse-core content includes op outputs/transformed outputs, inputs, activations,
+gradients, child tensor versions, tensor args/templates, parameters, buffers, `state_dict`, state
+snapshots, `_buffer_initial_values`, live handles/models, tensor RNG snapshots, callable pickles,
+executable code, and custom import paths. Call recipes and the core descriptor never carry tensor
+values or references; the external families are the only tensor carriers.
+
+`runnable_nonpersistent_buffer_v1` is a REQUIRED external payload family whenever the taken path
+uses a non-persistent registered buffer slot. It is written unconditionally -- it is NOT gated on
+`include_weights` or `include_activations` -- because a used non-persistent buffer is declared
+state (section 11) without which the artifact cannot replay. **Privacy note (prominent):** a
+DEFAULT runnable save of such a model therefore carries user tensor data (the capture-time
+non-persistent buffer values, which may hold arbitrary cached data) even with both include flags
+false. The save discloses this: the family is manifest-visible
+(`payload_layers.nonpersistent_buffers.present=true`) and the producer emits a one-time warning
+when the family is non-empty.
 
 Optional weights are declared as the external `state_dict_v1` blob family. With
 `include_weights=True`, it contains one full capture-time `state_dict`: all named parameters and
 persistent buffers keyed by canonical state records. It contains no gradients, RNG state,
 callables, model handles, or per-call snapshots. Optional activations are independently declared as
-`selected_activation_v1`: exactly the payloads retained by capture-time `save=`, never a new
+`selected_activation_v2`: exactly the payloads retained by capture-time `save=`, never a new
 selector and never part of the sparse call recipe.
 Tensor arguments, RNG tensors, callables/code/imports remain forbidden, and payload-only runnable
 artifacts are invalid.
+
+### Output losslessness (invariant I1)
+
+A runnable save requires a PROVED lossless model output: a bare-Tensor root, or a positive
+traversal proof establishing the exact root kind, recursively supported child kinds, fully
+encodable literal leaves, and a bijection between the walked tensor leaves and unique typed spec
+paths. Runnable model-output traversal never relies on the generic BFS fallback, and a childless
+leaf that merely *contains* tensors is not reconstructable. Sets, frozensets, their subclasses,
+and unordered/opaque containers are unsupported runnable outputs at every depth and cardinality
+(including zero and one tensor) and are uniformly refused at save with
+`missing_output_container_contract`. Ordinary analysis capture is unaffected. Proof failure is a
+typed producer refusal -- refuse-unless-proved, never accept-unless-flagged.
 
 ## 6. Resolver protocol
 
@@ -365,9 +447,18 @@ mutation_version_mismatch
 scalar_bool_divergence
 conditional_arm_divergence
 loop_predicate_divergence
+input_alias_topology_unresolved
+execution_context_unavailable
 numeric_attestation_failed
 poisoned_run_refused
 ```
+
+`input_alias_topology_unresolved` is an unverifiability CEILING, not a contradiction: the
+three-valued alias engine (section 11) could prove neither overlap nor disjointness for a
+same-storage input pair, so the run reports `unverifiable` with `not_applicable` attestation --
+never `diverged` by assumption and never `verified`. `execution_context_unavailable` is the typed
+refusal for a recorded execution context the producer could not capture or the runtime cannot
+enter/restore.
 
 `callable_moved_or_renamed` is a successful alias diagnostic. `runtime_signature_drift` rolls back
 but is compatibility failure, not path divergence. `semantic_drift` comes only from the independent
@@ -507,7 +598,12 @@ random-state, and non-equivalent-state runs report `not_applicable`.
 
 ## 10. N1-a initializer and seed
 
-`torchlens_role_init_v1` is:
+`torchlens_role_init_v2` is the v1 role table below plus degenerate totality: a legal
+`numel() == 0` slot (any shape containing a zero dimension) allocates and returns immediately
+with ZERO generator consumption -- provably, for every role -- and every nonempty Kaiming slot
+requires finite positive `fan_in`. The initializer contract is validated centrally at producer
+preflight AND defensively at runtime; an unsupported contract fails typed, never by division or
+backend sampling. No previously successful v1 reproduction changes. The role table is:
 
 | Role | Policy |
 |---|---|
@@ -532,6 +628,16 @@ slot-ID order. Every alias member is still reported random-filled.
 fixed seed, descriptor, inputs, backend/runtime version, and device reproduces both without changing
 global RNG. Null seed uses normal entropy. The report records it. This is architecture execution,
 never original-weight or original-random-draw recovery.
+
+Seeded-RNG isolation is TOTAL over the generators the run actually seeds: the executor seeds only
+the CPU generator plus each individually forked CUDA device generator (never a global
+seed-everything primitive), and the fork/restore set covers every CUDA device when CUDA is
+initialized or the descriptor's capture metadata names a CUDA device -- including devices that
+appear only as produced intermediates or RNG sources, not just bound inputs/state. Restoration
+runs in `finally` on success, divergence, callable exception, and numeric-attestation rollback. A
+post-run tripwire asserts CUDA initialization did not flip during a seeded run whose fork set
+excluded it. Generators this executor does not seed (MPS/XPU/other accelerators) are never
+touched by a seeded run, so no state can leak into them.
 
 ## 11. Honesty, divergence, poison, and exactness
 
@@ -561,12 +667,79 @@ Changed-input/random-state activation runs and sparse-only runs are `not_applica
 silently claims a numeric pass. Unsaved slots have no numeric claim. Sparse-only promises
 contract/witness honesty, not numerical reproduction.
 
+### Attestation lattice (invariant I3)
+
+Numeric attestation is DOWNSTREAM of the settled path verdict. Eligibility is derived from the
+provisional path-faithfulness verdict computed from ALL non-numeric contract checks and static/
+dynamic ceilings: a verdict that is not `verified` makes numeric attestation `not_applicable`
+before any archive byte is read. `attested` therefore implies `verified` and not poisoned -- the
+report constructor asserts this invariant, so the contradictory combination is unrepresentable.
+Every FUTURE contract check automatically caps attestation through the same derivation; there is
+no parallel eligibility flag list. Eligibility additionally requires: exact logical input digests
+AND exact physical input fingerprints (compared against the value that actually seeds execution),
+capture-equivalent persistent state plus validated capture-embedded non-persistent buffer values,
+a deterministic raw selection, and a capture context not positively marked
+`attestation_ineligible_context`.
+
+### Event-lifecycle discharge (invariant I2)
+
+Every observed capture dispatch event must be DISCHARGED: it ends as an accounted modeled call, an
+exact witness, an audited opaque boundary, or an explicit INCOMPLETE reason. In particular, an op
+that RAISED during the captured forward whose exception was caught before forward completion
+(`try/except` numerical fallbacks -- Cholesky-with-jitter, robust inversion, safe-log guards) is a
+`caught_exception_control` fact: the taken path was decided by whether an op raised, a channel no
+tensor witness can see, so the producer downgrades `witness_completeness` and EVERY run of that
+artifact -- original or changed input -- reports `unverifiable` + `not_applicable`, never
+`verified`. The discharge rule is owner-accounted: a raised or host-returning subevent whose
+enclosing wrapper owner became an accounted runnable call is discharged (replaying the owner
+replays its internal fallback); there are no exception-type or framework-file exemptions. A
+successful host/`None`-returning unaccounted event likewise needs an exact witness or audited
+boundary or it downgrades completeness. Assessed residual: warnings/environment reads are not
+tensor-value channels; value dependence must route through an already witnessed escape.
+
+A future replayable exception witness may recover `verified` ONLY when all five preconditions
+hold: (1) exact pre-call argument binding recorded; (2) purity proof -- no RNG consumption, no
+`out=`/in-place mutation, no allocator-visible or global side effect before the raise; (3)
+exception-identity witness -- replay raises the same portable exception type at the same site with
+recorded-handler compatibility; (4) full execution-context restoration around the probe; (5) an
+RNG bracket proving zero generator advance. This recovery is DEFERRED (not shipped); until it
+lands every in-forward caught raise ceilings at `unverifiable`.
+
+### Three-valued input alias topology
+
+Runtime input aliasing against the de-aliased capture is judged by a three-valued touched-byte
+engine: identity (`a is b`) and PROVED overlap of recorded-disjoint inputs are observed
+contradictions (`diverged`); PROVED disjointness passes; anything unproven is `unknown`, which
+adds the `input_alias_topology_unresolved` ceiling -- `unverifiable` path, `not_applicable`
+attestation -- never `overlap` by assumption and never `verified`. Proof layers: same-storage
+grouping (distinct storages are trivially disjoint); exact interval/geometry reasoning; an
+element-grid-normalized residue/GCD proof (applicable only when both views share element size,
+congruent byte starts, and element-multiple strides); and bounded exact enumeration up to 65,536
+logical elements per view. No bounding-box overlap alone is an overlap proof, and no complexity
+cap is a disjointness proof.
+
+### Execution-context equivalence and documented residuals
+
+Replay equivalence is EXPLICIT, never ambient: the per-call `CallExecutionContext` and the
+capture-scoped `AmbientExecutionContext` are recorded explicitly and restored transactionally
+(section 4). The consciously documented residual list -- contexts NOT captured, by decision --
+is: thread/intra-op parallelism configuration (can change reduction bytes; forcing
+`set_num_threads` is a process-global hazard, so attestation is same-parallelism-config by
+contract); environment identity (CPU ISA dispatch, library builds, GPU architecture/driver,
+allocator) -- attestation is same-environment by contract; CUDA stream identity (inert for a
+serially replayed DAG); and autotuner cache state (subsumed by the `cudnn.benchmark` positive
+ineligibility marking). Where one of these residuals changes bytes, the byte-exact attestation
+tripwire fails loud (`numeric_attestation_failed`), never falsely `attested`.
+
 ### Declared state model boundary
 
-The declared state model is exactly the capture-time `state_dict` (named parameters plus persistent
-buffers) together with the taken-path DAG. `verified` asserts faithful reproduction against oracle
-1: a *separate, fresh* live-model run from that state on the given inputs. It does not assert that a
-specific already-run model *instance* will reproduce the replay on a later call.
+The declared state model is exactly the capture-time `state_dict` (named parameters plus
+persistent buffers) PLUS the capture-time values of every used non-persistent registered buffer
+(shipped as the required `runnable_nonpersistent_buffer_v1` family), together with the taken-path
+DAG. `verified` asserts faithful reproduction against oracle 1: a *separate, fresh* live-model
+run whose instance received that declared state -- including the non-persistent buffer values,
+injected before its forward -- on the given inputs. It does not assert that a specific already-run
+model *instance* will reproduce the replay on a later call.
 
 A model whose `forward` is not a pure function of `(inputs, state_dict)` because it carries hidden
 mutable state in unregistered Python attributes — an arbitrary attribute, or a retained
@@ -609,10 +782,32 @@ already-retained capture-time `save=` selection, not a second selector.
 The complete implementation includes `load_state_dict`, transient state sources, initializer
 reporting, `run`, `RunResult`, transactional run forks, sparse input/call/output reconstruction,
 three-state `path_faithfulness`, strict divergence rollback, monotonically poisoned opt-in results,
-the external weight family, and inspection-only selected activation attestation. This contract plus
-`CLAUDE.md`/`AGENTS.md`, FIELD_ORDER, schema, and API tests move together. Until a curated public
-glossary ships, this document is the authoritative public glossary entry for sparse runnable
-execution.
+the external weight family, the required non-persistent buffer family, and inspection-only selected
+activation attestation. This contract plus `CLAUDE.md`/`AGENTS.md`, FIELD_ORDER, schema, and API
+tests move together. Until a curated public glossary ships, this document is the authoritative
+public glossary entry for sparse runnable execution.
+
+Glossary of v2 vocabulary introduced by this amendment (canonical here per the lockstep rule):
+
+- `sparse_recorded_taken_path_v2` -- the required capability whose context records are explicit;
+  absence of a context record only ever means legacy v1 (analysis-only).
+- `non_tensor_args_tensor_slots_and_context_v2` -- the call recipe carrying the REQUIRED
+  `CallExecutionContext` per call.
+- `CallExecutionContext` / `AutocastDeviceContext` -- per-call autocast (explicit disabled) and
+  grad/inference mode, entered tightly around each resolved call at replay.
+- `AmbientExecutionContext` -- the capture-scoped backend context record (defaults, matmul
+  precision, determinism, TF32/cuDNN flags, SDP toggles) restored transactionally around the run;
+  carries the positive `attestation_ineligible_context` nondeterministic-context marking.
+- `selected_activation_v2` -- the activation payload schema whose eligibility metadata includes
+  physical `InputAttestationFingerprint` records (sizes/strides/offset, memory-format flags,
+  conj/neg bits, subclass class, grad/inference metadata, data-pointer alignment class).
+- `runnable_nonpersistent_buffer_v1` -- the REQUIRED external family carrying capture-time values
+  of used non-persistent buffers; part of the declared state model (section 11).
+- `torchlens_role_init_v2` -- the initializer policy with degenerate totality (empty slots consume
+  zero RNG; nonempty Kaiming requires finite positive fan-in).
+- `input_alias_topology_unresolved` -- the unverifiability ceiling for an unproven same-storage
+  input alias relation.
+- `execution_context_unavailable` -- the typed refusal for uncapturable/unrestorable context.
 
 ## 13. Resolver compatibility release gate
 

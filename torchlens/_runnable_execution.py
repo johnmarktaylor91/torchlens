@@ -46,6 +46,7 @@ from .runnable import (
     ActivationPayloadMember,
     CallableRegistryEntry,
     ContractCheck,
+    InputAttestationFingerprint,
     ControlWitness,
     ControlWitnessKind,
     DivergencePolicy,
@@ -1216,6 +1217,86 @@ def _snapshot_input_byte_digests(
     }
 
 
+_FINGERPRINT_ALIGNMENT_MODULUS = 16
+"""Data-pointer alignment-class modulus for the physical input fingerprint.
+
+H_B_RESOLUTION R2: fp16 CUDA conv kernel selection/reduction order is keyed to the
+data pointer's alignment class (a misaligned offset view vs an aligned buffer), so
+the fingerprint records ``data_ptr() % 16`` of the value that actually seeds
+execution and attestation goes ``not_applicable`` on any mismatch instead of
+false-tripping the byte tripwire. The modulus is the vector-width class boundary:
+every fresh torch allocation (capture and replay both execute fresh clones) is at
+least 16-byte aligned, so equal-basis executions always agree, while an offset
+view that changes the executed alignment class is caught.
+"""
+
+
+def build_input_attestation_fingerprint(
+    slot_id: str,
+    value: torch.Tensor,
+    *,
+    byte_digest: str | None = None,
+) -> InputAttestationFingerprint:
+    """Build the physical identity fingerprint of one model-input value (hon1_3 H-a).
+
+    Both sides use the same basis: at save time the LIVE retained in-memory input
+    that seeded the captured forward; at run time the executed defensive clone.
+    Any physical fact that cannot be read fails toward attestation ineligibility
+    (a sentinel value that can never equal a well-formed capture record).
+
+    Parameters
+    ----------
+    slot_id:
+        Descriptor slot id of the model input.
+    value:
+        Live tensor to fingerprint.
+    byte_digest:
+        Precomputed logical byte digest, or ``None`` to compute one here.
+
+    Returns
+    -------
+    InputAttestationFingerprint
+        Frozen physical fingerprint record.
+    """
+
+    def _safe_bool(getter: Callable[[], Any]) -> bool:
+        try:
+            return bool(getter())
+        except (RuntimeError, AttributeError, TypeError, NotImplementedError):
+            return False
+
+    try:
+        alignment = int(value.data_ptr()) % _FINGERPRINT_ALIGNMENT_MODULUS
+    except (RuntimeError, AttributeError, TypeError, NotImplementedError):
+        # Unreadable pointer: use an out-of-range sentinel so it can never match
+        # a well-formed capture record (fail toward not_applicable, never a
+        # false ATTESTED).
+        alignment = -1
+    if byte_digest is None:
+        byte_digest = runnable_tensor_byte_digest(value)
+    return InputAttestationFingerprint(
+        slot_id=slot_id,
+        byte_digest=byte_digest,
+        device_type=str(value.device.type),
+        device_index=None if value.device.index is None else int(value.device.index),
+        layout=str(value.layout),
+        sizes=tuple(int(item) for item in value.shape),
+        strides=tuple(int(item) for item in value.stride()),
+        storage_offset=int(value.storage_offset()),
+        is_contiguous=_safe_bool(value.is_contiguous),
+        is_channels_last=_safe_bool(lambda: value.is_contiguous(memory_format=torch.channels_last)),
+        is_channels_last_3d=_safe_bool(
+            lambda: value.is_contiguous(memory_format=torch.channels_last_3d)
+        ),
+        is_conj=_safe_bool(value.is_conj),
+        is_neg=_safe_bool(value.is_neg),
+        tensor_class=type(value).__qualname__,
+        requires_grad=bool(value.requires_grad),
+        is_inference=_safe_bool(value.is_inference),
+        alignment_class=alignment,
+    )
+
+
 def _positions_are_mixed(positions: set[Any]) -> bool:
     """Return whether a capture carries both positional and keyword model sites."""
 
@@ -2062,6 +2143,20 @@ def _reconstruct_output(
                 f"Recorded output container could not be reconstructed: {exc}",
                 code=RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH.value,
             ) from exc
+    if len(values) == 1 and not values[0][0]:
+        # Genuine bare-tensor model output: nothing to reconstruct.
+        return values[0][1]
+    if values:
+        # r35 I1 defense in depth: a multi-leaf output with NO recorded container
+        # spec can only come from a legacy/tampered artifact (new saves are refused
+        # unless losslessness is proved). Approximating the container here would be
+        # a silent lossy substitution, so fail typed instead.
+        raise RunPreconditionError(
+            "Model output has multiple leaves but no recorded lossless container "
+            "contract; this artifact predates (or violates) the v2 output "
+            "losslessness proof and cannot be reconstructed faithfully.",
+            code=RunnableErrorCode.MISSING_OUTPUT_CONTAINER_CONTRACT.value,
+        )
     return _container_from_paths(values)
 
 
