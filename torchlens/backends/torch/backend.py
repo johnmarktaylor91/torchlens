@@ -680,6 +680,21 @@ class TorchBackend:
 
         self_trace = cast("Trace", session)
         output_entries = list(_walk_output_tensors_with_paths(outputs))
+        # r33 R32-B1: an UNSUPPORTED top-level output container (a bare ``set`` / ``frozenset``,
+        # or any container the traversal cannot map) falls back to a BFS that yields EVERY tensor
+        # at the SAME (empty) path with no ContainerSpec. Multiple tensors then collapse into ONE
+        # recorded output slot -- the container KIND and N-1 elements are silently dropped, yet a
+        # loaded run reconstructs a single Tensor and blesses it VERIFIED+ATTESTED (a false
+        # attestation the downstream lossy/`output_not_reproduced` gates cannot see, because only
+        # one slot survives). Flag the duplicate-path collision here so the runnable producer
+        # refuses the save (fail closed at save, never a false VERIFIED at run).
+        _seen_output_paths: set[Any] = set()
+        for _entry_tensor, _entry_path, _entry_spec in output_entries:
+            _path_key = repr(tuple(_entry_path))
+            if _path_key in _seen_output_paths:
+                setattr(self_trace, "_runnable_output_multitensor_collapse", True)
+                break
+            _seen_output_paths.add(_path_key)
         # The container_spec is only user-facing metadata when explicitly opted
         # into via capture_container_structure (or implied by intervention_ready);
         # with the default OFF it must stay None on output layers. The container

@@ -461,11 +461,34 @@ DELIBERATELY EXCLUDED (shape+dtype-derived or already covered, would only add no
 """
 
 INPUT_METADATA_PROPERTY_NAMES = frozenset(
-    {"requires_grad", "grad_fn", "is_leaf", "retains_grad", "_base"}
+    {
+        "requires_grad",
+        "grad_fn",
+        "is_leaf",
+        "retains_grad",
+        "_base",
+        "grad",
+        "_grad",
+        "_version",
+        "output_nr",
+    }
 )
 """Tensor autograd / structural getset PROPERTIES whose read on a MODEL INPUT is witnessed
 (r27-H2 ``requires_grad``; r29-C1 adds ``grad_fn`` / ``is_leaf``; r31 adds ``retains_grad`` /
-``_base``).
+``_base``; r33 adds ``grad`` / ``_grad`` as PRESENCE facts and ``_version`` / ``output_nr`` as
+INT facts).
+
+r33 additions (each a control decision the shape+dtype contract does NOT pin, confirmed by
+oracle to falsely VERIFY otherwise):
+
+* ``grad`` / ``_grad`` -- ``if x.grad is None:`` steers on whether a gradient has been
+  accumulated on the input leaf. The detach-clone erases it (a fresh clone has ``grad=None``),
+  so it is witnessed as a PRESENCE boolean (the exact gradient tensor is not comparable across
+  runs) and re-checked on the RAW pre-clone runtime input. ``_grad`` is the private alias.
+* ``_version`` -- ``if x._version == 0:`` steers on the input leaf's in-place mutation counter.
+  The detach-clone RESETS ``_version`` to 0, so like ``storage_offset`` it is read from the RAW
+  pre-clone runtime input and witnessed as its INT value.
+* ``output_nr`` -- the autograd output index of the tensor; witnessed as its INT value.
 
 ``x.requires_grad`` / ``x.grad_fn`` / ``x.is_leaf`` / ``x.retains_grad`` / ``x._base`` are
 non-callable getset descriptors read by ``if x.requires_grad:`` / ``if x.grad_fn is not None:``
@@ -480,10 +503,16 @@ semantics for the writable ``requires_grad`` (``x.requires_grad = True`` inside 
 works); ``grad_fn`` / ``is_leaf`` / ``retains_grad`` / ``_base`` are read-only.
 """
 
-_INPUT_METADATA_PRESENCE_PROPERTY_NAMES = frozenset({"grad_fn", "_base"})
+_INPUT_METADATA_PRESENCE_PROPERTY_NAMES = frozenset({"grad_fn", "_base", "grad", "_grad"})
 """Autograd/structural PROPERTIES recorded as a PRESENCE boolean (``value is not None``): the
-exact backward object (``grad_fn``) and base tensor (``_base``) are not comparable across runs,
-so only their presence witnesses the control decision."""
+exact backward object (``grad_fn``), base tensor (``_base``), and accumulated gradient
+(``grad`` / ``_grad``, r33) are not comparable across runs, so only their presence witnesses
+the control decision."""
+
+_INPUT_METADATA_INT_PROPERTY_NAMES = frozenset({"_version", "output_nr"})
+"""PROPERTIES recorded as their INT value (r33): the in-place mutation counter (``_version``)
+and the autograd output index (``output_nr``). Neither is pinned by the shape+dtype contract;
+both compare exactly across runs."""
 
 INPUT_METADATA_GRAD_PROPERTY = "requires_grad"
 """Deprecated single-name alias retained for back-compat; see ``INPUT_METADATA_PROPERTY_NAMES``."""
@@ -507,8 +536,15 @@ value is provably equal to a direct leaf read; a storage-alias with DIFFERENT ge
 derived view) fails closed. This closes the ``x.data.storage_offset()`` /
 ``x.detach().is_contiguous()`` class the object-identity map missed."""
 
+_INPUT_METADATA_CONJ_NEG_NAMES = frozenset({"is_conj", "is_neg"})
+"""ALIAS-SAFE accessors whose value FLIPS on a same-geometry conjugate/negative VIEW (r33 F5).
+A ``.conj()`` / ``torch._neg_view()`` of an input leaf shares its storage AND geometry but sets
+this dispatch bit, so a same-storage/same-geometry receiver is EQUIVALENT only if its bit also
+equals the leaf's; a bit mismatch is a genuine derived view and fails closed (else a wrong leaf
+fact forces a false divergence on the original complex input)."""
+
 _INPUT_METADATA_VIEW_FAIL_AUTOGRAD_NAMES = frozenset(
-    {"is_leaf", "retains_grad", "_base", "_is_view"}
+    {"is_leaf", "retains_grad", "_base", "_is_view", "output_nr"}
 )
 """AUTOGRAD / structural accessors whose read on a DERIVED VIEW of an input leaf fails closed
 (r31 hole C). On a ``.data`` / ``.detach()`` storage-alias these are CONSTANT (detached:
@@ -520,7 +556,9 @@ per-op capture bookkeeping NEVER reads THESE four accessors on any input-derived
 (verified empirically -- zero internal reads), so a match is a genuine USER Python view read.
 Uses only the CHEAP ``_base`` attribute check -- no per-op storage-pointer cost."""
 
-_INPUT_METADATA_LEAF_ONLY_AUTOGRAD_NAMES = frozenset({"requires_grad", "grad_fn"})
+_INPUT_METADATA_LEAF_ONLY_AUTOGRAD_NAMES = frozenset(
+    {"requires_grad", "grad_fn", "grad", "_grad", "_version"}
+)
 """AUTOGRAD accessors witnessed ONLY on the input LEAF (object identity), never attributed to a
 view or alias (r31). TorchLens's OWN per-op capture bookkeeping reads ``output.grad_fn`` and
 ``output.requires_grad`` on EVERY op output -- INCLUDING input-derived views (``x[i]`` /
@@ -534,7 +572,10 @@ per-op autograd reads live outside this witness surface (in ``backend.py``), so 
 accessors stay LEAF-ONLY: a direct ``x.requires_grad`` / ``x.grad_fn`` leaf read is witnessed
 and diverges correctly; a read reached ONLY through a view is a documented residual. (``grad_fn``
 is not even view-invariant -- a view of a leaf has a ``ViewBackward`` grad_fn the leaf lacks --
-so a leaf record would be wrong regardless.)"""
+so a leaf record would be wrong regardless.) r33 adds ``grad`` / ``_grad`` / ``_version`` here
+on the same principle: ``grad`` / ``_grad`` / ``_version`` are not view-invariant (a view has a
+distinct ``grad`` slot and a fresh ``_version``), so a view read is a documented leaf-only
+residual, never a leaf-attributed record."""
 
 
 # Per-trace map from an input leaf's BASE-storage data pointer to the list of
@@ -585,38 +626,47 @@ def record_runnable_input_storage_sites(
                     tuple(int(v) for v in tensor.stride()),
                     int(tensor.storage_offset()),
                 )
+                # r33 F5: the LEAF's conj/neg dispatch bits. A conj/neg VIEW of an input leaf
+                # shares its storage AND geometry but flips these bits; recording the leaf's
+                # true bits here lets the classifier reject such a same-geometry view instead
+                # of misattributing its ``is_conj``/``is_neg`` read as a leaf fact.
+                conj_neg = (bool(tensor.is_conj()), bool(tensor.is_neg()))
             except (RuntimeError, AttributeError, TypeError, ValueError, NotImplementedError):
                 continue
-            storage_sites.setdefault(ptr, []).append((site, *geometry))
+            storage_sites.setdefault(ptr, []).append((site, *geometry, *conj_neg))
     if storage_sites:
         _RUNNABLE_INPUT_STORAGE_SITES[trace] = storage_sites
 
 
-def _classify_input_storage_alias(trace: Any, source: torch.Tensor) -> "tuple[str | None, Any]":
+def _classify_input_storage_alias(
+    trace: Any, source: torch.Tensor
+) -> "tuple[str | None, Any, tuple[bool, bool] | None]":
     """Classify ``source`` against the input-leaf storage map (r31, holes A/C).
 
-    Returns ``(_ALIAS_EQUIVALENT, site)`` when ``source`` shares an input leaf's base storage
-    with IDENTICAL geometry (a ``.data`` / ``.detach()`` alias -- a metadata read on it equals a
-    direct leaf read), ``(_ALIAS_DERIVED_VIEW, site)`` when it shares the storage with DIFFERENT
-    geometry (a derived view the replay never re-derives), or ``(None, None)`` when it does not
-    alias any input leaf's storage (a genuine unrelated activation). Storage-pointer/geometry
-    reads run under the internal marker so the live patches stay pass-through and cannot recurse
-    back into observation.
+    Returns ``(_ALIAS_EQUIVALENT, site, leaf_conj_neg)`` when ``source`` shares an input leaf's
+    base storage with IDENTICAL geometry (a ``.data`` / ``.detach()`` alias -- a metadata read on
+    it equals a direct leaf read), ``(_ALIAS_DERIVED_VIEW, site, None)`` when it shares the
+    storage with DIFFERENT geometry (a derived view the replay never re-derives), or
+    ``(None, None, None)`` when it does not alias any input leaf's storage (a genuine unrelated
+    activation). ``leaf_conj_neg`` is the matched leaf's ``(is_conj, is_neg)`` bits so the caller
+    can reject a same-geometry conj/neg view (r33 F5). Storage-pointer/geometry reads run under
+    the internal marker so the live patches stay pass-through and cannot recurse back into
+    observation.
     """
 
     storage_sites = _RUNNABLE_INPUT_STORAGE_SITES.get(trace)
     if not storage_sites:
-        return (None, None)
+        return (None, None, None)
     # ``pause_logging`` so the ``untyped_storage`` / ``storage_offset`` reads below are not
     # captured as spurious ops mid-forward; ``internal_scalar_read`` keeps them off the census.
     with _state.pause_logging(), internal_scalar_read():
         try:
             ptr = source.untyped_storage().data_ptr()
         except (RuntimeError, AttributeError, TypeError, NotImplementedError):
-            return (None, None)
+            return (None, None, None)
         candidates = storage_sites.get(ptr)
         if not candidates:
-            return (None, None)
+            return (None, None, None)
         try:
             geometry: Any = (
                 tuple(source.shape),
@@ -625,10 +675,10 @@ def _classify_input_storage_alias(trace: Any, source: torch.Tensor) -> "tuple[st
             )
         except (RuntimeError, TypeError, ValueError):
             geometry = None
-    for site, size, stride, offset in candidates:
+    for site, size, stride, offset, leaf_conj, leaf_neg in candidates:
         if geometry is not None and geometry == (size, stride, offset):
-            return (_ALIAS_EQUIVALENT, site)
-    return (_ALIAS_DERIVED_VIEW, candidates[0][0])
+            return (_ALIAS_EQUIVALENT, site, (leaf_conj, leaf_neg))
+    return (_ALIAS_DERIVED_VIEW, candidates[0][0], None)
 
 
 def _input_base_tensor(source: torch.Tensor) -> "torch.Tensor | None":
@@ -722,8 +772,20 @@ def _observe_input_metadata_read(trace: Any, source: torch.Tensor, name: str, va
             _INPUT_METADATA_VIEW_READ.add(trace)
         return
     if name in _INPUT_METADATA_ALIAS_SAFE_NAMES:
-        kind, site = _classify_input_storage_alias(trace, source)
+        kind, site, leaf_conj_neg = _classify_input_storage_alias(trace, source)
         if kind == _ALIAS_EQUIVALENT:
+            # r33 F5 (over-trigger fix): a conj/neg VIEW shares an input leaf's storage AND
+            # geometry but FLIPS the conj/neg dispatch bit. Geometry alone would record the
+            # view's ``is_conj=True`` as a LEAF fact, which the RAW runtime leaf (``is_conj``
+            # False) then contradicts -> a forced FALSE divergence on the ORIGINAL input
+            # (complex models permanently diverged, r31 regression). For ``is_conj``/``is_neg``
+            # the observed bit must EQUAL the leaf's; a same-geometry bit MISMATCH is a genuine
+            # derived (conj/neg) view and fails closed rather than misrecording a leaf fact.
+            if name in _INPUT_METADATA_CONJ_NEG_NAMES and leaf_conj_neg is not None:
+                leaf_bit = leaf_conj_neg[0] if name == "is_conj" else leaf_conj_neg[1]
+                if bool(value) != bool(leaf_bit):
+                    _INPUT_METADATA_VIEW_READ.add(trace)
+                    return
             _record_input_metadata_read_at_site(trace, site, name, value)
         elif kind == _ALIAS_DERIVED_VIEW:
             _INPUT_METADATA_VIEW_READ.add(trace)
@@ -754,7 +816,7 @@ def _maybe_record_input_storage_geometry(trace: Any, source: torch.Tensor, stora
         return
     site = sites.get(id(source))
     if site is None:
-        kind, aliased_site = _classify_input_storage_alias(trace, source)
+        kind, aliased_site, _leaf_conj_neg = _classify_input_storage_alias(trace, source)
         if kind is None:
             return
         site = aliased_site
@@ -2131,6 +2193,7 @@ def _make_input_metadata_grad_property(
     """
 
     records_presence = name in _INPUT_METADATA_PRESENCE_PROPERTY_NAMES
+    records_int = name in _INPUT_METADATA_INT_PROPERTY_NAMES
 
     def getter(self: torch.Tensor) -> Any:
         value = descriptor.__get__(self, torch.Tensor)
@@ -2141,8 +2204,17 @@ def _make_input_metadata_grad_property(
             and _state._active_trace is state.trace
             and not _internal_read_active()
         ):
-            fact = (value is not None) if records_presence else bool(value)
-            _observe_input_metadata_read(state.trace, self, name, fact)
+            if records_presence:
+                fact: Any = value is not None
+            elif records_int:
+                try:
+                    fact = int(value)
+                except (TypeError, ValueError):
+                    fact = None
+            else:
+                fact = bool(value)
+            if fact is not None:
+                _observe_input_metadata_read(state.trace, self, name, fact)
         return value
 
     has_setter = hasattr(descriptor, "__set__")

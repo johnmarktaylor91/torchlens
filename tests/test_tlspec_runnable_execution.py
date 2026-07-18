@@ -1002,8 +1002,18 @@ def test_h3_distinct_inputs_still_verify(tmp_path: Path) -> None:
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
-def test_h3_readonly_aliased_inputs_do_not_over_trigger(tmp_path: Path) -> None:
-    """Aliased inputs with NO in-place mutation stay VERIFIED (no over-trigger)."""
+def test_h3_readonly_aliased_inputs_fail_closed(tmp_path: Path) -> None:
+    """r33 F1: aliased runtime inputs fail closed; distinct inputs stay VERIFIED.
+
+    Torch capture DE-ALIASES model inputs (independent per-slot clones), so the recorded DAG
+    always reflects DISTINCT-input semantics. A runtime call whose inputs are aliased (same
+    object, ``a is b``) cannot be proven faithful against a fresh model on those aliased inputs
+    -- an ``if a is b`` / ``id()`` identity branch (self/cross-attention ``q is k``) would take
+    a different arm than the de-aliased replay, a false VERIFIED even on the original input.
+    Superseding the earlier r29 "read-only aliasing is numerically irrelevant" reasoning
+    (incomplete: it misses identity branches), any runtime aliasing now fails closed. The
+    trivial all-distinct topology (the common case) is unaffected -- no over-trigger.
+    """
 
     class _ReadOnly(nn.Module):
         def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -1018,9 +1028,21 @@ def test_h3_readonly_aliased_inputs_do_not_over_trigger(tmp_path: Path) -> None:
         ),
     )
     trace.save(tmp_path / "readonly.tlspec", level="runnable", include_activations=True)
+
+    # Aliased runtime inputs (same object) -> fail closed (F1 honesty).
     shared = torch.tensor([3.0, 4.0])
-    result = tl.load(tmp_path / "readonly.tlspec").run(inputs=[shared, shared])
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    with pytest.raises(PathDivergenceError):
+        tl.load(tmp_path / "readonly.tlspec").run(inputs=[shared, shared])
+    diverged = tl.load(tmp_path / "readonly.tlspec").run(
+        inputs=[shared, shared], on_divergence=DivergencePolicy.RETURN_DIVERGED
+    )
+    assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
+
+    # Distinct runtime inputs match the de-aliased capture -> VERIFIED (no over-trigger).
+    verified = tl.load(tmp_path / "readonly.tlspec").run(
+        inputs=[torch.tensor([3.0, 4.0]), torch.tensor([5.0, 6.0])]
+    )
+    assert verified.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
 # --------------------------------------------------------------------------- #

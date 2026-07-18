@@ -3018,7 +3018,13 @@ def _tag_tensor_and_track_variations(
     # distinguish a genuine in-place mutation (version bumped since it was labeled) from a
     # non-mutating identity return that reuses the same object (see is_inplace at capture).
     if isinstance(out, torch.Tensor):
-        version = getattr(out, "_version", None)
+        # ``_version`` is a WITNESSED input-metadata property (r33): the scoped patch
+        # records a genuine USER ``x._version`` read on a model-input leaf. This snapshot is
+        # TorchLens's OWN bookkeeping read, so it must run under the internal marker or it
+        # spuriously records a ``_version`` fact for every model, falsely diverging any
+        # runtime input whose version counter differs from capture (an over-trigger).
+        with internal_scalar_read():
+            version = getattr(out, "_version", None)
         if version is not None:
             _LABEL_VERSION_SNAPSHOT[out] = version
     _add_tensor_backward_hook(self, out, out_label)

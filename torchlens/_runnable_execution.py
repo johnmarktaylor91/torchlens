@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import nullcontext
 from itertools import count
 import re
@@ -602,6 +602,14 @@ def _runtime_input_metadata_value(value: torch.Tensor, name: str) -> Any:
             return bool(value.is_shared())
         if name == "is_coalesced":
             return bool(value.is_coalesced())
+        if name == "grad":
+            return bool(value.grad is not None)
+        if name == "_grad":
+            return bool(value._grad is not None)
+        if name == "_version":
+            return int(value._version)
+        if name == "output_nr":
+            return int(value.output_nr)
         if name == "storage_nbytes":
             return int(value.untyped_storage().nbytes())
     except (RuntimeError, AttributeError, TypeError, ValueError, NotImplementedError):
@@ -878,6 +886,60 @@ def _bind_runtime_inputs(
                 ),
             )
         )
+        # r33 F7: pin DEVICE and LAYOUT next to shape+dtype. The shape+dtype contract does NOT
+        # pin either, yet the state lives on the capture DEVICE and the recorded DAG assumes a
+        # STRIDED DENSE input, so a same-shape+dtype runtime input on a different device or with
+        # an exotic layout (sparse/meta/nested/named) cannot be faithfully reproduced by the
+        # sparse replay -- today only an INCIDENTAL torch device/layout error guards them. Device
+        # TYPE is compared strictly; the INDEX only when both are concrete (a capture recorded as
+        # a bare ``cuda`` has index ``None`` and must not falsely diverge a ``cuda:0`` runtime).
+        device_ok = value.device.type == slot.device_type and (
+            slot.device_index is None
+            or value.device.index is None
+            or value.device.index == slot.device_index
+        )
+        checks.append(
+            _contract_check(
+                f"input_device:{slot.slot_id}",
+                device_ok,
+                RunnableErrorCode.INPUT_TREE_MISMATCH,
+                f"Runtime input device {value.device} does not match the capture device "
+                f"{slot.device_type}"
+                + (f":{slot.device_index}" if slot.device_index is not None else "")
+                + "; the recorded state and DAG cannot be replayed against a different device.",
+                affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("expected_device_type", slot.device_type),
+                    ("expected_device_index", repr(slot.device_index)),
+                    ("actual_device", str(value.device)),
+                ),
+            )
+        )
+        layout_ok = (
+            value.layout == torch.strided
+            and not value.is_nested
+            and not bool(getattr(value, "is_meta", False))
+            and not any(name is not None for name in (value.names or ()))
+        )
+        checks.append(
+            _contract_check(
+                f"input_layout:{slot.slot_id}",
+                layout_ok,
+                RunnableErrorCode.INPUT_TREE_MISMATCH,
+                "Runtime input has a non-strided/meta/nested/named layout the sparse replay "
+                "cannot faithfully reproduce; runnable capture records only strided dense "
+                "tensors, so such an input must fail closed rather than replay the recorded DAG.",
+                affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("actual_layout", str(value.layout)),
+                    ("is_nested", repr(bool(value.is_nested))),
+                    ("is_meta", repr(bool(getattr(value, "is_meta", False)))),
+                    ("named", repr(any(name is not None for name in (value.names or ())))),
+                ),
+            )
+        )
     checks.extend(_input_tree_contract_checks(descriptor, inputs))
     checks.extend(_input_literal_contract_checks(descriptor, inputs, positions))
     checks.extend(_input_metadata_contract_checks(descriptor, inputs, positions))
@@ -1058,51 +1120,69 @@ def _input_alias_topology_checks(
 ) -> tuple[ContractCheck, ...]:
     """Fail closed on runtime input aliasing unreproducible against a de-aliased capture.
 
-    Torch capture clones each model-input leaf before the forward, so aliasing between
-    input sites (``forward(a, b)`` with ``a is b``, or two views whose storage spans
-    OVERLAP) is LOST: the recorded DAG / archive reflect distinct-input semantics. When any
-    in-place call mutates a model input (directly, via its version chain, or via a view
-    derived from it), a runtime call whose input byte spans OVERLAP would propagate that
-    mutation between sites while the de-aliased replay (independent per-slot clones) would
-    not -- a divergence from a fresh model on the given inputs that the replay would
-    otherwise falsely VERIFY. Such a run is failed closed. A run with no in-place mutation of
-    an input, or whose inputs merely share a base storage with DISJOINT byte spans
-    (``base[:2]`` / ``base[2:]``), is unaffected (no over-trigger): a mutation of one span
-    cannot reach the other, and read-only aliasing is numerically irrelevant.
+    Torch capture clones each model-input leaf before the forward (``safe_copy_args``), and
+    the sparse replay likewise binds independent per-slot clones, so the captured DAG and the
+    replay both reflect DISTINCT-input semantics -- the captured alias topology is always
+    all-distinct. Any runtime aliasing between model-input sites therefore differs from the
+    captured topology and cannot be reproduced against a fresh model on those same aliased
+    inputs:
+
+    * IDENTITY (``forward(a, b)`` with ``a is b`` -- self/cross-attention ``q is k``): the
+      captured / replayed clones are distinct objects, so an ``if a is b`` / ``id()`` identity
+      branch takes the OTHER arm than a fresh model on the aliased input would -- a false
+      VERIFIED even on the ORIGINAL input (r33 F1). This holds with NO in-place mutation, so
+      the check is UNCONDITIONAL.
+    * OVERLAPPING STORAGE SPANS (two views whose byte spans overlap, a storage-identity
+      ``a.data_ptr() == b.data_ptr()`` branch, or an in-place mutation that propagates between
+      overlapping sites): the de-aliased clones neither share storage nor propagate a mutation
+      between sites, so a fresh model on the aliased input can diverge.
+
+    Both fail closed (``runtime topology != captured`` per the F1 contract: capture de-aliases,
+    so ANY runtime aliasing is unreproducible and a genuinely identity/storage-independent model
+    cannot be PROVEN so at this surface -- the honest verdict is fail-closed). DISJOINT spans of
+    one base (``base[:2]`` / ``base[2:]`` -- same storage pointer, non-overlapping bytes) are NOT
+    aliased: a mutation of one cannot reach the other and they are distinct objects, so they
+    never trigger. All-distinct inputs (the common case) never trigger -- zero over-trigger on
+    the trivial topology.
     """
 
-    if not _descriptor_mutates_model_input(descriptor):
-        return ()
-    footprints: list[tuple[str, tuple[int, int, int]]] = []
+    resolved: list[tuple[str, torch.Tensor]] = []
     for slot in input_slots:
         value = raw_values.get(slot.slot_id)
-        if not isinstance(value, torch.Tensor):
-            continue
+        if isinstance(value, torch.Tensor):
+            resolved.append((slot.slot_id, value))
+    aliased_pairs: set[tuple[str, str]] = set()
+
+    def _ordered_pair(left: str, right: str) -> tuple[str, str]:
+        return (left, right) if left <= right else (right, left)
+
+    # Identity aliasing: two input sites bound to the SAME tensor object (``a is b``).
+    for i in range(len(resolved)):
+        for j in range(i + 1, len(resolved)):
+            if resolved[i][1] is resolved[j][1]:
+                aliased_pairs.add(_ordered_pair(resolved[i][0], resolved[j][0]))
+    # Storage aliasing: two input sites whose element byte spans OVERLAP.
+    footprints: list[tuple[str, tuple[int, int, int]]] = []
+    for slot_id, value in resolved:
         footprint = _tensor_storage_footprint(value)
-        if footprint is None:
-            continue
-        footprints.append((slot.slot_id, footprint))
-    overlapping: list[tuple[str, str]] = []
+        if footprint is not None:
+            footprints.append((slot_id, footprint))
     for i in range(len(footprints)):
         for j in range(i + 1, len(footprints)):
             if _footprints_overlap(footprints[i][1], footprints[j][1]):
-                overlapping.append((footprints[i][0], footprints[j][0]))
-    if not overlapping:
+                aliased_pairs.add(_ordered_pair(footprints[i][0], footprints[j][0]))
+    if not aliased_pairs:
         return ()
     return (
         _contract_check(
             "input_alias_topology",
             False,
             RunnableErrorCode.INPUT_TREE_MISMATCH,
-            "Runtime model inputs alias (overlapping storage spans) while an in-place op "
-            "mutates a model input; capture de-aliases inputs, so the recorded taken path "
-            "cannot reproduce the aliased mutation and must not be blessed VERIFIED.",
-            details=(
-                (
-                    "overlapping_input_slot_pairs",
-                    repr(sorted(tuple(sorted(pair)) for pair in overlapping)),
-                ),
-            ),
+            "Runtime model inputs alias (same object or overlapping storage spans); capture "
+            "de-aliases inputs (independent per-slot clones), so the recorded taken path "
+            "cannot reproduce an identity or storage-aliasing dependence and must not be "
+            "blessed VERIFIED.",
+            details=(("aliased_input_slot_pairs", repr(sorted(aliased_pairs))),),
         ),
     )
 
@@ -1191,6 +1271,32 @@ def _input_site_value(inputs: Any, position: Any, positions: set[Any]) -> Any:
     return _value_at_path(inputs, position if isinstance(position, tuple) else (position,))
 
 
+def _type_strict_path(path: Iterable[Any]) -> tuple[Any, ...]:
+    """Type-tag numeric mapping-key path components so ``bool``/``int``/``float`` twins do not
+    conflate under Python ``==`` (r33 F6).
+
+    A dict key ``True`` compares equal to ``1`` and ``1.0`` (``True == 1 == 1.0`` with colliding
+    hashes), so a raw ``(True,)`` leaf path matches ``(1,)`` / ``(1.0,)`` in the contract path
+    SET -- a runtime input whose key TYPE changed then silently passes the input-tree tripwire.
+    Tagging each numeric component with its concrete type keeps the three distinct. Applied
+    SYMMETRICALLY to the recorded and runtime path sets, so an ordinary same-type structure (the
+    common case) is unaffected -- zero over-trigger. Non-numeric components (``str`` keys,
+    already-encoded ``(BOOL_KEY_PATH_TAG, ...)`` tuples) pass through unchanged.
+    """
+
+    tagged: list[Any] = []
+    for component in path:
+        if isinstance(component, bool):
+            tagged.append(("\x00tl_key_bool", bool(component)))
+        elif isinstance(component, int):
+            tagged.append(("\x00tl_key_int", int(component)))
+        elif isinstance(component, float):
+            tagged.append(("\x00tl_key_float", float(component)))
+        else:
+            tagged.append(component)
+    return tuple(tagged)
+
+
 def _input_tree_contract_checks(
     descriptor: SparseRunDescriptor,
     inputs: Any,
@@ -1203,17 +1309,17 @@ def _input_tree_contract_checks(
         if slot.role is TensorSlotRole.MODEL_INPUT and slot.input_binding is not None
     )
     positions = _model_input_arity_positions(descriptor)
-    expected_by_position: dict[Any, set[tuple[str | int, ...]]] = {}
+    expected_by_position: dict[Any, set[tuple[Any, ...]]] = {}
     for slot in slots:
         assert slot.input_binding is not None
         expected_by_position.setdefault(slot.input_binding.model_site_position, set()).add(
-            slot.input_binding.container_path
+            _type_strict_path(slot.input_binding.container_path)
         )
     checks: list[ContractCheck] = []
     for position, expected in expected_by_position.items():
         try:
             root = _input_site_value(inputs, position, positions)
-            actual = set(_tensor_leaf_paths(root))
+            actual = {_type_strict_path(p) for p in _tensor_leaf_paths(root)}
         except (KeyError, IndexError, TypeError):
             actual = set()
         checks.append(
@@ -1303,20 +1409,20 @@ def _input_nontensor_tree_contract_checks(
     capture -- or a recorded one absent at runtime -- diverges the run.
     """
 
-    expected_by_position: dict[Any, set[tuple[str | int, ...]]] = {
+    expected_by_position: dict[Any, set[tuple[Any, ...]]] = {
         position: set() for position in positions
     }
     for _witness, fact in _model_input_literal_facts(descriptor):
         raw_position = fact.get("position")
         position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
-        path = tuple(fact.get("path", ()) or ())
+        path = _type_strict_path(fact.get("path", ()) or ())
         expected_by_position.setdefault(position, set()).add(path)
 
     checks: list[ContractCheck] = []
     for position, expected in expected_by_position.items():
         try:
             root = _input_site_value(inputs, position, positions)
-            actual = _runtime_nontensor_leaf_paths(root)
+            actual = {_type_strict_path(p) for p in _runtime_nontensor_leaf_paths(root)}
         except (KeyError, IndexError, TypeError, AttributeError):
             actual = set()
         checks.append(

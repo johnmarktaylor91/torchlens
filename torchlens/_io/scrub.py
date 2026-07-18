@@ -390,6 +390,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_runnable_input_nontensor_leaves",
         "_runnable_input_tensor_sites",
         "_runnable_input_metadata_reads",
+        "_runnable_output_multitensor_collapse",
         "_runnable_module_training_modes",
         "_out_sink",
         "_out_writer",
