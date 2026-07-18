@@ -1948,7 +1948,9 @@ def _sample_writeback_at_consumption(
                         continue
                     if getattr(source, "_version", None) != version:
                         continue
-                    if not torch.equal(_whole_storage_uint8(source), before):
+                    if not torch.equal(
+                        _whole_storage_uint8(source), before
+                    ):  # byte-exact uint8 view
                         _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
                         return
                 except (RuntimeError, TypeError, NotImplementedError):
@@ -2038,7 +2040,7 @@ def _sample_param_toctou_at_consumption(
         if not isinstance(before, torch.Tensor):
             continue
         try:
-            if not torch.equal(_whole_storage_uint8(source), before):
+            if not torch.equal(_whole_storage_uint8(source), before):  # byte-exact uint8 view
                 _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
                 return True
         except (RuntimeError, TypeError, NotImplementedError):
@@ -2083,7 +2085,7 @@ def _sample_buffer_toctou_at_consumption(
         if not isinstance(expected, torch.Tensor):
             continue
         try:
-            if not torch.equal(_whole_storage_uint8(source), expected):
+            if not torch.equal(_whole_storage_uint8(source), expected):  # byte-exact uint8 view
                 _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
                 return True
         except (RuntimeError, TypeError, NotImplementedError):
@@ -2567,7 +2569,9 @@ def _check_writeback_watch(state: _WitnessState) -> None:
         with _state.pause_logging():
             for source, _version, before in state.writeback_watch:
                 try:
-                    if not torch.equal(_whole_storage_uint8(source), before):
+                    if not torch.equal(
+                        _whole_storage_uint8(source), before
+                    ):  # byte-exact uint8 view
                         _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
                         break
                 except (RuntimeError, TypeError, NotImplementedError):

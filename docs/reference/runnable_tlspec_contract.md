@@ -169,7 +169,12 @@ model-input slot: logical byte digest, device type/index, layout, exact sizes/st
 offset, contiguity/channels-last flags, conjugate/negative bits, base-Tensor-vs-subclass
 classification, grad/inference metadata, and data-pointer alignment class -- captured from the
 live in-memory value that seeded the captured forward, never from an archived payload (payload
-serialization contiguifies strides). Schemas are respectively `state_dict_v1`,
+serialization contiguifies strides). Both sides fingerprint the EXECUTED-clone basis (the
+retained capture-time input clone; the run-time defensive clone): a physical difference that
+survives the clone (a channels-last memory format, an alignment-class change) makes the run
+changed-input-for-attestation (`not_applicable`, path untouched), while a difference the clone
+erases (a storage offset, non-dense slicing) leaves execution physically identical to capture, so
+such a run honestly stays eligible with the byte-exact tripwire still armed. Schemas are respectively `state_dict_v1`,
 `runnable_nonpersistent_buffer_v1`, and `selected_activation_v2`. Any payload bytes/references
 live outside the sparse core.
 

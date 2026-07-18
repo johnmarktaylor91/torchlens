@@ -6,7 +6,6 @@ interventions, and saves or streams activation payloads for torch captures.
 
 import copy
 import dataclasses
-import re
 import time
 import warnings
 from collections import OrderedDict, defaultdict, deque
@@ -42,6 +41,7 @@ from .aliasing import (
 from .buffer_writes import resolve_registered_buffer_address
 from . import module_stack as _mstack
 from ...fastlog._halt import HaltSignal
+from ...utils._torch_compat import torch_structseq_field_names
 from ...utils.introspection import (
     _get_code_context,
     _get_tensors_and_params_from_obj,
@@ -761,6 +761,13 @@ def _is_namedtuple_instance(value: Any) -> bool:
 def _torch_return_type_fields(value: Any) -> tuple[str, ...]:
     """Return public field names for a ``torch.return_types`` structseq.
 
+    r35 hon1_4: delegates to the shared repr-independent helper in
+    ``utils/_torch_compat.py`` (``__match_args__`` primary; identity round-trip
+    fallback on 3.9; refusal otherwise). Structural facts must NEVER derive
+    from ``repr()``/``str()`` of tensor-bearing values -- a wrapped tensor repr
+    used to inject phantom ``dtype=`` fields and flip witness verdicts on
+    tensor size alone.
+
     Parameters
     ----------
     value
@@ -772,19 +779,7 @@ def _torch_return_type_fields(value: Any) -> tuple[str, ...]:
         Field names when PyTorch exposes a named structseq, otherwise ``()``.
     """
 
-    cls = type(value)
-    if cls.__module__ != "torch.return_types":
-        return ()
-    if not isinstance(value, tuple):
-        return ()
-    n_fields = getattr(value, "n_fields", None)
-    n_unnamed = getattr(value, "n_unnamed_fields", 0)
-    if not isinstance(n_fields, int) or n_fields <= 0 or n_unnamed:
-        return ()
-    field_names = tuple(re.findall(r"^\s*([A-Za-z_]\w*)=", repr(value), flags=re.MULTILINE))
-    if len(field_names) != n_fields:
-        return ()
-    return field_names
+    return torch_structseq_field_names(value)
 
 
 def _non_iterable_type_error(exc: TypeError) -> bool:
@@ -1066,6 +1061,13 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
             lossy_reconstruction=reconstruction_is_lossy(value, keys),
         )
     torch_fields = _torch_return_type_fields(value)
+    if type(value).__module__ == "torch.return_types" and not torch_fields:
+        # r35 hon1_4: a structseq whose field declaration cannot be PROVEN
+        # (no valid __match_args__, no identity bijection) is recorded opaque
+        # so the runnable producer refuses it typed -- never silently recorded
+        # as a plain positional tuple (a lossy type substitution).
+        module, qualname = _container_type_ref(value)
+        return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
     if _is_namedtuple_instance(value) or torch_fields:
         fields = torch_fields or tuple(value._fields)
         reconstructable = True

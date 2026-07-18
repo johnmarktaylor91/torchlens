@@ -5,9 +5,8 @@ from __future__ import annotations
 import dataclasses
 import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from itertools import count
-import re
 import struct
 from typing import Any, cast
 
@@ -39,7 +38,6 @@ from .ir.container import (
 from .utils.rng import (
     aten_qualname_is_seeded_rng,
     restore_host_rng,
-    set_random_seed,
     snapshot_host_rng,
 )
 from .runnable import (
@@ -117,8 +115,20 @@ def run_loaded_sparse_trace(
         ) from exc
     descriptor, readiness, callables = _require_loaded_sparse_provider(trace)
     slot_values, input_checks, input_alias_unresolved = _bind_runtime_inputs(descriptor, inputs)
-    input_byte_digests = _snapshot_input_byte_digests(descriptor, slot_values)
     _raise_first_divergence(input_checks, divergence_policy, fork=None)
+    # I5: digests/fingerprints are attestation-only facts, computed strictly
+    # AFTER admission (hard preconditions + contract enforcement) and only when
+    # an activation archive exists to attest against.
+    if isinstance(descriptor.payload_layers.activations, ActivationPayloadLayerDescriptor):
+        input_byte_digests: Mapping[str, str] = _snapshot_input_byte_digests(
+            descriptor, slot_values
+        )
+        input_fingerprints = _snapshot_input_fingerprints(
+            descriptor, slot_values, input_byte_digests
+        )
+    else:
+        input_byte_digests = {}
+        input_fingerprints = {}
     prepared_state = prepare_runnable_state(trace, seed=seed)
     slot_values.update(_clone_state_values(prepared_state.slot_values))
     fork = trace._fork_trace(name=_run_fork_name(trace))
@@ -133,6 +143,7 @@ def run_loaded_sparse_trace(
             callables=callables,
             slot_values=slot_values,
             input_byte_digests=input_byte_digests,
+            input_fingerprints=input_fingerprints,
             input_checks=input_checks,
             input_alias_unresolved=input_alias_unresolved,
             prepared_state=prepared_state,
@@ -141,6 +152,52 @@ def run_loaded_sparse_trace(
     except BaseException:
         _state._unregister_log(fork)
         raise
+
+
+def _seeded_fork_devices(descriptor: SparseRunDescriptor, seed: int | None) -> list[int]:
+    """Return the CUDA device fork set for one seeded run (r35 corr2_4).
+
+    The set follows the seeding primitive, never the bound-input overlay: ALL
+    visible CUDA devices are forked when CUDA is already initialized, or when
+    the descriptor's immutable capture metadata names a CUDA device anywhere --
+    including produced-only intermediates and RNG-source slots (the original
+    leak: a CPU-input model drawing ``torch.rand(..., device="cuda")``). A
+    CPU-only descriptor on an uninitialized-CUDA runtime forks nothing AND the
+    executor seeds nothing CUDA-side, so no lazy seed can leak into the
+    caller's future CUDA state; a post-run tripwire asserts initialization did
+    not flip.
+    """
+
+    if seed is None or not torch.cuda.is_available():
+        return []
+    if torch.cuda.is_initialized():
+        return list(range(torch.cuda.device_count()))
+    descriptor_mentions_cuda = any(slot.device_type == "cuda" for slot in descriptor.tensor_slots)
+    if descriptor_mentions_cuda:
+        return list(range(torch.cuda.device_count()))
+    return []
+
+
+def _seed_run_generators(seed: int, forked_cuda_devices: list[int], *, reseed_host: bool) -> None:
+    """Seed exactly the generators this run forked (r35 corr2_4).
+
+    Never ``torch.manual_seed``: the global primitive seeds every CUDA device
+    (queuing a LAZY seed on an uninitialized runtime that would apply to the
+    caller's future initialization) plus MPS/XPU generators the fork set does
+    not snapshot. The executor seeds the CPU default generator, each forked
+    CUDA device generator individually, and -- for a faithful host-RNG replay
+    -- Python/NumPy (whose prior state the caller snapshot-restores).
+    """
+
+    if reseed_host:
+        import random
+
+        random.seed(seed)
+        np.random.seed(seed)
+    torch.default_generator.manual_seed(seed)
+    for device_index in forked_cuda_devices:
+        with torch.cuda.device(device_index):
+            torch.cuda.manual_seed(seed)
 
 
 def _host_rng_unreproduced(descriptor: SparseRunDescriptor, seed: int | None) -> bool:
@@ -185,6 +242,7 @@ def _execute_loaded_sparse_transaction(
     callables: Mapping[str, Callable[..., Any]],
     slot_values: dict[str, torch.Tensor],
     input_byte_digests: Mapping[str, str],
+    input_fingerprints: Mapping[str, InputAttestationFingerprint],
     input_checks: tuple[ContractCheck, ...],
     input_alias_unresolved: bool,
     prepared_state: PreparedRunnableState,
@@ -208,16 +266,36 @@ def _execute_loaded_sparse_transaction(
         *_state_contract_checks(descriptor, slot_values),
     ]
     _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
+    # r35 corr2_5: PRE-EXECUTION state digests -- eligibility compares each
+    # state slot's capture-start bytes, not whatever a mutating call left
+    # behind. Computed only when an activation archive exists to attest.
+    state_byte_digests: dict[str, str] = {}
+    if isinstance(descriptor.payload_layers.activations, ActivationPayloadLayerDescriptor):
+        for state_slot in descriptor.tensor_slots:
+            if state_slot.state_binding is None or state_slot.slot_id not in slot_values:
+                continue
+            try:
+                state_byte_digests[state_slot.slot_id] = runnable_tensor_byte_digest(
+                    slot_values[state_slot.slot_id]
+                )
+            except Exception:
+                # Undigestable state cannot attest; the absent entry reads as a
+                # mismatch in the eligibility partition (fail-safe).
+                continue
     call_outputs: dict[str, Any] = {}
     attestation_slot_ids = _raw_activation_slot_ids(descriptor)
     attestation_slot_values: dict[str, torch.Tensor] = {}
 
-    devices = sorted(
-        {
-            value.device.index
-            for value in slot_values.values()
-            if value.device.type == "cuda" and value.device.index is not None
-        }
+    # r35 corr2_4: the fork/restore set follows the SEEDING PRIMITIVE, never the
+    # bound-input overlay -- every visible CUDA device is forked when CUDA is
+    # initialized or the descriptor's capture metadata names a CUDA device
+    # (including produced-only intermediates and RNG-source slots), and the
+    # executor seeds ONLY the CPU generator plus each forked CUDA generator, so
+    # no unforked generator (an unmentioned CUDA device, MPS/XPU) is ever
+    # touched by a seeded run.
+    devices = _seeded_fork_devices(descriptor, seed)
+    cuda_initialized_before = (
+        torch.cuda.is_available() and torch.cuda.is_initialized() if seed is not None else None
     )
     host_rng_unreproduced = _host_rng_unreproduced(descriptor, seed)
     # Faithful original replay of a host-RNG capture (matching seed): reseed every
@@ -230,11 +308,17 @@ def _execute_loaded_sparse_transaction(
     host_rng_saved = snapshot_host_rng() if reseed_host else None
     rng_context = torch.random.fork_rng(devices=devices) if seed is not None else nullcontext()
     try:
-        with rng_context, _state.pause_logging():
-            if reseed_host:
-                set_random_seed(cast(int, seed))
-            elif seed is not None:
-                torch.manual_seed(seed)
+        # Decision E: the recorded capture-scoped ambient backend context is
+        # restored transactionally around the whole run (finally-restored on
+        # every exit); each resolved call additionally enters its own recorded
+        # per-call context tightly (see execute_call below).
+        with (
+            _ambient_execution_context_restored(descriptor.ambient_context),
+            rng_context,
+            _state.pause_logging(),
+        ):
+            if seed is not None:
+                _seed_run_generators(cast(int, seed), devices, reseed_host=reseed_host)
 
             def execute_call(call_node: _CallConeNode) -> None:
                 """Execute and stage one dependency-ready sparse call."""
@@ -247,7 +331,8 @@ def _execute_loaded_sparse_transaction(
                 )
                 contract_checks.extend(call_checks)
                 _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
-                output = _execute_sparse_call(call, callables[call.call_id], slot_values)
+                with _call_execution_context_entered(call.execution_context):
+                    output = _execute_sparse_call(call, callables[call.call_id], slot_values)
                 call_outputs[call.call_id] = output
                 contract_checks.extend(
                     _bind_call_outputs(
@@ -270,6 +355,23 @@ def _execute_loaded_sparse_transaction(
     finally:
         if host_rng_saved is not None:
             restore_host_rng(host_rng_saved)
+
+    if (
+        seed is not None
+        and not devices
+        and torch.cuda.is_available()
+        and torch.cuda.is_initialized() != bool(cuda_initialized_before)
+    ):
+        # r35 corr2_4 tripwire: CUDA initialized DURING a seeded run whose fork
+        # set excluded it -- the descriptor's capture device summary missed a
+        # CUDA consumer, so run-local RNG isolation cannot be guaranteed. This
+        # is an internal summary bug, never silently ignored.
+        _state._unregister_log(fork)
+        raise RuntimeError(
+            "Internal invariant violation: CUDA became initialized during a "
+            "seeded sparse run whose descriptor named no CUDA device; the "
+            "capture device summary is incomplete."
+        )
 
     output = _reconstruct_output(descriptor, slot_values, fork, call_outputs=call_outputs)
     contract_checks.extend(
@@ -323,6 +425,8 @@ def _execute_loaded_sparse_transaction(
         slot_values=slot_values,
         attestation_slot_values=attestation_slot_values,
         input_byte_digests=input_byte_digests,
+        input_fingerprints=input_fingerprints,
+        state_byte_digests=state_byte_digests,
         trace=trace,
         provisional_verdict=eligibility_verdict,
     )
@@ -862,20 +966,26 @@ def _bind_runtime_inputs(
                 f"Runtime input leaf is {type(value).__name__}, expected torch.Tensor.",
             )
         raw_values[slot.slot_id] = value
-        values[slot.slot_id] = value.detach().clone()
-        shape_ok = tuple(value.shape) == slot.shape
+        # Phase-1 facts are exception-safe: exotic layouts (nested tensors) can
+        # refuse even a ``sizes()`` read, which must surface as a failed check,
+        # never a raw backend error.
+        try:
+            actual_shape: tuple[int, ...] | None = tuple(value.shape)
+        except (RuntimeError, TypeError, NotImplementedError):
+            actual_shape = None
+        shape_ok = actual_shape == slot.shape
         dtype_ok = str(value.dtype) == slot.dtype
         checks.append(
             _contract_check(
                 f"input_shape:{slot.slot_id}",
                 shape_ok,
                 RunnableErrorCode.INPUT_SHAPE_MISMATCH,
-                f"Runtime input shape {tuple(value.shape)} does not match {slot.shape}.",
+                f"Runtime input shape {actual_shape} does not match {slot.shape}.",
                 affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
                 details=(
                     ("slot_id", slot.slot_id),
                     ("expected_shape", repr(slot.shape)),
-                    ("actual_shape", repr(tuple(value.shape))),
+                    ("actual_shape", repr(actual_shape)),
                 ),
             )
         )
@@ -927,23 +1037,28 @@ def _bind_runtime_inputs(
             value.layout == torch.strided
             and not value.is_nested
             and not bool(getattr(value, "is_meta", False))
+            and not bool(getattr(value, "is_quantized", False))
             and not any(name is not None for name in (value.names or ()))
+            and type(value) in {torch.Tensor, torch.nn.Parameter}
         )
         checks.append(
             _contract_check(
                 f"input_layout:{slot.slot_id}",
                 layout_ok,
                 RunnableErrorCode.INPUT_TREE_MISMATCH,
-                "Runtime input has a non-strided/meta/nested/named layout the sparse replay "
-                "cannot faithfully reproduce; runnable capture records only strided dense "
-                "tensors, so such an input must fail closed rather than replay the recorded DAG.",
+                "Runtime input has a non-strided/meta/nested/named/quantized/subclass "
+                "layout the sparse replay cannot faithfully reproduce; runnable capture "
+                "records only plain strided dense tensors, so such an input must fail "
+                "closed rather than replay the recorded DAG.",
                 affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
                 details=(
                     ("slot_id", slot.slot_id),
                     ("actual_layout", str(value.layout)),
                     ("is_nested", repr(bool(value.is_nested))),
                     ("is_meta", repr(bool(getattr(value, "is_meta", False)))),
+                    ("is_quantized", repr(bool(getattr(value, "is_quantized", False)))),
                     ("named", repr(any(name is not None for name in (value.names or ())))),
+                    ("tensor_class", type(value).__qualname__),
                 ),
             )
         )
@@ -955,6 +1070,40 @@ def _bind_runtime_inputs(
         descriptor, input_slots, raw_values
     )
     checks.extend(alias_checks)
+    # ------------------------------------------------------------------
+    # r35 I5 (corr2_6) -- CONTRACT-BEFORE-TOUCH admission choke point.
+    # Everything ABOVE this comment reads only non-materializing, exception-
+    # safe facts from the RAW bound leaves. Everything BELOW may clone,
+    # transfer, view, digest, or otherwise materialize input bytes. Hard
+    # executability preconditions (meta/sparse/nested/named/quantized/
+    # subclass layouts) are enforced HERE, before any byte operation, and
+    # raise regardless of the divergence policy: ``return_diverged`` may
+    # continue only with an EXECUTABLE poisoned input, never past a hard
+    # precondition. Any future preamble addition that touches input bytes
+    # MUST be placed below this point.
+    # ------------------------------------------------------------------
+    hard_failure = next(
+        (check for check in checks if not check.passed and check.name.startswith("input_layout:")),
+        None,
+    )
+    if hard_failure is not None:
+        diagnostic = hard_failure.diagnostic
+        raise PathDivergenceError(
+            diagnostic.message if diagnostic is not None else "Unsupported input layout.",
+            code=(
+                diagnostic.code.value
+                if diagnostic is not None
+                else RunnableErrorCode.INPUT_TREE_MISMATCH.value
+            ),
+            path_faithfulness=PathFaithfulness.DIVERGED,
+            first_mismatch=diagnostic,
+            contract_check=hard_failure,
+        )
+    # Phase 4: clone only ACCEPTED (executable) tensors.
+    for slot in input_slots:
+        raw = raw_values.get(slot.slot_id)
+        if isinstance(raw, torch.Tensor):
+            values[slot.slot_id] = raw.detach().clone()
     return values, tuple(checks), input_alias_unresolved
 
 
@@ -1343,6 +1492,31 @@ def _snapshot_input_byte_digests(
         for slot in descriptor.tensor_slots
         if slot.role is TensorSlotRole.MODEL_INPUT and slot.slot_id in slot_values
     }
+
+
+def _snapshot_input_fingerprints(
+    descriptor: SparseRunDescriptor,
+    slot_values: Mapping[str, torch.Tensor],
+    input_byte_digests: Mapping[str, str],
+) -> dict[str, InputAttestationFingerprint]:
+    """Fingerprint the EXECUTED input clones on the capture-identical basis (hon1_3).
+
+    Runs after admission (I5), before any sparse call. The capture side
+    fingerprints the retained input clone that seeded the captured forward; both
+    sides therefore compare the same clone basis, so a physical twin (layout /
+    stride / offset / alignment-class change) is detected exactly.
+    """
+
+    fingerprints: dict[str, InputAttestationFingerprint] = {}
+    for slot in descriptor.tensor_slots:
+        if slot.role is not TensorSlotRole.MODEL_INPUT or slot.slot_id not in slot_values:
+            continue
+        fingerprints[slot.slot_id] = build_input_attestation_fingerprint(
+            slot.slot_id,
+            slot_values[slot.slot_id],
+            byte_digest=input_byte_digests.get(slot.slot_id),
+        )
+    return fingerprints
 
 
 _FINGERPRINT_ALIGNMENT_MODULUS = 16
@@ -1825,6 +1999,132 @@ def _pre_call_contract_checks(
         if argument.slot_id in slot_values
     }
     return checks, versions
+
+
+def _context_unavailable_error(field: str, detail: str) -> RunPreconditionError:
+    """Build the typed refusal for an un-enterable/un-restorable execution context."""
+
+    return RunPreconditionError(
+        f"Recorded execution context {field!r} cannot be entered or restored on "
+        f"this runtime: {detail}",
+        code=RunnableErrorCode.EXECUTION_CONTEXT_UNAVAILABLE.value,
+        context_field=field,
+    )
+
+
+@contextmanager
+def _ambient_execution_context_restored(ambient: Any) -> Any:
+    """Transactionally restore the recorded capture-scoped ambient context (decision E).
+
+    The caller's ambient state is snapshotted, the recorded values are applied
+    (``None`` producer-absent fields are left as-is -- there is nothing recorded
+    to restore), and the caller's state is re-applied in ``finally`` on every
+    exit: success, divergence, callable exception, and numeric-attestation
+    rollback. A recorded value this runtime cannot apply rolls back any partial
+    application and raises the typed ``execution_context_unavailable`` refusal
+    -- never a silent ambient passthrough.
+    """
+
+    from .utils._torch_compat import (
+        apply_ambient_execution_context,
+        snapshot_ambient_execution_context,
+    )
+
+    recorded = {
+        "default_dtype": ambient.default_dtype,
+        "default_device": ambient.default_device,
+        "float32_matmul_precision": ambient.float32_matmul_precision,
+        "deterministic_algorithms": ambient.deterministic_algorithms,
+        "deterministic_algorithms_warn_only": ambient.deterministic_algorithms_warn_only,
+        "cuda_matmul_allow_tf32": ambient.cuda_matmul_allow_tf32,
+        "cudnn_allow_tf32": ambient.cudnn_allow_tf32,
+        "cudnn_deterministic": ambient.cudnn_deterministic,
+        "cudnn_benchmark": ambient.cudnn_benchmark,
+        "cudnn_enabled": ambient.cudnn_enabled,
+        "flash_sdp_enabled": ambient.flash_sdp_enabled,
+        "mem_efficient_sdp_enabled": ambient.mem_efficient_sdp_enabled,
+        "math_sdp_enabled": ambient.math_sdp_enabled,
+    }
+    saved = snapshot_ambient_execution_context()
+    try:
+        apply_ambient_execution_context(recorded)
+    except RuntimeError as exc:
+        try:
+            apply_ambient_execution_context(saved)
+        except RuntimeError:  # pragma: no cover - saved values came from this runtime
+            pass
+        raise _context_unavailable_error("ambient_context", str(exc)) from exc
+    try:
+        yield
+    finally:
+        apply_ambient_execution_context(saved)
+
+
+@contextmanager
+def _call_execution_context_entered(context: Any) -> Any:
+    """Enter the REQUIRED recorded per-call execution context tightly (corr2_8).
+
+    Autocast: an ``enabled=True`` record enters autocast with the recorded
+    dtype; an explicit ``enabled=False`` record actively enters a DISABLED
+    autocast context when the runtime currently has that device class enabled
+    (so a caller's ambient autocast cannot contaminate a disabled capture) and
+    is vacuously satisfied when the device class is absent/disabled. Grad and
+    inference modes are entered explicitly. Context entry never touches RNG;
+    the caller's context is restored in reverse order on every exit. An
+    un-enterable recorded context is a typed refusal, never a raw torch error.
+    """
+
+    from .utils._torch_compat import autocast_is_enabled
+
+    stack: list[Any] = []
+    try:
+        for entry in context.autocast:
+            if entry.enabled:
+                dtype_name = str(entry.dtype or "").removeprefix("torch.")
+                dtype = getattr(torch, dtype_name, None)
+                if not isinstance(dtype, torch.dtype):
+                    raise _context_unavailable_error(
+                        f"autocast:{entry.device_type}",
+                        f"recorded autocast dtype {entry.dtype!r} is unavailable",
+                    )
+                try:
+                    ctx = torch.amp.autocast(entry.device_type, enabled=True, dtype=dtype)
+                    ctx.__enter__()
+                except (RuntimeError, ValueError, TypeError) as exc:
+                    raise _context_unavailable_error(
+                        f"autocast:{entry.device_type}", str(exc)
+                    ) from exc
+                stack.append(ctx)
+                continue
+            # Explicit disabled record: enter a disabled context only when the
+            # runtime reports that device class currently autocast-enabled; a
+            # runtime without the device class is vacuously disabled already.
+            try:
+                currently_enabled = bool(autocast_is_enabled(entry.device_type))
+            except (RuntimeError, TypeError):
+                currently_enabled = False
+            if currently_enabled:
+                try:
+                    ctx = torch.amp.autocast(entry.device_type, enabled=False)
+                    ctx.__enter__()
+                except (RuntimeError, ValueError, TypeError) as exc:
+                    raise _context_unavailable_error(
+                        f"autocast:{entry.device_type}", str(exc)
+                    ) from exc
+                stack.append(ctx)
+        try:
+            inference_ctx = torch.inference_mode(bool(context.inference_mode))
+            inference_ctx.__enter__()
+            stack.append(inference_ctx)
+            grad_ctx = torch.enable_grad() if context.grad_enabled else torch.no_grad()
+            grad_ctx.__enter__()
+            stack.append(grad_ctx)
+        except RuntimeError as exc:
+            raise _context_unavailable_error("grad_mode", str(exc)) from exc
+        yield
+    finally:
+        for ctx in reversed(stack):
+            ctx.__exit__(None, None, None)
 
 
 def _execute_sparse_call(
@@ -2947,6 +3247,12 @@ def _container_field_names(value: Any) -> tuple[str, ...]:
 def _torch_structseq_field_names(value: Any) -> tuple[str, ...]:
     """Return producer-compatible field names for a torch structseq value.
 
+    r35 hon1_4: delegates to the shared repr-independent helper in
+    ``utils/_torch_compat.py`` -- the exact same source the capture side uses,
+    so capture and replay stay behavior-identical. Console wrap position,
+    dtype/device suffixes, and tensor rendering can never create or destroy a
+    structural field.
+
     Parameters
     ----------
     value:
@@ -2959,17 +3265,9 @@ def _torch_structseq_field_names(value: Any) -> tuple[str, ...]:
         a fully named ``torch.return_types`` value.
     """
 
-    if not isinstance(value, tuple) or type(value).__module__ != "torch.return_types":
-        return ()
-    n_fields = getattr(value, "n_fields", None)
-    n_unnamed = getattr(value, "n_unnamed_fields", 0)
-    if not isinstance(n_fields, int) or n_fields <= 0 or n_unnamed:
-        return ()
-    field_names = tuple(
-        match.group(1)
-        for match in re.finditer(r"^\s*([A-Za-z_]\w*)=", repr(value), flags=re.MULTILINE)
-    )
-    return field_names if len(field_names) == n_fields else ()
+    from .utils._torch_compat import torch_structseq_field_names
+
+    return torch_structseq_field_names(value)
 
 
 def _scalar_literal_equal(actual: Any, expected: Any) -> bool:
@@ -3236,6 +3534,8 @@ def _numeric_attestation_check(
     slot_values: Mapping[str, torch.Tensor],
     attestation_slot_values: Mapping[str, torch.Tensor],
     input_byte_digests: Mapping[str, str],
+    input_fingerprints: Mapping[str, InputAttestationFingerprint],
+    state_byte_digests: Mapping[str, str],
     trace: Any,
     provisional_verdict: PathFaithfulness,
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
@@ -3311,9 +3611,11 @@ def _numeric_attestation_check(
         # not a reproducible result, so attesting it would create a false
         # divergence on an otherwise faithful original-input replay.
         return NumericAttestationStatus.NOT_APPLICABLE, None
-    if not raw_members or not _attestation_inputs_match(descriptor, layer, input_byte_digests):
+    if not raw_members or not _attestation_inputs_match(
+        descriptor, layer, input_byte_digests, input_fingerprints
+    ):
         return NumericAttestationStatus.NOT_APPLICABLE, None
-    if not _attestation_state_matches(descriptor, layer, state, slot_values):
+    if not _attestation_state_matches(descriptor, layer, state, state_byte_digests, trace):
         return NumericAttestationStatus.NOT_APPLICABLE, None
     archived = trace.__dict__.get("_runnable_archived_activations")
     if not isinstance(archived, Mapping):
@@ -3923,8 +4225,18 @@ def _attestation_inputs_match(
     descriptor: SparseRunDescriptor,
     layer: Any,
     input_byte_digests: Mapping[str, str],
+    input_fingerprints: Mapping[str, InputAttestationFingerprint],
 ) -> bool:
-    """Return whether every available capture-input digest matches this run."""
+    """Return whether the run's inputs are LOGICALLY and PHYSICALLY original.
+
+    r35 hon1_3 (H-a): eligibility is layout-strict. Alongside the logical byte
+    digests, every recorded ``InputAttestationFingerprint`` must equal the
+    fingerprint of the value that actually seeds execution -- sizes, strides,
+    storage offset, memory-format flags, conj/neg bits, device, subclass class,
+    grad/inference metadata, and data-pointer alignment class. A physical twin
+    (byte-identical values, different layout) is changed-input-for-attestation
+    ONLY: ``not_applicable``, with path faithfulness untouched.
+    """
 
     expected_slot_ids = {
         slot.slot_id for slot in descriptor.tensor_slots if slot.role is TensorSlotRole.MODEL_INPUT
@@ -3932,9 +4244,19 @@ def _attestation_inputs_match(
     observed_slot_ids = {digest.slot_id for digest in layer.original_input_digests}
     if not expected_slot_ids or observed_slot_ids != expected_slot_ids:
         return False
-    return all(
+    if not all(
         input_byte_digests.get(digest.slot_id) == digest.byte_digest
         for digest in layer.original_input_digests
+    ):
+        return False
+    recorded_fingerprints = tuple(getattr(layer, "input_fingerprints", ()) or ())
+    if {fingerprint.slot_id for fingerprint in recorded_fingerprints} != expected_slot_ids:
+        # v2 requires a fingerprint per input slot; anything else is ineligible
+        # (fail-safe: never attest without the physical identity proof).
+        return False
+    return all(
+        input_fingerprints.get(fingerprint.slot_id) == fingerprint
+        for fingerprint in recorded_fingerprints
     )
 
 
@@ -3942,30 +4264,63 @@ def _attestation_state_matches(
     descriptor: SparseRunDescriptor,
     layer: Any,
     state: PreparedRunnableState,
-    slot_values: Mapping[str, torch.Tensor],
+    state_byte_digests: Mapping[str, str],
+    trace: Any,
 ) -> bool:
-    """Return whether runtime state is capture-equivalent rather than random."""
+    """Return whether runtime state is capture-equivalent rather than random.
 
-    state_slots = {
-        slot.state_binding.state_dict_name: slot
-        for slot in descriptor.tensor_slots
-        if slot.state_binding is not None
-    }
-    if not state_slots:
+    r35 corr2_5: eligibility is PARTITIONED by persistence. PERSISTENT slots
+    (the canonical ``state_dict``) compare against the activation layer's
+    ``capture_state_digests`` (which by construction contain only canonical
+    entries). USED NON-PERSISTENT buffer slots are separately required to
+    originate from the present, schema-valid, load-validated capture-embedded
+    ``runnable_nonpersistent_buffer_v1`` family and to match its byte digests;
+    staged user state can never supply them. Comparison uses PRE-EXECUTION
+    digests so a slot a call mutates mid-run is judged by its capture-start
+    state.
+    """
+
+    persistent_slots: dict[str, TensorSlotDescriptor] = {}
+    nonpersistent_slots: dict[str, TensorSlotDescriptor] = {}
+    for slot in descriptor.tensor_slots:
+        binding = slot.state_binding
+        if binding is None:
+            continue
+        if binding.persistent:
+            persistent_slots[binding.state_dict_name] = slot
+        else:
+            nonpersistent_slots[binding.state_dict_name] = slot
+    if not persistent_slots and not nonpersistent_slots:
         return True
-    if state.state_source not in {
-        StateSource.EMBEDDED_CAPTURE_STATE,
-        StateSource.USER_STATE_DICT,
-    }:
-        return False
-    expected = {item.state_dict_name: item.byte_digest for item in layer.capture_state_digests}
-    if set(expected) != set(state_slots):
-        return False
-    return all(
-        slot.slot_id in slot_values
-        and runnable_tensor_byte_digest(slot_values[slot.slot_id]) == expected[name]
-        for name, slot in state_slots.items()
-    )
+    if persistent_slots:
+        if state.state_source not in {
+            StateSource.EMBEDDED_CAPTURE_STATE,
+            StateSource.USER_STATE_DICT,
+        }:
+            return False
+        expected = {item.state_dict_name: item.byte_digest for item in layer.capture_state_digests}
+        if set(expected) != set(persistent_slots):
+            return False
+        if not all(
+            state_byte_digests.get(slot.slot_id) == expected[name]
+            for name, slot in persistent_slots.items()
+        ):
+            return False
+    if nonpersistent_slots:
+        embedded = trace.__dict__.get("_runnable_embedded_nonpersistent_buffers")
+        if not isinstance(embedded, Mapping):
+            return False
+        for name, slot in nonpersistent_slots.items():
+            recorded = embedded.get(name)
+            if not isinstance(recorded, torch.Tensor):
+                return False
+            try:
+                recorded_digest = runnable_tensor_byte_digest(recorded)
+            except Exception:
+                return False
+            if state_byte_digests.get(slot.slot_id) != recorded_digest:
+                return False
+    return True
 
 
 def _raise_numeric_attestation_failure(fork: Any, check: ContractCheck) -> None:

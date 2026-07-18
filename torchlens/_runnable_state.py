@@ -519,6 +519,36 @@ def _name_contract(
     return canonical_module, roles
 
 
+def _alias_values_coherent(first: torch.Tensor, second: torch.Tensor) -> bool:
+    """Return whether two same-shape/dtype alias-group values are byte-coherent.
+
+    r35 corr2_2: coherence is the STORAGE-IDENTITY fast path (the tied-parameter
+    case -- one allocation exposed under two canonical names) or frozen
+    LOGICAL-BYTE equality via the same representation as
+    ``runnable_tensor_byte_digest``. Never float ``torch.equal`` (NaN payloads
+    falsely conflict), never ``allclose``, never ``equal_nan=True`` (a
+    different-NaN-payload pair must still conflict): NaN payloads, complex
+    components, signed zero, infinities, and int/bool bytes are all exact.
+    """
+
+    try:
+        if (
+            first.untyped_storage().data_ptr() == second.untyped_storage().data_ptr()
+            and first.storage_offset() == second.storage_offset()
+            and tuple(first.stride()) == tuple(second.stride())
+            and tuple(first.shape) == tuple(second.shape)
+        ):
+            return True
+    except (RuntimeError, AttributeError, TypeError, NotImplementedError):
+        pass
+    try:
+        return runnable_tensor_byte_digest(first) == runnable_tensor_byte_digest(second)
+    except Exception:
+        # An undigestable exotic value cannot be proven coherent: conflict
+        # (fail closed, atomic typed rejection at the caller).
+        return False
+
+
 def _alias_value_diagnostics(
     slots: tuple[TensorSlotDescriptor, ...],
     values_by_name: Mapping[str, torch.Tensor],
@@ -546,7 +576,7 @@ def _alias_value_diagnostics(
             if (
                 first_value.shape != value.shape
                 or first_value.dtype != value.dtype
-                or not torch.equal(first_value, value)
+                or not _alias_values_coherent(first_value, value)
             ):
                 diagnostics.append(
                     _diagnostic(
@@ -640,11 +670,61 @@ def _generator_for_slot(
     return generators[key]
 
 
+def _kaiming_fan_in(shape: tuple[int, ...]) -> int:
+    """Return the frozen N1-a fan-in for a nonempty Kaiming-initialized shape."""
+
+    return math.prod(shape[1:]) if len(shape) >= 2 else max(1, shape[0])
+
+
+def initializer_contract_diagnostics(
+    slot: TensorSlotDescriptor,
+) -> tuple[RunnableDiagnostic, ...]:
+    """Validate the ``torchlens_role_init_v2`` totality contract for one slot.
+
+    Shared by producer preflight AND the runtime initializer (defense in depth,
+    corr2_3): a legal ``numel() == 0`` slot is total for every role (allocated
+    and returned with ZERO generator consumption), and every nonempty Kaiming
+    slot must have finite positive ``fan_in``. An unsupported contract fails
+    typed here, never by division or backend sampling at run time.
+    """
+
+    binding = slot.state_binding
+    if binding is None:
+        return ()
+    policy = CANONICAL_INITIALIZER_BY_ROLE[binding.semantic_role]
+    if policy is not InitializerPolicy.KAIMING_NORMAL:
+        return ()
+    if math.prod(slot.shape) == 0:
+        # Degenerate-total: nothing to sample.
+        return ()
+    if not slot.shape:
+        return (
+            _diagnostic(
+                RunnableErrorCode.STATE_DTYPE_MISMATCH,
+                f"Kaiming initialization is unsupported for scalar slot {slot.slot_id!r}.",
+                detection_stage="state_random_initializer",
+                details=(("slot_id", slot.slot_id), ("dtype", slot.dtype)),
+            ),
+        )
+    fan_in = _kaiming_fan_in(slot.shape)
+    if fan_in <= 0:
+        return (
+            _diagnostic(
+                RunnableErrorCode.STATE_DTYPE_MISMATCH,
+                f"Kaiming initialization requires finite positive fan_in for slot "
+                f"{slot.slot_id!r}; got {fan_in}.",
+                detection_stage="state_random_initializer",
+                details=(("slot_id", slot.slot_id), ("shape", repr(slot.shape))),
+            ),
+        )
+    return ()
+
+
 def _initialize_slot(
     slot: TensorSlotDescriptor,
     generator: torch.Generator | None,
 ) -> torch.Tensor:
-    """Allocate and fill one representative slot under N1-a."""
+    """Allocate and fill one representative slot under ``torchlens_role_init_v2``."""
 
     binding = slot.state_binding
     assert binding is not None
@@ -653,10 +733,17 @@ def _initialize_slot(
     policy = CANONICAL_INITIALIZER_BY_ROLE[binding.semantic_role]
     _validate_initializer_dtype(slot, dtype)
     value = torch.empty(slot.shape, dtype=dtype, device=device)
+    if value.numel() == 0:
+        # v2 degenerate totality: a legal empty slot returns its allocation
+        # immediately -- no sampling, PROVABLY zero generator consumption.
+        return value
     if policy is InitializerPolicy.ZEROS:
         return value.zero_()
     if policy is InitializerPolicy.ONES:
         return value.fill_(1)
+    contract = initializer_contract_diagnostics(slot)
+    if contract:
+        raise _binding_error(contract)
     if not dtype.is_floating_point or not slot.shape:
         raise _binding_error(
             (
@@ -668,7 +755,7 @@ def _initialize_slot(
                 ),
             )
         )
-    fan_in = math.prod(slot.shape[1:]) if len(slot.shape) >= 2 else max(1, slot.shape[0])
+    fan_in = _kaiming_fan_in(slot.shape)
     return value.normal_(mean=0.0, std=math.sqrt(2.0 / fan_in), generator=generator)
 
 
@@ -853,8 +940,31 @@ def runnable_tensor_byte_digest(value: torch.Tensor) -> str:
     str
         Lowercase SHA-256 hexadecimal digest of dtype, shape, and contiguous
         CPU bytes.
+
+    Raises
+    ------
+    RunPreconditionError
+        If the tensor is not a plain strided dense tensor (r35 I5 defense in
+        depth: the digest helper itself refuses exotic layouts typed instead of
+        surfacing a raw backend error mid-materialization).
     """
 
+    if (
+        value.layout is not torch.strided
+        or bool(getattr(value, "is_meta", False))
+        or value.is_nested
+        or bool(getattr(value, "is_quantized", False))
+        or any(name is not None for name in (value.names or ()))
+    ):
+        from .errors import RunPreconditionError
+
+        raise RunPreconditionError(
+            "Byte digesting requires a plain strided dense tensor; got layout "
+            f"{value.layout} (meta={bool(getattr(value, 'is_meta', False))}, "
+            f"nested={bool(value.is_nested)}, "
+            f"quantized={bool(getattr(value, 'is_quantized', False))}).",
+            code=RunnableErrorCode.INPUT_TREE_MISMATCH.value,
+        )
     with _state.pause_logging():
         cpu_value = value.detach().cpu().contiguous()
         payload = cpu_value.reshape(-1).view(torch.uint8).numpy().tobytes()

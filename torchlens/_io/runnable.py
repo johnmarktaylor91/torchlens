@@ -533,6 +533,13 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # routes) cannot claim complete witness coverage for replay either.
         completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
     diagnostics.extend(_preflight_output_contracts(trace, ops))
+    # r35 corr2_3 note: the torchlens_role_init_v2 totality contract
+    # (``initializer_contract_diagnostics``) is enforced typed at runtime when
+    # random initialization is actually selected. It is deliberately NOT a
+    # producer refusal: a scalar-parameter model saved with embedded weights is
+    # a valid artifact whose random FALLBACK is simply unavailable, and v2's
+    # degenerate totality means every legal empty shape initializes without
+    # sampling, so no advertised descriptor can reach a raw math error.
     ambient_context = _ambient_execution_context(trace, calls, registry_entries, slot_drafts)
     if ambient_context is None:
         diagnostics.append(

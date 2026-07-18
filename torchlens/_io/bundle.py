@@ -276,6 +276,8 @@ def save(
             trace,
             sparse_run_descriptor,
         )
+        if nonpersistent_buffer_blob_specs:
+            _warn_nonpersistent_buffer_disclosure_once()
         if include_weights:
             weight_blob_specs = _capture_weight_blob_specs(
                 trace,
@@ -1082,6 +1084,35 @@ def _load_trace_payload(
         map_location=map_location,
     )
     return trace
+
+
+_NONPERSISTENT_DISCLOSURE_WARNED = False
+"""One-time process flag for the non-persistent buffer save disclosure."""
+
+
+def _warn_nonpersistent_buffer_disclosure_once() -> None:
+    """Emit the one-time REQUIRED-family privacy disclosure (contract section 5).
+
+    A default runnable save of a model with used non-persistent buffers carries
+    their capture-time tensor values in the required
+    ``runnable_nonpersistent_buffer_v1`` family even with both include flags
+    false -- declared state without which the artifact cannot replay. The family
+    is manifest-visible; this warning makes the disclosure active.
+    """
+
+    global _NONPERSISTENT_DISCLOSURE_WARNED
+    if _NONPERSISTENT_DISCLOSURE_WARNED:
+        return
+    _NONPERSISTENT_DISCLOSURE_WARNED = True
+    warnings.warn(
+        "This runnable save includes capture-time values of used NON-persistent "
+        "buffers (the required runnable_nonpersistent_buffer_v1 family): they are "
+        "declared state the artifact cannot replay without, and they are written "
+        "even with include_weights/include_activations false. Review the buffers "
+        "before sharing the artifact if they may hold sensitive data.",
+        UserWarning,
+        stacklevel=3,
+    )
 
 
 def _is_legacy_runnable_readiness(trace: Trace) -> bool:
