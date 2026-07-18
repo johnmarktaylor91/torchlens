@@ -144,7 +144,8 @@ jobs:
             menagerie/crawler/tests/test_round17_vs2_shutdown_composition.py::test_signal_after_real_forward_publishes_and_awards_nothing_then_resumes \
             menagerie/crawler/tests/test_slice_f_driver.py::test_linux_handoff_attempts_both_deferred_statuses_and_supersedes \
             menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes \
-            menagerie/crawler/tests/test_slice_g_tools_procedures.py::test_all_procedures_are_ascii_and_reference_only_real_commands \
+            menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment \
+            menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error \
             menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_hardlinked_prefix_is_one_sealed_authority_and_mutation_stales \
             menagerie/crawler/tests/test_round17_structural_inventories.py \
             -x --tb=short
@@ -187,4 +188,6 @@ jobs:
           PYTHONPATH=. "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -m pytest -q \
             menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package \
             menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_v3_profile_has_one_fresh_literal_prefix_and_exact_outside_members \
+            menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment \
+            menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error \
             -x --tb=short

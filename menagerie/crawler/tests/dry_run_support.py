@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
-import sys
+import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
+from menagerie.crawler.authority import AuthorityContext
+from menagerie.crawler.constants import EnvironmentPhase
 from menagerie.crawler.driver import (
     AuthorArtifact,
     CrawlerDriver,
@@ -16,6 +18,18 @@ from menagerie.crawler.driver import (
     DriverPaths,
     SupervisedForwardLane,
     WorkItem,
+)
+from menagerie.crawler.env_lifecycle import (
+    LifecycleResult,
+    ProbeResult,
+    SequentialEnvironmentLifecycle,
+    parse_probe_receipt_bytes,
+)
+from menagerie.crawler.envs import (
+    EnvironmentIntent,
+    EnvironmentRegistry,
+    IntentProbes,
+    LockArtifacts,
 )
 from menagerie.crawler.identity import (
     canonical_json_bytes,
@@ -29,8 +43,8 @@ from menagerie.crawler.tests.conftest import NOW
 from menagerie.crawler.tests.test_slice_f_driver import (
     FakeAuthor,
     FakeChecker,
-    FakeEnvironments,
     FakeNotifier,
+    _rebind_fake_author_result,
     _refresh_proposal_identities,
 )
 
@@ -49,6 +63,7 @@ class DryRunCase:
 
 _MLP_SOURCE = """from __future__ import annotations
 
+import menagerie_round19_sentinel
 import torch
 
 
@@ -66,6 +81,7 @@ class TinyMLP(torch.nn.Module):
 
 
 def build_model() -> object:
+    assert menagerie_round19_sentinel.INTERPRETER_SENTINEL == 'round19-selected-prefix'
     return TinyMLP()
 
 
@@ -76,6 +92,7 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
 
 _CONV_STATISTICAL_SOURCE = """from __future__ import annotations
 
+import menagerie_round19_sentinel
 import torch
 
 
@@ -92,6 +109,7 @@ class TinyStatisticalConvNet(torch.nn.Module):
 
 
 def build_model() -> object:
+    assert menagerie_round19_sentinel.INTERPRETER_SENTINEL == 'round19-selected-prefix'
     return TinyStatisticalConvNet()
 
 
@@ -102,6 +120,7 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
 
 _STRUCTURAL_SOURCE = """from __future__ import annotations
 
+import menagerie_round19_sentinel
 import torch
 
 
@@ -113,6 +132,7 @@ class TinyStructuralBranch(torch.nn.Module):
 
 
 def build_model() -> object:
+    assert menagerie_round19_sentinel.INTERPRETER_SENTINEL == 'round19-selected-prefix'
     return TinyStructuralBranch()
 
 
@@ -123,6 +143,7 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
 
 _CONV_STABLE_SOURCE = """from __future__ import annotations
 
+import menagerie_round19_sentinel
 import torch
 
 
@@ -136,6 +157,7 @@ class TinyStableConvNet(torch.nn.Module):
 
 
 def build_model() -> object:
+    assert menagerie_round19_sentinel.INTERPRETER_SENTINEL == 'round19-selected-prefix'
     return TinyStableConvNet()
 
 
@@ -173,6 +195,7 @@ DRY_RUN_ITEMS = (
     ("DryRunStableConvNet", "calibration-1"),
     ("DryRunStableConvNet", "calibration-2"),
 )
+DRY_RUN_PHASE = EnvironmentPhase.PYTORCH
 
 
 class TinyModelAuthor(FakeAuthor):
@@ -184,10 +207,27 @@ class TinyModelAuthor(FakeAuthor):
         super().__init__()
         self._cases = {case.name: case for case in DRY_RUN_CASES}
 
-    def author(self, item: WorkItem, work_root: Path, config: DriverConfig) -> AuthorArtifact:
-        """Return a canned accepted proposal bound to one real tiny adapter."""
+    def author(
+        self,
+        item: WorkItem,
+        work_root: Path,
+        config: DriverConfig,
+        context: AuthorityContext,
+    ) -> AuthorArtifact:
+        """Return a canned accepted proposal bound to one real tiny adapter.
 
-        artifact = super().author(item, work_root, config)
+        Parameters
+        ----------
+        item, work_root, config, context:
+            Mandatory driver work item, output root, configuration, and frozen authority context.
+
+        Returns
+        -------
+        AuthorArtifact
+            Authenticated author result containing the selected tiny adapter.
+        """
+
+        artifact = super().author(item, work_root, config, context)
         case = self._cases[item.intake.name]
         adapter_path = artifact.model_dir / "adapter.py"
         adapter_bytes = case.adapter_source.encode("utf-8")
@@ -224,6 +264,13 @@ class TinyModelAuthor(FakeAuthor):
         )
         code_manifest = [dict(row) for row in model_code_manifest(adapter_path, artifact.model_dir)]
         implementation["code_manifest"] = code_manifest
+        facts["evidence"]["excerpts"][0]["supports"] = sorted(
+            set(facts["evidence"]["excerpts"][0]["supports"])
+            | {
+                "implementation.code_manifest[].path",
+                "implementation.code_manifest[].sha256",
+            }
+        )
         contract = facts["input_contract"]
         contract["args"][0].update(
             {
@@ -254,7 +301,155 @@ class TinyModelAuthor(FakeAuthor):
             checker_model=config.checker_model,
             checker_version=config.checker_version,
         )
-        return AuthorArtifact(proposal, artifact.source_manifest, artifact.model_dir)
+        return _rebind_fake_author_result(artifact)
+
+
+class AllSourceFailureAuthor(TinyModelAuthor):
+    """Inject a deterministic all-source-failure terminal partition for acceptance testing."""
+
+    def author(
+        self,
+        item: WorkItem,
+        work_root: Path,
+        config: DriverConfig,
+        context: AuthorityContext,
+    ) -> AuthorArtifact:
+        """Fail source resolution before any proposal or model attempt can be accepted.
+
+        Parameters
+        ----------
+        item, work_root, config, context:
+            Mandatory author-lane inputs retained to implement the live protocol exactly.
+
+        Raises
+        ------
+        RuntimeError
+            Always, to create the explicit dry-run negative acceptance partition.
+        """
+
+        del item, work_root, config, context
+        raise RuntimeError("injected dry-run all-source failure")
+
+
+class MaterializedDryRunEnvironment(SequentialEnvironmentLifecycle):
+    """Expose one already-provisioned prefix through the production lifecycle protocol."""
+
+    def __init__(
+        self,
+        prefix: Path,
+        intent: EnvironmentIntent,
+        probe_results: tuple[ProbeResult, ...],
+    ) -> None:
+        """Store exact prefix and committed lifecycle artifacts.
+
+        Parameters
+        ----------
+        prefix, intent, probe_results:
+            Real materialized prefix plus its exact lock/export/probe contract.
+        """
+
+        self.prefix = prefix
+        self.intent = intent
+        self.probe_results = probe_results
+
+    def run(
+        self,
+        intent: EnvironmentIntent,
+        *,
+        use: Any,
+    ) -> LifecycleResult:
+        """Give the driver the real prefix so it performs strict production binding.
+
+        Parameters
+        ----------
+        intent:
+            Routed intent, which must equal the artifact-backed fixture intent.
+        use:
+            Driver callback that strictly calls ``bind_materialized_environment`` before work.
+
+        Returns
+        -------
+        LifecycleResult
+            Durable lifecycle observation for the already-materialized fixture.
+        """
+
+        if intent != self.intent:
+            raise AssertionError("dry-run environment intent differs from fixture artifacts")
+        use(self.prefix, self.probe_results)
+        return LifecycleResult(
+            intent=intent.name,
+            target=intent.lock.target,
+            export_sha256=str(intent.lock.declared_export_hash),
+            probe_results=self.probe_results,
+            disk_before=0,
+            disk_after_create=0,
+            disk_after_teardown=0,
+            disk_recovery_checked=False,
+        )
+
+
+def _materialized_environment(
+    prefix: Path,
+) -> tuple[MaterializedDryRunEnvironment, EnvironmentRegistry]:
+    """Load the real fixture prefix's exact lock/export/probe artifacts.
+
+    Parameters
+    ----------
+    prefix:
+        Session hardlink-clone prefix selected explicitly by the CLI.
+
+    Returns
+    -------
+    tuple[MaterializedDryRunEnvironment, EnvironmentRegistry]
+        Production lifecycle lane and single-intent routing registry.
+    """
+
+    resolved_prefix = prefix.resolve(strict=True)
+    if not (resolved_prefix / "conda-meta").is_dir():
+        raise ValueError(
+            f"dry-run environment is not a materialized conda prefix: {resolved_prefix}"
+        )
+    artifact_root = resolved_prefix.parent / "artifacts"
+    target = "round19-real-host"
+    lock_path = artifact_root / f"{target}.lock"
+    export_path = artifact_root / f"{target}.resolved.json"
+    export_hash_path = artifact_root / f"{target}.resolved.sha256"
+    probe_path = artifact_root / f"{target}.probes.json"
+    required = (lock_path, export_path, export_hash_path, probe_path)
+    missing = [str(path) for path in required if not path.is_file()]
+    if missing:
+        raise ValueError(f"dry-run environment fixture artifacts are missing: {missing}")
+    probes = IntentProbes(("torch", "menagerie_round19_sentinel"), (), ())
+    probe_results = parse_probe_receipt_bytes(probes, probe_path.read_bytes())
+    lock = LockArtifacts(
+        target=target,
+        lock_path=lock_path,
+        export_path=export_path,
+        export_hash_path=export_hash_path,
+        lock_bytes=lock_path.read_bytes(),
+        export_bytes=export_path.read_bytes(),
+        declared_export_hash=export_hash_path.read_text(encoding="utf-8").strip(),
+    )
+    intent = EnvironmentIntent(
+        name="core",
+        phase=DRY_RUN_PHASE,
+        framework="pytorch",
+        description="Round-19 real-prefix acceptance dry-run fixture",
+        split_guidance="fixture-only",
+        channels=("conda-forge",),
+        dependencies=("python", "pytorch"),
+        probes=probes,
+        lock=lock,
+        generation=None,
+    )
+    registry = EnvironmentRegistry(
+        intents={intent.name: intent},
+        phase_order=(DRY_RUN_PHASE,),
+        small_set_target=True,
+        hard_cap=None,
+        global_split_guidance="single real fixture environment",
+    )
+    return MaterializedDryRunEnvironment(resolved_prefix, intent, probe_results), registry
 
 
 class RecordingNotifier(FakeNotifier):
@@ -310,27 +505,47 @@ def dry_run_paths(campaign_root: Path, snapshot: IntakeSnapshot) -> DriverPaths:
 def build_dry_run_driver(
     repo_root: Path,
     campaign_root: Path,
+    environment_prefix: Path,
     *,
     review_checkpoint_at: Optional[int],
     progress_milestones: tuple[int, ...],
     run_id: str,
 ) -> CrawlerDriver:
-    """Build the real driver with only out-of-scope external lanes replaced by fakes."""
+    """Build the real driver with only author/checker/notifier lanes deterministic.
+
+    Parameters
+    ----------
+    repo_root, campaign_root, environment_prefix:
+        Checked-out source, disposable campaign, and explicit real environment prefix.
+    review_checkpoint_at, progress_milestones, run_id:
+        Ordinary driver checkpoint, notification, and invocation configuration.
+
+    Returns
+    -------
+    CrawlerDriver
+        Driver using the shipped supervisor/compiler and strict materialized-environment binder.
+    """
 
     snapshot = create_dry_run_snapshot(campaign_root)
     paths = dry_run_paths(campaign_root, snapshot)
+    environments, registry = _materialized_environment(environment_prefix)
+    author = (
+        AllSourceFailureAuthor()
+        if os.environ.get("MENAGERIE_DRY_RUN_INJECT_ALL_SOURCE_FAILURE") == "1"
+        else TinyModelAuthor()
+    )
     dependencies = DriverDependencies(
-        author=TinyModelAuthor(),
+        author=author,
         checker=FakeChecker(),
         forward=SupervisedForwardLane(timeout_seconds=30, cwd=repo_root),
-        environments=FakeEnvironments(campaign_root / "current-interpreter-envs"),
+        environments=environments,
         notifier=RecordingNotifier(campaign_root / "notifications.jsonl"),
         clock=lambda: NOW,
     )
     config = DriverConfig(
         target="osx-arm64",
         run_id=run_id,
-        machine_id=f"dry-run-{Path(sys.executable).name}",
+        machine_id=f"dry-run-{environment_prefix.name}",
         review_checkpoint_at=review_checkpoint_at,
         progress_milestones=progress_milestones,
         notify_command=None,
@@ -339,7 +554,7 @@ def build_dry_run_driver(
         checker_model="fake-codex",
         checker_version="dry-run",
     )
-    return CrawlerDriver(paths, config, dependencies)
+    return CrawlerDriver(paths, config, dependencies, registry=registry)
 
 
 def read_notification_summaries(path: Path) -> tuple[str, ...]:

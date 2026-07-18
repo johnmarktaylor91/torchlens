@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import os
 import shlex
@@ -10,7 +11,7 @@ import shutil
 import sys
 from dataclasses import asdict, replace
 from pathlib import Path
-from typing import Optional, Protocol, Sequence
+from typing import Any, Mapping, Optional, Protocol, Sequence
 
 from menagerie.crawler.authority import AuthorityContext, build_authority_context
 from menagerie.crawler.checkpoint import (
@@ -223,12 +224,17 @@ def _add_dry_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="run the test-only tiny-model corpus with fake LLM and environment lanes",
+        help="run the tiny-model acceptance corpus with deterministic agent lanes and a real prefix",
     )
     parser.add_argument(
         "--dry-run-root",
         type=Path,
         help="isolated dry-run campaign root (defaults under .crawl-local)",
+    )
+    parser.add_argument(
+        "--dry-run-environment-prefix",
+        type=Path,
+        help="real materialized fixture prefix required by the acceptance dry-run",
     )
 
 
@@ -375,13 +381,35 @@ def _driver_command(args: argparse.Namespace, factory: DriverFactory) -> int:
         output["shutdown_interruption"] = asdict(result.shutdown_interruption)
     if bool(getattr(args, "dry_run", False)):
         snapshot = load_intake_snapshot(driver.paths.intake_root)
+        attempts = scan_jsonl(driver.paths.ledgers.attempts)
+        context = _snapshot_authority_context(snapshot, driver.config)
+        context = replace(
+            context,
+            environment_generations=_persisted_environment_generations(attempts),
+        )
         current = materialize_current(
             driver.paths.ledgers,
-            context=_snapshot_authority_context(snapshot, driver.config),
+            context=context,
         )
-        output.update({"dry_run": True, "funnel": funnel_counts(current)})
+        acceptance = _dry_run_acceptance(
+            snapshot,
+            current,
+            attempts,
+            paused=result.paused_reason is not None,
+        )
+        output.update(
+            {
+                "dry_run": True,
+                "funnel": funnel_counts(current),
+                "acceptance": acceptance,
+            }
+        )
     print(json.dumps(output, sort_keys=True))
-    return EXIT_PAUSED if result.paused_reason is not None else EXIT_OK
+    if result.paused_reason is not None:
+        return EXIT_PAUSED
+    if bool(getattr(args, "dry_run", False)) and acceptance["status"] != "passed":
+        return EXIT_ERROR
+    return EXIT_OK
 
 
 def _record_scheduled_wake_intent(driver: CrawlerDriver, episode_id: str, fired_at: str) -> None:
@@ -411,13 +439,21 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
         from menagerie.crawler.tests.dry_run_support import build_dry_run_driver
 
         dry_run_root = args.dry_run_root or args.repo_root / ".crawl-local" / "dry-run"
+        environment_prefix = getattr(args, "dry_run_environment_prefix", None)
+        if not isinstance(environment_prefix, Path):
+            if os.environ.get("MENAGERIE_RELEASE_GATE") == "1":
+                raise ValueError("unmet-release-gate: --dry-run-environment-prefix is required")
+            raise ValueError("dry-run requires --dry-run-environment-prefix")
         return build_dry_run_driver(
             args.repo_root.resolve(),
             dry_run_root.resolve(),
+            environment_prefix.resolve(),
             review_checkpoint_at=args.review_checkpoint_at,
             progress_milestones=tuple(args.progress_milestones),
             run_id=args.run_id,
         )
+    if getattr(args, "dry_run_environment_prefix", None) is not None:
+        raise ValueError("--dry-run-environment-prefix requires --dry-run")
     if args.intake is None:
         raise ValueError("run/resume requires --intake unless --dry-run is selected")
     author_command = _required_command(args.author_command, "author")
@@ -454,6 +490,122 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
         clock=utc_now,
     )
     return CrawlerDriver(paths, config, dependencies)
+
+
+def _dry_run_acceptance(
+    snapshot: IntakeSnapshot,
+    current: Mapping[str, Mapping[str, Any]],
+    attempts: Sequence[Mapping[str, Any]],
+    *,
+    paused: bool,
+) -> dict[str, object]:
+    """Evaluate semantic success for the tiny-model acceptance gate.
+
+    Parameters
+    ----------
+    snapshot, current, attempts:
+        Expected tiny intake, canonical current projection, and authenticated attempt ledger.
+    paused:
+        Whether the driver intentionally stopped at a resumable checkpoint.
+
+    Returns
+    -------
+    dict[str, object]
+        Structured pending, passed, or acceptance-failed result.
+    """
+
+    expected_ids = {item.stable_id for item in snapshot.items}
+    runs_records = {
+        stable_id: record
+        for stable_id, record in current.items()
+        if stable_id in expected_ids and record.get("status", {}).get("code") == "runs"
+    }
+    authenticated_attempt_ids: dict[str, set[str]] = {
+        stable_id: set() for stable_id in expected_ids
+    }
+    for attempt in attempts:
+        stable_id = attempt.get("stable_id")
+        if not isinstance(stable_id, str) or stable_id not in expected_ids:
+            continue
+        raw_digest = attempt.get("raw_award_receipt_sha256")
+        parent = attempt.get("parent_attestation")
+        if (
+            attempt.get("result") == "succeeded"
+            and isinstance(attempt.get("raw_award_receipt"), Mapping)
+            and isinstance(raw_digest, str)
+            and isinstance(parent, Mapping)
+            and parent.get("named_raw_award_receipt_sha256") == raw_digest
+            and isinstance(attempt.get("attempt_id"), str)
+        ):
+            authenticated_attempt_ids[stable_id].add(str(attempt["attempt_id"]))
+    authenticated_models = {
+        stable_id
+        for stable_id, record in runs_records.items()
+        if authenticated_attempt_ids[stable_id]
+        and set(record.get("execution", {}).get("accepted_attempt_ids", ()))
+        == authenticated_attempt_ids[stable_id]
+    }
+    counts = {
+        "expected_runnable_models": len(expected_ids),
+        "runs_revisions": len(runs_records),
+        "authenticated_attempt_models": len(authenticated_models),
+    }
+    if paused:
+        return {"status": "pending", "reason_code": "driver-paused", **counts}
+    if set(runs_records) == expected_ids and authenticated_models == expected_ids:
+        return {"status": "passed", **counts}
+    unexpected_statuses = Counter(
+        str(record.get("status", {}).get("code", "missing-status"))
+        for stable_id, record in current.items()
+        if stable_id in expected_ids and stable_id not in runs_records
+    )
+    missing_records = expected_ids - set(current)
+    if missing_records:
+        unexpected_statuses["missing"] += len(missing_records)
+    all_source_failure = (
+        len(current) == len(expected_ids)
+        and set(current) == expected_ids
+        and set(unexpected_statuses) == {"failed:source"}
+    )
+    return {
+        "status": "acceptance-failed",
+        "reason_code": "all-source-failure" if all_source_failure else "expected-runs-missing",
+        **counts,
+        "unexpected_statuses": dict(sorted(unexpected_statuses.items())),
+    }
+
+
+def _persisted_environment_generations(
+    attempts: Sequence[Mapping[str, Any]],
+) -> dict[str, str]:
+    """Recover exact environment generations already authenticated by attempt rows.
+
+    Parameters
+    ----------
+    attempts:
+        Canonical attempt-ledger rows for the dry-run campaign.
+
+    Returns
+    -------
+    dict[str, str]
+        Environment-family to generation bindings needed for current projection.
+    """
+
+    generations: dict[str, str] = {}
+    for attempt in attempts:
+        environment = attempt.get("environment")
+        if not isinstance(environment, Mapping):
+            continue
+        family = environment.get("family")
+        identities = attempt.get("identities")
+        generation = identities.get("environment") if isinstance(identities, Mapping) else None
+        if not isinstance(family, str) or not isinstance(generation, str):
+            continue
+        existing = generations.get(family)
+        if existing is not None and existing != generation:
+            raise ValueError(f"dry-run attempts contain conflicting generations for {family}")
+        generations[family] = generation
+    return generations
 
 
 def _required_command(value: Optional[str], lane: str) -> tuple[str, ...]:

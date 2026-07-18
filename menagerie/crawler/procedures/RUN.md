@@ -43,14 +43,26 @@ python -m menagerie.crawler status --intake "$INTAKE" --full --verify-partition
 
 ## Tiny-model acceptance dry-run
 
-The opt-in test harness exercises the real driver and isolated worker on four tiny local PyTorch
-architectures across the ten rows required by the frozen metadata-batch minimum. It replaces only
-the author, checker, notifier, and environment solve with deterministic fakes, writes only beneath
-the selected disposable root, and prints the current funnel as JSON.
+The opt-in acceptance harness exercises the real driver and isolated worker on four tiny local
+PyTorch architectures across the ten rows required by the frozen metadata-batch minimum. It uses the
+selected lock-built fixture prefix, shipped environment binder/compiler/supervisor, canonical attempt
+sink, and reducer. Only the author, checker, and notifier remain deterministic. The explicit prefix
+must have the exact fixture lock, resolved export, export digest, and probe receipt artifacts beside
+it; there is no current-interpreter fallback. The commands write campaign state only beneath the
+selected disposable root and print the canonical current funnel plus structured acceptance status as
+JSON.
 
 ```bash
+DRY_RUN_ENV_PREFIX=/path/to/round19-real-environment/prefix
 python -m menagerie.crawler run --dry-run --dry-run-root /tmp/menagerie-crawler-dry-run \
+  --dry-run-environment-prefix "$DRY_RUN_ENV_PREFIX" \
   --review-checkpoint-at 2 --progress-milestones 3
 python -m menagerie.crawler resume --dry-run --dry-run-root /tmp/menagerie-crawler-dry-run \
+  --dry-run-environment-prefix "$DRY_RUN_ENV_PREFIX" \
   --review-checkpoint-at 2 --progress-milestones 3 --after-review
 ```
+
+The first command must exit with the documented paused code after two real `runs` revisions. The
+resume command succeeds only after all ten expected rows have authenticated forward attempts and
+current `runs` revisions. A terminal partition of source failures is an acceptance failure and exits
+nonzero even though the deterministic driver itself reached terminality.

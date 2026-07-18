@@ -92,9 +92,13 @@ _ROUND19_RELEASE_NODE_INVENTORY = {
         "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::"
         "test_real_unhashable_output_awards_runs_with_unverifiable_modes"
     ),
-    "dry-run": (
-        "menagerie/crawler/tests/test_slice_g_tools_procedures.py::"
-        "test_all_procedures_are_ascii_and_reference_only_real_commands"
+    "dry-run-run-resume": (
+        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::"
+        "test_documented_dry_run_and_resume_use_real_environment"
+    ),
+    "dry-run-false-complete": (
+        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::"
+        "test_dry_run_all_source_failure_is_acceptance_error"
     ),
     "cache": (
         "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
@@ -126,10 +130,13 @@ _SUBSTITUTION_BOUNDARIES = frozenset(
     }
 )
 _COMPOSITION_SOURCES = (
+    _CRAWLER_ROOT / "cli.py",
+    _CRAWLER_ROOT / "tests" / "dry_run_support.py",
     _CRAWLER_ROOT / "tests" / "test_round17_vs1_v3_composition.py",
     _CRAWLER_ROOT / "tests" / "test_round17_vs2_shutdown_composition.py",
     _CRAWLER_ROOT / "tests" / "test_slice_f_driver.py",
     _CRAWLER_ROOT / "tests" / "test_round19_environment_authority_composition.py",
+    _CRAWLER_ROOT / "tests" / "test_round19_vs6_dry_run_composition.py",
 )
 
 VS4_LANDING_MANIFEST: dict[str, Any] = {
@@ -730,6 +737,7 @@ def test_round17_real_composition_sources_are_not_fake_substitutes() -> None:
 
     import menagerie.crawler.tests.test_round17_vs1_v3_composition as vs1_module
     import menagerie.crawler.tests.test_round17_vs2_shutdown_composition as vs2_module
+    import menagerie.crawler.tests.test_round19_vs6_dry_run_composition as vs6_module
     import menagerie.crawler.tests.test_slice_f_driver as driver_tests
 
     golden = inspect.getsource(
@@ -741,6 +749,8 @@ def test_round17_real_composition_sources_are_not_fake_substitutes() -> None:
     handoff = inspect.getsource(
         driver_tests.test_linux_handoff_attempts_both_deferred_statuses_and_supersedes
     )
+    dry_run = inspect.getsource(vs6_module.test_documented_dry_run_and_resume_use_real_environment)
+    dry_run_support = (_CRAWLER_ROOT / "tests" / "dry_run_support.py").read_text(encoding="utf-8")
     module_source = _source(vs1_module)
     shutdown_module_source = _source(vs2_module)
     assert "SupervisedForwardLane" in module_source
@@ -756,6 +766,11 @@ def test_round17_real_composition_sources_are_not_fake_substitutes() -> None:
     assert "RealEnvironmentLane" in handoff
     assert "FakeEnvironments" not in handoff
     assert 'record["status"]["code"] for record in superseding' in handoff
+    assert "_dry_run_command" in dry_run
+    assert "scan_jsonl" in dry_run
+    assert "MaterializedDryRunEnvironment" in dry_run_support
+    assert "SupervisedForwardLane" in dry_run_support
+    assert "FakeEnvironments" not in dry_run_support
 
 
 def test_real_compositions_cannot_substitute_execution_boundaries() -> None:
@@ -805,7 +820,8 @@ def test_round19_supported_host_release_gate_inventory_is_exact() -> None:
         "shutdown",
         "clean-clone",
         "unverifiable",
-        "dry-run",
+        "dry-run-run-resume",
+        "dry-run-false-complete",
         "cache",
         "structural",
         "macos-positive-negative",
