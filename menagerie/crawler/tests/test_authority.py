@@ -727,6 +727,7 @@ def test_mode_summary_is_structural_or_unverifiable_from_authenticated_receipts(
     summary = derive_mode_summary(train, evaluation)
     assert summary.comparison_state == "unverifiable"
     assert summary.classification == "unverifiable"
+    assert summary.reason == "matching output signatures lack stable output value digests"
 
     evaluation = _attempt("eval")
     evaluation["raw_award_receipt"]["observation"]["output_signature"] = {

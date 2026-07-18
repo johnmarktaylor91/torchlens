@@ -221,6 +221,7 @@ class ModeSummary:
 
     comparison_state: str
     classification: str
+    reason: Optional[str]
     train_attempt_id: Optional[str]
     eval_attempt_id: Optional[str]
     compared_fields: tuple[str, ...]
@@ -3321,6 +3322,7 @@ def derive_mode_summary(
         return ModeSummary(
             comparison_state="not-applicable",
             classification="not-applicable",
+            reason=None,
             train_attempt_id=train_attempt_id,
             eval_attempt_id=eval_attempt_id,
             compared_fields=(),
@@ -3340,6 +3342,7 @@ def derive_mode_summary(
     train_signature = train_observation.get("output_signature")
     eval_signature = eval_observation.get("output_signature")
     compared_fields: tuple[str, ...] = ("output_signature",)
+    reason: Optional[str] = None
     if train_signature != eval_signature:
         comparison_state = "verified"
         classification = "structural"
@@ -3349,6 +3352,7 @@ def derive_mode_summary(
         if not isinstance(train_digest, str) or not isinstance(eval_digest, str):
             comparison_state = "unverifiable"
             classification = "unverifiable"
+            reason = "matching output signatures lack stable output value digests"
         else:
             _require_hash(train_digest, "train output value digest")
             _require_hash(eval_digest, "eval output value digest")
@@ -3362,9 +3366,12 @@ def derive_mode_summary(
         "eval_attempt_id": eval_authority.attempt_id,
         "compared_fields": list(compared_fields),
     }
+    if reason is not None:
+        payload["reason"] = reason
     return ModeSummary(
         comparison_state=comparison_state,
         classification=classification,
+        reason=reason,
         train_attempt_id=train_authority.attempt_id,
         eval_attempt_id=eval_authority.attempt_id,
         compared_fields=compared_fields,
@@ -3394,6 +3401,8 @@ def mode_summary_projection(summary: ModeSummary) -> JsonObject:
         "compared_fields": list(summary.compared_fields),
         "evidence_sha256": summary.evidence_sha256,
     }
+    if summary.reason is not None:
+        evidence["reason"] = summary.reason
     return {
         "train_eval_divergence": summary.classification,
         "divergence_evidence": json.dumps(

@@ -59,6 +59,34 @@ _MODE_ADAPTER = _TINY_ADAPTER.replace(
     "return value + (1 if self.training else 2)",
 )
 
+_UNHASHABLE_ADAPTER = """from __future__ import annotations
+
+import torch
+import menagerie_round19_sentinel as round19_sentinel
+
+
+class UnhashableOutput:
+    pass
+
+
+class Tiny(torch.nn.Module):
+    def forward(self, value: torch.Tensor) -> object:
+        del value
+        return UnhashableOutput()
+
+
+def build_model() -> object:
+    assert round19_sentinel.INTERPRETER_SENTINEL == 'round19-selected-prefix'
+    return Tiny()
+
+
+def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[str, object]]:
+    del seed
+    return ((torch.zeros(1, 2, device=device),), {})
+"""
+
+_UNVERIFIABLE_REASON = "matching output signatures lack stable output value digests"
+
 VS1_LANDING_MANIFEST: dict[str, Any] = {
     "findings": ("SOL-R16-01",),
     "production_symbols": {
@@ -83,23 +111,33 @@ VS1_LANDING_MANIFEST: dict[str, Any] = {
 
 
 @pytest.mark.parametrize(
-    ("adapter_source", "expected_divergence"),
-    ((_TINY_ADAPTER, "none"), (_MODE_ADAPTER, "statistical")),
+    (
+        "adapter_source",
+        "expected_comparison_state",
+        "expected_divergence",
+        "expected_value_digest",
+    ),
+    (
+        pytest.param(_TINY_ADAPTER, "verified", "none", True, id="none"),
+        pytest.param(_MODE_ADAPTER, "verified", "statistical", True, id="statistical"),
+    ),
 )
 def test_real_v3_worker_result_awards_through_driver_and_reducer(
     tmp_path: Path,
     real_environment_fixture: RealEnvironmentFixture,
     adapter_source: str,
+    expected_comparison_state: str,
     expected_divergence: str,
+    expected_value_digest: bool,
 ) -> None:
-    """Real persisted value digests must reach none/statistical mode authority.
+    """Real persisted nullable digests must reach all mode-comparison states.
 
     Parameters
     ----------
     tmp_path:
         Isolated campaign root.
-    adapter_source, expected_divergence:
-        Real adapter bytes and their authenticated mode classification.
+    adapter_source, expected_comparison_state, expected_divergence, expected_value_digest:
+        Real adapter bytes and their authenticated comparison contract.
     """
 
     snapshot = _snapshot(tmp_path, count=1)
@@ -128,9 +166,10 @@ def test_real_v3_worker_result_awards_through_driver_and_reducer(
     )
     facts["input_contract"]["args"][0]["shape"] = [1, 2]
     facts["modes"]["meaningful_modes"] = ["train", "eval"]
-    facts["modes"]["train_eval_divergence"] = expected_divergence
+    proposed_divergence = expected_divergence if expected_divergence != "unverifiable" else "none"
+    facts["modes"]["train_eval_divergence"] = proposed_divergence
     facts["external_metadata"]["modes"]["meaningful_modes"] = ["train", "eval"]
-    facts["external_metadata"]["modes"]["train_eval_divergence"] = expected_divergence
+    facts["external_metadata"]["modes"]["train_eval_divergence"] = proposed_divergence
     facts["evidence"]["excerpts"][0]["supports"] = sorted(
         set(facts["evidence"]["excerpts"][0]["supports"])
         | {
@@ -190,6 +229,11 @@ def test_real_v3_worker_result_awards_through_driver_and_reducer(
             wrapper = json.loads(result_path.read_text(encoding="utf-8"))
             assert wrapper["result_version"] == "menagerie.crawler.worker-result.v3"
             assert wrapper["raw_award_receipt"] is not None, wrapper["diagnostic"]
+            raw_observation = wrapper["raw_award_receipt"]["observation"]
+            if expected_value_digest:
+                assert isinstance(raw_observation["output_value_sha256"], str)
+            else:
+                assert raw_observation["output_value_sha256"] is None
             synthetic = make_worker_result_v3_mapping(
                 wrapper["diagnostic"],
                 raw_award_receipt=wrapper["raw_award_receipt"],
@@ -232,11 +276,25 @@ def test_real_v3_worker_result_awards_through_driver_and_reducer(
         )
 
         persisted = scan_jsonl(paths.ledgers.attempts)
+        assert len(persisted) == 2
+        for attempt in persisted:
+            raw_observation = attempt["raw_award_receipt"]["observation"]
+            projected_observation = attempt["worker_receipt"]
+            if expected_value_digest:
+                assert isinstance(raw_observation["output_value_sha256"], str)
+                assert isinstance(projected_observation["output_value_sha256"], str)
+            else:
+                assert raw_observation["output_value_sha256"] is None
+                assert projected_observation["output_value_sha256"] is None
         by_mode = {str(attempt["mode"]): attempt for attempt in persisted}
         summary = derive_mode_summary(by_mode["train"], by_mode["eval"])
-        assert summary.comparison_state == "verified"
+        assert summary.comparison_state == expected_comparison_state
         assert summary.classification == expected_divergence
-        assert summary.compared_fields == ("output_signature", "output_value_sha256")
+        if expected_value_digest:
+            assert summary.compared_fields == ("output_signature", "output_value_sha256")
+        else:
+            assert summary.compared_fields == ("output_signature",)
+            assert summary.reason == _UNVERIFIABLE_REASON
         model = driver_module._assemble_run_model(
             item,
             artifact,
@@ -247,6 +305,13 @@ def test_real_v3_worker_result_awards_through_driver_and_reducer(
         appended = reducer.append_model(reducer.prepare_model(model))
 
     assert appended.record["status"]["code"] == "runs"
+    assert appended.record["modes"]["train_eval_divergence"] == expected_divergence
+    canonical_evidence = json.loads(appended.record["modes"]["divergence_evidence"])
+    assert canonical_evidence["comparison_state"] == expected_comparison_state
+    if expected_value_digest:
+        assert "reason" not in canonical_evidence
+    else:
+        assert canonical_evidence["reason"] == _UNVERIFIABLE_REASON
     assert len(scan_jsonl(paths.ledgers.models)) == 1
     assert driver_module._current_run_is_fresh(
         appended.record,
@@ -276,6 +341,30 @@ def test_real_v3_worker_result_awards_through_driver_and_reducer(
         mutated_artifact,
         environment,
         [gate],
+    )
+
+
+def test_real_unhashable_output_awards_runs_with_unverifiable_modes(
+    tmp_path: Path,
+    real_environment_fixture: RealEnvironmentFixture,
+) -> None:
+    """A real digestless output must remain nullable and canonically unverifiable.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated campaign root.
+    real_environment_fixture:
+        Digest-sealed real prefix consumed by the shipped compiler and worker.
+    """
+
+    test_real_v3_worker_result_awards_through_driver_and_reducer(
+        tmp_path,
+        real_environment_fixture,
+        _UNHASHABLE_ADAPTER,
+        "unverifiable",
+        "unverifiable",
+        False,
     )
 
 

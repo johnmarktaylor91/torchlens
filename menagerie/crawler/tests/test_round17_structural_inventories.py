@@ -89,8 +89,8 @@ _ROUND19_RELEASE_NODE_INVENTORY = {
     "shutdown": _ROUND17_CI_NODES[1],
     "clean-clone": _ROUND17_CI_NODES[2],
     "unverifiable": (
-        "menagerie/crawler/tests/test_authority.py::"
-        "test_mode_summary_is_structural_or_unverifiable_from_authenticated_receipts"
+        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::"
+        "test_real_unhashable_output_awards_runs_with_unverifiable_modes"
     ),
     "dry-run": (
         "menagerie/crawler/tests/test_slice_g_tools_procedures.py::"
