@@ -30,8 +30,9 @@ from menagerie.crawler.authority import (
     ExecutionReadManifest as ExecutionReadManifest,
     ExecutionReadManifestV2,
     ExecutionReadManifestV3,
-    verify_execution_read_manifest_v3,
+    environment_read_capability,
     verify_execution_read_manifest_v2,
+    verify_execution_read_manifest_v3,
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
 
@@ -213,6 +214,9 @@ def generate_macos_sandbox_profile(
     *,
     allowed_read_paths: Sequence[Path] = (),
     runtime_read_roots: Sequence[Path] = (),
+    execution_read_manifest: Optional[
+        ExecutionReadManifest | ExecutionReadManifestV2 | ExecutionReadManifestV3
+    ] = None,
 ) -> str:
     """Generate a deterministic sandbox-exec profile for offline execution.
 
@@ -224,6 +228,10 @@ def generate_macos_sandbox_profile(
         Exact source/input paths or directories permitted for data reads.
     runtime_read_roots:
         Environment/source roots restricted to executable-code file suffixes.
+    execution_read_manifest:
+        Optional shipped execution capability. A live v3 manifest is freshly verified
+        and is the only source of a read-only environment-prefix grant. Legacy manifests
+        can contribute exact files only and never a root grant.
 
     Returns
     -------
@@ -247,16 +255,61 @@ def generate_macos_sandbox_profile(
         '(allow file-read* (subpath "/dev"))',
         '(allow file-write* (literal "/dev/null"))',
     ]
-    read_paths = tuple(dict.fromkeys(path.resolve() for path in (*roots, *allowed_read_paths)))
+    environment_prefix: Optional[Path] = None
+    manifest_read_paths: tuple[Path, ...] = ()
+    if isinstance(execution_read_manifest, ExecutionReadManifestV3):
+        capability = environment_read_capability(execution_read_manifest)
+        environment_prefix = capability.environment_prefix
+        manifest_read_paths = capability.exact_member_paths
+    elif isinstance(execution_read_manifest, ExecutionReadManifestV2):
+        verify_execution_read_manifest_v2(execution_read_manifest)
+        manifest_read_paths = tuple(
+            member.path
+            for member in (
+                *execution_read_manifest.code_members,
+                *execution_read_manifest.runtime_members,
+            )
+        )
+        if execution_read_manifest.standard_input_asset is not None:
+            manifest_read_paths = (
+                *manifest_read_paths,
+                execution_read_manifest.standard_input_asset[0],
+            )
+    elif isinstance(execution_read_manifest, ExecutionReadManifest):
+        manifest_read_paths = tuple(
+            path for path, _digest, _kind in execution_read_manifest.code_members
+        )
+        manifest_read_paths += tuple(
+            path for path, kind in execution_read_manifest.runtime_support if kind == "runtime-file"
+        )
+        if execution_read_manifest.standard_input_asset is not None:
+            manifest_read_paths = (
+                *manifest_read_paths,
+                execution_read_manifest.standard_input_asset[0],
+            )
+    candidate_read_paths = (*allowed_read_paths, *manifest_read_paths)
+    if execution_read_manifest is not None:
+        candidate_read_paths = tuple(path for path in candidate_read_paths if path.is_file())
+    if environment_prefix is not None:
+        candidate_read_paths = tuple(
+            path
+            for path in candidate_read_paths
+            if not path.resolve().is_relative_to(environment_prefix)
+        )
+    read_paths = tuple(dict.fromkeys(path.resolve() for path in (*roots, *candidate_read_paths)))
     for path in read_paths:
         encoded = json.dumps(str(path), ensure_ascii=True)
         lines.append(f"(allow file-read* (literal {encoded}))")
         if path in roots or path.is_dir():
             lines.append(f"(allow file-read* (subpath {encoded}))")
-    runtime_suffixes = "a|c|cc|cpp|cu|cuh|dylib|h|hpp|metallib|py|pyc|pyd|pyi|pyx|so"
-    for root in tuple(dict.fromkeys(path.resolve() for path in runtime_read_roots)):
-        pattern = f"^{re.escape(str(root))}/.*\\.(?:{runtime_suffixes})$"
-        lines.append(f"(allow file-read* (regex #{json.dumps(pattern)}))")
+    if environment_prefix is not None:
+        encoded_prefix = json.dumps(str(environment_prefix), ensure_ascii=True)
+        lines.append(f"(allow file-read* (subpath {encoded_prefix}))")
+    elif execution_read_manifest is None:
+        runtime_suffixes = "a|c|cc|cpp|cu|cuh|dylib|h|hpp|metallib|py|pyc|pyd|pyi|pyx|so"
+        for root in tuple(dict.fromkeys(path.resolve() for path in runtime_read_roots)):
+            pattern = f"^{re.escape(str(root))}/.*\\.(?:{runtime_suffixes})$"
+            lines.append(f"(allow file-read* (regex #{json.dumps(pattern)}))")
     for root in roots:
         encoded = json.dumps(str(root), ensure_ascii=True)
         lines.append(f"(allow file-write* (literal {encoded}))")

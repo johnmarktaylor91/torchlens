@@ -99,3 +99,92 @@ jobs:
             menagerie/crawler/tests/test_slice_f_driver.py::test_linux_handoff_attempts_both_deferred_statuses_and_supersedes \
             menagerie/crawler/tests/test_round17_structural_inventories.py \
             -x --tb=short
+
+  crawler-round19-linux-release:
+    name: Crawler Round 19 Linux supported-host release gate
+    runs-on: ubuntu-latest
+    env:
+      MENAGERIE_RELEASE_GATE: "1"
+      MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-linux-64.lock
+      MENAGERIE_REAL_ENV_PREFIX: ${{ runner.temp }}/round19-linux-prefix
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Provision the exact Linux platform lock
+        shell: bash
+        run: |
+          if [ ! -f "$MENAGERIE_PLATFORM_LOCK" ]; then
+            echo "unmet-release-gate: missing Linux platform lock: $MENAGERIE_PLATFORM_LOCK"
+            exit 1
+          fi
+          if ! command -v conda >/dev/null 2>&1; then
+            echo "unmet-release-gate: conda is unavailable on the Linux release host"
+            exit 1
+          fi
+          conda create --yes --prefix "$MENAGERIE_REAL_ENV_PREFIX" \
+            --file "$MENAGERIE_PLATFORM_LOCK"
+
+      - name: Require Linux bwrap and strace
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap strace
+          if ! command -v bwrap >/dev/null 2>&1 || ! command -v strace >/dev/null 2>&1; then
+            echo "unmet-release-gate: Linux bwrap/strace enforcement is unavailable"
+            exit 1
+          fi
+
+      - name: Run exact Linux release proof inventory
+        shell: bash
+        run: |
+          PYTHONPATH=. "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -m pytest -q \
+            menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer \
+            menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding \
+            menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package \
+            menagerie/crawler/tests/test_round17_vs2_shutdown_composition.py::test_signal_after_real_forward_publishes_and_awards_nothing_then_resumes \
+            menagerie/crawler/tests/test_slice_f_driver.py::test_linux_handoff_attempts_both_deferred_statuses_and_supersedes \
+            menagerie/crawler/tests/test_authority.py::test_mode_summary_is_structural_or_unverifiable_from_authenticated_receipts \
+            menagerie/crawler/tests/test_slice_g_tools_procedures.py::test_all_procedures_are_ascii_and_reference_only_real_commands \
+            menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_hardlinked_prefix_is_one_sealed_authority_and_mutation_stales \
+            menagerie/crawler/tests/test_round17_structural_inventories.py \
+            -x --tb=short
+
+  crawler-round19-macos-release:
+    name: Crawler Round 19 macOS supported-host release gate
+    runs-on: macos-14-xlarge
+    env:
+      MENAGERIE_RELEASE_GATE: "1"
+      MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-osx-arm64.lock
+      MENAGERIE_REAL_ENV_PREFIX: ${{ runner.temp }}/round19-macos-prefix
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Provision the exact macOS platform lock
+        shell: bash
+        run: |
+          if [ "$(uname -s)" != "Darwin" ] || [ "$(uname -m)" != "arm64" ]; then
+            echo "unmet-release-gate: an Apple-Silicon macOS release host is required"
+            exit 1
+          fi
+          if [ ! -f "$MENAGERIE_PLATFORM_LOCK" ]; then
+            echo "unmet-release-gate: missing macOS platform lock: $MENAGERIE_PLATFORM_LOCK"
+            exit 1
+          fi
+          if ! command -v conda >/dev/null 2>&1; then
+            echo "unmet-release-gate: conda is unavailable on the macOS release host"
+            exit 1
+          fi
+          if ! command -v sandbox-exec >/dev/null 2>&1 || ! command -v log >/dev/null 2>&1; then
+            echo "unmet-release-gate: macOS Seatbelt/denial audit is unavailable"
+            exit 1
+          fi
+          conda create --yes --prefix "$MENAGERIE_REAL_ENV_PREFIX" \
+            --file "$MENAGERIE_PLATFORM_LOCK"
+
+      - name: Run exact macOS positive and caught-denial release proofs
+        shell: bash
+        run: |
+          PYTHONPATH=. "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -m pytest -q \
+            menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package \
+            menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_v3_profile_has_one_fresh_literal_prefix_and_exact_outside_members \
+            -x --tb=short

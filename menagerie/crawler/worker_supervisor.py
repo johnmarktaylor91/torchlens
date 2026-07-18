@@ -3172,6 +3172,7 @@ def run_isolated_subprocess(
                 write_roots,
                 allowed_read_paths=(*allowed_read_paths, *runtime_package_data_paths),
                 runtime_read_roots=macos_runtime_read_roots,
+                execution_read_manifest=execution_read_manifest,
             ),
             encoding="utf-8",
         )

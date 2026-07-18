@@ -7,6 +7,7 @@ from collections import Counter
 from copy import deepcopy
 import inspect
 from pathlib import Path
+import re
 from typing import Any, Mapping, Sequence
 
 import pytest
@@ -75,6 +76,40 @@ _ROUND17_CI_NODES = (
     "menagerie/crawler/tests/test_slice_f_driver.py::"
     "test_linux_handoff_attempts_both_deferred_statuses_and_supersedes",
 )
+_ROUND19_RELEASE_NODE_INVENTORY = {
+    "golden": _ROUND17_CI_NODES[0],
+    "interpreter": (
+        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+        "test_outside_selected_interpreter_is_rejected_at_binding"
+    ),
+    "linux-denial": (
+        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+        "test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package"
+    ),
+    "shutdown": _ROUND17_CI_NODES[1],
+    "clean-clone": _ROUND17_CI_NODES[2],
+    "unverifiable": (
+        "menagerie/crawler/tests/test_authority.py::"
+        "test_mode_summary_is_structural_or_unverifiable_from_authenticated_receipts"
+    ),
+    "dry-run": (
+        "menagerie/crawler/tests/test_slice_g_tools_procedures.py::"
+        "test_all_procedures_are_ascii_and_reference_only_real_commands"
+    ),
+    "cache": (
+        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+        "test_hardlinked_prefix_is_one_sealed_authority_and_mutation_stales"
+    ),
+    "structural": "menagerie/crawler/tests/test_round17_structural_inventories.py",
+    "macos-positive-negative": (
+        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+        "test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package"
+    ),
+    "macos-profile": (
+        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+        "test_macos_v3_profile_has_one_fresh_literal_prefix_and_exact_outside_members"
+    ),
+}
 _SUBSTITUTION_BOUNDARIES = frozenset(
     {
         "_compile_worker_read_manifest",
@@ -94,6 +129,7 @@ _COMPOSITION_SOURCES = (
     _CRAWLER_ROOT / "tests" / "test_round17_vs1_v3_composition.py",
     _CRAWLER_ROOT / "tests" / "test_round17_vs2_shutdown_composition.py",
     _CRAWLER_ROOT / "tests" / "test_slice_f_driver.py",
+    _CRAWLER_ROOT / "tests" / "test_round19_environment_authority_composition.py",
 )
 
 VS4_LANDING_MANIFEST: dict[str, Any] = {
@@ -754,8 +790,38 @@ def test_round17_real_compositions_are_explicitly_selected_in_ci() -> None:
     assert "not heavy" not in crawler_job
     assert "not slow" not in crawler_job
 
-    mutated = workflow.replace(_ROUND17_CI_NODES[0], "", 1)
+    mutated = workflow.replace(_ROUND17_CI_NODES[0], "")
     assert _ROUND17_CI_NODES[0] not in mutated
+
+
+def test_round19_supported_host_release_gate_inventory_is_exact() -> None:
+    """Both mandatory host jobs select the closed permanent proof inventory."""
+
+    workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
+    assert set(_ROUND19_RELEASE_NODE_INVENTORY) == {
+        "golden",
+        "interpreter",
+        "linux-denial",
+        "shutdown",
+        "clean-clone",
+        "unverifiable",
+        "dry-run",
+        "cache",
+        "structural",
+        "macos-positive-negative",
+        "macos-profile",
+    }
+    assert "crawler-round19-linux-release:" in workflow
+    assert "crawler-round19-macos-release:" in workflow
+    release_jobs = workflow.split("crawler-round19-linux-release:", 1)[1]
+    selected = set(re.findall(r"menagerie/crawler/tests/[A-Za-z0-9_./:-]+", release_jobs))
+    assert selected == set(_ROUND19_RELEASE_NODE_INVENTORY.values())
+    linux_job, macos_job = release_jobs.split("\n  crawler-round19-macos-release:", 1)
+    assert "runs-on: macos-14-xlarge" in macos_job
+    for job in (linux_job, macos_job):
+        assert 'MENAGERIE_RELEASE_GATE: "1"' in job
+        assert "unmet-release-gate" in job
+        assert "pytest.skip" not in job
 
 
 @pytest.mark.parametrize(
