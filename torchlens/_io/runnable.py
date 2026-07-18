@@ -2409,12 +2409,17 @@ _INPUT_METADATA_FACT_NAMES = frozenset(
         "is_pinned",
         "is_shared",
         "is_coalesced",
+        "grad",
+        "_grad",
+        "_version",
+        "output_nr",
     }
 )
 """Metadata predicates the capture-time observer records for model-input receivers (r27-H2,
 extended r29-C1 with ``storage_offset`` / ``grad_fn`` / ``is_leaf`` / ``storage_nbytes``; r31
 adds the capability-driven surface ``retains_grad`` / ``_base`` / ``_is_view`` / ``is_conj`` /
-``is_neg`` / ``is_inference`` / ``is_pinned`` / ``is_shared`` / ``is_coalesced``)."""
+``is_neg`` / ``is_inference`` / ``is_pinned`` / ``is_shared`` / ``is_coalesced``; r33 adds
+``grad`` / ``_grad`` presence + ``_version`` / ``output_nr`` int facts)."""
 
 
 def _input_metadata_witnesses(
@@ -2576,6 +2581,23 @@ def _preflight_output_contracts(trace: Any, ops: Sequence[Any]) -> list[Runnable
 
     diagnostics: list[RunnableDiagnostic] = []
     output_ops = [op for op in ops if bool(getattr(op, "is_output", False))]
+    # r33 R32-B1: capture flagged a lossy multi-tensor collapse -- an unsupported top-level
+    # container (bare ``set`` / ``frozenset``) whose N output tensors mapped to the SAME empty
+    # path and collapsed to ONE output slot (KIND + N-1 elements dropped). Only one slot survives,
+    # so the multi-output contract below cannot see the loss; refuse the runnable save here (fail
+    # closed) rather than let the loaded run reconstruct a single Tensor and bless it VERIFIED.
+    if getattr(trace, "__dict__", {}).get("_runnable_output_multitensor_collapse", False):
+        diagnostics.append(
+            _diagnostic(
+                RunnableErrorCode.MISSING_OUTPUT_CONTAINER_CONTRACT,
+                "Model output is an unsupported top-level container (e.g. a bare set/frozenset) "
+                "whose tensors collapse to a single output slot with no container contract; "
+                "runnable replay would silently drop elements and mis-report the container kind.",
+                affected_ops=tuple(str(op.label) for op in output_ops),
+                detection_stage="producer_output_binding",
+            )
+        )
+        return diagnostics
     containers = getattr(trace, "__dict__", {}).get("_containers", {}) or {}
     model_output_snapshots = [
         snapshot

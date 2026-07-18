@@ -811,9 +811,46 @@ def _tensor_equal(left: torch.Tensor, right: torch.Tensor) -> bool:
 
 
 def _tensor_version(tensor: torch.Tensor) -> int | None:
-    """Return PyTorch's internal tensor version counter when available."""
+    """Return PyTorch's internal tensor version counter when available.
 
-    return getattr(tensor, "_version", None)
+    ``_version`` is a WITNESSED input-metadata property (r33): the completeness-witness
+    scoped patch records a genuine USER ``x._version`` read on a model-input leaf so a
+    reversible in-place bump (identical bytes, different version) fails closed instead of
+    a false VERIFIED. This buffer-tracking read is TorchLens's OWN bookkeeping on EVERY op
+    tensor operand -- including input leaves -- so it must be marked internal or it records
+    a spurious ``_version`` fact for every model and falsely diverges any runtime input
+    whose version counter differs from capture (an over-trigger). The per-thread depth
+    counter is bumped inline (not via the ``internal_scalar_read`` generator) to keep this
+    hot per-op read cheap.
+    """
+
+    state = _witness_marker_state()
+    if state is None:
+        return getattr(tensor, "_version", None)
+    depth = getattr(state, "depth", 0)
+    state.depth = depth + 1
+    try:
+        return getattr(tensor, "_version", None)
+    finally:
+        state.depth = depth
+
+
+_WITNESS_MARKER_STATE: Any = None
+
+
+def _witness_marker_state() -> Any:
+    """Lazily fetch the completeness-witness per-thread internal-read marker state.
+
+    Imported lazily (a module-level import would cycle: ``completeness_witness`` and
+    ``buffer_writes`` are mutually dependent) and cached after first resolution.
+    """
+
+    global _WITNESS_MARKER_STATE
+    if _WITNESS_MARKER_STATE is None:
+        from .completeness_witness import _internal_read_state as marker_state
+
+        _WITNESS_MARKER_STATE = marker_state
+    return _WITNESS_MARKER_STATE
 
 
 def _whole_storage_uint8(source: torch.Tensor) -> torch.Tensor:
