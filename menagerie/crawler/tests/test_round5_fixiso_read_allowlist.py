@@ -17,11 +17,11 @@ import pytest
 
 from menagerie.crawler import worker_supervisor
 from menagerie.crawler.identity import compute_recipe_revision, hash_bytes
+from menagerie.crawler.legacy_manifest_audit import compile_execution_read_manifest
 from menagerie.crawler.policy import (
     _runtime_code_path_allowed,
     _runtime_model_data_path,
     _runtime_package_data_paths,
-    compile_execution_read_manifest,
     detect_os_sandbox,
 )
 from menagerie.crawler.worker_supervisor import (
@@ -312,15 +312,12 @@ def test_compiled_manifest_rejects_symlink_and_hardlink_aliases(tmp_path: Path) 
     symlink = tmp_path / "symlink.py"
     symlink.symlink_to(source)
     digest = hash_bytes(source.read_bytes())
-    common = {
-        "stable_id": "m_manifest_alias",
-        "work_id": "work-manifest-alias",
-        "execution_identity": "sha256:" + "1" * 64,
-        "code_manifest_identity": "sha256:" + "2" * 64,
-    }
     with pytest.raises(ValueError, match="aliased"):
         compile_execution_read_manifest(
-            **common,
+            stable_id="m_manifest_alias",
+            work_id="work-manifest-alias",
+            execution_identity="sha256:" + "1" * 64,
+            code_manifest_identity="sha256:" + "2" * 64,
             code_members=((symlink, digest, "python-source"),),
         )
 
@@ -328,7 +325,10 @@ def test_compiled_manifest_rejects_symlink_and_hardlink_aliases(tmp_path: Path) 
     os.link(source, hardlink)
     with pytest.raises(ValueError, match="aliased"):
         compile_execution_read_manifest(
-            **common,
+            stable_id="m_manifest_alias",
+            work_id="work-manifest-alias",
+            execution_identity="sha256:" + "1" * 64,
+            code_manifest_identity="sha256:" + "2" * 64,
             code_members=((source, digest, "python-source"),),
         )
 

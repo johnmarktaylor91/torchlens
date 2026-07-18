@@ -4439,7 +4439,6 @@ def test_cached_terminal_artifacts_follow_same_terminal_branch_on_resume(tmp_pat
 def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(
     tmp_path: Path,
     real_environment_fixture: RealEnvironmentFixture,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A clean clone executes only canonical deferred handoff authority.
 
@@ -4449,15 +4448,22 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(
         Isolated cross-platform campaign root.
     real_environment_fixture:
         Strictly bound hardlink-cloned prefix used by the shipped compiler path.
-    monkeypatch:
-        Fetch-lane guard; compiler, authority, and supervisor remain unpatched.
     """
 
     source_root = tmp_path / "source-campaign"
     source_root.mkdir()
     snapshot = _snapshot(source_root, count=2)
-    first = _driver(source_root, snapshot, author=BothDeferredRealAuthor()).run()
+    source_environments = RealEnvironmentLane(real_environment_fixture)
+    first = _driver(
+        source_root,
+        snapshot,
+        author=BothDeferredRealAuthor(),
+        forward=SupervisedForwardLane(timeout_seconds=20, cwd=Path.cwd()),
+        environments=source_environments,
+        registry=real_environment_registry(real_environment_fixture),
+    ).run()
     assert first.status == "complete"
+    assert source_environments.events == []
     source_paths = _paths(source_root, snapshot)
     deferred = scan_jsonl(source_paths.ledgers.models)
     assert {record["status"]["code"] for record in deferred} == {
@@ -4499,16 +4505,6 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(
     assert not source_root.exists()
     assert all(not path.exists() for path in old_source_cas)
     assert not old_cache.exists()
-
-    fetch_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
-
-    def disabled_fetch(*args: Any, **kwargs: Any) -> None:
-        """Record and reject any attempt to leave canonical private custody."""
-
-        fetch_calls.append((args, kwargs))
-        raise AssertionError("fetch fallback must remain disabled")
-
-    monkeypatch.setattr(driver_module, "fetch_targets", disabled_fetch)
 
     linux_author = DisabledAuthor()
     linux_checker = FakeChecker()
@@ -4627,7 +4623,6 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(
             for root in forbidden_roots
         )
         assert str(source_root) not in canonical_json_bytes(attempt).decode("utf-8")
-    assert fetch_calls == []
     assert linux_author.calls == 0
     assert linux_checker.metadata_calls == 0
     assert linux_checker.fidelity_calls == 0
@@ -4645,7 +4640,6 @@ def test_linux_handoff_attempts_both_deferred_statuses_and_supersedes(
     }
     assert after_third == before_third
     assert linux_environments.events == ["use:core"]
-    assert fetch_calls == []
     assert linux_author.calls == 0
     assert linux_checker.metadata_calls == 0
     assert linux_checker.fidelity_calls == 0

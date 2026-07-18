@@ -15,9 +15,7 @@ import menagerie.crawler.driver as driver_module
 from menagerie.crawler.authority import (
     AuthorityDerivationError,
     EnvironmentAuthorityCache,
-    ExecutionReadManifest,
     RuntimeMember,
-    compile_execution_read_manifest_v2,
     compile_execution_read_manifest_v3,
     verify_execution_read_manifest_v3,
 )
@@ -561,10 +559,44 @@ def _run_host_denial_composition(
         )
         assert len(positive_attempts) == 1
         assert positive_attempts[0]["result"] == "succeeded", positive_attempts[0]["error"]
+        assert positive_attempts[0]["raw_award_receipt"] is not None
+        assert (
+            positive_attempts[0]["parent_attestation"]["named_raw_award_receipt_sha256"]
+            == positive_attempts[0]["raw_award_receipt_sha256"]
+        )
+        positive_argv = list(positive_attempts[0]["invocation"]["argv"])
+        interpreter_index = positive_argv.index(str(environment.python_executable))
+        assert positive_argv[interpreter_index : interpreter_index + 4] == [
+            str(environment.python_executable),
+            "-B",
+            "-m",
+            "menagerie.crawler.worker",
+        ]
         positive_model = driver_module._assemble_run_model(
             items[0], positive, positive_attempts, [positive_gate], driver.config
         )
+        decisions = driver._license_decisions(positive)
+        assert positive.staged is not None
+        assert set(decisions) == {claim.claim_id for claim in positive.staged.custody_claims}
+        object_digests = {obj.object_id: obj.content_sha256 for obj in positive.staged.objects}
+        assert all(
+            decisions[claim.claim_id].content_sha256 == object_digests[claim.object_id]
+            for claim in positive.staged.custody_claims
+        )
+        driver._authorize_and_publish_artifact(
+            positive,
+            positive_model,
+            [positive_gate],
+            reducer,
+        )
         reducer.append_model(reducer.prepare_model(positive_model))
+        public_mirror = paths.runtime_root / "mirrors" / "public"
+        positive_public_bytes = {
+            path.relative_to(public_mirror).as_posix(): path.read_bytes()
+            for path in public_mirror.rglob("*")
+            if path.is_file()
+        }
+        assert positive_public_bytes
 
         denial = driver._stage_author_result(items[1], denial, reducer)
         denial_gate = FakeChecker().check_metadata([denial], paths.work_root, driver.config).gate
@@ -612,8 +644,11 @@ def _run_host_denial_composition(
     assert [(row["stable_id"], row["status"]["code"]) for row in models] == [
         (items[0].stable_id, "runs")
     ]
-    public_mirror = paths.runtime_root / "mirrors" / "public"
-    assert not public_mirror.exists() or not any(public_mirror.rglob("*"))
+    assert {
+        path.relative_to(public_mirror).as_posix(): path.read_bytes()
+        for path in public_mirror.rglob("*")
+        if path.is_file()
+    } == positive_public_bytes
 
 
 def test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package(
@@ -765,39 +800,12 @@ def test_macos_v3_profile_has_one_fresh_literal_prefix_and_exact_outside_members
     assert str(members["runtime"]) not in profile
 
 
-def test_macos_profile_refuses_legacy_and_stale_environment_prefix_grants(
+def test_macos_profile_refuses_stale_environment_prefix_grant(
     tmp_path: Path,
 ) -> None:
-    """V1/v2 manifests and stale v3 authority cannot create a Seatbelt prefix grant."""
+    """A stale v3 authority cannot create a Seatbelt prefix grant."""
 
     manifest, members = _macos_profile_manifest(tmp_path)
-    legacy_v1 = ExecutionReadManifest(
-        manifest_id=HASH,
-        stable_id="m_legacy",
-        work_id="work-legacy",
-        execution_identity=HASH,
-        code_manifest_identity=HASH,
-        code_members=(),
-        standard_input_asset=None,
-        runtime_support=((members["prefix"], "runtime-root"),),
-    )
-    legacy_v2 = compile_execution_read_manifest_v2(
-        stable_id="m_legacy",
-        work_id="work-legacy",
-        execution_identity=HASH,
-        code_manifest_identity=HASH,
-        environment_generation=HASH,
-        installed_package_inventory_sha256=HASH,
-        code_members=(),
-        runtime_members=(),
-    )
-    for legacy in (legacy_v1, legacy_v2):
-        profile = generate_macos_sandbox_profile(
-            (),
-            execution_read_manifest=legacy,
-        )
-        assert str(members["prefix"]) not in profile
-
     members["runtime"].write_text("RUNTIME = False\n", encoding="utf-8")
     with pytest.raises(AuthorityDerivationError, match="content seal"):
         generate_macos_sandbox_profile((), execution_read_manifest=manifest)

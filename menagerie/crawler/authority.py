@@ -314,20 +314,6 @@ class PublicationAuthorization:
 
 
 @dataclass(frozen=True)
-class ExecutionReadManifest:
-    """Trusted, digest-bound semantic read capability for one worker request."""
-
-    manifest_id: str
-    stable_id: str
-    work_id: str
-    execution_identity: str
-    code_manifest_identity: str
-    code_members: tuple[tuple[Path, str, str], ...]
-    standard_input_asset: Optional[tuple[Path, str, str]]
-    runtime_support: tuple[tuple[Path, str], ...]
-
-
-@dataclass(frozen=True)
 class RuntimeMember:
     """One exact digest-bound executable or runtime file in manifest v2.
 

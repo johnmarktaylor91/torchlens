@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 from collections import Counter
 from copy import deepcopy
+from dataclasses import dataclass
 import inspect
 from pathlib import Path
 import re
@@ -119,26 +120,136 @@ _SUBSTITUTION_BOUNDARIES = frozenset(
     {
         "_compile_worker_read_manifest",
         "_collect_worker_executable_closure",
+        "_execution_identity",
+        "_attempts_from_supervised",
+        "_verified_worker_result",
+        "_read_verified_worker_receipt",
+        "_seal_environment_content",
+        "materialized_environment_generation",
+        "verify_environment_authority",
         "bind_materialized_environment",
         "EnvironmentAuthorityCache",
         "compile_execution_read_manifest_v3",
         "compile_execution_read_manifest_v3_from_closure",
+        "collect_executable_closure_v3",
         "environment_read_capability",
         "verify_execution_read_manifest",
         "verify_execution_read_manifest_v3",
         "supervise_worker",
         "run_isolated_subprocess",
+        "verify_supervised_worker_result",
+        "derive_parent_attestation",
+        "derive_attempt_projection",
+        "SupervisorObservation",
+        "VerifiedWorkerResult",
+        "PublicationAuthorization",
+        "_assemble_run_model",
+        "_authorize_and_publish_artifact",
+        "_authorize_terminal_artifact",
+        "append_attempt",
+        "append_model",
+        "prepare_model",
+        "CanonicalReducer",
+        "publish_authorized_artifact",
     }
 )
-_COMPOSITION_SOURCES = (
-    _CRAWLER_ROOT / "cli.py",
-    _CRAWLER_ROOT / "tests" / "dry_run_support.py",
-    _CRAWLER_ROOT / "tests" / "test_round17_vs1_v3_composition.py",
-    _CRAWLER_ROOT / "tests" / "test_round17_vs2_shutdown_composition.py",
-    _CRAWLER_ROOT / "tests" / "test_slice_f_driver.py",
-    _CRAWLER_ROOT / "tests" / "test_round19_environment_authority_composition.py",
-    _CRAWLER_ROOT / "tests" / "test_round19_vs6_dry_run_composition.py",
+_LEGACY_ALTERNATE_COMPILERS = frozenset(
+    {"compile_execution_read_manifest", "compile_execution_read_manifest_v2"}
 )
+_FAKE_EXECUTION_TYPES = frozenset({"FakeEnvironments", "FakeForward", "SupervisedResult"})
+_QUARANTINE_PATH = _CRAWLER_ROOT / "legacy_manifest_audit.py"
+
+
+def _workflow_test_paths(workflow_source: str) -> tuple[Path, ...]:
+    """Return every crawler test path selected textually by CI.
+
+    Parameters
+    ----------
+    workflow_source:
+        Complete workflow YAML text.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Existing selected crawler test modules in stable order.
+    """
+
+    relative_paths = {
+        token.split("::", 1)[0]
+        for token in re.findall(r"menagerie/crawler/tests/[A-Za-z0-9_./:-]+", workflow_source)
+    }
+    return tuple(
+        sorted(
+            path for relative in relative_paths if (path := _REPOSITORY_ROOT / relative).is_file()
+        )
+    )
+
+
+def _registered_composition_roots() -> dict[Path, tuple[str, ...]]:
+    """Return exact landing-manifest real nodes grouped by their source path.
+
+    Returns
+    -------
+    dict[pathlib.Path, tuple[str, ...]]
+        Registered source paths and exact top-level pytest function roots.
+    """
+
+    default_paths = (
+        (VS1_LANDING_MANIFEST, _CRAWLER_ROOT / "tests" / "test_round17_vs1_v3_composition.py"),
+        (
+            VS2_LANDING_MANIFEST,
+            _CRAWLER_ROOT / "tests" / "test_round17_vs2_shutdown_composition.py",
+        ),
+        (
+            VS3_LANDING_MANIFEST,
+            _CRAWLER_ROOT / "tests" / "test_round17_vs3_authority_composition.py",
+        ),
+    )
+    grouped: dict[Path, set[str]] = {}
+    for manifest, default_path in default_paths:
+        for raw_node in manifest["real_composition_nodes"]:
+            node_id = str(raw_node)
+            if "::" in node_id:
+                path_text, function_name = node_id.split("::", 1)
+                path = _REPOSITORY_ROOT / path_text
+            else:
+                path = default_path
+                function_name = node_id
+            grouped.setdefault(path, set()).add(function_name.split("[", 1)[0])
+    return {path: tuple(sorted(roots)) for path, roots in grouped.items()}
+
+
+def _composition_source_paths(workflow_source: str | None = None) -> tuple[Path, ...]:
+    """Discover the complete §8.3 composition and fixture-module scope.
+
+    Parameters
+    ----------
+    workflow_source:
+        Optional workflow mutation used by self-proofs.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Composition modules, transitive fixture/support modules, and CI selections.
+    """
+
+    workflow = (
+        _WORKFLOW_PATH.read_text(encoding="utf-8") if workflow_source is None else workflow_source
+    )
+    test_root = _CRAWLER_ROOT / "tests"
+    paths = {
+        _CRAWLER_ROOT / "cli.py",
+        test_root / "conftest.py",
+        test_root / "dry_run_support.py",
+        test_root / "test_slice_f_driver.py",
+        *test_root.glob("test_*composition*.py"),
+        *_workflow_test_paths(workflow),
+        *_registered_composition_roots(),
+    }
+    return tuple(sorted(path for path in paths if path.is_file()))
+
+
+_COMPOSITION_SOURCES = _composition_source_paths()
 
 VS4_LANDING_MANIFEST: dict[str, Any] = {
     "findings": ("SOL-R16-07", "Fable-F5"),
@@ -165,6 +276,25 @@ VS4_LANDING_MANIFEST: dict[str, Any] = {
         "test_protocol_literal_inventory_has_only_reviewed_comparison_owners",
         "test_synthetic_worker_result_factory_matches_production_protocol_shapes",
         "test_round17_real_compositions_are_explicitly_selected_in_ci",
+    ),
+}
+
+ROUND21_VS1_PROOF_REGISTRY: dict[str, str] = {
+    "P01": (
+        "menagerie/crawler/tests/test_round21_preclusion_composition.py::"
+        "test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
+    ),
+    "T01": (
+        "menagerie/crawler/tests/test_round21_preclusion_composition.py::"
+        "test_round21_tripwire_catches_python_evasion"
+    ),
+    "T01-CI": (
+        "menagerie/crawler/tests/test_round21_preclusion_composition.py::"
+        "test_round21_tripwire_catches_deleted_ci_node"
+    ),
+    "T02": (
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
+        "test_legacy_manifest_v1_is_quarantined_from_every_live_import_graph"
     ),
 }
 
@@ -285,31 +415,540 @@ def _string_constants(node: ast.AST) -> set[str]:
     }
 
 
-def _substitution_boundary_errors(source: str) -> tuple[str, ...]:
-    """Return AST-detected composition substitutions of live execution boundaries."""
+@dataclass(frozen=True)
+class _SymbolicValue:
+    """One statically resolved symbol and/or folded string value."""
 
-    tree, parents, names = _tree_context(source)
-    errors: list[str] = []
-    for node in ast.walk(tree):
+    symbol: str | None = None
+    text: str | None = None
+
+
+class _SubstitutionAnalyzer:
+    """Small fixed-point AST interpreter for §8.3 composition preclusion."""
+
+    def __init__(self, source: str, source_path: Path) -> None:
+        """Index one module's imports, constants, and local definitions.
+
+        Parameters
+        ----------
+        source:
+            Python source under analysis.
+        source_path:
+            Repository-relative diagnostic path.
+        """
+
+        self.tree = ast.parse(source, filename=str(source_path))
+        self.source_path = source_path
+        self.definitions = {
+            node.name: node
+            for node in self.tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        }
+        self.module_values: dict[str, _SymbolicValue] = {}
+        self.errors: set[str] = set()
+        self._active_calls: set[tuple[str, tuple[str, ...]]] = set()
+        self._index_module_bindings()
+
+    def _index_module_bindings(self) -> None:
+        """Resolve module imports, aliases, and foldable constant assignments."""
+
+        for node in self.tree.body:
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    self.module_values[alias.asname or alias.name.split(".")[0]] = _SymbolicValue(
+                        symbol=alias.name
+                    )
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                for alias in node.names:
+                    name = alias.asname or alias.name
+                    self.module_values[name] = _SymbolicValue(
+                        symbol=".".join(part for part in (module, alias.name) if part)
+                    )
+            elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+                value_node = node.value
+                if value_node is None:
+                    continue
+                value = self._value(value_node, self.module_values)
+                targets = node.targets if isinstance(node, ast.Assign) else (node.target,)
+                for target in targets:
+                    if isinstance(target, ast.Name):
+                        self.module_values[target.id] = value
+
+    def _value(
+        self,
+        node: ast.AST,
+        values: Mapping[str, _SymbolicValue],
+    ) -> _SymbolicValue:
+        """Resolve one expression into a symbol alias and folded string.
+
+        Parameters
+        ----------
+        node:
+            Expression to resolve.
+        values:
+            Current lexical bindings.
+
+        Returns
+        -------
+        _SymbolicValue
+            Best-effort static value; unknown fields remain ``None``.
+        """
+
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return _SymbolicValue(text=node.value)
+        if isinstance(node, ast.Name):
+            return values.get(node.id, _SymbolicValue(symbol=node.id))
+        if isinstance(node, ast.Attribute):
+            owner = self._value(node.value, values).symbol
+            return _SymbolicValue(symbol=f"{owner}.{node.attr}" if owner else node.attr)
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            left = self._value(node.left, values).text
+            right = self._value(node.right, values).text
+            return _SymbolicValue(
+                text=left + right if left is not None and right is not None else None
+            )
+        if isinstance(node, ast.JoinedStr):
+            parts: list[str] = []
+            for value in node.values:
+                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                    parts.append(value.value)
+                elif isinstance(value, ast.FormattedValue):
+                    folded = self._value(value.value, values).text
+                    if folded is None:
+                        return _SymbolicValue()
+                    parts.append(folded)
+                else:
+                    return _SymbolicValue()
+            return _SymbolicValue(text="".join(parts))
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "join"
+            and len(node.args) == 1
+        ):
+            separator = self._value(node.func.value, values).text
+            items = node.args[0]
+            if separator is not None and isinstance(items, (ast.List, ast.Tuple)):
+                folded_items = [self._value(item, values).text for item in items.elts]
+                if all(item is not None for item in folded_items):
+                    return _SymbolicValue(text=separator.join(str(item) for item in folded_items))
         if isinstance(node, ast.Call):
-            call_name = _attribute_name(node.func)
-            if (
-                call_name in {"patch", "patch.object"}
-                or call_name.endswith(".monkeypatch.setattr")
-                or call_name.endswith("monkeypatch.setattr")
+            return _SymbolicValue(symbol=self._value(node.func, values).symbol)
+        if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
+            for candidate in node.values:
+                symbolic_value = self._value(candidate, values)
+                if symbolic_value.symbol is not None or symbolic_value.text is not None:
+                    return symbolic_value
+        return _SymbolicValue()
+
+    def _definition_label(self, stack: Sequence[str]) -> str:
+        """Return a stable caller-to-helper definition chain."""
+
+        return "->".join(stack) if stack else "<module>"
+
+    def _add_error(self, stack: Sequence[str], boundary: str, evasion_class: str) -> None:
+        """Record one fully located substitution diagnostic."""
+
+        self.errors.add(
+            f"{self.source_path.as_posix()}:{self._definition_label(stack)}:"
+            f"{boundary}:{evasion_class}"
+        )
+
+    def _boundary_from_call(
+        self,
+        node: ast.Call,
+        resolved_call: str,
+        values: Mapping[str, _SymbolicValue],
+    ) -> str | None:
+        """Resolve the registered boundary targeted by a mutation or lookup call."""
+
+        name_index = 0 if resolved_call.endswith("patch") else 1
+        if len(node.args) <= name_index:
+            return None
+        candidate = self._value(node.args[name_index], values).text
+        if candidate is not None:
+            tail = candidate.rsplit(".", 1)[-1]
+            if tail in _SUBSTITUTION_BOUNDARIES:
+                return tail
+        if name_index == 1:
+            owner_symbol = self._value(node.args[0], values).symbol
+            if owner_symbol:
+                tail = owner_symbol.rsplit(".", 1)[-1]
+                if tail in _SUBSTITUTION_BOUNDARIES:
+                    return tail
+        return None
+
+    def _analyze_call(
+        self,
+        node: ast.Call,
+        values: dict[str, _SymbolicValue],
+        stack: tuple[str, ...],
+        *,
+        decorator: bool = False,
+    ) -> None:
+        """Analyze one call, including aliases and local-helper argument flow."""
+
+        syntactic_call = _attribute_name(node.func)
+        resolved_call = self._value(node.func, values).symbol or syntactic_call
+        call_tail = resolved_call.rsplit(".", 1)[-1]
+        mutation = bool(
+            call_tail in {"patch", "setattr", "delattr"} or resolved_call.endswith("patch.object")
+        )
+        boundary = self._boundary_from_call(node, resolved_call, values) if mutation else None
+        if mutation and boundary is not None:
+            if decorator:
+                evasion_class = "decorator"
+            elif len(stack) > 1:
+                evasion_class = "helper-indirection"
+            elif syntactic_call != resolved_call and "." not in syntactic_call:
+                evasion_class = "alias-patch"
+            elif call_tail in {"setattr", "delattr"} and not isinstance(
+                node.args[1] if len(node.args) > 1 else None, ast.Constant
             ):
-                rendered = " ".join(ast.unparse(arg) for arg in node.args)
-                rendered = f"{rendered} {' '.join(_string_constants(node))}"
-                for boundary in sorted(_SUBSTITUTION_BOUNDARIES):
-                    if boundary in rendered:
-                        errors.append(f"{_enclosing_definition(node, parents, names)}:{boundary}")
-        elif isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
-            targets = node.targets if isinstance(node, ast.Assign) else (node.target,)
-            rendered_targets = " ".join(ast.unparse(target) for target in targets)
-            for boundary in sorted(_SUBSTITUTION_BOUNDARIES):
-                if boundary in rendered_targets:
-                    errors.append(f"{_enclosing_definition(node, parents, names)}:{boundary}")
+                evasion_class = "dynamic-lookup"
+            else:
+                evasion_class = "direct-patch"
+            self._add_error(stack, boundary, evasion_class)
+        elif mutation and boundary is None:
+            target_known = (
+                len(node.args) > 1 and self._value(node.args[1], values).text is not None
+            ) or (bool(node.args) and self._value(node.args[0], values).text is not None)
+            if not target_known:
+                self._add_error(stack, "<unresolved-mutation-target>", "dynamic-lookup")
+
+        if call_tail == "getattr" and len(node.args) >= 2:
+            dynamic_boundary = self._value(node.args[1], values).text
+            if dynamic_boundary in _SUBSTITUTION_BOUNDARIES:
+                self._add_error(stack, str(dynamic_boundary), "dynamic-lookup")
+        if call_tail in _FAKE_EXECUTION_TYPES:
+            self._add_error(stack, call_tail, "fake-environment-result")
+        if call_tail in _LEGACY_ALTERNATE_COMPILERS:
+            self._add_error(stack, call_tail, "alternate-compiler")
+        if call_tail in {"wraps", "spy", "Mock", "MagicMock"}:
+            candidates = [*node.args, *(keyword.value for keyword in node.keywords)]
+            for candidate in candidates:
+                symbol = self._value(candidate, values).symbol
+                if symbol and symbol.rsplit(".", 1)[-1] in _SUBSTITUTION_BOUNDARIES:
+                    self._add_error(stack, symbol.rsplit(".", 1)[-1], "wrapper-spy")
+
+        helper_name = call_tail if call_tail in self.definitions else None
+        helper = self.definitions.get(helper_name) if helper_name is not None else None
+        if (
+            helper_name is not None
+            and helper_name not in stack
+            and self.source_path.name != "test_round17_structural_inventories.py"
+            and isinstance(helper, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ):
+            bound = dict(self.module_values)
+            parameters = [*helper.args.posonlyargs, *helper.args.args]
+            for parameter, argument in zip(parameters, node.args):
+                bound[parameter.arg] = self._value(argument, values)
+            for keyword in node.keywords:
+                if keyword.arg is not None:
+                    bound[keyword.arg] = self._value(keyword.value, values)
+            self._analyze_function(helper, bound, (*stack, helper_name))
+
+        for child in (*node.args, *(keyword.value for keyword in node.keywords)):
+            self._analyze_expression(child, values, stack)
+
+    def _analyze_expression(
+        self,
+        node: ast.AST,
+        values: dict[str, _SymbolicValue],
+        stack: tuple[str, ...],
+        *,
+        decorator: bool = False,
+    ) -> None:
+        """Recursively analyze calls and folded forbidden values in an expression."""
+
+        folded = self._value(node, values).text
+        if (
+            folded == "runtime-root"
+            and self.source_path.name != "test_round17_structural_inventories.py"
+        ):
+            self._add_error(stack, "runtime-root", "legacy-root")
+        if isinstance(node, ast.Call):
+            self._analyze_call(node, values, stack, decorator=decorator)
+            self._analyze_expression(node.func, values, stack)
+            return
+        if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
+            for candidate in node.values:
+                self._analyze_expression(candidate, values, stack)
+                value = self._value(candidate, values)
+                if value.symbol is not None or value.text is not None:
+                    break
+            return
+        for child in ast.iter_child_nodes(node):
+            self._analyze_expression(child, values, stack)
+
+    def _analyze_target(
+        self,
+        target: ast.AST,
+        values: Mapping[str, _SymbolicValue],
+        stack: tuple[str, ...],
+    ) -> None:
+        """Reject direct attribute and mapping assignment to a registered boundary."""
+
+        if isinstance(target, ast.Attribute) and target.attr in _SUBSTITUTION_BOUNDARIES:
+            self._add_error(stack, target.attr, "assignment")
+        elif isinstance(target, ast.Subscript):
+            key = self._value(target.slice, values).text
+            if key in _SUBSTITUTION_BOUNDARIES:
+                self._add_error(stack, str(key), "assignment")
+
+    def _analyze_statements(
+        self,
+        statements: Sequence[ast.stmt],
+        values: dict[str, _SymbolicValue],
+        stack: tuple[str, ...],
+    ) -> None:
+        """Interpret one statement list with local alias and constant propagation."""
+
+        for statement in statements:
+            if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for decorator in statement.decorator_list:
+                    self._analyze_expression(decorator, values, stack, decorator=True)
+                self._analyze_function(statement, dict(values), (*stack, statement.name))
+                continue
+            if isinstance(statement, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+                targets = (
+                    statement.targets if isinstance(statement, ast.Assign) else (statement.target,)
+                )
+                value_node = statement.value
+                if value_node is None:
+                    continue
+                self._analyze_expression(value_node, values, stack)
+                value = self._value(value_node, values)
+                for target in targets:
+                    self._analyze_target(target, values, stack)
+                    if isinstance(target, ast.Name):
+                        values[target.id] = value
+                continue
+            for child in ast.iter_child_nodes(statement):
+                if isinstance(child, ast.expr):
+                    self._analyze_expression(child, values, stack)
+                elif isinstance(child, ast.stmt):
+                    self._analyze_statements((child,), dict(values), stack)
+
+    def _analyze_function(
+        self,
+        node: ast.FunctionDef | ast.AsyncFunctionDef,
+        values: dict[str, _SymbolicValue],
+        stack: tuple[str, ...],
+    ) -> None:
+        """Analyze one local function once per symbolic caller binding."""
+
+        signature = tuple(
+            f"{name}={value.symbol or value.text or '?'}" for name, value in sorted(values.items())
+        )
+        key = (node.name, signature)
+        if key in self._active_calls:
+            return
+        self._active_calls.add(key)
+        base_worker_argv = any(
+            "menagerie.crawler.worker" in _string_constants(container)
+            and any(
+                isinstance(child, ast.Attribute)
+                and child.attr == "executable"
+                and isinstance(child.value, ast.Name)
+                and child.value.id == "sys"
+                for child in ast.walk(container)
+            )
+            for container in ast.walk(node)
+            if isinstance(container, (ast.List, ast.Tuple))
+        )
+        if base_worker_argv:
+            self._add_error(stack, "selected-interpreter-argv", "base-interpreter-argv")
+        self._analyze_statements(node.body, values, stack)
+        self._active_calls.remove(key)
+
+    def analyze(self, root_definitions: Sequence[str] | None = None) -> tuple[str, ...]:
+        """Return all diagnostics reachable from the selected module definitions.
+
+        Parameters
+        ----------
+        root_definitions:
+            Exact top-level roots.  By default every test function is analyzed.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Sorted fully located diagnostics.
+        """
+
+        roots = tuple(root_definitions or ())
+        if not roots:
+            roots = tuple(name for name in self.definitions if name.startswith("test_"))
+        if not roots:
+            roots = tuple(self.definitions)
+        for root in roots:
+            definition = self.definitions.get(root)
+            if isinstance(definition, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                values = dict(self.module_values)
+                for decorator in definition.decorator_list:
+                    self._analyze_expression(decorator, values, (root,), decorator=True)
+                self._analyze_function(definition, values, (root,))
+            elif isinstance(definition, ast.ClassDef):
+                for child in definition.body:
+                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        self._analyze_function(
+                            child,
+                            dict(self.module_values),
+                            (root, child.name),
+                        )
+        return tuple(sorted(self.errors))
+
+
+def _substitution_boundary_errors(
+    source: str,
+    *,
+    source_path: Path = Path("<memory>"),
+    root_definitions: Sequence[str] | None = None,
+) -> tuple[str, ...]:
+    """Return transitive AST-detected substitutions in one composition module.
+
+    Parameters
+    ----------
+    source:
+        Python module source.
+    source_path:
+        Repository-relative diagnostic path.
+    root_definitions:
+        Optional exact composition/fixture roots.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Fully located substitution diagnostics.
+    """
+
+    return _SubstitutionAnalyzer(source, source_path).analyze(root_definitions)
+
+
+def _composition_roots(path: Path, source: str) -> tuple[str, ...] | None:
+    """Return exact roots for support modules that also contain unit-only fixtures."""
+
+    if path.name == "conftest.py":
+        raise AssertionError("conftest roots require the transitive fixture graph")
+    if path.name == "test_slice_f_driver.py":
+        return ("test_linux_handoff_attempts_both_deferred_statuses_and_supersedes",)
+    if path.name in {"cli.py", "dry_run_support.py"}:
+        tree = ast.parse(source, filename=str(path))
+        return tuple(
+            node.name
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        )
+    registered = _registered_composition_roots().get(path)
+    if registered is not None and "composition" not in path.stem:
+        return registered
+    return None
+
+
+def _transitive_fixture_roots(paths: Sequence[Path]) -> tuple[str, ...]:
+    """Resolve every applicable conftest fixture dependency to a fixed point.
+
+    Parameters
+    ----------
+    paths:
+        Complete discovered composition/registered/CI source scope.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Exact conftest fixture roots plus the real fixture data/lane classes.
+    """
+
+    conftest_path = _CRAWLER_ROOT / "tests" / "conftest.py"
+    conftest_tree = ast.parse(
+        conftest_path.read_text(encoding="utf-8"), filename=str(conftest_path)
+    )
+    fixtures = {
+        node.name: node
+        for node in conftest_tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and any(
+            _attribute_name(
+                decorator.func if isinstance(decorator, ast.Call) else decorator
+            ).endswith("fixture")
+            for decorator in node.decorator_list
+        )
+    }
+    requested: set[str] = set()
+    for path in paths:
+        if path == conftest_path:
+            continue
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+        selected_roots = _composition_roots(path, source)
+        roots = set(selected_roots or ())
+        for node in tree.body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if roots and node.name not in roots:
+                continue
+            if not roots and not node.name.startswith("test_"):
+                continue
+            requested.update(
+                parameter.arg for parameter in (*node.args.posonlyargs, *node.args.args)
+            )
+
+    resolved: set[str] = set()
+    pending = requested & fixtures.keys()
+    while pending:
+        fixture_name = pending.pop()
+        if fixture_name in resolved:
+            continue
+        resolved.add(fixture_name)
+        fixture = fixtures[fixture_name]
+        dependencies = {
+            parameter.arg for parameter in (*fixture.args.posonlyargs, *fixture.args.args)
+        }
+        pending.update((dependencies & fixtures.keys()) - resolved)
+    return tuple(
+        sorted(
+            {
+                "RealEnvironmentFixture",
+                "RealEnvironmentLane",
+                "real_environment_registry",
+                *resolved,
+            }
+        )
+    )
+
+
+def _composition_scope_errors() -> tuple[str, ...]:
+    """Return substitution diagnostics across every discovered composition edge."""
+
+    errors: list[str] = []
+    paths = _composition_source_paths()
+    fixture_roots = _transitive_fixture_roots(paths)
+    for path in paths:
+        source = path.read_text(encoding="utf-8")
+        roots = fixture_roots if path.name == "conftest.py" else _composition_roots(path, source)
+        errors.extend(
+            _substitution_boundary_errors(
+                source,
+                source_path=path.relative_to(_REPOSITORY_ROOT),
+                root_definitions=roots,
+            )
+        )
     return tuple(sorted(set(errors)))
+
+
+def _required_ci_selection_errors(workflow_source: str) -> tuple[str, ...]:
+    """Return fully located diagnostics for missing required real CI nodes."""
+
+    required = {
+        *_ROUND17_CI_NODES,
+        *(node for node in _ROUND19_RELEASE_NODE_INVENTORY.values() if "::" in node),
+    }
+    return tuple(
+        f".github/workflows/tests.yml:<workflow>:{node}:deleted-ci-node"
+        for node in sorted(required)
+        if node not in workflow_source
+    )
 
 
 def _production_python_paths() -> tuple[Path, ...]:
@@ -792,12 +1431,15 @@ def test_environment_cache_has_one_lifecycle_owner_and_no_default_collector() ->
 
 
 def test_real_compositions_cannot_substitute_execution_boundaries() -> None:
-    """AST tripwire forbids compiler, authority, and supervisor replacement."""
+    """Transitive AST tripwire covers fixtures, compositions, helpers, and CI."""
 
-    assert {
-        path.name: _substitution_boundary_errors(path.read_text(encoding="utf-8"))
-        for path in _COMPOSITION_SOURCES
-    } == {path.name: () for path in _COMPOSITION_SOURCES}
+    assert _COMPOSITION_SOURCES == _composition_source_paths()
+    assert _CRAWLER_ROOT / "tests" / "conftest.py" in _COMPOSITION_SOURCES
+    assert (
+        _CRAWLER_ROOT / "tests" / "test_round17_vs3_authority_composition.py"
+        in _COMPOSITION_SOURCES
+    )
+    assert _composition_scope_errors() == ()
 
     mutated = (
         _COMPOSITION_SOURCES[0].read_text(encoding="utf-8")
@@ -805,9 +1447,42 @@ def test_real_compositions_cannot_substitute_execution_boundaries() -> None:
         + "def test_reintroduced_patch(monkeypatch):\n"
         + "    monkeypatch.setattr(driver_module, '_compile_worker_read_manifest', object())\n"
     )
-    assert _substitution_boundary_errors(mutated) == (
-        "test_reintroduced_patch:_compile_worker_read_manifest",
+    assert _substitution_boundary_errors(
+        mutated,
+        source_path=Path("tests/test_reintroduced_composition.py"),
+        root_definitions=("test_reintroduced_patch",),
+    ) == (
+        "tests/test_reintroduced_composition.py:test_reintroduced_patch:"
+        "_compile_worker_read_manifest:direct-patch",
     )
+
+
+def test_legacy_manifest_v1_is_quarantined_from_every_live_import_graph() -> None:
+    """Legacy root-grant parsing exists only in the audit module and cannot spawn."""
+
+    production_paths = _production_python_paths()
+    assert _QUARANTINE_PATH in production_paths
+    for path in production_paths:
+        source = path.read_text(encoding="utf-8")
+        if path == _QUARANTINE_PATH:
+            assert "class ExecutionReadManifest" in source
+            assert "def compile_execution_read_manifest" in source
+            assert "def audit_runtime_root_grants" in source
+            assert "runtime-root" in source
+            assert "supervise_worker" not in source
+            assert "run_isolated_subprocess" not in source
+            continue
+        assert "legacy_manifest_audit" not in source, path
+        assert "runtime-root" not in source, path
+        assert re.search(r"^class ExecutionReadManifest(?:\(|:)", source, re.MULTILINE) is None, (
+            path
+        )
+        assert "def compile_execution_read_manifest(" not in source, path
+
+    supervisor_source = _source(supervisor_module)
+    assert "live v3 model worker spawn requires execution-read-manifest.v3" in supervisor_source
+    assert "ExecutionReadManifest |" not in supervisor_source
+    assert 'runtime_support if kind == "runtime-root"' not in supervisor_source
 
 
 def test_round17_real_compositions_are_explicitly_selected_in_ci() -> None:
@@ -824,7 +1499,9 @@ def test_round17_real_compositions_are_explicitly_selected_in_ci() -> None:
     assert "not slow" not in crawler_job
 
     mutated = workflow.replace(_ROUND17_CI_NODES[0], "")
-    assert _ROUND17_CI_NODES[0] not in mutated
+    assert _required_ci_selection_errors(mutated) == (
+        f".github/workflows/tests.yml:<workflow>:{_ROUND17_CI_NODES[0]}:deleted-ci-node",
+    )
 
 
 def test_round19_supported_host_release_gate_inventory_is_exact() -> None:

@@ -11,7 +11,6 @@ from pathlib import Path
 import signal
 import textwrap
 from typing import Any
-from unittest.mock import patch
 
 import pytest
 
@@ -24,7 +23,6 @@ from menagerie.crawler.driver import (
     WorkItem,
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
-from menagerie.crawler.licenses import LicenseDecision, RedistributionClass
 from menagerie.crawler.proposal import model_code_manifest
 from menagerie.crawler.recordio import scan_jsonl
 from menagerie.crawler.tests.conftest import (
@@ -159,29 +157,6 @@ def _called_symbols(function: Any) -> set[str]:
     return symbols
 
 
-def _claim_specific_license_decisions(
-    driver: driver_module.CrawlerDriver,
-    artifact: AuthorArtifact,
-) -> dict[Any, LicenseDecision]:
-    """Provide distinct legitimate dispositions for source and adapter claims."""
-
-    del driver
-    assert artifact.staged is not None
-    objects = {obj.object_id: obj for obj in artifact.staged.objects}
-    decisions: dict[Any, LicenseDecision] = {}
-    for claim in artifact.staged.custody_claims:
-        public = claim.logical_role == "code"
-        decisions[claim.claim_id] = LicenseDecision(
-            content_sha256=objects[claim.object_id].content_sha256,
-            redistribution_class=(
-                RedistributionClass.PUBLIC_OK if public else RedistributionClass.RESTRICTED_PRIVATE
-            ),
-            evidence_ids=("evidence-1",),
-            rationale="test fixture binds claim-specific accepted license evidence",
-        )
-    return decisions
-
-
 def _run_after_forward_shutdown(root: str, fixture: RealEnvironmentFixture) -> None:
     """Run the real driver under its production signal handler in a child process."""
 
@@ -208,14 +183,7 @@ def _run_after_forward_shutdown(root: str, fixture: RealEnvironmentFixture) -> N
         boundary=signal_after_forward,
         registry=real_environment_registry(fixture),
     )
-    with (
-        patch.object(
-            driver_module.CrawlerDriver,
-            "_license_decisions",
-            _claim_specific_license_decisions,
-        ),
-    ):
-        interrupted = driver.run()
+    interrupted = driver.run()
 
     artifact_events = scan_jsonl(paths.ledgers.artifacts)
     operational = scan_jsonl(paths.operational_ledger)
@@ -257,14 +225,7 @@ def _run_after_forward_shutdown(root: str, fixture: RealEnvironmentFixture) -> N
         boundary=reject_second_forward,
         registry=real_environment_registry(fixture),
     )
-    with (
-        patch.object(
-            driver_module.CrawlerDriver,
-            "_license_decisions",
-            _claim_specific_license_decisions,
-        ),
-    ):
-        resumed = resumed_driver.run()
+    resumed = resumed_driver.run()
     observation.update(
         {
             "resume_status": resumed.status,
@@ -315,12 +276,7 @@ def _run_admission_boundary_shutdown(
         boundary=signal_at_boundary,
         registry=real_environment_registry(fixture),
     )
-    with patch.object(
-        driver_module.CrawlerDriver,
-        "_license_decisions",
-        _claim_specific_license_decisions,
-    ):
-        interrupted = driver.run()
+    interrupted = driver.run()
 
     attempts_before_resume = scan_jsonl(paths.ledgers.attempts)
     observation: dict[str, Any] = {
@@ -370,12 +326,7 @@ def _run_admission_boundary_shutdown(
         boundary=reject_repeated_forward,
         registry=real_environment_registry(fixture),
     )
-    with patch.object(
-        driver_module.CrawlerDriver,
-        "_license_decisions",
-        _claim_specific_license_decisions,
-    ):
-        resumed = resumed_driver.run()
+    resumed = resumed_driver.run()
     resumed_attempts = scan_jsonl(paths.ledgers.attempts)
     observation.update(
         {

@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import Any, BinaryIO, Callable, Iterator, Mapping, Optional, Sequence
 
 from menagerie.crawler.authority import (
-    ExecutionReadManifest,
     ExecutionReadManifestV2,
     ExecutionReadManifestV3,
     environment_read_capability,
@@ -1669,9 +1668,7 @@ def _parent_owned_audit_path(
 
 def _request_allowed_read_paths(
     argv: Sequence[str],
-    manifest: Optional[
-        ExecutionReadManifest | ExecutionReadManifestV2 | ExecutionReadManifestV3
-    ] = None,
+    manifest: Optional[ExecutionReadManifestV2 | ExecutionReadManifestV3] = None,
 ) -> tuple[Path, ...]:
     """Return parent bootstrap files plus one compiled read capability.
 
@@ -1728,11 +1725,6 @@ def _request_allowed_read_paths(
             allowed.extend(capability.startup_pth_paths)
         elif isinstance(manifest, ExecutionReadManifestV2):
             allowed.extend(exact_read_capability(manifest).member_paths)
-        else:
-            allowed.extend(path for path, _digest, _kind in manifest.code_members)
-            allowed.extend(
-                path for path, kind in manifest.runtime_support if kind == "runtime-root"
-            )
         if manifest.standard_input_asset is not None:
             allowed.append(manifest.standard_input_asset[0])
         allowed.extend(path for path, kind in manifest.runtime_support if kind == "runtime-file")
@@ -3036,9 +3028,7 @@ def run_isolated_subprocess(
     base_environment: Optional[Mapping[str, str]] = None,
     additional_write_roots: Sequence[Path] = (),
     worker_completion_challenge: Optional[str] = None,
-    execution_read_manifest: Optional[
-        ExecutionReadManifest | ExecutionReadManifestV2 | ExecutionReadManifestV3
-    ] = None,
+    execution_read_manifest: Optional[ExecutionReadManifestV2 | ExecutionReadManifestV3] = None,
     shutdown_event: Optional[threading.Event] = None,
     worker_lease_handle: Optional[WorkerLeaseHandle] = None,
     request_nonce: Optional[str] = None,
@@ -3156,16 +3146,6 @@ def run_isolated_subprocess(
         elif isinstance(execution_read_manifest, ExecutionReadManifestV2):
             macos_runtime_read_roots = ()
             runtime_package_data_paths = ()
-        else:
-            declared_runtime_roots = tuple(
-                path
-                for path, kind in execution_read_manifest.runtime_support
-                if kind == "runtime-root"
-            )
-            macos_runtime_read_roots = tuple(
-                dict.fromkeys((*discovered_roots[:-1], *declared_runtime_roots))
-            )
-            runtime_package_data_paths = _runtime_package_data_paths(macos_runtime_read_roots)
         profile_path = scratch_root / "worker-sandbox.sb"
         profile_path.write_text(
             generate_macos_sandbox_profile(
@@ -3184,20 +3164,6 @@ def run_isolated_subprocess(
             linux_runtime_code_roots = (execution_read_manifest.environment_authority.prefix,)
         elif isinstance(execution_read_manifest, ExecutionReadManifestV2):
             linux_runtime_code_roots = ()
-        else:
-            declared_runtime_roots = tuple(
-                path
-                for path, kind in execution_read_manifest.runtime_support
-                if kind == "runtime-root"
-            )
-            linux_runtime_code_roots = tuple(
-                dict.fromkeys(
-                    (
-                        *(root for root in discovered_roots if root != working_directory),
-                        *declared_runtime_roots,
-                    )
-                )
-            )
         linux_runtime_read_paths = _linux_runtime_read_paths(argv)
     sandboxed_argv = wrap_with_os_sandbox(
         sandbox,
@@ -3519,9 +3485,7 @@ def supervise_worker(
     timeout_seconds: float = DEFAULT_FORWARD_TIMEOUT_SECONDS,
     rss_limit_bytes: int = 12 * 1024**3,
     cwd: Optional[Path] = None,
-    execution_read_manifest: Optional[
-        ExecutionReadManifest | ExecutionReadManifestV2 | ExecutionReadManifestV3
-    ] = None,
+    execution_read_manifest: Optional[ExecutionReadManifestV2 | ExecutionReadManifestV3] = None,
     worker_lease_handle: Optional[WorkerLeaseHandle] = None,
     shutdown_event: Optional[threading.Event] = None,
     on_lease_started: Optional[Callable[[WorkerLease], None]] = None,
