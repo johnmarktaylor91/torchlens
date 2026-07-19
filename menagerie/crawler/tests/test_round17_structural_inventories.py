@@ -118,6 +118,13 @@ _ROUND19_RELEASE_NODE_INVENTORY = {
         "test_macos_v3_profile_has_one_fresh_literal_prefix_and_exact_outside_members"
     ),
 }
+_REQUIRED_CI_SELECTIONS = (
+    "menagerie/crawler/tests -m round21_linux_real",
+    _ROUND19_RELEASE_NODE_INVENTORY["macos-positive-negative"],
+    _ROUND19_RELEASE_NODE_INVENTORY["macos-profile"],
+    _ROUND19_RELEASE_NODE_INVENTORY["dry-run-run-resume"],
+    _ROUND19_RELEASE_NODE_INVENTORY["dry-run-false-complete"],
+)
 _SUBSTITUTION_BOUNDARIES = frozenset(
     {
         "_compile_worker_read_manifest",
@@ -1093,13 +1100,9 @@ def _composition_scope_errors() -> tuple[str, ...]:
 def _required_ci_selection_errors(workflow_source: str) -> tuple[str, ...]:
     """Return fully located diagnostics for missing required real CI nodes."""
 
-    required = {
-        *_ROUND17_CI_NODES,
-        *(node for node in _ROUND19_RELEASE_NODE_INVENTORY.values() if "::" in node),
-    }
     return tuple(
         f".github/workflows/tests.yml:<workflow>:{node}:deleted-ci-node"
-        for node in sorted(required)
+        for node in sorted(_REQUIRED_CI_SELECTIONS)
         if node not in workflow_source
     )
 

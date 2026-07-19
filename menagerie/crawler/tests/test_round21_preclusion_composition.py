@@ -196,7 +196,7 @@ def test_round21_tripwire_catches_deleted_ci_node() -> None:
     """Deleting one required real node from CI must be a located substitution error."""
 
     workflow = structural._WORKFLOW_PATH.read_text(encoding="utf-8")  # noqa: SLF001
-    required_node = structural._ROUND17_CI_NODES[0]  # noqa: SLF001
+    required_node = structural._REQUIRED_CI_SELECTIONS[0]  # noqa: SLF001
     errors = structural._required_ci_selection_errors(  # type: ignore[attr-defined]  # noqa: SLF001
         workflow.replace(required_node, "")
     )

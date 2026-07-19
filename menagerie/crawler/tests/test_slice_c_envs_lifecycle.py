@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from dataclasses import replace
 from pathlib import Path
@@ -19,6 +20,8 @@ from menagerie.crawler.env_lifecycle import (
     SequentialEnvironmentLifecycle,
     SolveResult,
     expected_probe_names,
+    parse_exact_lock,
+    parse_resolved_export,
 )
 from menagerie.crawler.envs import DEFAULT_ENVS_ROOT, IntentProbes, load_environment_registry
 from menagerie.crawler.effort import CapFailureRecord, EffortCapExceeded, EffortTracker, StageCap
@@ -85,6 +88,141 @@ def _copy_env_specs(tmp_path: Path) -> Path:
     return target
 
 
+def _release_lock_provenance_errors(env_root: Path) -> tuple[str, ...]:
+    """Return violations in committed release-lock provenance.
+
+    Parameters
+    ----------
+    env_root:
+        Environment registry root containing optional committed release locks.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Located anti-fabrication diagnostics, empty only for fully attested lock families.
+    """
+
+    generated_outputs = {
+        path
+        for path in env_root.rglob("*")
+        if path.is_file()
+        and (
+            path.suffix == ".lock"
+            or path.name.endswith(".resolved.json")
+            or path.name.endswith(".resolved.sha256")
+        )
+    }
+    accounted_outputs: set[Path] = set()
+    errors: list[str] = []
+    for lock_path in sorted(env_root.rglob("*.lock")):
+        family = {
+            "resolved": lock_path.with_suffix(".resolved.json"),
+            "resolved_hash": lock_path.with_suffix(".resolved.sha256"),
+            "provenance": lock_path.with_suffix(".provenance.json"),
+            "probes": lock_path.with_suffix(".probes.json"),
+        }
+        accounted_outputs.add(lock_path)
+        accounted_outputs.update(
+            path for name, path in family.items() if name in {"resolved", "resolved_hash"}
+        )
+        missing = [name for name, path in family.items() if not path.is_file()]
+        if missing:
+            errors.append(f"{lock_path}:missing-{','.join(sorted(missing))}")
+            continue
+        try:
+            lock_bytes = lock_path.read_bytes()
+            resolved_bytes = family["resolved"].read_bytes()
+            parse_exact_lock(lock_bytes)
+            if parse_resolved_export(resolved_bytes) != resolved_bytes:
+                errors.append(f"{lock_path}:noncanonical-resolved-export")
+            declared_resolved_hash = family["resolved_hash"].read_text(encoding="utf-8").strip()
+            provenance = json.loads(family["provenance"].read_bytes())
+        except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(f"{lock_path}:invalid-lock-family:{type(exc).__name__}")
+            continue
+        if not isinstance(provenance, dict):
+            errors.append(f"{lock_path}:provenance-not-object")
+            continue
+        target = provenance.get("target")
+        spec_path = provenance.get("spec_path")
+        probe_contract_path = provenance.get("probe_contract_path")
+        if not isinstance(target, str) or not lock_path.name.endswith(f"-{target}.lock"):
+            errors.append(f"{lock_path}:target-not-bound-to-lock")
+        if provenance.get("schema_version") != "menagerie.crawler.release-lock-provenance.v1":
+            errors.append(f"{lock_path}:invalid-provenance-schema")
+        if provenance.get("lock_path") != (
+            f"menagerie/crawler/envs/{lock_path.relative_to(env_root).as_posix()}"
+        ):
+            errors.append(f"{lock_path}:lock-path-not-bound")
+        if provenance.get("lock_sha256") != hash_bytes(lock_bytes):
+            errors.append(f"{lock_path}:lock-hash-mismatch")
+        if declared_resolved_hash != hash_bytes(resolved_bytes):
+            errors.append(f"{lock_path}:resolved-hash-file-mismatch")
+        if provenance.get("resolved_export_sha256") != declared_resolved_hash:
+            errors.append(f"{lock_path}:resolved-provenance-mismatch")
+        if provenance.get("resolved_export_path") != (
+            f"menagerie/crawler/envs/{family['resolved'].relative_to(env_root).as_posix()}"
+        ):
+            errors.append(f"{lock_path}:resolved-path-not-bound")
+        if provenance.get("probe_receipt_path") != (
+            f"menagerie/crawler/envs/{family['probes'].relative_to(env_root).as_posix()}"
+        ):
+            errors.append(f"{lock_path}:probe-receipt-path-not-bound")
+        if provenance.get("probe_receipt_sha256") != hash_bytes(family["probes"].read_bytes()):
+            errors.append(f"{lock_path}:probe-receipt-hash-mismatch")
+        for label, declared_path, digest_key in (
+            ("spec", spec_path, "spec_sha256"),
+            ("probe-contract", probe_contract_path, "probe_contract_sha256"),
+        ):
+            expected_parent = Path("menagerie/crawler/envs/specs")
+            if not isinstance(declared_path, str) or Path(declared_path).parent != expected_parent:
+                errors.append(f"{lock_path}:{label}-path-outside-registry")
+                continue
+            local_path = env_root / "specs" / Path(declared_path).name
+            if not local_path.is_file() or provenance.get(digest_key) != hash_bytes(
+                local_path.read_bytes()
+            ):
+                errors.append(f"{lock_path}:{label}-hash-mismatch")
+        solver = provenance.get("solver")
+        solver_command = solver.get("command") if isinstance(solver, dict) else None
+        if (
+            not isinstance(solver_command, list)
+            or spec_path not in solver_command
+            or solver_command[:3] != ["conda", "env", "create"]
+        ):
+            errors.append(f"{lock_path}:solver-command-not-bound")
+        clean_create = provenance.get("clean_create")
+        artifact_validation = provenance.get("artifact_hash_validation")
+        if not isinstance(clean_create, dict) or clean_create.get("validated") is not True:
+            errors.append(f"{lock_path}:clean-create-unattested")
+        if (
+            not isinstance(artifact_validation, dict)
+            or artifact_validation.get("algorithm") != "sha256"
+            or artifact_validation.get("verified") is not True
+        ):
+            errors.append(f"{lock_path}:artifact-hashes-unattested")
+        target_host = {
+            "linux-64": ("Linux", "x86_64", "__linux"),
+            "osx-arm64": ("Darwin", "arm64", "__osx"),
+        }.get(target)
+        host = provenance.get("host")
+        virtual_packages = provenance.get("virtual_packages")
+        if (
+            target_host is None
+            or not isinstance(host, dict)
+            or (host.get("system"), host.get("machine")) != target_host[:2]
+            or not isinstance(virtual_packages, list)
+            or not any(
+                isinstance(row, list) and row and row[0] == target_host[2]
+                for row in virtual_packages
+            )
+        ):
+            errors.append(f"{lock_path}:solve-host-not-on-target")
+    for path in sorted(generated_outputs - accounted_outputs):
+        errors.append(f"{path}:orphan-hand-authored-output")
+    return tuple(errors)
+
+
 def test_registry_loads_all_intents_without_committed_locks() -> None:
     """All eleven intents have dependencies, probes, and honest unlocked state."""
 
@@ -118,21 +256,22 @@ def test_generation_is_stable_and_changes_with_exact_lock(tmp_path: Path) -> Non
     assert load_environment_registry(root).intents["core"].generation != first
 
 
-def test_repository_contains_no_hand_authored_lock_or_hash_outputs() -> None:
-    """Only setup documentation is committed under lock directories."""
+def test_repository_contains_no_hand_authored_lock_or_hash_outputs(tmp_path: Path) -> None:
+    """Only solve-provenance-bound exact lock families may be committed."""
 
-    forbidden = [
-        path
-        for path in DEFAULT_ENVS_ROOT.rglob("*")
-        if path.is_file()
-        and (
-            path.suffix == ".lock"
-            or path.name.endswith(".resolved.json")
-            or path.name.endswith(".resolved.sha256")
-        )
-    ]
-    assert forbidden == []
+    assert _release_lock_provenance_errors(DEFAULT_ENVS_ROOT) == ()
     assert (DEFAULT_ENVS_ROOT / "locks" / "README.md").is_file()
+    copied_root = _copy_env_specs(tmp_path)
+    fabricated_lock = copied_root / "locks" / "hand-authored-linux-64.lock"
+    fabricated_lock.write_text("@EXPLICIT\nhttps://example.test/fake#sha256=00\n", encoding="utf-8")
+    fabricated_lock.with_suffix(".resolved.sha256").write_text(
+        "sha256:0000000000000000000000000000000000000000000000000000000000000000\n",
+        encoding="utf-8",
+    )
+    assert any(
+        "hand-authored-linux-64.lock:missing-" in error
+        for error in _release_lock_provenance_errors(copied_root)
+    )
 
 
 def test_lifecycle_orders_solve_create_probe_use_and_teardown(tmp_path: Path) -> None:

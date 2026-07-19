@@ -1160,8 +1160,7 @@ def _bubblewrap_argv(
     libomp_registration_path = f"/__KMP_REGISTERED_LIB_2_{os.getuid()}"
     wrapped.extend(
         (
-            "--bind",
-            str(scratch_tmp),
+            "--dir",
             "/tmp",
             "--dir",
             "/dev/shm",

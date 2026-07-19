@@ -192,6 +192,12 @@ _GENERATED_METADATA_ROOTS = (
     PurePosixPath("menagerie/crawler/reconstruction"),
     PurePosixPath("menagerie/crawler/envs"),
 )
+_REGISTERED_STANDALONE_ENVIRONMENT_CANDIDATES = frozenset(
+    {
+        Path("specs/round21-release.probes.json"),
+        Path("specs/round21-release.yml"),
+    }
+)
 _ALLOWLIST_SUFFIXES = frozenset(
     {
         ".c",
@@ -1958,6 +1964,7 @@ def _validate_environment_candidates(
             len(relative.parts) > 1
             and relative.parts[0] not in registered
             and relative.parts[0] != "locks"
+            and relative not in _REGISTERED_STANDALONE_ENVIRONMENT_CANDIDATES
         ):
             raise CheckpointValidationError(
                 f"environment candidate is outside the registry: {path.as_posix()}"

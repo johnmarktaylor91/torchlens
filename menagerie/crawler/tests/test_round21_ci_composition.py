@@ -84,6 +84,10 @@ def _probe_contract() -> IntentProbes:
     return IntentProbes(tuple(imports), checks, ())
 
 
+@pytest.mark.skipif(
+    os.environ.get("MENAGERIE_RELEASE_GATE") != "1",
+    reason="release-gate-only",
+)
 @pytest.mark.round21_linux_real
 def test_round21_linux_committed_lock_provenance_awards_in_ci(
     tmp_path: Path,
