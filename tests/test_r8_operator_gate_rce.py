@@ -227,6 +227,26 @@ def test_decode_literal_admits_torch_device() -> None:
     assert _decode_literal(LiteralTorchSymbol("torch.device(cpu)")) == torch.device("cpu")
 
 
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    "qualname",
+    [
+        "torch.device(BOGUS!!!)",  # the r40 secC tamper repro payload
+        "torch.device()",  # empty payload
+        "torch.device(cpu:0:1)",  # malformed index spec
+        "torch.device(cuda:notanumber)",  # non-integer index
+    ],
+)
+def test_decode_literal_device_malformed_payload_typed(qualname: str) -> None:
+    """r41 secC: a malformed ``torch.device(...)`` payload raises the SAME typed
+    ``unsupported_literal`` refusal as every other decoder branch -- never a raw
+    torch ``RuntimeError`` outside the ``RunnableErrorCode`` vocabulary."""
+
+    with pytest.raises(RunPreconditionError) as exc:
+        _decode_literal(LiteralTorchSymbol(qualname))
+    assert exc.value.fields.get("code") == "unsupported_literal"
+
+
 @pytest.mark.parametrize(
     "qualname",
     [
