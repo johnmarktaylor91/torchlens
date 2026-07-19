@@ -195,6 +195,7 @@ _GENERATED_METADATA_ROOTS = (
 _REGISTERED_STANDALONE_ENVIRONMENT_CANDIDATES = frozenset(
     {
         Path("specs/round21-release.probes.json"),
+        Path("specs/round21-release.virtual-packages.yml"),
         Path("specs/round21-release.yml"),
     }
 )

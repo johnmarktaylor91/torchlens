@@ -121,12 +121,22 @@ _REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 _RELEASE_SPEC_PATH = _REPOSITORY_ROOT / "menagerie/crawler/envs/specs/round21-release.yml"
 _RELEASE_PROBE_CONTRACT_PATH = _RELEASE_SPEC_PATH.with_name("round21-release.probes.json")
 _ROUND21_LINUX_REGISTRY_PATH = Path(__file__).with_name("round21_linux_real_nodes.json")
-_ROUND21_LINUX_COLLECTED: set[str] = set()
-_ROUND21_LINUX_PASSED: set[str] = set()
-_ROUND21_LINUX_SKIPPED: set[str] = set()
-_ROUND21_LINUX_XFAILED: set[str] = set()
-_ROUND21_LINUX_FAILED: set[str] = set()
+_ROUND21_MACOS_REGISTRY_PATH = Path(__file__).with_name("round21_macos_real_nodes.json")
+_ROUND21_RELEASE_REGISTRY_PATHS = {
+    "linux-64": _ROUND21_LINUX_REGISTRY_PATH,
+    "osx-arm64": _ROUND21_MACOS_REGISTRY_PATH,
+}
+_ROUND21_RELEASE_MARKERS = {
+    "linux-64": "round21_linux_real",
+    "osx-arm64": "round21_macos_real",
+}
+_ROUND21_RELEASE_COLLECTED: dict[str, set[str]] = {"linux-64": set(), "osx-arm64": set()}
+_ROUND21_RELEASE_PASSED: dict[str, set[str]] = {"linux-64": set(), "osx-arm64": set()}
+_ROUND21_RELEASE_SKIPPED: dict[str, set[str]] = {"linux-64": set(), "osx-arm64": set()}
+_ROUND21_RELEASE_XFAILED: dict[str, set[str]] = {"linux-64": set(), "osx-arm64": set()}
+_ROUND21_RELEASE_FAILED: dict[str, set[str]] = {"linux-64": set(), "osx-arm64": set()}
 _ROUND21_RELEASE_CONTENT_DIGEST: Optional[str] = None
+_ROUND21_RELEASE_PROBE_RESULTS: tuple[ProbeResult, ...] = ()
 
 _FACT_KEYS = (
     "identity",
@@ -524,6 +534,7 @@ def _committed_fixture_intent(
     export_hash_path = lock_path.with_suffix(".resolved.sha256")
     provenance_path = lock_path.with_suffix(".provenance.json")
     probe_receipt_path = lock_path.with_suffix(".probes.json")
+    platform_target = lock_path.name.removeprefix("round19-").removesuffix(".lock")
     required = (
         _RELEASE_SPEC_PATH,
         _RELEASE_PROBE_CONTRACT_PATH,
@@ -531,7 +542,6 @@ def _committed_fixture_intent(
         export_path,
         export_hash_path,
         provenance_path,
-        probe_receipt_path,
     )
     missing = [path for path in required if not path.is_file()]
     if missing:
@@ -539,6 +549,10 @@ def _committed_fixture_intent(
             "committed release artifacts are unavailable: "
             + ", ".join(path.name for path in missing)
         )
+    if platform_target == "linux-64" and not probe_receipt_path.is_file():
+        _real_environment_failure("committed Linux release probe receipt is unavailable")
+    if platform_target != "linux-64" and probe_receipt_path.exists():
+        _real_environment_failure("non-Linux release probes must be hosted observations")
 
     lock_bytes = lock_path.read_bytes()
     export_bytes = export_path.read_bytes()
@@ -556,38 +570,59 @@ def _committed_fixture_intent(
         )
 
     probes = _release_probe_contract()
-    try:
-        committed_probe_results = parse_probe_receipt_bytes(probes, probe_receipt_path.read_bytes())
-    except Exception as exc:
-        _real_environment_failure(f"committed release probe receipt is invalid: {exc}")
+    committed_probe_results: tuple[ProbeResult, ...] | None = None
+    if probe_receipt_path.is_file():
+        try:
+            committed_probe_results = parse_probe_receipt_bytes(
+                probes, probe_receipt_path.read_bytes()
+            )
+        except Exception as exc:
+            _real_environment_failure(f"committed release probe receipt is invalid: {exc}")
     observed_probe_results = (
-        _observe_release_probes(prefix, probes) if observe_probes else committed_probe_results
+        _observe_release_probes(prefix, probes)
+        if observe_probes or committed_probe_results is None
+        else committed_probe_results
     )
-    if observed_probe_results != committed_probe_results:
+    if committed_probe_results is not None and observed_probe_results != committed_probe_results:
         _real_environment_failure("live release probes differ from the committed receipt")
 
     try:
         provenance = json.loads(provenance_path.read_bytes())
     except (OSError, json.JSONDecodeError) as exc:
         _real_environment_failure(f"release provenance is invalid: {exc}")
-    platform_target = lock_path.name.removeprefix("round19-").removesuffix(".lock")
     artifact_target = lock_path.stem
     required_digests = {
         "spec_sha256": hash_bytes(_RELEASE_SPEC_PATH.read_bytes()),
         "probe_contract_sha256": hash_bytes(_RELEASE_PROBE_CONTRACT_PATH.read_bytes()),
         "lock_sha256": hash_bytes(lock_bytes),
         "resolved_export_sha256": hash_bytes(export_bytes),
-        "probe_receipt_sha256": hash_bytes(probe_receipt_path.read_bytes()),
     }
+    if probe_receipt_path.is_file():
+        required_digests["probe_receipt_sha256"] = hash_bytes(probe_receipt_path.read_bytes())
+    committed_probe_state = provenance.get("probe_observation")
+    expected_hosted_probe_state = (
+        isinstance(committed_probe_state, dict)
+        and committed_probe_state.get("committed_on_linux") is False
+        and committed_probe_state.get("producer") == "hosted macOS release CI attestation"
+    )
     if (
         not isinstance(provenance, dict)
         or provenance.get("schema_version") != "menagerie.crawler.release-lock-provenance.v1"
         or provenance.get("target") != platform_target
         or any(provenance.get(key) != value for key, value in required_digests.items())
-        or not isinstance(provenance.get("clean_create"), dict)
-        or provenance["clean_create"].get("validated") is not True
+        or (platform_target == "linux-64" and provenance.get("probe_receipt_sha256") is None)
+        or (platform_target == "osx-arm64" and not expected_hosted_probe_state)
     ):
         _real_environment_failure("release provenance does not bind the committed lock family")
+    clean_create = provenance.get("clean_create")
+    if not isinstance(clean_create, dict):
+        _real_environment_failure("release provenance lacks clean-create state")
+    if platform_target == "linux-64" and clean_create.get("validated") is not True:
+        _real_environment_failure("release provenance lacks native clean-create validation")
+    if platform_target == "osx-arm64" and clean_create.get("validation_host") != (
+        "hosted macOS release CI"
+    ):
+        _real_environment_failure("macOS clean-create validation is not delegated to hosted CI")
 
     spec = json.loads(_RELEASE_SPEC_PATH.read_bytes())
     if not isinstance(spec, dict):
@@ -1102,10 +1137,11 @@ def _build_real_environment_fixture(
         authority_cache=authority_cache,
     )
     if os.environ.get("MENAGERIE_RELEASE_GATE") == "1":
-        global _ROUND21_RELEASE_CONTENT_DIGEST
+        global _ROUND21_RELEASE_CONTENT_DIGEST, _ROUND21_RELEASE_PROBE_RESULTS
         if binding.environment_authority is None:
             _real_environment_failure("release fixture has no sealed environment authority")
         _ROUND21_RELEASE_CONTENT_DIGEST = binding.environment_authority.content_manifest_sha256
+        _ROUND21_RELEASE_PROBE_RESULTS = probe_results
     counter.record(authority_cache, shared=shared)
     return RealEnvironmentFixture(
         source_prefix=clone_source,
@@ -2802,8 +2838,29 @@ def valid_model() -> dict[str, Any]:
     return make_model(accepted=True)
 
 
-def _round21_linux_release_nodes() -> tuple[str, ...]:
-    """Load the exact checked-in Linux release proof node set.
+def _round21_release_target_from_lock() -> str:
+    """Return the release target selected by ``MENAGERIE_PLATFORM_LOCK``.
+
+    Returns
+    -------
+    str
+        Canonical target basename, currently ``linux-64`` or ``osx-arm64``.
+    """
+
+    lock_value = os.environ.get("MENAGERIE_PLATFORM_LOCK", "round19-linux-64.lock")
+    name = Path(lock_value).name
+    if name.startswith("round19-") and name.endswith(".lock"):
+        return name.removeprefix("round19-").removesuffix(".lock")
+    return "linux-64"
+
+
+def _round21_release_nodes(target: str) -> tuple[str, ...]:
+    """Load one exact checked-in release proof node set.
+
+    Parameters
+    ----------
+    target:
+        Platform target for the registry.
 
     Returns
     -------
@@ -2811,20 +2868,23 @@ def _round21_linux_release_nodes() -> tuple[str, ...]:
         Full parameterized pytest node IDs in canonical registry order.
     """
 
-    payload = json.loads(_ROUND21_LINUX_REGISTRY_PATH.read_bytes())
-    if not isinstance(payload, dict) or payload.get("target") != "linux-64":
-        raise pytest.UsageError("unmet-release-gate: invalid Linux release proof registry")
+    registry_path = _ROUND21_RELEASE_REGISTRY_PATHS.get(target)
+    if registry_path is None:
+        raise pytest.UsageError(f"unmet-release-gate: unsupported release target {target!r}")
+    payload = json.loads(registry_path.read_bytes())
+    if not isinstance(payload, dict) or payload.get("target") != target:
+        raise pytest.UsageError(f"unmet-release-gate: invalid {target} release proof registry")
     nodes = payload.get("nodes")
     if not isinstance(nodes, list) or not nodes or not all(isinstance(node, str) for node in nodes):
-        raise pytest.UsageError("unmet-release-gate: empty Linux release proof registry")
+        raise pytest.UsageError(f"unmet-release-gate: empty {target} release proof registry")
     if len(nodes) != len(set(nodes)):
-        raise pytest.UsageError("unmet-release-gate: duplicate Linux release proof node")
+        raise pytest.UsageError(f"unmet-release-gate: duplicate {target} release proof node")
     return tuple(nodes)
 
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Apply the Linux release marker from the exact checked-in registry.
+    """Apply release markers from exact checked-in registries.
 
     Parameters
     ----------
@@ -2832,15 +2892,16 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         Fully expanded pytest items before marker-expression deselection.
     """
 
-    expected = frozenset(_round21_linux_release_nodes())
-    for item in items:
-        if item.nodeid in expected:
-            item.add_marker(pytest.mark.round21_linux_real)
-            _ROUND21_LINUX_COLLECTED.add(item.nodeid)
+    for target, marker_name in _ROUND21_RELEASE_MARKERS.items():
+        expected = frozenset(_round21_release_nodes(target))
+        for item in items:
+            if item.nodeid in expected:
+                item.add_marker(getattr(pytest.mark, marker_name))
+                _ROUND21_RELEASE_COLLECTED[target].add(item.nodeid)
 
 
 def pytest_runtest_logreport(report: pytest.TestReport) -> None:
-    """Record terminal outcomes for registered Linux release nodes.
+    """Record terminal outcomes for registered release nodes.
 
     Parameters
     ----------
@@ -2848,15 +2909,20 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
         One pytest setup/call/teardown phase report.
     """
 
-    if report.nodeid not in frozenset(_round21_linux_release_nodes()):
-        return
-    if report.skipped:
-        target = _ROUND21_LINUX_XFAILED if hasattr(report, "wasxfail") else _ROUND21_LINUX_SKIPPED
-        target.add(report.nodeid)
-    elif report.failed:
-        _ROUND21_LINUX_FAILED.add(report.nodeid)
-    elif report.when == "call" and report.passed:
-        _ROUND21_LINUX_PASSED.add(report.nodeid)
+    for target in _ROUND21_RELEASE_REGISTRY_PATHS:
+        if report.nodeid not in frozenset(_round21_release_nodes(target)):
+            continue
+        if report.skipped:
+            destination = (
+                _ROUND21_RELEASE_XFAILED[target]
+                if hasattr(report, "wasxfail")
+                else _ROUND21_RELEASE_SKIPPED[target]
+            )
+            destination.add(report.nodeid)
+        elif report.failed:
+            _ROUND21_RELEASE_FAILED[target].add(report.nodeid)
+        elif report.when == "call" and report.passed:
+            _ROUND21_RELEASE_PASSED[target].add(report.nodeid)
 
 
 def _round21_release_commit() -> str:
@@ -2883,7 +2949,7 @@ def _round21_release_commit() -> str:
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int | pytest.ExitCode) -> None:
-    """Fail closed and emit the Linux release pass/not-skip attestation.
+    """Fail closed and emit the release pass/not-skip attestation.
 
     Parameters
     ----------
@@ -2896,12 +2962,13 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int | pytest.ExitC
     attestation_value = os.environ.get("MENAGERIE_RELEASE_ATTESTATION")
     if not attestation_value:
         return
-    expected = frozenset(_round21_linux_release_nodes())
-    collected = frozenset(_ROUND21_LINUX_COLLECTED)
-    passed = frozenset(_ROUND21_LINUX_PASSED)
-    skipped = frozenset(_ROUND21_LINUX_SKIPPED)
-    xfailed = frozenset(_ROUND21_LINUX_XFAILED)
-    failed = frozenset(_ROUND21_LINUX_FAILED)
+    target = _round21_release_target_from_lock()
+    expected = frozenset(_round21_release_nodes(target))
+    collected = frozenset(_ROUND21_RELEASE_COLLECTED[target])
+    passed = frozenset(_ROUND21_RELEASE_PASSED[target])
+    skipped = frozenset(_ROUND21_RELEASE_SKIPPED[target])
+    xfailed = frozenset(_ROUND21_RELEASE_XFAILED[target])
+    failed = frozenset(_ROUND21_RELEASE_FAILED[target])
     lock_path = Path(os.environ.get("MENAGERIE_PLATFORM_LOCK", ""))
     export_path = lock_path.with_suffix(".resolved.json")
     provenance_path = lock_path.with_suffix(".provenance.json")
@@ -2923,7 +2990,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int | pytest.ExitC
     attestation = {
         "schema_version": "menagerie.crawler.release-proof-attestation.v1",
         "status": "passed" if complete else "unmet-release-gate",
-        "target": "linux-64",
+        "target": target,
         "commit_sha": _round21_release_commit(),
         "lock_path": lock_path.as_posix(),
         "lock_sha256": hash_bytes(lock_path.read_bytes()) if lock_path.is_file() else None,
@@ -2934,6 +3001,10 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int | pytest.ExitC
             hash_bytes(provenance_path.read_bytes()) if provenance_path.is_file() else None
         ),
         "environment_content_digest": _ROUND21_RELEASE_CONTENT_DIGEST,
+        "probe_results": [
+            {"name": result.name, "passed": result.passed, "detail": result.detail}
+            for result in _ROUND21_RELEASE_PROBE_RESULTS
+        ],
         "host": {"system": platform.system(), "machine": platform.machine()},
         "sandbox": None if sandbox is None else sandbox.kind,
         "selected_interpreter": str((prefix / "bin/python").resolve()),

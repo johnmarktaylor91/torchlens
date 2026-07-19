@@ -115,6 +115,7 @@ def _release_lock_provenance_errors(env_root: Path) -> tuple[str, ...]:
     accounted_outputs: set[Path] = set()
     errors: list[str] = []
     for lock_path in sorted(env_root.rglob("*.lock")):
+        lock_target = lock_path.name.removeprefix("round19-").removesuffix(".lock")
         family = {
             "resolved": lock_path.with_suffix(".resolved.json"),
             "resolved_hash": lock_path.with_suffix(".resolved.sha256"),
@@ -125,7 +126,11 @@ def _release_lock_provenance_errors(env_root: Path) -> tuple[str, ...]:
         accounted_outputs.update(
             path for name, path in family.items() if name in {"resolved", "resolved_hash"}
         )
-        missing = [name for name, path in family.items() if not path.is_file()]
+        missing = [
+            name
+            for name, path in family.items()
+            if not path.is_file() and (name != "probes" or lock_target == "linux-64")
+        ]
         if missing:
             errors.append(f"{lock_path}:missing-{','.join(sorted(missing))}")
             continue
@@ -164,12 +169,18 @@ def _release_lock_provenance_errors(env_root: Path) -> tuple[str, ...]:
             f"menagerie/crawler/envs/{family['resolved'].relative_to(env_root).as_posix()}"
         ):
             errors.append(f"{lock_path}:resolved-path-not-bound")
-        if provenance.get("probe_receipt_path") != (
-            f"menagerie/crawler/envs/{family['probes'].relative_to(env_root).as_posix()}"
-        ):
-            errors.append(f"{lock_path}:probe-receipt-path-not-bound")
-        if provenance.get("probe_receipt_sha256") != hash_bytes(family["probes"].read_bytes()):
-            errors.append(f"{lock_path}:probe-receipt-hash-mismatch")
+        if family["probes"].is_file():
+            if provenance.get("probe_receipt_path") != (
+                f"menagerie/crawler/envs/{family['probes'].relative_to(env_root).as_posix()}"
+            ):
+                errors.append(f"{lock_path}:probe-receipt-path-not-bound")
+            if provenance.get("probe_receipt_sha256") != hash_bytes(family["probes"].read_bytes()):
+                errors.append(f"{lock_path}:probe-receipt-hash-mismatch")
+        elif provenance.get("probe_observation") != {
+            "committed_on_linux": False,
+            "producer": "hosted macOS release CI attestation",
+        }:
+            errors.append(f"{lock_path}:hosted-probe-observation-not-bound")
         for label, declared_path, digest_key in (
             ("spec", spec_path, "spec_sha256"),
             ("probe-contract", probe_contract_path, "probe_contract_sha256"),
@@ -188,12 +199,26 @@ def _release_lock_provenance_errors(env_root: Path) -> tuple[str, ...]:
         if (
             not isinstance(solver_command, list)
             or spec_path not in solver_command
-            or solver_command[:3] != ["conda", "env", "create"]
+            or (
+                solver_command[:3] != ["conda", "env", "create"]
+                and solver_command[:3]
+                != [
+                    "/home/jtaylor/anaconda3/envs/condalock/bin/python",
+                    "-m",
+                    "conda_lock",
+                ]
+            )
         ):
             errors.append(f"{lock_path}:solver-command-not-bound")
         clean_create = provenance.get("clean_create")
         artifact_validation = provenance.get("artifact_hash_validation")
-        if not isinstance(clean_create, dict) or clean_create.get("validated") is not True:
+        if not isinstance(clean_create, dict):
+            errors.append(f"{lock_path}:clean-create-unattested")
+        elif target == "linux-64" and clean_create.get("validated") is not True:
+            errors.append(f"{lock_path}:clean-create-unattested")
+        elif target == "osx-arm64" and clean_create.get("validation_host") != (
+            "hosted macOS release CI"
+        ):
             errors.append(f"{lock_path}:clean-create-unattested")
         if (
             not isinstance(artifact_validation, dict)
@@ -201,13 +226,10 @@ def _release_lock_provenance_errors(env_root: Path) -> tuple[str, ...]:
             or artifact_validation.get("verified") is not True
         ):
             errors.append(f"{lock_path}:artifact-hashes-unattested")
-        target_host = {
-            "linux-64": ("Linux", "x86_64", "__linux"),
-            "osx-arm64": ("Darwin", "arm64", "__osx"),
-        }.get(target)
+        target_host = {"linux-64": ("Linux", "x86_64", "__linux")}.get(target)
         host = provenance.get("host")
         virtual_packages = provenance.get("virtual_packages")
-        if (
+        if target == "linux-64" and (
             target_host is None
             or not isinstance(host, dict)
             or (host.get("system"), host.get("machine")) != target_host[:2]
@@ -218,6 +240,20 @@ def _release_lock_provenance_errors(env_root: Path) -> tuple[str, ...]:
             )
         ):
             errors.append(f"{lock_path}:solve-host-not-on-target")
+        if target == "osx-arm64" and (
+            not isinstance(host, dict)
+            or host.get("system") != "Linux"
+            or "virtual_package_spec_path" not in provenance
+            or not isinstance(virtual_packages, list)
+            or not any(
+                isinstance(row, list) and row and row[0] == "__osx" for row in virtual_packages
+            )
+            or provenance.get("virtual_package_spec_sha256")
+            != hash_bytes(
+                (env_root / "specs" / "round21-release.virtual-packages.yml").read_bytes()
+            )
+        ):
+            errors.append(f"{lock_path}:cross-solve-not-bound")
     for path in sorted(generated_outputs - accounted_outputs):
         errors.append(f"{path}:orphan-hand-authored-output")
     return tuple(errors)

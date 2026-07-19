@@ -1,0 +1,95 @@
+{
+  "artifact_hash_validation": {
+    "algorithm": "sha256",
+    "artifact_count": 63,
+    "method": "conda-lock package metadata SHA-256 rendered into explicit lock",
+    "verified": true
+  },
+  "channels": [
+    "https://conda.anaconda.org/conda-forge/osx-arm64",
+    "https://conda.anaconda.org/conda-forge/noarch"
+  ],
+  "clean_create": {
+    "reason": "target execution requires Darwin arm64",
+    "validated": false,
+    "validation_host": "hosted macOS release CI"
+  },
+  "generated_at_utc": "2026-07-19T22:50:05Z",
+  "host": {
+    "filesystem": "ext4",
+    "kernel": "5.15.0-139-generic",
+    "machine": "x86_64",
+    "system": "Linux"
+  },
+  "lock_path": "menagerie/crawler/envs/locks/round19-osx-arm64.lock",
+  "lock_sha256": "sha256:8a3e9e75d7c2df1b027fa4fb5b229ac1404b48efdcf02baa0a011468583cb8ae",
+  "probe_contract_path": "menagerie/crawler/envs/specs/round21-release.probes.json",
+  "probe_contract_sha256": "sha256:095e6004ec48253a2b03bd7e2d251775cc57ee5105a05fe188528d5546df63cf",
+  "probe_observation": {
+    "committed_on_linux": false,
+    "producer": "hosted macOS release CI attestation"
+  },
+  "repodata_inputs": {
+    "channel_priority": "flexible",
+    "conda_lock_channels": [
+      {
+        "url": "conda-forge",
+        "used_env_vars": []
+      }
+    ],
+    "filenames": [
+      "repodata.json"
+    ]
+  },
+  "resolved_export_path": "menagerie/crawler/envs/locks/round19-osx-arm64.resolved.json",
+  "resolved_export_sha256": "sha256:9462ad9617ba4b79b008e22ca23ed96a5ff7fcaf4e29ff1922db2617e0faa321",
+  "schema_version": "menagerie.crawler.release-lock-provenance.v1",
+  "solver": {
+    "command": [
+      "/home/jtaylor/anaconda3/envs/condalock/bin/python",
+      "-m",
+      "conda_lock",
+      "lock",
+      "--platform",
+      "osx-arm64",
+      "--file",
+      "menagerie/crawler/envs/specs/round21-release.yml",
+      "--virtual-package-spec",
+      "menagerie/crawler/envs/specs/round21-release.virtual-packages.yml",
+      "--lockfile",
+      "/tmp/round21-osx-arm64-conda-lock.yml",
+      "--no-mamba",
+      "--kind",
+      "lock",
+      "--log-level",
+      "INFO"
+    ],
+    "conda_lock_version": "4.0.2",
+    "content_hash": "1dd3da856e5681d3782ec222cc2b52eb1ee62511bf37d3ff89cd09cac97d1377",
+    "name": "conda-lock",
+    "source_lockfile": "/tmp/round21-osx-arm64-conda-lock.yml"
+  },
+  "source_commit": "57b20dd7e50adfe4016c3b74dc025bcd74c2b2f6",
+  "spec_path": "menagerie/crawler/envs/specs/round21-release.yml",
+  "spec_sha256": "sha256:8df6d5699932e2d78757a0d095337640c0b1b85ae6c1edc80e01a331fdd8e8ff",
+  "target": "osx-arm64",
+  "virtual_package_spec_path": "menagerie/crawler/envs/specs/round21-release.virtual-packages.yml",
+  "virtual_package_spec_sha256": "sha256:45dd80cade098c31ef7088a9530c55f94dc399cabfbccc6d5372f0eec857139f",
+  "virtual_packages": [
+    [
+      "__archspec",
+      "1",
+      "arm64"
+    ],
+    [
+      "__osx",
+      "14.0",
+      "0"
+    ],
+    [
+      "__unix",
+      "0",
+      ""
+    ]
+  ]
+}

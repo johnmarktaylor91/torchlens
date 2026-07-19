@@ -120,10 +120,7 @@ _ROUND19_RELEASE_NODE_INVENTORY = {
 }
 _REQUIRED_CI_SELECTIONS = (
     "menagerie/crawler/tests -m round21_linux_real",
-    _ROUND19_RELEASE_NODE_INVENTORY["macos-positive-negative"],
-    _ROUND19_RELEASE_NODE_INVENTORY["macos-profile"],
-    _ROUND19_RELEASE_NODE_INVENTORY["dry-run-run-resume"],
-    _ROUND19_RELEASE_NODE_INVENTORY["dry-run-false-complete"],
+    "menagerie/crawler/tests -m round21_macos_real",
 )
 _SUBSTITUTION_BOUNDARIES = frozenset(
     {
@@ -388,6 +385,22 @@ ROUND21_VS9_PROOF_REGISTRY: dict[str, str] = {
     "T05": (
         "menagerie/crawler/tests/test_round17_structural_inventories.py::"
         "test_round21_linux_release_registry_is_exact"
+    ),
+}
+
+ROUND21_VS10_PROOF_REGISTRY: dict[str, str] = {
+    **ROUND21_VS9_PROOF_REGISTRY,
+    "P10": (
+        "menagerie/crawler/tests/test_round21_ci_composition.py::"
+        "test_round21_macos_committed_lock_seatbelt_award_and_denial"
+    ),
+    "T04-mac": (
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
+        "test_round21_macos_release_artifacts_and_provisioning_are_real"
+    ),
+    "T05-mac": (
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
+        "test_round21_macos_release_registry_is_exact"
     ),
 }
 
@@ -1647,7 +1660,7 @@ def test_round17_real_compositions_are_explicitly_selected_in_ci() -> None:
     workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
     assert "name: Crawler Round 21 Linux committed-lock release proofs" in workflow
     crawler_job = workflow.split("crawler-round21-linux-release:", 1)[1]
-    crawler_job = crawler_job.split("\n  crawler-round19-macos-release:", 1)[0]
+    crawler_job = crawler_job.split("\n  crawler-round21-macos-release:", 1)[0]
     assert "menagerie/crawler/tests -m round21_linux_real" in crawler_job
     assert 'MENAGERIE_RELEASE_GATE: "1"' in crawler_job
     assert "MENAGERIE_RELEASE_ATTESTATION" in crawler_job
@@ -1675,21 +1688,18 @@ def test_round19_supported_host_release_gate_inventory_is_exact() -> None:
         "macos-profile",
     }
     assert "crawler-round21-linux-release:" in workflow
-    assert "crawler-round19-macos-release:" in workflow
+    assert "crawler-round21-macos-release:" in workflow
     release_jobs = workflow.split("crawler-round21-linux-release:", 1)[1]
-    linux_job, macos_job = release_jobs.split("\n  crawler-round19-macos-release:", 1)
-    macos_selected = set(re.findall(r"menagerie/crawler/tests/[A-Za-z0-9_./:-]+", macos_job))
-    assert macos_selected == {
-        _ROUND19_RELEASE_NODE_INVENTORY["macos-positive-negative"],
-        _ROUND19_RELEASE_NODE_INVENTORY["macos-profile"],
-        _ROUND19_RELEASE_NODE_INVENTORY["dry-run-run-resume"],
-        _ROUND19_RELEASE_NODE_INVENTORY["dry-run-false-complete"],
-    }
+    linux_job, macos_job = release_jobs.split("\n  crawler-round21-macos-release:", 1)
     assert "-m round21_linux_real" in linux_job
+    assert "-m round21_macos_real" in macos_job
     assert "runs-on: macos-14-xlarge" in macos_job
+    assert "MENAGERIE_RELEASE_ATTESTATION" in macos_job
+    assert "seatbelt-denial-audit-unavailable" in macos_job
     for job in (linux_job, macos_job):
         assert 'MENAGERIE_RELEASE_GATE: "1"' in job
         assert "unmet-release-gate" in job
+        assert "menagerie.crawler.tools.release_lock" in job
         assert "pytest.skip" not in job
 
 
@@ -1718,7 +1728,7 @@ def test_round21_linux_release_artifacts_and_provisioning_are_real() -> None:
 
     workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
     linux_job = workflow.split("crawler-round21-linux-release:", 1)[1].split(
-        "\n  crawler-round19-macos-release:", 1
+        "\n  crawler-round21-macos-release:", 1
     )[0]
     assert family["lock"].relative_to(_REPOSITORY_ROOT).as_posix() in linux_job
     for suffix in (".resolved.json", ".resolved.sha256", ".provenance.json", ".probes.json"):
@@ -1726,6 +1736,53 @@ def test_round21_linux_release_artifacts_and_provisioning_are_real() -> None:
     assert "menagerie.crawler.tools.release_lock" in linux_job
     assert '"$MENAGERIE_REAL_ENV_PREFIX/bin/python" -m pytest' in linux_job
     assert "if-no-files-found: error" in linux_job
+
+
+def test_round21_macos_release_artifacts_and_provisioning_are_real() -> None:
+    """T04 requires every workflow-named macOS lock-family artifact to exist and parse."""
+
+    lock_path = _CRAWLER_ROOT / "envs" / "locks" / "round19-osx-arm64.lock"
+    family = {
+        "lock": lock_path,
+        "export": lock_path.with_suffix(".resolved.json"),
+        "export-hash": lock_path.with_suffix(".resolved.sha256"),
+        "provenance": lock_path.with_suffix(".provenance.json"),
+        "virtual-packages": _CRAWLER_ROOT
+        / "envs"
+        / "specs"
+        / "round21-release.virtual-packages.yml",
+    }
+    assert {name for name, path in family.items() if path.is_file()} == set(family)
+    assert not lock_path.with_suffix(".probes.json").exists()
+    lock_bytes = family["lock"].read_bytes()
+    export_bytes = family["export"].read_bytes()
+    assert lifecycle_module.parse_exact_lock(lock_bytes)
+    assert lifecycle_module.parse_resolved_export(export_bytes) == export_bytes
+    assert family["export-hash"].read_text(encoding="utf-8").strip() == hash_bytes(export_bytes)
+    provenance = json.loads(family["provenance"].read_bytes())
+    assert provenance["target"] == "osx-arm64"
+    assert provenance["lock_sha256"] == hash_bytes(lock_bytes)
+    assert provenance["resolved_export_sha256"] == hash_bytes(export_bytes)
+    assert provenance["virtual_package_spec_sha256"] == hash_bytes(
+        family["virtual-packages"].read_bytes()
+    )
+    assert provenance["solver"]["name"] == "conda-lock"
+    assert "osx-arm64" in provenance["solver"]["command"]
+    assert provenance["probe_observation"] == {
+        "committed_on_linux": False,
+        "producer": "hosted macOS release CI attestation",
+    }
+    assert provenance["clean_create"]["validation_host"] == "hosted macOS release CI"
+
+    workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
+    macos_job = workflow.split("crawler-round21-macos-release:", 1)[1]
+    assert family["lock"].relative_to(_REPOSITORY_ROOT).as_posix() in macos_job
+    for suffix in (".resolved.json", ".resolved.sha256", ".provenance.json"):
+        assert suffix in macos_job
+    assert ".probes.json" not in macos_job
+    assert "menagerie.crawler.tools.release_lock" in macos_job
+    assert '"$MENAGERIE_REAL_ENV_PREFIX/bin/python" -m pytest' in macos_job
+    assert "if-no-files-found: error" in macos_job
 
 
 def test_round21_linux_release_registry_is_exact() -> None:
@@ -1760,6 +1817,46 @@ def test_round21_linux_release_registry_is_exact() -> None:
         "T05",
     }
     assert ROUND21_VS9_PROOF_REGISTRY["P09"] in nodes
+    assert all(node.startswith("menagerie/crawler/tests/") and "::test_" in node for node in nodes)
+
+
+def test_round21_macos_release_registry_is_exact() -> None:
+    """T05 requires the committed macOS marker registry to name expanded existing nodes."""
+
+    registry_path = _CRAWLER_ROOT / "tests" / "round21_macos_real_nodes.json"
+    payload = json.loads(registry_path.read_bytes())
+    nodes = payload["nodes"]
+    assert payload["target"] == "osx-arm64"
+    assert len(nodes) == 5
+    assert len(nodes) == len(set(nodes))
+    assert set(ROUND21_VS10_PROOF_REGISTRY) == {
+        "P01",
+        "T01",
+        "T01-CI",
+        "T02",
+        "P02",
+        "P03",
+        "T03",
+        "P04",
+        "P12",
+        "P13",
+        "P14",
+        "P17",
+        "P19",
+        "P05",
+        "P06",
+        "P07",
+        "P08",
+        "P09",
+        "T04",
+        "T05",
+        "P10",
+        "T04-mac",
+        "T05-mac",
+    }
+    assert ROUND21_VS10_PROOF_REGISTRY["P10"] in nodes
+    assert _ROUND19_RELEASE_NODE_INVENTORY["macos-positive-negative"] in nodes
+    assert _ROUND19_RELEASE_NODE_INVENTORY["macos-profile"] in nodes
     assert all(node.startswith("menagerie/crawler/tests/") and "::test_" in node for node in nodes)
 
 

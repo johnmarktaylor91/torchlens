@@ -1,0 +1,11 @@
+{
+  "schema_version": "menagerie.crawler.release-proof-registry.v1",
+  "target": "osx-arm64",
+  "nodes": [
+    "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial",
+    "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+    "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_v3_profile_has_one_fresh_literal_prefix_and_exact_outside_members",
+    "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
+    "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
+  ]
+}
