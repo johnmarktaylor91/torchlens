@@ -95,6 +95,7 @@ class TinyAdapterAuthor(FakeAuthor):
         """Return a proposal whose accepted code can run in the real worker."""
 
         artifact = super().author(item, work_root, config, context)
+        artifact.source_manifest["sources"][0]["retrieval_status"] = "fetched"
         adapter_path = artifact.model_dir / "adapter.py"
         adapter_path.write_text(_TINY_ADAPTER, encoding="utf-8")
         adapter_digest = hash_bytes(adapter_path.read_bytes())
@@ -112,6 +113,47 @@ class TinyAdapterAuthor(FakeAuthor):
                 "code_manifest": code_manifest,
             }
         )
+        source = facts["source_resolution"]["sources"][0]
+        excerpt = facts["evidence"]["excerpts"][0]
+        facts["source_resolution"].update(
+            {
+                "rung": "R2_VENDOR",
+                "decision": "typed vendor adapter from exact mirrored upstream bytes",
+                "attempted_rungs": [
+                    {
+                        "rung": "R1_LIBRARY",
+                        "result": "unavailable",
+                        "reason_code": "no-declarative-library-recipe",
+                        "evidence_ids": ["evidence-1"],
+                    },
+                    {
+                        "rung": "R2_VENDOR",
+                        "result": "selected",
+                        "reason_code": "exact-mirrored-source-adapted",
+                        "evidence_ids": ["evidence-1"],
+                    },
+                ],
+            }
+        )
+        facts["implementation"]["upstream_files"] = [
+            {
+                "source_id": "source-1",
+                "path": "source.bin",
+                "sha256": source["content_sha256"],
+                "use": "exact source grounding for the typed adapter",
+            }
+        ]
+        facts["implementation"]["source_to_code_map"] = [
+            {
+                "material_item": "Tiny forward",
+                "source_id": "source-1",
+                "source_locator": excerpt["locator"],
+                "evidence_ids": ["evidence-1"],
+                "code_path": "adapter.py",
+                "code_locator": "Tiny.forward",
+                "disposition": "vendor-adapted",
+            }
+        ]
         facts["input_contract"]["args"][0]["shape"] = [1, 2]
         facts["modes"]["meaningful_modes"] = ["eval"]
         facts["external_metadata"]["modes"]["meaningful_modes"] = ["eval"]
@@ -120,10 +162,24 @@ class TinyAdapterAuthor(FakeAuthor):
             | {
                 "implementation.code_manifest[].path",
                 "implementation.code_manifest[].sha256",
+                "implementation.source_to_code_map[].code_locator",
+                "implementation.source_to_code_map[].code_path",
+                "implementation.source_to_code_map[].disposition",
+                "implementation.source_to_code_map[].evidence_ids[]",
+                "implementation.source_to_code_map[].material_item",
+                "implementation.source_to_code_map[].source_id",
+                "implementation.source_to_code_map[].source_locator",
+                "implementation.upstream_files[].path",
+                "implementation.upstream_files[].sha256",
+                "implementation.upstream_files[].source_id",
+                "implementation.upstream_files[].use",
             }
         )
         proposal["verified_hashes"]["code"] = adapter_digest
         proposal["verified_hashes"]["code_manifest"] = stable_hash(code_manifest)
+        proposal["verified_hashes"]["source_to_code_map"] = stable_hash(
+            facts["implementation"]["source_to_code_map"]
+        )
         _refresh_proposal_identities(
             proposal,
             checker_model=config.checker_model,

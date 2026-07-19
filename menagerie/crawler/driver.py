@@ -392,6 +392,22 @@ _SHUTDOWN_ADMISSION_REGISTRY: Mapping[str, str] = {
     "model-append": "atomic:award-commit",
     "post-award-observation": "guard:post-award-commit",
 }
+_SHUTDOWN_COMPOSITION_HOOK_REGISTRY: Mapping[str, str] = {
+    "author": "pre-author",
+    "checker": "pre-checker",
+    "environment-create": "pre-environment-create",
+    "environment-use": "pre-environment-use",
+    "model": "pre-model",
+    "lease|spawn": "pre-forward",
+    "child-durable": "worker-lease-started",
+    "attempt-durable": "after-forward",
+    "run-model-assembly": "post-attempt-pre-award",
+    "publication-admission": "pre-publication",
+    "award-entry": "pre-award-commit",
+    "award-atomic": "award-commit-entered",
+    "post-award-observation": "post-award-commit",
+    "wave-transition": "after-reduce",
+}
 _AWARD_CLOSURE_SCHEMAS = (
     "schemas/attempt-v3.schema.json",
     "schemas/author-proposal-v3.schema.json",
@@ -4637,6 +4653,7 @@ class CrawlerDriver:
 
                 nonlocal observed_environment, observed_generation, repair_pause, use_entered
                 nonlocal use_completed
+                self.dependencies.boundary_hook("pre-environment-use", intent_name)
                 self._check_shutdown("environment-use-admission")
                 use_entered = True
                 environment_lane = self.dependencies.environments
@@ -4696,6 +4713,7 @@ class CrawlerDriver:
                 )
                 with pass_context as verification_token:
                     for item in items:
+                        self.dependencies.boundary_hook("pre-model", item.stable_id)
                         self._check_shutdown("model-admission", item=item)
                         current = reducer.current_records.get(item.stable_id)
                         closure = (
@@ -4773,6 +4791,7 @@ class CrawlerDriver:
                 use_entered = False
                 use_completed = False
                 try:
+                    self.dependencies.boundary_hook("pre-environment-create", intent_name)
                     self._check_shutdown("environment-create-admission")
                     self.dependencies.environments.run(intent, use=use)
                 except DriverPaused:
@@ -4956,6 +4975,7 @@ class CrawlerDriver:
         execution_identity = _execution_identity(
             artifact, environment, closure_identity=closure_identity
         )
+        self.dependencies.boundary_hook("pre-forward", item.stable_id)
         self._check_shutdown(
             "forward-admission",
             item=item,
@@ -5015,6 +5035,8 @@ class CrawlerDriver:
                         "child_pid": lease.child_pid,
                     },
                 )
+                if event_kind == OperationalEventKind.WORKER_LEASE_STARTED.value:
+                    self.dependencies.boundary_hook(event_kind, lease.stable_id)
 
             def resolve_worker_attempt(cold_index: int, mode: str) -> Optional[Mapping[str, Any]]:
                 """Authenticate one canonical deterministic slot before any capability opens."""
@@ -5359,6 +5381,7 @@ class CrawlerDriver:
         result = reducer.append_model(reducer.prepare_model(model))
         if result.appended:
             self._reduced += 1
+        self.dependencies.boundary_hook("post-award-commit", item.stable_id)
         self._check_shutdown("post-award-commit")
         self.dependencies.boundary_hook("after-reduce", item.stable_id)
         current_records = reducer.current_records
@@ -5710,6 +5733,7 @@ class CrawlerDriver:
         result = reducer.append_model(reducer.prepare_model(model))
         if result.appended:
             self._reduced += 1
+        self.dependencies.boundary_hook("post-award-commit", item.stable_id)
         self._check_shutdown("post-award-commit")
         self.dependencies.boundary_hook("after-reduce", item.stable_id)
         current_records = reducer.current_records

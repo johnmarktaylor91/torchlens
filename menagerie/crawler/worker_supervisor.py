@@ -130,6 +130,9 @@ _WORKER_RESULT_VERSION = "menagerie.crawler.worker-result.v3"
 _WORKER_DIAGNOSTIC_VERSION = "menagerie.crawler.worker-receipt.v1"
 _RAW_AWARD_RECEIPT_VERSION = "menagerie.crawler.raw-award-receipt.v3"
 _PARENT_ATTESTATION_VERSION = "menagerie.crawler.parent-attestation.v2"
+_SHUTDOWN_CHILD_DURABILITY_EVENT_REGISTRY: Mapping[str, tuple[str, ...]] = {
+    "worker-lease-started": ("child_pid", "child_start_token", "child_pgid"),
+}
 _WORKER_RESULT_KEYS = frozenset(
     {
         "result_version",

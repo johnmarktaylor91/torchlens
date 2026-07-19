@@ -334,6 +334,14 @@ ROUND21_VS4_PROOF_REGISTRY: dict[str, str] = {
     ),
 }
 
+ROUND21_VS5_PROOF_REGISTRY: dict[str, str] = {
+    **ROUND21_VS4_PROOF_REGISTRY,
+    "P05": (
+        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::"
+        "test_round21_shutdown_matrix"
+    ),
+}
+
 
 def test_round21_verification_tree_walk_inventory_is_closed() -> None:
     """Every complete prefix walk and v3 reuse site stays explicitly registered."""
