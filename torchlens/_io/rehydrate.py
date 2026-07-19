@@ -24,7 +24,11 @@ from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .payload_codec import materialize_transport_tensor
 from .paths import resolve_bundle_blob_path
-from .scrub import _RAW_IMAGE_SENTINEL
+from .scrub import (
+    _RAW_IMAGE_SENTINEL,
+    _RAW_INPUT_IMAGE_BYTES_LIMIT,
+    _RAW_INPUT_IMAGE_MAX_EDGE,
+)
 from ..backends import BackendRuntimeCompatibilityError
 from ..data_classes._state_adapter import state_items
 from ..data_classes.trace import Trace
@@ -177,12 +181,41 @@ def _rehydrate_small_raw_images(value: Any) -> Any:
         data = value.get("data")
         if not isinstance(data, bytes):
             return value
+        # SECURITY (secF-1). ``data`` is attacker-controlled bytes on a plain
+        # ``tl.load()``: a hand-edited ``metadata.pkl`` is NOT bound by the
+        # save-time "small" policy, so this sink must re-impose the SAME canonical
+        # bounds the writer applies (never the attacker-echoed ``bytes_limit`` /
+        # ``max_edge`` fields sitting in ``value``) and fail CLOSED. Without this,
+        # a few-hundred-byte blob declaring huge dimensions forced a large
+        # ``Image.load()`` allocation (decompression-bomb DoS), and malformed
+        # bytes raised an UNCAUGHT Pillow error that crashed the whole load.
+        # 1) Byte cap: refuse to even hand oversized bytes to Pillow's C codecs.
+        if len(data) > _RAW_INPUT_IMAGE_BYTES_LIMIT:
+            return value
         try:
             from PIL import Image
         except ImportError:
             return value
-        image = Image.open(BytesIO(data))
-        image.load()
+        # 2) Header-only dimension check BEFORE decode: ``Image.open`` reads the
+        #    format header (giving ``.size``) without allocating pixel buffers, so
+        #    an oversized *declared* image is rejected here -- before ``.load()``
+        #    can allocate -- and bounded to the documented save-time max edge.
+        # 3) Fail closed: any decoder error (malformed / truncated / unsupported
+        #    bytes, or an early decompression-bomb guard) degrades to the inert raw
+        #    sentinel dict instead of propagating out of ``tl.load()``.
+        try:
+            image = Image.open(BytesIO(data))
+            width, height = image.size
+            if (
+                width > _RAW_INPUT_IMAGE_MAX_EDGE
+                or height > _RAW_INPUT_IMAGE_MAX_EDGE
+                or width < 1
+                or height < 1
+            ):
+                return value
+            image.load()
+        except Exception:
+            return value
         return image
     if isinstance(value, list):
         return [_rehydrate_small_raw_images(item) for item in value]

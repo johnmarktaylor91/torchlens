@@ -63,6 +63,14 @@ _RUNNABLE_WEIGHT_KIND = "runnable_weight"
 _RUNNABLE_NONPERSISTENT_BUFFER_KIND = "runnable_nonpersistent_buffer"
 _RUNNABLE_ACTIVATION_KIND = "runnable_activation"
 
+# SECURITY (secF-2). Hard cap on nested-bundle recursion depth. Nested bundles are
+# shallow by construction; a deep chain is a hand-edited attacker artifact. The
+# resolved-path visited set closes self-reference and mutual cycles exactly; this
+# cap is the belt-and-suspenders bound on any deep acyclic chain that would still
+# exhaust the Python stack (and open FDs / re-parse JSON per level) before a
+# ``RecursionError``.
+_MAX_BUNDLE_NESTING_DEPTH = 32
+
 _RENAMED_PICKLE_GLOBALS: dict[tuple[str, str], tuple[str, str]] = {
     ("torchlens.data_classes.model_log", "ModelLog"): (
         "torchlens.data_classes.trace",
@@ -268,6 +276,8 @@ def save(
             trace,
             sparse_run_descriptor,
         )
+        if nonpersistent_buffer_blob_specs:
+            _warn_nonpersistent_buffer_disclosure_once()
         if include_weights:
             weight_blob_specs = _capture_weight_blob_specs(
                 trace,
@@ -280,12 +290,14 @@ def save(
                 activation_members,
                 original_input_digests,
                 capture_state_digests,
+                input_fingerprints,
             ) = _capture_activation_blob_specs(trace, sparse_run_descriptor)
             sparse_run_descriptor = with_activation_payload(
                 sparse_run_descriptor,
                 members=activation_members,
                 original_input_digests=original_input_digests,
                 capture_state_digests=capture_state_digests,
+                input_fingerprints=input_fingerprints,
             )
         sparse_run_json = sparse_descriptor_to_json(sparse_run_descriptor)
         include_outs = False
@@ -587,6 +599,7 @@ def _capture_activation_blob_specs(
     tuple[ActivationPayloadMember, ...],
     tuple[SlotByteDigest, ...],
     tuple[StateByteDigest, ...],
+    tuple[Any, ...],
 ]:
     """Collect capture-selected activation blobs and attestation eligibility digests.
 
@@ -610,6 +623,7 @@ def _capture_activation_blob_specs(
     """
 
     from .._runnable_state import runnable_tensor_byte_digest
+    from .._runnable_execution import build_input_attestation_fingerprint
     from ..runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
 
     slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
@@ -619,6 +633,7 @@ def _capture_activation_blob_specs(
     blob_specs: list[BlobSpec] = []
     members: list[ActivationPayloadMember] = []
     input_digests: list[SlotByteDigest] = []
+    input_fingerprints: list[Any] = []
     for op in trace.layer_list:
         op_label = str(op.label)
         slot_id = f"slot:{op_label}"
@@ -626,11 +641,14 @@ def _capture_activation_blob_specs(
             continue
         out = _physical_op_payload(op, "out")
         if bool(getattr(op, "is_input", False)) and isinstance(out, torch.Tensor):
-            input_digests.append(
-                SlotByteDigest(
-                    slot_id=slot_id,
-                    byte_digest=runnable_tensor_byte_digest(out),
-                )
+            digest = runnable_tensor_byte_digest(out)
+            input_digests.append(SlotByteDigest(slot_id=slot_id, byte_digest=digest))
+            # hon1_3 (H-a): the physical fingerprint is built from the LIVE retained
+            # in-memory input value that seeded the captured forward (never from the
+            # serialized payload, which contiguifies strides). The run side
+            # fingerprints the executed clone on the same basis.
+            input_fingerprints.append(
+                build_input_attestation_fingerprint(slot_id, out, byte_digest=digest)
             )
         if not bool(getattr(op, "has_saved_activation", False)):
             continue
@@ -681,7 +699,13 @@ def _capture_activation_blob_specs(
         )
         for name, value in sorted(cast(Mapping[str, torch.Tensor], state).items())
     )
-    return blob_specs, tuple(members), tuple(input_digests), state_digests
+    return (
+        blob_specs,
+        tuple(members),
+        tuple(input_digests),
+        state_digests,
+        tuple(input_fingerprints),
+    )
 
 
 def _physical_op_payload(op: Any, field_name: str) -> Any:
@@ -775,6 +799,7 @@ def load(
     payload_hints: PayloadLoadHints | None = None,
     trust_custom_callables: bool = False,
     allowed_custom_callable_modules: Collection[str] | None = None,
+    _bundle_visited: "frozenset[Path] | None" = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a ``.tlspec`` object with eager tensor materialization.
 
@@ -809,6 +834,7 @@ def load(
     payload_hints: PayloadLoadHints | None = None,
     trust_custom_callables: bool = False,
     allowed_custom_callable_modules: Collection[str] | None = None,
+    _bundle_visited: "frozenset[Path] | None" = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a ``.tlspec`` object while leaving direct tensors lazy.
 
@@ -842,6 +868,7 @@ def load(
     payload_hints: PayloadLoadHints | None = None,
     trust_custom_callables: bool = False,
     allowed_custom_callable_modules: Collection[str] | None = None,
+    _bundle_visited: "frozenset[Path] | None" = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a TorchLens ``.tlspec`` object polymorphically.
 
@@ -918,6 +945,7 @@ def load(
                 payload_hints=payload_hints,
                 trust_custom_callables=trust_custom_callables,
                 allowed_custom_callable_modules=allowed_custom_callable_modules,
+                bundle_visited=_bundle_visited,
             )
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
         from ..intervention.save import load_intervention_spec
@@ -1058,6 +1086,50 @@ def _load_trace_payload(
     return trace
 
 
+_NONPERSISTENT_DISCLOSURE_WARNED = False
+"""One-time process flag for the non-persistent buffer save disclosure."""
+
+
+def _warn_nonpersistent_buffer_disclosure_once() -> None:
+    """Emit the one-time REQUIRED-family privacy disclosure (contract section 5).
+
+    A default runnable save of a model with used non-persistent buffers carries
+    their capture-time tensor values in the required
+    ``runnable_nonpersistent_buffer_v1`` family even with both include flags
+    false -- declared state without which the artifact cannot replay. The family
+    is manifest-visible; this warning makes the disclosure active.
+    """
+
+    global _NONPERSISTENT_DISCLOSURE_WARNED
+    if _NONPERSISTENT_DISCLOSURE_WARNED:
+        return
+    _NONPERSISTENT_DISCLOSURE_WARNED = True
+    warnings.warn(
+        "This runnable save includes capture-time values of used NON-persistent "
+        "buffers (the required runnable_nonpersistent_buffer_v1 family): they are "
+        "declared state the artifact cannot replay without, and they are written "
+        "even with include_weights/include_activations false. Review the buffers "
+        "before sharing the artifact if they may hold sensitive data.",
+        UserWarning,
+        stacklevel=3,
+    )
+
+
+def _is_legacy_runnable_readiness(trace: Trace) -> bool:
+    """Return whether load-time readiness marked a LEGACY analysis-only capability.
+
+    Decision G: legacy v1 artifacts load for analysis with a typed readiness
+    refusal; their payload blob families stay unbound because no supported
+    descriptor exists to validate them against.
+    """
+
+    from ..runnable import LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS
+
+    readiness = trace.__dict__.get("_runnable_readiness")
+    capability = getattr(readiness, "capability", None)
+    return isinstance(capability, str) and capability in LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS
+
+
 def _bind_embedded_nonpersistent_buffer_payload(
     trace: Trace,
     *,
@@ -1091,6 +1163,10 @@ def _bind_embedded_nonpersistent_buffer_payload(
         entry for entry in manifest.tensors if entry.kind == _RUNNABLE_NONPERSISTENT_BUFFER_KIND
     )
     if descriptor is None:
+        if _is_legacy_runnable_readiness(trace):
+            # Decision G: legacy v1 artifacts load analysis-only; their payload
+            # blobs stay unbound because no supported descriptor can validate them.
+            return
         if entries:
             raise TorchLensIOError(
                 "Non-persistent buffer payloads require a parsed sparse runnable descriptor."
@@ -1168,6 +1244,8 @@ def _bind_embedded_weight_payload(
         entry for entry in manifest.tensors if entry.kind == _RUNNABLE_WEIGHT_KIND
     )
     if descriptor is None:
+        if _is_legacy_runnable_readiness(trace):
+            return
         if weight_entries:
             raise TorchLensIOError(
                 "Weight payload blobs require a parsed sparse runnable descriptor."
@@ -1240,6 +1318,8 @@ def _bind_archived_activation_payload(
         if entry.kind == _RUNNABLE_ACTIVATION_KIND
     }
     if descriptor is None:
+        if _is_legacy_runnable_readiness(trace):
+            return
         if activation_entries:
             raise TorchLensIOError(
                 "Activation payload blobs require a parsed sparse runnable descriptor."
@@ -1255,7 +1335,9 @@ def _bind_archived_activation_payload(
         return
     if not isinstance(declared, ActivationPayloadLayerDescriptor):
         raise TorchLensIOError("Runnable activation payload metadata is incomplete.")
-    if declared.schema != "selected_activation_v1":
+    from ..runnable import RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION
+
+    if declared.schema != RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION:
         raise TorchLensIOError(
             f"Unsupported runnable activation payload schema {declared.schema!r}."
         )
@@ -1302,6 +1384,7 @@ def _load_unified_tlspec(
     payload_hints: PayloadLoadHints | None,
     trust_custom_callables: bool,
     allowed_custom_callable_modules: Collection[str] | None,
+    bundle_visited: "frozenset[Path] | None" = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a unified ``.tlspec`` bundle by manifest kind.
 
@@ -1364,7 +1447,7 @@ def _load_unified_tlspec(
             allowed_custom_callable_modules=allowed_custom_callable_modules,
         )
     if kind == "bundle":
-        return _load_unified_bundle(bundle_path)
+        return _load_unified_bundle(bundle_path, bundle_visited=bundle_visited)
     raise TorchLensIOError(f"Unsupported unified tlspec kind={kind!r}.")
 
 
@@ -1737,13 +1820,21 @@ def _manifest_for_unified_trace_load(manifest: dict[str, Any]) -> Manifest:
     return parsed_manifest
 
 
-def _load_unified_bundle(bundle_path: Path) -> "Bundle":
+def _load_unified_bundle(
+    bundle_path: Path,
+    *,
+    bundle_visited: "frozenset[Path] | None" = None,
+) -> "Bundle":
     """Load a unified ``Bundle`` payload.
 
     Parameters
     ----------
     bundle_path:
         Directory containing a unified bundle manifest and metadata payload.
+    bundle_visited:
+        Internal set of already-in-progress bundle-root real paths, threaded to
+        detect self-referential / mutually-recursive nested-bundle members
+        (secF-2). ``None`` at the top level.
 
     Returns
     -------
@@ -1759,7 +1850,9 @@ def _load_unified_bundle(bundle_path: Path) -> "Bundle":
     metadata_path = bundle_path / "bundle.json"
     _reject_symlink_path(metadata_path, context="bundle metadata")
     if metadata_path.exists():
-        return _load_unified_bundle_directory(bundle_path, metadata_path)
+        return _load_unified_bundle_directory(
+            bundle_path, metadata_path, bundle_visited=bundle_visited
+        )
 
     legacy_pickle_path = bundle_path / "metadata.pkl"
     _reject_symlink_path(legacy_pickle_path, context="bundle metadata")
@@ -1829,10 +1922,26 @@ def _resolve_bundle_member_path(bundle_path: Path, relative_path: str) -> Path:
         raise TorchLensIOError(
             f"Bundle rejected member path traversal outside bundle root: {relative_path!r}."
         ) from exc
+    # SECURITY (secF-2). A member path that resolves to the bundle root itself
+    # (``"."`` / ``""`` / any path collapsing onto the root) is a self-reference
+    # that would re-enter this same directory and recurse without bound. The
+    # containment check above passes for it (it stays inside the root), so it must
+    # be rejected explicitly. Mutual / deeper cycles are additionally closed by the
+    # visited-set + depth cap in ``_load_unified_bundle_directory``.
+    if candidate == allowed_root:
+        raise TorchLensIOError(
+            f"Bundle rejected self-referential member path {relative_path!r} "
+            "(resolves to the bundle root)."
+        )
     return candidate
 
 
-def _load_unified_bundle_directory(bundle_path: Path, metadata_path: Path) -> "Bundle":
+def _load_unified_bundle_directory(
+    bundle_path: Path,
+    metadata_path: Path,
+    *,
+    bundle_visited: "frozenset[Path] | None" = None,
+) -> "Bundle":
     """Load a unified bundle container from nested member specs.
 
     Parameters
@@ -1841,6 +1950,11 @@ def _load_unified_bundle_directory(bundle_path: Path, metadata_path: Path) -> "B
         Bundle root directory.
     metadata_path:
         ``bundle.json`` metadata path.
+    bundle_visited:
+        Internal set of already-in-progress bundle-root real paths, threaded down
+        the recursive load chain to detect a member that re-enters this or an
+        ancestor bundle (secF-2 self-reference / mutual recursion). ``None`` at the
+        top level.
 
     Returns
     -------
@@ -1850,8 +1964,22 @@ def _load_unified_bundle_directory(bundle_path: Path, metadata_path: Path) -> "B
     Raises
     ------
     TorchLensIOError
-        If the nested bundle metadata or members are invalid.
+        If the nested bundle metadata or members are invalid, or a member forms a
+        load cycle or exceeds the nesting-depth cap.
     """
+
+    # SECURITY (secF-2). Record THIS bundle root before loading any member so a
+    # member that points back at us (or at an ancestor already being loaded) is
+    # caught as a cycle instead of recursing forever. The depth cap bounds any deep
+    # acyclic chain that would still blow the stack before a ``RecursionError``.
+    visited = frozenset() if bundle_visited is None else bundle_visited
+    current_root = bundle_path.resolve()
+    if len(visited) >= _MAX_BUNDLE_NESTING_DEPTH:
+        raise TorchLensIOError(
+            "Unified bundle nesting exceeds the maximum depth of "
+            f"{_MAX_BUNDLE_NESTING_DEPTH}; refusing to recurse further."
+        )
+    next_visited = visited | {current_root}
 
     try:
         with metadata_path.open("r", encoding="utf-8") as handle:
@@ -1873,7 +2001,12 @@ def _load_unified_bundle_directory(bundle_path: Path, metadata_path: Path) -> "B
         if not isinstance(name, str) or not isinstance(relative_path, str):
             raise TorchLensIOError(f"Unified bundle member {index} has invalid name/path.")
         member_path = _resolve_bundle_member_path(bundle_path, relative_path)
-        loaded = load(member_path)
+        if member_path.resolve() in next_visited:
+            raise TorchLensIOError(
+                f"Unified bundle member {name!r} forms a load cycle: its path "
+                f"{relative_path!r} re-enters an in-progress bundle directory."
+            )
+        loaded = load(member_path, _bundle_visited=next_visited)
         if not isinstance(loaded, Trace):
             raise TorchLensIOError(f"Unified bundle member {name!r} did not load as a Trace.")
         members[name] = loaded

@@ -405,6 +405,33 @@ def resolve_function_registry_key(
                     # attributes off a torchlens module. Deny by the callable's REAL
                     # module -- the torchlens import path grants it nothing.
                     _enforce_foreign_trust(str(getattr(obj, "__module__", "") or module_name))
+                    # PURITY PARITY (secE-1). ``_enforce_foreign_trust`` gates on the
+                    # RESOLVED-owner STRING, but that string is blind to two
+                    # side-effecting families reachable by walking off a torchlens
+                    # module: (a) a torch builtin (``torch.from_file`` /
+                    # ``torch.compile``) whose real ``__module__`` is the bare,
+                    # non-denied ``"torch"``, and (b) a C tensor method
+                    # (``Tensor.apply_`` / ``resize_`` / ``set_``) whose
+                    # ``__module__ is None`` so the ``or module_name`` fallback lands
+                    # on the (benign) torchlens import path. The sibling
+                    # genuinely-foreign branch below routes torch owners through
+                    # ``is_pure_forward_callable``; mirror that gate here on the REAL
+                    # object identity (NOT the fallback string) so a foreign callable
+                    # walked off a torchlens path is held to the SAME purity contract
+                    # even under trust. ``is_pure_forward_callable`` covers torch
+                    # name/purity, the operator name-allowlist, the stdlib/denylist,
+                    # and the ``__module__ is None`` tensor-method case -- closing the
+                    # ``or module_name`` fallback loophole and collapsing both foreign
+                    # sub-branches onto one purity gate.
+                    if not is_pure_forward_callable(obj):
+                        raise UntrustedCallableError(
+                            "Refusing bundle-supplied custom callable "
+                            f"{module_name}:{qualname}: it walks off a torchlens module "
+                            f"onto a non-torchlens callable ({unsafe_callable_reason(obj)}) "
+                            "that is not a pure forward/tensor op; only pure "
+                            "forward/tensor ops resolve from a torchlens-path walk onto "
+                            "a foreign callable, even under trust."
+                        )
                 elif not is_inert_first_party_callable(obj):
                     # Defense-in-depth (mirrors the r21 bundle-unpickler narrowing):
                     # a genuinely torchlens-owned callable is auto-trusted ONLY if it

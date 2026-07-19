@@ -6,11 +6,10 @@ interventions, and saves or streams activation payloads for torch captures.
 
 import copy
 import dataclasses
-import re
 import time
 import warnings
 from collections import OrderedDict, defaultdict, deque
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from math import prod
 from types import SimpleNamespace
@@ -42,6 +41,7 @@ from .aliasing import (
 from .buffer_writes import resolve_registered_buffer_address
 from . import module_stack as _mstack
 from ...fastlog._halt import HaltSignal
+from ...utils._torch_compat import torch_structseq_field_names
 from ...utils.introspection import (
     _get_code_context,
     _get_tensors_and_params_from_obj,
@@ -761,6 +761,13 @@ def _is_namedtuple_instance(value: Any) -> bool:
 def _torch_return_type_fields(value: Any) -> tuple[str, ...]:
     """Return public field names for a ``torch.return_types`` structseq.
 
+    r35 hon1_4: delegates to the shared repr-independent helper in
+    ``utils/_torch_compat.py`` (``__match_args__`` primary; identity round-trip
+    fallback on 3.9; refusal otherwise). Structural facts must NEVER derive
+    from ``repr()``/``str()`` of tensor-bearing values -- a wrapped tensor repr
+    used to inject phantom ``dtype=`` fields and flip witness verdicts on
+    tensor size alone.
+
     Parameters
     ----------
     value
@@ -772,19 +779,7 @@ def _torch_return_type_fields(value: Any) -> tuple[str, ...]:
         Field names when PyTorch exposes a named structseq, otherwise ``()``.
     """
 
-    cls = type(value)
-    if cls.__module__ != "torch.return_types":
-        return ()
-    if not isinstance(value, tuple):
-        return ()
-    n_fields = getattr(value, "n_fields", None)
-    n_unnamed = getattr(value, "n_unnamed_fields", 0)
-    if not isinstance(n_fields, int) or n_fields <= 0 or n_unnamed:
-        return ()
-    field_names = tuple(re.findall(r"^\s*([A-Za-z_]\w*)=", repr(value), flags=re.MULTILINE))
-    if len(field_names) != n_fields:
-        return ()
-    return field_names
+    return torch_structseq_field_names(value)
 
 
 def _non_iterable_type_error(exc: TypeError) -> bool:
@@ -1066,6 +1061,13 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
             lossy_reconstruction=reconstruction_is_lossy(value, keys),
         )
     torch_fields = _torch_return_type_fields(value)
+    if type(value).__module__ == "torch.return_types" and not torch_fields:
+        # r35 hon1_4: a structseq whose field declaration cannot be PROVEN
+        # (no valid __match_args__, no identity bijection) is recorded opaque
+        # so the runnable producer refuses it typed -- never silently recorded
+        # as a plain positional tuple (a lossy type substitution).
+        module, qualname = _container_type_ref(value)
+        return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
     if _is_namedtuple_instance(value) or torch_fields:
         fields = torch_fields or tuple(value._fields)
         reconstructable = True
@@ -1288,6 +1290,135 @@ def _walk_supported_output_container(
         return_addresses=True,
     ):
         yield tensor, (*path, *_fallback_address_to_path(fallback_address)), root_spec
+
+
+def _prove_runnable_output_lossless(value: Any) -> tuple[bool, str]:
+    """Positively prove one MODEL-output subtree is losslessly reconstructable (r35 I1).
+
+    A runnable claim requires refuse-unless-proved: the proof establishes an exact
+    root kind, recursively supported child kinds, and fully encodable literal
+    leaves. It deliberately does NOT extend ``_leaf_is_reconstructable``'s
+    "childless leaf that still holds tensors" tolerance (that tolerance exists
+    only for non-runnable BFS capture): an opaque tensor holder, and any
+    unordered container (``set``/``frozenset``/subclasses) at ANY depth and ANY
+    cardinality (zero, one, or many tensors), fails the proof.
+
+    Returns
+    -------
+    tuple[bool, str]
+        ``(proved, reason)`` where ``reason`` names the first failure.
+    """
+
+    if isinstance(value, torch.nn.Parameter):
+        return False, "parameter_output"
+    if isinstance(value, torch.Tensor):
+        return True, ""
+    if isinstance(value, (set, frozenset)):
+        return False, f"unordered_container:{type(value).__qualname__}"
+    if _literal_value_supported(value) or isinstance(value, torch.Size):
+        return True, ""
+    registered = get_registered_container(type(value))
+    if registered is not None:
+        children, _aux = registered.flatten(value)
+        for item in children:
+            proved, reason = _prove_runnable_output_lossless(item)
+            if not proved:
+                return False, reason
+        return True, ""
+    if _is_hf_model_output(value):
+        for key in value.keys():
+            proved, reason = _prove_runnable_output_lossless(value[key])
+            if not proved:
+                return False, reason
+        return True, ""
+    torch_fields = _torch_return_type_fields(value)
+    if _is_namedtuple_instance(value) or torch_fields:
+        fields = torch_fields or tuple(value._fields)
+        if type(value).__module__ == "torch.return_types" and not torch_fields:
+            return False, "structseq_fields_unprovable"
+        for field_name in fields:
+            proved, reason = _prove_runnable_output_lossless(getattr(value, field_name))
+            if not proved:
+                return False, reason
+        return True, ""
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        for field in dataclasses.fields(value):
+            proved, reason = _prove_runnable_output_lossless(getattr(value, field.name))
+            if not proved:
+                return False, reason
+        return True, ""
+    if isinstance(value, Mapping):
+        recon = _mapping_reconstruction(value)
+        if recon is None:
+            return False, f"unreconstructable_mapping:{type(value).__qualname__}"
+        for key in value.keys():
+            if not isinstance(key, (str, int)):
+                return False, f"unsupported_mapping_key:{type(key).__qualname__}"
+            proved, reason = _prove_runnable_output_lossless(value[key])
+            if not proved:
+                return False, reason
+        return True, ""
+    if isinstance(value, (list, tuple)):
+        if type(value) not in {list, tuple}:
+            # An exotic sequence subclass cannot be rebuilt with its exact type.
+            return False, f"unsupported_sequence_type:{type(value).__qualname__}"
+        items = _iter_sequence_items(value)
+        if items is None:
+            return False, f"opaque_sequence:{type(value).__qualname__}"
+        for _index, item in items:
+            proved, reason = _prove_runnable_output_lossless(item)
+            if not proved:
+                return False, reason
+        return True, ""
+    return False, f"opaque_leaf:{type(value).__qualname__}"
+
+
+def runnable_output_losslessness(
+    out: Any,
+    output_entries: Sequence[tuple[torch.Tensor, tuple[OutputPathComponent, ...], Any]],
+) -> dict[str, Any]:
+    """Build the explicit model-output traversal proof result (r35 I1, decision B).
+
+    Combines the positive structural losslessness proof with the tensor-leaf /
+    typed-path bijection over the walked output entries: duplicate paths, a
+    spec/leaf-count disagreement, or any fallback traversal breaks the proof.
+
+    Parameters
+    ----------
+    out:
+        Raw model output object.
+    output_entries:
+        Entries yielded by :func:`_walk_output_tensors_with_paths` for ``out``.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``{"lossless", "reason", "root_type", "used_fallback", "leaf_count",
+        "duplicate_paths"}`` -- the single flag set the runnable producer
+        consumes (no dual flags).
+    """
+
+    proved, reason = _prove_runnable_output_lossless(out)
+    paths = [tuple(path) for _tensor, path, _spec in output_entries]
+    duplicate_paths = len(paths) != len({repr(p) for p in paths})
+    used_fallback = False
+    if not isinstance(out, torch.Tensor) and not (
+        _literal_value_supported(out) or isinstance(out, torch.Size)
+    ):
+        used_fallback = _try_build_container_spec(out) is None
+    lossless = proved and not duplicate_paths and not used_fallback
+    if lossless and reason == "" and duplicate_paths:
+        reason = "duplicate_output_paths"
+    if not lossless and not reason:
+        reason = "duplicate_output_paths" if duplicate_paths else "fallback_traversal"
+    return {
+        "lossless": bool(lossless),
+        "reason": reason if not lossless else "",
+        "root_type": type(out).__qualname__,
+        "used_fallback": bool(used_fallback),
+        "leaf_count": len(paths),
+        "duplicate_paths": bool(duplicate_paths),
+    }
 
 
 def _walk_output_tensors_with_paths(

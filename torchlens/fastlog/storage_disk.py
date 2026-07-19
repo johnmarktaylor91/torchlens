@@ -398,11 +398,22 @@ def _dtype_to_name(dtype: torch.dtype | None) -> str | None:
 
 
 def _dtype_from_name(name: str | None) -> torch.dtype | None:
-    """Resolve a portable dtype name to a torch dtype."""
+    """Resolve a portable dtype name to a torch dtype.
+
+    Defense-in-depth parity (fastlog): the fastlog spec ``dtype`` string comes from
+    a portable JSON metadata file that a hand-editor controls. Guard the ``getattr``
+    result with an ``isinstance(_, torch.dtype)`` check -- matching the sibling dtype
+    resolvers (``rehydrate.py::_dtype_from_manifest_string``,
+    ``storage_disk.py::_torch_dtype_from_ref``) -- so a name like ``"load"`` cannot
+    resolve ``torch.load`` (a callable, not a dtype) into a ``CaptureSpec``.
+    """
 
     if name is None:
         return None
-    return cast(torch.dtype, getattr(torch, name))
+    dtype_obj = getattr(torch, str(name), None)
+    if not isinstance(dtype_obj, torch.dtype):
+        raise TorchLensIOError(f"Unsupported dtype name in fastlog spec: {name!r}.")
+    return cast(torch.dtype, dtype_obj)
 
 
 def _write_metadata(path: Path, recording: Recording, options: RecordingOptions) -> None:

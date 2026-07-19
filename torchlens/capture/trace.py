@@ -1322,6 +1322,14 @@ def run_and_log_inputs_through_model(
             _record_runnable_input_literal_leaves(self, input_args, input_kwargs)
             _record_runnable_input_tensor_sites(self, input_args, input_kwargs)
             _record_runnable_module_training_modes(self, model)
+            if bool(getattr(self, "intervention_ready", False)):
+                # r35 decision E: capture the ambient backend execution context the
+                # forward is about to run under (defaults, matmul precision,
+                # determinism, TF32/cuDNN flags, SDP toggles) so the sparse runnable
+                # descriptor can restore it explicitly at replay.
+                from ..utils._torch_compat import snapshot_ambient_execution_context
+
+                self._runnable_capture_ambient = snapshot_ambient_execution_context()
 
             if self.capture_mode == "predicate":
                 outputs = _run_predicate_forward_with_root_frame(

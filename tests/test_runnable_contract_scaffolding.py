@@ -7,10 +7,19 @@ from dataclasses import fields
 from torchlens.errors import ReattachError, RunnableTLSPECError, StateBindingError
 from torchlens.runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
+    LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
+    RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
+    RUNNABLE_CALL_RECIPE_VERSION,
+    RUNNABLE_INITIALIZER_POLICY_VERSION,
     RUNNABLE_TLSPEC_SCHEMA_VERSION,
+    ActivationPayloadLayerDescriptor,
+    AmbientExecutionContext,
+    CallExecutionContext,
     InitializerPolicy,
+    InputAttestationFingerprint,
     RunReport,
     ReadinessReport,
+    RunnableCallDescriptor,
     RunnableErrorCode,
     SparseRunDescriptor,
     StateSlotRole,
@@ -19,12 +28,20 @@ from torchlens.runnable import (
 
 
 def test_frozen_runnable_schema_values() -> None:
-    """Keep the Stage 0 schema version and key enum values frozen."""
+    """Keep the v2 schema versions and key enum values frozen."""
 
-    assert RUNNABLE_TLSPEC_SCHEMA_VERSION == "sparse_recorded_taken_path_v1"
+    assert RUNNABLE_TLSPEC_SCHEMA_VERSION == "sparse_recorded_taken_path_v2"
+    assert RUNNABLE_CALL_RECIPE_VERSION == "non_tensor_args_tensor_slots_and_context_v2"
+    assert RUNNABLE_INITIALIZER_POLICY_VERSION == "torchlens_role_init_v2"
+    assert RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION == "selected_activation_v2"
+    assert LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS == frozenset({"sparse_recorded_taken_path_v1"})
     assert WitnessCompleteness.COMPLETE.value == "complete"
     assert RunnableErrorCode.UNSUPPORTED_BACKEND_REPLAY.value == "unsupported_backend_replay"
     assert RunnableErrorCode.NUMERIC_ATTESTATION_FAILED.value == "numeric_attestation_failed"
+    assert (
+        RunnableErrorCode.INPUT_ALIAS_TOPOLOGY_UNRESOLVED.value == "input_alias_topology_unresolved"
+    )
+    assert RunnableErrorCode.EXECUTION_CONTEXT_UNAVAILABLE.value == "execution_context_unavailable"
     assert CANONICAL_INITIALIZER_BY_ROLE[StateSlotRole.WEIGHT] is InitializerPolicy.KAIMING_NORMAL
 
 
@@ -56,9 +73,74 @@ def test_authoritative_descriptor_and_report_field_names() -> None:
         "control_witnesses",
         "witness_completeness",
         "rng_profile",
+        "ambient_context",
         "compatibility",
         "preflight",
         "unsupported_sites",
+    )
+    assert tuple(field.name for field in fields(RunnableCallDescriptor)) == (
+        "call_id",
+        "op_labels",
+        "registry_id",
+        "dispatch_kind",
+        "argument_names",
+        "num_positional_args",
+        "num_keyword_args",
+        "tensor_arguments",
+        "literal_arguments",
+        "output_slot_ids",
+        "parent_call_ids",
+        "is_inplace",
+        "runtime_fingerprint",
+        "execution_context",
+    )
+    assert tuple(field.name for field in fields(CallExecutionContext)) == (
+        "autocast",
+        "grad_enabled",
+        "inference_mode",
+    )
+    assert tuple(field.name for field in fields(AmbientExecutionContext)) == (
+        "default_dtype",
+        "default_device",
+        "float32_matmul_precision",
+        "deterministic_algorithms",
+        "deterministic_algorithms_warn_only",
+        "cuda_matmul_allow_tf32",
+        "cudnn_allow_tf32",
+        "cudnn_deterministic",
+        "cudnn_benchmark",
+        "cudnn_enabled",
+        "flash_sdp_enabled",
+        "mem_efficient_sdp_enabled",
+        "math_sdp_enabled",
+        "attestation_ineligible_context",
+    )
+    assert tuple(field.name for field in fields(ActivationPayloadLayerDescriptor)) == (
+        "present",
+        "schema",
+        "members",
+        "original_input_digests",
+        "capture_state_digests",
+        "input_fingerprints",
+    )
+    assert tuple(field.name for field in fields(InputAttestationFingerprint)) == (
+        "slot_id",
+        "byte_digest",
+        "device_type",
+        "device_index",
+        "layout",
+        "sizes",
+        "strides",
+        "storage_offset",
+        "is_contiguous",
+        "is_channels_last",
+        "is_channels_last_3d",
+        "is_conj",
+        "is_neg",
+        "tensor_class",
+        "requires_grad",
+        "is_inference",
+        "alignment_class",
     )
     assert tuple(field.name for field in fields(RunReport)) == (
         "readiness",

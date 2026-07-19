@@ -519,3 +519,110 @@ def test_h4_lossy_container_output_not_attested(tmp_path: Path) -> None:
 
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
+
+
+# ---------------------------------------------------------------------------
+# r35 I1 (hon1_1 == corr1_1, hon1_2, decision B): uniform save-time refusal of
+# every lossy/unaddressable model output -- any cardinality, any depth.
+# ---------------------------------------------------------------------------
+
+
+class _IntSet(set):  # type: ignore[type-arg]
+    """Set subclass output (must refuse exactly like a bare set)."""
+
+
+class _LambdaOutputModel(nn.Module):
+    """Return an arbitrary lossy/unaddressable output shape."""
+
+    def __init__(self, builder: Any) -> None:
+        super().__init__()
+        self._builder = builder
+
+    def forward(self, x: torch.Tensor) -> Any:
+        return self._builder(x)
+
+
+class _OpaqueTensorHolder:
+    """Opaque object (DynamicCache-style) holding a tensor."""
+
+    def __init__(self, value: torch.Tensor) -> None:
+        self.value = value
+
+
+@dataclass
+class _SetFieldOutput:
+    """Dataclass output holding a set field."""
+
+    value: torch.Tensor
+    extras: Any
+
+
+_R35_LOSSY_OUTPUT_BUILDERS = {
+    "bare_one_tensor_set": lambda x: {x + 1},
+    "one_tensor_set_with_flag": lambda x: {x + 1, "flag"},
+    "bare_two_tensor_set": lambda x: {x + 1, x * 2},
+    "bare_frozenset": lambda x: frozenset({x + 1}),
+    "empty_set_in_tuple": lambda x: (x + 1, set()),
+    "empty_frozenset_in_tuple": lambda x: (x + 1, frozenset()),
+    "set_subclass": lambda x: _IntSet({x + 1}),
+    "tuple_nested_one_tensor_set": lambda x: (x + 1, {x * 2}),
+    "tuple_nested_two_tensor_set": lambda x: (x + 1, {x * 2, x * 3}),
+    "dict_nested_set": lambda x: {"a": {x + 1}},
+    "deep_list_dict_nested_set": lambda x: [{"inner": (x + 1, {x * 2})}],
+    "dataclass_with_set_field": lambda x: _SetFieldOutput(value=x + 1, extras={x * 2}),
+    "opaque_tensor_holder_in_tuple": lambda x: (x + 1, _OpaqueTensorHolder(x * 2)),
+}
+
+
+@pytest.mark.smoke
+@pytest.mark.filterwarnings("ignore:TorchLens intervention-ready output traversal:UserWarning")
+@pytest.mark.parametrize("kind", sorted(_R35_LOSSY_OUTPUT_BUILDERS))
+def test_r35_lossy_output_refuses_runnable_save_uniformly(tmp_path: Path, kind: str) -> None:
+    """Every lossy/unaddressable output refuses at save with the typed code.
+
+    r34 hon1_1/corr1_1 (bare one-tensor set: false VERIFIED+ATTESTED) and
+    hon1_2 (nested sets: false DIVERGED / advertise-then-crash) close as ONE
+    class: refuse-unless-proved at save. Analysis capture stays available.
+    """
+
+    from torchlens.errors import RunnablePreflightError
+
+    model = _LambdaOutputModel(_R35_LOSSY_OUTPUT_BUILDERS[kind]).eval()
+    x = torch.arange(4.0) + 1.0
+    trace = _capture(model, x)
+    with pytest.raises(RunnablePreflightError) as excinfo:
+        tl.save(trace, str(tmp_path / f"{kind}.tlspec"), level="runnable")
+    codes = {diag.code.value for diag in excinfo.value.fields["diagnostics"]}
+    assert "missing_output_container_contract" in codes
+    # No runnable artifact was written.
+    assert not (tmp_path / f"{kind}.tlspec").exists()
+    # Ordinary analysis save remains available for the same capture.
+    tl.save(trace, str(tmp_path / f"{kind}_analysis.tlspec"), level="portable")
+
+
+_R35_LOSSLESS_OUTPUT_BUILDERS = {
+    "bare_tensor": lambda x: x + 1,
+    "tuple": lambda x: (x + 1, x * 2),
+    "one_tensor_list": lambda x: [x + 1],
+    "dict": lambda x: {"a": x + 1, "b": x * 2},
+    "namedtuple": lambda x: _Pair(value=x + 1, meta=3),
+    "tuple_with_literal": lambda x: (x + 1, "ok", 7),
+}
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("kind", sorted(_R35_LOSSLESS_OUTPUT_BUILDERS))
+def test_r35_lossless_outputs_still_save_and_run_verified(tmp_path: Path, kind: str) -> None:
+    """Positive controls: proved-lossless outputs save, run, and match kinds."""
+
+    model = _LambdaOutputModel(_R35_LOSSLESS_OUTPUT_BUILDERS[kind]).eval()
+    x = torch.arange(4.0) + 1.0
+    expected = model(x)
+    trace = _capture(model, x)
+    path = tmp_path / f"{kind}.tlspec"
+    tl.save(trace, str(path), level="runnable")
+    result = tl.load(str(path)).run(inputs=x)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert type(result.output) is type(expected)
+    if isinstance(expected, torch.Tensor):
+        assert torch.equal(result.output, expected)

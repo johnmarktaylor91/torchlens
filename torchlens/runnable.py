@@ -15,17 +15,37 @@ from typing import Any, Final, Literal, Protocol, TypeAlias
 
 from .intervention.types import FunctionRegistryKey
 
-RUNNABLE_TLSPEC_SCHEMA_VERSION: Final = "sparse_recorded_taken_path_v1"
-"""Frozen sparse runnable descriptor capability/version string."""
+RUNNABLE_TLSPEC_SCHEMA_VERSION: Final = "sparse_recorded_taken_path_v2"
+"""Frozen sparse runnable descriptor capability/version string.
 
-RUNNABLE_CALL_RECIPE_VERSION: Final = "non_tensor_args_and_tensor_slots_v1"
-"""Frozen sparse call-recipe version string."""
+v2 requires EXPLICIT execution-context records (per-call ``execution_context``
+plus the capture-scoped ``ambient_context``); the parser REJECTS their absence,
+so an absent context can only ever mean a legacy v1 artifact, which is
+analysis-only (fail-closed), never "assume disabled".
+"""
+
+RUNNABLE_CALL_RECIPE_VERSION: Final = "non_tensor_args_tensor_slots_and_context_v2"
+"""Frozen sparse call-recipe version string (v2: adds required call context)."""
 
 RUNNABLE_CALLABLE_REF_SCHEMA_VERSION: Final = 1
 """Frozen ``FunctionRegistryKey`` schema version accepted by rung 1."""
 
-RUNNABLE_INITIALIZER_POLICY_VERSION: Final = "torchlens_role_init_v1"
-"""Frozen canonical role-based random-initializer policy version."""
+RUNNABLE_INITIALIZER_POLICY_VERSION: Final = "torchlens_role_init_v2"
+"""Frozen canonical role-based random-initializer policy version.
+
+v2 semantics are the v1 role table plus degenerate totality: a legal
+``numel() == 0`` slot allocates and returns without sampling or consuming any
+generator state, and every nonempty Kaiming slot requires finite positive
+``fan_in`` (producer preflight and the runtime validator share the check).
+"""
+
+RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION: Final = "selected_activation_v2"
+"""Frozen selected-activation payload schema (v2: physical input fingerprints)."""
+
+LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS: Final[frozenset[str]] = frozenset(
+    {"sparse_recorded_taken_path_v1"}
+)
+"""Known legacy capability strings: analysis-only load, typed run refusal."""
 
 
 class TensorSlotRole(str, Enum):
@@ -187,6 +207,8 @@ class RunnableErrorCode(str, Enum):
     SCALAR_BOOL_DIVERGENCE = "scalar_bool_divergence"
     CONDITIONAL_ARM_DIVERGENCE = "conditional_arm_divergence"
     LOOP_PREDICATE_DIVERGENCE = "loop_predicate_divergence"
+    INPUT_ALIAS_TOPOLOGY_UNRESOLVED = "input_alias_topology_unresolved"
+    EXECUTION_CONTEXT_UNAVAILABLE = "execution_context_unavailable"
     NUMERIC_ATTESTATION_FAILED = "numeric_attestation_failed"
     POISONED_RUN_REFUSED = "poisoned_run_refused"
 
@@ -372,6 +394,97 @@ class RunnableCallDescriptor:
     parent_call_ids: tuple[str, ...]
     is_inplace: bool
     runtime_fingerprint: str
+    execution_context: "CallExecutionContext"
+
+
+@dataclass(frozen=True, slots=True)
+class AutocastDeviceContext:
+    """Explicit autocast state for one device class at a resolved call.
+
+    Disabled state is written affirmatively (``enabled=False``); absence of a
+    device record is never interpreted as disabled.
+    """
+
+    device_type: str
+    enabled: bool
+    dtype: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class CallExecutionContext:
+    """Required per-call execution context recorded at capture (v2).
+
+    Replay enters exactly this context tightly around the resolved call:
+    explicit ``enabled=False`` autocast contexts are actively entered so a
+    caller's ambient autocast cannot contaminate a disabled capture, and the
+    recorded grad/inference mode is restored. Context entry never touches RNG.
+    """
+
+    autocast: tuple[AutocastDeviceContext, ...]
+    grad_enabled: bool
+    inference_mode: bool
+
+
+@dataclass(frozen=True, slots=True)
+class AmbientExecutionContext:
+    """Capture-scoped ambient backend context (v2, required, explicit).
+
+    ``None`` values mean the producing runtime did not expose that control
+    (feature-detected through ``utils/_torch_compat.py``); every exposed
+    control is recorded affirmatively, including its disabled state. Replay
+    restores the recorded values transactionally around the whole run; a
+    recorded value the runtime cannot restore is a typed refusal, never a
+    silent ambient passthrough. ``attestation_ineligible_context`` is the
+    positive capture-time marking for a nondeterministic context (for example
+    ``cudnn.benchmark=True``): such a capture can replay and verify its path
+    but never claims byte-exact numeric attestation.
+    """
+
+    default_dtype: str
+    default_device: str
+    float32_matmul_precision: str | None
+    deterministic_algorithms: bool | None
+    deterministic_algorithms_warn_only: bool | None
+    cuda_matmul_allow_tf32: bool | None
+    cudnn_allow_tf32: bool | None
+    cudnn_deterministic: bool | None
+    cudnn_benchmark: bool | None
+    cudnn_enabled: bool | None
+    flash_sdp_enabled: bool | None
+    mem_efficient_sdp_enabled: bool | None
+    math_sdp_enabled: bool | None
+    attestation_ineligible_context: bool
+
+
+@dataclass(frozen=True, slots=True)
+class InputAttestationFingerprint:
+    """Physical identity of one capture-time model-input slot (v2).
+
+    Recorded from the live capture-time input value (never from an archived
+    payload, whose serialization contiguifies strides). At run time the value
+    that actually seeds execution is fingerprinted on the same basis; any
+    physical mismatch makes the run changed-input-for-attestation only:
+    numeric attestation is ``not_applicable`` while path faithfulness stays
+    governed by the ordinary input/control contracts.
+    """
+
+    slot_id: str
+    byte_digest: str
+    device_type: str
+    device_index: int | None
+    layout: str
+    sizes: tuple[int, ...]
+    strides: tuple[int, ...]
+    storage_offset: int
+    is_contiguous: bool
+    is_channels_last: bool
+    is_channels_last_3d: bool
+    is_conj: bool
+    is_neg: bool
+    tensor_class: str
+    requires_grad: bool
+    is_inference: bool
+    alignment_class: int
 
 
 class ControlWitnessKind(str, Enum):
@@ -437,10 +550,11 @@ class ActivationPayloadLayerDescriptor:
     """Presence, membership, and eligibility metadata for activation payloads."""
 
     present: bool
-    schema: Literal["selected_activation_v1"]
+    schema: Literal["selected_activation_v2"]
     members: tuple[ActivationPayloadMember, ...]
     original_input_digests: tuple[SlotByteDigest, ...]
     capture_state_digests: tuple[StateByteDigest, ...]
+    input_fingerprints: tuple[InputAttestationFingerprint, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -521,14 +635,14 @@ class ProducerPreflight:
 class SparseRunDescriptor:
     """Authoritative manifest descriptor for sparse runnable rung 1."""
 
-    capability: Literal["sparse_recorded_taken_path_v1"]
+    capability: Literal["sparse_recorded_taken_path_v2"]
     backend: str
-    call_recipe: Literal["non_tensor_args_and_tensor_slots_v1"]
+    call_recipe: Literal["non_tensor_args_tensor_slots_and_context_v2"]
     callable_ref_schema: Literal[1]
     state_binding: Literal["module_path_role_v1"]
     input_binding: Literal["model_site_io_role_v1"]
     control_witness: Literal["scalar_bool_and_arm_entry_v1"]
-    initializer_policy_version: Literal["torchlens_role_init_v1"]
+    initializer_policy_version: Literal["torchlens_role_init_v2"]
     payload_layers: PayloadLayersDescriptor
     callable_registry: tuple[CallableRegistryEntry, ...]
     calls: tuple[RunnableCallDescriptor, ...]
@@ -536,6 +650,7 @@ class SparseRunDescriptor:
     control_witnesses: tuple[ControlWitness, ...]
     witness_completeness: WitnessCompleteness
     rng_profile: RunnableRngProfile
+    ambient_context: AmbientExecutionContext
     compatibility: RunnableCompatibility
     preflight: ProducerPreflight
     unsupported_sites: tuple[RunnableDiagnostic, ...]
@@ -715,13 +830,19 @@ def refuse_poisoned_trace(trace: Any, operation: str) -> None:
 __all__ = [
     "ActivationPayloadLayerDescriptor",
     "ActivationPayloadMember",
+    "AmbientExecutionContext",
     "ArchivedActivation",
+    "AutocastDeviceContext",
     "CANONICAL_INITIALIZER_BY_ROLE",
+    "LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS",
+    "RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION",
     "RUNNABLE_CALLABLE_REF_SCHEMA_VERSION",
     "RUNNABLE_CALL_RECIPE_VERSION",
     "RUNNABLE_INITIALIZER_POLICY_VERSION",
     "RUNNABLE_TLSPEC_SCHEMA_VERSION",
+    "CallExecutionContext",
     "CallableRegistryEntry",
+    "InputAttestationFingerprint",
     "ContractCheck",
     "ControlWitness",
     "ControlWitnessKind",

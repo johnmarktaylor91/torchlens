@@ -87,10 +87,21 @@ def test_legacy_branch_unsupported_device_raises_runtimeerror() -> None:
 
 
 def test_log_current_autocast_state_unaffected() -> None:
-    """The public capture path still returns the expected device-keyed dict."""
+    """The public capture path still returns the expected device-keyed dict.
+
+    r35: the reserved ``__execution__`` grad/inference entry rides along with
+    ``enabled=False`` so every autocast consumer skips it structurally.
+    """
+
     state = log_current_autocast_state()
-    assert set(state) <= {"cpu", "cuda"}
-    for dev_state in state.values():
+    assert set(state) <= {"cpu", "cuda", "__execution__"}
+    execution = state["__execution__"]
+    assert execution["enabled"] is False
+    assert isinstance(execution["grad_enabled"], bool)
+    assert isinstance(execution["inference_mode"], bool)
+    for device, dev_state in state.items():
+        if device.startswith("__"):
+            continue
         assert set(dev_state) == {"enabled", "dtype"}
         assert isinstance(dev_state["enabled"], bool)
         assert isinstance(dev_state["dtype"], torch.dtype)
@@ -302,6 +313,13 @@ def test_torch_capability_snapshot_contract() -> None:
         # the live capability like AUTOCAST rather than hardcoding a boolean).
         "HAS_SAFE_WEIGHTS_ONLY_LOAD": tc.HAS_SAFE_WEIGHTS_ONLY_LOAD,
         "HAS_TENSOR_SEQUENCE_SLOT_FIX": True,
+        # r35 decision E: ambient execution-context knobs are feature-detected and
+        # surfaced in the capability snapshot (values are runtime-dependent).
+        "HAS_FLOAT32_MATMUL_PRECISION": tc.HAS_FLOAT32_MATMUL_PRECISION,
+        "HAS_DETERMINISTIC_ALGORITHMS_QUERY": tc.HAS_DETERMINISTIC_ALGORITHMS_QUERY,
+        "HAS_CUDA_MATMUL_TF32": tc.HAS_CUDA_MATMUL_TF32,
+        "HAS_CUDNN_FLAGS": tc.HAS_CUDNN_FLAGS,
+        "HAS_SDP_TOGGLES": tc.HAS_SDP_TOGGLES,
         "AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED": tc.AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED,
     }
 

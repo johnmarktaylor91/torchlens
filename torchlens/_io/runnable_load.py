@@ -20,13 +20,19 @@ from .. import _state
 from ..constants import get_orig_torch_funcs
 from ..intervention.types import FunctionRegistryKey
 from ..runnable import (
+    LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
+    RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
     RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
     RUNNABLE_CALL_RECIPE_VERSION,
     RUNNABLE_INITIALIZER_POLICY_VERSION,
     RUNNABLE_TLSPEC_SCHEMA_VERSION,
     ActivationPayloadLayerDescriptor,
     ActivationPayloadMember,
+    AmbientExecutionContext,
+    AutocastDeviceContext,
+    CallExecutionContext,
     CallableRegistryEntry,
+    InputAttestationFingerprint,
     ControlWitness,
     ControlWitnessKind,
     InputSlotBinding,
@@ -144,6 +150,9 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
     payload = _mapping(value, "payload_layers")
     compatibility = _mapping(value, "compatibility")
     preflight = _mapping(value, "preflight")
+    # v2: the capture-scoped ambient execution context is REQUIRED and EXPLICIT.
+    # Absence is a parse failure (fail closed), never a defaulted context.
+    ambient = _parse_ambient_context(_mapping(value, "ambient_context"))
     return SparseRunDescriptor(
         capability=cast(Any, _string(value, "capability")),
         backend=_string(value, "backend"),
@@ -164,6 +173,7 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
         control_witnesses=witnesses,
         witness_completeness=WitnessCompleteness(_string(value, "witness_completeness")),
         rng_profile=_parse_rng_profile(value.get("rng_profile")),
+        ambient_context=ambient,
         compatibility=RunnableCompatibility(
             torchlens_version=_string(compatibility, "torchlens_version"),
             python_version=_string(compatibility, "python_version"),
@@ -182,6 +192,92 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
         unsupported_sites=tuple(
             _parse_diagnostic(item) for item in _mapping_sequence(value, "unsupported_sites")
         ),
+    )
+
+
+def _parse_ambient_context(value: Mapping[str, Any]) -> AmbientExecutionContext:
+    """Parse the required v2 capture-scoped ambient execution context.
+
+    Every field must be present explicitly; ``None`` means the producing runtime
+    did not expose that control. Missing keys raise (fail closed).
+    """
+
+    def _optional_bool_field(name: str) -> bool | None:
+        raw = value[name]
+        if raw is None:
+            return None
+        if not isinstance(raw, bool):
+            raise TypeError(f"ambient_context.{name} must be a boolean or null.")
+        return raw
+
+    def _optional_str_field(name: str) -> str | None:
+        raw = value[name]
+        if raw is None:
+            return None
+        return _string_item(raw, f"ambient_context.{name}")
+
+    return AmbientExecutionContext(
+        default_dtype=_string(value, "default_dtype"),
+        default_device=_string(value, "default_device"),
+        float32_matmul_precision=_optional_str_field("float32_matmul_precision"),
+        deterministic_algorithms=_optional_bool_field("deterministic_algorithms"),
+        deterministic_algorithms_warn_only=_optional_bool_field(
+            "deterministic_algorithms_warn_only"
+        ),
+        cuda_matmul_allow_tf32=_optional_bool_field("cuda_matmul_allow_tf32"),
+        cudnn_allow_tf32=_optional_bool_field("cudnn_allow_tf32"),
+        cudnn_deterministic=_optional_bool_field("cudnn_deterministic"),
+        cudnn_benchmark=_optional_bool_field("cudnn_benchmark"),
+        cudnn_enabled=_optional_bool_field("cudnn_enabled"),
+        flash_sdp_enabled=_optional_bool_field("flash_sdp_enabled"),
+        mem_efficient_sdp_enabled=_optional_bool_field("mem_efficient_sdp_enabled"),
+        math_sdp_enabled=_optional_bool_field("math_sdp_enabled"),
+        attestation_ineligible_context=_boolean(value, "attestation_ineligible_context"),
+    )
+
+
+def _parse_call_execution_context(value: Mapping[str, Any]) -> CallExecutionContext:
+    """Parse the required v2 per-call execution context (explicit, never defaulted)."""
+
+    autocast_entries: list[AutocastDeviceContext] = []
+    for item in _mapping_sequence(value, "autocast"):
+        dtype = item.get("dtype")
+        autocast_entries.append(
+            AutocastDeviceContext(
+                device_type=_string(item, "device_type"),
+                enabled=_boolean(item, "enabled"),
+                dtype=None if dtype is None else _string_item(dtype, "autocast.dtype"),
+            )
+        )
+    return CallExecutionContext(
+        autocast=tuple(autocast_entries),
+        grad_enabled=_boolean(value, "grad_enabled"),
+        inference_mode=_boolean(value, "inference_mode"),
+    )
+
+
+def _parse_input_fingerprint(value: Mapping[str, Any]) -> InputAttestationFingerprint:
+    """Parse one required physical input fingerprint (``selected_activation_v2``)."""
+
+    device_index = value.get("device_index")
+    return InputAttestationFingerprint(
+        slot_id=_string(value, "slot_id"),
+        byte_digest=_string(value, "byte_digest"),
+        device_type=_string(value, "device_type"),
+        device_index=None if device_index is None else _integer_item(device_index, "device_index"),
+        layout=_string(value, "layout"),
+        sizes=tuple(_integer_item(item, "sizes") for item in _sequence(value, "sizes")),
+        strides=tuple(_integer_item(item, "strides") for item in _sequence(value, "strides")),
+        storage_offset=_integer(value, "storage_offset"),
+        is_contiguous=_boolean(value, "is_contiguous"),
+        is_channels_last=_boolean(value, "is_channels_last"),
+        is_channels_last_3d=_boolean(value, "is_channels_last_3d"),
+        is_conj=_boolean(value, "is_conj"),
+        is_neg=_boolean(value, "is_neg"),
+        tensor_class=_string(value, "tensor_class"),
+        requires_grad=_boolean(value, "requires_grad"),
+        is_inference=_boolean(value, "is_inference"),
+        alignment_class=_integer(value, "alignment_class"),
     )
 
 
@@ -225,6 +321,40 @@ def attach_sparse_run_readiness(
 
     if raw_descriptor is None:
         report = _analysis_only_readiness(trace)
+        _store_readiness(trace, None, report, None)
+        return report
+    capability = raw_descriptor.get("capability")
+    if isinstance(capability, str) and capability in LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS:
+        # Decision G: a legacy v1 descriptor carries no execution-context records
+        # (per-call context, ambient backend context, input fingerprints), and
+        # "absent" is never interpreted as a default. Legacy artifacts load for
+        # analysis with a typed readiness refusal naming the missing context class;
+        # re-capture under v2 is the actionable remedy.
+        diagnostic = _diagnostic(
+            RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+            f"Legacy runnable capability {capability!r} is analysis-only: it "
+            "records no per-call execution context, capture-scoped ambient "
+            "backend context, or physical input fingerprints, and absent "
+            "context is never defaulted. Re-capture and re-save with this "
+            f"TorchLens version to produce {RUNNABLE_TLSPEC_SCHEMA_VERSION!r}.",
+            backend=str(getattr(trace, "backend", "unknown")),
+            detection_stage="descriptor_legacy_version",
+            details=(
+                ("capability", capability),
+                ("supported", RUNNABLE_TLSPEC_SCHEMA_VERSION),
+                ("missing_context_class", "execution_context/ambient_context"),
+            ),
+        )
+        report = ReadinessReport(
+            status=ReadinessStatus.UNAVAILABLE,
+            provider=RunProvider.LOADED_SPARSE,
+            backend=str(getattr(trace, "backend", "unknown")),
+            capability=capability,
+            resolver_records=(),
+            state_sources_available=(),
+            witness_completeness=None,
+            diagnostics=(diagnostic,),
+        )
         _store_readiness(trace, None, report, None)
         return report
     try:
@@ -890,6 +1020,21 @@ def _descriptor_version_diagnostics(
                 details=(("field", field_name), ("supported", str(expected))),
             )
         )
+    activations_layer = descriptor.payload_layers.activations
+    if activations_layer.schema != RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION:
+        diagnostics.append(
+            _diagnostic(
+                RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+                f"Unsupported activation payload schema {activations_layer.schema!r}; "
+                f"runtime supports {RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION!r}.",
+                descriptor=descriptor,
+                detection_stage="descriptor_version_validation",
+                details=(
+                    ("field", "payload_layers.activations.schema"),
+                    ("supported", RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION),
+                ),
+            )
+        )
     nonpersistent_layer = descriptor.payload_layers.nonpersistent_buffers
     has_nonpersistent_slots = any(
         slot.role is TensorSlotRole.BUFFER
@@ -1093,6 +1238,9 @@ def _parse_call(value: Mapping[str, Any]) -> RunnableCallDescriptor:
         parent_call_ids=_string_tuple(value, "parent_call_ids"),
         is_inplace=_boolean(value, "is_inplace"),
         runtime_fingerprint=_string(value, "runtime_fingerprint"),
+        # v2: the per-call execution context is REQUIRED; absence is a parse
+        # failure (legacy artifacts are analysis-only), never "assume disabled".
+        execution_context=_parse_call_execution_context(_mapping(value, "execution_context")),
     )
 
 
@@ -1217,6 +1365,10 @@ def _parse_activation_payload_layer(
     return ActivationPayloadLayerDescriptor(
         present=_boolean(value, "present"),
         schema=cast(Any, _string(value, "schema")),
+        input_fingerprints=tuple(
+            _parse_input_fingerprint(item)
+            for item in _mapping_sequence(value, "input_fingerprints")
+        ),
         members=tuple(
             ActivationPayloadMember(
                 blob_id=_string(item, "blob_id"),
@@ -1268,15 +1420,67 @@ def _parse_diagnostic(value: Mapping[str, Any]) -> RunnableDiagnostic:
     )
 
 
+def _validate_literal_atom_value(kind: "LiteralAtomKind", value: Any) -> None:
+    """Enforce that an atom's JSON value matches its declared ``kind``.
+
+    ROBUSTNESS (secC informational note). ``LiteralAtom`` is a *scalar* grammar
+    node: downstream witness / decode logic assumes an atom carries the scalar its
+    ``kind`` promises (e.g. ``bool(...)`` / ``.get(...)`` on a witness
+    ``observed_value``). The encoder (``_io/runnable.py``) only ever emits one JSON
+    type per kind, but a hand-edited ``manifest.json`` could tag ``kind="int"`` on a
+    list / dict / string, which decodes inertly yet makes scalar-assuming logic
+    inconsistent. Reject the type mismatch at parse so the grammar invariant is
+    upheld. (A genuine container value has its own ``LiteralSequence`` /
+    ``LiteralMapping`` node; it never rides on a scalar atom.) ``bool`` is a subclass
+    of ``int`` in Python, so ``INT`` explicitly excludes ``bool`` (and vice versa) to
+    match the encoder's distinct ``BOOL`` / ``INT`` kinds; JSON ``float`` never
+    parses as ``int``/``bool`` so ``FLOAT`` needs no such exclusion.
+    """
+
+    if kind in (LiteralAtomKind.NONE, LiteralAtomKind.ELLIPSIS):
+        if value is not None:
+            raise ValueError(
+                f"Runnable literal atom kind {kind.value!r} requires a null value, "
+                f"got {type(value).__name__}."
+            )
+    elif kind is LiteralAtomKind.BOOL:
+        if not isinstance(value, bool):
+            raise ValueError(
+                f"Runnable literal atom kind 'bool' requires a bool value, "
+                f"got {type(value).__name__}."
+            )
+    elif kind is LiteralAtomKind.INT:
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError(
+                f"Runnable literal atom kind 'int' requires an int value, "
+                f"got {type(value).__name__}."
+            )
+    elif kind is LiteralAtomKind.FLOAT:
+        if not isinstance(value, float):
+            raise ValueError(
+                f"Runnable literal atom kind 'float' requires a float value, "
+                f"got {type(value).__name__}."
+            )
+    elif kind in (LiteralAtomKind.STR, LiteralAtomKind.NONFINITE_FLOAT):
+        if not isinstance(value, str):
+            raise ValueError(
+                f"Runnable literal atom kind {kind.value!r} requires a str value, "
+                f"got {type(value).__name__}."
+            )
+
+
 def _parse_literal(value: Any) -> NonTensorLiteral:
     """Parse one recursively tagged non-tensor literal."""
 
     mapping = _mapping_item(value, "literal")
     keys = set(mapping)
     if keys == {"kind", "value"}:
+        kind = LiteralAtomKind(_string(mapping, "kind"))
+        atom_value = mapping["value"]
+        _validate_literal_atom_value(kind, atom_value)
         return LiteralAtom(
-            kind=LiteralAtomKind(_string(mapping, "kind")),
-            value=cast(Any, mapping["value"]),
+            kind=kind,
+            value=cast(Any, atom_value),
         )
     if keys == {"qualname"}:
         return LiteralTorchSymbol(qualname=_string(mapping, "qualname"))

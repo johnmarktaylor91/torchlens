@@ -103,13 +103,14 @@
         "unsupported_sites"
       ],
       "properties": {
-        "capability": {"const": "sparse_recorded_taken_path_v1"},
-        "call_recipe": {"const": "non_tensor_args_and_tensor_slots_v1"},
+        "capability": {"const": "sparse_recorded_taken_path_v2"},
+        "call_recipe": {"const": "non_tensor_args_tensor_slots_and_context_v2"},
         "callable_ref_schema": {"const": 1},
         "state_binding": {"const": "module_path_role_v1"},
         "input_binding": {"const": "model_site_io_role_v1"},
         "control_witness": {"const": "scalar_bool_and_arm_entry_v1"},
-        "initializer_policy_version": {"const": "torchlens_role_init_v1"},
+        "initializer_policy_version": {"const": "torchlens_role_init_v2"},
+        "ambient_context": {"type": "object"},
         "payload_layers": {
           "type": "object",
           "required": ["weights", "activations"],
@@ -135,10 +136,11 @@
               "required": ["present", "schema"],
               "properties": {
                 "present": {"type": "boolean"},
-                "schema": {"const": "selected_activation_v1"},
+                "schema": {"const": "selected_activation_v2"},
                 "members": {"type": "array"},
                 "original_input_digests": {"type": "array"},
-                "capture_state_digests": {"type": "array"}
+                "capture_state_digests": {"type": "array"},
+                "input_fingerprints": {"type": "array"}
               }
             }
           }

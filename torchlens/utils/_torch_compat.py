@@ -52,6 +52,13 @@ __all__ = [
     "AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED",
     "HAS_ACCUMULATE_GRAD_CLASS",
     "HAS_AUTOCAST_DEVICE_TYPE_ARG",
+    "HAS_CUDA_MATMUL_TF32",
+    "HAS_CUDNN_FLAGS",
+    "HAS_DETERMINISTIC_ALGORITHMS_QUERY",
+    "HAS_FLOAT32_MATMUL_PRECISION",
+    "HAS_SDP_TOGGLES",
+    "apply_ambient_execution_context",
+    "snapshot_ambient_execution_context",
     "HAS_DEVICE_CONTEXT_DISPATCH",
     "HAS_DEVICE_CONSTRUCTORS",
     "HAS_FUNCTORCH_APIS",
@@ -714,6 +721,11 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_DYNAMO_OPTIMIZED_MODULE",
     "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
+    "HAS_FLOAT32_MATMUL_PRECISION",
+    "HAS_DETERMINISTIC_ALGORITHMS_QUERY",
+    "HAS_CUDA_MATMUL_TF32",
+    "HAS_CUDNN_FLAGS",
+    "HAS_SDP_TOGGLES",
 )
 
 
@@ -1167,3 +1179,271 @@ else:
     def autocast_get_dtype(device_type: str) -> torch.dtype:
         """Return the autocast dtype for ``device_type`` (torch 2.1-2.3 path)."""
         return _legacy_get_autocast_dtype(device_type)
+
+
+# --- r35 decision E: ambient execution-context snapshot/restore ------------------
+#
+# Every knob below is a fragile cross-version torch surface, so it is probed here
+# (the doctrinal home for such probes) behind named ``HAS_*`` capability flags.
+# ``None`` in a snapshot means "this runtime does not expose the control"; every
+# exposed control is recorded affirmatively, including its disabled state.
+
+
+def _probe_float32_matmul_precision() -> bool:
+    """Return whether this torch exposes the float32 matmul precision control."""
+
+    return callable(getattr(torch, "get_float32_matmul_precision", None)) and callable(
+        getattr(torch, "set_float32_matmul_precision", None)
+    )
+
+
+def _probe_deterministic_algorithms_query() -> bool:
+    """Return whether deterministic-algorithms mode is both queryable and settable."""
+
+    return (
+        callable(getattr(torch, "are_deterministic_algorithms_enabled", None))
+        and callable(getattr(torch, "is_deterministic_algorithms_warn_only_enabled", None))
+        and callable(getattr(torch, "use_deterministic_algorithms", None))
+    )
+
+
+def _probe_cuda_matmul_tf32() -> bool:
+    """Return whether the CUDA matmul TF32 flag is exposed."""
+
+    matmul = getattr(getattr(torch.backends, "cuda", None), "matmul", None)
+    return matmul is not None and hasattr(matmul, "allow_tf32")
+
+
+def _probe_cudnn_flags() -> bool:
+    """Return whether the cuDNN backend flag set is exposed."""
+
+    cudnn = getattr(torch.backends, "cudnn", None)
+    return cudnn is not None and all(
+        hasattr(cudnn, name) for name in ("allow_tf32", "deterministic", "benchmark", "enabled")
+    )
+
+
+def _probe_sdp_toggles() -> bool:
+    """Return whether the scaled-dot-product attention backend toggles are exposed."""
+
+    cuda_backend = getattr(torch.backends, "cuda", None)
+    return cuda_backend is not None and all(
+        callable(getattr(cuda_backend, name, None))
+        for name in (
+            "flash_sdp_enabled",
+            "enable_flash_sdp",
+            "mem_efficient_sdp_enabled",
+            "enable_mem_efficient_sdp",
+            "math_sdp_enabled",
+            "enable_math_sdp",
+        )
+    )
+
+
+HAS_FLOAT32_MATMUL_PRECISION: bool = _probe_float32_matmul_precision()
+HAS_DETERMINISTIC_ALGORITHMS_QUERY: bool = _probe_deterministic_algorithms_query()
+HAS_CUDA_MATMUL_TF32: bool = _probe_cuda_matmul_tf32()
+HAS_CUDNN_FLAGS: bool = _probe_cudnn_flags()
+HAS_SDP_TOGGLES: bool = _probe_sdp_toggles()
+
+
+def snapshot_ambient_execution_context() -> dict[str, Any]:
+    """Snapshot the capture-scoped ambient backend execution context (decision E).
+
+    Returns
+    -------
+    dict[str, Any]
+        Plain JSON-safe mapping of every decision-E ambient control. Controls the
+        runtime does not expose are ``None``; exposed controls are recorded
+        affirmatively (explicit ``False``), never omitted.
+    """
+
+    snapshot: dict[str, Any] = {
+        "default_dtype": str(torch.get_default_dtype()),
+        "default_device": str(getattr(torch, "get_default_device", lambda: "cpu")()),
+        "float32_matmul_precision": (
+            str(torch.get_float32_matmul_precision()) if HAS_FLOAT32_MATMUL_PRECISION else None
+        ),
+        "deterministic_algorithms": (
+            bool(torch.are_deterministic_algorithms_enabled())
+            if HAS_DETERMINISTIC_ALGORITHMS_QUERY
+            else None
+        ),
+        "deterministic_algorithms_warn_only": (
+            bool(torch.is_deterministic_algorithms_warn_only_enabled())
+            if HAS_DETERMINISTIC_ALGORITHMS_QUERY
+            else None
+        ),
+        "cuda_matmul_allow_tf32": (
+            bool(torch.backends.cuda.matmul.allow_tf32) if HAS_CUDA_MATMUL_TF32 else None
+        ),
+        "cudnn_allow_tf32": bool(torch.backends.cudnn.allow_tf32) if HAS_CUDNN_FLAGS else None,
+        "cudnn_deterministic": (
+            bool(torch.backends.cudnn.deterministic) if HAS_CUDNN_FLAGS else None
+        ),
+        "cudnn_benchmark": bool(torch.backends.cudnn.benchmark) if HAS_CUDNN_FLAGS else None,
+        "cudnn_enabled": bool(torch.backends.cudnn.enabled) if HAS_CUDNN_FLAGS else None,
+        "flash_sdp_enabled": (
+            bool(torch.backends.cuda.flash_sdp_enabled()) if HAS_SDP_TOGGLES else None
+        ),
+        "mem_efficient_sdp_enabled": (
+            bool(torch.backends.cuda.mem_efficient_sdp_enabled()) if HAS_SDP_TOGGLES else None
+        ),
+        "math_sdp_enabled": (
+            bool(torch.backends.cuda.math_sdp_enabled()) if HAS_SDP_TOGGLES else None
+        ),
+    }
+    return snapshot
+
+
+def apply_ambient_execution_context(values: dict[str, Any]) -> None:
+    """Apply one recorded ambient execution context to the current runtime.
+
+    Parameters
+    ----------
+    values:
+        Mapping in the :func:`snapshot_ambient_execution_context` shape. ``None``
+        entries (producer runtime did not expose the control) are skipped; the
+        caller decides how to treat a recorded value this runtime cannot set.
+
+    Raises
+    ------
+    RuntimeError
+        If a recorded (non-``None``) control cannot be applied on this runtime.
+    """
+
+    def _require(flag: bool, name: str) -> None:
+        if not flag:
+            raise RuntimeError(
+                f"Recorded ambient execution context field {name!r} is not "
+                "supported by this torch runtime."
+            )
+
+    default_dtype = values.get("default_dtype")
+    if default_dtype is not None:
+        dtype = getattr(torch, str(default_dtype).removeprefix("torch."), None)
+        if not isinstance(dtype, torch.dtype):
+            raise RuntimeError(f"Recorded default dtype {default_dtype!r} is unavailable.")
+        if torch.get_default_dtype() is not dtype:
+            torch.set_default_dtype(dtype)
+    default_device = values.get("default_device")
+    if default_device is not None:
+        # Apply only on a REAL difference: ``torch.set_default_device`` installs a
+        # process-level DeviceContext TorchFunctionMode even for the default
+        # "cpu" value, which would perturb subsequent captures (the 2.31.0
+        # meta-device-context regression class). Equality means there is nothing
+        # to restore.
+        current_device = str(getattr(torch, "get_default_device", lambda: "cpu")())
+        if str(default_device) != current_device:
+            if not callable(getattr(torch, "set_default_device", None)):
+                raise RuntimeError("Recorded default device cannot be restored on this runtime.")
+            torch.set_default_device(torch.device(str(default_device)))
+    deterministic = values.get("deterministic_algorithms")
+    if deterministic is not None:
+        _require(HAS_DETERMINISTIC_ALGORITHMS_QUERY, "deterministic_algorithms")
+        warn_only = bool(values.get("deterministic_algorithms_warn_only") or False)
+        torch.use_deterministic_algorithms(bool(deterministic), warn_only=warn_only)
+    # ``torch.backends.cuda.matmul.allow_tf32`` and
+    # ``torch.set_float32_matmul_precision`` are two views of ONE underlying
+    # control (setting ``allow_tf32=True`` coerces precision to "high"). Apply
+    # the coarse Boolean FIRST so the finer-grained recorded precision value
+    # wins; the pair is snapshotted together, so the final state is coherent.
+    cuda_tf32 = values.get("cuda_matmul_allow_tf32")
+    if cuda_tf32 is not None:
+        _require(HAS_CUDA_MATMUL_TF32, "cuda_matmul_allow_tf32")
+        torch.backends.cuda.matmul.allow_tf32 = bool(cuda_tf32)
+    precision = values.get("float32_matmul_precision")
+    if precision is not None:
+        _require(HAS_FLOAT32_MATMUL_PRECISION, "float32_matmul_precision")
+        torch.set_float32_matmul_precision(str(precision))
+    for field_name, attr in (
+        ("cudnn_allow_tf32", "allow_tf32"),
+        ("cudnn_deterministic", "deterministic"),
+        ("cudnn_benchmark", "benchmark"),
+        ("cudnn_enabled", "enabled"),
+    ):
+        recorded = values.get(field_name)
+        if recorded is None:
+            continue
+        _require(HAS_CUDNN_FLAGS, field_name)
+        setattr(torch.backends.cudnn, attr, bool(recorded))
+    for field_name, setter in (
+        ("flash_sdp_enabled", "enable_flash_sdp"),
+        ("mem_efficient_sdp_enabled", "enable_mem_efficient_sdp"),
+        ("math_sdp_enabled", "enable_math_sdp"),
+    ):
+        recorded = values.get(field_name)
+        if recorded is None:
+            continue
+        _require(HAS_SDP_TOGGLES, field_name)
+        getattr(torch.backends.cuda, setter)(bool(recorded))
+
+
+# --- r35 hon1_4: repr-independent torch structseq field discovery -----------------
+#
+# The ONLY sanctioned sources for ``torch.return_types`` structseq field names are
+# the TYPE's ``__match_args__`` declaration (CPython 3.10+) and, on 3.9, an
+# identity round-trip over the type's member descriptors. ``repr()`` parsing is
+# FORBIDDEN: console wrap position injects phantom fields (``dtype=`` /
+# ``grad_fn=`` at line start), flipping witness verdicts on tensor size alone.
+
+
+def torch_structseq_field_names(value: Any) -> tuple[str, ...]:
+    """Return the exact ordered public field names of a torch structseq value.
+
+    Parameters
+    ----------
+    value:
+        Candidate ``torch.return_types.*`` (PyStructSequence) instance.
+
+    Returns
+    -------
+    tuple[str, ...]
+        The validated ordered field names, or ``()`` when ``value`` is not a
+        fully named torch structseq or its declaration cannot be PROVEN
+        (producers refuse such a structseq; runtimes report typed
+        unavailability -- never a guess, never a repr parse).
+    """
+
+    cls = type(value)
+    if cls.__module__ != "torch.return_types" or not isinstance(value, tuple):
+        return ()
+    n_fields = getattr(value, "n_fields", None)
+    n_unnamed = getattr(value, "n_unnamed_fields", 0)
+    if not isinstance(n_fields, int) or n_fields <= 0 or n_unnamed:
+        return ()
+    match_args = getattr(cls, "__match_args__", None)
+    if (
+        isinstance(match_args, tuple)
+        and len(match_args) == n_fields
+        and len(set(match_args)) == n_fields
+        and all(
+            isinstance(name, str) and name.isidentifier() and not name.startswith("_")
+            for name in match_args
+        )
+    ):
+        return tuple(str(name) for name in match_args)
+    # CPython 3.9 fallback: derive the name -> index bijection by IDENTITY
+    # round-trip over the type's descriptors (``getattr(value, name) is
+    # value[i]`` for exactly one ``i``). Refuse on any ambiguity or
+    # non-bijection -- fail closed, never repr.
+    candidates = [
+        name
+        for name, member in vars(cls).items()
+        if not name.startswith("_") and hasattr(member, "__get__") and not callable(member)
+    ]
+    if len(candidates) != n_fields or len(value) != n_fields:
+        return ()
+    by_index: dict[int, str] = {}
+    for name in candidates:
+        try:
+            attribute = getattr(value, name)
+        except Exception:
+            return ()
+        matches = [index for index in range(n_fields) if value[index] is attribute]
+        if len(matches) != 1 or matches[0] in by_index:
+            return ()
+        by_index[matches[0]] = name
+    if len(by_index) != n_fields:
+        return ()
+    return tuple(by_index[index] for index in range(n_fields))

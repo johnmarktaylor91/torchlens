@@ -312,7 +312,7 @@ def test_n1a_initializes_every_role_deterministically_and_names_every_slot(
     second = prepare_runnable_state(trace, seed=1234)
 
     assert first.state_source is StateSource.RANDOM_INITIALIZATION
-    assert first.initializer_policy_version == "torchlens_role_init_v1"
+    assert first.initializer_policy_version == "torchlens_role_init_v2"
     assert first.seed == 1234
     assert set(first.random_filled_slot_ids) == set(first.slot_values)
     assert torch.equal(global_rng_before, torch.random.get_rng_state())
