@@ -76,6 +76,98 @@ def snapshot_capture_state(model: object) -> Mapping[str, torch.Tensor] | None:
         return MappingProxyType({name: value.detach().clone() for name, value in state.items()})
 
 
+def snapshot_state_alias_topology(model: object) -> Mapping[str, Any] | None:
+    """Capture the live bound-state alias topology BEFORE cloning erases it (r37 corr2-4).
+
+    Walks every named parameter and buffer (``remove_duplicate=False``) of the LIVE
+    model and classifies each pair through the shared absolute-byte relation engine:
+
+    * repeated live Python object identity -> a shared ``alias_group`` (one staged
+      allocation reproduces ``a is b`` semantics -- tied weights, double-registered
+      buffers);
+    * DISTINCT objects whose touched bytes ``overlap`` (or are ``unknown``, including
+      an unprovable footprint) -> a save-time REFUSAL record: the v2 schema has no
+      backing-storage/view recipe, so serializing the pair as independent values
+      would silently change in-place propagation semantics on replay (the corr2-4
+      false-VERIFIED class);
+    * proved-``disjoint`` pairs (including disjoint views of one storage) serialize
+      independently.
+
+    An interval sweep per device address space bounds the pairwise work. Runs under
+    ``pause_logging`` so geometry reads are never captured. Returns ``None`` when the
+    model exposes no named state accessors.
+    """
+
+    from .utils.tensor_utils import tensor_byte_footprint, touched_bytes_relation
+
+    named_parameters = getattr(model, "named_parameters", None)
+    named_buffers = getattr(model, "named_buffers", None)
+    if not callable(named_parameters) or not callable(named_buffers):
+        return None
+    try:
+        entries: list[tuple[str, torch.Tensor]] = [
+            (str(name), value)
+            for name, value in named_parameters(remove_duplicate=False)
+            if isinstance(value, torch.Tensor)
+        ]
+        entries.extend(
+            (str(name), value)
+            for name, value in named_buffers(remove_duplicate=False)
+            if isinstance(value, torch.Tensor)
+        )
+    except Exception:
+        return None
+    groups: dict[str, str] = {}
+    names_by_object: dict[int, list[str]] = {}
+    tensor_by_name: dict[str, torch.Tensor] = {}
+    for name, value in entries:
+        names_by_object.setdefault(id(value), []).append(name)
+        tensor_by_name.setdefault(name, value)
+    for names in names_by_object.values():
+        if len(names) > 1:
+            group_id = f"state_alias:{min(names)}"
+            for name in names:
+                groups[name] = group_id
+    refusals: list[tuple[str, str, str]] = []
+    with _state.pause_logging():
+        footprints: list[tuple[str, Any]] = []
+        for name, value in tensor_by_name.items():
+            footprint = tensor_byte_footprint(value)
+            if footprint is None:
+                # An unprovable footprint cannot participate in any disjointness
+                # proof: fail closed against every other state name (INV-2).
+                refusals.append((name, "<unprovable footprint>", "unknown"))
+                continue
+            if footprint.numel == 0:
+                continue
+            footprints.append((name, footprint))
+        # Interval sweep per device address space: only interval-intersecting pairs
+        # need the exact relation (identity pairs were already grouped above).
+        footprints.sort(key=lambda item: (item[1].device_key, item[1].start_byte))
+        active: list[tuple[str, Any]] = []
+        for name, footprint in footprints:
+            still_active: list[tuple[str, Any]] = []
+            for other_name, other in active:
+                if (
+                    other.device_key == footprint.device_key
+                    and other.end_byte > footprint.start_byte
+                ):
+                    still_active.append((other_name, other))
+            active = still_active
+            for other_name, _other in active:
+                left_tensor = tensor_by_name[name]
+                right_tensor = tensor_by_name[other_name]
+                if left_tensor is right_tensor:
+                    continue  # identity: covered by an alias group
+                relation = touched_bytes_relation(left_tensor, right_tensor)
+                if relation != "disjoint":
+                    refusals.append((other_name, name, relation))
+            active.append((name, footprint))
+    # Plain containers (not MappingProxyType): the snapshot rides on the Trace
+    # ``__dict__`` and must survive pickle/deepcopy like its sibling capture-state.
+    return {"groups": groups, "refusals": tuple(refusals)}
+
+
 def load_trace_state_dict(trace: Any, sd: Mapping[str, Any]) -> None:
     """Validate and atomically stage a user state mapping on a sparse Trace.
 

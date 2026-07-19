@@ -208,7 +208,9 @@ class RunnableErrorCode(str, Enum):
     CONDITIONAL_ARM_DIVERGENCE = "conditional_arm_divergence"
     LOOP_PREDICATE_DIVERGENCE = "loop_predicate_divergence"
     INPUT_ALIAS_TOPOLOGY_UNRESOLVED = "input_alias_topology_unresolved"
+    STATE_ALIAS_TOPOLOGY_UNSUPPORTED = "state_alias_topology_unsupported"
     EXECUTION_CONTEXT_UNAVAILABLE = "execution_context_unavailable"
+    CONTEXT_FIELD_INVALID = "context_field_invalid"
     NUMERIC_ATTESTATION_FAILED = "numeric_attestation_failed"
     POISONED_RUN_REFUSED = "poisoned_run_refused"
 

@@ -533,6 +533,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # routes) cannot claim complete witness coverage for replay either.
         completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
     diagnostics.extend(_preflight_output_contracts(trace, ops))
+    diagnostics.extend(_preflight_state_alias_topology(trace, slot_drafts))
     # r35 corr2_3 note: the torchlens_role_init_v2 totality contract
     # (``initializer_contract_diagnostics``) is enforced typed at runtime when
     # random initialization is actually selected. It is deliberately NOT a
@@ -2814,6 +2815,67 @@ def _is_encodable_model_input_leaf(value: Any) -> bool:
     return True
 
 
+def _preflight_state_alias_topology(
+    trace: Any, slot_drafts: Mapping[str, _SlotDraft]
+) -> list[RunnableDiagnostic]:
+    """Refuse a runnable save whose bound state has unsupported alias topology (corr2-4).
+
+    The capture-time topology snapshot (taken from the LIVE model objects before
+    state cloning) records every DISTINCT-object pair of named state tensors whose
+    touched bytes overlap or whose relation is unprovable. The v2 schema serializes
+    per-name VALUES with no backing-storage/view recipe, so replaying such a pair as
+    independent allocations silently changes in-place propagation semantics (a write
+    through one name no longer reaches the other) -- the corr2-4 false-VERIFIED
+    class. Refusal is filtered to names the descriptor actually binds (plus the
+    required non-persistent-buffer family, which serializes every non-persistent
+    name). Repeated live object IDENTITY is NOT refused: it is reproduced exactly
+    through a shared ``alias_group`` and one staged allocation. Proved-disjoint
+    same-storage views serialize independently and stay admitted.
+    """
+
+    topology = getattr(trace, "_runnable_state_alias_topology", None)
+    if not isinstance(topology, Mapping):
+        return []
+    refusals = topology.get("refusals") or ()
+    if not refusals:
+        return []
+    bound_names = {
+        draft.state_binding.state_dict_name
+        for draft in slot_drafts.values()
+        if draft.state_binding is not None
+    }
+    # The Option-A non-persistent-buffer family serializes every non-persistent
+    # buffer name, so those participate even without a graph slot.
+    persistence = getattr(trace, "_buffer_persistence", {}) or {}
+    nonpersistent_names = {str(name) for name, persistent in persistence.items() if not persistent}
+    used_names = bound_names | nonpersistent_names
+    diagnostics: list[RunnableDiagnostic] = []
+    for left, right, relation in refusals:
+        if left not in used_names and right not in used_names:
+            continue
+        diagnostics.append(
+            _diagnostic(
+                RunnableErrorCode.STATE_ALIAS_TOPOLOGY_UNSUPPORTED,
+                "Bound state tensors "
+                f"{left!r} and {right!r} are distinct objects whose touched bytes "
+                f"{'overlap' if relation == 'overlap' else 'cannot be proven disjoint'}; "
+                "the v2 schema serializes independent per-name values (no "
+                "storage/view recipe), so replay would silently drop in-place "
+                "propagation between them. The runnable save is refused "
+                "(state_alias_topology_unsupported); analysis save levels remain "
+                "available.",
+                detection_stage="producer_state_alias_topology",
+                details=(
+                    ("reason", "state_alias_topology_unsupported"),
+                    ("left_state", left),
+                    ("right_state", right),
+                    ("relation", relation),
+                ),
+            )
+        )
+    return diagnostics
+
+
 def _preflight_output_contracts(trace: Any, ops: Sequence[Any]) -> list[RunnableDiagnostic]:
     """Report structured model outputs whose container contract is unavailable."""
 
@@ -2948,13 +3010,19 @@ def _buffer_binding(trace: Any, op: Any) -> StateSlotBinding | None:
     persistence = getattr(trace, "_buffer_persistence", {}) or {}
     persistent = bool(persistence.get(address, False))
     module_path, _, name = address.rpartition(".")
+    # r37 corr2-4: repeated live object identity (captured before state cloning)
+    # becomes a shared alias group so the loader stages ONE allocation per group and
+    # preserves ``a is b`` / in-place propagation semantics across the tied names.
+    topology = getattr(trace, "_runnable_state_alias_topology", None)
+    groups = topology.get("groups") if isinstance(topology, Mapping) else None
+    alias_group = groups.get(address) if isinstance(groups, Mapping) else None
     return StateSlotBinding(
         module_path=module_path or "self",
         state_dict_name=address,
         semantic_role=_buffer_role(name or address),
         trainable=False,
         persistent=persistent,
-        alias_group=None,
+        alias_group=alias_group,
     )
 
 

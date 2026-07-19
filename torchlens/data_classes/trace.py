@@ -1293,6 +1293,7 @@ class Trace(
         "_pre_forward_rng_states": FieldPolicy.DROP,
         "_runnable_host_rng_consumed": FieldPolicy.DROP,
         "_runnable_capture_ambient": FieldPolicy.DROP,
+        "_runnable_state_alias_topology": FieldPolicy.DROP,
         "_runnable_output_losslessness": FieldPolicy.DROP,
         "_mlx_saved_payloads": FieldPolicy.DROP,
         "_mlx_capture_depth": FieldPolicy.DROP,

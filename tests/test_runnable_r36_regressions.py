@@ -532,7 +532,7 @@ class TestCorr24StateAliasTopology:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 trace.save(tmp_path / "overlap.tlspec", level="runnable", include_weights=True)
-        assert "state_alias_topology_unsupported" in str(excinfo.value)
+        assert "state_alias_topology_unsupported" in str(excinfo.value.fields.get("diagnostics"))
 
     def test_disjoint_views_of_one_storage_still_save_and_verify(self, tmp_path: Path) -> None:
         x = torch.tensor([100.0, 200.0])
