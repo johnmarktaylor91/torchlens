@@ -2245,12 +2245,13 @@ def _escape_witnesses(
         host_escape_has_unattributable_bool,
         host_escape_has_unattributable_opaque,
         host_escape_state_source_names,
-        host_escape_unattributable_values,
     )
 
     witnesses: list[ControlWitness] = []
-    escaped_labels, unresolvable_escape = _host_escape_source_labels(trace)
-    state_names = host_escape_state_source_names(trace)
+    escaped_labels, fallback_state_names, unresolvable_escape = _host_escape_source_labels(trace)
+    # PASS A witnesses the census-recorded state escape names PLUS any leaf-origin
+    # fallback state names (a pruned host-only chain whose value derives from state).
+    state_names = host_escape_state_source_names(trace) | fallback_state_names
     # Fail closed for the genuinely-unwitnessable escape shapes: an orphan-pruned census
     # tensor-op source (:_host_escape_source_labels), an unattributable (``.data`` alias) bool
     # control predicate covered by no net, an unattributable census-invisible
@@ -2272,19 +2273,12 @@ def _escape_witnesses(
     if host_escape_has_raw_pointer(trace):
         incomplete = True
 
+    # r37 INV-1 (hon2_2): the former unattributable-VALUE plumbing is deleted. An
+    # unlabelled-source escape now resolves through the census attribution ladder
+    # (direct state alias / dispatch origins) into ``state_names`` / the raw-label
+    # sets, or fails closed as UNATTRIBUTABLE_OPAQUE -- scalar value equality never
+    # attributes anything (a collision may only ADD witnesses, never discharge).
     ints, floats, sequences = _collect_baked_literal_values(calls)
-    # An UNLABELLED-source non-bool escape (a ``.data`` alias) leaves a scalar value but
-    # no source-op label. Treat those values as baked-literal candidates (internal sink)
-    # AND as capture-state candidates (PASS A). A value matching NEITHER -> INCOMPLETE.
-    unattr_values: set[Any] = {
-        value for value in host_escape_unattributable_values(trace) if not isinstance(value, bool)
-    }
-    unmatched_unattr: set[Any] = set(unattr_values)
-    for escaped in unattr_values:
-        if isinstance(escaped, int):
-            ints.add(escaped)
-        elif isinstance(escaped, float):
-            floats.add(escaped)
     sequence_lengths = {len(item) for item in sequences}
 
     call_id_by_slot: dict[str, str] = {}
@@ -2315,21 +2309,13 @@ def _escape_witnesses(
             continue
         name = binding.state_dict_name
         captured = capture_state.get(name) if isinstance(capture_state, Mapping) else None
-        matched_value: Any = None
-        if isinstance(captured, torch.Tensor) and unmatched_unattr and int(captured.numel()) == 1:
-            try:
-                scalar = captured.detach().item()
-            except (RuntimeError, ValueError, TypeError):
-                scalar = None
-            if not isinstance(scalar, bool) and scalar in unmatched_unattr:
-                matched_value = scalar
         is_named_escape = name in state_names
         # Name-level, not slot-level: a buffer with ANY slot consumed by a traced call is
         # graph-connected (r15-C3), so a normal tracked in-place running-stat update is
         # replayable and stays VERIFIED. A buffer/param read only on an untraced host path has
         # NO bound slot for its name and is still witnessed here (fails closed on changed state).
         is_unbound = slot_id not in bound_slot_ids and name not in bound_state_names
-        if not (is_named_escape or is_unbound or matched_value is not None):
+        if not (is_named_escape or is_unbound):
             continue
         if not isinstance(captured, torch.Tensor):
             # A state slot that must be witnessed but whose capture value is not
@@ -2363,8 +2349,6 @@ def _escape_witnesses(
                 observed_value=observed,
             )
         )
-        if matched_value is not None:
-            unmatched_unattr.discard(matched_value)
 
     # ---- PASS B: non-state tensor-op escape sources (input / internal) ----
     seen_slots: set[str] = set()
@@ -2405,21 +2389,14 @@ def _escape_witnesses(
                 incomplete = True
             continue
         matched = is_escape
-        # Value-equality OPTIMIZATION (secondary): a dual-use internal sink whose exact
-        # value was baked verbatim into a downstream literal (or equals an unattributable
-        # escaped value). Never the ONLY net -- the source-digest witness above is primary.
+        # Value-equality OPTIMIZATION (secondary, ADDITIVE-only per INV-1): a dual-use
+        # internal sink whose exact value was baked verbatim into a downstream literal
+        # gains a witness. A value match may only ADD a witness -- it never attributes
+        # or discharges an escape (hon2_2).
         if not matched and is_sink:
             matched = _value_matches_baked_literal(value, ints, floats, sequences, sequence_lengths)
         if not matched:
             continue
-        matched_value_here: Any = None
-        if unmatched_unattr and int(value.numel()) == 1:
-            try:
-                sink_scalar = value.item()
-            except (RuntimeError, ValueError):
-                sink_scalar = None
-            if not isinstance(sink_scalar, bool) and sink_scalar in unmatched_unattr:
-                matched_value_here = sink_scalar
         try:
             digest = runnable_tensor_byte_digest(value)
         except (RuntimeError, ValueError, TypeError):
@@ -2446,15 +2423,9 @@ def _escape_witnesses(
         seen_slots.add(slot_id)
         if is_escape:
             covered_labels.add(str(op.label))
-        if matched_value_here is not None:
-            unmatched_unattr.discard(matched_value_here)
 
     # ---- Structural invariant: every recorded escape fact is witnessed OR INCOMPLETE ----
     # No net-exclusion may silently drop a recognized escape.
-    if unmatched_unattr:
-        # An unattributable non-bool escape value matched neither a witnessed internal
-        # sink nor a capture-state slot: its source cannot be witnessed -> fail closed.
-        incomplete = True
     if not incomplete:
         from ..backends.torch.completeness_witness import host_escape_bool_source_labels
 
@@ -2473,8 +2444,8 @@ def _escape_witnesses(
     return witnesses, incomplete
 
 
-def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], bool]:
-    """Return final escape-source labels and whether any census label is unresolvable.
+def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], frozenset[str], bool]:
+    """Return final escape-source labels, fallback state names, and unresolvability.
 
     The dispatch census records, for each ``aten._local_scalar_dense`` escape, the
     RAW capture label of the source tensor's producing op (see
@@ -2484,25 +2455,34 @@ def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], bool]:
 
     A census raw label that does NOT resolve to a final op is a real escape whose
     source chain was orphan-PRUNED -- a host-only chain that reached neither an
-    input nor an output (e.g. a param-rooted ``float((w + 1).sum())``). Such a slot
-    can never be digest-witnessed, so the second return value flags it and the
-    caller must fail honest (mark the witness set INCOMPLETE). Silently dropping it
-    (the pre-R10 behavior) left completeness COMPLETE -> false VERIFIED on changed
-    state. The value-equality net and the unbound-state net remain independent
-    safety nets for the resolvable cases.
+    input nor an output (e.g. a param-rooted ``float((w + 1).sum())``). r37
+    mechanism A: such a label first consults the census-recorded LEAF-ORIGIN
+    fallback basis -- the terminal inputs/state the pruned chain's VALUE derives
+    from. A resolvable fallback substitutes an equivalent witness set (every leaf
+    label re-resolved here; leaf state names returned for PASS A); an absent,
+    fail-closed (``None``), or itself-unresolvable fallback flags the third return
+    value and the caller must fail honest (INCOMPLETE). Silently dropping a pruned
+    label (the pre-R10 behavior) left completeness COMPLETE -> false VERIFIED on
+    changed state; discharging it by scalar value equality (the pre-r37 behavior)
+    did the same under a value collision (hon2_2). A RESOLVED bool predicate is a
+    real captured conditional covered by the control-witness net; an unresolved
+    STATE source is covered by the state net and never closes as a pruned chain.
     """
 
     from ..backends.torch.completeness_witness import (
+        host_escape_label_leaf_origins,
         host_escape_source_labels,
         host_escape_state_source_labels,
     )
 
     raw_labels = host_escape_source_labels(trace)
     if not raw_labels:
-        return frozenset(), False
+        return frozenset(), frozenset(), False
     state_labels = host_escape_state_source_labels(trace)
+    leaf_fallbacks = host_escape_label_leaf_origins(trace)
     raw_to_final = getattr(trace, "_raw_to_final_op_labels", {}) or {}
     final_labels: set[str] = set()
+    fallback_state_names: set[str] = set()
     unresolvable = False
     for raw_label in raw_labels:
         if not isinstance(raw_label, str):
@@ -2511,17 +2491,30 @@ def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], bool]:
         final = raw_to_final.get(raw_label)
         if isinstance(final, str):
             final_labels.add(final)
-        elif raw_label not in state_labels:
-            # An unresolved source has no witnessable slot -> fail honest. This covers an
-            # orphan-pruned TENSOR-OP host-only chain (``float((w + 1).sum())``) AND a
-            # PRUNED BOOL control predicate (``bool(self.gate.data > 0.5)`` -- the ``.data``
-            # alias severs the graph link so the gt is orphan-pruned and NO control-witness
-            # net can see it; spec point 3). A RESOLVED bool predicate is a real captured
-            # conditional and the control-witness net covers it, so it is not flagged here.
-            # An unresolved STATE source (a buffer/param read only on the host) is covered
-            # by the state net, so it does not close as a pruned chain here.
+            continue
+        if raw_label in state_labels:
+            continue
+        fallback = leaf_fallbacks.get(raw_label)
+        if fallback is None:
+            # No sound fallback basis (absent, or the census recorded a fail-closed
+            # marker: an unknown/rng-tainted leaf) -> INCOMPLETE.
             unresolvable = True
-    return frozenset(final_labels), unresolvable
+            continue
+        leaf_labels, leaf_states = fallback
+        resolved_leaves: set[str] = set()
+        for leaf_label in leaf_labels:
+            leaf_final = raw_to_final.get(leaf_label)
+            if isinstance(leaf_final, str):
+                resolved_leaves.add(leaf_final)
+            else:
+                # A fallback leaf that is itself unwitnessable: fail honest.
+                unresolvable = True
+                resolved_leaves = set()
+                break
+        else:
+            final_labels |= resolved_leaves
+            fallback_state_names |= set(leaf_states)
+    return frozenset(final_labels), frozenset(fallback_state_names), unresolvable
 
 
 UNBOUND_STATE_ESCAPE_SITE_PREFIX = "unbound_state_escape:"

@@ -216,6 +216,8 @@ class _DispatchEvent:
     state_view_accessor: bool = False
     outcome: str = "started"
     exception_type: str | None = None
+    contained_view: bool = False
+    """``aten.as_strided`` whose result byte span is contained in its operand's (r37)."""
 
 
 @dataclass
@@ -310,26 +312,18 @@ an unresolved (orphan-pruned) BOOL predicate from the tensor-op INCOMPLETE gate 
 pruned bool predicate is honestly witnessed (or downgraded) by those other nets.
 """
 
-_HOST_ESCAPE_UNATTRIBUTABLE_VALUES: "weakref.WeakKeyDictionary[Any, set[Any]]" = (
-    weakref.WeakKeyDictionary()
-)
-"""Per-trace scalar values of UNATTRIBUTABLE (unlabelled-source) non-bool escapes.
-
-A ``.data`` alias (or any tensor whose capture label cannot be resolved) that escapes
-to the host via ``aten._local_scalar_dense`` leaves no source-op label to witness by
-slot. But the escape IS a scalar (``_local_scalar_dense`` extracts exactly one value),
-so its numeric value is recorded here. The runnable producer treats these exactly like
-baked literals: an INTERNAL-SINK op whose retained output equals an unattributable
-escape value is the escaped source, so it is witnessed value-free by its capture-time
-digest. This keeps the original input VERIFIED (byte-identical slot) while a changed
-input recomputes different bytes -> UNVERIFIABLE, instead of a false VERIFIED.
-
-BOOL escape sources are NOT recorded anywhere by the census: a ``bool(...)``
-truth-test steering control flow is the control-witness / conditional / loop /
-pruned-RNG net's domain, not the tensor-derived scalar net's. An UNATTRIBUTABLE
-bool escape whose predicate is NOT covered by any of those nets is recorded in
-``_HOST_ESCAPE_UNATTRIBUTABLE_BOOL`` below so the runnable producer can fail closed.
-"""
+# r37 INV-1 (hon2_2): the former ``_HOST_ESCAPE_UNATTRIBUTABLE_VALUES`` table -- scalar
+# values of unlabelled escapes, discharged by value-equality against sinks/state -- is
+# REMOVED. Scalar value equality is not a provenance proof (a colliding constant sink or
+# threshold buffer silently blessed a changed-input run as VERIFIED). Unlabelled escape
+# sources now resolve through the positive attribution ladder in
+# ``_record_escape_source_tensor`` (direct state alias -> dispatch origins) or fail closed.
+#
+# BOOL escape sources are NOT recorded as values anywhere by the census: a ``bool(...)``
+# truth-test steering control flow is the control-witness / conditional / loop /
+# pruned-RNG net's domain, not the tensor-derived scalar net's. An UNATTRIBUTABLE bool
+# escape whose predicate is NOT covered by any of those nets is recorded in
+# ``_HOST_ESCAPE_UNATTRIBUTABLE_BOOL`` below so the runnable producer can fail closed.
 
 INVISIBLE_HOST_ESCAPE_FUNCS = frozenset({"tolist", "numpy", "__array__", "__dlpack__"})
 """Torch-function / protocol METHOD names that hand a captured tensor's value to the
@@ -932,11 +926,67 @@ def host_escape_bool_source_labels(trace: Any) -> frozenset[str]:
     return frozenset(labels) if labels else frozenset()
 
 
-def host_escape_unattributable_values(trace: Any) -> frozenset[Any]:
-    """Return scalar values of unattributable (unlabelled-source) non-bool escapes."""
+_HOST_ESCAPE_LABEL_LEAF_ORIGINS: "weakref.WeakKeyDictionary[Any, dict[str, tuple[frozenset[str], frozenset[str]] | None]]" = weakref.WeakKeyDictionary()
+"""Per-trace fallback witness basis for escape-source labels (r37 mechanism A).
 
-    values = _HOST_ESCAPE_UNATTRIBUTABLE_VALUES.get(trace)
-    return frozenset(values) if values else frozenset()
+Maps each recorded escape-source RAW label to the escape source's propagated LEAF
+origins, split as ``(leaf_labels, leaf_state_names)`` -- or ``None`` when the leaf set
+contained ``unknown``/``rng`` (no sound fallback exists; the producer must fail
+closed). The producer consults this map ONLY for a raw label that does not resolve to
+a final op (an orphan-pruned host-only chain): instead of closing INCOMPLETE, it
+witnesses every leaf label's op digest (PASS B) and leaf state digest (PASS A), which
+is exactly the value basis the pruned chain read from. Every leaf label must itself
+resolve or the escape stays INCOMPLETE -- fallback never weakens, it substitutes an
+equivalent witness basis."""
+
+
+def host_escape_label_leaf_origins(
+    trace: Any,
+) -> Mapping[str, tuple[frozenset[str], frozenset[str]] | None]:
+    """Return the per-raw-label leaf-origin fallback basis for one trace."""
+
+    return dict(_HOST_ESCAPE_LABEL_LEAF_ORIGINS.get(trace, {}))
+
+
+def _record_escape_label_fallback(trace: Any, raw_label: str, source: torch.Tensor) -> None:
+    """Record the leaf-origin fallback basis for one labelled escape source.
+
+    ``None`` (fail-closed marker) wins over any positive entry on collision: if the
+    same label escapes twice and either occurrence is unresolvable, the fallback is
+    unusable for that label.
+    """
+
+    with _state.pause_logging(), internal_scalar_read():
+        leaf = _operand_leaf_origins(trace, source)
+    if _ORIGIN_UNKNOWN in leaf or _ORIGIN_RNG in leaf:
+        entry: tuple[frozenset[str], frozenset[str]] | None = None
+    else:
+        entry = (
+            frozenset(
+                origin[len(_ORIGIN_LABEL_PREFIX) :]
+                for origin in leaf
+                if origin.startswith(_ORIGIN_LABEL_PREFIX)
+            ),
+            frozenset(
+                origin[len(_ORIGIN_STATE_PREFIX) :]
+                for origin in leaf
+                if origin.startswith(_ORIGIN_STATE_PREFIX)
+            ),
+        )
+    table = _HOST_ESCAPE_LABEL_LEAF_ORIGINS.get(trace)
+    if table is None:
+        table = {}
+        _HOST_ESCAPE_LABEL_LEAF_ORIGINS[trace] = table
+    if raw_label in table and table[raw_label] is None:
+        return  # fail-closed marker sticks
+    if entry is None:
+        table[raw_label] = None
+        return
+    previous = table.get(raw_label)
+    if previous is None:
+        table[raw_label] = entry
+    else:
+        table[raw_label] = (previous[0] | entry[0], previous[1] | entry[1])
 
 
 _PRUNED_RNG_CONTROL_LABELS: "weakref.WeakKeyDictionary[Any, set[str]]" = weakref.WeakKeyDictionary()
@@ -1217,10 +1267,6 @@ def _record_host_escape_source(trace: Any, func: Any, args: tuple[Any, ...], res
         _record_escape_source_tensor(trace, source, invisible=False)
 
 
-_AUTOGRAD_LEAF_WALK_LIMIT = 256
-"""Bounded step budget for the param-derived autograd ancestry walk (fail safe on overflow)."""
-
-
 def _escape_storage_ptr(source: torch.Tensor) -> int | None:
     """Return ``source``'s untyped-storage data pointer, read under the internal marker.
 
@@ -1235,63 +1281,23 @@ def _escape_storage_ptr(source: torch.Tensor) -> int | None:
         return None
 
 
-def _autograd_leaf_storage_ptrs(source: torch.Tensor) -> set[int] | None:
-    """Return the storage pointers of the autograd LEAF tensors feeding ``source``, else ``None``.
-
-    Walks ``source.grad_fn`` back to its ``AccumulateGrad`` leaves. Registered params require grad,
-    so a param-derived reduction/transform (``self.w.sum()`` / ``self.w.max()``) keeps a grad_fn
-    chain that bottoms out at the param leaf tensors. Returns ``None`` (unresolvable -> caller fails
-    safe) for a source with NO grad_fn (a detached or no-grad tensor gives no ancestry) and for a
-    walk that overflows the step budget (cannot prove PURE param derivation).
-    """
-
-    grad_fn = getattr(source, "grad_fn", None)
-    if grad_fn is None:
-        # A leaf with no grad_fn: a requires_grad leaf IS the param itself, already resolved by the
-        # direct storage-alias rung; a non-requires-grad leaf yields no autograd ancestry.
-        return None
-    ptrs: set[int] = set()
-    seen: set[int] = set()
-    stack = [grad_fn]
-    steps = 0
-    while stack:
-        if steps >= _AUTOGRAD_LEAF_WALK_LIMIT:
-            return None
-        steps += 1
-        fn = stack.pop()
-        if fn is None or id(fn) in seen:
-            continue
-        seen.add(id(fn))
-        variable = getattr(fn, "variable", None)
-        if isinstance(variable, torch.Tensor):
-            ptr = _escape_storage_ptr(variable)
-            if ptr is None:
-                return None
-            ptrs.add(ptr)
-            continue
-        for next_fn, _ in getattr(fn, "next_functions", ()):
-            if next_fn is not None:
-                stack.append(next_fn)
-    return ptrs or None
-
-
 def _param_derived_addresses(trace: Any, source: torch.Tensor) -> set[str]:
-    """Return the state addresses of every registered PARAMETER that ``source`` reads from.
+    """Return the state address of the registered PARAMETER whose storage ``source`` aliases.
 
-    Resolves a host-escape source to param state slot(s) for the READ-ONLY-PARAM escape witness
-    (r18 direct reads + r19-C derived reads). Two rungs, both fail-safe (return empty on any doubt):
+    DIRECT alias rung only (r18): ``source`` shares a param's storage (``self.w.detach()``,
+    ``self.w[0]``, ``self.w.tolist()``, ``self.w.detach().numpy()``) -- its storage pointer
+    is in the forward-start param index. Resolves for frozen params too (no autograd needed).
 
-    * DIRECT alias -- ``source`` shares a param's storage (``self.w.detach()``, ``self.w[0]``,
-      ``self.w.tolist()``, ``self.w.detach().numpy()``): its storage pointer is in the forward-start
-      param index. Resolves for frozen params too (no autograd needed).
-    * DERIVED read (r19-C) -- ``source`` has its OWN storage (no direct alias) but its autograd
-      ancestry bottoms out ONLY at registered-param leaves (``self.w.sum()``, ``float(self.w.max())``,
-      ``(self.w1 + self.w2).mean()``). Such a chain is a deterministic pure function of param state,
-      so it re-digests identically on replay (VERIFIED on original state, UNVERIFIABLE on changed
-      state). If ANY autograd leaf is NOT a registered param (an INPUT / internal tensor feeds the
-      chain), the source is NOT purely param-derived -> return empty; that chain is graph-connected
-      and witnessed by its own kept op. A host WRITE is caught independently by
-      ``buffer_writes._reconcile_params``, so this read resolution never blesses a mutated param.
+    r37 INV-1: the former DERIVED autograd rung (r19-C -- walk ``grad_fn`` back to
+    ``AccumulateGrad`` leaves and declare purity when every leaf is a registered param) is
+    REMOVED as an attribution mechanism. Measured on torch 2.8 (exp1, hon2_3): a DETACHED
+    or non-differentiable-dtype operand (``x.data``, ``x.detach()``, a bool mask from
+    ``x > 0``, a long index, ``where``'s condition) contributes NO autograd slot at all, so
+    "every leaf is a param" never proves operand totality -- the walk blessed
+    input-contaminated chains as pure-param (false VERIFIED, hon2_3). Pure param-derived
+    reads are recovered ONLY through positive dispatch-origin propagation
+    (:func:`_resolved_dispatch_origins`); no autograd-graph structural argument may ever
+    serve as an operand-totality proof again (INV-1 banned mechanism).
     """
 
     param_storage_addresses = getattr(trace, "_param_storage_addresses", None)
@@ -1300,17 +1306,246 @@ def _param_derived_addresses(trace: Any, source: torch.Tensor) -> set[str]:
     direct = _escape_storage_ptr(source)
     if direct is not None and direct in param_storage_addresses:
         return {str(param_storage_addresses[direct])}
-    leaf_ptrs = _autograd_leaf_storage_ptrs(source)
-    if not leaf_ptrs:
-        return set()
-    resolved: set[str] = set()
-    for ptr in leaf_ptrs:
-        address = param_storage_addresses.get(ptr)
-        if address is None:
-            # A non-param autograd leaf (input / internal): NOT purely param-derived.
-            return set()
-        resolved.add(str(address))
-    return resolved
+    return set()
+
+
+class _TensorOriginRegistry:
+    """Identity-keyed weak map: live tensor object -> propagated origin set.
+
+    ``WeakKeyDictionary`` is unusable for tensors (its ref-equality path invokes the
+    tensor's elementwise ``__eq__``), so entries key on ``id(tensor)`` with a weakref
+    finalizer removing the entry when the tensor dies, and a liveness identity check
+    guarding against id reuse.
+    """
+
+    __slots__ = ("_entries",)
+
+    def __init__(self) -> None:
+        self._entries: dict[int, tuple[Any, frozenset[str], frozenset[str]]] = {}
+
+    def get(self, tensor: torch.Tensor) -> tuple[frozenset[str], frozenset[str]] | None:
+        entry = self._entries.get(id(tensor))
+        if entry is None:
+            return None
+        ref, display, leaf = entry
+        return (display, leaf) if ref() is tensor else None
+
+    def set(self, tensor: torch.Tensor, display: frozenset[str], leaf: frozenset[str]) -> None:
+        key = id(tensor)
+        entries = self._entries
+
+        def _cleanup(dead_ref: Any, key: int = key) -> None:
+            entry = entries.get(key)
+            if entry is not None and entry[0] is dead_ref:
+                del entries[key]
+
+        try:
+            ref = weakref.ref(tensor, _cleanup)
+        except TypeError:
+            return  # non-weakref-able exotic subclass: stays unregistered (-> unknown)
+        entries[key] = (ref, display, leaf)
+
+
+_DISPATCH_TENSOR_ORIGINS: "weakref.WeakKeyDictionary[Any, _TensorOriginRegistry]" = (
+    weakref.WeakKeyDictionary()
+)
+"""Per-trace dispatch-origin ledger: unlabelled tensor -> propagated value origins.
+
+r37 mechanism A (INV-1). Every in-scope aten dispatch registers each tensor RESULT with
+the union of its tensor OPERANDS' origins, so a fresh unlabelled tensor (a ``.data`` /
+``.detach()`` alias, or any raw-dispatch product) carries a positive record of which
+witnessable sources -- capture-labeled ops/inputs (``label:<raw_label>``), registered
+state (``state:<address>``), seeded torch RNG (``rng``) -- its VALUE derives from.
+``unknown`` taints a result whose operand could not be positively resolved; it is never
+omitted. The outer key is the Trace (weak); the inner map is weak-keyed on the live
+tensor objects so entries vanish with them.
+"""
+
+_ORIGIN_UNKNOWN = "unknown"
+_ORIGIN_RNG = "rng"
+_ORIGIN_LABEL_PREFIX = "label:"
+_ORIGIN_STATE_PREFIX = "state:"
+
+_ORIGIN_FLATTEN_DEPTH_LIMIT = 4
+"""Recursion bound for flattening tensor operands/results out of dispatch containers."""
+
+
+def _iter_tensors_deep(value: Any, depth: int = 0) -> Iterator[torch.Tensor]:
+    """Yield every tensor in a dispatch argument/result container, bounded-depth."""
+
+    if isinstance(value, torch.Tensor):
+        yield value
+        return
+    if depth >= _ORIGIN_FLATTEN_DEPTH_LIMIT:
+        return
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _iter_tensors_deep(item, depth + 1)
+    elif isinstance(value, Mapping):
+        for item in value.values():
+            yield from _iter_tensors_deep(item, depth + 1)
+
+
+def _operand_origins(trace: Any, operand: torch.Tensor) -> frozenset[str]:
+    """Resolve ONE dispatch operand to its positive value origins (or ``unknown``).
+
+    Resolution ladder (first hit wins): capture label (a tagged input/op output is
+    witnessable by its own slot digest); registered-state meta/buffer address; the
+    dispatch-origin ledger (a previously registered unlabelled alias/product); direct
+    registered-param storage identity. Anything unresolved is ``unknown`` -- an
+    explicit taint, never an omission (INV-1).
+    """
+
+    label = get_tensor_label(operand)
+    if isinstance(label, str):
+        return frozenset({f"{_ORIGIN_LABEL_PREFIX}{label}"})
+    meta = get_tensor_meta(operand)
+    address = getattr(meta, "address", None) if meta is not None else None
+    if address is not None:
+        return frozenset({f"{_ORIGIN_STATE_PREFIX}{address}"})
+    buffer_address = get_buffer_address(operand)
+    if buffer_address is not None:
+        return frozenset({f"{_ORIGIN_STATE_PREFIX}{buffer_address}"})
+    registry = _DISPATCH_TENSOR_ORIGINS.get(trace)
+    if registry is not None:
+        entry = registry.get(operand)
+        if entry is not None:
+            return entry[0]
+    param_storage_addresses = getattr(trace, "_param_storage_addresses", None)
+    if param_storage_addresses:
+        ptr = _escape_storage_ptr(operand)
+        if ptr is not None and ptr in param_storage_addresses:
+            return frozenset({f"{_ORIGIN_STATE_PREFIX}{param_storage_addresses[ptr]}"})
+    return frozenset({_ORIGIN_UNKNOWN})
+
+
+def _operand_leaf_origins(trace: Any, operand: torch.Tensor) -> frozenset[str]:
+    """Resolve ONE operand to its TERMINAL leaf origins (state / input-or-boundary labels).
+
+    Unlike :func:`_operand_origins` (where an interior op's own label wins -- the best,
+    finest witness), leaf resolution propagates THROUGH interior labeled results down to
+    a basis that survives orphan-pruning: registered state addresses and the labels of
+    tensors that were never produced by an in-scope dispatch (model inputs and other
+    boundary tensors). The producer consumes this basis as the fail-closed FALLBACK
+    witness set for an escape whose direct source label was orphan-pruned (r37
+    mechanism A: "falls back to propagated leaf origins for pruned labels").
+    """
+
+    meta = get_tensor_meta(operand)
+    address = getattr(meta, "address", None) if meta is not None else None
+    if address is not None:
+        return frozenset({f"{_ORIGIN_STATE_PREFIX}{address}"})
+    buffer_address = get_buffer_address(operand)
+    if buffer_address is not None:
+        return frozenset({f"{_ORIGIN_STATE_PREFIX}{buffer_address}"})
+    registry = _DISPATCH_TENSOR_ORIGINS.get(trace)
+    if registry is not None:
+        entry = registry.get(operand)
+        if entry is not None:
+            return entry[1]
+    param_storage_addresses = getattr(trace, "_param_storage_addresses", None)
+    if param_storage_addresses:
+        ptr = _escape_storage_ptr(operand)
+        if ptr is not None and ptr in param_storage_addresses:
+            return frozenset({f"{_ORIGIN_STATE_PREFIX}{param_storage_addresses[ptr]}"})
+    label = get_tensor_label(operand)
+    if isinstance(label, str):
+        # Not a dispatch product: an input / boundary tensor whose label is terminal.
+        return frozenset({f"{_ORIGIN_LABEL_PREFIX}{label}"})
+    return frozenset({_ORIGIN_UNKNOWN})
+
+
+def _operator_is_seeded_rng(func: Any) -> bool:
+    """Return whether a dispatcher overload is torch-tagged nondeterministic-seeded."""
+
+    try:
+        return torch.Tag.nondeterministic_seeded in getattr(func, "tags", ())
+    except (TypeError, RuntimeError):
+        return True  # unreadable tags: treat as RNG (fail closed)
+
+
+def _register_dispatch_result_origins(
+    state: "_WitnessState",
+    func: Any,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any] | None,
+    result: Any,
+) -> None:
+    """Propagate the union of operand origins onto every tensor result (mechanism A).
+
+    A seeded-RNG operator additionally taints its results with the ``rng`` origin so a
+    pruned host read of raw RNG output can never be attributed as a deterministic
+    function of its operands. An in-place operator's mutated unlabelled receiver is
+    covered because the receiver IS a result-aliasing operand: re-registering results
+    updates its entry with the union (its VALUE now depends on all operands).
+    """
+
+    trace = state.trace
+    display_union: set[str] = set()
+    leaf_union: set[str] = set()
+    # ``pause_logging`` + the internal marker: origin resolution reads storage
+    # pointers/labels through torch-function-wrapped accessors; unpaused reads
+    # would be logged as spurious ops mid-forward (shifting raw counters and
+    # staling every label recorded after them) and would trip the escape census.
+    with _state.pause_logging(), internal_scalar_read():
+        for operand in _iter_tensors_deep(args):
+            display_union |= _operand_origins(trace, operand)
+            leaf_union |= _operand_leaf_origins(trace, operand)
+        if kwargs:
+            for operand in _iter_tensors_deep(kwargs):
+                display_union |= _operand_origins(trace, operand)
+                leaf_union |= _operand_leaf_origins(trace, operand)
+    if _operator_is_seeded_rng(func):
+        display_union.add(_ORIGIN_RNG)
+        leaf_union.add(_ORIGIN_RNG)
+    if _operator_base_name(func) == "aten.as_strided" and not _as_strided_result_contained(
+        args, result
+    ):
+        # An out-of-span restride can address storage bytes outside every operand's
+        # witnessed span: its value is NOT a function of the operands (fail closed).
+        display_union.add(_ORIGIN_UNKNOWN)
+        leaf_union.add(_ORIGIN_UNKNOWN)
+    display = frozenset(display_union)
+    leaf = frozenset(leaf_union)
+    registry = _DISPATCH_TENSOR_ORIGINS.get(trace)
+    if registry is None:
+        registry = _TensorOriginRegistry()
+        _DISPATCH_TENSOR_ORIGINS[trace] = registry
+    for produced in _iter_tensors_deep(result):
+        # Labeled results register too: the display ladder still prefers their own
+        # label (finest witness), but the LEAF set must flow through them so a later
+        # orphan-pruned chain can fall back to a surviving witness basis.
+        registry.set(produced, display, leaf)
+
+
+def _resolved_dispatch_origins(
+    trace: Any, source: torch.Tensor
+) -> tuple[set[str], set[str]] | None:
+    """Resolve an unlabelled escape source to positive (labels, state names), or ``None``.
+
+    Returns ``None`` -- the caller MUST fail closed -- when the source's propagated
+    origin set contains ``unknown`` (an operand the census could not attribute) or
+    ``rng`` (raw seeded-RNG output; the torch-RNG nets own that class, and value
+    attribution through it would launder nondeterminism). An empty origin pair is a
+    positive result: the value derives from a literal-only deterministic chain that
+    replays identically, so it needs no witness.
+    """
+
+    with _state.pause_logging(), internal_scalar_read():
+        origins = _operand_origins(trace, source)
+    if _ORIGIN_UNKNOWN in origins or _ORIGIN_RNG in origins:
+        return None
+    labels = {
+        origin[len(_ORIGIN_LABEL_PREFIX) :]
+        for origin in origins
+        if origin.startswith(_ORIGIN_LABEL_PREFIX)
+    }
+    states = {
+        origin[len(_ORIGIN_STATE_PREFIX) :]
+        for origin in origins
+        if origin.startswith(_ORIGIN_STATE_PREFIX)
+    }
+    return labels, states
 
 
 def _record_escape_source_tensor(trace: Any, source: torch.Tensor, *, invisible: bool) -> None:
@@ -1333,18 +1568,18 @@ def _record_escape_source_tensor(trace: Any, source: torch.Tensor, *, invisible:
     is_bool = source.dtype is torch.bool
     label = get_tensor_label(source)
     if not isinstance(label, str):
-        # An UNATTRIBUTABLE escape: a real captured tensor whose value left to the
-        # host but which carries no resolvable capture label (a ``.data`` alias --
-        # its fresh Python tensor object has no TorchLens metadata, and its own
-        # producing op is orphan-pruned).
+        # An UNLABELLED escape source (a ``.data`` alias, a raw-dispatch product):
+        # r37 INV-1 single-exit attribution ladder. Every rung is a POSITIVE
+        # attribution to a witnessable source; the fallthrough IS the fail-closed
+        # record. Banned forever as discharge mechanisms: scalar value equality
+        # (hon2_2), ``.item()`` re-extraction on unknown-arity operands (hon2_1),
+        # and any autograd-graph structural purity argument (hon2_3 / exp1).
         if is_bool:
             # A pruned, unlabelled bool predicate is covered by NO net -> fail closed.
             _HOST_ESCAPE_UNATTRIBUTABLE_BOOL.add(trace)
             return
-        # r19-C: an unlabelled non-bool source that is a read of registered-param storage
-        # (``self.w.tolist()`` directly on a param -- a param carries no capture label) is
-        # witnessed by the param state slot, NOT failed closed. Covers direct param reads and
-        # pruned param-derived reads uniformly with the labelled path below.
+        # Rung 1 (r18): direct registered-param storage alias -- witnessed by the
+        # param state slot (``self.w.tolist()`` directly on a param carries no label).
         param_addresses = _param_derived_addresses(trace, source)
         if param_addresses:
             state_names = _HOST_ESCAPE_STATE_SOURCE_NAMES.get(trace)
@@ -1353,32 +1588,46 @@ def _record_escape_source_tensor(trace: Any, source: torch.Tensor, *, invisible:
                 _HOST_ESCAPE_STATE_SOURCE_NAMES[trace] = state_names
             state_names |= param_addresses
             return
-        if invisible:
-            # A census-invisible conversion of an unlabelled tensor leaves no source
-            # slot and no reliable scalar (may be multi-element): fail closed. (Never
-            # call ``.item()`` here -- it would emit a stray dispatch under the census.)
-            _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE.add(trace)
+        # Rung 2 (r37 mechanism A): positive dispatch-origin propagation. The census
+        # registered this tensor's value origins at its producing dispatch; resolve
+        # them to witnessable raw labels (tensor-op/input sources -> PASS B digest)
+        # and state names (param/buffer sources -> PASS A digest). Multi-element and
+        # scalar sources resolve identically -- no arity assumption anywhere.
+        resolved = _resolved_dispatch_origins(trace, source)
+        if resolved is not None:
+            origin_labels, origin_states = resolved
+            if origin_labels:
+                sources = _HOST_ESCAPE_SOURCE_LABELS.get(trace)
+                if sources is None:
+                    sources = set()
+                    _HOST_ESCAPE_SOURCE_LABELS[trace] = sources
+                sources |= origin_labels
+                # An origin label can itself be an interior (later orphan-pruned)
+                # op label; give each the same leaf fallback basis.
+                for origin_label in origin_labels:
+                    _record_escape_label_fallback(trace, origin_label, source)
+            if origin_states:
+                state_names = _HOST_ESCAPE_STATE_SOURCE_NAMES.get(trace)
+                if state_names is None:
+                    state_names = set()
+                    _HOST_ESCAPE_STATE_SOURCE_NAMES[trace] = state_names
+                state_names |= origin_states
+            # Empty label+state origins: a literal-only deterministic chain whose
+            # baked value replays identically -- positively attributed, witness-free.
             return
-        # A census scalar escape extracts exactly one value; record it so the runnable
-        # producer can match it to the internal-sink op (or capture-state slot) that
-        # produced it and witness that source value-free.
-        try:
-            escaped = source.detach().item()
-        except (RuntimeError, ValueError, TypeError):
-            return
-        if isinstance(escaped, bool):
-            return
-        values = _HOST_ESCAPE_UNATTRIBUTABLE_VALUES.get(trace)
-        if values is None:
-            values = set()
-            _HOST_ESCAPE_UNATTRIBUTABLE_VALUES[trace] = values
-        values.add(escaped)
+        # Fallthrough: no positive attribution -> fail closed (INCOMPLETE). This is
+        # the ONLY other exit; there is no third state (INV-1).
+        _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE.add(trace)
         return
     sources = _HOST_ESCAPE_SOURCE_LABELS.get(trace)
     if sources is None:
         sources = set()
         _HOST_ESCAPE_SOURCE_LABELS[trace] = sources
     sources.add(label)
+    # r37 mechanism A: record the leaf-origin fallback basis NOW (the live tensor and
+    # its propagated origins exist only during capture). Consumed by the producer only
+    # if this label turns out orphan-pruned.
+    _record_escape_label_fallback(trace, label, source)
     # A BOOL predicate source stays in the main set (the pruned-RNG control-flow
     # detector consumes it) but is tracked here so the runnable producer excludes an
     # unresolved bool predicate from the tensor-op INCOMPLETE gate (it is the
@@ -1733,6 +1982,10 @@ class _CompletenessDispatchMode(TorchDispatchMode):
         if event is not None:
             if _dispatch_result_holds_tensor(result):
                 event.outcome = "returned_tensor"
+                if not event.mutates and _operator_base_name(func) == "aten.as_strided":
+                    # Owner-independent: an ``__dlpack__``-wrapper-owned interval is
+                    # not a modeled call, so the audited row must still apply.
+                    event.contained_view = _as_strided_result_contained(args, result)
             else:
                 event.outcome = "returned_host_or_none"
                 if not event.in_replacement_hook:
@@ -1741,9 +1994,13 @@ class _CompletenessDispatchMode(TorchDispatchMode):
         # returning a NON-TENSOR host value from a tensor operand (equal/allclose/
         # is_nonzero/_local_scalar_dense). Recorded after redispatch so the result is
         # observable; still gated to the owner thread / active trace / logging window.
+        # Origin propagation (r37 mechanism A) registers every tensor RESULT with the
+        # union of its operands' origins FIRST, so an escape observed later on an
+        # unlabelled product of this dispatch resolves positively instead of opaquely.
         if in_scope and self.state.record_escapes:
             escape_started = time.perf_counter_ns()
             try:
+                _register_dispatch_result_origins(self.state, func, args, kwargs, result)
                 _record_host_escape_source(self.state.trace, func, args, result)
             finally:
                 self.state.callback_ns += time.perf_counter_ns() - escape_started
@@ -1780,19 +2037,88 @@ def runnable_ledger_facts(trace: Any) -> tuple[Mapping[str, Any], ...]:
     return tuple(_RUNNABLE_LEDGER_FACTS.get(trace, ()))
 
 
-def _finalize_runnable_ledger(state: _WitnessState) -> None:
-    """Discharge every observed dispatch event or record an incomplete fact (r35 I2).
+_PURE_VIEW_DISPATCH_OPERATORS = frozenset({"aten.detach", "aten.alias"})
+"""Non-mutating pure-aliasing operators discharged as an audited ``returned_tensor`` row.
 
-    Discharge rules (owner-accounted; no exception-type or framework-file
-    exemptions): a raised or host-returning subevent whose enclosing wrapper
-    owner became an accounted modeled call is discharged (replaying the owner
-    replays its internal fallback); an exact audited opaque boundary is
-    discharged by its existing narrow row; a host-return witnessed by the exact
-    escape net (``HOST_ESCAPE_OPERATORS``), a ``.data``-accessor state view, and
-    genuine replacement-hook construction are discharged. Everything else is an
-    explicit incomplete fact. This finalize runs only when the forward COMPLETED
-    -- so an undischarged raise means the exception was caught before forward
-    completion: exception-driven control flow the sparse replay cannot witness.
+r37 INV-1 narrow audited row (never a blanket outcome exemption): an unowned
+``aten.detach`` / ``aten.alias`` is the C-level ``.data`` property accessor (on ANY
+tensor, not only registered buffers). The view itself moves no value to the host and
+computes no new bytes; every hazard THROUGH it is owned by another disposition -- a
+VALUE escape of the alias is attributed by the escape ladder (origin propagation
+resolves the alias to its base), a MUTATION through the alias is a separate mutating
+dispatch event, and a metadata read is the r31 input-metadata witness's domain. A
+value-PRODUCING unowned op (``aten.add``/``aten.mul``/...) is NOT in this set and
+records an incomplete fact. ``aten.as_strided`` (emitted unowned by C-level DLPack /
+array-interop consumers) is discharged by the SAME argument but ONLY when its result
+span is byte-contained in its operand's span (:func:`_as_strided_event_contained`);
+an out-of-span restride can address storage bytes no witness covers and stays an
+incomplete fact.
+"""
+
+
+def _tensor_abs_byte_span(value: torch.Tensor) -> tuple[int, int] | None:
+    """Absolute (start, end] byte span a strided tensor's elements touch, or ``None``.
+
+    Local minimal span math (min/max stride contributions on absolute addresses);
+    the full shared relation engine lives in ``utils.tensor_utils`` -- this helper
+    only answers CONTAINMENT for the as_strided audited row and fails ``None``-closed.
+    """
+
+    try:
+        with internal_scalar_read():
+            base = int(value.untyped_storage().data_ptr())
+        esize = int(value.element_size())
+        if base == 0 and value.numel() > 0:
+            return None
+        origin = base + int(value.storage_offset()) * esize
+        if value.numel() == 0:
+            return (origin, origin)
+        low = 0
+        high = 0
+        for size, stride in zip(value.shape, value.stride()):
+            contribution = (int(size) - 1) * int(stride)
+            if contribution < 0:
+                low += contribution
+            else:
+                high += contribution
+        return (origin + low * esize, origin + high * esize + esize)
+    except (RuntimeError, AttributeError, TypeError, ValueError, NotImplementedError):
+        return None
+
+
+def _as_strided_result_contained(args: tuple[Any, ...], result: Any) -> bool:
+    """Return whether an ``aten.as_strided`` result's byte span sits inside its operand's."""
+
+    if not args or not isinstance(args[0], torch.Tensor) or not isinstance(result, torch.Tensor):
+        return False
+    with _state.pause_logging():
+        operand_span = _tensor_abs_byte_span(args[0])
+        result_span = _tensor_abs_byte_span(result)
+    if operand_span is None or result_span is None:
+        return False
+    return operand_span[0] <= result_span[0] and result_span[1] <= operand_span[1]
+
+
+def _finalize_runnable_ledger(state: _WitnessState) -> None:
+    """Discharge every observed dispatch event or record an incomplete fact (r35 I2, r37 INV-1).
+
+    EXHAUSTIVE over the outcome vocabulary: every event terminates in exactly one
+    explicit disposition -- accounted modeled call, exact audited opaque boundary,
+    replacement-hook construction, escape-net witness, ``.data``-accessor state view,
+    audited pure-view row, or an explicit incomplete fact. Discharge rules
+    (owner-accounted; no exception-type or framework-file exemptions): a subevent
+    whose enclosing wrapper owner became an accounted modeled call is discharged
+    (replaying the owner replays its internals); a host-return witnessed by the exact
+    escape net (``HOST_ESCAPE_OPERATORS``) is discharged (post-hon2_1 the net is
+    total: every operand records a positive attribution or a fail-closed flag). A
+    ``returned_tensor`` event -- the corr2-1 class -- is NEVER implicitly discharged:
+    an unowned mutating dispatch records ``opaque_side_effect`` and an unowned
+    non-mutating value-producing dispatch records ``unmodeled_tensor_return`` (its
+    product can bake into a later traced call as an unwitnessed constant). An
+    unhandled outcome value is a hard internal error, never a silent pass. This
+    finalize runs only when the forward COMPLETED -- an undischarged raise means the
+    exception was caught before forward completion: exception-driven control flow the
+    sparse replay cannot witness.
     """
 
     facts: list[dict[str, Any]] = []
@@ -1800,6 +2126,11 @@ def _finalize_runnable_ledger(state: _WitnessState) -> None:
         owner = event.owner
         owner_accounted = owner is not None and owner.capture_accounted is True
         audited_opaque = owner is not None and _is_expected_opaque_dispatch(event.operator, owner)
+        # ``_operator_name`` yields overload-qualified names (``aten.equal.default``);
+        # the allowlists hold overload-stripped base names.
+        base_operator = (
+            event.operator.rsplit(".", 1)[0] if event.operator.count(".") >= 2 else event.operator
+        )
         if event.outcome == "raised":
             if owner_accounted or audited_opaque or event.in_replacement_hook:
                 continue
@@ -1816,13 +2147,6 @@ def _finalize_runnable_ledger(state: _WitnessState) -> None:
         elif event.outcome == "returned_host_or_none":
             if owner_accounted or audited_opaque or event.in_replacement_hook:
                 continue
-            # ``_operator_name`` yields overload-qualified names (``aten.equal.default``);
-            # the escape-net allowlist holds overload-stripped base names.
-            base_operator = (
-                event.operator.rsplit(".", 1)[0]
-                if event.operator.count(".") >= 2
-                else event.operator
-            )
             if base_operator in HOST_ESCAPE_OPERATORS:
                 # Witnessed exactly by the tensor->host escape net.
                 continue
@@ -1837,6 +2161,44 @@ def _finalize_runnable_ledger(state: _WitnessState) -> None:
                     "exception_type": None,
                     "mutates": bool(event.mutates),
                 }
+            )
+        elif event.outcome == "returned_tensor":
+            if owner_accounted or audited_opaque or event.in_replacement_hook:
+                continue
+            if event.state_view_accessor:
+                continue
+            if not event.mutates and base_operator in _PURE_VIEW_DISPATCH_OPERATORS:
+                continue
+            if not event.mutates and event.contained_view:
+                # Audited span-contained ``as_strided`` (DLPack/array-interop restride).
+                continue
+            facts.append(
+                {
+                    "kind": "opaque_side_effect" if event.mutates else "unmodeled_tensor_return",
+                    "operator": event.operator,
+                    "owner_wrapper": owner.wrapper_name if owner is not None else None,
+                    "owner_func_name": owner.func_name if owner is not None else None,
+                    "exception_type": None,
+                    "mutates": bool(event.mutates),
+                }
+            )
+        elif event.outcome == "started":
+            # A dispatch that neither returned nor raised cannot exist on a completed
+            # forward; record fail-closed rather than silently passing (INV-1).
+            facts.append(
+                {
+                    "kind": "unclassified_event",
+                    "operator": event.operator,
+                    "owner_wrapper": owner.wrapper_name if owner is not None else None,
+                    "owner_func_name": owner.func_name if owner is not None else None,
+                    "exception_type": None,
+                    "mutates": bool(event.mutates),
+                }
+            )
+        else:  # pragma: no cover - unreachable by construction
+            raise AssertionError(
+                f"Internal invariant violation: unhandled dispatch outcome {event.outcome!r}; "
+                "every outcome value must have an explicit ledger disposition (INV-1)."
             )
     if facts:
         _RUNNABLE_LEDGER_FACTS.setdefault(state.trace, []).extend(facts)

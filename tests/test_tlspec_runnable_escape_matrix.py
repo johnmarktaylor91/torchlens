@@ -391,18 +391,26 @@ class _DataAliasBoolControl(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         h = x * self.gate
-        # ``.data`` severs the graph link; the gt predicate is orphan-pruned and its
-        # bool source carries no resolvable label -> witnessed by NO net -> INCOMPLETE.
+        # ``.data`` severs the graph link; the gt predicate is orphan-pruned. r37
+        # mechanism A resolves its LEAF origins ({state: gate}) so the predicate is
+        # positively witnessed by the gate's capture-time state digest.
         if bool(self.gate.data > 0.5):
             return h + 10.0
         return h - 10.0
 
 
-def test_pruned_unattributable_bool_is_unverifiable_even_on_original(tmp_path: Path) -> None:
-    """A pruned, unlabelled bool control predicate fails closed on ANY run (documented)."""
+def test_pruned_data_bool_predicate_is_state_witnessed(tmp_path: Path) -> None:
+    """r37: the pruned ``.data`` bool predicate is witnessed by its state leaf origin.
+
+    Pre-r37 this class was a documented fail-closed exception (unattributable ->
+    UNVERIFIABLE even on the original). Origin propagation attributes it positively:
+    the ORIGINAL state re-digests identically -> VERIFIED (honest recovery), while a
+    CHANGED staged state restales the digest -> never VERIFIED (the tripwire half,
+    unchanged).
+    """
     loaded = _save_load(_DataAliasBoolControl(), _STATE_X_VEC, tmp_path)
     original = loaded.run(inputs=_STATE_X_VEC, seed=0, on_divergence="return_diverged")
-    assert original.report.path_faithfulness is not PathFaithfulness.VERIFIED
+    assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     changed = _save_load(_DataAliasBoolControl(), _STATE_X_VEC, tmp_path)
     changed.load_state_dict({"gate": torch.tensor(0.0)})
     changed_result = changed.run(inputs=_STATE_X_VEC, seed=0, on_divergence="return_diverged")

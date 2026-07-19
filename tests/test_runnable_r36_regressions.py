@@ -303,6 +303,9 @@ _CONTAMINATED = (
 )
 
 
+# The probes deliberately float() requires_grad reductions; torch's "converting to
+# scalar" UserWarning is expected noise from the probe shape, not a torchlens signal.
+@pytest.mark.filterwarnings("ignore:Converting a tensor with requires_grad")
 class TestHon23ParamDerivedContamination:
     """No autograd-graph argument may prove operand totality (exp1 miss set pinned)."""
 
@@ -358,6 +361,9 @@ class _RawNonMutating(nn.Module):
         return torch.relu(y)
 
 
+# Raw-dispatch products feeding traced ops legitimately warn about missing provenance;
+# the pinned contract here is the ledger fact + INCOMPLETE ceiling, not the warning.
+@pytest.mark.filterwarnings("ignore:TorchLens found tensor arguments with no graph")
 class TestCorr21EventLedgerExhaustive:
     """Every dispatch outcome -- including ``returned_tensor`` -- has one disposition."""
 
@@ -372,7 +378,13 @@ class TestCorr21EventLedgerExhaustive:
         assert attest == "not_applicable"
 
     def test_raw_nonmutating_aten_is_incomplete_never_verified(self, tmp_path: Path) -> None:
-        """Pre-closed adjacent: the non-mutating twin bakes an unlabelled constant."""
+        """Pre-closed adjacent: the non-mutating twin bakes an unlabelled constant.
+
+        Fail-closed either way: the unattributed product feeding a traced call may be
+        refused at SAVE (``unsupported_tensor_constant``), and when an artifact does
+        save, the ``unmodeled_tensor_return`` ledger fact must ceiling it INCOMPLETE
+        and never VERIFIED.
+        """
 
         from torchlens.backends.torch.completeness_witness import runnable_ledger_facts
 
@@ -381,7 +393,11 @@ class TestCorr21EventLedgerExhaustive:
         facts = runnable_ledger_facts(trace)
         assert any(fact.get("kind") == "unmodeled_tensor_return" for fact in facts)
         path = tmp_path / "raw_nonmut.tlspec"
-        trace.save(path, level="runnable", include_weights=True)
+        try:
+            trace.save(path, level="runnable", include_weights=True)
+        except RunnablePreflightError as exc:
+            assert "unsupported_tensor_constant" in str(exc.fields.get("diagnostics", ""))
+            return
         loaded = tl.load(path)
         descriptor = loaded.runnable_descriptor
         assert descriptor is not None
