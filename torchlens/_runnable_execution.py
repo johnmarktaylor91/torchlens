@@ -1004,6 +1004,77 @@ def _model_input_arity_positions(descriptor: SparseRunDescriptor) -> set[Any]:
     return positions
 
 
+def _runtime_top_level_positions(inputs: Any, positions: set[Any]) -> set[Any] | None:
+    """Enumerate the runtime call's TOP-LEVEL model-input site positions (r42 corr1_1).
+
+    Mirrors :func:`_input_site_value`'s dispatch so the actual top-level site SET aligns with
+    the recorded ``("arg", i)`` / ``("kwarg", key)`` positions. A single bare positional site is
+    NOT exploded (a list/dataclass/dict root is one site, its inner leaves are checked by the
+    tree/literal contracts). Returns ``None`` for an input spelling the standard binder handles
+    (and raises on) itself, so the arity check never double-reports a shape the binder rejects.
+    """
+
+    if _positions_are_mixed(positions):
+        try:
+            args, kwargs = _split_mixed_inputs(inputs)
+        except TypeError:
+            return None
+        return {("arg", index) for index in range(len(args))} | {("kwarg", key) for key in kwargs}
+    kinds = {p[0] for p in positions if isinstance(p, tuple) and len(p) == 2}
+    if kinds == {"arg"}:
+        if len(positions) == 1 and ("arg", 0) in positions:
+            # Single bare positional: the whole ``inputs`` IS the one site (never exploded).
+            return {("arg", 0)}
+        if not isinstance(inputs, Sequence) or isinstance(inputs, (str, bytes)):
+            return None
+        return {("arg", index) for index in range(len(inputs))}
+    if kinds == {"kwarg"}:
+        if not isinstance(inputs, Mapping):
+            return None
+        return {("kwarg", key) for key in inputs}
+    return None
+
+
+def _top_level_input_site_contract_checks(
+    descriptor: SparseRunDescriptor, inputs: Any, positions: set[Any]
+) -> tuple[ContractCheck, ...]:
+    """Reject a runtime call carrying MORE top-level input sites than capture (r42 corr1_1).
+
+    The sparse descriptor records CONCRETE boundary positions and encodes no open-ended variadic
+    contract: a capture of a ``*args`` / ``**kwargs`` model that took two args recorded exactly
+    two concrete sites, so a third runtime arg (or an unrecorded keyword) is outside the recorded
+    taken path -- ignored input, not valid replay, and MUST NOT report VERIFIED. This mirrors the
+    tensor/non-tensor leaf-set contracts at the TOP level: any extra positional index or keyword
+    diverges. Missing sites stay the existing tree/binder contracts' domain.
+    """
+
+    expected = {p for p in positions if isinstance(p, tuple) and len(p) == 2}
+    if not expected:
+        return ()
+    actual = _runtime_top_level_positions(inputs, positions)
+    if actual is None:
+        return ()
+    extra = actual - expected
+    if not extra:
+        return ()
+    return (
+        _contract_check(
+            "input_arity_extra",
+            False,
+            RunnableErrorCode.INPUT_ARITY_EXTRA,
+            "Runtime call carries top-level model-input sites not present at capture; the "
+            "recorded taken path is not valid for extra positional/keyword arguments (including "
+            "for Python variadic signatures whose recorded taken path is a finite concrete site "
+            "set).",
+            details=(
+                ("expected_positions", repr(sorted(expected, key=repr))),
+                ("actual_positions", repr(sorted(actual, key=repr))),
+                ("extra_positions", repr(sorted(extra, key=repr))),
+            ),
+        ),
+    )
+
+
 def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
     """Type-strict, bit-exact equality for recorded vs runtime non-tensor input leaves.
 
@@ -1131,6 +1202,9 @@ def _bind_runtime_inputs(
     values: dict[str, torch.Tensor] = {}
     checks: list[ContractCheck] = []
     positions = _model_input_arity_positions(descriptor)
+    # r42 corr1_1: reject EXTRA top-level args/kwargs (site-set superset) BEFORE any per-site
+    # tensor/literal/metadata check, so an ignored extra input can never be blessed VERIFIED.
+    checks.extend(_top_level_input_site_contract_checks(descriptor, inputs, positions))
     # Torch capture DE-ALIASES model inputs (each input leaf is cloned before the forward,
     # so ``forward(a, b)`` with ``a is b`` is captured as two DISTINCT tensors). The recorded
     # DAG and activation archive therefore reflect distinct-input semantics, and each runtime
@@ -1902,6 +1976,12 @@ def _runtime_nontensor_leaf_paths(root: Any) -> set[tuple[str | int, ...]]:
         if isinstance(value, tuple) and hasattr(value, "_fields"):
             for name in value._fields:
                 _walk(getattr(value, name), (*path, str(name)))
+            return
+        # r42 corr1_2: mirror the capture-side dataclass descent so a tensor-only dataclass
+        # input's runtime non-tensor leaf-path SET matches the recorded (empty) set exactly.
+        if dataclasses.is_dataclass(value) and not isinstance(value, type):
+            for field in dataclasses.fields(value):
+                _walk(getattr(value, field.name), (*path, field.name))
             return
         if isinstance(value, Mapping):
             for key, child in value.items():
@@ -2915,7 +2995,7 @@ def _spec_node_reconstruction_lossy(spec: ContainerSpec) -> bool:
         # The captured type is not loaded, so reconstruction returns a plain namespace / mapping
         # rather than the recorded container type: a lossy substitution, never a false VERIFIED.
         return True
-    return reconstruction_is_lossy_by_type(container_type, captured_names, spec.kind)
+    return reconstruction_is_lossy_by_type(container_type, captured_names, spec.kind, spec)
 
 
 def _fresh_bare_tensor_root(trace: Any) -> bool:
@@ -4808,7 +4888,14 @@ def _decode_torch_symbol(qualname: str) -> Any:
             f"Unsupported torch literal symbol {qualname!r}.",
             code=RunnableErrorCode.UNSUPPORTED_LITERAL.value,
         )
-    symbol = getattr(torch, name, None)
+    # r42 secC_1: ``torch.__dict__.get`` reads module vars() WITHOUT firing ``torch.__getattr__``,
+    # so an attacker qualname (``torch._inductor`` / ``_dynamo`` / ``_export`` / ``onnx`` /
+    # deprecated ``has_cuda``) triggers NO lazy submodule import and invokes NO deprecated
+    # ``replacement()`` -- both unrequested side effects the old ``getattr(torch, name, None)``
+    # ran, one of which could also leak a raw ``ImportError`` outside the typed vocabulary. Every
+    # allowlisted dtype/layout/memory_format/qscheme/``Size`` symbol is a real ``torch.__dict__``
+    # entry and still resolves; everything else returns ``None`` -> the typed refusal below.
+    symbol = torch.__dict__.get(name)
     if symbol is torch.Size or isinstance(symbol, _ALLOWED_TORCH_SYMBOL_TYPES):
         return symbol
     raise RunPreconditionError(

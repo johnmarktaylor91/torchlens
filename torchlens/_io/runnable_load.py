@@ -250,7 +250,9 @@ def _validated_dtype_literal(field: str, raw: str) -> str:
     """Validate a persisted ``torch.<dtype>`` literal against the live dtype table."""
 
     name = raw.removeprefix("torch.")
-    resolved = getattr(torch, name, None)
+    # r42 secC_1: ``torch.__dict__.get`` never fires ``torch.__getattr__`` (no lazy submodule
+    # import, no deprecated-attr call). Every real dtype is a ``torch.__dict__`` entry.
+    resolved = torch.__dict__.get(name)
     if not isinstance(resolved, torch.dtype):
         raise ContextFieldInvalidError(field, f"{raw!r} does not name a torch dtype")
     return raw
@@ -966,7 +968,17 @@ def _getattr_allowlisted(namespace: str, qualname: str) -> Callable[..., Any] | 
         return None
     if root is None:
         return None
-    value = getattr(root, qualname, None)
+    # r42 secC_1: the PEP-562 lazy-submodule ``__getattr__`` hazard (unrequested
+    # ``_inductor``/``_dynamo``/``_export``/``onnx`` import + raw error leak) lives ONLY on the
+    # top-level ``torch`` module. Reading its ``__dict__`` directly never fires ``__getattr__``
+    # and still resolves every real ``torch.*`` callable. Class roots (``torch.Tensor`` /
+    # ``_VariableFunctions``) and the proxying ``torch._VF`` module expose inherited/proxied
+    # callables only through ``getattr`` and carry no lazy-import hazard (their enumerated
+    # namespaces are fixed, never attacker-chosen lazy submodules).
+    if root is torch:
+        value = torch.__dict__.get(qualname)
+    else:
+        value = getattr(root, qualname, None)
     return cast(Callable[..., Any], value) if callable(value) else None
 
 

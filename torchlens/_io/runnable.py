@@ -2257,6 +2257,7 @@ def _escape_witnesses(
     """
 
     from ..backends.torch.completeness_witness import (
+        host_escape_has_cross_thread_captured_tensor,
         host_escape_has_mutable_writeback,
         host_escape_has_raw_pointer,
         host_escape_has_unattributable_bool,
@@ -2294,6 +2295,12 @@ def _escape_witnesses(
     # / predicate belt) failed to install or restore, so a ``_disable_current_modes()``-region
     # value escape could have gone unwitnessed this forward -- coverage is unknowable, fail closed.
     if host_escape_observer_install_failed(trace):
+        incomplete = True
+    # r43 CLASS 2 (JMT-locked): any NON-OWNER thread that touched a CAPTURED tensor during the
+    # armed forward window is outside the single-owner-thread replay model -- the escape is not
+    # witnessable as a precise source, so the run must fail closed to UNVERIFIABLE + NOT_APPLICABLE
+    # rather than a false VERIFIED. Subsumes the r42 hon2_1/hon2_2/hon2_3/hon2_4 findings.
+    if host_escape_has_cross_thread_captured_tensor(trace):
         incomplete = True
 
     # r37 INV-1 (hon2_2): the former unattributable-VALUE plumbing is deleted. An

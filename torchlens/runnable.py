@@ -198,6 +198,7 @@ class RunnableErrorCode(str, Enum):
     INPUT_SHAPE_MISMATCH = "input_shape_mismatch"
     INPUT_DTYPE_MISMATCH = "input_dtype_mismatch"
     CALL_ARITY_MISMATCH = "call_arity_mismatch"
+    INPUT_ARITY_EXTRA = "input_arity_extra"
     CALL_STRUCTURE_MISMATCH = "call_structure_mismatch"
     OUTPUT_STRUCTURE_MISMATCH = "output_structure_mismatch"
     OUTPUT_SHAPE_MISMATCH = "output_shape_mismatch"
