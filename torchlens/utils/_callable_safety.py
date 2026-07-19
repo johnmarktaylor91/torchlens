@@ -56,6 +56,32 @@ deliberately NOT used (they would wrongly deny ``Tensor.module_load`` /
 ``_overload``); the ``load``-suffixed siblings (``_load_global_deps`` /
 ``_preload_cuda_deps``) are enumerated exactly instead. ``from_numpy`` and
 ``frombuffer`` are pure and stay resolvable (they match none of the patterns).
+
+GENERAL INVARIANT (the denylist-completeness class -- r5/r6 ``from_file`` /
+``resize_``; r26 ``apply_`` / ``map_``; r39 ``map2_`` / ``register_hook``). A callable
+reachable in the allowed namespace is NOT a pure forward op -- and must NOT resolve from
+an untrusted bundle -- if it does ANY of the following, regardless of whether it was
+individually enumerated:
+
+* INVOKES an arbitrary Python callable (elementwise runners ``apply_`` / ``map_`` /
+  ``map2_`` / any future ``map3_``; transforms like ``vmap``; the hook-registration
+  family ``register_hook`` / ``register_post_accumulate_grad_hook`` / any future
+  ``register_*``);
+* REALLOCATES / rebinds tensor storage (``resize_`` / ``resize_as_`` /
+  ``_resize_output_`` / ``_copy_from_and_resize`` -- uninitialized-memory disclosure or
+  storage rebind), or
+* MUTATES process-global torch / interpreter state that OUTLIVES ``Trace.run`` (the
+  ``set_*`` seed/dtype/device/flag setters; the device-backend registration
+  ``_register_device_module``).
+
+Each class is closed by BOTH an audited exact-name set AND a STRUCTURAL pattern guard
+(``(map|apply)\\d*_`` runners; a leading ``register`` after underscore-strip; a
+``resize`` substring; the ``set_`` / ``_set_`` prefix) so a FUTURE sibling gadget is
+denied by shape even when it is never added to a list. Every pattern was verified by
+exhaustive enumeration of the fixed roots (torch / torch.Tensor / torch.nn.functional /
+operator) to catch NO pure forward op; the sole benign structural false-deny is the
+inert functionalization introspection query ``_functionalize_was_inductor_storage_resized``
+(a boolean read, never a captured forward op).
 """
 
 from __future__ import annotations
@@ -334,6 +360,19 @@ _DENIED_CALLABLE_NAMES: frozenset[str] = frozenset(
         "compile",
         "apply_",
         "map_",
+        # r39 (secE-r38-1): the SAME arbitrary-callable-INVOKE class that r26
+        # denied ``apply_`` / ``map_`` for, but MISSED. ``Tensor.map2_`` is the
+        # 3-tensor elementwise Python-callable runner (identical primitive to
+        # ``map_``); ``torch.vmap`` (real module ``torch.func``, reachable as
+        # ``torch.vmap``) is a transform that INVOKES an attacker fn; and
+        # ``Tensor.register_hook`` / ``register_post_accumulate_grad_hook``
+        # register an arbitrary callback fired on backward. Also caught by the
+        # structural ``(map|apply)\d*_`` / leading-``register`` guards below, but
+        # pinned here as the confirmed named misses.
+        "map2_",
+        "vmap",
+        "register_hook",
+        "register_post_accumulate_grad_hook",
         # Belt-and-suspenders: the two serialization entry points, in case a torch
         # version ever re-exports them with ``__module__ == "torch"`` (their real
         # module ``torch.serialization`` is already module-denied).
@@ -397,6 +436,11 @@ _DENIED_STATE_MUTATOR_NAMES: frozenset[str] = frozenset(
         "set_float32_matmul_precision",
         "set_warn_always",
         "set_vital",
+        # r39 (secE-r38-1): registers an arbitrary object as a device-backend
+        # module -- a persistent process-global registry mutation. Its terminal
+        # name does not lead with ``set_`` (it is ``_register_device_module``), so
+        # it is pinned here AND caught by the leading-``register`` structural guard.
+        "_register_device_module",
     }
 )
 
@@ -418,8 +462,58 @@ _STORAGE_UNSAFE_NAMES: frozenset[str] = frozenset(
         "resize_as_sparse_",
         "sparse_resize_",
         "sparse_resize_and_clear_",
+        # r39 (secE-r38-1): private reallocators and the non-underscore deprecated
+        # ``resize`` / ``resize_as`` that escaped the exact set above. All are
+        # covered by the ``resize`` substring guard too; pinned here as the
+        # confirmed named misses. ``_resize_output_`` reallocates an output tensor's
+        # storage; ``_copy_from_and_resize`` reallocates then copies.
+        "_resize_output_",
+        "_copy_from_and_resize",
+        "resize",
+        "resize_as",
     }
 )
+
+# STRUCTURAL close of the arbitrary-callable-INVOKE class (r39, secE-r38-1). The
+# ``_DENIED_CALLABLE_NAMES`` enumeration kept missing siblings of the same
+# elementwise Python-callable RUNNER / callback-REGISTRATION class (r26 denied
+# ``apply_`` / ``map_``; ``map2_`` and the ``register_*hook`` family escaped). These
+# POSITIVE structural rules deny a FUTURE sibling by SHAPE even if never enumerated.
+# Verified by exhaustive enumeration of the fixed roots (2234 callables): NO pure
+# forward op matches either pattern.
+#   * ``(map|apply)\d*_`` -- the elementwise Python-callable runners ``map_`` /
+#     ``map2_`` / ``apply_`` (+ any future ``map3_`` / ``apply2_``). Anchored to the
+#     START (no leading underscore) so the aten sparse op
+#     ``_sparse_semi_structured_apply`` -- NOT a Python-callable runner -- is NOT hit.
+#   * a leading ``register`` (after stripping leading underscores) -- every
+#     ``register_*`` / ``_register_*`` callable reachable in the allowed surface
+#     REGISTERS a callback (``register_hook`` / ``register_post_accumulate_grad_hook``)
+#     or an arbitrary object as global device-backend state
+#     (``_register_device_module``); NONE is a pure forward op.
+_CALLABLE_INVOKER_NAME_STEMS: tuple[str, ...] = ("map", "apply")
+
+
+def _is_callable_invoker_name(name: str) -> bool:
+    """Return whether ``name`` is an arbitrary-Python-callable INVOKER by SHAPE.
+
+    Closes the callable-runner / callback-registration class structurally (r39):
+    the ``(map|apply)\\d*_`` elementwise runners and the ``register_*`` /
+    ``_register_*`` registration family. Verified against the fixed roots to match NO
+    pure forward op (the aten ``_sparse_semi_structured_apply`` is excluded by the
+    START anchor).
+    """
+
+    if name.lstrip("_").startswith("register"):
+        return True
+    for stem in _CALLABLE_INVOKER_NAME_STEMS:
+        if name.startswith(stem):
+            middle = name[len(stem) :]
+            if middle.endswith("_"):
+                digits = middle[:-1]
+                if digits == "" or digits.isdigit():
+                    return True
+    return False
+
 
 # Structural guard for the GLOBAL-STATE-SETTER prefix class (round-6). Verified
 # by EXHAUSTIVE enumeration across every allowlisted root + tensor-op namespace:
@@ -465,12 +559,20 @@ def _is_side_effecting_callable_name(func: Callable[..., Any]) -> bool:
     * process-global-state MUTATORS (round-6): ``set_default_dtype`` /
       ``manual_seed`` / ``set_num_threads`` and the whole ``set_*`` / ``_set_*``
       setter class, caught by exact name AND leading-``set_`` prefix;
-    * storage-unsafe in-place ops (round-6): ``set_`` / ``resize_`` /
-      ``set_source_*`` (info-leak / storage rebind), caught by exact name.
+    * storage-unsafe / REALLOCATING ops (round-6, r39): ``set_`` / ``resize_`` /
+      ``set_source_*`` / ``_resize_output_`` / ``_copy_from_and_resize`` (info-leak /
+      storage rebind), caught by exact name AND a ``resize`` substring guard;
+    * arbitrary-callable INVOKERS (r26, r39): the elementwise runners ``apply_`` /
+      ``map_`` / ``map2_``, the transform ``vmap``, and the callback / device-module
+      registration family ``register_*``, caught by exact name AND the
+      ``(map|apply)\\d*_`` / leading-``register`` structural guard.
 
     The ``set_``-prefix guard is safe against legitimate in-place ELEMENTWISE
     ops (``add_`` / ``mul_`` / ``clamp_`` ...): those TRAIL an underscore but
-    never LEAD with ``set_`` (verified by exhaustive enumeration).
+    never LEAD with ``set_`` (verified by exhaustive enumeration). Likewise the
+    ``resize`` / ``(map|apply)\\d*_`` / ``register`` guards were verified to hit no
+    pure forward op (the pure ``Tensor.is_set_to`` read, e.g., contains ``set_`` only
+    mid-name and is preserved by the leading-only ``set_`` prefix).
     """
 
     name = _terminal_callable_name(func)
@@ -480,7 +582,14 @@ def _is_side_effecting_callable_name(func: Callable[..., Any]) -> bool:
         return True
     if any(name.startswith(prefix) for prefix in _DENIED_STATE_SETTER_PREFIXES):
         return True
+    # r39: structural close of the arbitrary-callable-INVOKE and storage-REALLOC
+    # classes so a future sibling (``map3_`` / a new ``register_*hook`` / a new
+    # ``*_resize_*`` reallocator) is denied by shape even if never enumerated.
+    if _is_callable_invoker_name(name):
+        return True
     lowered = name.lower()
+    if "resize" in lowered:
+        return True
     return any(substring in lowered for substring in _DENIED_NAME_SUBSTRINGS)
 
 
