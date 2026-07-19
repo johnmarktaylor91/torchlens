@@ -126,6 +126,8 @@ class RealEnvironmentSealCounter:
 
         if cache.full_seals != 1:
             raise AssertionError("a real fixture bind must perform exactly one initial full seal")
+        if shared and self.shared_caches:
+            raise AssertionError("the pytest session attempted a second shared real fixture")
         caches = self.shared_caches if shared else self.isolated_caches
         caches.append(cache)
         self.base_seals += cache.full_seals
@@ -141,18 +143,22 @@ class RealEnvironmentSealCounter:
 
         shared_full_seals = sum(cache.full_seals for cache in self.shared_caches)
         isolated_full_seals = sum(cache.full_seals for cache in self.isolated_caches)
+        isolated_rehashes = sum(cache.rehashes for cache in self.isolated_caches)
         return {
             "shared_fixtures": len(self.shared_caches),
             "isolated_fixtures": len(self.isolated_caches),
             "base_seals": self.base_seals,
             "shared_full_seals": shared_full_seals,
             "isolated_full_seals": isolated_full_seals,
+            "isolated_rehashes": isolated_rehashes,
             "observed_full_seals": shared_full_seals + isolated_full_seals,
-            "maximum_full_seals": len(self.shared_caches) + 2 * len(self.isolated_caches),
+            "maximum_full_seals": (
+                len(self.shared_caches) + len(self.isolated_caches) + isolated_rehashes
+            ),
         }
 
     def assert_bounded(self, *, require_shared: bool = False) -> None:
-        """Assert one shared seal and at most one mutation re-seal per isolate.
+        """Assert one shared seal and only recorded mutation re-seals per isolate.
 
         Parameters
         ----------
@@ -168,6 +174,10 @@ class RealEnvironmentSealCounter:
             raise AssertionError("every real fixture must perform exactly one initial base seal")
         if counts["shared_full_seals"] != counts["shared_fixtures"]:
             raise AssertionError("the shared real environment was re-sealed")
+        if counts["isolated_full_seals"] != (
+            counts["isolated_fixtures"] + counts["isolated_rehashes"]
+        ):
+            raise AssertionError("an isolated real fixture performed an unexplained full seal")
         if counts["observed_full_seals"] > counts["maximum_full_seals"]:
             raise AssertionError("real fixture full seals exceeded the session bound")
 
@@ -339,7 +349,7 @@ def _fixture_intent(
         canonical_probe_receipt_bytes(probe_results)
     )
     intent = EnvironmentIntent(
-        name="round19-real",
+        name="core",
         phase=EnvironmentPhase.PYTORCH,
         framework="pytorch",
         description="Round-19 lock-built hardlink-clone release fixture",
@@ -530,7 +540,7 @@ def real_environment_seal_counter() -> Iterator[RealEnvironmentSealCounter]:
 
 
 @pytest.fixture(scope="session")
-def _shared_real_environment_fixture(
+def real_environment_fixture(
     tmp_path_factory: pytest.TempPathFactory,
     real_environment_seal_counter: RealEnvironmentSealCounter,
 ) -> RealEnvironmentFixture:
@@ -538,15 +548,6 @@ def _shared_real_environment_fixture(
 
     root = tmp_path_factory.mktemp("round19-shared-real-environment")
     return _build_real_environment_fixture(root, real_environment_seal_counter, shared=True)
-
-
-@pytest.fixture
-def real_environment_fixture(
-    _shared_real_environment_fixture: RealEnvironmentFixture,
-) -> RealEnvironmentFixture:
-    """Return the session-shared real binding for read-only compositions."""
-
-    return _shared_real_environment_fixture
 
 
 @pytest.fixture
