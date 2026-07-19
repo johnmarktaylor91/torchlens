@@ -58,34 +58,60 @@ deliberately NOT used (they would wrongly deny ``Tensor.module_load`` /
 ``frombuffer`` are pure and stay resolvable (they match none of the patterns).
 
 GENERAL INVARIANT (the denylist-completeness class -- r5/r6 ``from_file`` /
-``resize_``; r26 ``apply_`` / ``map_``; r39 ``map2_`` / ``register_hook``). A callable
-reachable in the allowed namespace is NOT a pure forward op -- and must NOT resolve from
-an untrusted bundle -- if it does ANY of the following, regardless of whether it was
-individually enumerated:
+``resize_``; r26 ``apply_`` / ``map_``; r39 ``map2_`` / ``register_hook``; r41
+``cond`` / ``while_loop`` / ``autocast_increment_nesting``). A callable reachable in the
+allowed namespace is NOT a pure forward op -- and must NOT resolve from an untrusted
+bundle -- if it does ANY of the following, regardless of whether it was individually
+enumerated:
 
-* INVOKES an arbitrary Python callable (elementwise runners ``apply_`` / ``map_`` /
-  ``map2_`` / any future ``map3_``; transforms like ``vmap``; the hook-registration
-  family ``register_hook`` / ``register_post_accumulate_grad_hook`` / any future
-  ``register_*``);
+* INVOKES an arbitrary Python callable -- whether the callable arrives by NAME shape
+  (elementwise runners ``apply_`` / ``map_`` / ``map2_`` / any future ``map3_``;
+  transforms like ``vmap``; the hook-registration family ``register_hook`` /
+  ``register_post_accumulate_grad_hook`` / any future ``register_*``) OR by SIGNATURE
+  shape (a higher-order / callback-taking op whose ``inspect.signature`` exposes a
+  ``Callable``-annotated or callable-named parameter -- ``torch.cond`` / ``while_loop``
+  branch fns, ``handle_torch_function``'s ``public_api``,
+  ``triplet_margin_with_distance_loss``'s ``distance_function``, ``_check_with``'s
+  ``message``, ``_disable_dynamo``'s ``fn``);
 * REALLOCATES / rebinds tensor storage (``resize_`` / ``resize_as_`` /
   ``_resize_output_`` / ``_copy_from_and_resize`` -- uninitialized-memory disclosure or
   storage rebind), or
 * MUTATES process-global torch / interpreter state that OUTLIVES ``Trace.run`` (the
   ``set_*`` seed/dtype/device/flag setters; the device-backend registration
-  ``_register_device_module``).
+  ``_register_device_module``; and the NON-``set_`` global mutators the ``set_`` prefix
+  missed -- the autocast nesting counters ``autocast_increment_nesting`` /
+  ``autocast_decrement_nesting``, the cache flushers ``clear_autocast_cache`` /
+  ``_cufft_clear_plan_cache``, and the cuFFT plan-cache setter
+  ``_cufft_set_plan_cache_max_size``).
 
-Each class is closed by BOTH an audited exact-name set AND a STRUCTURAL pattern guard
-(``(map|apply)\\d*_`` runners; a leading ``register`` after underscore-strip; a
-``resize`` substring; the ``set_`` / ``_set_`` prefix) so a FUTURE sibling gadget is
-denied by shape even when it is never added to a list. Every pattern was verified by
-exhaustive enumeration of the fixed roots (torch / torch.Tensor / torch.nn.functional /
-operator) to catch NO pure forward op; the sole benign structural false-deny is the
-inert functionalization introspection query ``_functionalize_was_inductor_storage_resized``
+Each class is closed by BOTH an audited exact-name set AND a STRUCTURAL guard so a FUTURE
+sibling gadget is denied by shape even when it is never added to a list:
+
+* callable-INVOKE -- the ``(map|apply)\\d*_`` runner / leading-``register`` name guard
+  AND a SIGNATURE guard (``_signature_invokes_callable``: any ``Callable``-annotated or
+  callable-named parameter). The signature guard is what makes r39's "denied by shape
+  even when never enumerated" claim TRUE for the higher-order ops (``cond`` /
+  ``while_loop`` / ...) that carry no ``map`` / ``register`` name marker;
+* storage-REALLOC -- the ``resize`` substring guard;
+* global-MUTATE -- the ``set_`` / ``_set_`` prefix guard PLUS the non-``set_`` verb close
+  (``nesting`` counter; ``clear`` + ``cache`` flush; ``set_plan_cache`` sizer).
+
+Every pattern was verified by exhaustive enumeration of the fixed roots (torch /
+torch.Tensor / torch.nn.functional / operator) to catch NO pure forward op: the
+``nesting`` / ``clear``+``cache`` / ``set_plan_cache`` verbs leave the pure ``nuclear_norm``
+(``clear`` without ``cache``), the pure quantization op
+``_fake_quantize_per_tensor_affine_cachemask_tensor_qparams`` (``cache`` without
+``clear``), the casting ops ``_autocast_to_full_precision`` /
+``_autocast_to_reduced_precision``, and every ``is_*``/``get_*`` autocast + cuFFT getter
+resolvable; the SIGNATURE guard leaves every pure forward op (no pure tensor op takes a
+callable parameter) resolvable. The sole benign structural false-deny remains the inert
+functionalization introspection query ``_functionalize_was_inductor_storage_resized``
 (a boolean read, never a captured forward op).
 """
 
 from __future__ import annotations
 
+import inspect
 import sys
 from typing import Any, Callable
 
@@ -441,6 +467,23 @@ _DENIED_STATE_MUTATOR_NAMES: frozenset[str] = frozenset(
         # name does not lead with ``set_`` (it is ``_register_device_module``), so
         # it is pinned here AND caught by the leading-``register`` structural guard.
         "_register_device_module",
+        # r41 (secE-r40-1): NON-``set_`` process-global mutators the r6 ``set_*``
+        # audit MISSED because none leads with ``set_``. All MUTATE process-global
+        # torch state that OUTLIVES ``Trace.run`` and are directly reachable via the
+        # run-path (zero/low-arg, take no callable). Pinned here as the confirmed
+        # named misses AND closed structurally by ``_is_global_state_mutator_name``
+        # below (``nesting`` / ``clear``+``cache`` / ``set_plan_cache`` verbs).
+        # ``autocast_increment_nesting`` / ``autocast_decrement_nesting`` bump the
+        # process-global autocast nesting counter (NOT restored by the run's
+        # ambient-context snapshot); ``clear_autocast_cache`` / ``_cufft_clear_plan_cache``
+        # flush process-global caches; ``_cufft_set_plan_cache_max_size`` resizes the
+        # global cuFFT plan cache. The ``is_*``/``get_*`` autocast + cuFFT-plan-cache
+        # getters are pure reads and STAY resolvable.
+        "autocast_increment_nesting",
+        "autocast_decrement_nesting",
+        "clear_autocast_cache",
+        "_cufft_clear_plan_cache",
+        "_cufft_set_plan_cache_max_size",
     }
 )
 
@@ -536,6 +579,93 @@ _DENIED_STATE_SETTER_PREFIXES: tuple[str, ...] = (
 )
 
 
+def _is_global_state_mutator_name(name: str) -> bool:
+    """Return whether ``name`` marks a NON-``set_`` process-global-state MUTATOR (r41).
+
+    The r6 ``set_*`` prefix guard closes only the leading-``set_`` global-setter class.
+    It MISSED a sibling family of process-global torch mutators whose names do NOT lead
+    with ``set_`` (secE-r40-1): the autocast nesting counters, the autocast / cuFFT cache
+    flushers, and the ``_cufft_``-prefixed plan-cache SIZER (whose ``set_`` is embedded
+    after the ``_cufft_`` prefix, so ``startswith('set_')`` never fires). These VERB
+    markers were verified by exhaustive enumeration of the fixed roots to have ZERO
+    overlap with the pure forward surface, so a FUTURE sibling mutator is denied by shape:
+
+    * ``nesting`` -- the ``autocast_increment_nesting`` / ``autocast_decrement_nesting``
+      counter mutators (the ONLY two ``nesting`` callables reachable);
+    * ``clear`` AND ``cache`` together -- the cache FLUSHERS ``clear_autocast_cache`` /
+      ``_cufft_clear_plan_cache`` (and the per-tensor
+      ``_clear_non_serializable_cached_data``). Requiring BOTH tokens preserves the pure
+      ``nuclear_norm`` (has ``clear`` via "nu-CLEAR", no ``cache``) and the pure
+      quantization op ``..._cachemask_...`` (has ``cache``, no ``clear``);
+    * ``set_plan_cache`` -- the cuFFT plan-cache SIZER
+      ``_cufft_set_plan_cache_max_size``. The read-only ``get_plan_cache`` GETTERS carry
+      ``get_plan_cache``, so they are NOT hit and STAY resolvable.
+    """
+
+    low = name.lower()
+    if "nesting" in low:
+        return True
+    if "clear" in low and "cache" in low:
+        return True
+    if "set_plan_cache" in low:
+        return True
+    return False
+
+
+# STRUCTURAL close of the arbitrary-callable-INVOKE class by SIGNATURE (r41,
+# secE-r40-1). ``_is_callable_invoker_name`` (below) closes the class by NAME shape
+# (``(map|apply)\\d*_`` / leading-``register``) -- but the higher-order control-flow and
+# callback-taking ops carry NO such name marker (``torch.cond`` / ``torch.while_loop`` /
+# ``handle_torch_function`` / ``triplet_margin_with_distance_loss`` / ``_check_with`` /
+# ``_disable_dynamo``), so r39's "denied by shape even when never enumerated" claim was
+# FALSE for them. They are unified instead by SIGNATURE: each takes an arbitrary Python
+# callable as a parameter. ``_signature_invokes_callable`` denies any op whose
+# ``inspect.signature`` exposes a ``Callable``-annotated parameter OR a callable-NAMED
+# parameter (``fn`` / ``func`` / ``callback`` / ``hook`` / ``if_true`` / ``if_false`` /
+# any ``*_fn`` / ``*_func``). Verified by exhaustive enumeration of the fixed roots to
+# hit NO pure forward op -- no pure tensor op takes a callable parameter. A no-signature
+# C builtin (the vast pure-op surface) yields ``False`` here and falls through to the
+# module gate: this detector can only ADD denials, never rescue.
+_CALLABLE_PARAM_NAMES: frozenset[str] = frozenset(
+    {"fn", "func", "callback", "hook", "closure", "body", "branch", "if_true", "if_false"}
+)
+
+
+def _annotation_takes_callable(annotation: Any) -> bool:
+    """Return whether a parameter annotation denotes a ``Callable`` type."""
+
+    if annotation is inspect.Parameter.empty:
+        return False
+    return "callable" in str(annotation).lower()
+
+
+def _signature_invokes_callable(func: Callable[..., Any]) -> bool:
+    """Return whether ``func``'s signature exposes an arbitrary-Python-callable parameter.
+
+    Closes the higher-order / callback-taking INVOKE class structurally (r41): a torch
+    op that accepts a Python callable is NOT a pure forward op and must not resolve from
+    an untrusted bundle -- it is the same class as the r39-denied ``vmap`` (both invoke an
+    attacker fn), just carrying no ``map`` / ``register`` name marker. Detected by BOTH a
+    ``Callable``-typed annotation AND a callable-conventional parameter NAME, so an op
+    with unannotated callable params (``torch.while_loop(cond_fn, body_fn, ...)``) is
+    still caught. Fails SAFE: a callable with no inspectable signature (the pure C tensor
+    ops) returns ``False`` and is left to the module gate; this guard only ever ADDS a
+    denial.
+    """
+
+    try:
+        signature = inspect.signature(func)
+    except (ValueError, TypeError):
+        return False
+    for parameter in signature.parameters.values():
+        if _annotation_takes_callable(parameter.annotation):
+            return True
+        low = parameter.name.lower()
+        if low in _CALLABLE_PARAM_NAMES or low.endswith("_fn") or low.endswith("_func"):
+            return True
+    return False
+
+
 def _terminal_callable_name(func: Callable[..., Any]) -> str:
     """Return a callable's terminal name (last ``__qualname__`` component fallback)."""
 
@@ -556,9 +686,14 @@ def _is_side_effecting_callable_name(func: Callable[..., Any]) -> bool:
 
     * file-I/O / serialization / import gadgets (round-5): ``torch.from_file`` and
       its audited siblings, plus the structural file/serial/import name guard;
-    * process-global-state MUTATORS (round-6): ``set_default_dtype`` /
+    * process-global-state MUTATORS (round-6, r41): ``set_default_dtype`` /
       ``manual_seed`` / ``set_num_threads`` and the whole ``set_*`` / ``_set_*``
-      setter class, caught by exact name AND leading-``set_`` prefix;
+      setter class, caught by exact name AND leading-``set_`` prefix; PLUS the
+      NON-``set_`` global mutators the ``set_`` prefix missed
+      (``autocast_increment_nesting`` / ``autocast_decrement_nesting`` /
+      ``clear_autocast_cache`` / ``_cufft_clear_plan_cache`` /
+      ``_cufft_set_plan_cache_max_size``), caught by exact name AND the
+      ``nesting`` / ``clear``+``cache`` / ``set_plan_cache`` verb close;
     * storage-unsafe / REALLOCATING ops (round-6, r39): ``set_`` / ``resize_`` /
       ``set_source_*`` / ``_resize_output_`` / ``_copy_from_and_resize`` (info-leak /
       storage rebind), caught by exact name AND a ``resize`` substring guard;
@@ -581,6 +716,11 @@ def _is_side_effecting_callable_name(func: Callable[..., Any]) -> bool:
     if name in _DENIED_STATE_MUTATOR_NAMES or name in _STORAGE_UNSAFE_NAMES:
         return True
     if any(name.startswith(prefix) for prefix in _DENIED_STATE_SETTER_PREFIXES):
+        return True
+    # r41: structural close of the NON-``set_`` process-global mutator class
+    # (``nesting`` counters / ``clear``+``cache`` flushers / ``set_plan_cache`` sizer)
+    # so a future sibling is denied by shape even if never enumerated.
+    if _is_global_state_mutator_name(name):
         return True
     # r39: structural close of the arbitrary-callable-INVOKE and storage-REALLOC
     # classes so a future sibling (``map3_`` / a new ``register_*hook`` / a new
@@ -677,6 +817,14 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
 
     real = _unwrap_capture_wrapper(func)
     if _is_side_effecting_callable_name(real):
+        return False
+    # r41: deny higher-order / callback-taking ops by SIGNATURE shape (``torch.cond`` /
+    # ``while_loop`` / ``handle_torch_function`` / ``triplet_margin_with_distance_loss`` /
+    # ``_check_with`` / ``_disable_dynamo``) -- the same arbitrary-callable-INVOKE class as
+    # the r39-denied ``vmap``, but carrying no ``map`` / ``register`` name marker. Runs
+    # BEFORE the module gate so a callable-taking op whose real module is the allowlisted
+    # ``torch`` namespace cannot slip. Fails safe: no-signature C ops fall through.
+    if _signature_invokes_callable(real):
         return False
     module = str(getattr(real, "__module__", "") or "")
     if module == "":
