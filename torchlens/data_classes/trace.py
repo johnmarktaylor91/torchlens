@@ -1297,6 +1297,7 @@ class Trace(
         "_runnable_host_rng_unreplayable": FieldPolicy.DROP,
         "_runnable_host_rng_channels": FieldPolicy.DROP,
         "_runnable_rng_monitor_uncertain": FieldPolicy.DROP,
+        "_runnable_rng_monitor_uncertain_detail": FieldPolicy.DROP,
         "_runnable_output_losslessness": FieldPolicy.DROP,
         "_mlx_saved_payloads": FieldPolicy.DROP,
         "_mlx_capture_depth": FieldPolicy.DROP,

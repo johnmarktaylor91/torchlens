@@ -744,6 +744,44 @@ def tensor_byte_footprint(value: torch.Tensor) -> Optional[TensorByteFootprint]:
         return None
 
 
+def _footprint_is_dense_interval(footprint: TensorByteFootprint) -> bool:
+    """Return whether a footprint's element starts cover ONE canonical dense byte interval (r39).
+
+    Pure-integer proof (corr2_6): the touched element addresses form a contiguous no-hole,
+    no-overlap grid -- so the WHOLE ``[start_byte, end_byte)`` byte span is fully covered -- iff,
+    after dropping singleton dims and sorting the rest by absolute element stride, the smallest
+    absolute stride is ``1`` and each next equals the running product of the preceding dimension
+    sizes (then multiply by that size). This is the canonical row-major recurrence up to a
+    dimension permutation and independent per-dim sign, so it proves contiguous, transposed/
+    permuted-dense, and mathematically-valid negative-stride layouts alike -- and NOTHING else.
+
+    It is deliberately NOT ``numel * element_size == end_byte - start_byte``: duplicate element
+    addresses plus holes can satisfy that count/span equality without dense coverage. A zero
+    stride on any non-singleton dim (an expanded view) repeats addresses -> not dense -> ``False``.
+    Numel-independent: no enumeration, sound above the enumeration cap.
+    """
+
+    if footprint.numel == 0:
+        return False
+    dims = [
+        (abs(stride), size) for size, stride in zip(footprint.shape, footprint.strides) if size > 1
+    ]
+    if not dims:
+        # All dims singleton: the footprint touches exactly one element -> a trivially dense
+        # (single-element) interval of ``element_size`` bytes.
+        return True
+    if any(abs_stride == 0 for abs_stride, _size in dims):
+        # An expanded (zero-stride) non-singleton dim repeats addresses -> not dense.
+        return False
+    dims.sort(key=lambda item: item[0])
+    expected = 1
+    for abs_stride, size in dims:
+        if abs_stride != expected:
+            return False
+        expected *= size
+    return True
+
+
 def _footprint_stride_gcd(footprint: TensorByteFootprint) -> int:
     """gcd of nonzero element strides over nonsingleton dims (``0`` == one element)."""
 
@@ -845,6 +883,19 @@ def touched_bytes_relation(left: torch.Tensor, right: torch.Tensor) -> AliasRela
                 )
             if (delta_bytes // esize) % combined != 0:
                 return "disjoint"
+    # r39 corr2_6 (the sole relaxation, sequenced after all fail-closed work): when BOTH
+    # footprints are proven canonical dense byte intervals, each fully covers its own
+    # ``[start_byte, end_byte)`` span, so their device-scoped byte intervals already passed the
+    # disjointness check above => the overlapping region is touched by both => ``overlap``,
+    # exactly and numel-independently (no enumeration, sound above the cap). This never converts
+    # an ``unknown`` into a false ``overlap``: it fires ONLY on the provable dense geometry
+    # (contiguous, permuted/transposed, signed-stride), keeping genuinely sparse/expanded
+    # over-cap layouts ``unknown``. Element sizes need not match -- both byte intervals are
+    # individually proved full.
+    if _footprint_is_dense_interval(left_footprint) and _footprint_is_dense_interval(
+        right_footprint
+    ):
+        return "overlap"
     if (
         left_footprint.numel <= ALIAS_ENUMERATION_ELEMENT_CAP
         and right_footprint.numel <= ALIAS_ENUMERATION_ELEMENT_CAP

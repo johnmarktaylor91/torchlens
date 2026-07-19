@@ -94,6 +94,7 @@ from ...ir.container import (
     get_registered_container,
     mapping_extra_instance_state,
     namedtuple_extra_instance_state,
+    namedtuple_type_can_carry_instance_state,
     reconstruction_is_lossy,
 )
 from ...ir.container_registry import (
@@ -1350,9 +1351,17 @@ def _prove_runnable_output_lossless(value: Any) -> tuple[bool, str]:
         fields = torch_fields or tuple(value._fields)
         if type(value).__module__ == "torch.return_types" and not torch_fields:
             return False, "structseq_fields_unprovable"
-        if namedtuple_extra_instance_state(value):
-            # r37 secB_1: non-field instance state the inert rebuild drops --
-            # refuse at save (capability-table rule for the namedtuple kind).
+        if namedtuple_type_can_carry_instance_state(type(value)):
+            # r39 corr1-1: refuse at save any namedtuple TYPE capable of carrying dropped
+            # instance state (an unslotted subclass), even when THIS instance's ``__dict__``
+            # is currently empty -- load cannot see the original instance and secB_1 forbids
+            # trusting a persisted "no extras" flag, so instance-emptiness is unprovable at
+            # load. This is the SAME structural type-level criterion the load-time gate
+            # (``_spec_node_reconstruction_lossy`` -> ``namedtuple_type_can_carry_instance_state``)
+            # applies, closing the producer/consumer disagreement that let an unslotted
+            # subclass save a permanently-UNVERIFIABLE artifact. Plain ``collections.namedtuple``
+            # / ``typing.NamedTuple`` / ``__slots__=()`` subclasses / torch structseq (no
+            # instance ``__dict__``) stay admitted.
             return False, f"namedtuple_instance_state:{type(value).__qualname__}"
         for field_name in fields:
             proved, reason = _prove_runnable_output_lossless(getattr(value, field_name))
@@ -1433,10 +1442,27 @@ def runnable_output_losslessness(
         reason = "duplicate_output_paths"
     if not lossless and not reason:
         reason = "duplicate_output_paths" if duplicate_paths else "fallback_traversal"
+    # r39 corr2_5: an EXPLICIT closed root kind, so the live provider never INFERS a bare
+    # tensor from "one leaf, no spec, no path" -- an opaque set/frozenset/custom container the
+    # traversal fell back on produces that SAME signature. ``bare_tensor_root`` is the single
+    # positive fact the live bare-tensor fast path is gated on; a non-tensor opaque root is
+    # ``opaque`` (never blessed), a proven container is ``supported_container``, and a
+    # tensor-free literal/Size root is ``literal_only``.
+    bare_tensor_root = isinstance(out, torch.Tensor) and not isinstance(out, torch.nn.Parameter)
+    if bare_tensor_root:
+        root_kind = "bare_tensor"
+    elif not lossless:
+        root_kind = "opaque"
+    elif _literal_value_supported(out) or isinstance(out, torch.Size):
+        root_kind = "literal_only"
+    else:
+        root_kind = "supported_container"
     return {
         "lossless": bool(lossless),
         "reason": reason if not lossless else "",
         "root_type": type(out).__qualname__,
+        "root_kind": root_kind,
+        "bare_tensor_root": bool(bare_tensor_root),
         "used_fallback": bool(used_fallback),
         "leaf_count": len(paths),
         "duplicate_paths": bool(duplicate_paths),

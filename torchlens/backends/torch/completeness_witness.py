@@ -399,6 +399,48 @@ If such a property can neither be wrapped nor its source recorded, its use must 
 (INCOMPLETE), never silently VERIFIED.
 """
 
+HOST_VALUE_ESCAPE_METHODS = frozenset(
+    {
+        # Tensor->Python SCALAR numeric protocol: each lowers to ``aten._local_scalar_dense``
+        # under the census, BUT torch's own tensor string formatting (``_tensor_str._str``,
+        # backing ``__repr__``/``__str__``/``print``) runs its body under
+        # ``_disable_current_modes()``, which POPS the census TorchDispatchMode. A method
+        # patch fires regardless of dispatch-mode state (measured E1/E6), so it is the
+        # mode-independent belt that closes the ``str()``/``repr()``/``print()`` blind spot.
+        "item",
+        "__bool__",
+        "__int__",
+        "__float__",
+        "__index__",
+        "__complex__",
+        # Pure tensor->``bool`` predicates: ``torch.equal`` under disabled modes bypasses the
+        # census entirely (measured E6), so the Tensor-method spellings are patched too.
+        "equal",
+        "allclose",
+        "is_nonzero",
+    }
+)
+"""Tensor **methods** that read a captured tensor's VALUE out to the Python host (r39 hon2_1).
+
+These are the mode-independent belt for the aten census: every one is patched on
+``torch.Tensor`` for the duration of one runnable forward and records its tensor operand(s)
+through the SAME ``_record_escape_source_tensor(..., invisible=True)`` attribution ladder as
+the census. Coupled to :data:`HOST_ESCAPE_OPERATORS` by the r39 census<->observer meta-test:
+a one-sided addition (a new census op without a method/module observer, or vice versa) fails
+CI. ``__repr__``/``__str__``/``__format__`` are deliberately NOT patched -- every string/format
+spelling transits patched ``item``/``tolist`` under ``_disable_current_modes`` (E6), so patching
+them is redundant and is pinned by regression tests instead.
+"""
+
+HOST_VALUE_ESCAPE_MODULE_FUNCS = frozenset({"equal", "allclose", "is_nonzero"})
+"""``torch.*`` MODULE predicate spellings of the pure tensor->``bool`` escapes (r39 hon2_1).
+
+The module-level ``equal`` / ``allclose`` / ``is_nonzero`` functions return a raw Python bool
+DIRECTLY from the dispatcher and, under an explicit ``_disable_current_modes()`` region, bypass
+the census (E6). The module functions are wrapped to record every tensor operand as an escape
+source, mirroring the Tensor-method belt.
+"""
+
 INPUT_METADATA_PREDICATE_FUNCS = frozenset({"is_contiguous", "stride", "storage_offset"})
 """Tensor LAYOUT-PREDICATE **methods** whose result on a MODEL INPUT can steer unobserved
 Python control flow (r27-H2, extended r29-C1). Special-cased (memory_format / full-stride
@@ -1136,6 +1178,142 @@ def host_escape_has_raw_pointer(trace: Any) -> bool:
     """Return whether a raw ``Tensor.data_ptr()`` pointer escaped to the host (r15-H1)."""
 
     return trace in _HOST_ESCAPE_RAW_POINTER
+
+
+_HOST_ESCAPE_OBSERVER_FAILED: "weakref.WeakSet[Any]" = weakref.WeakSet()
+"""Traces where a REQUIRED tensor->host value observer could not be installed/restored (r39).
+
+The mode-independent method/module observers (:data:`HOST_VALUE_ESCAPE_METHODS` /
+:data:`HOST_VALUE_ESCAPE_MODULE_FUNCS`) are the belt that closes the ``_disable_current_modes``
+census blind spot. If a required observer cannot be installed or its exact original cannot be
+restored, coverage for that forward is unknowable -- so the capture fails closed to INCOMPLETE
+rather than silently reporting no escape. Optional/absent targets on a given torch version do
+NOT set this (they are classified absent by the version inventory). Presence-only.
+"""
+
+
+def host_escape_observer_install_failed(trace: Any) -> bool:
+    """Return whether a required tensor->host value observer failed to install/restore (r39)."""
+
+    return trace in _HOST_ESCAPE_OBSERVER_FAILED
+
+
+def record_host_string_escape_source(trace: Any, tensor: Any) -> None:
+    """Record a tensor->host VALUE escape via string formatting (r39 hon2_1).
+
+    TorchLens intercepts ``__repr__`` / ``__str__`` / ``_str`` on a captured tensor and formats
+    it internally under ``pause_logging()`` (``print_override`` -> ``.detach().cpu().numpy()``),
+    which extracts the tensor's VALUES into the returned string -- a genuine tensor->host value
+    escape the user can fold back into control flow (the string NaN guard). Because that
+    extraction runs under PAUSED logging, the ordinary ``.numpy()`` / ``.item()`` escape
+    observers are blind to it (they gate on ``_state._logging_enabled``), so the print
+    interception records the SOURCE tensor here through the SAME attribution ladder.
+
+    NOTE (r39): the reconciled plan's E6 measurement of str/repr transitivity was taken on RAW
+    torch, where ``str()`` crosses patched ``item``/``tolist``. Inside a live capture TorchLens
+    intercepts the string path itself, so the fix lives at the interception, not in a
+    ``__repr__``/``__str__`` patch -- the escape still lands UNVERIFIABLE, consistently with how
+    every other value-extraction spelling (``.numpy()`` / ``.tolist()``) ceilings a changed run.
+
+    Gated by the runnable-capture escape-observation flag and skipped for TorchLens's own
+    marked internal reads (``internal_scalar_read``). A no-string forward records nothing.
+    """
+
+    if not getattr(trace, "intervention_ready", False):
+        return
+    if not isinstance(tensor, torch.Tensor):
+        return
+    if _internal_read_active():
+        return
+    _record_escape_source_tensor(trace, tensor, invisible=True)
+
+
+_DISABLE_MODE_SITE_CATEGORIES = frozenset(
+    {
+        # Frozen category allowlist of torch subpackages/modules that legitimately pop
+        # dispatch modes (tensor formatting, dispatch plumbing, tracing/compile stacks,
+        # library/registration, subclass/ref/prim lowering). The mode-independent belt
+        # covers every such transit context; a site OUTSIDE these categories is the only
+        # way the audit surfaces an ``unclassified`` result (-> RED coverage meta-test).
+        "_tensor_str",
+        "_dispatch",
+        "_dynamo",
+        "_export",
+        "_functorch",
+        "_higher_order_ops",
+        "_inductor",
+        "_library",
+        "_subclasses",
+        "_refs",
+        "_prims",
+        "_prims_common",
+        "_meta_registrations",
+        "_decomp",
+        "_ops",
+        "_C",
+        "overrides",
+        "utils",
+        "fx",
+        "nn",
+        "ao",
+        "masked",
+        "nested",
+        "sparse",
+        "distributed",
+        "autograd",
+        "func",
+        "serialization",
+        "onnx",
+        "jit",
+        "_custom_ops",
+        "_guards",
+        "_logging",
+    }
+)
+"""Categories of torch modules that legitimately host ``_disable_current_modes`` sites (r39)."""
+
+
+def audit_disable_current_modes_sites() -> dict[str, tuple[str, ...]]:
+    """Snapshot-audit torch's ``_disable_current_modes`` sites (r39 advisory-but-armed immunizer).
+
+    The mode-independent method/module belt (:data:`HOST_VALUE_ESCAPE_METHODS` /
+    :data:`HOST_VALUE_ESCAPE_MODULE_FUNCS`) closes the census blind spot regardless of WHICH
+    torch region pops the dispatch modes, so this audit is NOT load-bearing -- it is an armed
+    snapshot. It enumerates the ``_disable_current_modes`` sites in the installed torch and
+    classifies each by its top-level containing module against
+    :data:`_DISABLE_MODE_SITE_CATEGORIES`. A site whose category is unknown is ``unclassified``,
+    turning the coverage meta-test RED so a human confirms the new region introduces no
+    value-escape spelling the belt misses.
+
+    Returns
+    -------
+    dict[str, tuple[str, ...]]
+        ``{"classified": (...), "unclassified": (...)}`` module paths (sorted).
+    """
+
+    classified: set[str] = set()
+    unclassified: set[str] = set()
+    try:
+        torch_root = Path(torch.__file__).resolve().parent
+    except Exception:  # pragma: no cover - torch always has a file
+        return {"classified": (), "unclassified": ()}
+    for path in torch_root.rglob("*.py"):
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except (OSError, UnicodeError):  # pragma: no cover - unreadable file
+            continue
+        if "_disable_current_modes(" not in text:
+            continue
+        relative = path.relative_to(torch_root)
+        top = relative.parts[0]
+        category = top[:-3] if top.endswith(".py") else top
+        (classified if category in _DISABLE_MODE_SITE_CATEGORIES else unclassified).add(
+            str(relative)
+        )
+    return {
+        "classified": tuple(sorted(classified)),
+        "unclassified": tuple(sorted(unclassified)),
+    }
 
 
 _COMPLETENESS_WITNESS_FILE = Path(__file__).resolve()
@@ -2558,6 +2736,93 @@ def _make_storage_raw_pointer_wrapper(original: Any, state: _WitnessState) -> An
     return wrapper
 
 
+def _completeness_census_active() -> bool:
+    """Return whether the aten completeness census mode is on the active dispatch stack (r39).
+
+    The mode-independent method/predicate belt is only NEEDED when the census is BLIND -- inside
+    a ``_disable_current_modes()`` region that popped :class:`_CompletenessDispatchMode` off the
+    dispatch stack (measured E6). When the census IS active it observes the escape at its aten
+    dispatch, where the source tensor is fully labelled/attributed; the belt firing there too
+    would record the operand PRE-dispatch (before its buffer/op label exists) and mis-route a
+    legitimately-witnessed read (e.g. a registered-buffer ``if self.gate``) into the fail-closed
+    unattributable gate. So the belt records ONLY when the census is not currently observing.
+    """
+
+    try:
+        from torch.utils._python_dispatch import _get_current_dispatch_mode_stack
+
+        return any(
+            isinstance(mode, _CompletenessDispatchMode)
+            for mode in _get_current_dispatch_mode_stack()
+        )
+    except Exception:  # pragma: no cover - defensive; treat unknown as census-active (skip)
+        return True
+
+
+def _make_host_value_escape_method(original: Any, state: _WitnessState, name: str) -> Any:
+    """Wrap a tensor->host VALUE method to record its tensor operand SOURCES (r39 hon2_1).
+
+    ``item`` / ``__bool__`` / ``__int__`` / ``__float__`` / ``__index__`` / ``__complex__`` and
+    the pure predicates ``equal`` / ``allclose`` / ``is_nonzero`` all read a captured tensor's
+    VALUE out to the host. The aten census sees them through ``aten._local_scalar_dense`` /
+    ``aten.equal`` -- EXCEPT inside torch's own ``_disable_current_modes()`` regions (tensor
+    string formatting; explicit predicate guards), which pop the census TorchDispatchMode
+    (measured E6). This method patch fires regardless of dispatch-mode state, feeding the SAME
+    ``_record_escape_source_tensor(..., invisible=True)`` attribution ladder as the census, so
+    the escape is witnessed by its SOURCE tensor's capture-time digest either way.
+
+    Records ``self`` plus any tensor argument (``equal`` / ``allclose`` take a second tensor
+    operand), gated to the owner thread / active trace / logging window with TorchLens's own
+    marked internal reads excluded. Always calls the exact original unchanged (byte-identical
+    values, goldens, and control flow). The census stays the primary observer; this is the
+    idempotent mode-independent belt (shared source table -> no double count).
+    """
+
+    del name  # recorded uniformly; the operand set determines the source, not the spelling
+
+    def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
+        if (
+            isinstance(self, torch.Tensor)
+            and threading.get_ident() == state.owner_thread_id
+            and _state._logging_enabled
+            and _state._active_trace is state.trace
+            and not _internal_read_active()
+            and not _completeness_census_active()
+        ):
+            _record_escape_source_tensor(state.trace, self, invisible=True)
+            for value in (*args, *kwargs.values()):
+                if isinstance(value, torch.Tensor):
+                    _record_escape_source_tensor(state.trace, value, invisible=True)
+        return original(self, *args, **kwargs)
+
+    return wrapper
+
+
+def _make_host_value_predicate_module_wrapper(original: Any, state: _WitnessState) -> Any:
+    """Wrap ``torch.equal`` / ``torch.allclose`` / ``torch.is_nonzero`` to record operands (r39).
+
+    Like the Tensor-method belt, records every tensor operand ONLY when the aten census is not
+    currently observing (a ``_disable_current_modes()`` region), so it complements -- never
+    duplicates or pre-empts -- the census. Distinct from :func:`_make_module_escape_wrapper`
+    (dlpack export), which is census-INVISIBLE always and therefore records unconditionally.
+    """
+
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        if (
+            threading.get_ident() == state.owner_thread_id
+            and _state._logging_enabled
+            and _state._active_trace is state.trace
+            and not _internal_read_active()
+            and not _completeness_census_active()
+        ):
+            for value in (*args, *kwargs.values()):
+                if isinstance(value, torch.Tensor):
+                    _record_escape_source_tensor(state.trace, value, invisible=True)
+        return original(*args, **kwargs)
+
+    return wrapper
+
+
 def _make_module_escape_wrapper(original: Any, state: _WitnessState) -> Any:
     """Wrap a module-level tensor->host export function to record its tensor argument SOURCE.
 
@@ -2753,6 +3018,27 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
         except (TypeError, AttributeError):
             continue
         originals[name] = original
+    # r39 hon2_1: mode-independent belt for the aten census -- the scalar numeric protocol
+    # (``item``/``__bool__``/``__int__``/``__float__``/``__index__``/``__complex__``) and the
+    # pure predicates (``equal``/``allclose``/``is_nonzero``). These fire regardless of
+    # dispatch-mode state, so a scalar/predicate escape inside torch's own
+    # ``_disable_current_modes()`` (tensor string formatting; explicit guards) still hits a
+    # Python observer. Several names are getset/slot members of the C ``TensorBase`` and NOT in
+    # ``torch.Tensor.__dict__``; setting them installs a SHADOW that restore must DELETE (never
+    # set back to the base slot). A required-observer install failure fails the capture closed.
+    host_value_method_restore: dict[str, tuple[bool, Any]] = {}
+    for name in HOST_VALUE_ESCAPE_METHODS:
+        original = getattr(torch.Tensor, name, None)
+        if original is None or not callable(original):
+            _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
+            continue
+        shadowed = name in torch.Tensor.__dict__
+        try:
+            setattr(torch.Tensor, name, _make_host_value_escape_method(original, state, name))
+        except (TypeError, AttributeError):
+            _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
+            continue
+        host_value_method_restore[name] = (shadowed, original)
     # Module-level zero-copy export C bindings that bypass the Tensor method patch:
     # ``torch.utils.dlpack.to_dlpack`` == ``torch._C._to_dlpack`` never calls
     # ``Tensor.__dlpack__``. Patch the Python-level function (and ``torch._C._to_dlpack`` if the
@@ -2767,6 +3053,25 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
         except (TypeError, AttributeError):
             continue
         module_originals.append((module, func_name, original_func))
+    # r39 hon2_1: the ``torch.*`` MODULE predicate spellings (``torch.equal`` / ``torch.allclose``
+    # / ``torch.is_nonzero``) return a raw Python bool DIRECTLY from the dispatcher and, under an
+    # explicit ``_disable_current_modes()`` region, bypass the census (E6). Record every tensor
+    # operand -- the same shared source table as the Tensor-method belt.
+    for predicate_name in HOST_VALUE_ESCAPE_MODULE_FUNCS:
+        original_predicate = getattr(torch, predicate_name, None)
+        if original_predicate is None or not callable(original_predicate):
+            _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
+            continue
+        try:
+            setattr(
+                torch,
+                predicate_name,
+                _make_host_value_predicate_module_wrapper(original_predicate, state),
+            )
+        except (TypeError, AttributeError):
+            _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
+            continue
+        module_originals.append((torch, predicate_name, original_predicate))
     # Storage-handle raw-pointer accessors (r16-C1): ``UntypedStorage.data_ptr`` /
     # ``TypedStorage.data_ptr`` reach the SAME raw pointer as ``Tensor.data_ptr`` but off the
     # storage object, so the Tensor patch never sees them. Fail closed on a genuine user call.
@@ -2882,6 +3187,16 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
                     delattr(torch.Tensor, prop_name)
             except (TypeError, AttributeError):
                 pass
+        # r39 hon2_1: restore the host-value method belt shadow-aware (delete a shadow that
+        # was not originally in ``torch.Tensor.__dict__``). A restore failure fails closed.
+        for name, (was_shadowed, original) in host_value_method_restore.items():
+            try:
+                if was_shadowed:
+                    setattr(torch.Tensor, name, original)
+                else:
+                    delattr(torch.Tensor, name)
+            except (TypeError, AttributeError):
+                _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
         _check_writeback_watch(state)
 
 

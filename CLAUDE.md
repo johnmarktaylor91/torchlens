@@ -272,10 +272,24 @@ tensor leaves (all-literal trees, literal roots, empty containers) and namedtupl
 registered-container outputs carrying extra per-instance state refuse at save
 (`missing_output_container_contract`; one per-kind capability table governs capture proof, save
 refusal, and load-time recompute). Host nondeterminism beyond the two replayable global engines
--- RNG instances (incl. outside-held NumPy Generators), `SystemRandom`/`secrets`, OS entropy,
-`uuid4`, the `default_rng` factory, and the full clock family incl. `perf_counter` -- ceilings
-every replay permanently (`unverifiable` + `not_applicable`); monitor uncertainty downgrades
-completeness, never reads as no-consumption. Persisted execution-context values validate at parse
+-- RNG instances (incl. outside-held NumPy Generators, witnessed by a chained
+`sys`/`threading.setprofile` receiver classifier + a cheap model-attribute state digest -- NO
+process-wide gc scan; bare `_random.Random`; unseeded-construction entropy via the
+`randbits` alias), `SystemRandom`/`secrets`, OS entropy, `uuid4`, the `default_rng` factory, and
+the full clock family (`time.*` counters, `localtime`/`strftime`/`datetime.now`/`date.today`,
+`os.times`/`getrusage`) -- ceilings every replay permanently (`unverifiable` + `not_applicable`);
+monitor uncertainty (install/chain/restore/inventory failure) downgrades completeness, never reads
+as no-consumption. A realistic pre-existing-thread draw from a persistent numpy generator is
+witnessed by the setprofile classifier / model digest; only an externally-held generator drawn on
+a pre-existing (non-hooked) thread is a documented residual (a benign background thread never
+ceilings a capture). The loaded-sparse and live-refresh
+providers settle through ONE finalizer (identical verdict class): a live opaque-container output
+is `unverifiable` + poisoned (never a wrongly-blessed bare tensor), a parse-refused descriptor
+degrades EVERY payload family to analysis-only with its typed diagnostic intact, and an
+inexecutable divergent input raises `PathDivergenceError` (not `RuntimeSignatureDrift`). Structseq
+reconstruction trust keys on the RESOLUTION AUTHORITY (`spec.type_module == "torch.return_types"` +
+identity re-resolution), never the spoofable `__module__` attribute; a namedtuple TYPE that can
+carry instance state refuses at save even with an empty instance. Persisted execution-context values validate at parse
 time against closed vocabularies (`context_field_invalid`); the recorded default device is entered
 as a scoped `with torch.device(...)` context, never via `set_default_device`.
 
