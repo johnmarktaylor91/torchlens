@@ -1659,7 +1659,9 @@ def _parse_literal(value: Any) -> NonTensorLiteral:
             value=cast(Any, atom_value),
         )
     if keys == {"qualname"}:
-        return LiteralTorchSymbol(qualname=_string(mapping, "qualname"))
+        qualname = _string(mapping, "qualname")
+        _validate_torch_device_literal_shape(qualname)
+        return LiteralTorchSymbol(qualname=qualname)
     if keys == {"start", "stop", "step"}:
         return LiteralSlice(
             start=_parse_literal_slice_component(mapping["start"], "start"),
@@ -1682,6 +1684,27 @@ def _parse_literal(value: Any) -> NonTensorLiteral:
             )
         )
     raise ValueError(f"Unsupported tagged runnable literal fields: {sorted(keys)}")
+
+
+def _validate_torch_device_literal_shape(qualname: str) -> None:
+    """Refuse a malformed ``torch.device(...)`` literal payload at descriptor parse (r41 secC).
+
+    Parse-time belt for the run-time typed wrap in
+    ``torchlens._runnable_execution._decode_torch_symbol``: only the DEVICE literal's
+    payload is validated here -- ``torch.device`` construction is inert (no import, no
+    exec; it succeeds for absent backends such as ``cuda:0`` on a CPU-only host, so it
+    cannot over-refuse) -- while the symbol ALLOWLIST stays exclusively the runtime
+    decoder's job (no duplication). Raising ``ValueError`` routes through
+    ``parse_sparse_run_descriptor``'s existing descriptor-parse refusal, degrading the
+    load to ANALYSIS-ONLY with the typed diagnostic intact (the corr2_3 disposition),
+    never a hard load failure.
+    """
+
+    if qualname.startswith("torch.device(") and qualname.endswith(")"):
+        try:
+            torch.device(qualname[13:-1])
+        except (RuntimeError, ValueError, TypeError) as exc:
+            raise ValueError(f"Malformed torch.device literal payload {qualname!r}: {exc}") from exc
 
 
 def _parse_literal_slice_component(value: Any, field_name: str) -> LiteralAtom:

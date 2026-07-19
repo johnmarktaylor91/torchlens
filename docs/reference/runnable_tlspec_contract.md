@@ -101,7 +101,11 @@ values, sets, arbitrary enums/objects, tensors, callables, classes, import refer
 opaque reprs are outside the grammar and fail preflight with `unsupported_literal`.
 
 `LiteralTorchSymbol.qualname` is resolved only through an explicit non-callable allowlist. It never
-authorizes `importlib`, arbitrary attribute walking, custom modules, or a callable fallback.
+authorizes `importlib`, arbitrary attribute walking, custom modules, or a callable fallback. A
+malformed `torch.device(...)` literal payload raises a typed `RunPreconditionError`
+(`unsupported_literal`) at decode (r41 secC -- never a raw torch error); a malformed device
+qualname additionally refuses at descriptor parse, degrading the load to analysis-only with the
+typed diagnostic intact per the corr2_3 disposition.
 
 ## 3. Callable key and capture-spine coupling
 
@@ -534,7 +538,10 @@ runtime capability fact, not a new class -- as a readiness diagnostic at detecti
 
 `callable_moved_or_renamed` is a successful alias diagnostic. `runtime_signature_drift` rolls back
 but is compatibility failure, not path divergence. `semantic_drift` comes only from the independent
-live-model oracle and never rebaselines an artifact.
+live-model oracle and never rebaselines an artifact. A malformed `torch.device(...)` literal
+payload raises `RunPreconditionError` (`unsupported_literal`) at decode -- every branch of the
+torch-symbol decoder is typed (r41 secC); a malformed device qualname additionally refuses at
+descriptor parse and degrades the load to analysis-only per the corr2_3 disposition.
 
 `RunnableDiagnostic` is exactly:
 
@@ -844,8 +851,11 @@ seed) reports `unverifiable` + `not_applicable`:
    be class-patched, so the profile-hook receiver typing is the mechanism -- an externally-held
    generator drawn on the owner or an in-window helper thread is caught, including the
    hon1_1/corr2_2 cross-thread case), belted by a cheap thread-independent before/after state
-   digest of any generator the MODEL itself holds as a submodule attribute (O(attributes), not a
-   process-wide `gc` scan -- the r39-draft process-wide inventory was removed for cost);
+   digest of any generator or bare BitGenerator the MODEL itself holds, swept over submodule
+   attributes INCLUDING builtin-container nesting (list/tuple/set/dict keys and values,
+   cycle-safe, unbounded for any realistic model) -- never a process-wide `gc` scan; exhaustion
+   of the defensive sweep cap downgrades capture completeness to INCOMPLETE
+   (`inventory_budget_exhausted`) -- a truncated inventory never reads as no-consumption;
 3. UNSEEDED numpy generator CONSTRUCTION, via `numpy.random.default_rng` and the writable
    `numpy.random.bit_generator.randbits` construction-entropy alias (r39): an unseeded
    `PCG64()` / `default_rng()` built on any thread marks;
@@ -863,6 +873,15 @@ seed) reports `unverifiable` + `not_applicable`:
    class-patched); and `os.times` / `resource.getrusage`. A forward that reads no clock records
    nothing.
 
+Every module-attr channel is ADDITIONALLY identity-registered at monitor install (r41): a held
+pre-window reference to the original builtin (the idiomatic `from time import time` /
+`from os import urandom` at the top of a model or helper file) is classified by `c_call`
+identity on the owner and every in-window profile-hooked thread, with TorchLens's own frames
+excluded by exact module-globals ownership. The implicit-now converters decode the call site's
+positional argument count from the caller's bytecode, so a held `localtime(t)` /
+`strftime(fmt, t)` remains a pure transform; an undecodable call site (a star-call) marks
+fail-closed.
+
 TorchLens's own per-op timing reads are excluded by EXACT module ownership of the caller frame
 (the registered `torchlens.*` module globals), never by filename strings or frame ancestry -- a
 user callback's code stays user code even when invoked from a TorchLens frame, and a plain
@@ -878,7 +897,9 @@ model-attribute generator digest; and every profile-hooked thread -- the owner p
 started in-window). An IN-WINDOW cross-thread external-generator draw (hon1_1/corr2_2) is caught
 by `threading.setprofile`; an owner-thread numpy instance draw and the immutable `datetime`
 readers by `sys.setprofile`; a model-held generator on any thread by its state digest; unseeded
-construction and Python `random` by the construction/class patches. The monitor does NOT ceiling a
+construction and Python `random` by the construction/class patches. Held-reference spellings of
+the module-attr channels mark on the owner and every in-window hooked thread by original-builtin
+identity; module-attr patched spellings remain thread-independent. The monitor does NOT ceiling a
 capture merely because a benign background thread (a DataLoader worker, a Jupyter history thread, a
 pytest plugin thread) is alive, and it does NOT run a process-wide `gc` scan per capture (the
 r39-draft inventory cost ~900 ms/capture and perturbed the peak-memory measurement -- removed).
@@ -886,19 +907,50 @@ r39-draft inventory cost ~900 ms/capture and perturbed the peak-memory measureme
 Absence of a touch proves no touch of THIS NAMED vocabulary; it does not claim environmental
 determinism for channels outside it. The residual tail is exactly: (i) direct `/dev/urandom` file
 reads; (ii) ctypes / user C-extension entropy or clock reads that never cross a Python-visible
-call surface; (iii) legacy `RandomState()` C-level CONSTRUCTION entropy (its DRAWS stay
-digest/profile-witnessed); and (iv) an externally-held generator drawn on a PRE-EXISTING
+call surface, including C-mediated indirect calls of held builtins (a
+`functools.partial(time.time)()` invoked from C emits no Python-visible call of the monitored
+builtin); (iii) legacy `RandomState()` C-level CONSTRUCTION entropy (its DRAWS stay
+digest/profile-witnessed); (iv) an externally-held generator drawn on a PRE-EXISTING
 (already-running, non-owner, non-hooked) thread -- which `threading.setprofile` cannot reach on
 Python <= 3.11 and which the model-attribute digest does not cover (the generator is not a model
-attribute) -- of the same class as the adversarial draw+`state`-restore a cooperative model does
-not exercise. `datetime.now()` / `localtime()` are NOT residual (covered above). Future all-thread
-coverage is `sys.monitoring` (PEP 669, 3.12+, interpreter-wide).
+attribute, nor inside builtin-container nesting of one; a generator behind a CUSTOM object
+attribute is witnessed by the receiver classifiers on hooked threads only) -- of the same class
+as the adversarial draw+`state`-restore a cooperative model does not exercise; (v) a
+held-reference module-builtin call on a PRE-EXISTING (non-hooked) thread -- the module-attr
+patched spelling stays thread-independent; and (vi) a held-reference implicit-now converter
+explicitly passed `None` (`localtime(None)`) decodes as a one-argument transform call site (the
+patched spelling catches it). `datetime.now()` / `localtime()` are NOT residual (covered above).
+Future all-thread coverage is `sys.monitoring` (PEP 669, 3.12+, interpreter-wide).
 
 A pruned `.data`-alias BOOL control predicate whose leaf origins resolve positively (e.g.
 `bool(self.gate.data > 0.5)` -> the gate's state digest) is witnessed by that basis: the
 original state stays `verified` and a changed staged state restales the witness -- the pre-r37
 "unattributable pruned bool" fail-closed exception no longer applies to positively-resolved
 cases.
+
+### Cross-thread escape qualification (r41)
+
+The mode-independent tensor->host escape belt (scalar/method/module-predicate/dlpack/
+property/storage-pointer observers) is class-patched and fires on EVERY thread. The
+OWNER thread records as before (aten census primary; belt when the census is
+mode-blinded). An IN-WINDOW thread (started during the forward; positively identified
+by the same threading-profile window registry that classifies cross-thread RNG
+receivers) records through the FULL attribution ladder including the fail-closed
+unattributable rungs -- a helper-thread `item()`/`tolist()`/`equal()` escape is
+witnessed by its source or ceilings the capture. A PRE-EXISTING (non-hooked) thread
+records POSITIVE attributions only: a direct touch of a captured/labelled tensor or
+registered-state alias is witnessed; an unattributable foreign-thread read never
+ceilings the capture (the benign-background-thread over-trigger gate). Deterministic
+tensor-only helper-thread work records nothing and never downgrades; a helper thread
+matters only when it performs a declared tensor-to-host value escape or when observer
+installation/classification/restoration is uncertain. The aten census remains
+owner-thread-scoped (a TorchDispatchMode is thread-local); the belt is the designated
+cross-thread observer. An in-window thread that escapes AFTER the forward has returned
+is outside the recording window (the registry is cleared with the capture); only a
+tensor DERIVED on such a thread then escaped joins the residual below. Residual: an
+escape, on a pre-existing thread (or on an in-window thread after the forward has
+returned), of a tensor DERIVED on that thread from captured values -- the direct
+captured-tensor escape is witnessed on any thread.
 
 ### Three-valued input alias topology
 
@@ -1028,7 +1080,12 @@ sole owner of the monotonic Trace-poison mark, divergence-policy enforcement, th
 `_run_report` constructor (which derives `poisoned` solely from the faithfulness lattice), and
 `RunResult` construction. A source-scan meta-test forbids constructing `RunResult` or calling
 `_run_report` anywhere else, so a future provider or payload family cannot fork the settlement
-path.
+path. Parity means shared settlement machinery and typed handling for the same provider claim,
+not identical verdicts from different evidence: loaded-sparse replays the recorded schedule and
+may settle changed-input or witnessed-host-control runs as `diverged`/`unverifiable`, while
+live-refresh executes a fresh model forward and may honestly report `verified` when that fresh
+run completes and its output contract is lossless. Inexecutable input divergence is typed as
+`PathDivergenceError` for both providers.
 
 - **Live opaque output (corr2_5).** The live provider's bare-tensor fast path is gated on the
   FRESH refresh forward's output-losslessness proof (`bare_tensor_root` + `lossless`, one leaf, no
@@ -1053,7 +1110,11 @@ path.
   `return_diverged`. But an admitted-but-INEXECUTABLE divergent input (a wrong feature shape that
   fails the native call) surfaces as `PathDivergenceError` carrying the first-failed input check --
   NOT `RuntimeSignatureDriftError`, which stays reserved for genuine resolved-callable / torch-version
-  drift with all input checks passing. Both policies roll back the transactional fork.
+  drift with all input checks passing. Both policies roll back the transactional fork. The live
+  provider classifies at native-failure time against pre-computed input-contract checks (the
+  native error is chained as `__cause__`, and a divergent input whose forward fails for an
+  unrelated reason is still classified as the divergence), while a native failure on a
+  NON-divergent input re-raises unchanged -- a genuinely failing model is not a divergence.
 
 ## 12. Optional-payload API spelling and docs lockstep
 

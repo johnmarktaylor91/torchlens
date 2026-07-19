@@ -1,0 +1,1109 @@
+"""Round-41 witness-completeness hardening -- pinned regressions + immunizer suite.
+
+Closes the round-40 findings as CLASSES (see round41-plan/PLAN_AGREED.md):
+
+* hon1_1 -- a pre-window HELD REFERENCE to a module-patched host-nondeterminism
+  builtin (``from time import time`` / ``from os import urandom``) bypassed every
+  ``module_patch`` channel -> false VERIFIED+ATTESTED. Closed by original-builtin
+  ``c_call`` identity registered pre-patch, with caller-bytecode argcount decoding
+  keeping a held ``localtime(t)`` a pure transform.
+* hon1_2 -- the model-attribute generator sweep truncated SILENTLY at budget=2000.
+  Closed by full builtin-container recursion with a defensive cap whose exhaustion
+  flags ``inventory_budget_exhausted`` (INCOMPLETE, never silent).
+* hon2_1 -- a tensor->host VALUE escape on an IN-WINDOW helper thread was witnessed
+  by neither the aten census nor the escape belt -> false VERIFIED. Closed by the
+  3-class thread gate on the existing escape wrappers (owner / in-window fail-closed
+  / foreign positive-only).
+* hon1_3 -- the live provider leaked a raw native error for an inexecutable
+  divergent input. Closed by precompute-before-forward + classify-at-native-failure
+  (typed ``PathDivergenceError`` with the native error as ``__cause__``).
+* secC -- the ``torch.device(...)`` literal decode leaked a raw ``RuntimeError``.
+  Closed by the typed run-time wrap + the parse-time analysis-only degradation belt.
+
+Every test either pins a round-40 false-VERIFIED/raw-error repro (red-before,
+green-after) or is a REGISTRY/FROZENSET-DERIVED behavioral immunizer: the
+parametrization is built FROM the live vocabulary objects with an explicit
+per-target probe recipe, so a future uncovered module-patch channel, a future
+cross-thread escape member, or a reintroduced silent truncation is a RED test --
+never a silent gap. Fail-closed always wins; the r39 no-over-trigger classes
+(deterministic model, benign background thread, unused-result worker op, pure
+``localtime(t)`` transform) are pinned VERIFIED by RED-capable tests.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import queue
+import shutil
+import sys
+import threading
+import time as _time
+import types
+import warnings
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pytest
+import torch
+from torch import nn
+
+import torchlens as tl
+import torchlens.utils.rng as rng_mod
+from torchlens.backends.torch.completeness_witness import (
+    HOST_VALUE_ESCAPE_METHODS,
+    HOST_VALUE_ESCAPE_MODULE_FUNCS,
+    INVISIBLE_HOST_ESCAPE_FUNCS,
+    INVISIBLE_HOST_ESCAPE_PROPERTIES,
+    STORAGE_BRIDGE_ESCAPE_FUNCS,
+    host_escape_has_raw_pointer,
+    host_escape_has_unattributable_bool,
+    host_escape_has_unattributable_opaque,
+    host_escape_source_labels,
+    host_escape_state_source_names,
+)
+from torchlens.errors.runnable import (
+    PathDivergenceError,
+    RunCapabilityUnavailableError,
+)
+from torchlens.options import CaptureOptions
+from torchlens.runnable import (
+    NumericAttestationStatus,
+    PathFaithfulness,
+    ReadinessStatus,
+)
+from torchlens.utils.rng import (
+    HOST_NONDETERMINISM_REGISTRY,
+    _call_site_argcount,
+    host_nondeterminism_monitor,
+)
+
+try:  # POSIX-only; the getrusage recipe skips on platforms without it.
+    import resource as _resource
+except ImportError:  # pragma: no cover - non-POSIX platforms
+    _resource = None  # type: ignore[assignment]
+
+_CAP = dict(intervention_ready=True, capture_container_structure=True, cache=False)
+
+# Pre-window held references (module import time == before any monitor window).
+_HELD_TIME = _time.time
+_HELD_LOCALTIME = _time.localtime
+_HELD_GMTIME = _time.gmtime
+_HELD_STRFTIME = _time.strftime
+_HELD_URANDOM = os.urandom
+
+
+def _capture(model: nn.Module, x: Any, *, seed: int = 1) -> tl.Trace:
+    """Capture a runnable-ready trace under a fixed seed."""
+
+    return tl.trace(model, x, capture=CaptureOptions(random_seed=seed, **_CAP))
+
+
+def _roundtrip(
+    model: nn.Module,
+    x: Any,
+    *,
+    tmp: Path,
+    run_inputs: Any = None,
+    name: str = "r41.tlspec",
+    include_activations: bool = True,
+) -> tuple[tl.Trace, tl.RunResult]:
+    """Capture, save runnable (with weights), reload, and run."""
+
+    trace = _capture(model, x)
+    path = tmp / name
+    shutil.rmtree(path, ignore_errors=True)
+    trace.save(
+        path, level="runnable", include_weights=True, include_activations=include_activations
+    )
+    result = tl.load(path).run(inputs=x if run_inputs is None else run_inputs)
+    return trace, result
+
+
+class _PreexistingWorker:
+    """A worker thread started BEFORE any capture window (a foreign thread)."""
+
+    def __init__(self) -> None:
+        self.jobs: "queue.Queue[Any]" = queue.Queue()
+        self.results: "queue.Queue[Any]" = queue.Queue()
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.thread.start()
+
+    def _loop(self) -> None:
+        while True:
+            job = self.jobs.get()
+            if job is None:
+                return
+            try:
+                self.results.put(("ok", job()))
+            except BaseException as exc:  # noqa: BLE001 - relayed to the test thread
+                self.results.put(("err", exc))
+
+    def run(self, job: Callable[[], Any]) -> Any:
+        # Blocking ``get()`` (no timeout): a ``get(timeout=...)`` inside a monitored
+        # forward runs ``Condition.wait(timeout)``, whose held pre-window
+        # ``time.monotonic`` alias the r41 held-ref layer now (correctly,
+        # fail-closed) marks as a clock read -- a genuine channel, but not the
+        # scenario these pins isolate.
+        self.jobs.put(job)
+        kind, value = self.results.get()
+        if kind == "err":
+            raise value
+        return value
+
+    def stop(self) -> None:
+        self.jobs.put(None)
+
+
+@pytest.fixture
+def preexisting_worker() -> Any:
+    """Yield a worker thread that pre-exists every capture in the test."""
+
+    worker = _PreexistingWorker()
+    try:
+        yield worker
+    finally:
+        worker.stop()
+
+
+# ======================================================================================
+# A -- held-reference channel immunizer (REGISTRY-derived; missing recipe = RED)
+# ======================================================================================
+
+
+@dataclass(frozen=True)
+class _HeldRecipe:
+    """One held-reference probe recipe for a module-patched registry row."""
+
+    get: Callable[[], Any]
+    invoke: Callable[[Any], Any]
+    channels: frozenset[str]
+
+
+def _clock_gettime_recipe(f: Any) -> Any:
+    return f(_time.CLOCK_MONOTONIC)
+
+
+_HELD_REF_RECIPES: dict[str, _HeldRecipe] = {
+    "time.time": _HeldRecipe(lambda: _time.time, lambda f: f(), frozenset({"time.time"})),
+    "time.time_ns": _HeldRecipe(lambda: _time.time_ns, lambda f: f(), frozenset({"time.time_ns"})),
+    "time.monotonic": _HeldRecipe(
+        lambda: _time.monotonic, lambda f: f(), frozenset({"time.monotonic"})
+    ),
+    "time.monotonic_ns": _HeldRecipe(
+        lambda: _time.monotonic_ns, lambda f: f(), frozenset({"time.monotonic_ns"})
+    ),
+    "time.perf_counter": _HeldRecipe(
+        lambda: _time.perf_counter, lambda f: f(), frozenset({"time.perf_counter"})
+    ),
+    "time.perf_counter_ns": _HeldRecipe(
+        lambda: _time.perf_counter_ns, lambda f: f(), frozenset({"time.perf_counter_ns"})
+    ),
+    "time.process_time": _HeldRecipe(
+        lambda: _time.process_time, lambda f: f(), frozenset({"time.process_time"})
+    ),
+    "time.process_time_ns": _HeldRecipe(
+        lambda: _time.process_time_ns, lambda f: f(), frozenset({"time.process_time_ns"})
+    ),
+    "time.thread_time": _HeldRecipe(
+        lambda: _time.thread_time, lambda f: f(), frozenset({"time.thread_time"})
+    ),
+    "time.thread_time_ns": _HeldRecipe(
+        lambda: _time.thread_time_ns, lambda f: f(), frozenset({"time.thread_time_ns"})
+    ),
+    "time.clock_gettime": _HeldRecipe(
+        lambda: _time.clock_gettime, _clock_gettime_recipe, frozenset({"time.clock_gettime"})
+    ),
+    "time.clock_gettime_ns": _HeldRecipe(
+        lambda: _time.clock_gettime_ns,
+        _clock_gettime_recipe,
+        frozenset({"time.clock_gettime_ns"}),
+    ),
+    # Implicit-now converters called with NO explicit time -> current-clock read.
+    "time.localtime": _HeldRecipe(
+        lambda: _time.localtime, lambda f: f(), frozenset({"time.localtime"})
+    ),
+    "time.gmtime": _HeldRecipe(lambda: _time.gmtime, lambda f: f(), frozenset({"time.gmtime"})),
+    "time.asctime": _HeldRecipe(lambda: _time.asctime, lambda f: f(), frozenset({"time.asctime"})),
+    "time.ctime": _HeldRecipe(lambda: _time.ctime, lambda f: f(), frozenset({"time.ctime"})),
+    "time.strftime": _HeldRecipe(
+        lambda: _time.strftime, lambda f: f("%Y"), frozenset({"time.strftime"})
+    ),
+    "os.times": _HeldRecipe(lambda: os.times, lambda f: f(), frozenset({"os.times"})),
+    "resource.getrusage": _HeldRecipe(
+        lambda: _resource.getrusage,
+        lambda f: f(_resource.RUSAGE_SELF),
+        frozenset({"resource.getrusage"}),
+    ),
+    # ``random._urandom`` IS ``os.urandom`` (one builtin object): the canonical
+    # first-registered channel wins, so either name is an acceptable mark.
+    "os.urandom": _HeldRecipe(
+        lambda: os.urandom, lambda f: f(4), frozenset({"os.urandom", "random._urandom"})
+    ),
+    "os.getrandom": _HeldRecipe(lambda: os.getrandom, lambda f: f(4), frozenset({"os.getrandom"})),
+    "random._urandom": _HeldRecipe(
+        lambda: __import__("random")._urandom,
+        lambda f: f(4),
+        frozenset({"os.urandom", "random._urandom"}),
+    ),
+    "numpy.random.default_rng": _HeldRecipe(
+        lambda: np.random.default_rng, lambda f: f(), frozenset({"np.random.default_rng"})
+    ),
+    # numpy's ``randbits`` alias is a pre-bound ``SystemRandom.getrandbits`` (a Python
+    # method emits no ``c_call``), but its draw funnels through the patched
+    # ``random._urandom``/``os.urandom`` entropy channel -- any of the three names is
+    # an honest mark for the held spelling.
+    "numpy.random.bit_generator.randbits": _HeldRecipe(
+        lambda: np.random.bit_generator.randbits,
+        lambda f: f(32),
+        frozenset({"np_bit_generator_randbits", "random._urandom", "os.urandom"}),
+    ),
+}
+
+_HELD_REF_TARGETS: tuple[str, ...] = tuple(
+    row.target
+    for row in HOST_NONDETERMINISM_REGISTRY
+    if row.strategy in {"module_patch", "construction_entropy"}
+)
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("target", _HELD_REF_TARGETS)
+def test_held_ref_registry_channel_marks(target: str) -> None:
+    """Every module-patched registry row marks through a PRE-WINDOW held reference.
+
+    The parametrization is derived from the LIVE registry: a future ``module_patch``
+    row without a probe recipe here fails loudly, and a row whose held-ref identity
+    registration is dropped fails behaviorally (no channel marked).
+    """
+
+    recipe = _HELD_REF_RECIPES.get(target)
+    if recipe is None:
+        pytest.fail(f"no held-ref probe recipe for registry target {target!r}")
+    if target == "resource.getrusage" and _resource is None:
+        pytest.skip("resource module unavailable on this platform")
+    try:
+        held = recipe.get()
+    except AttributeError:
+        pytest.skip(f"{target} unavailable on this platform")
+    with host_nondeterminism_monitor(None) as result:
+        recipe.invoke(held)
+    assert recipe.channels & result.channels, (
+        f"held reference to {target!r} left channels {sorted(result.channels)!r}"
+    )
+
+
+# ======================================================================================
+# B -- purity + fail-closed pins for the argcount decode
+# ======================================================================================
+
+_FIXED_T = 1_000_000.0
+
+
+@pytest.mark.smoke
+def test_held_implicit_now_explicit_time_stays_pure() -> None:
+    """Held ``localtime(t)`` / ``gmtime(t)`` / ``strftime(fmt, t)`` are pure transforms."""
+
+    lt = _HELD_LOCALTIME(_FIXED_T)
+    with host_nondeterminism_monitor(None) as result:
+        _HELD_LOCALTIME(_FIXED_T)
+        _HELD_GMTIME(_FIXED_T)
+        _HELD_STRFTIME("%Y", lt)
+    assert "time.localtime" not in result.channels
+    assert "time.gmtime" not in result.channels
+    assert "time.strftime" not in result.channels
+
+
+@pytest.mark.smoke
+def test_held_implicit_now_no_arg_marks() -> None:
+    """Held ``localtime()`` / ``strftime(fmt)`` read the current clock and mark."""
+
+    with host_nondeterminism_monitor(None) as result:
+        _HELD_LOCALTIME()
+    assert "time.localtime" in result.channels
+    with host_nondeterminism_monitor(None) as result2:
+        _HELD_STRFTIME("%Y")
+    assert "time.strftime" in result2.channels
+
+
+@pytest.mark.smoke
+def test_held_implicit_now_star_call_marks_fail_closed() -> None:
+    """An undecodable star-call site marks fail-closed even with an explicit time."""
+
+    args = (_FIXED_T,)
+    with host_nondeterminism_monitor(None) as result:
+        _HELD_LOCALTIME(*args)
+    assert "time.localtime" in result.channels
+
+
+@pytest.mark.smoke
+def test_call_site_argcount_unit_pins() -> None:
+    """Pin the interpreter's CALL decode: 0-arg, 1-arg, and star-call sites.
+
+    An interpreter bump that changes the bytecode shape turns this RED at upgrade
+    time; the monitor then over-marks (fail-closed) rather than under-marks.
+    """
+
+    captured: list[int | None] = []
+    target = _HELD_LOCALTIME
+
+    def probe_hook(frame: Any, event: str, arg: Any) -> None:
+        if event == "c_call" and arg is target:
+            captured.append(_call_site_argcount(frame))
+
+    star_args = (_FIXED_T,)
+    previous = sys.getprofile()
+    sys.setprofile(probe_hook)
+    try:
+        target()
+        target(_FIXED_T)
+        target(*star_args)
+    finally:
+        sys.setprofile(previous)
+    assert captured == [0, 1, None]
+
+
+@pytest.mark.smoke
+def test_held_ref_torchlens_frame_exempt() -> None:
+    """A call of the held original FROM a torchlens-owned frame never marks.
+
+    TorchLens's own per-op clock reads route patched-attr -> wrapper -> original,
+    emitting ``c_call`` for the original from the wrapper's frame; without the exact
+    module-globals exemption every capture would self-ceiling.
+    """
+
+    held = _HELD_TIME
+    rng_mod.__dict__["_r41_test_held_ref"] = held
+    try:
+        with host_nondeterminism_monitor(None) as result:
+            eval(  # noqa: S307 - fixed literal code object, test-owned
+                compile("_r41_test_held_ref()", "<r41-tl-frame>", "eval"), rng_mod.__dict__
+            )
+        assert "time.time" not in result.channels
+    finally:
+        del rng_mod.__dict__["_r41_test_held_ref"]
+
+
+# ======================================================================================
+# C -- hon1_1 end-to-end: held-ref channels ceiling the runnable verdict
+# ======================================================================================
+
+
+class _HeldTimeBranch(nn.Module):
+    """Branch on a pre-window held ``time.time`` reference (the hon1_1 gap model)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Steer a branch by the held clock reference."""
+
+        v = _HELD_TIME()
+        h = self.lin(x)
+        return h * 2.0 if int(v * 1e6) % 2 == 0 else h * 3.0
+
+
+class _HeldUrandomBranch(nn.Module):
+    """Branch on a pre-window held ``os.urandom`` reference."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Steer a branch by held OS entropy."""
+
+        v = _HELD_URANDOM(1)[0]
+        h = self.lin(x)
+        return h * 2.0 if v % 2 == 0 else h * 3.0
+
+
+_HELPER_CLOCK_SOURCE = "from time import time as _lt\n\ndef read_clock():\n    return _lt()\n"
+
+
+def _make_helper_clock_module() -> types.ModuleType:
+    """Build a helper module holding a pre-window ``from time import time`` alias.
+
+    The idiomatic third-party-utility spelling (probe A2): the alias lives in the
+    HELPER module's globals, structurally unreachable by any model-graph alias scan,
+    and reached only through the held-ref identity mechanism.
+    """
+
+    helper = types.ModuleType("r41_helper_clock")
+    exec(compile(_HELPER_CLOCK_SOURCE, "r41_helper_clock.py", "exec"), helper.__dict__)
+    return helper
+
+
+_HELPER_CLOCK = _make_helper_clock_module()
+
+
+class _HelperModuleClockBranch(nn.Module):
+    """Branch on a clock read through a helper-module-global held alias."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Steer a branch by the helper module's held clock alias."""
+
+        v = _HELPER_CLOCK.read_clock()
+        h = self.lin(x)
+        return h * 2.0 if int(v * 1e6) % 2 == 0 else h * 3.0
+
+
+@pytest.mark.parametrize(
+    "factory,channel",
+    [
+        (_HeldTimeBranch, "time.time"),
+        (_HeldUrandomBranch, "os.urandom"),
+        (_HelperModuleClockBranch, "time.time"),
+    ],
+)
+def test_held_ref_capture_never_false_verified(factory: Any, channel: str, tmp_path: Path) -> None:
+    """A held-ref clock/entropy capture ceilings exactly like the patched spelling."""
+
+    x = torch.randn(2, 4)
+    trace, result = _roundtrip(factory(), x, tmp=tmp_path)
+    assert channel in getattr(trace, "_runnable_host_rng_channels", ())
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+class _HeldLocaltimePure(nn.Module):
+    """Use a held ``localtime`` ONLY as a pure transform of a fixed time (stays VERIFIED)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Scale by a deterministic function of ``localtime(fixed_t)``."""
+
+        parts = _HELD_LOCALTIME(_FIXED_T)
+        scale = float(parts.tm_year % 7 + 1)
+        return self.lin(x) * scale
+
+
+def test_held_localtime_pure_transform_stays_verified(tmp_path: Path) -> None:
+    """No-over-trigger pin: a pure held ``localtime(t)`` transform stays VERIFIED."""
+
+    from torchlens._io.runnable import build_sparse_run_descriptor
+
+    x = torch.randn(2, 4)
+    trace, result = _roundtrip(_HeldLocaltimePure(), x, tmp=tmp_path)
+    assert build_sparse_run_descriptor(trace).rng_profile.host_rng_consumed is False
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+# ======================================================================================
+# D -- hon1_2: sweep completeness + cap invariant + BitGenerator digest
+# ======================================================================================
+
+
+class _AttrHolder:
+    """A minimal ``modules()`` holder for direct monitor-level sweep tests."""
+
+    def __init__(self, **attrs: Any) -> None:
+        self.__dict__.update(attrs)
+
+    def modules(self) -> list[Any]:
+        return [self]
+
+
+@pytest.mark.smoke
+def test_sweep_cap_exhaustion_flags_uncertain(monkeypatch: Any) -> None:
+    """Cap invariant: ANY cap exhaustion flags ``inventory_budget_exhausted``, never silent."""
+
+    monkeypatch.setattr(rng_mod, "_INVENTORY_NODE_CAP", 40)
+    holder = _AttrHolder(**{f"a{i}": i for i in range(100)})
+    with host_nondeterminism_monitor(holder) as result:
+        pass
+    assert result.uncertain is True
+    assert "inventory_budget_exhausted" in result.uncertain_detail
+
+
+@pytest.mark.smoke
+def test_sweep_realistic_model_never_hits_cap() -> None:
+    """A 400-block deterministic model sweeps completely: no channels, no uncertainty."""
+
+    model = nn.ModuleList([nn.Linear(2, 2) for _ in range(400)])
+    with host_nondeterminism_monitor(model) as result:
+        pass
+    assert result.uncertain is False
+    assert result.channels == set()
+
+
+def test_large_late_held_generator_witnessed(preexisting_worker: Any) -> None:
+    """A generator on the FINAL child of a 400-block model (past the old silent budget)
+    drawn on a PRE-EXISTING thread is digest-witnessed with no uncertainty."""
+
+    model = nn.ModuleList([nn.Linear(2, 2) for _ in range(400)])
+    model[-1].rng = np.random.default_rng(777)
+    with host_nondeterminism_monitor(model) as result:
+        preexisting_worker.run(lambda: float(model[-1].rng.random()))
+    assert "model_attribute_generator" in result.channels
+    assert result.uncertain is False
+
+
+def test_large_model_held_generator_end_to_end_unverifiable(
+    preexisting_worker: Any, tmp_path: Path
+) -> None:
+    """End-to-end (the r40 hon1_2 repro shape): a model-held generator past the old
+    budget, drawn on a pre-existing thread, ceilings the runnable verdict."""
+
+    class _BigHeldGen(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self.blocks = nn.ModuleList([nn.Linear(2, 2) for _ in range(150)])
+            self.blocks[-1].rng = np.random.default_rng(777)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            v = preexisting_worker.run(lambda: float(self.blocks[-1].rng.random()))
+            h = self.lin(x)
+            return h * 2.0 if v < 0.5 else h * 3.0
+
+    x = torch.randn(2, 4)
+    trace, result = _roundtrip(_BigHeldGen(), x, tmp=tmp_path)
+    assert "model_attribute_generator" in getattr(trace, "_runnable_host_rng_channels", ())
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    "wrap",
+    [
+        lambda gen: [gen],
+        lambda gen: {"g": gen},
+        lambda gen: [[gen]],
+        lambda gen: {gen: 1},
+    ],
+    ids=["list", "dict-value", "nested-list", "dict-key"],
+)
+def test_container_nested_generator_witnessed(wrap: Any, preexisting_worker: Any) -> None:
+    """Generators nested in builtin containers (incl. dict KEYS) are digest-witnessed."""
+
+    gen = np.random.default_rng(9)
+    holder = _AttrHolder(pool=wrap(gen))
+    with host_nondeterminism_monitor(holder) as result:
+        preexisting_worker.run(lambda: float(gen.random()))
+    assert "model_attribute_generator" in result.channels
+    assert result.uncertain is False
+
+
+@pytest.mark.smoke
+def test_container_held_generator_no_draw_stays_clean() -> None:
+    """Over-trigger pin: container-held generators with NO draw record nothing."""
+
+    holder = _AttrHolder(
+        pool=[np.random.default_rng(3)],
+        table={"g": np.random.default_rng(4), np.random.default_rng(5): 1},
+        deep=[[["benign", 1, 2.0, (3, 4)]]],
+    )
+    with host_nondeterminism_monitor(holder) as result:
+        pass
+    assert result.channels == set()
+    assert result.uncertain is False
+
+
+@pytest.mark.smoke
+def test_bare_bit_generator_digest_witnessed(preexisting_worker: Any) -> None:
+    """A bare model-held BitGenerator drawn through a wrapping Generator is witnessed."""
+
+    bit_gen = np.random.PCG64(5)
+    before = host_nondeterminism_monitor._digest_rng_instance(bit_gen)
+    float(np.random.Generator(bit_gen).random())
+    after = host_nondeterminism_monitor._digest_rng_instance(bit_gen)
+    assert before != after  # the digest actually tracks BitGenerator state
+
+    holder = _AttrHolder(bg=np.random.PCG64(11))
+    with host_nondeterminism_monitor(holder) as result:
+        preexisting_worker.run(lambda: float(np.random.Generator(holder.bg).random()))
+    assert "model_attribute_generator" in result.channels
+
+
+# ======================================================================================
+# E -- cross-thread escape vocabulary immunizer (FROZENSET-derived; missing recipe = RED)
+# ======================================================================================
+
+
+@dataclass(frozen=True)
+class _EscapeRecipe:
+    """One in-window helper-thread probe recipe for an escape vocabulary member."""
+
+    invoke: Callable[[torch.Tensor, torch.Tensor], Any]
+    witness: str  # "labels" (source labels / fail-closed sets) or "raw_pointer"
+    requires_cuda: bool = False
+
+
+def _storage_data_ptr(gf: torch.Tensor, gi: torch.Tensor) -> Any:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # TypedStorage deprecation is torch's, not ours
+        return gf.storage().data_ptr()
+
+
+_ESCAPE_RECIPES: dict[str, _EscapeRecipe] = {
+    # HOST_VALUE_ESCAPE_METHODS
+    "item": _EscapeRecipe(lambda gf, gi: gf.item(), "labels"),
+    "__bool__": _EscapeRecipe(lambda gf, gi: bool(gf), "labels"),
+    "__int__": _EscapeRecipe(lambda gf, gi: int(gf), "labels"),
+    "__float__": _EscapeRecipe(lambda gf, gi: float(gf), "labels"),
+    "__index__": _EscapeRecipe(lambda gf, gi: gi.__index__(), "labels"),
+    "__complex__": _EscapeRecipe(lambda gf, gi: complex(gf), "labels"),
+    "equal": _EscapeRecipe(lambda gf, gi: gf.equal(gf), "labels"),
+    "allclose": _EscapeRecipe(lambda gf, gi: gf.allclose(gf), "labels"),
+    "is_nonzero": _EscapeRecipe(lambda gf, gi: gf.is_nonzero(), "labels"),
+    # INVISIBLE_HOST_ESCAPE_FUNCS
+    "tolist": _EscapeRecipe(lambda gf, gi: gf.tolist(), "labels"),
+    "numpy": _EscapeRecipe(lambda gf, gi: gf.numpy(), "labels"),
+    "__array__": _EscapeRecipe(lambda gf, gi: gf.__array__(), "labels"),
+    "__dlpack__": _EscapeRecipe(lambda gf, gi: gf.__dlpack__(), "labels"),
+    # STORAGE_BRIDGE_ESCAPE_FUNCS (watch-only value surface; the RAW POINTER is the
+    # observable escape, so each recipe reaches ``data_ptr`` and asserts the flag)
+    "untyped_storage": _EscapeRecipe(lambda gf, gi: gf.untyped_storage().data_ptr(), "raw_pointer"),
+    "storage": _EscapeRecipe(_storage_data_ptr, "raw_pointer"),
+    "data_ptr": _EscapeRecipe(lambda gf, gi: gf.data_ptr(), "raw_pointer"),
+    # HOST_VALUE_ESCAPE_MODULE_FUNCS (module spellings expose no receiver -- the
+    # module wrapper is the sole cross-thread observer for them)
+    "module:equal": _EscapeRecipe(lambda gf, gi: torch.equal(gf, gf), "labels"),
+    "module:allclose": _EscapeRecipe(lambda gf, gi: torch.allclose(gf, gf), "labels"),
+    "module:is_nonzero": _EscapeRecipe(lambda gf, gi: torch.is_nonzero(gf), "labels"),
+    # INVISIBLE_HOST_ESCAPE_PROPERTIES
+    "__cuda_array_interface__": _EscapeRecipe(
+        lambda gf, gi: gf.cuda().__cuda_array_interface__, "labels", requires_cuda=True
+    ),
+}
+
+_ESCAPE_MEMBERS: tuple[str, ...] = (
+    tuple(
+        sorted(
+            HOST_VALUE_ESCAPE_METHODS | INVISIBLE_HOST_ESCAPE_FUNCS | STORAGE_BRIDGE_ESCAPE_FUNCS
+        )
+    )
+    + tuple(sorted(f"module:{name}" for name in HOST_VALUE_ESCAPE_MODULE_FUNCS))
+    + tuple(sorted(INVISIBLE_HOST_ESCAPE_PROPERTIES))
+)
+
+
+class _InWindowEscapeModel(nn.Module):
+    """Run one escape recipe on an IN-WINDOW helper thread against a captured input."""
+
+    def __init__(self, recipe: _EscapeRecipe) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+        self._recipe = recipe
+
+    def forward(
+        self, gate_f: torch.Tensor, gate_i: torch.Tensor, data: torch.Tensor
+    ) -> torch.Tensor:
+        """Execute the escape on a thread started inside the forward, then join."""
+
+        box: dict[str, BaseException] = {}
+
+        def _worker() -> None:
+            try:
+                self._recipe.invoke(gate_f, gate_i)
+            except BaseException as exc:  # noqa: BLE001 - surfaced to the test
+                box["exc"] = exc
+
+        t = threading.Thread(target=_worker)
+        t.start()
+        t.join()
+        if "exc" in box:
+            raise box["exc"]
+        return self.lin(data)
+
+
+def _escape_witnessed(trace: Any) -> bool:
+    """Return whether ANY escape witness (positive or fail-closed) recorded."""
+
+    return bool(
+        host_escape_source_labels(trace)
+        or host_escape_state_source_names(trace)
+        or host_escape_has_unattributable_bool(trace)
+        or host_escape_has_unattributable_opaque(trace)
+    )
+
+
+@pytest.mark.parametrize("member", _ESCAPE_MEMBERS)
+def test_in_window_thread_escape_witnessed(member: str) -> None:
+    """Every declared escape vocabulary member is witnessed from an IN-WINDOW thread.
+
+    Frozenset-derived: a future member without a recipe fails loudly, and a wrapper
+    that regains an owner-only thread gate fails behaviorally (nothing witnessed).
+    """
+
+    recipe = _ESCAPE_RECIPES.get(member)
+    if recipe is None:
+        pytest.fail(f"no in-window escape recipe for vocabulary member {member!r}")
+    if recipe.requires_cuda and not torch.cuda.is_available():
+        pytest.skip("CUDA unavailable; recipe entry present as required")
+    gate_f = torch.tensor([0.5])
+    gate_i = torch.tensor(3)
+    data = torch.randn(1, 4)
+    trace = _capture(_InWindowEscapeModel(recipe), (gate_f, gate_i, data))
+    if recipe.witness == "raw_pointer":
+        assert host_escape_has_raw_pointer(trace)
+    else:
+        assert _escape_witnessed(trace), f"in-window {member!r} escape left no witness"
+
+
+# ======================================================================================
+# F -- hon2_1 end-to-end: helper-thread escape ceilings the changed-input verdict
+# ======================================================================================
+
+
+class _ThreadScalarItemGuard(nn.Module):
+    """Branch on ``gate.item()`` executed on an in-window helper thread (the repro)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.a = nn.Linear(4, 4)
+        self.b = nn.Linear(4, 4)
+
+    def forward(self, gate: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+        """Steer the taken path by a helper-thread scalar escape."""
+
+        box: dict[str, bool] = {}
+
+        def _worker() -> None:
+            box["flag"] = bool(gate.item() > 0)
+
+        t = threading.Thread(target=_worker)
+        t.start()
+        t.join()
+        return self.a(data) if box["flag"] else self.b(data)
+
+
+class _ThreadTensorToListGuard(nn.Module):
+    """Branch on ``gate.tolist()`` executed on an in-window helper thread."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.a = nn.Linear(4, 4)
+        self.b = nn.Linear(4, 4)
+
+    def forward(self, gate: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+        """Steer the taken path by a helper-thread tolist escape."""
+
+        box: dict[str, bool] = {}
+
+        def _worker() -> None:
+            box["flag"] = bool(gate.tolist()[0] > 0)
+
+        t = threading.Thread(target=_worker)
+        t.start()
+        t.join()
+        return self.a(data) if box["flag"] else self.b(data)
+
+
+class _ThreadTensorNumpyGuard(nn.Module):
+    """Branch on ``gate.numpy()`` executed on an in-window helper thread."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.a = nn.Linear(4, 4)
+        self.b = nn.Linear(4, 4)
+
+    def forward(self, gate: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+        """Steer the taken path by a helper-thread numpy escape."""
+
+        box: dict[str, bool] = {}
+
+        def _worker() -> None:
+            box["flag"] = bool(float(gate.numpy()[0]) > 0)
+
+        t = threading.Thread(target=_worker)
+        t.start()
+        t.join()
+        return self.a(data) if box["flag"] else self.b(data)
+
+
+@pytest.mark.parametrize(
+    "factory", [_ThreadScalarItemGuard, _ThreadTensorToListGuard, _ThreadTensorNumpyGuard]
+)
+def test_helper_thread_escape_changed_input_never_verified(factory: Any, tmp_path: Path) -> None:
+    """hon2_1 end-to-end: helper-thread escape witnessed; changed input never VERIFIED."""
+
+    gate = torch.tensor([1.0])
+    data = torch.randn(1, 4)
+    trace = _capture(factory(), (gate, data))
+    assert _escape_witnessed(trace), "helper-thread escape recorded no witness"
+    path = tmp_path / "hon2.tlspec"
+    shutil.rmtree(path, ignore_errors=True)
+    trace.save(path, level="runnable", include_weights=True, include_activations=True)
+    result = tl.load(path).run(inputs=(torch.tensor([-1.0]), data))
+    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
+    assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
+
+
+def test_owner_thread_escape_control_unchanged(tmp_path: Path) -> None:
+    """Owner-thread control: the same escape on the owner thread stays witnessed."""
+
+    class _OwnerScalarGuard(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.a = nn.Linear(4, 4)
+            self.b = nn.Linear(4, 4)
+
+        def forward(self, gate: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+            flag = bool(gate.item() > 0)
+            return self.a(data) if flag else self.b(data)
+
+    gate = torch.tensor([1.0])
+    data = torch.randn(1, 4)
+    trace = _capture(_OwnerScalarGuard(), (gate, data))
+    assert _escape_witnessed(trace)
+    path = tmp_path / "hon2owner.tlspec"
+    shutil.rmtree(path, ignore_errors=True)
+    trace.save(path, level="runnable", include_weights=True)
+    result = tl.load(path).run(inputs=(torch.tensor([-1.0]), data))
+    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
+
+
+# ======================================================================================
+# G -- no-over-trigger pins (the r39 regression classes stay VERIFIED)
+# ======================================================================================
+
+
+def test_benign_foreign_thread_own_tensors_stays_verified(
+    preexisting_worker: Any, tmp_path: Path
+) -> None:
+    """A PRE-EXISTING thread touching its OWN tensors mid-capture never ceilings.
+
+    The foreign posture is positive-attribution-only: `.item()` / ``torch.equal`` /
+    storage ``data_ptr()`` on tensors the capture never saw record nothing -- no
+    escape sources, no fail-closed sets, no raw-pointer flag -- and the deterministic
+    capture stays VERIFIED end-to-end.
+    """
+
+    own = torch.randn(())  # created BEFORE the capture window; never captured
+
+    class _SignalsForeignWork(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            def _foreign_reads() -> float:
+                # DIRECT reads only -- a tensor OP on a foreign thread is a separate,
+                # documented thread-blind-logging surface, not the escape belt's.
+                value = own.item()
+                torch.equal(own, own)
+                own.untyped_storage().data_ptr()
+                return value
+
+            preexisting_worker.run(_foreign_reads)  # waits: reads happen mid-capture
+            return self.lin(x).relu()
+
+    x = torch.randn(2, 4)
+    trace, result = _roundtrip(_SignalsForeignWork(), x, tmp=tmp_path)
+    assert host_escape_source_labels(trace) == frozenset()
+    assert not host_escape_has_unattributable_bool(trace)
+    assert not host_escape_has_unattributable_opaque(trace)
+    assert not host_escape_has_raw_pointer(trace)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+def test_in_window_unused_tensor_op_stays_verified(tmp_path: Path) -> None:
+    """An in-window helper thread doing tensor-only work (result unused, no host
+    escape) records nothing and the capture stays VERIFIED."""
+
+    class _ThreadUnusedTensorOp(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            def _worker() -> None:
+                _ = (x * 2.0).sum()  # tensor-only; result discarded; no host read
+
+            t = threading.Thread(target=_worker)
+            t.start()
+            t.join()
+            return self.lin(x).relu()
+
+    x = torch.randn(2, 4)
+    trace, result = _roundtrip(_ThreadUnusedTensorOp(), x, tmp=tmp_path)
+    assert host_escape_source_labels(trace) == frozenset()
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+def test_foreign_thread_captured_tensor_escape_positively_witnessed(
+    preexisting_worker: Any, tmp_path: Path
+) -> None:
+    """A PRE-EXISTING thread's DIRECT `.item()` on a CAPTURED tensor is positively
+    witnessed (the realistic queue-fed worker), and the original-input run stays
+    VERIFIED -- a witness, not a ceiling."""
+
+    class _HandsToForeignWorker(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(1, 1)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            h = self.lin(x)
+            preexisting_worker.run(lambda: h.item())  # DIRECT captured-tensor escape
+            return h.relu()
+
+    x = torch.randn(1, 1)
+    trace, result = _roundtrip(_HandsToForeignWorker(), x, tmp=tmp_path)
+    assert _escape_witnessed(trace), "foreign direct captured-tensor escape unwitnessed"
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+# ======================================================================================
+# H -- hon1_3: live-provider typed divergence fold
+# ======================================================================================
+
+
+class _PlainLinear(nn.Module):
+    """Deterministic control model for the live-provider pins."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Plain affine + relu."""
+
+        return self.lin(x).relu()
+
+
+def test_live_inexecutable_divergent_input_typed_and_rolls_back() -> None:
+    """hon1_3: a live inexecutable divergent input raises typed PathDivergenceError
+    with the native error chained, leaves the source unpoisoned, and a subsequent
+    original-input run stays VERIFIED."""
+
+    x = torch.randn(2, 4)
+    model = _PlainLinear()
+    trace = _capture(model, x)
+    with pytest.raises(PathDivergenceError) as exc:
+        trace.run(inputs=torch.randn(3, 5), on_divergence="return_diverged")
+    assert exc.value.fields.get("path_faithfulness") is PathFaithfulness.DIVERGED
+    check = exc.value.fields.get("contract_check")
+    assert check is not None and check.name.startswith("input_shape:")
+    assert isinstance(exc.value.__cause__, RuntimeError)  # native torch error preserved
+    rerun = trace.run(inputs=x)
+    assert rerun.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert rerun.report.poisoned is False
+
+
+def test_live_changed_batch_refresh_stays_verified() -> None:
+    """Provider-scoped asymmetry pin: an EXECUTABLE changed-batch live refresh is a
+    fresh forward and stays VERIFIED + unpoisoned.
+
+    The refresh projector legitimately WARNS on the changed input shape; under the
+    project's warnings-as-errors pytest policy that advisory would abort the forward
+    and (correctly) classify as typed divergence, so it is suppressed here -- the
+    contract under test is the VERIFIED verdict of the successful refresh, exactly as
+    outside pytest.
+    """
+
+    x = torch.randn(2, 4)
+    model = _PlainLinear()
+    trace = _capture(model, x)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        result = trace.run(inputs=torch.randn(5, 4))
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert result.report.poisoned is False
+
+
+def test_live_non_divergent_native_failure_reraises_raw() -> None:
+    """A native failure on a NON-divergent input re-raises raw -- a genuinely
+    failing model is not a divergence."""
+
+    class _ValueGate(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            if float(x.sum().item()) > 100.0:
+                raise ValueError("boom")
+            return self.lin(x)
+
+    x = torch.zeros(2, 4)
+    model = _ValueGate()
+    trace = _capture(model, x)
+    with pytest.raises(ValueError, match="boom"):
+        trace.run(inputs=torch.full((2, 4), 100.0))
+
+
+# ======================================================================================
+# I -- secC end-to-end: tampered device literal degrades the LOAD analysis-only
+# ======================================================================================
+
+
+def _tamper_device_qualname(bundle_path: Path) -> bool:
+    """Rewrite every ``torch.device(...)`` literal qualname in the manifest to garbage."""
+
+    manifest_path = bundle_path / "manifest.json"
+    data = json.loads(manifest_path.read_text())
+    tampered = False
+
+    def _walk(node: Any) -> None:
+        nonlocal tampered
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if (
+                    key == "qualname"
+                    and isinstance(value, str)
+                    and value.startswith("torch.device(")
+                ):
+                    node[key] = "torch.device(BOGUS!!!)"
+                    tampered = True
+                else:
+                    _walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(data)
+    manifest_path.write_text(json.dumps(data))
+    return tampered
+
+
+def test_tampered_device_literal_degrades_analysis_only(tmp_path: Path) -> None:
+    """secC end-to-end: a tampered device qualname refuses at descriptor parse --
+    analysis-only load with the typed diagnostic intact, typed error from ``run``."""
+
+    class _DeviceLiteral(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return x.to(torch.device("cpu")) * 2.0
+
+    x = torch.randn(2, 3)
+    trace = _capture(_DeviceLiteral(), x)
+    path = tmp_path / "secC.tlspec"
+    shutil.rmtree(path, ignore_errors=True)
+    trace.save(path, level="runnable")
+    assert _tamper_device_qualname(path), "bundle carried no device literal to tamper"
+    loaded = tl.load(path)  # must not hard-fail: corr2_3 analysis-only degradation
+    readiness = loaded._runnable_readiness
+    assert readiness.status is ReadinessStatus.UNAVAILABLE
+    assert any("torch.device" in (d.message or "") for d in readiness.diagnostics)
+    with pytest.raises(RunCapabilityUnavailableError):
+        loaded.run(inputs=x)
+
+
+def test_untampered_device_literal_still_runs_verified(tmp_path: Path) -> None:
+    """Control: the untampered device-literal bundle loads and replays VERIFIED."""
+
+    class _DeviceLiteral(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return x.to(torch.device("cpu")) * 2.0
+
+    x = torch.randn(2, 3)
+    trace = _capture(_DeviceLiteral(), x)
+    path = tmp_path / "secC_ok.tlspec"
+    shutil.rmtree(path, ignore_errors=True)
+    trace.save(path, level="runnable")
+    result = tl.load(path).run(inputs=x)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

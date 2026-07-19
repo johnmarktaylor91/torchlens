@@ -573,7 +573,25 @@ def run_live_trace(
             args, kwargs = _split_mixed_inputs(inputs)
             input_args = list(args)
             input_kwargs = dict(kwargs)
-        fork.save_new_outs(model, input_args, input_kwargs=input_kwargs, random_seed=seed)
+        # r41 hon1_3 (corr2_4 parity): PRE-compute the soft input-contract checks
+        # BEFORE the forward -- a failing forward may in-place-mutate an input leaf
+        # (``resize_``) before the failing op, so a post-hoc metadata read could
+        # misclassify. The precompute has ZERO admission power: a divergent-but-
+        # executable input (changed batch / seq-len) still runs and may honestly
+        # settle VERIFIED (fresh-refresh semantics); classification happens only at
+        # native-failure time below.
+        first_failed = _first_failed_live_input_check(trace, input_args, input_kwargs)
+        try:
+            fork.save_new_outs(model, input_args, input_kwargs=input_kwargs, random_seed=seed)
+        except Exception as exc:  # not BaseException: KeyboardInterrupt/SystemExit stay raw
+            if first_failed is not None:
+                # An admitted-but-inexecutable DIVERGENT input surfaces as the typed
+                # PathDivergenceError carrying the first failed input check, with the
+                # native error chained as ``__cause__`` (corr2_4 on both providers).
+                # A native failure on a NON-divergent input re-raises raw below -- a
+                # genuinely failing model is not a divergence.
+                _raise_failed_contract_as_divergence(first_failed, fork=None, cause=exc)
+            raise
         output, faithful = _reconstruct_live_output(fork)
         # A lossy output container (computed non-field/non-key state, __slots__, or a
         # data-descriptor field) cannot be faithfully rebuilt, so it is UNVERIFIABLE here
@@ -622,6 +640,118 @@ def run_live_trace(
             if id(log) not in prior_log_ids:
                 _state._unregister_log(log)
         raise
+
+
+def _live_runtime_input_leaves(input_args: Any, input_kwargs: Any) -> list[torch.Tensor] | None:
+    """Flatten runtime live-refresh inputs to ordered tensor leaves, or ``None``.
+
+    Mirrors the capture-side flatten (``backend.fetch_label_move_input_tensors``:
+    ``get_vars_of_type_from_obj`` per positional arg, then per kwarg value, at
+    ``search_depth=5``) so leaf ORDER pairs 1:1 with the capture's recorded
+    ``input_layers`` ordering. Returns ``None`` on any traversal failure -- the
+    caller then skips classification entirely (never masks the native error).
+    """
+
+    from .utils.introspection import get_vars_of_type_from_obj
+
+    try:
+        if isinstance(input_args, (list, tuple)):
+            args_list = list(input_args)
+        else:
+            args_list = [input_args]
+        leaves: list[torch.Tensor] = []
+        for arg in args_list:
+            leaves.extend(get_vars_of_type_from_obj(arg, torch.Tensor, search_depth=5))
+        if input_kwargs:
+            for value in input_kwargs.values():
+                leaves.extend(get_vars_of_type_from_obj(value, torch.Tensor, search_depth=5))
+        return leaves
+    except Exception:
+        return None
+
+
+def _first_failed_live_input_check(
+    trace: Any, input_args: Any, input_kwargs: Any
+) -> ContractCheck | None:
+    """Return the first failed SOFT input-contract check for a live refresh, or ``None``.
+
+    r41 hon1_3 (corr2_4 parity): reads the capture-recorded input ops' shape/dtype off
+    the live Trace and compares the runtime leaves positionally, mirroring the sparse
+    ``_bind_runtime_inputs`` check names (``input_shape:slot:<label>`` /
+    ``input_dtype:slot:<label>``) and message text so both providers speak identically.
+    The helper has ZERO admission power (it refuses nothing and is consulted only when
+    the forward already failed natively) and returns ``None`` on ANY internal failure
+    so classification unavailability never masks the native error.
+    """
+
+    try:
+        input_labels = list(getattr(trace, "input_layers", ()) or ())
+        if not input_labels:
+            return None
+        layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
+        recorded: list[tuple[str, tuple[int, ...] | None, str | None]] = []
+        for label in input_labels:
+            op = layer_dict.get(label)
+            if op is None:
+                return None
+            shape = getattr(op, "shape", None)
+            dtype = getattr(op, "dtype", None)
+            recorded.append(
+                (
+                    str(label),
+                    tuple(shape) if shape is not None else None,
+                    str(dtype) if dtype is not None else None,
+                )
+            )
+        leaves = _live_runtime_input_leaves(input_args, input_kwargs)
+        if leaves is None:
+            return None
+        if len(leaves) != len(recorded):
+            return _contract_check(
+                "input_arity",
+                False,
+                RunnableErrorCode.INPUT_TREE_MISMATCH,
+                f"Runtime input tree carries {len(leaves)} tensor leaves; "
+                f"the capture recorded {len(recorded)}.",
+                details=(
+                    ("expected_leaves", str(len(recorded))),
+                    ("actual_leaves", str(len(leaves))),
+                ),
+            )
+        for (label, expected_shape, expected_dtype), value in zip(recorded, leaves):
+            try:
+                actual_shape: tuple[int, ...] | None = tuple(value.shape)
+            except (RuntimeError, TypeError, NotImplementedError):
+                actual_shape = None
+            if expected_shape is not None and actual_shape != expected_shape:
+                return _contract_check(
+                    f"input_shape:slot:{label}",
+                    False,
+                    RunnableErrorCode.INPUT_SHAPE_MISMATCH,
+                    f"Runtime input shape {actual_shape} does not match {expected_shape}.",
+                    affected_op_labels=(label,),
+                    details=(
+                        ("slot_id", f"slot:{label}"),
+                        ("expected_shape", repr(expected_shape)),
+                        ("actual_shape", repr(actual_shape)),
+                    ),
+                )
+            if expected_dtype is not None and str(value.dtype) != expected_dtype:
+                return _contract_check(
+                    f"input_dtype:slot:{label}",
+                    False,
+                    RunnableErrorCode.INPUT_DTYPE_MISMATCH,
+                    f"Runtime input dtype {value.dtype} does not match {expected_dtype}.",
+                    affected_op_labels=(label,),
+                    details=(
+                        ("slot_id", f"slot:{label}"),
+                        ("expected_dtype", expected_dtype),
+                        ("actual_dtype", str(value.dtype)),
+                    ),
+                )
+        return None
+    except Exception:
+        return None
 
 
 def raise_analysis_run_unavailable(trace: Any) -> None:
@@ -4509,19 +4639,24 @@ def _first_failed_contract(checks: Sequence[ContractCheck]) -> ContractCheck | N
     return next((check for check in checks if not check.passed), None)
 
 
-def _raise_failed_contract_as_divergence(failed: ContractCheck, *, fork: Any | None) -> None:
+def _raise_failed_contract_as_divergence(
+    failed: ContractCheck, *, fork: Any | None, cause: BaseException | None = None
+) -> None:
     """Roll back and raise a first-failed contract check as a typed ``PathDivergenceError``.
 
-    The single typed-divergence raise shared by hard admission (:func:`_raise_first_divergence`)
-    and the call loop (r39 corr2_4): a call that throws AFTER an input contract check already
-    failed is INPUT DIVERGENCE, not resolved-callable ``RuntimeSignatureDriftError``, so it must
-    surface as ``PathDivergenceError`` carrying that first failed check under either policy.
+    The single typed-divergence raise shared by hard admission (:func:`_raise_first_divergence`),
+    the call loop (r39 corr2_4), and the live provider's classify-at-native-failure fold (r41
+    hon1_3): a call that throws AFTER an input contract check already failed is INPUT
+    DIVERGENCE, not resolved-callable ``RuntimeSignatureDriftError``, so it must surface as
+    ``PathDivergenceError`` carrying that first failed check under either policy. ``cause``
+    (live provider) chains the native error as ``__cause__`` so the underlying torch failure
+    stays inspectable.
     """
 
     if fork is not None:
         _state._unregister_log(fork)
     diagnostic = failed.diagnostic
-    raise PathDivergenceError(
+    error = PathDivergenceError(
         diagnostic.message if diagnostic is not None else "Sparse run path diverged.",
         code=(
             diagnostic.code.value
@@ -4532,6 +4667,9 @@ def _raise_failed_contract_as_divergence(failed: ContractCheck, *, fork: Any | N
         first_mismatch=diagnostic,
         contract_check=failed,
     )
+    if cause is not None:
+        raise error from cause
+    raise error
 
 
 def _raise_first_divergence(
@@ -4653,7 +4791,17 @@ def _decode_torch_symbol(qualname: str) -> Any:
     """
 
     if qualname.startswith("torch.device(") and qualname.endswith(")"):
-        return torch.device(qualname[13:-1])
+        # r41 secC: the device constructor is inert value construction but rejects a
+        # malformed payload with a raw torch error; an attacker-edited qualname must
+        # surface as the SAME typed literal refusal as every other branch, never a
+        # bare ``RuntimeError`` outside the ``RunnableErrorCode`` vocabulary.
+        try:
+            return torch.device(qualname[13:-1])
+        except (RuntimeError, ValueError, TypeError) as exc:
+            raise RunPreconditionError(
+                f"Unsupported torch literal symbol {qualname!r}.",
+                code=RunnableErrorCode.UNSUPPORTED_LITERAL.value,
+            ) from exc
     name = qualname.removeprefix("torch.")
     if name == qualname or "." in name or not name.isidentifier():
         raise RunPreconditionError(
