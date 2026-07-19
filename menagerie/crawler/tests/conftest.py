@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 import json
 import os
 from pathlib import Path
+import platform
 import shutil
 import stat
 import subprocess
@@ -42,10 +43,14 @@ from menagerie.crawler.env_lifecycle import (
     SequentialEnvironmentLifecycle,
     canonical_probe_receipt_bytes,
     installed_package_inventory_bytes,
+    parse_exact_lock,
+    parse_probe_receipt_bytes,
+    parse_resolved_export,
 )
 from menagerie.crawler.envs import (
     EnvironmentIntent,
     EnvironmentRegistry,
+    ExportCheck,
     IntentProbes,
     LockArtifacts,
 )
@@ -77,14 +82,25 @@ OTHER_HASH = "sha256:" + "b" * 64
 NOW = "2026-07-14T12:00:00Z"
 
 _MINIMAL_REAL_SITE_MEMBERS = (
+    "_pytest",
+    "attr",
+    "attrs",
     "filelock",
     "fsspec",
+    "iniconfig",
     "jinja2",
+    "jsonschema",
+    "jsonschema_specifications",
     "markupsafe",
     "mpmath",
     "networkx",
     "numpy",
-    "numpy.libs",
+    "packaging",
+    "pluggy",
+    "py.py",
+    "pytest",
+    "referencing",
+    "rpds",
     "sympy",
     "torchgen",
     "typing_extensions.py",
@@ -101,6 +117,16 @@ _MINIMAL_REAL_DIST_INFO_PREFIXES = (
     "torch-",
     "typing_extensions-",
 )
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+_RELEASE_SPEC_PATH = _REPOSITORY_ROOT / "menagerie/crawler/envs/specs/round21-release.yml"
+_RELEASE_PROBE_CONTRACT_PATH = _RELEASE_SPEC_PATH.with_name("round21-release.probes.json")
+_ROUND21_LINUX_REGISTRY_PATH = Path(__file__).with_name("round21_linux_real_nodes.json")
+_ROUND21_LINUX_COLLECTED: set[str] = set()
+_ROUND21_LINUX_PASSED: set[str] = set()
+_ROUND21_LINUX_SKIPPED: set[str] = set()
+_ROUND21_LINUX_XFAILED: set[str] = set()
+_ROUND21_LINUX_FAILED: set[str] = set()
+_ROUND21_RELEASE_CONTENT_DIGEST: Optional[str] = None
 
 _FACT_KEYS = (
     "identity",
@@ -355,7 +381,12 @@ def _real_environment_failure(message: str) -> NoReturn:
 def _real_environment_source() -> Path:
     """Return the explicitly selected lock-built conda-family base prefix."""
 
-    value = os.environ.get("MENAGERIE_REAL_ENV_PREFIX") or os.environ.get("CONDA_PREFIX")
+    release_gate = os.environ.get("MENAGERIE_RELEASE_GATE") == "1"
+    if release_gate and not os.environ.get("MENAGERIE_PLATFORM_LOCK"):
+        _real_environment_failure("MENAGERIE_PLATFORM_LOCK is unavailable")
+    value = os.environ.get("MENAGERIE_REAL_ENV_PREFIX")
+    if not value and not release_gate:
+        value = os.environ.get("CONDA_PREFIX")
     if not value:
         _real_environment_failure("MENAGERIE_REAL_ENV_PREFIX/CONDA_PREFIX is unavailable")
     prefix = Path(str(value)).resolve()
@@ -364,9 +395,240 @@ def _real_environment_source() -> Path:
     return prefix
 
 
+def _release_probe_contract() -> IntentProbes:
+    """Load the committed target-neutral release probe contract.
+
+    Returns
+    -------
+    IntentProbes
+        Exact import and export probes shared by every release host.
+    """
+
+    try:
+        raw = json.loads(_RELEASE_PROBE_CONTRACT_PATH.read_bytes())
+    except (OSError, json.JSONDecodeError) as exc:
+        _real_environment_failure(f"release probe contract is unavailable: {exc}")
+    if not isinstance(raw, dict) or set(raw) != {
+        "schema_version",
+        "imports",
+        "export_checks",
+        "source_build",
+    }:
+        _real_environment_failure("release probe contract has an invalid schema")
+    imports = raw.get("imports")
+    checks = raw.get("export_checks")
+    if (
+        raw.get("schema_version") != "menagerie.crawler.release-probes.v1"
+        or not isinstance(imports, list)
+        or len(imports) < 3
+        or not all(isinstance(value, str) and value for value in imports)
+        or not isinstance(checks, list)
+        or raw.get("source_build") != []
+    ):
+        _real_environment_failure("release probe contract is incomplete")
+    export_checks = []
+    for raw_check in checks:
+        if (
+            not isinstance(raw_check, dict)
+            or set(raw_check) != {"module", "attribute"}
+            or not all(
+                isinstance(raw_check.get(key), str) and raw_check.get(key)
+                for key in ("module", "attribute")
+            )
+        ):
+            _real_environment_failure("release export-check contract is malformed")
+        export_checks.append(ExportCheck(str(raw_check["module"]), str(raw_check["attribute"])))
+    return IntentProbes(tuple(imports), tuple(export_checks), ())
+
+
+def _observe_release_probes(prefix: Path, probes: IntentProbes) -> tuple[ProbeResult, ...]:
+    """Run the committed release probes under the selected prefix interpreter.
+
+    Parameters
+    ----------
+    prefix:
+        Lock-built prefix or its hardlink clone.
+    probes:
+        Committed target-neutral probe contract.
+
+    Returns
+    -------
+    tuple[ProbeResult, ...]
+        Canonical successful observations with stable details.
+    """
+
+    program = (
+        "import importlib, json; "
+        f"imports={list(probes.imports)!r}; "
+        f"checks={[(check.module, check.attribute) for check in probes.export_checks]!r}; "
+        "modules={name:importlib.import_module(name) for name in imports}; "
+        "print(json.dumps({'exports':{name+'.'+attribute:"
+        "str(getattr(modules[name],attribute)) for name,attribute in checks}},sort_keys=True))"
+    )
+    try:
+        completed = subprocess.run(
+            (str(prefix / "bin/python"), "-B", "-c", program),
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        observation = json.loads(completed.stdout)
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+        stderr = exc.stderr if isinstance(exc, subprocess.CalledProcessError) else None
+        detail = f": {stderr[-1000:]}" if isinstance(stderr, str) and stderr else ""
+        _real_environment_failure(f"committed release probes failed: {exc}{detail}")
+    exports = observation.get("exports") if isinstance(observation, dict) else None
+    if not isinstance(exports, dict):
+        _real_environment_failure("release export observations are unavailable")
+    results = [ProbeResult(f"import:{name}", True, f"imported {name}") for name in probes.imports]
+    for check in probes.export_checks:
+        key = f"{check.module}.{check.attribute}"
+        value = exports.get(key)
+        if not isinstance(value, str) or not value:
+            _real_environment_failure(f"release export observation is absent: {key}")
+        results.append(
+            ProbeResult(f"export:{check.module}:{check.attribute}", True, f"{key}={value}")
+        )
+    return tuple(results)
+
+
+def _committed_fixture_intent(
+    prefix: Path,
+    *,
+    observe_probes: bool = True,
+) -> tuple[EnvironmentIntent, tuple[ProbeResult, ...]]:
+    """Load and independently verify the release fixture's committed lock family.
+
+    Parameters
+    ----------
+    prefix:
+        Hardlink clone of the clean lock-materialized prefix.
+    observe_probes:
+        Whether this intentionally executable fixture must rerun live probes.
+
+    Returns
+    -------
+    tuple[EnvironmentIntent, tuple[ProbeResult, ...]]
+        Strict binder intent and freshly observed committed probes.
+    """
+
+    lock_value = os.environ.get("MENAGERIE_PLATFORM_LOCK")
+    if not lock_value:
+        _real_environment_failure("MENAGERIE_PLATFORM_LOCK is unavailable")
+    lock_path = Path(lock_value).resolve()
+    lock_root = (_REPOSITORY_ROOT / "menagerie/crawler/envs/locks").resolve()
+    if lock_path.parent != lock_root or not lock_path.name.startswith("round19-"):
+        _real_environment_failure("release lock is not a committed platform artifact")
+    export_path = lock_path.with_suffix(".resolved.json")
+    export_hash_path = lock_path.with_suffix(".resolved.sha256")
+    provenance_path = lock_path.with_suffix(".provenance.json")
+    probe_receipt_path = lock_path.with_suffix(".probes.json")
+    required = (
+        _RELEASE_SPEC_PATH,
+        _RELEASE_PROBE_CONTRACT_PATH,
+        lock_path,
+        export_path,
+        export_hash_path,
+        provenance_path,
+        probe_receipt_path,
+    )
+    missing = [path for path in required if not path.is_file()]
+    if missing:
+        _real_environment_failure(
+            "committed release artifacts are unavailable: "
+            + ", ".join(path.name for path in missing)
+        )
+
+    lock_bytes = lock_path.read_bytes()
+    export_bytes = export_path.read_bytes()
+    try:
+        parse_exact_lock(lock_bytes)
+        canonical_export = parse_resolved_export(export_bytes)
+    except Exception as exc:
+        _real_environment_failure(f"committed release lock family is invalid: {exc}")
+    declared_export_hash = export_hash_path.read_text(encoding="utf-8").strip()
+    if canonical_export != export_bytes or hash_bytes(export_bytes) != declared_export_hash:
+        _real_environment_failure("committed resolved export digest is invalid")
+    if installed_package_inventory_bytes(prefix) != export_bytes:
+        _real_environment_failure(
+            "created-prefix package inventory differs from the committed resolved export"
+        )
+
+    probes = _release_probe_contract()
+    try:
+        committed_probe_results = parse_probe_receipt_bytes(probes, probe_receipt_path.read_bytes())
+    except Exception as exc:
+        _real_environment_failure(f"committed release probe receipt is invalid: {exc}")
+    observed_probe_results = (
+        _observe_release_probes(prefix, probes) if observe_probes else committed_probe_results
+    )
+    if observed_probe_results != committed_probe_results:
+        _real_environment_failure("live release probes differ from the committed receipt")
+
+    try:
+        provenance = json.loads(provenance_path.read_bytes())
+    except (OSError, json.JSONDecodeError) as exc:
+        _real_environment_failure(f"release provenance is invalid: {exc}")
+    platform_target = lock_path.name.removeprefix("round19-").removesuffix(".lock")
+    artifact_target = lock_path.stem
+    required_digests = {
+        "spec_sha256": hash_bytes(_RELEASE_SPEC_PATH.read_bytes()),
+        "probe_contract_sha256": hash_bytes(_RELEASE_PROBE_CONTRACT_PATH.read_bytes()),
+        "lock_sha256": hash_bytes(lock_bytes),
+        "resolved_export_sha256": hash_bytes(export_bytes),
+        "probe_receipt_sha256": hash_bytes(probe_receipt_path.read_bytes()),
+    }
+    if (
+        not isinstance(provenance, dict)
+        or provenance.get("schema_version") != "menagerie.crawler.release-lock-provenance.v1"
+        or provenance.get("target") != platform_target
+        or any(provenance.get(key) != value for key, value in required_digests.items())
+        or not isinstance(provenance.get("clean_create"), dict)
+        or provenance["clean_create"].get("validated") is not True
+    ):
+        _real_environment_failure("release provenance does not bind the committed lock family")
+
+    spec = json.loads(_RELEASE_SPEC_PATH.read_bytes())
+    if not isinstance(spec, dict):
+        _real_environment_failure("release specification is malformed")
+    channels = spec.get("channels")
+    dependencies = spec.get("dependencies")
+    if (
+        not isinstance(channels, list)
+        or not all(isinstance(value, str) and value for value in channels)
+        or not isinstance(dependencies, list)
+        or not all(isinstance(value, str) and value for value in dependencies)
+    ):
+        _real_environment_failure("release specification dependencies are malformed")
+    intent = EnvironmentIntent(
+        name="core",
+        phase=EnvironmentPhase.PYTORCH,
+        framework="pytorch",
+        description="Round-21 committed-lock release fixture",
+        split_guidance="release-proof-only",
+        channels=tuple(channels),
+        dependencies=tuple(dependencies),
+        probes=probes,
+        lock=LockArtifacts(
+            target=artifact_target,
+            lock_path=lock_path,
+            export_path=export_path,
+            export_hash_path=export_hash_path,
+            lock_bytes=lock_bytes,
+            export_bytes=export_bytes,
+            declared_export_hash=declared_export_hash,
+        ),
+        generation=None,
+    )
+    return intent, observed_probe_results
+
+
 def _fixture_intent(
     artifact_root: Path,
     prefix: Path,
+    *,
+    observe_probes: bool = True,
 ) -> tuple[EnvironmentIntent, tuple[ProbeResult, ...]]:
     """Create strict lifecycle artifacts from the selected lock-built installation.
 
@@ -374,12 +636,17 @@ def _fixture_intent(
     ----------
     artifact_root, prefix:
         Outside-prefix artifact directory and hardlink clone.
+    observe_probes:
+        Whether an intentionally executable fixture must rerun live probes.
 
     Returns
     -------
     tuple[EnvironmentIntent, tuple[ProbeResult, ...]]
         Exact strict binder contract and durable successful probes.
     """
+
+    if os.environ.get("MENAGERIE_RELEASE_GATE") == "1":
+        return _committed_fixture_intent(prefix, observe_probes=observe_probes)
 
     artifact_root.mkdir(parents=True)
     package_bytes = installed_package_inventory_bytes(prefix)
@@ -555,6 +822,18 @@ def _minimal_real_environment_source(source: Path, private_source: Path) -> None
     for member in sorted(torch_root.iterdir(), key=lambda path: path.name):
         if member.name != "lib":
             _copy_real_environment_member(member, private_site / "torch" / member.name)
+    copied_torch_symlinks = tuple(
+        path
+        for path in sorted(torch_root.rglob("*"), key=lambda path: str(path))
+        if path.is_symlink() and path.relative_to(torch_root).parts[0] != "lib"
+    )
+    for symlink in copied_torch_symlinks:
+        target = symlink.resolve(strict=True)
+        if not target.is_relative_to(source):
+            _real_environment_failure(f"Torch runtime symlink escapes selected prefix: {symlink}")
+        destination = private_source / target.relative_to(source)
+        if not destination.exists() and not destination.is_symlink():
+            _copy_real_environment_member(target, destination)
     for name in _MINIMAL_REAL_SITE_MEMBERS:
         member = site_packages / name
         if not member.exists():
@@ -581,19 +860,28 @@ def _minimal_real_environment_source(source: Path, private_source: Path) -> None
     _copy_real_environment_member(header, private_source / header.relative_to(source))
 
     global_deps = torch_root / "lib" / "libtorch_global_deps.so"
+    torch_shm_manager = torch_root / "bin" / "torch_shm_manager"
+    torch_shm_manager_target = (
+        torch_shm_manager.resolve(strict=True) if torch_shm_manager.is_file() else None
+    )
+    numpy_native_extensions = tuple(sorted((site_packages / "numpy").rglob("*.so")))
+    if not numpy_native_extensions:
+        _real_environment_failure("selected prefix has no real NumPy native extension")
     native_roots = (
         interpreter_target,
         global_deps,
+        *((torch_shm_manager_target,) if torch_shm_manager_target is not None else ()),
         *tuple(sorted((python_root / "lib-dynload").glob("*.so"))),
         *tuple(sorted(torch_root.glob("_C*.so"))),
         *tuple(sorted((site_packages / "markupsafe").glob("*.so"))),
-        *tuple(sorted((site_packages / "numpy").rglob("*.so"))),
+        *numpy_native_extensions,
         *tuple(sorted((site_packages / "numpy.libs").glob("*.so*"))),
     )
     dependencies = {
         global_deps,
         source / "lib" / "libgcc_s.so.1",
         source / "lib" / "libstdc++.so.6",
+        *((torch_shm_manager_target,) if torch_shm_manager_target is not None else ()),
         *_linux_native_dependency_closure(source, native_roots),
     }
     for member in sorted(dependencies, key=lambda path: path.relative_to(source).as_posix()):
@@ -757,31 +1045,37 @@ def _build_real_environment_fixture(
             raise AssertionError("the session-shared real fixture cannot be configured")
         configure(root, prefix)
     interpreter = prefix / "bin" / "python"
-    try:
-        completed = subprocess.run(
-            (
-                str(interpreter),
-                "-B",
-                "-c",
-                "import json, os, sys, torch, menagerie_round19_sentinel as s; "
-                "print(json.dumps({'prefix':sys.prefix,'torch':torch.__version__,"
-                "'sentinel':s.INTERPRETER_SENTINEL,'pth':"
-                "os.environ.get('MENAGERIE_ROUND19_PTH_SENTINEL')}))",
-            ),
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        observation = json.loads(completed.stdout)
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
-        _real_environment_failure(f"clone interpreter/Torch probe failed: {exc}")
-    if Path(str(observation["prefix"])).resolve() != prefix.resolve():
-        _real_environment_failure("clone interpreter does not report the clone prefix")
-    if observation.get("sentinel") != "round19-selected-prefix":
-        _real_environment_failure("environment-only sentinel is not importable")
-    if observation.get("pth") != "sealed-startup":
-        _real_environment_failure("sealed startup .pth effect is absent")
+    binary_immediate_pth = any(
+        b"\x00" in path.read_bytes() for path in site_packages.glob("*.pth") if path.is_file()
+    )
+    if not binary_immediate_pth:
+        try:
+            completed = subprocess.run(
+                (
+                    str(interpreter),
+                    "-B",
+                    "-c",
+                    "import json, os, sys, torch, menagerie_round19_sentinel as s; "
+                    "print(json.dumps({'prefix':sys.prefix,'torch':torch.__version__,"
+                    "'sentinel':s.INTERPRETER_SENTINEL,'pth':"
+                    "os.environ.get('MENAGERIE_ROUND19_PTH_SENTINEL')}))",
+                ),
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            observation = json.loads(completed.stdout)
+        except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+            stderr = exc.stderr if isinstance(exc, subprocess.CalledProcessError) else None
+            detail = f": {stderr[-1000:]}" if isinstance(stderr, str) and stderr else ""
+            _real_environment_failure(f"clone interpreter/Torch probe failed: {exc}{detail}")
+        if Path(str(observation["prefix"])).resolve() != prefix.resolve():
+            _real_environment_failure("clone interpreter does not report the clone prefix")
+        if observation.get("sentinel") != "round19-selected-prefix":
+            _real_environment_failure("environment-only sentinel is not importable")
+        if observation.get("pth") != "sealed-startup":
+            _real_environment_failure("sealed startup .pth effect is absent")
     if interpreter.resolve() == Path(sys.executable).resolve():
         _real_environment_failure("selected interpreter resolves to the driver interpreter")
     if detect_os_sandbox() is None:
@@ -795,7 +1089,11 @@ def _build_real_environment_fixture(
         "dist-info" in path.parts or path.parent.name == "conda-meta" for path in regular_files
     ):
         _real_environment_failure("clone has no package metadata")
-    intent, probe_results = _fixture_intent(root / "artifacts", prefix)
+    intent, probe_results = _fixture_intent(
+        root / "artifacts",
+        prefix,
+        observe_probes=not binary_immediate_pth,
+    )
     authority_cache = EnvironmentAuthorityCache()
     binding = bind_materialized_environment(
         intent,
@@ -803,6 +1101,11 @@ def _build_real_environment_fixture(
         probe_results,
         authority_cache=authority_cache,
     )
+    if os.environ.get("MENAGERIE_RELEASE_GATE") == "1":
+        global _ROUND21_RELEASE_CONTENT_DIGEST
+        if binding.environment_authority is None:
+            _real_environment_failure("release fixture has no sealed environment authority")
+        _ROUND21_RELEASE_CONTENT_DIGEST = binding.environment_authority.content_manifest_sha256
     counter.record(authority_cache, shared=shared)
     return RealEnvironmentFixture(
         source_prefix=clone_source,
@@ -2497,3 +2800,157 @@ def valid_model() -> dict[str, Any]:
     """
 
     return make_model(accepted=True)
+
+
+def _round21_linux_release_nodes() -> tuple[str, ...]:
+    """Load the exact checked-in Linux release proof node set.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Full parameterized pytest node IDs in canonical registry order.
+    """
+
+    payload = json.loads(_ROUND21_LINUX_REGISTRY_PATH.read_bytes())
+    if not isinstance(payload, dict) or payload.get("target") != "linux-64":
+        raise pytest.UsageError("unmet-release-gate: invalid Linux release proof registry")
+    nodes = payload.get("nodes")
+    if not isinstance(nodes, list) or not nodes or not all(isinstance(node, str) for node in nodes):
+        raise pytest.UsageError("unmet-release-gate: empty Linux release proof registry")
+    if len(nodes) != len(set(nodes)):
+        raise pytest.UsageError("unmet-release-gate: duplicate Linux release proof node")
+    return tuple(nodes)
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Apply the Linux release marker from the exact checked-in registry.
+
+    Parameters
+    ----------
+    items:
+        Fully expanded pytest items before marker-expression deselection.
+    """
+
+    expected = frozenset(_round21_linux_release_nodes())
+    for item in items:
+        if item.nodeid in expected:
+            item.add_marker(pytest.mark.round21_linux_real)
+            _ROUND21_LINUX_COLLECTED.add(item.nodeid)
+
+
+def pytest_runtest_logreport(report: pytest.TestReport) -> None:
+    """Record terminal outcomes for registered Linux release nodes.
+
+    Parameters
+    ----------
+    report:
+        One pytest setup/call/teardown phase report.
+    """
+
+    if report.nodeid not in frozenset(_round21_linux_release_nodes()):
+        return
+    if report.skipped:
+        target = _ROUND21_LINUX_XFAILED if hasattr(report, "wasxfail") else _ROUND21_LINUX_SKIPPED
+        target.add(report.nodeid)
+    elif report.failed:
+        _ROUND21_LINUX_FAILED.add(report.nodeid)
+    elif report.when == "call" and report.passed:
+        _ROUND21_LINUX_PASSED.add(report.nodeid)
+
+
+def _round21_release_commit() -> str:
+    """Return the CI-provided or repository-observed release commit.
+
+    Returns
+    -------
+    str
+        Full Git commit SHA.
+    """
+
+    provided = os.environ.get("GITHUB_SHA")
+    if provided:
+        return provided
+    completed = subprocess.run(
+        ("git", "rev-parse", "HEAD"),
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        cwd=_REPOSITORY_ROOT,
+    )
+    return completed.stdout.strip()
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int | pytest.ExitCode) -> None:
+    """Fail closed and emit the Linux release pass/not-skip attestation.
+
+    Parameters
+    ----------
+    session:
+        Completed pytest session whose exit status may be made fail-closed.
+    exitstatus:
+        Pytest's pre-attestation session result.
+    """
+
+    attestation_value = os.environ.get("MENAGERIE_RELEASE_ATTESTATION")
+    if not attestation_value:
+        return
+    expected = frozenset(_round21_linux_release_nodes())
+    collected = frozenset(_ROUND21_LINUX_COLLECTED)
+    passed = frozenset(_ROUND21_LINUX_PASSED)
+    skipped = frozenset(_ROUND21_LINUX_SKIPPED)
+    xfailed = frozenset(_ROUND21_LINUX_XFAILED)
+    failed = frozenset(_ROUND21_LINUX_FAILED)
+    lock_path = Path(os.environ.get("MENAGERIE_PLATFORM_LOCK", ""))
+    export_path = lock_path.with_suffix(".resolved.json")
+    provenance_path = lock_path.with_suffix(".provenance.json")
+    complete = (
+        os.environ.get("MENAGERIE_RELEASE_GATE") == "1"
+        and collected == expected
+        and passed == expected
+        and not skipped
+        and not xfailed
+        and not failed
+        and int(exitstatus) == int(pytest.ExitCode.OK)
+        and _ROUND21_RELEASE_CONTENT_DIGEST is not None
+        and lock_path.is_file()
+        and export_path.is_file()
+        and provenance_path.is_file()
+    )
+    sandbox = detect_os_sandbox()
+    prefix = Path(os.environ.get("MENAGERIE_REAL_ENV_PREFIX", ""))
+    attestation = {
+        "schema_version": "menagerie.crawler.release-proof-attestation.v1",
+        "status": "passed" if complete else "unmet-release-gate",
+        "target": "linux-64",
+        "commit_sha": _round21_release_commit(),
+        "lock_path": lock_path.as_posix(),
+        "lock_sha256": hash_bytes(lock_path.read_bytes()) if lock_path.is_file() else None,
+        "resolved_export_sha256": (
+            hash_bytes(export_path.read_bytes()) if export_path.is_file() else None
+        ),
+        "provenance_sha256": (
+            hash_bytes(provenance_path.read_bytes()) if provenance_path.is_file() else None
+        ),
+        "environment_content_digest": _ROUND21_RELEASE_CONTENT_DIGEST,
+        "host": {"system": platform.system(), "machine": platform.machine()},
+        "sandbox": None if sandbox is None else sandbox.kind,
+        "selected_interpreter": str((prefix / "bin/python").resolve()),
+        "expected_nodes": sorted(expected),
+        "collected_nodes": sorted(collected),
+        "passed_nodes": sorted(passed),
+        "skipped_nodes": sorted(skipped),
+        "xfailed_nodes": sorted(xfailed),
+        "failed_nodes": sorted(failed),
+    }
+    attestation_path = Path(attestation_value)
+    attestation_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = attestation_path.with_suffix(f"{attestation_path.suffix}.tmp")
+    temporary_path.write_text(
+        json.dumps(attestation, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    temporary_path.replace(attestation_path)
+    if not complete:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED

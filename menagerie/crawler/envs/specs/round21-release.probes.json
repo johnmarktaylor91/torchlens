@@ -1,0 +1,10 @@
+{
+  "schema_version": "menagerie.crawler.release-probes.v1",
+  "imports": ["torch", "numpy", "pytest", "jsonschema"],
+  "export_checks": [
+    {"module": "torch", "attribute": "__version__"},
+    {"module": "numpy", "attribute": "__version__"},
+    {"module": "pytest", "attribute": "__version__"}
+  ],
+  "source_build": []
+}

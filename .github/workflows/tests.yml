@@ -70,9 +70,14 @@ jobs:
         run: |
           ${{ matrix.pytest }}
 
-  crawler-round17:
-    name: Crawler Round 17 real compositions
+  crawler-round21-linux-release:
+    name: Crawler Round 21 Linux committed-lock release proofs
     runs-on: ubuntu-latest
+    env:
+      MENAGERIE_RELEASE_GATE: "1"
+      MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-linux-64.lock
+      MENAGERIE_REAL_ENV_PREFIX: ${{ runner.temp }}/round21-linux-prefix
+      MENAGERIE_RELEASE_ATTESTATION: ${{ runner.temp }}/round21-linux-attestation.json
     steps:
       - uses: actions/checkout@v4
 
@@ -80,75 +85,63 @@ jobs:
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-activate-base: false
+          python-version: "3.11"
 
-      - name: Install crawler OS-policy dependencies
+      - name: Require Linux lock, provenance, conda, bwrap, and strace
+        shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y bubblewrap strace
-
-      - name: Install crawler test dependencies
-        run: |
-          uv pip install --system -e ".[dev,tabular]"
-
-      - name: Run permanent Round 17 compositions and structural inventories
-        run: |
-          PYTHONPATH=. python -m pytest -q \
-            menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer \
-            menagerie/crawler/tests/test_round17_vs2_shutdown_composition.py::test_signal_after_real_forward_publishes_and_awards_nothing_then_resumes \
-            menagerie/crawler/tests/test_slice_f_driver.py::test_linux_handoff_attempts_both_deferred_statuses_and_supersedes \
-            menagerie/crawler/tests/test_round17_structural_inventories.py \
-            -x --tb=short
-
-  crawler-round19-linux-release:
-    name: Crawler Round 19 Linux supported-host release gate
-    runs-on: ubuntu-latest
-    env:
-      MENAGERIE_RELEASE_GATE: "1"
-      MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-linux-64.lock
-      MENAGERIE_REAL_ENV_PREFIX: ${{ runner.temp }}/round19-linux-prefix
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Provision the exact Linux platform lock
-        shell: bash
-        run: |
-          if [ ! -f "$MENAGERIE_PLATFORM_LOCK" ]; then
-            echo "unmet-release-gate: missing Linux platform lock: $MENAGERIE_PLATFORM_LOCK"
-            exit 1
-          fi
+          for artifact in \
+            "$MENAGERIE_PLATFORM_LOCK" \
+            "${MENAGERIE_PLATFORM_LOCK%.lock}.resolved.json" \
+            "${MENAGERIE_PLATFORM_LOCK%.lock}.resolved.sha256" \
+            "${MENAGERIE_PLATFORM_LOCK%.lock}.provenance.json" \
+            "${MENAGERIE_PLATFORM_LOCK%.lock}.probes.json"; do
+            if [ ! -f "$artifact" ]; then
+              echo "unmet-release-gate: missing committed Linux artifact: $artifact"
+              exit 1
+            fi
+          done
           if ! command -v conda >/dev/null 2>&1; then
             echo "unmet-release-gate: conda is unavailable on the Linux release host"
             exit 1
           fi
-          conda create --yes --prefix "$MENAGERIE_REAL_ENV_PREFIX" \
-            --file "$MENAGERIE_PLATFORM_LOCK"
-
-      - name: Require Linux bwrap and strace
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bubblewrap strace
           if ! command -v bwrap >/dev/null 2>&1 || ! command -v strace >/dev/null 2>&1; then
             echo "unmet-release-gate: Linux bwrap/strace enforcement is unavailable"
             exit 1
           fi
 
-      - name: Run exact Linux release proof inventory
+      - name: Materialize and verify the committed SHA-256 Linux lock
+        shell: bash
+        run: |
+          python -m pip install jsonschema
+          PYTHONPATH=. python -m menagerie.crawler.tools.release_lock \
+            --lock "$MENAGERIE_PLATFORM_LOCK" \
+            --resolved-export "${MENAGERIE_PLATFORM_LOCK%.lock}.resolved.json" \
+            --prefix "$MENAGERIE_REAL_ENV_PREFIX" \
+            --conda conda
+          "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -c \
+            "import jsonschema, numpy, pytest, torch"
+
+      - name: Run every registered Linux real composition and emit pass attestation
         shell: bash
         run: |
           PYTHONPATH=. "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -m pytest -q \
-            menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer \
-            menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding \
-            menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package \
-            menagerie/crawler/tests/test_round17_vs2_shutdown_composition.py::test_signal_after_real_forward_publishes_and_awards_nothing_then_resumes \
-            menagerie/crawler/tests/test_slice_f_driver.py::test_linux_handoff_attempts_both_deferred_statuses_and_supersedes \
-            menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes \
-            menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment \
-            menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error \
-            menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_real_multi_model_cache_closes_currentness_and_quarantines_mutation \
-            menagerie/crawler/tests/test_round17_structural_inventories.py \
-            -x --tb=short
+            menagerie/crawler/tests -m round21_linux_real -x --tb=short
+          "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -c \
+            "import json, os; p=json.load(open(os.environ['MENAGERIE_RELEASE_ATTESTATION'])); assert p['status']=='passed' and p['expected_nodes']==p['passed_nodes'] and not p['skipped_nodes'] and not p['xfailed_nodes']"
+
+      - name: Upload Linux release pass attestation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: round21-linux-release-attestation
+          path: ${{ runner.temp }}/round21-linux-attestation.json
+          if-no-files-found: error
 
   crawler-round19-macos-release:
     name: Crawler Round 19 macOS supported-host release gate

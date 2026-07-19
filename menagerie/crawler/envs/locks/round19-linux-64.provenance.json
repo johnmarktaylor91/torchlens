@@ -1,0 +1,102 @@
+{
+  "artifact_hash_validation": {
+    "algorithm": "sha256",
+    "artifact_count": 72,
+    "method": "dedicated clean-create package cache archives compared with committed lock",
+    "verified": true
+  },
+  "channels": [
+    "https://conda.anaconda.org/conda-forge/linux-64",
+    "https://conda.anaconda.org/conda-forge/noarch"
+  ],
+  "clean_create": {
+    "command": [
+      "python",
+      "-m",
+      "menagerie.crawler.tools.release_lock",
+      "--lock",
+      "menagerie/crawler/envs/locks/round19-linux-64.lock",
+      "--resolved-export",
+      "menagerie/crawler/envs/locks/round19-linux-64.resolved.json",
+      "--prefix",
+      "<clean-prefix>"
+    ],
+    "inventory_sha256": "sha256:e5f51e5bf652d7019757f0f8f4c591bc83704804e91c34894acbbd7e9bd84b57",
+    "jsonschema_version": "4.23.0",
+    "numpy_version": "2.1.3",
+    "observed_at_utc": "2026-07-19T16:45:26Z",
+    "pytest_version": "8.3.5",
+    "python_version": "3.11.11",
+    "torch_version": "2.5.1",
+    "validated": true
+  },
+  "host": {
+    "filesystem": "ext4",
+    "kernel": "5.15.0-139-generic",
+    "machine": "x86_64",
+    "system": "Linux"
+  },
+  "lock_path": "menagerie/crawler/envs/locks/round19-linux-64.lock",
+  "lock_sha256": "sha256:81c2003c4fa9f62b5ab85c737e4ba924385a78aa22dcc5b4fc231bee3f293356",
+  "probe_contract_path": "menagerie/crawler/envs/specs/round21-release.probes.json",
+  "probe_contract_sha256": "sha256:095e6004ec48253a2b03bd7e2d251775cc57ee5105a05fe188528d5546df63cf",
+  "probe_receipt_path": "menagerie/crawler/envs/locks/round19-linux-64.probes.json",
+  "probe_receipt_sha256": "sha256:1de80f6a7a54065ff1e801bdb448dab983be2503b1a374fe998021ab72783073",
+  "repodata_inputs": {
+    "channel_priority": "flexible",
+    "filenames": [
+      "repodata.json"
+    ]
+  },
+  "resolved_export_path": "menagerie/crawler/envs/locks/round19-linux-64.resolved.json",
+  "resolved_export_sha256": "sha256:e5f51e5bf652d7019757f0f8f4c591bc83704804e91c34894acbbd7e9bd84b57",
+  "schema_version": "menagerie.crawler.release-lock-provenance.v1",
+  "solver": {
+    "command": [
+      "conda",
+      "env",
+      "create",
+      "--prefix",
+      "<solve-prefix>",
+      "--file",
+      "menagerie/crawler/envs/specs/round21-release.yml",
+      "--solver",
+      "libmamba"
+    ],
+    "conda_libmamba_solver_version": "23.9.1",
+    "conda_version": "23.9.0",
+    "libmamba_version": "1.5.1",
+    "name": "conda-libmamba-solver"
+  },
+  "source_commit": "765c015ba0ccc8650ecad1a91123ebd7a6fb1eb6",
+  "spec_path": "menagerie/crawler/envs/specs/round21-release.yml",
+  "spec_sha256": "sha256:8df6d5699932e2d78757a0d095337640c0b1b85ae6c1edc80e01a331fdd8e8ff",
+  "target": "linux-64",
+  "virtual_packages": [
+    [
+      "__archspec",
+      "1",
+      "skylake_avx512"
+    ],
+    [
+      "__cuda",
+      "12.4",
+      "0"
+    ],
+    [
+      "__glibc",
+      "2.31",
+      "0"
+    ],
+    [
+      "__linux",
+      "5.15.0",
+      "0"
+    ],
+    [
+      "__unix",
+      "0",
+      "0"
+    ]
+  ]
+}

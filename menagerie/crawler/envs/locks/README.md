@@ -1,9 +1,15 @@
 # Target-solved environment locks
 
-Exact `*.lock`, `*.resolved.json`, and `*.resolved.sha256` files are setup-time outputs. The lifecycle
-solver must run on the actual `osx-arm64` or `linux-x86_64-cuda` target, capture exact artifact URLs and
-hashes, create the environment from that lock, and pass all declared probes. These files are never
-hand-authored, guessed, or generated on a different platform.
+Exact `*.lock`, `*.resolved.json`, and `*.resolved.sha256` files are target-solve outputs. The release
+lock family also includes solver provenance and an observed probe receipt. Locks capture exact artifact
+URLs and SHA-256 hashes, and must clean-create an installed inventory byte-identical to the committed
+resolved export before they can be committed. These files are never hand-authored or guessed.
 
-Until that on-target setup occurs, each intent intentionally reports an `unlocked` status and no
-environment generation. A changed lock, resolved export, or probe contract creates a new generation.
+`round19-linux-64.*` is the genuine Linux release family solved and clean-validated on Linux from
+`../specs/round21-release.yml`. CI materializes it with `menagerie.crawler.tools.release_lock`, which
+checks every downloaded archive SHA-256 and the complete installed inventory. The release fixture then
+consumes these committed artifacts and reruns the committed probe contract; it never derives release
+provenance from the live prefix. The `osx-arm64` release family remains the separately owned VS10 work.
+
+Other intent families remain unlocked until their target setup occurs. Any changed lock, export,
+provenance, or probe contract creates a new environment generation.

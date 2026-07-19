@@ -40,7 +40,7 @@ from menagerie.crawler.identity import (
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.proposal import model_code_manifest
-from menagerie.crawler.tests.conftest import NOW
+from menagerie.crawler.tests.conftest import NOW, _committed_fixture_intent
 from menagerie.crawler.tests.test_slice_f_driver import (
     FakeAuthor,
     FakeChecker,
@@ -485,6 +485,16 @@ def _materialized_environment(
         raise ValueError(
             f"dry-run environment is not a materialized conda prefix: {resolved_prefix}"
         )
+    if os.environ.get("MENAGERIE_PLATFORM_LOCK"):
+        intent, probe_results = _committed_fixture_intent(resolved_prefix)
+        registry = EnvironmentRegistry(
+            intents={intent.name: intent},
+            phase_order=(DRY_RUN_PHASE,),
+            small_set_target=True,
+            hard_cap=None,
+            global_split_guidance="single committed-lock real fixture environment",
+        )
+        return MaterializedDryRunEnvironment(resolved_prefix, intent, probe_results), registry
     artifact_root = resolved_prefix.parent / "artifacts"
     target = "round19-real-host"
     lock_path = artifact_root / f"{target}.lock"

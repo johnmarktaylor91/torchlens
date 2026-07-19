@@ -884,7 +884,7 @@ def _proof_e13(
         """Add one binary immediate site-packages ``.pth`` before sealing."""
 
         checkpoint = _site_packages(prefix) / "menagerie_round21_binary.pth"
-        _hardlink_test_member(root, checkpoint, b"\x00\xff\x00round21-binary-pth\n")
+        _hardlink_test_member(root, checkpoint, b"\x00round21-binary-pth\n")
         state["checkpoint"] = checkpoint
 
     fixture = factory(configure)

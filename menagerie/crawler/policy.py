@@ -397,13 +397,13 @@ def _linux_compute_devices() -> tuple[Path, ...]:
     return tuple(sorted((path for path in candidates if path.exists()), key=lambda path: str(path)))
 
 
-def _linux_dynamic_runtime_files(executable: Path) -> tuple[Path, ...]:
-    """Return exact host runtime files required to start one Linux executable.
+def _linux_ldd_runtime_files(target: Path) -> tuple[Path, ...]:
+    """Return exact host runtime files reported for one Linux ELF target.
 
     Parameters
     ----------
-    executable:
-        Interpreter executable that will run inside the minimal namespace.
+    target:
+        ELF executable or extension whose exact dynamic closure is required.
 
     Returns
     -------
@@ -421,7 +421,7 @@ def _linux_dynamic_runtime_files(executable: Path) -> tuple[Path, ...]:
         raise SandboxUnavailableError("Linux runtime dependency inventory is unavailable")
     try:
         completed = subprocess.run(
-            (ldd, str(executable)),
+            (ldd, str(target)),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -444,6 +444,45 @@ def _linux_dynamic_runtime_files(executable: Path) -> tuple[Path, ...]:
         paths.append(path)
     if not paths:
         raise SandboxUnavailableError("Linux runtime dependency inventory was empty")
+    return tuple(dict.fromkeys(paths))
+
+
+def _linux_dynamic_runtime_files(executable: Path) -> tuple[Path, ...]:
+    """Return exact host runtime files needed by the Linux worker boundary.
+
+    The worker always imports the shipped Torch native extension. Conda-forge's
+    Python executable does not itself link every glibc component used by that
+    extension, so the closed capability must include both exact ELF closures.
+
+    Parameters
+    ----------
+    executable:
+        Interpreter executable that will run inside the minimal namespace.
+
+    Returns
+    -------
+    tuple[Path, ...]
+        Existing absolute ELF loader and shared-library paths reported by ``ldd``.
+
+    Raises
+    ------
+    SandboxUnavailableError
+        If a present Torch native extension cannot be inventoried safely.
+    """
+
+    targets = [executable]
+    prefix = executable.parent.parent
+    torch_extensions = tuple(
+        sorted(
+            prefix.glob("lib/python*/site-packages/torch/_C*.so"),
+            key=lambda path: str(path),
+        )
+    )
+    if torch_extensions:
+        targets.append(torch_extensions[0])
+    paths: list[Path] = []
+    for target in targets:
+        paths.extend(_linux_ldd_runtime_files(target))
     return tuple(dict.fromkeys(paths))
 
 
@@ -1048,6 +1087,7 @@ def _linux_minimal_read_mounts(
         source_root,
         *allowed_read_paths,
         *transport.members,
+        *transport.canonical_members,
     ]
     normalized: list[Path] = []
     for candidate in candidates:
@@ -1109,6 +1149,30 @@ def _bubblewrap_argv(
         "--dev",
         "/dev",
     ]
+    scratch_tmp_candidates = tuple(
+        root.resolve() / "tmp" for root in write_roots if (root.resolve() / "tmp").is_dir()
+    )
+    if len(scratch_tmp_candidates) != 1:
+        raise SandboxUnavailableError("Linux private temporary directory is unavailable")
+    scratch_tmp = scratch_tmp_candidates[0]
+    libomp_registration_blocker = scratch_tmp / "libomp-registration-blocker"
+    libomp_registration_blocker.mkdir(exist_ok=True)
+    libomp_registration_path = f"/__KMP_REGISTERED_LIB_2_{os.getuid()}"
+    wrapped.extend(
+        (
+            "--bind",
+            str(scratch_tmp),
+            "/tmp",
+            "--dir",
+            "/dev/shm",
+            "--bind",
+            str(scratch_tmp),
+            "/dev/shm",
+            "--bind",
+            str(libomp_registration_blocker),
+            libomp_registration_path,
+        )
+    )
     for path in _linux_minimal_read_mounts(
         argv,
         cwd,
@@ -1143,6 +1207,7 @@ def _probe_bubblewrap(executable: str) -> bool:
     try:
         with tempfile.TemporaryDirectory(prefix="menagerie-bwrap-probe-") as temporary:
             root = Path(temporary).resolve()
+            (root / "tmp").mkdir()
             return _probe_command(
                 _bubblewrap_argv(
                     executable,

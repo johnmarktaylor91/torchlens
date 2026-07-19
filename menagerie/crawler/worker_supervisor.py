@@ -1841,6 +1841,32 @@ def _decoded_trace_paths(line: str) -> tuple[str, ...]:
     return tuple(values)
 
 
+def _sandbox_temporary_alias_path(candidate: Path, write_roots: Sequence[Path]) -> Path:
+    """Map Linux private temporary mount aliases back to the worker scratch.
+
+    Parameters
+    ----------
+    candidate:
+        Absolute path observed inside the bubblewrap namespace.
+    write_roots:
+        Writable roots with the worker scratch first.
+
+    Returns
+    -------
+    pathlib.Path
+        Host-side scratch path for private ``/tmp`` and ``/dev/shm`` aliases.
+    """
+
+    if not write_roots:
+        return candidate
+    for sandbox_alias in (Path("/tmp"), Path("/dev/shm")):
+        if candidate.parent == sandbox_alias and re.fullmatch(
+            r"__KMP_REGISTERED_LIB_\d+_\d+", candidate.name
+        ):
+            return write_roots[0] / "tmp" / candidate.relative_to(sandbox_alias)
+    return candidate
+
+
 def _outside_allowed_roots(path_text: str, cwd: Path, write_roots: Sequence[Path]) -> bool:
     """Return whether a traced write path is outside every allowed root.
 
@@ -1860,6 +1886,8 @@ def _outside_allowed_roots(path_text: str, cwd: Path, write_roots: Sequence[Path
     """
 
     path = Path(path_text)
+    if path.is_absolute():
+        path = _sandbox_temporary_alias_path(path, write_roots)
     candidate = (path if path.is_absolute() else cwd / path).resolve()
     roots = tuple(root.resolve() for root in write_roots)
     return not any(candidate == root or root in candidate.parents for root in roots)
@@ -1949,6 +1977,8 @@ def _read_path_is_allowed(
     raw_path = Path(path_text)
     lexical_candidate = (raw_path if raw_path.is_absolute() else cwd / raw_path).absolute()
     candidate = _resolved_trace_path(path_text, cwd)
+    if raw_path.is_absolute():
+        candidate = _sandbox_temporary_alias_path(candidate, write_roots).resolve()
     roots = tuple(root.resolve() for root in write_roots)
     allowed = tuple(path.resolve() for path in allowed_read_paths)
     runtime_roots = tuple(root.resolve() for root in runtime_code_roots)

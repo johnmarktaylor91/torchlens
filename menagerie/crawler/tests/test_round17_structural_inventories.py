@@ -7,6 +7,7 @@ from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass
 import inspect
+import json
 from pathlib import Path
 import re
 from typing import Any, Mapping, Sequence
@@ -19,6 +20,7 @@ import menagerie.crawler.driver as driver_module
 import menagerie.crawler.env_lifecycle as lifecycle_module
 import menagerie.crawler.worker_supervisor as supervisor_module
 from menagerie.crawler.constants import ATTEMPT_SCHEMA_VERSION_V3
+from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.schema import (
     SchemaOwner,
     load_schema,
@@ -363,6 +365,22 @@ ROUND21_VS8_PROOF_REGISTRY: dict[str, str] = {
     "P08": (
         "menagerie/crawler/tests/test_round21_cache_rebind_composition.py::"
         "test_round21_mismatched_rebind_preserves_active_authority_and_awards"
+    ),
+}
+
+ROUND21_VS9_PROOF_REGISTRY: dict[str, str] = {
+    **ROUND21_VS8_PROOF_REGISTRY,
+    "P09": (
+        "menagerie/crawler/tests/test_round21_ci_composition.py::"
+        "test_round21_linux_committed_lock_provenance_awards_in_ci"
+    ),
+    "T04": (
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
+        "test_round21_linux_release_artifacts_and_provisioning_are_real"
+    ),
+    "T05": (
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
+        "test_round21_linux_release_registry_is_exact"
     ),
 }
 
@@ -1621,22 +1639,18 @@ def test_legacy_manifest_v1_is_quarantined_from_every_live_import_graph() -> Non
 
 
 def test_round17_real_compositions_are_explicitly_selected_in_ci() -> None:
-    """CI must select every real probe and the structural module by exact path."""
+    """The always-on Linux CI lane must select the exact release marker."""
 
     workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
-    assert "name: Crawler Round 17 real compositions" in workflow
-    assert "test_round17_structural_inventories.py" in workflow
-    for node_id in _ROUND17_CI_NODES:
-        assert node_id in workflow
-    crawler_job = workflow.split("crawler-round17:", 1)[1]
+    assert "name: Crawler Round 21 Linux committed-lock release proofs" in workflow
+    crawler_job = workflow.split("crawler-round21-linux-release:", 1)[1]
+    crawler_job = crawler_job.split("\n  crawler-round19-macos-release:", 1)[0]
+    assert "menagerie/crawler/tests -m round21_linux_real" in crawler_job
+    assert 'MENAGERIE_RELEASE_GATE: "1"' in crawler_job
+    assert "MENAGERIE_RELEASE_ATTESTATION" in crawler_job
     assert "--ignore" not in crawler_job
     assert "not heavy" not in crawler_job
     assert "not slow" not in crawler_job
-
-    mutated = workflow.replace(_ROUND17_CI_NODES[0], "")
-    assert _required_ci_selection_errors(mutated) == (
-        f".github/workflows/tests.yml:<workflow>:{_ROUND17_CI_NODES[0]}:deleted-ci-node",
-    )
 
 
 def test_round19_supported_host_release_gate_inventory_is_exact() -> None:
@@ -1657,17 +1671,93 @@ def test_round19_supported_host_release_gate_inventory_is_exact() -> None:
         "macos-positive-negative",
         "macos-profile",
     }
-    assert "crawler-round19-linux-release:" in workflow
+    assert "crawler-round21-linux-release:" in workflow
     assert "crawler-round19-macos-release:" in workflow
-    release_jobs = workflow.split("crawler-round19-linux-release:", 1)[1]
-    selected = set(re.findall(r"menagerie/crawler/tests/[A-Za-z0-9_./:-]+", release_jobs))
-    assert selected == set(_ROUND19_RELEASE_NODE_INVENTORY.values())
+    release_jobs = workflow.split("crawler-round21-linux-release:", 1)[1]
     linux_job, macos_job = release_jobs.split("\n  crawler-round19-macos-release:", 1)
+    macos_selected = set(re.findall(r"menagerie/crawler/tests/[A-Za-z0-9_./:-]+", macos_job))
+    assert macos_selected == {
+        _ROUND19_RELEASE_NODE_INVENTORY["macos-positive-negative"],
+        _ROUND19_RELEASE_NODE_INVENTORY["macos-profile"],
+        _ROUND19_RELEASE_NODE_INVENTORY["dry-run-run-resume"],
+        _ROUND19_RELEASE_NODE_INVENTORY["dry-run-false-complete"],
+    }
+    assert "-m round21_linux_real" in linux_job
     assert "runs-on: macos-14-xlarge" in macos_job
     for job in (linux_job, macos_job):
         assert 'MENAGERIE_RELEASE_GATE: "1"' in job
         assert "unmet-release-gate" in job
         assert "pytest.skip" not in job
+
+
+def test_round21_linux_release_artifacts_and_provisioning_are_real() -> None:
+    """T04 requires every workflow-named Linux lock-family artifact to exist and parse."""
+
+    lock_path = _CRAWLER_ROOT / "envs" / "locks" / "round19-linux-64.lock"
+    family = {
+        "lock": lock_path,
+        "export": lock_path.with_suffix(".resolved.json"),
+        "export-hash": lock_path.with_suffix(".resolved.sha256"),
+        "provenance": lock_path.with_suffix(".provenance.json"),
+        "probes": lock_path.with_suffix(".probes.json"),
+    }
+    assert {name for name, path in family.items() if path.is_file()} == set(family)
+    lock_bytes = family["lock"].read_bytes()
+    export_bytes = family["export"].read_bytes()
+    assert lifecycle_module.parse_exact_lock(lock_bytes)
+    assert lifecycle_module.parse_resolved_export(export_bytes) == export_bytes
+    assert family["export-hash"].read_text(encoding="utf-8").strip() == hash_bytes(export_bytes)
+    provenance = json.loads(family["provenance"].read_bytes())
+    assert provenance["target"] == "linux-64"
+    assert provenance["lock_sha256"] == hash_bytes(lock_bytes)
+    assert provenance["resolved_export_sha256"] == hash_bytes(export_bytes)
+    assert provenance["clean_create"]["validated"] is True
+
+    workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
+    linux_job = workflow.split("crawler-round21-linux-release:", 1)[1].split(
+        "\n  crawler-round19-macos-release:", 1
+    )[0]
+    assert family["lock"].relative_to(_REPOSITORY_ROOT).as_posix() in linux_job
+    for suffix in (".resolved.json", ".resolved.sha256", ".provenance.json", ".probes.json"):
+        assert suffix in linux_job
+    assert "menagerie.crawler.tools.release_lock" in linux_job
+    assert '"$MENAGERIE_REAL_ENV_PREFIX/bin/python" -m pytest' in linux_job
+    assert "if-no-files-found: error" in linux_job
+
+
+def test_round21_linux_release_registry_is_exact() -> None:
+    """T05 requires the committed marker registry to name expanded existing nodes."""
+
+    registry_path = _CRAWLER_ROOT / "tests" / "round21_linux_real_nodes.json"
+    payload = json.loads(registry_path.read_bytes())
+    nodes = payload["nodes"]
+    assert payload["target"] == "linux-64"
+    assert len(nodes) == 45
+    assert len(nodes) == len(set(nodes))
+    assert set(ROUND21_VS9_PROOF_REGISTRY) == {
+        "P01",
+        "T01",
+        "T01-CI",
+        "T02",
+        "P02",
+        "P03",
+        "T03",
+        "P04",
+        "P12",
+        "P13",
+        "P14",
+        "P17",
+        "P19",
+        "P05",
+        "P06",
+        "P07",
+        "P08",
+        "P09",
+        "T04",
+        "T05",
+    }
+    assert ROUND21_VS9_PROOF_REGISTRY["P09"] in nodes
+    assert all(node.startswith("menagerie/crawler/tests/") and "::test_" in node for node in nodes)
 
 
 @pytest.mark.parametrize(
