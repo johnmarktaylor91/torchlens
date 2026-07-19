@@ -859,6 +859,7 @@ class EnvironmentAuthorityCache:
         self.real_spawns = 0
         self.invalidations = 0
         self.rehashes = 0
+        self.rejected_rebinds = 0
         self._epoch = 0
         self._verification_sequence = 0
         self._active_currentness_token: Optional[EnvironmentVerificationToken] = None
@@ -922,7 +923,7 @@ class EnvironmentAuthorityCache:
                 or active.selected_interpreter != selected_interpreter.absolute()
                 or active.base_environment_generation != base_generation
             ):
-                self.invalidate()
+                self.rejected_rebinds += 1
                 raise AuthorityDerivationError(
                     "active environment authority cache cannot be rebound to different inputs"
                 )

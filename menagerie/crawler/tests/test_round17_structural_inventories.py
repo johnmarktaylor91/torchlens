@@ -358,6 +358,14 @@ ROUND21_VS7_PROOF_REGISTRY: dict[str, str] = {
     ),
 }
 
+ROUND21_VS8_PROOF_REGISTRY: dict[str, str] = {
+    **ROUND21_VS7_PROOF_REGISTRY,
+    "P08": (
+        "menagerie/crawler/tests/test_round21_cache_rebind_composition.py::"
+        "test_round21_mismatched_rebind_preserves_active_authority_and_awards"
+    ),
+}
+
 
 def test_round21_verification_tree_walk_inventory_is_closed() -> None:
     """Every complete prefix walk and v3 reuse site stays explicitly registered."""
