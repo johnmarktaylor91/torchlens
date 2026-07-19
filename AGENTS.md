@@ -199,8 +199,11 @@ pytest tests/ -m "not slow" -x --tb=short
     `_random.Random`, unseeded-construction `randbits` entropy, `SystemRandom`/`secrets`, OS
     entropy, `uuid4`, `default_rng`, the full clock family incl. `datetime.now`/`localtime`/
     `os.times`/`getrusage`) permanently ceilings replay at `unverifiable` + `not_applicable`;
-    monitor uncertainty (incl. a live pre-existing non-owner Python thread on py<=3.11) downgrades
-    completeness to INCOMPLETE. Loaded-sparse and live providers settle through ONE finalizer
+    monitor uncertainty (install/chain/restore/inventory failure) downgrades completeness to
+    INCOMPLETE; a realistic pre-existing-thread persistent-generator draw is witnessed by the
+    state inventory, and only an adversarial draw+state-restore on such a thread is a documented
+    residual (a benign background thread never ceilings a capture). Loaded-sparse and live
+    providers settle through ONE finalizer
     (identical verdict class): a live opaque-container output is `unverifiable`+poisoned, a
     parse-refused descriptor degrades every payload family to analysis-only, and an inexecutable
     divergent input raises `PathDivergenceError`; structseq trust keys on the resolution authority

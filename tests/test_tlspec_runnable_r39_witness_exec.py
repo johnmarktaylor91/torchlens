@@ -21,8 +21,10 @@ from __future__ import annotations
 import collections
 import datetime as _datetime
 import shutil
+import sys
 import threading
 import time
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -279,25 +281,93 @@ def test_seeded_numpy_singleton_stays_verified(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-def test_pre_existing_non_owner_thread_is_incomplete() -> None:
-    """A live pre-existing non-owner Python thread ceilings the witness INCOMPLETE."""
+def test_benign_background_thread_does_not_ceiling_capture(tmp_path: Path) -> None:
+    """A benign live background thread must NOT ceiling a deterministic capture (over-trigger pin).
+
+    The r38 draft's blanket pre-existing-thread INCOMPLETE ceiling broke every capture running
+    alongside a DataLoader/Jupyter/pytest worker. A background thread that draws no RNG is not a
+    threat: the monitor stays certain and a deterministic model stays VERIFIED.
+    """
 
     from torchlens.utils.rng import host_nondeterminism_monitor
 
     stop = threading.Event()
 
     def _idle() -> None:
-        stop.wait(5.0)
+        stop.wait(10.0)
 
-    worker = threading.Thread(target=_idle, name="preexisting-worker")
+    worker = threading.Thread(target=_idle, name="benign-worker", daemon=True)
     worker.start()
     try:
         with host_nondeterminism_monitor(None) as result:
             pass
-        assert result.uncertain is True
+        assert result.uncertain is False
+        assert result.channels == set()
+        x = torch.randn(2, 4)
+        assert _host_rng_consumed(_DeterministicLinear(), x) is False
+        run = _roundtrip(_DeterministicLinear(), x, tmp=tmp_path, run_seed=1)
+        assert run.report.path_faithfulness is PathFaithfulness.VERIFIED
     finally:
         stop.set()
         worker.join()
+
+
+def test_pre_existing_thread_persistent_draw_is_witnessed_by_inventory() -> None:
+    """A REAL persistent-instance draw on a pre-existing thread is still witnessed (E3).
+
+    Dropping the blanket ceiling does not lose the realistic case: the thread-independent state
+    inventory catches a background worker's draw from a persistent numpy Generator, so the
+    monitor still marks host-RNG consumption (the run would ceiling honestly).
+    """
+
+    from torchlens.utils.rng import host_nondeterminism_monitor
+
+    gen = np.random.default_rng(7)  # persistent, held across the window
+    with host_nondeterminism_monitor(None) as result:
+        done = threading.Event()
+
+        def _draw() -> None:
+            float(gen.standard_normal())
+            done.set()
+
+        worker = threading.Thread(target=_draw, name="drawing-worker", daemon=True)
+        worker.start()
+        worker.join()
+        done.wait(1.0)
+    assert result.uncertain is False
+    assert "rng_instance_inventory" in result.channels
+
+
+def test_back_to_back_captures_are_isolated(tmp_path: Path) -> None:
+    """Isolation: a second back-to-back capture behaves identically to a fresh-process one.
+
+    Guards against a monitor patch (sys/threading profile, randbits, _random.Random) surviving a
+    completed capture and corrupting the next one. Two deterministic captures in one process must
+    BOTH be VERIFIED with no leaked global.
+    """
+
+    import _random as _c_random
+
+    pre = (
+        sys.getprofile(),
+        threading.getprofile() if hasattr(threading, "getprofile") else None,
+        _c_random.Random.random,
+        np.random.bit_generator.randbits,
+        np.random.default_rng,
+    )
+    x = torch.randn(2, 4)
+    first = _roundtrip(_DeterministicLinear(), x, tmp=tmp_path, run_seed=1, name="iso1.tlspec")
+    second = _roundtrip(_DeterministicLinear(), x, tmp=tmp_path, run_seed=1, name="iso2.tlspec")
+    assert first.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert second.report.path_faithfulness is PathFaithfulness.VERIFIED
+    post = (
+        sys.getprofile(),
+        threading.getprofile() if hasattr(threading, "getprofile") else None,
+        _c_random.Random.random,
+        np.random.bit_generator.randbits,
+        np.random.default_rng,
+    )
+    assert post == pre, "a host-RNG monitor patch leaked past a completed capture"
 
 
 # ---- RNG structural immunizer (registry meta-test) ------------------------------------
@@ -546,7 +616,13 @@ def test_live_opaque_output_never_verified(factory: Any) -> None:
 
     x = torch.randn(2, 4)
     model = factory()  # retain a strong ref: the live Trace holds only a weakref to it
-    live = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+    with warnings.catch_warnings():
+        # Capturing an opaque set/custom container legitimately warns that output traversal
+        # falls back to BFS (honest, and de-duped process-wide). The contract under test is
+        # the UNVERIFIABLE+poison verdict, not the warning; tolerate it (the project errors on
+        # torchlens UserWarnings) without weakening the verdict assertion.
+        warnings.simplefilter("ignore")
+        live = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
     result = live.run(inputs=x, on_divergence="return_diverged")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert result.report.poisoned is True
@@ -585,7 +661,9 @@ def test_sparse_refuses_opaque_output_save(tmp_path: Path) -> None:
     """Parity: the sparse producer REFUSES to save the same opaque outputs."""
 
     x = torch.randn(2, 4)
-    trace = _capture(_SetOut(), x)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # opaque-output BFS-fallback warning (see above)
+        trace = _capture(_SetOut(), x)
     path = tmp_path / "opaque.tlspec"
     shutil.rmtree(path, ignore_errors=True)
     with pytest.raises(Exception):

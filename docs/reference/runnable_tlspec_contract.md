@@ -872,22 +872,27 @@ as no-consumption.
 
 **Positively-covered thread qualification (r39).** Entropy / instance / construction / clock
 positives mark on ANY COVERED thread (thread-independent module/class patches, the process
-inventory, and every profile-hooked thread -- the owner plus threads started in-window). A live
-PRE-EXISTING non-owner Python thread at window open is an UNWITNESSABLE domain on Python <= 3.11
-(a draw followed by a `bit_generator.state` restore on such a thread defeats the inventory, and
-`threading.setprofile` cannot reach an already-running worker), so its presence ceilings the
-capture to INCOMPLETE -- the locked conservative default, with the offending threads NAMED in the
-uncertainty detail. This is NOT a claim that the hook reached the thread; it is honest
-over-triggering. Future relaxation (a positive all-thread proof) is `sys.monitoring` (PEP 669,
-3.12+, interpreter-wide); it is not in this contract.
+inventory, and every profile-hooked thread -- the owner plus threads started in-window). A
+REALISTIC pre-existing non-owner Python thread RNG use (a background worker drawing from a
+persistent `Generator`/`RandomState`/`BitGenerator`, or constructing an unseeded generator) IS
+witnessed: the process-wide before/after state inventory catches the persistent-instance draw
+thread-independently, and the module/class construction/entropy patches (`default_rng`,
+`randbits`, `random.Random`/`SystemRandom`/`_random.Random`) fire from any thread. The monitor
+does NOT ceiling a capture merely because a benign background thread (a DataLoader worker, a
+Jupyter history thread, a pytest plugin thread) is alive -- that over-triggered every such
+capture and is not applied.
 
 Absence of a touch proves no touch of THIS NAMED vocabulary; it does not claim environmental
 determinism for channels outside it. The residual tail is exactly: (i) direct `/dev/urandom` file
 reads; (ii) ctypes / user C-extension entropy or clock reads that never cross a Python-visible
-call surface; and (iii) legacy `RandomState()` C-level CONSTRUCTION entropy (its DRAWS stay
-inventory/digest-witnessed). `datetime.now()` / `localtime()` are NOT residual (covered above), and
-self-cleaning RNG/clock use confined to a pre-existing thread is NOT residual -- it is INCOMPLETE
-via the thread-domain rule.
+call surface; (iii) legacy `RandomState()` C-level CONSTRUCTION entropy (its DRAWS stay
+inventory/digest-witnessed); and (iv) an ADVERSARIAL persistent-instance draw immediately
+followed by a `bit_generator.state` RESTORE on a PRE-EXISTING (already-running, non-owner) thread
+-- a self-cleaning sequence that nets zero observable state change and that `threading.setprofile`
+cannot reach on Python <= 3.11, analogous to the tensor-subclass dispatch-disable adversarial
+construction a cooperative model does not exercise. `datetime.now()` / `localtime()` are NOT
+residual (covered above). Future all-thread coverage of the adversarial case is `sys.monitoring`
+(PEP 669, 3.12+, interpreter-wide).
 
 A pruned `.data`-alias BOOL control predicate whose leaf origins resolve positively (e.g.
 `bool(self.gate.data > 0.5)` -> the gate's state digest) is witnessed by that basis: the

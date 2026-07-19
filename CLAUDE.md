@@ -277,9 +277,11 @@ process-wide state inventory; bare `_random.Random`; unseeded-construction entro
 `randbits` alias), `SystemRandom`/`secrets`, OS entropy, `uuid4`, the `default_rng` factory, and
 the full clock family (`time.*` counters, `localtime`/`strftime`/`datetime.now`/`date.today`,
 `os.times`/`getrusage`) -- ceilings every replay permanently (`unverifiable` + `not_applicable`);
-monitor uncertainty downgrades completeness, never reads as no-consumption. A live PRE-EXISTING
-non-owner Python thread at capture is an unwitnessable domain on Python <= 3.11 and ceilings the
-capture to INCOMPLETE (the locked conservative default). The loaded-sparse and live-refresh
+monitor uncertainty (install/chain/restore/inventory failure) downgrades completeness, never reads
+as no-consumption. A realistic pre-existing-thread draw from a persistent numpy generator is
+witnessed thread-independently by the state inventory; only an adversarial persistent-instance
+draw+state-restore on a pre-existing thread is a documented residual (a benign background thread
+never ceilings a capture). The loaded-sparse and live-refresh
 providers settle through ONE finalizer (identical verdict class): a live opaque-container output
 is `unverifiable` + poisoned (never a wrongly-blessed bare tensor), a parse-refused descriptor
 degrades EVERY payload family to analysis-only with its typed diagnostic intact, and an

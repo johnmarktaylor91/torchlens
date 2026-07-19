@@ -648,18 +648,20 @@ class host_nondeterminism_monitor:
       ``datetime`` current readers (E1: unpatchable extension types).
     * **Dual chained profile hooks (belt).** ``sys.setprofile`` (owner thread) AND
       ``threading.setprofile`` (threads STARTED in-window; measured E2: a pre-existing
-      worker is unreachable, so its ephemeral draws are covered by the inventory + the
-      pre-existing-thread ceiling instead). Each hook chains its own exact predecessor and
-      is identity-restored on success and exception.
-    * **Pre-existing-thread ceiling.** Any live non-owner Python thread at window open makes
-      coverage INCOMPLETE (measured E4: draw+state-restore on such a thread defeats the
-      inventory, and ``threading.setprofile`` cannot reach it) -- the locked conservative
-      default, with the offending threads NAMED in ``uncertain_detail``. Future relaxation
-      is ``sys.monitoring`` (PEP 669, 3.12+, interpreter-wide), gated on a positive
-      all-thread proof; NOT this batch.
+      worker is unreachable, so a persistent-instance draw on such a thread is covered by the
+      thread-independent state inventory instead). Each hook chains its own exact predecessor
+      and is identity-restored on success and exception.
 
-    Entropy / instance / construction / clock positives mark from any COVERED thread; an
-    uncovered pre-existing-thread domain ceilings to INCOMPLETE, never a silent VERIFIED.
+    Entropy / instance / construction / clock positives mark from any COVERED thread. A
+    REALISTIC pre-existing-thread RNG use (a background worker drawing from a persistent
+    Generator/RandomState/BitGenerator) is witnessed thread-independently by the state
+    inventory (E3), and an unseeded construction on any thread by the module/class patches.
+    The residual is only an ADVERSARIAL persistent-instance draw+``state`` RESTORE on a
+    pre-existing thread (E4) -- a self-cleaning sequence no py<=3.11 mechanism can witness --
+    which is a documented residual (contract s11), NOT a blanket ceiling: the r38 draft's
+    thread-presence INCOMPLETE over-triggered every capture running alongside a benign
+    background thread (DataLoader/Jupyter/pytest), so it is intentionally not applied. Future
+    all-thread coverage is ``sys.monitoring`` (PEP 669, 3.12+, interpreter-wide).
     """
 
     def __init__(self, model: Any = None) -> None:
@@ -905,18 +907,22 @@ class host_nondeterminism_monitor:
                         f"datetime.{receiver.__name__}.{method}"
                     )
             # PRIMARY: process-wide GC instance inventory (thread-independent digests).
+            # This is the load-bearing witness for a REALISTIC pre-existing-thread RNG use:
+            # a draw from a persistent Generator/RandomState/BitGenerator on ANY thread
+            # (owner, in-window, OR a live pre-existing worker) advances that instance's
+            # state, which the before/after digest catches thread-independently (measured E3).
+            # Combined with the thread-independent construction/entropy/class patches
+            # (default_rng, randbits, _random.Random -- module/class-level, so they fire from
+            # any thread including pre-existing ones), realistic background-thread RNG is
+            # witnessed. The ONLY residual is an ADVERSARIAL persistent-instance draw followed
+            # by a bit_generator.state RESTORE on a pre-existing thread (E4), which nets zero
+            # observable state change and which no py<=3.11 mechanism can witness -- a
+            # documented residual (contract s11), analogous to ctypes / self-cleaning entropy,
+            # NOT a blanket ceiling on every capture that merely happens to run alongside a
+            # benign background thread (a DataLoader worker, a Jupyter history thread, a pytest
+            # plugin thread). The r38 draft's blanket thread-presence ceiling over-triggered
+            # INCOMPLETE on every such capture and is intentionally NOT applied here.
             self._generator_states = self._inventory_rng_instances()
-            # Pre-existing-thread ceiling (E4): a live non-owner Python thread at window
-            # open is an unwitnessable ephemeral-draw domain on <=3.11 -> INCOMPLETE.
-            live_others = [
-                f"{thread.name}:{thread.ident}"
-                for thread in _threading_module.enumerate()
-                if thread.ident is not None
-                and thread.ident != self._owner_thread
-                and thread.is_alive()
-            ]
-            if live_others:
-                self._flag_uncertain("pre_existing_threads:" + ",".join(live_others))
             # BELT: dual chained profile hooks (owner thread + threads started in-window).
             self._previous_sys_profile = _sys_module.getprofile()
             self._sys_hook = self._make_profile_hook(self._previous_sys_profile)
