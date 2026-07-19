@@ -583,6 +583,34 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     return _matches(module, _ALLOWED_FORWARD_OP_MODULES)
 
 
+def real_callable_module(func: Callable[..., Any]) -> str:
+    """Return the REAL (capture-unwrapped) ``__module__`` of ``func`` (``""`` if none).
+
+    The intervention resolver / metadata unpickler FOREIGN branches decide whether a
+    resolved callable is a torch-namespace or module-less C callable (which must pass
+    ``is_pure_forward_callable``) versus a genuinely-foreign TRUSTED user recipe (which
+    resolves as-is -- trust means "run this user recipe"). That decision MUST key on the
+    callable's REAL identity, never the surface ``__module__``:
+
+    * a C tensor-method descriptor (``resize_`` / ``set_`` / ``apply_`` / ``map_``)
+      reports ``__module__ is None``, and the foreign branches historically fell back to
+      the (benign) trusted module name -- so a string check treated a side-effecting
+      method as a benign foreign recipe (secE-r36-1);
+    * WORSE, a torch op TorchLens has capture-wrapped reports
+      ``__module__ == 'torchlens.backends.torch.wrappers'`` -- a truthy, non-torch
+      string -- so BOTH a ``__module__``-missing check AND a raw torch-prefix check are
+      spoofed once torch is wrapped (the near-universal live state), letting a wrapped
+      ``resize_`` / ``torch.load`` slip.
+
+    Unwrapping first restores the true owner: ``""`` for a module-less C tensor method,
+    ``"torch"`` / ``"torch.serialization"`` for a torch builtin, and the genuine user
+    module for a real foreign recipe.
+    """
+
+    real = _unwrap_capture_wrapper(func)
+    return str(getattr(real, "__module__", "") or "")
+
+
 def is_denied_operator_gadget(func: Callable[..., Any]) -> bool:
     """Return whether ``func`` is an ``operator`` / ``_operator`` gadget to DENY.
 

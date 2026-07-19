@@ -1182,19 +1182,43 @@ class SafeBundleUnpickler(pickle.Unpickler):
                     f"{resolved_owner!r}) reached via a dotted name during trusted "
                     f"bundle metadata unpickle: {module}.{name}."
                 )
-            # A callable that walked back into the torch namespace via a dotted name
-            # must be a PURE forward op -- ``torch`` also hosts side-effecting builtins
-            # (``torch.from_file``) whose real module is the bare, non-denied
-            # ``"torch"``. Parity with ``runnable_load`` / the intervention resolver.
-            if callable(obj) and (resolved_owner == "torch" or resolved_owner.startswith("torch.")):
-                from ..utils._callable_safety import is_pure_forward_callable
+            # PURITY PARITY (secE-1 / secE-r36-1). A callable that walked back into the
+            # torch namespace via a dotted name -- OR a module-less C tensor method
+            # (``resize_`` / ``set_`` / ``apply_`` / ``map_``) -- must be a PURE forward
+            # op: ``torch`` also hosts side-effecting builtins (``torch.from_file``) and
+            # the tensor-method family rebinds/reallocates storage or runs an arbitrary
+            # callable per element. This gate keys on the callable's REAL
+            # (capture-unwrapped) module, NEVER ``resolved_owner``: that fallback string
+            # is spoofed two ways -- it lands on the trusted pickled ``module`` for a
+            # module-less tensor method (real ``__module__ is None``), and on
+            # ``"torchlens.backends.torch.wrappers"`` for ANY torch op TorchLens has
+            # capture-wrapped (the near-universal live state) -- so a raw string
+            # torch/prefix check misses a wrapped ``resize_`` / ``torch.load`` (the r36
+            # hole). Mirror the r35 torchlens-walk fix / the intervention resolver on the
+            # REAL identity: when the real owner is module-less OR torch, hold it to
+            # ``is_pure_forward_callable`` (which unwraps + covers the
+            # tensor-method-descriptor case, the storage-unsafe / ``apply_`` / ``map_``
+            # name guards, and torch name/purity). Legit foreign recipe callables/types
+            # carry a real, non-torch ``__module__`` and are NOT subject to this gate.
+            from ..utils._callable_safety import (
+                is_pure_forward_callable,
+                real_callable_module,
+            )
 
-                if not is_pure_forward_callable(obj):
-                    raise pickle.UnpicklingError(
-                        "Blocked side-effecting torch callable (resolved real module "
-                        f"{resolved_owner!r}) reached via a dotted name during trusted "
-                        f"bundle metadata unpickle: {module}.{name}."
-                    )
+            real_owner = real_callable_module(obj) if callable(obj) else ""
+            if (
+                callable(obj)
+                and (real_owner == "" or real_owner == "torch" or real_owner.startswith("torch."))
+                and not is_pure_forward_callable(obj)
+            ):
+                raise pickle.UnpicklingError(
+                    "Blocked torch-namespace or module-less callable (chiefly a C-level "
+                    "tensor method such as resize_/set_/apply_/map_ or a side-effecting "
+                    f"torch builtin) reached via a dotted name during trusted bundle "
+                    f"metadata unpickle: {module}.{name}. Only pure forward/tensor ops "
+                    "resolve from the torch namespace or a module-less C callable, even "
+                    "under trust."
+                )
             # OPERATOR GADGET name-scope (r33, A-R32-1 / E-r32-1): the ``operator`` /
             # ``_operator`` root is carved out of the stdlib denial so ``operator.neg``
             # survives, but that carve-out must NOT re-admit the generic operator
