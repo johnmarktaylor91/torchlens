@@ -104,11 +104,14 @@ def test_r35_no_float_torch_equal_in_runnable_modules() -> None:
     )
     offenders: list[str] = []
     for relative in runnable_modules:
-        for line_number, line in enumerate(
-            (package_root / relative).read_text().splitlines(), start=1
-        ):
-            if re.search(r"\btorch\.equal\(", line) and "# byte-exact uint8 view" not in line:
-                offenders.append(f"{relative}:{line_number}: {line.strip()}")
+        lines = (package_root / relative).read_text().splitlines()
+        for index, line in enumerate(lines):
+            if not re.search(r"\btorch\.equal\(", line):
+                continue
+            # The annotation may sit on a continuation line after formatting.
+            statement = " ".join(lines[index : index + 3])
+            if "# byte-exact uint8 view" not in statement:
+                offenders.append(f"{relative}:{index + 1}: {line.strip()}")
     assert offenders == []
 
 
