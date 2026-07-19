@@ -183,8 +183,24 @@ pytest tests/ -m "not slow" -x --tb=short
     faithfulness is `verified|diverged|unverifiable`, state source is
     `live_model_state|embedded_capture_state|user_state_dict|random_initialization|not_applicable`,
     and divergence policy is `raise|return_diverged`. Error handling uses `RunnableErrorCode`, never
-    exception-message matching. The complete taxonomy and payload rules live in
+    exception-message matching. r37 adds the frozen codes `state_alias_topology_unsupported`
+    (save-time refusal of distinct-object overlapping/unprovable bound-state alias topology; tied
+    live-identity state stages as ONE alias-group allocation instead) and `context_field_invalid`
+    (parse-time refusal of persisted execution-context values outside their closed vocabulary).
+    The complete taxonomy and payload rules live in
     `docs/reference/runnable_tlspec_contract.md`.
+19a. r37 honesty boundaries: zero-tensor-leaf model outputs and namedtuple/mapping/registered
+    containers carrying extra per-instance state refuse at runnable save
+    (`missing_output_container_contract`; one per-kind capability table --
+    `CONTAINER_KIND_CAPABILITIES` -- governs capture proof, save refusal, and forged-flag-proof
+    load recompute; `tl.register_container` gains an explicit `state_complete=` declaration).
+    Host nondeterminism outside the two replayable global engines (RNG instances incl.
+    outside-held NumPy Generators, `SystemRandom`/`secrets`, OS entropy, `uuid4`, `default_rng`,
+    the full clock family) permanently ceilings replay at `unverifiable` + `not_applicable`;
+    monitor uncertainty downgrades completeness. Alias proofs run on absolute device-scoped byte
+    intervals (storage-pointer equality never decides); the recorded default device enters as a
+    scoped `with torch.device(...)`; CUDA state stages lazily and atomically at run preparation
+    with a no-allocation readiness capability gate.
 
 ## Known Gotchas
 - Intervention-spec loads tolerate foreign `custom` callable keys for safe analysis without importing

@@ -1305,8 +1305,13 @@ def run_and_log_inputs_through_model(
             _vprint(self, f"Inputs: {len(input_tensors)} tensor(s) on {device_str}")
 
         if bool(getattr(self, "intervention_ready", False)):
-            from .._runnable_state import snapshot_capture_state
+            from .._runnable_state import snapshot_capture_state, snapshot_state_alias_topology
 
+            # r37 corr2-4: the live bound-state alias topology (object identity,
+            # storage overlap) must be captured BEFORE ``snapshot_capture_state``'s
+            # clones erase it; the runnable producer refuses unsupported topologies
+            # at save and reproduces identity groups from this record.
+            self._runnable_state_alias_topology = snapshot_state_alias_topology(model)
             self._runnable_capture_state = snapshot_capture_state(model)
 
         # Turn on the logging toggle and run the forward pass.
@@ -1350,11 +1355,28 @@ def run_and_log_inputs_through_model(
                             # ran. TorchLens itself never draws host RNG here (its only
                             # host draw seeds before this point), so any advance is the
                             # user's. Reads are side-effect free -> capture unchanged.
+                            # r37 hon1_2: the four-layer channel monitor additionally
+                            # observes NON-global channels (RNG instances, SystemRandom,
+                            # os entropy, clocks, the default_rng factory) over the
+                            # frozen vocabulary. Any touch is permanently unreplayable
+                            # (no identifiable seed); monitor uncertainty downgrades
+                            # completeness, never reads as no-consumption.
+                            from ..utils.rng import host_nondeterminism_monitor
+
                             _host_rng_before = snapshot_host_rng()
-                            outputs = cast(Callable[..., Any], model)(*input_args, **input_kwargs)
-                            self._runnable_host_rng_consumed = host_rng_advanced(
+                            with host_nondeterminism_monitor(model) as _rng_channels:
+                                outputs = cast(Callable[..., Any], model)(
+                                    *input_args, **input_kwargs
+                                )
+                            _global_advanced = host_rng_advanced(
                                 _host_rng_before, snapshot_host_rng()
                             )
+                            self._runnable_host_rng_consumed = _global_advanced or bool(
+                                _rng_channels.channels
+                            )
+                            self._runnable_host_rng_unreplayable = bool(_rng_channels.channels)
+                            self._runnable_host_rng_channels = tuple(sorted(_rng_channels.channels))
+                            self._runnable_rng_monitor_uncertain = bool(_rng_channels.uncertain)
 
         backend.finalize_forward_session(self)
 

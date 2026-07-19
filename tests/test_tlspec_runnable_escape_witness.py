@@ -320,27 +320,33 @@ def test_r10_input_escape_original_still_verified(
 
 
 # --------------------------------------------------------------------------- #
-# R10-C1: a `.data` (unlabelled-alias) escape source has no source-op label, but
-# `_local_scalar_dense` extracts exactly one scalar. That value is recorded and
-# matched to the internal-sink op that produced it, which is witnessed value-free:
+# R10-C1 (mechanism updated r37/INV-1): a `.data` (unlabelled-alias) escape source has
+# no source-op label. The census now attributes it POSITIVELY through dispatch-origin
+# propagation -- the alias inherits its base op's raw label at its `aten.detach`
+# dispatch -- so the producer witnesses the PRODUCING op's digest. Scalar value
+# recording/matching is gone (value collision could discharge a wrong source, hon2_2):
 # the changed input differs -> UNVERIFIABLE, the original stays VERIFIED. (A false
 # VERIFIED on the changed input is the tripwire; a spurious original downgrade is a
 # no-regression violation -- both are avoided.)
 # --------------------------------------------------------------------------- #
 class DataAliasScalarEscape(nn.Module):
-    """R10-C1: ``.data.item()`` reads an UNLABELLED alias -> census records its value."""
+    """R10-C1: ``.data.item()`` reads an UNLABELLED alias -> census resolves its origin."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x * (x.mean().data.item() * 3.0 + 1.0)
 
 
-def test_r10_data_alias_escape_records_value() -> None:
-    from torchlens.backends.torch.completeness_witness import host_escape_unattributable_values
+def test_r10_data_alias_escape_attributes_source_label() -> None:
+    from torchlens.backends.torch.completeness_witness import (
+        host_escape_has_unattributable_opaque,
+        host_escape_source_labels,
+    )
 
     trace = tl.trace(DataAliasScalarEscape(), torch.tensor([2.0, 2.0]), capture=_CAPTURE)
-    # mean([2, 2]) == 2.0; the unlabelled .data escape records that scalar so the
-    # producer can witness the internal-sink op that produced it.
-    assert 2.0 in host_escape_unattributable_values(trace)
+    # The unlabelled .data escape resolves to the mean op's raw label via origin
+    # propagation -- positively attributed, never a fail-closed opaque record.
+    assert any(label.startswith("mean") for label in host_escape_source_labels(trace))
+    assert not host_escape_has_unattributable_opaque(trace)
 
 
 def test_r10_data_alias_escape_changed_is_unverifiable(tmp_path: Path) -> None:

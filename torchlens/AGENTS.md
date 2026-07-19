@@ -77,7 +77,12 @@ random/non-equivalent-state, and nondeterministic-capture-context runs are `not_
 `verified|diverged|unverifiable` path faithfulness, and numeric attestation in its `RunResult`.
 Use `return_diverged` only when a permanently poisoned diagnostic result is intended. Match failures
 through `RunnableErrorCode`; the complete frozen taxonomy is in
-`docs/reference/runnable_tlspec_contract.md`.
+`docs/reference/runnable_tlspec_contract.md`. r37: overlapping/unprovable distinct-object state
+alias topology and zero-tensor-leaf or instance-stateful container outputs refuse at save
+(`state_alias_topology_unsupported` / `missing_output_container_contract`); tied live-identity
+state stages as one alias-group allocation; persisted context values validate at parse
+(`context_field_invalid`); non-global host RNG/entropy/clock touches permanently ceiling replay;
+CUDA state stages lazily at run preparation behind a no-allocation readiness capability gate.
 
 Provisional semantic I/O examples (review-day names):
 

@@ -525,6 +525,14 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             else WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
         )
     if (
+        bool(getattr(trace, "_runnable_rng_monitor_uncertain", False))
+        and completeness is WitnessCompleteness.COMPLETE
+    ):
+        # r37 hon1_2 fail-closed rule: the host-nondeterminism monitor could not
+        # prove its own installation/chain/restoration, so channel coverage for
+        # this forward is unknowable -- INCOMPLETE, never "no consumption".
+        completeness = WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
+    if (
         getattr(trace, "capture_verified", None) is False
         and completeness is WitnessCompleteness.COMPLETE
     ):
@@ -533,6 +541,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # routes) cannot claim complete witness coverage for replay either.
         completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
     diagnostics.extend(_preflight_output_contracts(trace, ops))
+    diagnostics.extend(_preflight_state_alias_topology(trace, slot_drafts))
     # r35 corr2_3 note: the torchlens_role_init_v2 totality contract
     # (``initializer_contract_diagnostics``) is enforced typed at runtime when
     # random initialization is actually selected. It is deliberately NOT a
@@ -705,6 +714,14 @@ def _build_rng_profile(trace: Any) -> RunnableRngProfile:
     consumed = bool(getattr(trace, "_runnable_host_rng_consumed", False))
     seed = getattr(trace, "random_seed", None)
     capture_seed = int(seed) if isinstance(seed, int) and not isinstance(seed, bool) else None
+    # r37 hon1_2: a touch on any NON-global monitored channel (RNG instances,
+    # SystemRandom/secrets, os entropy, clocks, the default_rng factory) is
+    # permanently unreplayable -- no seed reproduces it -- so the profile records
+    # host consumption with NO identifiable capture seed, landing every run in
+    # the permanent-unreproduced ceiling (UNVERIFIABLE + NOT_APPLICABLE). The
+    # replayable global engines keep their seeded-reproduction semantics.
+    if bool(getattr(trace, "_runnable_host_rng_unreplayable", False)):
+        return RunnableRngProfile(host_rng_consumed=True, capture_seed=None)
     return RunnableRngProfile(host_rng_consumed=consumed, capture_seed=capture_seed)
 
 
@@ -2245,12 +2262,13 @@ def _escape_witnesses(
         host_escape_has_unattributable_bool,
         host_escape_has_unattributable_opaque,
         host_escape_state_source_names,
-        host_escape_unattributable_values,
     )
 
     witnesses: list[ControlWitness] = []
-    escaped_labels, unresolvable_escape = _host_escape_source_labels(trace)
-    state_names = host_escape_state_source_names(trace)
+    escaped_labels, fallback_state_names, unresolvable_escape = _host_escape_source_labels(trace)
+    # PASS A witnesses the census-recorded state escape names PLUS any leaf-origin
+    # fallback state names (a pruned host-only chain whose value derives from state).
+    state_names = host_escape_state_source_names(trace) | fallback_state_names
     # Fail closed for the genuinely-unwitnessable escape shapes: an orphan-pruned census
     # tensor-op source (:_host_escape_source_labels), an unattributable (``.data`` alias) bool
     # control predicate covered by no net, an unattributable census-invisible
@@ -2272,19 +2290,12 @@ def _escape_witnesses(
     if host_escape_has_raw_pointer(trace):
         incomplete = True
 
+    # r37 INV-1 (hon2_2): the former unattributable-VALUE plumbing is deleted. An
+    # unlabelled-source escape now resolves through the census attribution ladder
+    # (direct state alias / dispatch origins) into ``state_names`` / the raw-label
+    # sets, or fails closed as UNATTRIBUTABLE_OPAQUE -- scalar value equality never
+    # attributes anything (a collision may only ADD witnesses, never discharge).
     ints, floats, sequences = _collect_baked_literal_values(calls)
-    # An UNLABELLED-source non-bool escape (a ``.data`` alias) leaves a scalar value but
-    # no source-op label. Treat those values as baked-literal candidates (internal sink)
-    # AND as capture-state candidates (PASS A). A value matching NEITHER -> INCOMPLETE.
-    unattr_values: set[Any] = {
-        value for value in host_escape_unattributable_values(trace) if not isinstance(value, bool)
-    }
-    unmatched_unattr: set[Any] = set(unattr_values)
-    for escaped in unattr_values:
-        if isinstance(escaped, int):
-            ints.add(escaped)
-        elif isinstance(escaped, float):
-            floats.add(escaped)
     sequence_lengths = {len(item) for item in sequences}
 
     call_id_by_slot: dict[str, str] = {}
@@ -2315,21 +2326,13 @@ def _escape_witnesses(
             continue
         name = binding.state_dict_name
         captured = capture_state.get(name) if isinstance(capture_state, Mapping) else None
-        matched_value: Any = None
-        if isinstance(captured, torch.Tensor) and unmatched_unattr and int(captured.numel()) == 1:
-            try:
-                scalar = captured.detach().item()
-            except (RuntimeError, ValueError, TypeError):
-                scalar = None
-            if not isinstance(scalar, bool) and scalar in unmatched_unattr:
-                matched_value = scalar
         is_named_escape = name in state_names
         # Name-level, not slot-level: a buffer with ANY slot consumed by a traced call is
         # graph-connected (r15-C3), so a normal tracked in-place running-stat update is
         # replayable and stays VERIFIED. A buffer/param read only on an untraced host path has
         # NO bound slot for its name and is still witnessed here (fails closed on changed state).
         is_unbound = slot_id not in bound_slot_ids and name not in bound_state_names
-        if not (is_named_escape or is_unbound or matched_value is not None):
+        if not (is_named_escape or is_unbound):
             continue
         if not isinstance(captured, torch.Tensor):
             # A state slot that must be witnessed but whose capture value is not
@@ -2363,8 +2366,6 @@ def _escape_witnesses(
                 observed_value=observed,
             )
         )
-        if matched_value is not None:
-            unmatched_unattr.discard(matched_value)
 
     # ---- PASS B: non-state tensor-op escape sources (input / internal) ----
     seen_slots: set[str] = set()
@@ -2405,21 +2406,14 @@ def _escape_witnesses(
                 incomplete = True
             continue
         matched = is_escape
-        # Value-equality OPTIMIZATION (secondary): a dual-use internal sink whose exact
-        # value was baked verbatim into a downstream literal (or equals an unattributable
-        # escaped value). Never the ONLY net -- the source-digest witness above is primary.
+        # Value-equality OPTIMIZATION (secondary, ADDITIVE-only per INV-1): a dual-use
+        # internal sink whose exact value was baked verbatim into a downstream literal
+        # gains a witness. A value match may only ADD a witness -- it never attributes
+        # or discharges an escape (hon2_2).
         if not matched and is_sink:
             matched = _value_matches_baked_literal(value, ints, floats, sequences, sequence_lengths)
         if not matched:
             continue
-        matched_value_here: Any = None
-        if unmatched_unattr and int(value.numel()) == 1:
-            try:
-                sink_scalar = value.item()
-            except (RuntimeError, ValueError):
-                sink_scalar = None
-            if not isinstance(sink_scalar, bool) and sink_scalar in unmatched_unattr:
-                matched_value_here = sink_scalar
         try:
             digest = runnable_tensor_byte_digest(value)
         except (RuntimeError, ValueError, TypeError):
@@ -2446,15 +2440,9 @@ def _escape_witnesses(
         seen_slots.add(slot_id)
         if is_escape:
             covered_labels.add(str(op.label))
-        if matched_value_here is not None:
-            unmatched_unattr.discard(matched_value_here)
 
     # ---- Structural invariant: every recorded escape fact is witnessed OR INCOMPLETE ----
     # No net-exclusion may silently drop a recognized escape.
-    if unmatched_unattr:
-        # An unattributable non-bool escape value matched neither a witnessed internal
-        # sink nor a capture-state slot: its source cannot be witnessed -> fail closed.
-        incomplete = True
     if not incomplete:
         from ..backends.torch.completeness_witness import host_escape_bool_source_labels
 
@@ -2473,8 +2461,8 @@ def _escape_witnesses(
     return witnesses, incomplete
 
 
-def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], bool]:
-    """Return final escape-source labels and whether any census label is unresolvable.
+def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], frozenset[str], bool]:
+    """Return final escape-source labels, fallback state names, and unresolvability.
 
     The dispatch census records, for each ``aten._local_scalar_dense`` escape, the
     RAW capture label of the source tensor's producing op (see
@@ -2484,25 +2472,34 @@ def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], bool]:
 
     A census raw label that does NOT resolve to a final op is a real escape whose
     source chain was orphan-PRUNED -- a host-only chain that reached neither an
-    input nor an output (e.g. a param-rooted ``float((w + 1).sum())``). Such a slot
-    can never be digest-witnessed, so the second return value flags it and the
-    caller must fail honest (mark the witness set INCOMPLETE). Silently dropping it
-    (the pre-R10 behavior) left completeness COMPLETE -> false VERIFIED on changed
-    state. The value-equality net and the unbound-state net remain independent
-    safety nets for the resolvable cases.
+    input nor an output (e.g. a param-rooted ``float((w + 1).sum())``). r37
+    mechanism A: such a label first consults the census-recorded LEAF-ORIGIN
+    fallback basis -- the terminal inputs/state the pruned chain's VALUE derives
+    from. A resolvable fallback substitutes an equivalent witness set (every leaf
+    label re-resolved here; leaf state names returned for PASS A); an absent,
+    fail-closed (``None``), or itself-unresolvable fallback flags the third return
+    value and the caller must fail honest (INCOMPLETE). Silently dropping a pruned
+    label (the pre-R10 behavior) left completeness COMPLETE -> false VERIFIED on
+    changed state; discharging it by scalar value equality (the pre-r37 behavior)
+    did the same under a value collision (hon2_2). A RESOLVED bool predicate is a
+    real captured conditional covered by the control-witness net; an unresolved
+    STATE source is covered by the state net and never closes as a pruned chain.
     """
 
     from ..backends.torch.completeness_witness import (
+        host_escape_label_leaf_origins,
         host_escape_source_labels,
         host_escape_state_source_labels,
     )
 
     raw_labels = host_escape_source_labels(trace)
     if not raw_labels:
-        return frozenset(), False
+        return frozenset(), frozenset(), False
     state_labels = host_escape_state_source_labels(trace)
+    leaf_fallbacks = host_escape_label_leaf_origins(trace)
     raw_to_final = getattr(trace, "_raw_to_final_op_labels", {}) or {}
     final_labels: set[str] = set()
+    fallback_state_names: set[str] = set()
     unresolvable = False
     for raw_label in raw_labels:
         if not isinstance(raw_label, str):
@@ -2511,17 +2508,30 @@ def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], bool]:
         final = raw_to_final.get(raw_label)
         if isinstance(final, str):
             final_labels.add(final)
-        elif raw_label not in state_labels:
-            # An unresolved source has no witnessable slot -> fail honest. This covers an
-            # orphan-pruned TENSOR-OP host-only chain (``float((w + 1).sum())``) AND a
-            # PRUNED BOOL control predicate (``bool(self.gate.data > 0.5)`` -- the ``.data``
-            # alias severs the graph link so the gt is orphan-pruned and NO control-witness
-            # net can see it; spec point 3). A RESOLVED bool predicate is a real captured
-            # conditional and the control-witness net covers it, so it is not flagged here.
-            # An unresolved STATE source (a buffer/param read only on the host) is covered
-            # by the state net, so it does not close as a pruned chain here.
+            continue
+        if raw_label in state_labels:
+            continue
+        fallback = leaf_fallbacks.get(raw_label)
+        if fallback is None:
+            # No sound fallback basis (absent, or the census recorded a fail-closed
+            # marker: an unknown/rng-tainted leaf) -> INCOMPLETE.
             unresolvable = True
-    return frozenset(final_labels), unresolvable
+            continue
+        leaf_labels, leaf_states = fallback
+        resolved_leaves: set[str] = set()
+        for leaf_label in leaf_labels:
+            leaf_final = raw_to_final.get(leaf_label)
+            if isinstance(leaf_final, str):
+                resolved_leaves.add(leaf_final)
+            else:
+                # A fallback leaf that is itself unwitnessable: fail honest.
+                unresolvable = True
+                resolved_leaves = set()
+                break
+        else:
+            final_labels |= resolved_leaves
+            fallback_state_names |= set(leaf_states)
+    return frozenset(final_labels), frozenset(fallback_state_names), unresolvable
 
 
 UNBOUND_STATE_ESCAPE_SITE_PREFIX = "unbound_state_escape:"
@@ -2821,6 +2831,67 @@ def _is_encodable_model_input_leaf(value: Any) -> bool:
     return True
 
 
+def _preflight_state_alias_topology(
+    trace: Any, slot_drafts: Mapping[str, _SlotDraft]
+) -> list[RunnableDiagnostic]:
+    """Refuse a runnable save whose bound state has unsupported alias topology (corr2-4).
+
+    The capture-time topology snapshot (taken from the LIVE model objects before
+    state cloning) records every DISTINCT-object pair of named state tensors whose
+    touched bytes overlap or whose relation is unprovable. The v2 schema serializes
+    per-name VALUES with no backing-storage/view recipe, so replaying such a pair as
+    independent allocations silently changes in-place propagation semantics (a write
+    through one name no longer reaches the other) -- the corr2-4 false-VERIFIED
+    class. Refusal is filtered to names the descriptor actually binds (plus the
+    required non-persistent-buffer family, which serializes every non-persistent
+    name). Repeated live object IDENTITY is NOT refused: it is reproduced exactly
+    through a shared ``alias_group`` and one staged allocation. Proved-disjoint
+    same-storage views serialize independently and stay admitted.
+    """
+
+    topology = getattr(trace, "_runnable_state_alias_topology", None)
+    if not isinstance(topology, Mapping):
+        return []
+    refusals = topology.get("refusals") or ()
+    if not refusals:
+        return []
+    bound_names = {
+        draft.state_binding.state_dict_name
+        for draft in slot_drafts.values()
+        if draft.state_binding is not None
+    }
+    # The Option-A non-persistent-buffer family serializes every non-persistent
+    # buffer name, so those participate even without a graph slot.
+    persistence = getattr(trace, "_buffer_persistence", {}) or {}
+    nonpersistent_names = {str(name) for name, persistent in persistence.items() if not persistent}
+    used_names = bound_names | nonpersistent_names
+    diagnostics: list[RunnableDiagnostic] = []
+    for left, right, relation in refusals:
+        if left not in used_names and right not in used_names:
+            continue
+        diagnostics.append(
+            _diagnostic(
+                RunnableErrorCode.STATE_ALIAS_TOPOLOGY_UNSUPPORTED,
+                "Bound state tensors "
+                f"{left!r} and {right!r} are distinct objects whose touched bytes "
+                f"{'overlap' if relation == 'overlap' else 'cannot be proven disjoint'}; "
+                "the v2 schema serializes independent per-name values (no "
+                "storage/view recipe), so replay would silently drop in-place "
+                "propagation between them. The runnable save is refused "
+                "(state_alias_topology_unsupported); analysis save levels remain "
+                "available.",
+                detection_stage="producer_state_alias_topology",
+                details=(
+                    ("reason", "state_alias_topology_unsupported"),
+                    ("left_state", left),
+                    ("right_state", right),
+                    ("relation", relation),
+                ),
+            )
+        )
+    return diagnostics
+
+
 def _preflight_output_contracts(trace: Any, ops: Sequence[Any]) -> list[RunnableDiagnostic]:
     """Report structured model outputs whose container contract is unavailable."""
 
@@ -2855,6 +2926,27 @@ def _preflight_output_contracts(trace: Any, ops: Sequence[Any]) -> list[Runnable
                 affected_ops=tuple(str(op.label) for op in output_ops),
                 detection_stage="producer_output_binding",
                 details=(("reason", reason), ("root_type", root_type)),
+            )
+        )
+        return diagnostics
+    if not output_ops:
+        # r37 corr1_1 (INV-3): a PROVED-lossless output tree with ZERO tensor
+        # slots (all-literal / literal-root / empty containers) has no output Op
+        # to carry the root ContainerSpec in the v2 schema, so the run would
+        # reconstruct ``None`` -- an accepted-then-dropped output. Unrepresentable
+        # means REFUSE AT SAVE, uniformly with every other output refusal; the
+        # relaxation path is a future versioned root-spec schema bump, not an
+        # implicit carrier.
+        diagnostics.append(
+            _diagnostic(
+                RunnableErrorCode.MISSING_OUTPUT_CONTAINER_CONTRACT,
+                "Model output contains no tensor leaves (zero output slots), so the "
+                "v2 descriptor has no carrier for its container contract and the "
+                "loaded artifact could not reconstruct it "
+                "(missing_output_container_contract). The runnable save is refused; "
+                "ordinary analysis save levels remain available.",
+                detection_stage="producer_output_binding",
+                details=(("reason", "zero_tensor_slot_output"),),
             )
         )
         return diagnostics
@@ -2955,13 +3047,19 @@ def _buffer_binding(trace: Any, op: Any) -> StateSlotBinding | None:
     persistence = getattr(trace, "_buffer_persistence", {}) or {}
     persistent = bool(persistence.get(address, False))
     module_path, _, name = address.rpartition(".")
+    # r37 corr2-4: repeated live object identity (captured before state cloning)
+    # becomes a shared alias group so the loader stages ONE allocation per group and
+    # preserves ``a is b`` / in-place propagation semantics across the tied names.
+    topology = getattr(trace, "_runnable_state_alias_topology", None)
+    groups = topology.get("groups") if isinstance(topology, Mapping) else None
+    alias_group = groups.get(address) if isinstance(groups, Mapping) else None
     return StateSlotBinding(
         module_path=module_path or "self",
         state_dict_name=address,
         semantic_role=_buffer_role(name or address),
         trainable=False,
         persistent=persistent,
-        alias_group=None,
+        alias_group=alias_group,
     )
 
 

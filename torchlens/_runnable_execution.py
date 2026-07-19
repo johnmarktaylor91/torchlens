@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import dataclasses
-import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
+import sys
 from contextlib import contextmanager, nullcontext
 from itertools import count
 import struct
@@ -29,8 +29,10 @@ from .errors import (
 )
 from .intervention.replay import _CallConeNode, _walk_call_cone
 from .ir.container import (
+    CONTAINER_KIND_CAPABILITIES,
     ContainerReconstructionError,
     ContainerSpec,
+    namedtuple_type_can_carry_instance_state,
     rebuild_container_from_spec,
     reconstruction_is_lossy_by_type,
     resolve_container_type,
@@ -40,6 +42,8 @@ from .utils.rng import (
     restore_host_rng,
     snapshot_host_rng,
 )
+from .utils._torch_compat import tensor_version_or_none
+from .utils.tensor_utils import touched_bytes_relation
 from .runnable import (
     ActivationPayloadLayerDescriptor,
     ActivationPayloadMember,
@@ -130,7 +134,7 @@ def run_loaded_sparse_trace(
         input_byte_digests = {}
         input_fingerprints = {}
     prepared_state = prepare_runnable_state(trace, seed=seed)
-    slot_values.update(_clone_state_values(prepared_state.slot_values))
+    slot_values.update(_clone_state_values(descriptor, prepared_state.slot_values))
     fork = trace._fork_trace(name=_run_fork_name(trace))
     try:
         return _execute_loaded_sparse_transaction(
@@ -448,7 +452,10 @@ def _execute_loaded_sparse_transaction(
     )
     report = _run_report(
         readiness,
-        prepared_state,
+        state_source=prepared_state.state_source,
+        initializer_policy_version=prepared_state.initializer_policy_version,
+        seed=prepared_state.seed,
+        random_filled_slot_ids=prepared_state.random_filled_slot_ids,
         contract_checks=tuple(contract_checks),
         path_faithfulness=path_faithfulness,
         first_mismatch=mismatch,
@@ -462,8 +469,16 @@ def run_live_trace(
     inputs: Any,
     *,
     seed: int | None,
+    on_divergence: DivergencePolicy | str = DivergencePolicy.RAISE,
 ) -> RunResult:
     """Run the live-model refresh provider on a transactional fork.
+
+    r37 corr2-5: the live provider finalizes through the SAME spine as the sparse
+    provider -- ``mark_trace_path_status`` (monotonic Trace poison), the shared
+    divergence-policy enforcement, and the one ``_run_report`` finalizer (poison
+    derived solely from the faithfulness lattice). A lossy live reconstruction
+    therefore returns a POISONED report and a monotonically marked Trace that
+    every faithful consumer (``to_pandas``, export, chaining) refuses.
 
     Parameters
     ----------
@@ -473,6 +488,8 @@ def run_live_trace(
         New forward input accepted by the existing ``save_new_outs`` path.
     seed:
         Optional refresh seed.
+    on_divergence:
+        Divergence policy threaded from the public ``run`` surface.
 
     Returns
     -------
@@ -485,6 +502,7 @@ def run_live_trace(
         If the live source model is no longer available.
     """
 
+    divergence_policy = DivergencePolicy(on_divergence)
     source_ref = getattr(trace, "_source_model_ref", None)
     model = source_ref() if source_ref is not None else None
     if model is None:
@@ -526,8 +544,11 @@ def run_live_trace(
         # Honesty gate: only a faithfully reconstructed output (exact container type
         # and non-tensor leaves) is VERIFIED. An output we could only approximate
         # from naive leaf paths is UNVERIFIABLE, never blessed with a wrong object.
-        report = RunReport(
-            readiness=readiness,
+        provisional = PathFaithfulness.VERIFIED if faithful else PathFaithfulness.UNVERIFIABLE
+        path_faithfulness, mismatch = mark_trace_path_status(fork, provisional, None)
+        _raise_monotonic_divergence(fork, path_faithfulness, mismatch, divergence_policy)
+        report = _run_report(
+            readiness,
             state_source=StateSource.LIVE_MODEL_STATE,
             initializer_policy_version=None,
             seed=seed,
@@ -541,12 +562,9 @@ def run_live_trace(
                     "captured container contract.",
                 ),
             ),
-            path_faithfulness=(
-                PathFaithfulness.VERIFIED if faithful else PathFaithfulness.UNVERIFIABLE
-            ),
-            first_mismatch=None,
+            path_faithfulness=path_faithfulness,
+            first_mismatch=mismatch,
             numeric_attestation=NumericAttestationStatus.NOT_PRESENT,
-            poisoned=False,
         )
         return RunResult(output=output, trace=fork, report=report)
     except BaseException:
@@ -965,6 +983,38 @@ def _bind_runtime_inputs(
                 slot,
                 f"Runtime input leaf is {type(value).__name__}, expected torch.Tensor.",
             )
+        # r37 corr2-6 phase 0: EXACT-type admission precedes every dispatchable
+        # property read. A tensor SUBCLASS routes ``shape``/``dtype``/``device``/
+        # ``names`` through ``__torch_function__``, so reading any of them before
+        # this gate would execute user subclass code and leak its raw exception in
+        # place of the typed hard-precondition refusal. Diagnostics use ONLY
+        # ``type(value).__qualname__`` -- never a property.
+        if type(value) not in {torch.Tensor, torch.nn.Parameter}:
+            subclass_check = _contract_check(
+                f"input_layout:{slot.slot_id}",
+                False,
+                RunnableErrorCode.INPUT_TREE_MISMATCH,
+                "Runtime input is a tensor SUBCLASS the sparse replay cannot "
+                "faithfully reproduce; runnable capture records only plain "
+                "strided torch.Tensor/Parameter leaves, so such an input fails "
+                "closed (typed) before any property dispatch, under every "
+                "divergence policy.",
+                affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("tensor_class", type(value).__qualname__),
+                ),
+            )
+            diagnostic = subclass_check.diagnostic
+            raise PathDivergenceError(
+                diagnostic.message
+                if diagnostic is not None
+                else "Unsupported tensor-subclass input.",
+                code=RunnableErrorCode.INPUT_TREE_MISMATCH.value,
+                path_faithfulness=PathFaithfulness.DIVERGED,
+                first_mismatch=diagnostic,
+                contract_check=subclass_check,
+            )
         raw_values[slot.slot_id] = value
         # Phase-1 facts are exception-safe: exotic layouts (nested tensors) can
         # refuse even a ``sizes()`` read, which must surface as a failed check,
@@ -1066,10 +1116,6 @@ def _bind_runtime_inputs(
     checks.extend(_input_literal_contract_checks(descriptor, inputs, positions))
     checks.extend(_input_metadata_contract_checks(descriptor, inputs, positions))
     checks.extend(_input_nontensor_tree_contract_checks(descriptor, inputs, positions))
-    alias_checks, input_alias_unresolved = _input_alias_topology_checks(
-        descriptor, input_slots, raw_values
-    )
-    checks.extend(alias_checks)
     # ------------------------------------------------------------------
     # r35 I5 (corr2_6) -- CONTRACT-BEFORE-TOUCH admission choke point.
     # Everything ABOVE this comment reads only non-materializing, exception-
@@ -1099,12 +1145,46 @@ def _bind_runtime_inputs(
             first_mismatch=diagnostic,
             contract_check=hard_failure,
         )
+    # r37 3-ADJ-6 (R10 ordering): alias-topology math runs BELOW the hard layout
+    # precondition raise, so the shared byte engine's domain is admitted plain
+    # strided tensors BY CONSTRUCTION -- it can never see a meta/nested/named/
+    # quantized layout the gate is about to reject.
+    alias_checks, input_alias_unresolved = _input_alias_topology_checks(
+        descriptor, input_slots, raw_values
+    )
+    checks.extend(alias_checks)
     # Phase 4: clone only ACCEPTED (executable) tensors.
     for slot in input_slots:
         raw = raw_values.get(slot.slot_id)
         if isinstance(raw, torch.Tensor):
-            values[slot.slot_id] = raw.detach().clone()
+            values[slot.slot_id] = _runtime_mirror_clone(raw)
     return values, tuple(checks), input_alias_unresolved
+
+
+def _runtime_mirror_clone(raw: torch.Tensor) -> torch.Tensor:
+    """Defensively clone one leaf while MIRRORING its runtime autograd metadata.
+
+    r37 corr2-7 (R13): ``detach().clone()`` strips a leaf's ``requires_grad``, so
+    the recorded ``grad_enabled=True`` call context became semantically inert (no
+    autograd history on replay) and the exact original input was needlessly
+    attestation-ineligible (fingerprint flag mismatch). The runtime mirror restores
+    ``raw.requires_grad`` on the clone where legal; fingerprints stay on the
+    executed-clone basis, so an intentionally changed-flag input remains a physical
+    input change (attestation ``not_applicable``), never normalized away. This is
+    the ONE second-clone helper -- every input-bind/state-clone/staging site routes
+    through it or the staging helper's recorded-trainable rule.
+    """
+
+    clone = raw.detach().clone()
+    if bool(raw.requires_grad) and not clone.requires_grad:
+        try:
+            clone.requires_grad_(True)
+        except RuntimeError:
+            # Non-differentiable dtype cannot require grad; the raw flag could not
+            # have been set either, so this is unreachable in practice -- degrade
+            # to the detached clone rather than aborting the bind.
+            pass
+    return clone
 
 
 def _model_input_version_closure(descriptor: SparseRunDescriptor) -> set[str]:
@@ -1239,149 +1319,20 @@ def _tensor_storage_key(value: torch.Tensor) -> int | None:
         return None
 
 
-def _tensor_storage_footprint(value: torch.Tensor) -> tuple[int, int, int] | None:
-    """Return ``(storage_ptr, start_byte, end_byte)`` spanned by a tensor's elements.
-
-    ``end_byte`` is exclusive and covers the highest linear storage index the tensor's
-    shape+stride reaches (r29-C3, F4). Two same-storage inputs whose byte spans do NOT
-    overlap (``a = base[:2]``, ``b = base[2:]``) share a base pointer but touch disjoint
-    memory, so an in-place mutation of one cannot reach the other -- keying aliasing on the
-    base pointer alone falsely diverges them. Overlap of the spans is the honest hazard test.
-    """
-
-    try:
-        storage_ptr = int(value.untyped_storage().data_ptr())
-        element_size = int(value.element_size())
-        offset_bytes = int(value.storage_offset()) * element_size
-        if value.numel() == 0:
-            return storage_ptr, offset_bytes, offset_bytes
-        max_linear_index = sum(
-            (int(dim) - 1) * int(stride) for dim, stride in zip(value.shape, value.stride())
-        )
-        end_byte = offset_bytes + (max_linear_index + 1) * element_size
-        return storage_ptr, offset_bytes, end_byte
-    except (RuntimeError, AttributeError, TypeError, ValueError):
-        return None
-
-
-def _footprints_overlap(left: tuple[int, int, int], right: tuple[int, int, int]) -> bool:
-    """Return whether two ``(storage_ptr, start, end)`` byte spans can touch shared memory."""
-
-    if left[0] != right[0]:
-        return False
-    return left[1] < right[2] and right[1] < left[2]
-
-
-_ALIAS_ENUMERATION_ELEMENT_CAP = 65536
-"""Exact-enumeration bound (inclusive, per view) for the alias proof engine."""
-
-
-def _stride_gcd(value: torch.Tensor) -> int:
-    """Return the gcd of a view's nonzero element strides over nonsingleton dims.
-
-    Zero strides (broadcast) and singleton dimensions contribute no reachable
-    offset variation and drop out. ``0`` means the view touches exactly one
-    element (scalar, all-broadcast, or all-singleton).
-    """
-
-    result = 0
-    for size, stride in zip(value.shape, value.stride()):
-        if int(size) > 1 and int(stride) != 0:
-            result = math.gcd(result, abs(int(stride)))
-    return result
-
-
-def _touched_element_offsets(value: torch.Tensor) -> set[int]:
-    """Enumerate the exact storage element offsets a strided view touches.
-
-    Bounded by ``_ALIAS_ENUMERATION_ELEMENT_CAP`` at the call site; runs under
-    ``pause_logging`` so the integer arithmetic is never captured.
-    """
-
-    with _state.pause_logging():
-        offset = int(value.storage_offset())
-        if value.numel() == 0:
-            return set()
-        if value.dim() == 0:
-            return {offset}
-        index_grid = torch.ones(tuple(value.shape), dtype=torch.int8).nonzero()
-        strides = torch.tensor([int(s) for s in value.stride()], dtype=torch.int64)
-        offsets = (index_grid.to(torch.int64) * strides).sum(dim=1) + offset
-        return {int(item) for item in torch.unique(offsets)}
+# r37 INV-2: the alias/overlap proof engine lives in ``utils.tensor_utils`` --
+# absolute, device-scoped byte intervals, three-valued relation, pure-integer
+# enumeration. The former local implementation keyed "same memory" on
+# ``untyped_storage().data_ptr()`` EQUALITY, which mis-proved disjointness for
+# overlapping views of one external buffer (``torch.from_numpy(arr[:6])`` vs
+# ``arr[2:8]`` -- distinct torch storages, genuinely shared host memory; hon1_1).
+# No local reimplementation or pointer-equality shortcut may reappear here.
 
 
 def _touched_bytes_relation(left: torch.Tensor, right: torch.Tensor) -> str:
-    """Three-valued exact touched-byte relation for two same-storage-capable views.
+    """Shared-engine adapter (see :func:`torchlens.utils.tensor_utils.touched_bytes_relation`)."""
 
-    r35 decision D (corr2_1): returns ``"overlap"`` only on a PROOF of shared
-    touched bytes, ``"disjoint"`` only on a PROOF of disjointness, and
-    ``"unknown"`` otherwise. Proof layers, in order: distinct storages / empty
-    views / disjoint bounding byte intervals (exact); identical geometry
-    (exact overlap); an element-grid-normalized residue/GCD proof (disjointness
-    only -- applicable when both views share element size, so their byte starts
-    are automatically congruent on the element grid and all strides are element
-    multiples); and bounded exact enumeration of touched offsets up to
-    65,536 logical elements per view (byte-range expansion for mixed element
-    sizes). No bounding-box overlap alone is an overlap proof, and no
-    complexity cap is a disjointness proof.
-    """
-
-    left_footprint = _tensor_storage_footprint(left)
-    right_footprint = _tensor_storage_footprint(right)
-    if left_footprint is None or right_footprint is None:
-        return "unknown"
-    if left_footprint[0] != right_footprint[0]:
-        return "disjoint"
-    try:
-        left_numel = int(left.numel())
-        right_numel = int(right.numel())
-        left_esize = int(left.element_size())
-        right_esize = int(right.element_size())
-    except (RuntimeError, TypeError, ValueError):
-        return "unknown"
-    if left_numel == 0 or right_numel == 0:
-        return "disjoint"
-    if not _footprints_overlap(left_footprint, right_footprint):
-        return "disjoint"
-    if (
-        left_esize == right_esize
-        and left_footprint[1] == right_footprint[1]
-        and tuple(left.shape) == tuple(right.shape)
-        and tuple(left.stride()) == tuple(right.stride())
-    ):
-        return "overlap"
-    if left_esize == right_esize:
-        # Element-grid residue proof: every touched element offset of a view is
-        # congruent to its start modulo the gcd of its nonzero strides, so a
-        # start-residue disagreement modulo gcd(g_left, g_right) proves
-        # disjointness. A congruence NEVER proves overlap.
-        left_start = int(left.storage_offset())
-        right_start = int(right.storage_offset())
-        combined = math.gcd(_stride_gcd(left), _stride_gcd(right))
-        if combined == 0:
-            # Both views touch exactly one element inside overlapping bounds.
-            return "overlap" if left_start == right_start else "disjoint"
-        if (left_start - right_start) % combined != 0:
-            return "disjoint"
-    if (
-        left_numel <= _ALIAS_ENUMERATION_ELEMENT_CAP
-        and right_numel <= _ALIAS_ENUMERATION_ELEMENT_CAP
-    ):
-        try:
-            left_offsets = _touched_element_offsets(left)
-            right_offsets = _touched_element_offsets(right)
-        except (RuntimeError, TypeError, ValueError):
-            return "unknown"
-        if left_esize == right_esize:
-            return "overlap" if left_offsets & right_offsets else "disjoint"
-        left_bytes = {
-            offset * left_esize + byte for offset in left_offsets for byte in range(left_esize)
-        }
-        right_bytes = {
-            offset * right_esize + byte for offset in right_offsets for byte in range(right_esize)
-        }
-        return "overlap" if left_bytes & right_bytes else "disjoint"
-    return "unknown"
+    with _state.pause_logging():
+        return touched_bytes_relation(left, right)
 
 
 def _input_alias_topology_checks(
@@ -1466,16 +1417,35 @@ def _input_alias_topology_checks(
 
 
 def _clone_state_values(
+    descriptor: SparseRunDescriptor,
     values: Mapping[str, torch.Tensor],
 ) -> dict[str, torch.Tensor]:
-    """Clone run-local state while preserving recorded alias groups."""
+    """Clone run-local state while preserving alias groups, device, and trainability.
 
+    r37 R5/R13: this second clone runs AFTER staging normalized every value to its
+    slot device, so it must not strip anything staging established -- ``clone()``
+    keeps the device; alias groups keep one shared clone (identity-keyed); and the
+    RECORDED per-slot ``trainable`` bit is restored on the clone (state semantics
+    come from the recorded binding, unlike runtime INPUTS whose mirror follows the
+    live leaf -- see ``_runtime_mirror_clone``).
+    """
+
+    trainable_by_slot = {
+        slot.slot_id: bool(slot.state_binding.trainable)
+        for slot in descriptor.tensor_slots
+        if slot.state_binding is not None
+    }
     clones_by_identity: dict[int, torch.Tensor] = {}
     cloned: dict[str, torch.Tensor] = {}
     for slot_id, value in values.items():
         clone = clones_by_identity.get(id(value))
         if clone is None:
             clone = value.detach().clone()
+            if trainable_by_slot.get(slot_id, False) and not clone.requires_grad:
+                try:
+                    clone.requires_grad_(True)
+                except RuntimeError:
+                    pass  # non-differentiable dtype cannot carry the trainable bit
             clones_by_identity[id(value)] = clone
         cloned[slot_id] = clone
     return cloned
@@ -1864,6 +1834,27 @@ def _state_contract_checks(
                 ),
             )
         )
+        # r37 R5 in-transaction tripwire: staging is the sole placement authority,
+        # so a device mismatch HERE is a broken staging/state hook -- a typed state
+        # failure before any callable, never a mid-call runtime_signature_drift.
+        device_ok = value.device.type == slot.device_type and (
+            slot.device_index is None
+            or value.device.index is None
+            or value.device.index == slot.device_index
+        )
+        checks.append(
+            _contract_check(
+                f"state_device:{slot.slot_id}",
+                device_ok,
+                RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+                f"State slot {slot.slot_id!r} was not staged to its recorded device.",
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("expected_device", f"{slot.device_type}:{slot.device_index}"),
+                    ("actual_device", str(value.device)),
+                ),
+            )
+        )
         checks.append(
             _contract_check(
                 f"state_dtype:{slot.slot_id}",
@@ -1993,11 +1984,19 @@ def _pre_call_contract_checks(
             ),
         ),
     )
-    versions = {
-        argument.slot_id: slot_values[argument.slot_id]._version
-        for argument in call.tensor_arguments
-        if argument.slot_id in slot_values
-    }
+    # r37 hon1_4: inference tensors carry NO version counter (reading ``_version``
+    # raises), so a slot whose version is unavailable records NO baseline. The
+    # mutation tripwire then enforces only its version-independent legs for that
+    # slot (alias identity for in-place calls); value fidelity remains guarded by
+    # the output comparison and numeric attestation layers.
+    versions: dict[str, int] = {}
+    for argument in call.tensor_arguments:
+        value = slot_values.get(argument.slot_id)
+        if value is None:
+            continue
+        version = tensor_version_or_none(value)
+        if version is not None:
+            versions[argument.slot_id] = version
     return checks, versions
 
 
@@ -2046,6 +2045,25 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
         "math_sdp_enabled": ambient.math_sdp_enabled,
     }
     saved = snapshot_ambient_execution_context()
+    # r37 R4 (corr2-3/corr2-2): the recorded DEFAULT DEVICE is entered as a SCOPED
+    # ``with torch.device(recorded)`` mode nested above the caller's existing mode
+    # stack -- never via ``torch.set_default_device`` (which mutates process-global
+    # mode bookkeeping and, measured, leaks/clobbers DeviceContext modes on every
+    # policy: implicit callers gained a mode, nested callers were corrupted). The
+    # context-manager exit IS the restoration mechanism -- correct by construction on
+    # success, divergence, callable exception, and attestation rollback -- so no
+    # restore logic exists for the device at all. A mode-stack length postcondition
+    # (feature-probed introspection) is a belt-and-suspenders tripwire.
+    device_scope: Any = nullcontext()
+    if ambient.default_device is not None:
+        try:
+            device_scope = torch.device(str(ambient.default_device))
+        except (RuntimeError, TypeError, ValueError) as exc:
+            raise _context_unavailable_error("default_device", str(exc)) from exc
+    from .utils._torch_compat import get_current_function_mode_stack
+
+    stack_before = get_current_function_mode_stack()
+    depth_before = len(list(stack_before)) if stack_before is not None else None
     try:
         apply_ambient_execution_context(recorded)
     except RuntimeError as exc:
@@ -2055,9 +2073,20 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
             pass
         raise _context_unavailable_error("ambient_context", str(exc)) from exc
     try:
-        yield
+        with device_scope:
+            yield
     finally:
         apply_ambient_execution_context(saved)
+        if depth_before is not None and sys.exc_info()[0] is None:
+            stack_after = get_current_function_mode_stack()
+            depth_after = len(list(stack_after)) if stack_after is not None else None
+            if depth_after is not None and depth_after != depth_before:
+                raise RuntimeError(
+                    "Internal invariant violation: the run transaction changed the "
+                    f"caller's TorchFunctionMode stack depth ({depth_before} -> "
+                    f"{depth_after}); scoped device-context restoration must be "
+                    "exact on every exit path."
+                )
 
 
 @contextmanager
@@ -2429,7 +2458,7 @@ def _mutation_contract_checks(
     changed = {
         slot_id
         for slot_id, before in before_versions.items()
-        if slot_id in slot_values and slot_values[slot_id]._version != before
+        if slot_id in slot_values and tensor_version_or_none(slot_values[slot_id]) != before
     }
     if not call.is_inplace:
         non_state_changed = changed - state_slot_ids
@@ -2466,10 +2495,14 @@ def _mutation_contract_checks(
         and isinstance(output_value, torch.Tensor)
         and (input_value is output_value or input_value.data_ptr() == output_value.data_ptr())
     )
+    # Version leg: enforced only when a baseline exists. An inference tensor has no
+    # version counter, so its in-place relation is proven by alias identity alone
+    # (hon1_4); a versioned tensor keeps the full version-bump requirement.
+    version_leg = input_slot_id in changed if input_slot_id in before_versions else True
     return (
         _contract_check(
             f"mutation:{call.call_id}",
-            input_slot_id in changed and aliases,
+            version_leg and aliases,
             RunnableErrorCode.MUTATION_VERSION_MISMATCH,
             f"In-place call {call.call_id!r} violated its alias/version expectation.",
             affected_op_labels=call.op_labels,
@@ -2669,8 +2702,29 @@ def _spec_node_reconstruction_lossy(spec: ContainerSpec) -> bool:
 
     if getattr(spec, "lossy_reconstruction", False):
         return True
-    if spec.kind not in {"dataclass", "hf_model_output"}:
+    # r37 R11: the load-time recompute follows the capability table's per-kind
+    # instance-state rule. ``type_recompute`` kinds re-derive lossiness from the
+    # RESOLVED type so a forged ``lossy_reconstruction=False`` cannot suppress it;
+    # builtin-stateless kinds short-circuit False; ``instance_refused`` /
+    # ``declaration_required`` kinds are policed at save (their persisted flag is
+    # supplementary and honest captures never produce a stateful instance).
+    rule = CONTAINER_KIND_CAPABILITIES.get(spec.kind, {}).get("instance_state_rule")
+    if rule != "type_recompute":
         return False
+    if spec.kind == "namedtuple":
+        try:
+            container_type = resolve_container_type(spec)
+        except ContainerReconstructionError:
+            return True
+        if container_type is None:
+            # Unresolved namedtuple type: reconstruction substitutes a synthesized
+            # type -- a lossy type substitution, never a false VERIFIED.
+            return True
+        # secB_1 forged-flag defense: a resolved namedtuple type that CAN carry
+        # per-instance state (no ``__slots__ = ()``) is treated as lossy even when
+        # the persisted flag is false. Plain ``collections.namedtuple`` /
+        # ``typing.NamedTuple`` / slotted subclasses stay VERIFIED-eligible.
+        return namedtuple_type_can_carry_instance_state(container_type)
     captured_names = spec.fields if spec.kind == "dataclass" else spec.keys
     try:
         container_type = resolve_container_type(spec)
@@ -3490,19 +3544,24 @@ def _path_faithfulness(
 
 def _run_report(
     readiness: ReadinessReport,
-    state: PreparedRunnableState,
     *,
+    state_source: StateSource,
+    initializer_policy_version: str | None,
+    seed: int | None,
+    random_filled_slot_ids: tuple[str, ...],
     contract_checks: tuple[ContractCheck, ...],
     path_faithfulness: PathFaithfulness,
     first_mismatch: RunnableDiagnostic | None,
     numeric_attestation: NumericAttestationStatus,
 ) -> RunReport:
-    """Build the settled sparse run-report surface.
+    """Build the settled run-report surface -- the ONE report finalizer (r37 corr2-5).
 
-    r35 I3 tripwire-on-the-tripwire: ``attested`` structurally implies a
-    ``verified``, unpoisoned path. The prohibited combination is asserted
-    unrepresentable at construction, so no future code path can emit an
-    internally contradictory positive numeric claim.
+    EVERY provider (loaded sparse AND live refresh) routes its report through this
+    constructor: ``poisoned`` is DERIVED solely from ``path_faithfulness is not
+    VERIFIED`` (no caller Boolean exists), and the r35 I3 tripwire-on-the-tripwire
+    asserts ``attested`` structurally implies a verified, unpoisoned path, so no
+    provider can emit an internally contradictory report. Direct ``RunReport(``
+    construction outside this finalizer is forbidden (source-scan meta-test).
     """
 
     poisoned = path_faithfulness is not PathFaithfulness.VERIFIED
@@ -3515,10 +3574,10 @@ def _run_report(
         )
     return RunReport(
         readiness=readiness,
-        state_source=state.state_source,
-        initializer_policy_version=state.initializer_policy_version,
-        seed=state.seed,
-        random_filled_slot_ids=state.random_filled_slot_ids,
+        state_source=state_source,
+        initializer_policy_version=initializer_policy_version,
+        seed=seed,
+        random_filled_slot_ids=random_filled_slot_ids,
         contract_checks=contract_checks,
         path_faithfulness=path_faithfulness,
         first_mismatch=first_mismatch,

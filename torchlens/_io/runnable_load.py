@@ -195,11 +195,78 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
     )
 
 
+class ContextFieldInvalidError(ValueError):
+    """A persisted execution-context field failed closed-vocabulary validation (INV-4).
+
+    Raised at PARSE time -- before readiness, staging, or any torch setter/callable
+    can observe the attacker-controllable bytes -- and surfaced as the frozen
+    ``context_field_invalid`` readiness diagnostic.
+    """
+
+    def __init__(self, field: str, detail: str) -> None:
+        super().__init__(f"Persisted execution-context field {field!r} is invalid: {detail}")
+        self.field = field
+        self.detail = detail
+
+
+_MATMUL_PRECISION_VOCABULARY = frozenset({"highest", "high", "medium"})
+"""Closed vocabulary for ``float32_matmul_precision`` (torch's exact accepted set)."""
+
+_DEVICE_TYPE_VOCABULARY = frozenset(
+    {
+        "cpu",
+        "cuda",
+        "meta",
+        "mps",
+        "xpu",
+        "hpu",
+        "mtia",
+        "ipu",
+        "xla",
+        "vulkan",
+        "lazy",
+        "privateuseone",
+    }
+)
+"""Closed vocabulary of device TYPE literals a persisted context may name."""
+
+
+def _validated_device_literal(field: str, raw: str) -> str:
+    """Validate a persisted device literal against the closed type[:index] grammar."""
+
+    device_type, separator, index = raw.partition(":")
+    if device_type not in _DEVICE_TYPE_VOCABULARY:
+        raise ContextFieldInvalidError(
+            field, f"device type {device_type!r} is outside the closed device vocabulary"
+        )
+    if separator and not index.isdigit():
+        raise ContextFieldInvalidError(
+            field, f"device index {index!r} is not a nonnegative integer"
+        )
+    return raw
+
+
+def _validated_dtype_literal(field: str, raw: str) -> str:
+    """Validate a persisted ``torch.<dtype>`` literal against the live dtype table."""
+
+    name = raw.removeprefix("torch.")
+    resolved = getattr(torch, name, None)
+    if not isinstance(resolved, torch.dtype):
+        raise ContextFieldInvalidError(field, f"{raw!r} does not name a torch dtype")
+    return raw
+
+
 def _parse_ambient_context(value: Mapping[str, Any]) -> AmbientExecutionContext:
     """Parse the required v2 capture-scoped ambient execution context.
 
     Every field must be present explicitly; ``None`` means the producing runtime
-    did not expose that control. Missing keys raise (fail closed).
+    did not expose that control. Missing keys raise (fail closed). r37 INV-4:
+    every VALUE validates here against a closed vocabulary -- device literals
+    against the type[:index] grammar, dtype literals against the live dtype
+    table, matmul precision against torch's exact accepted set, Booleans
+    strictly -- so no torch setter (and no callable) ever receives an
+    unvalidated persisted byte. The ambient-apply guards remain as a second
+    belt.
     """
 
     def _optional_bool_field(name: str) -> bool | None:
@@ -207,7 +274,9 @@ def _parse_ambient_context(value: Mapping[str, Any]) -> AmbientExecutionContext:
         if raw is None:
             return None
         if not isinstance(raw, bool):
-            raise TypeError(f"ambient_context.{name} must be a boolean or null.")
+            raise ContextFieldInvalidError(
+                f"ambient_context.{name}", f"{raw!r} is not a strict boolean or null"
+            )
         return raw
 
     def _optional_str_field(name: str) -> str | None:
@@ -216,10 +285,20 @@ def _parse_ambient_context(value: Mapping[str, Any]) -> AmbientExecutionContext:
             return None
         return _string_item(raw, f"ambient_context.{name}")
 
+    precision = _optional_str_field("float32_matmul_precision")
+    if precision is not None and precision not in _MATMUL_PRECISION_VOCABULARY:
+        raise ContextFieldInvalidError(
+            "ambient_context.float32_matmul_precision",
+            f"{precision!r} is outside {sorted(_MATMUL_PRECISION_VOCABULARY)}",
+        )
     return AmbientExecutionContext(
-        default_dtype=_string(value, "default_dtype"),
-        default_device=_string(value, "default_device"),
-        float32_matmul_precision=_optional_str_field("float32_matmul_precision"),
+        default_dtype=_validated_dtype_literal(
+            "ambient_context.default_dtype", _string(value, "default_dtype")
+        ),
+        default_device=_validated_device_literal(
+            "ambient_context.default_device", _string(value, "default_device")
+        ),
+        float32_matmul_precision=precision,
         deterministic_algorithms=_optional_bool_field("deterministic_algorithms"),
         deterministic_algorithms_warn_only=_optional_bool_field(
             "deterministic_algorithms_warn_only"
@@ -244,9 +323,18 @@ def _parse_call_execution_context(value: Mapping[str, Any]) -> CallExecutionCont
         dtype = item.get("dtype")
         autocast_entries.append(
             AutocastDeviceContext(
-                device_type=_string(item, "device_type"),
+                device_type=_validated_device_literal(
+                    "execution_context.autocast.device_type", _string(item, "device_type")
+                ),
                 enabled=_boolean(item, "enabled"),
-                dtype=None if dtype is None else _string_item(dtype, "autocast.dtype"),
+                dtype=(
+                    None
+                    if dtype is None
+                    else _validated_dtype_literal(
+                        "execution_context.autocast.dtype",
+                        _string_item(dtype, "autocast.dtype"),
+                    )
+                ),
             )
         )
     return CallExecutionContext(
@@ -359,6 +447,29 @@ def attach_sparse_run_readiness(
         return report
     try:
         descriptor = parse_sparse_run_descriptor(raw_descriptor)
+    except ContextFieldInvalidError as exc:
+        # r37 INV-4: an invalid persisted context VALUE is its own frozen refusal
+        # class -- refused at parse, before readiness/staging, so no torch setter
+        # or resolved callable ever observes the bytes.
+        diagnostic = _diagnostic(
+            RunnableErrorCode.CONTEXT_FIELD_INVALID,
+            str(exc),
+            backend=str(getattr(trace, "backend", "unknown")),
+            detection_stage="context_parse_validation",
+            details=(("context_field", exc.field), ("reason", exc.detail)),
+        )
+        report = ReadinessReport(
+            status=ReadinessStatus.UNAVAILABLE,
+            provider=RunProvider.LOADED_SPARSE,
+            backend=str(getattr(trace, "backend", "unknown")),
+            capability=cast(str | None, raw_descriptor.get("capability")),
+            resolver_records=(),
+            state_sources_available=(),
+            witness_completeness=None,
+            diagnostics=(diagnostic,),
+        )
+        _store_readiness(trace, None, report, None)
+        return report
     except (KeyError, TypeError, ValueError) as exc:
         diagnostic = _diagnostic(
             RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
@@ -384,6 +495,58 @@ def attach_sparse_run_readiness(
     return report
 
 
+def _device_capability_diagnostics(
+    descriptor: SparseRunDescriptor,
+) -> tuple[RunnableDiagnostic, ...]:
+    """Capability-check every recorded slot device WITHOUT allocation (r37 R5).
+
+    Validates device class existence and index bounds against this runtime. Only
+    accelerator classes with runtime probes are gated; the check must never
+    allocate payload memory or initialize a device context beyond the cheap
+    availability query.
+    """
+
+    diagnostics: list[RunnableDiagnostic] = []
+    seen: set[tuple[str, int | None]] = set()
+    for slot in descriptor.tensor_slots:
+        key = (slot.device_type, slot.device_index)
+        if key in seen:
+            continue
+        seen.add(key)
+        unavailable: str | None = None
+        if slot.device_type == "cuda":
+            if not torch.cuda.is_available():
+                unavailable = "CUDA is unavailable on this runtime"
+            elif slot.device_index is not None and slot.device_index >= torch.cuda.device_count():
+                unavailable = (
+                    f"CUDA device index {slot.device_index} exceeds "
+                    f"device_count()={torch.cuda.device_count()}"
+                )
+        elif slot.device_type == "mps":
+            mps_module = getattr(torch.backends, "mps", None)
+            if mps_module is None or not bool(mps_module.is_available()):
+                unavailable = "MPS is unavailable on this runtime"
+        if unavailable is not None:
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+                    f"Recorded slot {slot.slot_id!r} requires device "
+                    f"{slot.device_type}"
+                    + (f":{slot.device_index}" if slot.device_index is not None else "")
+                    + f": {unavailable}. The artifact stays loadable for analysis; "
+                    "execution requires a runtime exposing the recorded device.",
+                    descriptor=descriptor,
+                    detection_stage="readiness_device_capability",
+                    details=(
+                        ("slot_id", slot.slot_id),
+                        ("device_type", slot.device_type),
+                        ("device_index", repr(slot.device_index)),
+                    ),
+                )
+            )
+    return tuple(diagnostics)
+
+
 def preflight_sparse_run_descriptor(
     descriptor: SparseRunDescriptor,
 ) -> tuple[ReadinessReport, Mapping[str, Callable[..., Any]] | None]:
@@ -402,6 +565,19 @@ def preflight_sparse_run_descriptor(
     """
 
     version_diagnostics = _descriptor_version_diagnostics(descriptor)
+    device_diagnostics = _device_capability_diagnostics(descriptor)
+    if device_diagnostics:
+        # r37 R5 readiness gate: recorded slot devices are capability-checked
+        # WITHOUT allocating anything -- a CPU-only host loads a CUDA artifact for
+        # analysis fine, reports UNAVAILABLE here, and ``.run()`` refuses typed
+        # before any callable resolution or payload transfer.
+        report = _readiness_report(
+            descriptor,
+            records=(),
+            diagnostics=(*version_diagnostics, *device_diagnostics),
+            ready=False,
+        )
+        return report, None
     if descriptor.backend != "torch":
         diagnostic = _diagnostic(
             RunnableErrorCode.UNSUPPORTED_BACKEND_REPLAY,

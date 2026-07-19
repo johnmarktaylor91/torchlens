@@ -35,6 +35,7 @@ from ..utils._callable_safety import (
     is_denied_stdlib_or_builtin_module,
     is_inert_first_party_callable,
     is_pure_forward_callable,
+    real_callable_module,
     unsafe_callable_reason,
 )
 from ..utils._torch_compat import resolve_runnable_torch_alias
@@ -488,24 +489,43 @@ def resolve_function_registry_key(
                         f"module reached by attribute-walking a dotted qualname off "
                         f"{module_name!r}; denied even under trust."
                     )
-                # A callable that walked BACK into the torch namespace via a dotted
-                # qualname must be a PURE forward op: ``torch`` also hosts
-                # side-effecting builtins (``torch.from_file``) whose real module is
-                # the bare, non-denied ``"torch"``. Parity with
-                # ``runnable_load._finalize_resolution``'s ``is_pure_forward_callable``
-                # gate. Genuinely foreign (non-torch) trusted callables are NOT
-                # subject to this gate -- trust means "run this user recipe".
-                if callable(obj) and (
-                    resolved_owner == "torch" or resolved_owner.startswith("torch.")
+                # PURITY PARITY (secE-1 / secE-r36-1). A callable that walked BACK into
+                # the torch namespace via a dotted qualname -- OR a module-less C tensor
+                # method (``resize_`` / ``set_`` / ``apply_`` / ``map_``) -- must be a
+                # PURE forward op: ``torch`` also hosts side-effecting builtins
+                # (``torch.from_file``) and the tensor-method family
+                # rebinds/reallocates storage or runs an arbitrary callable per element.
+                # This gate keys on the callable's REAL (capture-unwrapped) module, NEVER
+                # ``resolved_owner``: that fallback string is spoofed two ways -- it lands
+                # on the trusted ``module_name`` for a module-less tensor method (real
+                # ``__module__ is None``), and on ``"torchlens.backends.torch.wrappers"``
+                # for ANY torch op TorchLens has capture-wrapped (the near-universal live
+                # state) -- so a raw string torch/prefix check misses a wrapped
+                # ``resize_`` / ``torch.load`` (the r36 hole). Mirror the r35
+                # torchlens-walk fix on the REAL identity: when the real owner is
+                # module-less OR torch, hold it to ``is_pure_forward_callable`` (which
+                # unwraps + covers the tensor-method-descriptor case, the storage-unsafe /
+                # ``apply_`` / ``map_`` name guards, and torch name/purity). Genuinely
+                # foreign (non-torch) trusted recipes carry a real, non-torch
+                # ``__module__`` and are NOT subject to this gate -- trust means "run this
+                # user recipe".
+                real_owner = real_callable_module(obj) if callable(obj) else ""
+                if (
+                    callable(obj)
+                    and (
+                        real_owner == "" or real_owner == "torch" or real_owner.startswith("torch.")
+                    )
+                    and not is_pure_forward_callable(obj)
                 ):
-                    if not is_pure_forward_callable(obj):
-                        raise UntrustedCallableError(
-                            "Refusing bundle-supplied custom callable "
-                            f"{module_name}:{qualname}: it resolves to a side-effecting "
-                            f"torch callable ({unsafe_callable_reason(obj)}) reached via "
-                            "a dotted qualname; only pure forward/tensor ops resolve "
-                            "from the torch namespace."
-                        )
+                    raise UntrustedCallableError(
+                        "Refusing bundle-supplied custom callable "
+                        f"{module_name}:{qualname}: it resolves to a torch-namespace or "
+                        f"module-less callable ({unsafe_callable_reason(obj)}) -- chiefly a "
+                        "C-level tensor method such as resize_/set_/apply_/map_ or a "
+                        "side-effecting torch builtin -- that is not a pure forward/tensor "
+                        "op; only pure forward/tensor ops resolve from the torch namespace "
+                        "or a module-less C callable, even under trust."
+                    )
 
             # OPERATOR GADGET name-scope (r33, A-R32-1). The ``operator`` /
             # ``_operator`` root is carved out of the stdlib denial so ``operator:neg``

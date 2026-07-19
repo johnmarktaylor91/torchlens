@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import torch
+
+from ...utils._torch_compat import tensor_version_or_none
 from torch import nn
 
 from ... import _state
@@ -826,11 +828,11 @@ def _tensor_version(tensor: torch.Tensor) -> int | None:
 
     state = _witness_marker_state()
     if state is None:
-        return getattr(tensor, "_version", None)
+        return tensor_version_or_none(tensor)
     depth = getattr(state, "depth", 0)
     state.depth = depth + 1
     try:
-        return getattr(tensor, "_version", None)
+        return tensor_version_or_none(tensor)
     finally:
         state.depth = depth
 

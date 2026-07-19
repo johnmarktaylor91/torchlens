@@ -20,10 +20,16 @@ Autocast state (``torch.amp.autocast``) is captured similarly so that
 mixed-precision ops can be replayed under the same dtype context.
 """
 
+import os as _os_module
 import random
+import sys as _sys_module
+import threading as _threading_module
+import time as _time_module
 from collections.abc import Callable
 from types import TracebackType
 from typing import Any, Dict, List, TypeVar, cast
+
+import _random as _c_random_module
 
 import numpy as np
 import torch
@@ -360,3 +366,329 @@ class AutocastRestore:
         # Exit in reverse order to mirror the nesting order of __enter__.
         for ctx in reversed(self._contexts):
             ctx.__exit__(exc_type, exc_value, traceback)
+
+
+# ======================================================================================
+# r37 hon1_2 -- host-nondeterminism channel monitor (the conservative ceiling).
+#
+# The global-engine snapshots above cover only the two REPLAYABLE engines (module
+# ``random``, legacy ``np.random``). Every other host entropy/clock/RNG-instance
+# channel is monitored here over a FROZEN vocabulary; a positive touch permanently
+# ceilings the capture (``host_rng_consumed=True`` with NO identifiable seed ->
+# every replay UNVERIFIABLE + NOT_APPLICABLE). Monitor uncertainty (install/chain/
+# restore failure) is itself recorded and downgrades capture completeness -- it
+# never reads as "no consumption". Absence of a touch claims nothing beyond the
+# named vocabulary (residual tail: direct /dev/urandom file reads, user C-extension
+# RNGs, ctypes -- outside any sane monitor).
+# ======================================================================================
+
+
+class HostRngMonitorResult:
+    """Outcome of one capture-scoped host-nondeterminism monitoring window."""
+
+    __slots__ = ("channels", "uncertain")
+
+    def __init__(self) -> None:
+        self.channels: set[str] = set()
+        self.uncertain: bool = False
+
+
+_CLOCK_CHANNEL_NAMES = (
+    "time",
+    "time_ns",
+    "monotonic",
+    "monotonic_ns",
+    "perf_counter",
+    "perf_counter_ns",
+    "process_time",
+    "process_time_ns",
+    "thread_time",
+    "thread_time_ns",
+    "clock_gettime",
+    "clock_gettime_ns",
+)
+"""Frozen monitored clock vocabulary (r37): any in-forward user read ceilings."""
+
+
+def _torchlens_module_globals_ids() -> frozenset[int]:
+    """Identity keys of every loaded torchlens module's globals dict.
+
+    TorchLens's own capture machinery reads clocks constantly (per-op timing); its
+    reads are excluded by EXACT module ownership -- the caller frame's globals dict
+    identity against this registry -- never by filename strings or frame ancestry.
+    A user callback's code keeps its own module globals even when invoked from a
+    TorchLens frame, so user reads are always detected.
+    """
+
+    ids = set()
+    for name, module in list(_sys_module.modules.items()):
+        if module is not None and (name == "torchlens" or name.startswith("torchlens.")):
+            module_dict = getattr(module, "__dict__", None)
+            if module_dict is not None:
+                ids.add(id(module_dict))
+    return frozenset(ids)
+
+
+def _rng_exempt_instances() -> tuple[Any, ...]:
+    """Replayable global singletons + TorchLens's private barcode RNG (identity-exempt)."""
+
+    exempt: list[Any] = []
+    inst = getattr(random, "_inst", None)
+    if inst is not None:
+        exempt.append(inst)
+    np_singleton = getattr(getattr(np.random, "mtrand", None), "_rand", None)
+    if np_singleton is not None:
+        exempt.append(np_singleton)
+    try:
+        from .hashing import _BARCODE_RNG
+
+        exempt.append(_BARCODE_RNG)
+    except Exception:  # pragma: no cover - hashing is a first-party import
+        pass
+    return tuple(exempt)
+
+
+class host_nondeterminism_monitor:
+    """Context manager installing the four-layer host-RNG/entropy/clock monitor.
+
+    Layers (agreed r37 design):
+
+    1. replayable global engines -- NOT handled here (the snapshot bracket at the
+       call site keeps its unchanged seeded-reproduction semantics);
+    2. scoped patches over the frozen channel vocabulary: ``random.Random`` /
+       ``random.SystemRandom`` draw primitives (class-level, so private instances
+       and subclasses are caught; the module-global engine binds its methods at
+       import time and bypasses them structurally), ``os.urandom`` (+
+       ``os.getrandom`` where present) and the import-time ``random._urandom``
+       alias (the ``secrets.token_*`` funnel), the ``np.random.default_rng``
+       factory, and the full clock family;
+    3. a model-attribute generator state sweep (belt for layer 4);
+    4. a capture-scoped chained ``sys.setprofile`` ``c_call`` classifier marking
+       any draw whose bound receiver is a NumPy ``Generator`` / ``BitGenerator`` /
+       ``RandomState`` or a C-level ``_random.Random``, identity-exempting the two
+       replayable global singletons and TorchLens's private barcode RNG.
+
+    Entropy/instance channels mark from ANY thread (a forward offloading a draw to
+    a helper thread is still a touch); clock channels mark only on the owner thread
+    (unrelated daemon threads must not ceiling a deterministic capture). Install,
+    chain, or restore failure sets ``uncertain`` -- the caller must downgrade
+    capture completeness, never report no-consumption.
+    """
+
+    def __init__(self, model: Any = None) -> None:
+        self.result = HostRngMonitorResult()
+        self._model = model
+        self._restores: list[Callable[[], None]] = []
+        self._owner_thread = _threading_module.get_ident()
+        self._previous_profile: Any = None
+        self._profile_installed = False
+        self._hook: Any = None
+        self._generator_states: list[tuple[Any, Any]] = []
+        self._tl_globals_ids: frozenset[int] = frozenset()
+        self._exempt_ids: frozenset[int] = frozenset()
+
+    # -- helpers -----------------------------------------------------------------
+
+    def _mark(self, channel: str) -> None:
+        self.result.channels.add(channel)
+
+    def _patch_attr(self, holder: Any, name: str, wrapper: Any) -> None:
+        original = getattr(holder, name)
+        setattr(holder, name, wrapper)
+
+        def _restore(holder: Any = holder, name: str = name, original: Any = original) -> None:
+            if getattr(holder, name, None) is not wrapper:
+                # Someone replaced our patch mid-window: restoration cannot be
+                # proven exact -> uncertainty (fail closed), restore anyway.
+                self.result.uncertain = True
+            setattr(holder, name, original)
+
+        self._restores.append(_restore)
+
+    def _entropy_wrapper(self, original: Any, channel: str) -> Any:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            self._mark(channel)
+            return original(*args, **kwargs)
+
+        return wrapper
+
+    def _clock_wrapper(self, original: Any, channel: str) -> Any:
+        tl_ids = self._tl_globals_ids
+        owner = self._owner_thread
+
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            if _threading_module.get_ident() == owner:
+                try:
+                    caller_globals_id = id(_sys_module._getframe(1).f_globals)
+                except Exception:
+                    caller_globals_id = -1
+                if caller_globals_id not in tl_ids:
+                    self._mark(channel)
+            return original(*args, **kwargs)
+
+        return wrapper
+
+    def _instance_method_wrapper(self, original: Any, channel: str) -> Any:
+        exempt_ids = self._exempt_ids
+
+        def wrapper(self_rng: Any, *args: Any, **kwargs: Any) -> Any:
+            if id(self_rng) not in exempt_ids:
+                self._mark(channel)
+            return original(self_rng, *args, **kwargs)
+
+        return wrapper
+
+    def _profile_hook(self, frame: Any, event: str, arg: Any) -> Any:
+        try:
+            if event == "c_call":
+                receiver = getattr(arg, "__self__", None)
+                if (
+                    receiver is not None
+                    and id(receiver) not in self._exempt_ids
+                    and isinstance(
+                        receiver,
+                        (
+                            _c_random_module.Random,
+                            np.random.Generator,
+                            np.random.RandomState,
+                            np.random.BitGenerator,
+                        ),
+                    )
+                ):
+                    self._mark("c_rng_instance_draw")
+        except Exception:
+            self.result.uncertain = True
+        previous = self._previous_profile
+        if previous is not None:
+            try:
+                previous(frame, event, arg)
+            except Exception:
+                self.result.uncertain = True
+
+    def _sweep_model_generators(self) -> list[tuple[Any, Any]]:
+        states: list[tuple[Any, Any]] = []
+        model = self._model
+        modules = getattr(model, "modules", None)
+        if not callable(modules):
+            return states
+        try:
+            budget = 1000
+            for module in modules():
+                for value in list(getattr(module, "__dict__", {}).values()):
+                    budget -= 1
+                    if budget <= 0:
+                        return states
+                    try:
+                        if isinstance(value, np.random.Generator):
+                            states.append((value, repr(value.bit_generator.state)))
+                        elif isinstance(value, np.random.RandomState):
+                            states.append((value, repr(value.get_state())))
+                        elif isinstance(value, random.Random):
+                            states.append((value, value.getstate()))
+                    except Exception:
+                        self.result.uncertain = True
+        except Exception:
+            self.result.uncertain = True
+        return states
+
+    # -- context protocol ---------------------------------------------------------
+
+    def __enter__(self) -> HostRngMonitorResult:
+        try:
+            self._tl_globals_ids = _torchlens_module_globals_ids()
+            self._exempt_ids = frozenset(id(item) for item in _rng_exempt_instances())
+            # Layer 2a: Python RNG class primitives (instances + subclasses).
+            for method_name in ("random", "getrandbits", "randbytes"):
+                if hasattr(random.Random, method_name):
+                    self._patch_attr(
+                        random.Random,
+                        method_name,
+                        self._instance_method_wrapper(
+                            getattr(random.Random, method_name),
+                            f"random.Random.{method_name}",
+                        ),
+                    )
+                if method_name in vars(random.SystemRandom):
+                    self._patch_attr(
+                        random.SystemRandom,
+                        method_name,
+                        self._instance_method_wrapper(
+                            getattr(random.SystemRandom, method_name),
+                            f"random.SystemRandom.{method_name}",
+                        ),
+                    )
+            # Layer 2b: OS entropy + the secrets funnel alias + uuid4's feed.
+            self._patch_attr(
+                _os_module, "urandom", self._entropy_wrapper(_os_module.urandom, "os.urandom")
+            )
+            if hasattr(_os_module, "getrandom"):
+                self._patch_attr(
+                    _os_module,
+                    "getrandom",
+                    self._entropy_wrapper(_os_module.getrandom, "os.getrandom"),
+                )
+            if hasattr(random, "_urandom"):
+                # ``random.py`` imports ``os.urandom`` at import time; SystemRandom
+                # and ``secrets.token_bytes`` route through THIS alias, not the
+                # patched ``os.urandom`` attribute (measured, exp3).
+                self._patch_attr(
+                    random,
+                    "_urandom",
+                    self._entropy_wrapper(random._urandom, "random._urandom"),
+                )
+            # Layer 2c: the modern NumPy generator factory.
+            self._patch_attr(
+                np.random,
+                "default_rng",
+                self._entropy_wrapper(np.random.default_rng, "np.random.default_rng"),
+            )
+            # Layer 2d: the frozen clock family (owner-thread, TL-ownership-excluded).
+            for clock_name in _CLOCK_CHANNEL_NAMES:
+                if hasattr(_time_module, clock_name):
+                    self._patch_attr(
+                        _time_module,
+                        clock_name,
+                        self._clock_wrapper(
+                            getattr(_time_module, clock_name), f"time.{clock_name}"
+                        ),
+                    )
+            # Layer 3: model-attribute generator state sweep (belt for layer 4).
+            self._generator_states = self._sweep_model_generators()
+            # Layer 4: chained c_call classifier on the owner thread. The bound
+            # method is materialized ONCE so the exit identity check compares the
+            # exact installed object (attribute access would rebind per access).
+            self._hook = self._profile_hook
+            self._previous_profile = _sys_module.getprofile()
+            _sys_module.setprofile(self._hook)
+            self._profile_installed = True
+        except Exception:
+            self.result.uncertain = True
+        return self.result
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        if self._profile_installed:
+            try:
+                if _sys_module.getprofile() is not self._hook:
+                    # The hook was replaced mid-forward: coverage between the
+                    # replacement and now is unknowable.
+                    self.result.uncertain = True
+                _sys_module.setprofile(self._previous_profile)
+            except Exception:
+                self.result.uncertain = True
+        for restore in reversed(self._restores):
+            try:
+                restore()
+            except Exception:
+                self.result.uncertain = True
+        for holder, before in self._generator_states:
+            try:
+                if isinstance(holder, np.random.Generator):
+                    after: Any = repr(holder.bit_generator.state)
+                elif isinstance(holder, np.random.RandomState):
+                    after = repr(holder.get_state())
+                else:
+                    after = holder.getstate()
+                if after != before:
+                    self._mark("model_attribute_generator")
+            except Exception:
+                self.result.uncertain = True

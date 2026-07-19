@@ -334,6 +334,21 @@ analysis output but must not write runnable capability. It rejects when:
 7. A control site lacks completeness classification or a witness required by that classification.
 8. A declared optional weight layer cannot represent state mutation after its snapshot.
 9. Any forbidden sparse-core payload or executable reference survives final scrubbing.
+10. Bound state alias topology is unsupported (r37): two DISTINCT live state tensor objects whose
+    touched bytes overlap, or whose relation cannot be proven, refuse with
+    `state_alias_topology_unsupported` (detection stage `producer_state_alias_topology`, details
+    `reason`/`left_state`/`right_state`/`relation`). The topology is captured from the LIVE model
+    objects before capture-state cloning erases it. Repeated live object IDENTITY (tied weights,
+    double-registered buffers) is NOT refused: it becomes a shared `alias_group`, serialized and
+    staged as ONE allocation so `a is b` and in-place propagation semantics replay exactly.
+    Proved-disjoint views of one storage serialize independently and stay admitted. The v2 schema
+    deliberately carries no backing-storage/view recipe; representing overlapping distinct views
+    is a future versioned schema bump, not an implicit encoding.
+11. The model output has ZERO tensor slots (r37, `zero_tensor_slot_output`): an all-literal tree,
+    a literal root, or empty containers pass the losslessness proof but leave no output Op to
+    carry the root `ContainerSpec`, so a loaded run would reconstruct `None`. Unrepresentable
+    means refuse at save with `missing_output_container_contract`, uniformly with every other
+    output refusal.
 
 The hard invariant is:
 
@@ -378,6 +393,31 @@ and unordered/opaque containers are unsupported runnable outputs at every depth 
 (including zero and one tensor) and are uniformly refused at save with
 `missing_output_container_contract`. Ordinary analysis capture is unaffected. Proof failure is a
 typed producer refusal -- refuse-unless-proved, never accept-unless-flagged.
+
+r37 adds ONE per-kind reconstruction capability table (`CONTAINER_KIND_CAPABILITIES` in
+`torchlens/ir/container.py`) shared by spec construction, this producer proof, and the runtime
+independent recompute; a kind existing in only one site fails a coverage meta-test. The
+instance-state rules it encodes:
+
+- `tuple`/`list`/`literal` are structurally stateless (exact builtins, no instance `__dict__`).
+- `namedtuple` uses NAMEDTUPLE-SPECIFIC helpers (never the dataclass helper, whose
+  no-`__dict__` interpretation is inverted for tuple storage): an instance carrying non-field,
+  non-`None` `__dict__` state refuses at save (`namedtuple_instance_state`); at load, a RESOLVED
+  namedtuple type that CAN carry per-instance state (no `__slots__ = ()`) is treated as lossy
+  even when the persisted `lossy_reconstruction` flag says `False` (forged-flag defense). Plain
+  `collections.namedtuple`, `typing.NamedTuple`, `__slots__ = ()` subclasses, and supported
+  `torch.return_types` stay admitted.
+- `dataclass`/`hf_model_output` keep their r25/r27 type-level recompute.
+- `dict` admits only the exact trusted bases (`dict`/`OrderedDict`/`defaultdict` with an
+  allowlisted factory); an instance carrying extra non-`None` `__dict__` state refuses at save
+  (`mapping_instance_state`). The load-time recompute for this kind is the persisted flag plus
+  the exact-type gate (extra instance state is not type-observable on the trusted bases); honest
+  captures never produce a stateful instance because the save refuses it.
+- `registered` requires the registration's explicit `state_complete=True` declaration
+  (`tl.register_container(..., state_complete=True)`) before an instance carrying extra
+  `__dict__` state may save (`registered_container_instance_state` otherwise); the declaration is
+  the trusted statement that `unflatten` restores everything `flatten` observed.
+- `opaque` is always a typed save refusal.
 
 ## 6. Resolver protocol
 
@@ -453,7 +493,9 @@ scalar_bool_divergence
 conditional_arm_divergence
 loop_predicate_divergence
 input_alias_topology_unresolved
+state_alias_topology_unsupported
 execution_context_unavailable
+context_field_invalid
 numeric_attestation_failed
 poisoned_run_refused
 ```
@@ -464,6 +506,19 @@ same-storage input pair, so the run reports `unverifiable` with `not_applicable`
 never `diverged` by assumption and never `verified`. `execution_context_unavailable` is the typed
 refusal for a recorded execution context the producer could not capture or the runtime cannot
 enter/restore.
+
+`state_alias_topology_unsupported` (r37) is a SAVE-time producer refusal: two distinct live
+bound-state tensor objects overlap in touched bytes (or their relation is unprovable), which the
+v2 value-only state encoding cannot represent (section 5, rule 10). `context_field_invalid`
+(r37, INV-4) is the PARSE-time refusal for a persisted ambient/per-call execution-context VALUE
+outside its closed vocabulary -- device literals against the `type[:index]` grammar, dtype
+literals against the live dtype table, matmul precision against exactly
+`highest|high|medium`, strict Booleans -- surfaced as an `unavailable` readiness diagnostic at
+detection stage `context_parse_validation` before any torch setter, staging, or callable can
+observe the bytes (the ambient-apply guards remain as a second belt). Device-UNAVAILABILITY (a
+CUDA artifact on a CPU-only host) deliberately reuses `run_capability_unavailable` -- it is a
+runtime capability fact, not a new class -- as a readiness diagnostic at detection stage
+`readiness_device_capability` naming the slot and device.
 
 `callable_moved_or_renamed` is a successful alias diagnostic. `runtime_signature_drift` rolls back
 but is compatibility failure, not path divergence. `semantic_drift` comes only from the independent
@@ -656,8 +711,12 @@ returns a permanently, monotonically poisoned result/Trace. Contradiction is div
 proof is unverifiable; both have `poisoned=true`. The mark cannot be cleared by another run.
 
 Validation, runnable export, faithful comparison, path-assuming intervention chaining, and any
-model-faithful presentation reject poison with `PoisonedRunError`/`poisoned_run_refused`. This is the
-target for live run too; temporary provider gaps must remain explicit.
+model-faithful presentation reject poison with `PoisonedRunError`/`poisoned_run_refused`. The LIVE
+refresh provider finalizes through the SAME spine as the sparse provider (r37 corr2-5): the
+monotonic Trace path-status mark, the shared divergence-policy enforcement (with `on_divergence`
+threaded from the public `run` surface), and the one report finalizer whose `poisoned` flag is
+DERIVED solely from `path_faithfulness is not verified` -- no provider carries a caller Boolean,
+and direct report construction outside the finalizer is meta-tested away.
 
 There are exactly two independent reproduction oracles:
 
@@ -699,8 +758,33 @@ artifact -- original or changed input -- reports `unverifiable` + `not_applicabl
 enclosing wrapper owner became an accounted runnable call is discharged (replaying the owner
 replays its internal fallback); there are no exception-type or framework-file exemptions. A
 successful host/`None`-returning unaccounted event likewise needs an exact witness or audited
-boundary or it downgrades completeness. Assessed residual: warnings/environment reads are not
-tensor-value channels; value dependence must route through an already witnessed escape.
+boundary or it downgrades completeness.
+
+r37 makes the ledger EXHAUSTIVE over dispatch outcomes (INV-1): a `returned_tensor` event is
+never implicitly discharged. An unowned MUTATING dispatch records `opaque_side_effect`; an
+unowned VALUE-PRODUCING non-mutating dispatch records `unmodeled_tensor_return` (its product can
+bake into a later traced call as an unwitnessed constant -- the corr2-1 class and its
+non-mutating twin); the only audited `returned_tensor` rows are pure views (`aten.detach` /
+`aten.alias`, the C-level `.data` accessor) and a span-CONTAINED `aten.as_strided` (DLPack /
+array-interop restride; an out-of-span restride stays an incomplete fact). An unhandled outcome
+value is a hard internal error. Producer preflight enforces observed events == explicit
+dispositions.
+
+Escape-source attribution is a SINGLE-EXIT positive ladder: a labeled source witnesses by its
+slot digest; an unlabeled source resolves through the direct registered-state storage alias or
+the propagated dispatch-origin ledger (every in-scope dispatch registers each tensor result with
+the union of its operands' origins); the only other exit is a fail-closed opaque record ->
+INCOMPLETE. An orphan-pruned source label falls back to its census-recorded LEAF-origin basis
+(the terminal inputs/state its VALUE derives from), each leaf itself re-resolved or the escape
+stays INCOMPLETE. BANNED forever as discharge/attribution mechanisms (r36 hon2_1/hon2_2/hon2_3,
+measured): scalar value equality/collision (a value match may only ADD a witness), `.item()`
+re-extraction on unknown-arity operands, and ANY autograd-graph structural argument as an
+operand-totality proof (non-differentiable-dtype and detached operands leave no autograd slot at
+all, so "every leaf is a param" proves nothing). Pure param-derived host reads (`w.sum()`,
+`w * 2`) recover `verified` ONLY through positive origin resolution; `.data`-of-input escapes
+attribute to the input slot and keep the ORIGINAL input `verified` while any changed input
+restales the witness. Raw seeded-RNG products taint their origins and can never launder
+attribution.
 
 A future replayable exception witness may recover `verified` ONLY when all five preconditions
 hold: (1) exact pre-call argument binding recorded; (2) purity proof -- no RNG consumption, no
@@ -710,18 +794,74 @@ recorded-handler compatibility; (4) full execution-context restoration around th
 RNG bracket proving zero generator advance. This recovery is DEFERRED (not shipped); until it
 lands every in-forward caught raise ceilings at `unverifiable`.
 
+### Host nondeterminism channel vocabulary (r37)
+
+The replayable engines are exactly the module-global Python `random` engine and the legacy global
+`numpy.random` singleton: their consumption is snapshot-detected, records the capture seed, and a
+matching-seed replay stays `verified`/`attested` while an off-seed or seedless run ceilings.
+
+Every OTHER host channel is monitored over this FROZEN vocabulary, and ANY capture-time touch is
+permanently unreplayable -- `host_rng_consumed=true` with NO identifiable seed, so every run of
+the artifact (any input, any seed) reports `unverifiable` + `not_applicable`:
+
+1. non-global `random.Random` / `random.SystemRandom` draw primitives (`random`, `getrandbits`,
+   `randbytes`) -- private instances and subclasses included (class-level monitoring);
+2. any C call bound to a `numpy.random.Generator` / `BitGenerator` / `RandomState` receiver
+   (a capture-scoped chained `sys.setprofile` classifier -- an OUTSIDE-held generator drawn
+   in-forward is observed without discovering its holder; the formerly declared residual is
+   CLOSED), plus `numpy.random.default_rng` construction;
+3. the `secrets` family (funnels through `SystemRandom` and the import-time `random._urandom`
+   alias -- monitored directly because `secrets.token_bytes` bypasses the `os.urandom`
+   attribute);
+4. `os.urandom` / `os.getrandom` and `uuid.uuid4` (feeds through `os.urandom`);
+5. the full clock family: `time`, `time_ns`, `monotonic`, `monotonic_ns`, `perf_counter`,
+   `perf_counter_ns`, `process_time`, `process_time_ns`, `thread_time`, `thread_time_ns`,
+   `clock_gettime`, `clock_gettime_ns` (any in-forward user read ceilings; a forward that reads
+   no clock records nothing).
+
+TorchLens's own per-op timing reads are excluded by EXACT module ownership of the caller frame
+(the registered `torchlens.*` module globals), never by filename strings or frame ancestry -- a
+user callback's code stays user code even when invoked from a TorchLens frame, and a plain
+deterministic capture records nothing (the critical over-trigger pin). Monitor UNCERTAINTY
+(installation, chaining, restoration, or classification failure) downgrades capture completeness
+to INCOMPLETE -- it never reads as no-consumption. Absence of a touch proves no touch of THIS
+NAMED vocabulary; it does not claim environmental determinism for channels outside it (residual
+tail: direct `/dev/urandom` file reads, user C-extension RNGs, ctypes -- outside any sane
+monitor). Entropy/instance channels mark from any thread; clock channels mark only on the
+capture owner thread.
+
+A pruned `.data`-alias BOOL control predicate whose leaf origins resolve positively (e.g.
+`bool(self.gate.data > 0.5)` -> the gate's state digest) is witnessed by that basis: the
+original state stays `verified` and a changed staged state restales the witness -- the pre-r37
+"unattributable pruned bool" fail-closed exception no longer applies to positively-resolved
+cases.
+
 ### Three-valued input alias topology
 
-Runtime input aliasing against the de-aliased capture is judged by a three-valued touched-byte
-engine: identity (`a is b`) and PROVED overlap of recorded-disjoint inputs are observed
-contradictions (`diverged`); PROVED disjointness passes; anything unproven is `unknown`, which
-adds the `input_alias_topology_unresolved` ceiling -- `unverifiable` path, `not_applicable`
-attestation -- never `overlap` by assumption and never `verified`. Proof layers: same-storage
-grouping (distinct storages are trivially disjoint); exact interval/geometry reasoning; an
-element-grid-normalized residue/GCD proof (applicable only when both views share element size,
-congruent byte starts, and element-multiple strides); and bounded exact enumeration up to 65,536
-logical elements per view. No bounding-box overlap alone is an overlap proof, and no complexity
-cap is a disjointness proof.
+Runtime input aliasing against the de-aliased capture is judged by ONE shared three-valued
+touched-byte engine (`torchlens.utils.tensor_utils`, r37 INV-2): identity (`a is b`) and PROVED
+overlap of recorded-disjoint inputs are observed contradictions (`diverged`); PROVED disjointness
+passes; anything unproven is `unknown`, which adds the `input_alias_topology_unresolved` ceiling
+-- `unverifiable` path, `not_applicable` attestation -- never `overlap` by assumption and never
+`verified`.
+
+All proofs run on ABSOLUTE, device-scoped byte addresses (`storage.data_ptr()` + offset +
+min/max stride contributions; negative and zero strides sound). Storage-object identity or
+pointer (in)equality NEVER decides anything: `torch.from_numpy` / `torch.frombuffer` / DLPack
+views own DISTINCT torch storage objects over genuinely overlapping host memory, so the former
+"distinct storages are trivially disjoint" rule was unsound (r36 hon1_1) and is REMOVED. Proof
+layers: disjoint absolute byte intervals; identical absolute geometry; an
+element-grid-normalized residue/GCD proof on absolute coordinates (disjointness only; applicable
+when both views share element size and byte starts congruent on the shared grid); and bounded
+exact enumeration up to 65,536 logical elements per view, computed in PURE Python integers so
+the verdict is identical under an implicit CPU default, a process-global meta default, and
+nested `torch.device(...)` modes (r36 corr2-2). Distinct device address spaces are disjoint by
+construction (cross-device aliasing is not constructible through public torch APIs); the device
+key prevents spurious cross-device numerical collisions. A meta tensor (`data_ptr() == 0`) or
+any unprovable footprint is `unknown`, never a proof. No bounding-interval overlap alone is an
+overlap proof, and no complexity cap is a disjointness proof. Alias admission runs BELOW the
+hard layout precondition choke point, so the engine's domain is admitted plain strided tensors
+by construction.
 
 ### Execution-context equivalence and documented residuals
 
@@ -764,6 +904,37 @@ sampling), and the only unobservable surface (a raw `data_ptr()` pointer) fails 
 `unverifiable`. Parameters and buffers are witnessed identically: a bytes-changed-but-version-static
 storage during the forward is an opaque host write-back (`unverifiable`), while a read-only exposure
 of either stays `verified`.
+
+State ALIAS topology is part of the declared model (r37): repeated live object identity across
+state names reproduces exactly (one serialized value, one staged allocation per `alias_group`,
+`a is b` preserved); distinct-object overlap or an unprovable relation refuses at save
+(`state_alias_topology_unsupported`, section 5 rule 10); proved-disjoint views of one storage
+serialize independently.
+
+Device placement (r37): payload blobs keep their `map_location` transport placement through load
+and analysis. Readiness capability-checks every recorded slot device WITHOUT allocating (a
+CPU-only host loads a CUDA artifact for analysis and reports `unavailable` with a
+`run_capability_unavailable` diagnostic at `readiness_device_capability`; `.run()` refuses typed
+before any callable). At run preparation ONE atomic staging pass -- the sole execution-placement
+authority -- moves embedded capture state, staged user state, and required non-persistent
+buffers to their recorded slot devices, once per shared value (alias groups keep one allocation),
+preserving dtype and `requires_grad`, publishing nothing on failure. A post-staging
+in-transaction `state_device` tripwire catches a broken staging hook typed -- never a mid-call
+`runtime_signature_drift`. Defensive run clones MIRROR fidelity: runtime input clones restore
+the live leaf's `requires_grad` (the recorded grad context stays semantically live and the exact
+original input remains attestation-eligible; an intentionally changed flag stays a physical
+input change -> `not_applicable`), while state clones restore the RECORDED per-slot trainable
+bit.
+
+The recorded DEFAULT DEVICE is entered as a scoped `with torch.device(recorded)` context nested
+above the caller's mode stack -- never via `torch.set_default_device`, whose process-global
+DeviceContext mutation leaked/corrupted caller modes (r36 corr2-3) -- so context-manager exit
+restores the caller's exact state on every path by construction; a feature-probed mode-stack
+depth postcondition is the tripwire. Ambient `torch.inference_mode()` capture is supported: the
+per-call `inference_mode=true` context is recorded and re-entered at replay, with all
+TorchLens-owned `_version` reads routed through one safe accessor (an unavailable version
+degrades bookkeeping to its conservative fallback, never a capture crash; the replay mutation
+tripwire keeps its version-independent alias leg for version-less inference tensors).
 
 A third, pathological boundary is an autograd property read off an input-*derived view* rather than
 the input leaf. Direct-leaf autograd reads (`requires_grad`, gradient presence, `_version`,
@@ -810,9 +981,21 @@ Glossary of v2 vocabulary introduced by this amendment (canonical here per the l
   of used non-persistent buffers; part of the declared state model (section 11).
 - `torchlens_role_init_v2` -- the initializer policy with degenerate totality (empty slots consume
   zero RNG; nonempty Kaiming requires finite positive fan-in).
-- `input_alias_topology_unresolved` -- the unverifiability ceiling for an unproven same-storage
-  input alias relation.
+- `input_alias_topology_unresolved` -- the unverifiability ceiling for an unproven input alias
+  relation (r37: absolute device-scoped byte addresses; distinct storage objects are never
+  trivially disjoint).
 - `execution_context_unavailable` -- the typed refusal for uncapturable/unrestorable context.
+- `state_alias_topology_unsupported` (r37) -- the save-time refusal for distinct-object
+  overlapping/unprovable bound-state alias topology (section 5 rule 10).
+- `context_field_invalid` (r37) -- the parse-time refusal for a persisted execution-context value
+  outside its closed vocabulary (section 7).
+- `CONTAINER_KIND_CAPABILITIES` (r37) -- the one per-kind output reconstruction capability table
+  shared by spec construction, producer proof, and runtime recompute (section 5).
+- `tl.register_container(..., state_complete=...)` (r37) -- the explicit trusted declaration that
+  a registered container's hooks round-trip all per-instance state; without it, runnable saves
+  refuse instances carrying extra state.
+- `stage_state_to_slot_devices` (r37) -- the single atomic run-preparation staging authority for
+  recorded slot devices (section 11, declared state model).
 
 ## 13. Resolver compatibility release gate
 
