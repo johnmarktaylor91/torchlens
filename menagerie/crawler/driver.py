@@ -5703,6 +5703,13 @@ class CrawlerDriver:
             and prior_artifact_authority.get("state") in {"private-committed", "published"}
         )
         if retain_prior_artifact_authority:
+            assert artifact is not None
+            assert isinstance(prior_artifact_authority, Mapping)
+            self._assert_retained_artifact_authority_matches(
+                artifact,
+                prior_artifact_authority,
+                reducer,
+            )
             model["artifact_authority"] = deepcopy(dict(prior_artifact_authority))
 
         self.dependencies.boundary_hook("pre-publication", item.stable_id)
@@ -5743,6 +5750,92 @@ class CrawlerDriver:
             raise DriverPaused("review checkpoint reached")
         state.update({"last_terminal_count": len(current_records), "status": "running"})
         _write_driver_state(self.paths.driver_state, state)
+
+    def _assert_retained_artifact_authority_matches(
+        self,
+        artifact: AuthorArtifact,
+        authority: Mapping[str, Any],
+        reducer: CanonicalReducer,
+    ) -> None:
+        """Require retained final authority to identify the exact new artifact.
+
+        Parameters
+        ----------
+        artifact:
+            New terminal artifact that would inherit prior finalized authority.
+        authority:
+            Prior model revision's finalized artifact-authority projection.
+        reducer:
+            Active reducer supplying the validated append-only authority context.
+
+        Raises
+        ------
+        DriverIntegrationError
+            If any final event, reconstruction input, claim, work, proposal, or
+            private-custody identity differs from the new terminal artifact.
+        """
+
+        if artifact.staged is None:
+            raise DriverIntegrationError("retained-artifact-authority-mismatch")
+        transaction_value = authority.get("transaction_id")
+        if not isinstance(transaction_value, str) or not transaction_value:
+            raise DriverIntegrationError("retained-artifact-authority-mismatch")
+        canonical_root = _canonical_crawler_root(self.paths)
+        repository_root = _canonical_repo_root(canonical_root)
+        mirrors = MirrorStore(
+            self.paths.runtime_root / "mirrors" / "public",
+            self.paths.runtime_root / "mirrors" / "private",
+            self.paths.runtime_root / "mirrors" / "local",
+        )
+        artifact_paths = tuple(sorted(self.paths.ledgers.artifacts.parent.glob("*.jsonl"))) or (
+            self.paths.ledgers.artifacts,
+        )
+        binding = artifact.author_result.binding
+        try:
+            projection = validate_artifact_checkpoint(
+                artifact_paths,
+                context=reducer.context,
+                mirrors=mirrors,
+                canonical_root=canonical_root,
+                repository_root=repository_root,
+            )
+            transaction = resolve_final_artifact_transaction(
+                projection,
+                stable_id=binding.stable_id,
+                work_id=binding.work_id,
+                transaction_id=ArtifactTransactionId(transaction_value),
+            )
+        except (ArtifactCheckpointError, ArtifactRehydrationError, TypeError, ValueError) as exc:
+            raise DriverIntegrationError("retained-artifact-authority-mismatch") from exc
+        if transaction is None:
+            raise DriverIntegrationError("retained-artifact-authority-mismatch")
+        inputs = transaction.reconstruction_inputs
+        raw_result = artifact.author_result.binding.raw_result
+        expected_proposal = (
+            artifact.proposal if isinstance(artifact.author_result, ProposedAuthorResult) else None
+        )
+        expected_handoff = (
+            raw_result.get("payload", {}).get("handoff_execution")
+            if isinstance(artifact.author_result, DeferRecommendation)
+            else None
+        )
+        claim_ids = sorted(str(claim.claim_id) for claim in transaction.claims)
+        if (
+            transaction.stable_id != binding.stable_id
+            or transaction.work_id != binding.work_id
+            or transaction.transaction_id != artifact.staged.transaction_id
+            or transaction.final_event_id != authority.get("committed_event_id")
+            or transaction.final_event_kind != authority.get("state")
+            or transaction.authorization_id != authority.get("authorization_id")
+            or transaction.reconstruction_sha256 != authority.get("reconstruction_sha256")
+            or claim_ids != authority.get("claim_ids")
+            or transaction.objects != artifact.staged.objects
+            or inputs.author_result != raw_result
+            or inputs.proposal != expected_proposal
+            or inputs.handoff_execution != expected_handoff
+            or inputs.source_manifest != artifact.source_manifest
+        ):
+            raise DriverIntegrationError("retained-artifact-authority-mismatch")
 
     def _pause_for_usage(
         self, signal: CheckerBackoffSignal, operational: JsonlLedger, queued: int
@@ -7629,14 +7722,16 @@ def _assert_persisted_handoff_authority_available(
         authority = model.get("artifact_authority")
         transaction_id = authority.get("transaction_id") if isinstance(authority, Mapping) else None
         if not isinstance(transaction_id, str) or not transaction_id:
-            continue
+            raise DriverIntegrationError("handoff-authority-unavailable")
         matching = tuple(
             event
             for event in final_events
             if event.get("stable_id") == model.get("stable_id")
             and event.get("transaction_id") == transaction_id
         )
-        if len(matching) == 1 and (
+        if len(matching) != 1:
+            raise DriverIntegrationError("handoff-authority-unavailable")
+        if (
             matching[0].get("handoff_proposal_id") is None
             or matching[0].get("handoff_sha256") is None
         ):
