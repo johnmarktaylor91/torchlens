@@ -5,11 +5,12 @@ Two fail-closed attestation defects on very common eval-mode layers:
 * F1 (HIGH): a plain eval ``nn.MultiheadAttention`` + ``include_activations``
   raised ``NumericAttestationError`` on a faithful replay. Capture records the
   in-proj ``F.linear`` under autograd (a grad-specialized BLAS reduction order);
-  the run path recomputes it under no-grad ``pause_logging()`` isolation, so the
-  two reduction orders differ by ~1 dtype ULP. Byte-faithful replay is
-  infeasible from the run path (the capture-time grad/layout context is not
-  recorded), so such a slot now reports ``not_applicable`` instead of raising --
-  a narrow, provably-benign carve-out that never blesses a corruption.
+  the pre-r37 run path recomputed it with DETACHED state clones, so the two
+  reduction orders differed by ~1 dtype ULP and a ``not_applicable`` carve-out
+  was the honest floor. Since r37 (corr2-7/R13) replay restores the recorded
+  per-slot trainable bit, reproduces the capture-time grad-specialized
+  reduction, and byte-ATTESTS; the carve-out remains armed as a narrow,
+  provably-benign fail-safe that never blesses a corruption.
 * F2 (LOW): eval-mode / ``p == 0`` dropout was unconditionally seeded-RNG-tagged
   and over-triggered ``not_applicable`` although its replay is byte-exact. The
   RNG tag is now keyed off actual consumption (``training`` and ``p``), so a
@@ -233,12 +234,21 @@ def test_training_dropout_stays_not_applicable(tmp_path: Path) -> None:
 
 @pytest.mark.smoke
 def test_eval_mha_include_activations_is_honest_no_raise(tmp_path: Path) -> None:
-    """F1: a plain eval MHA + include_activations is HONEST -- never an unhandled raise.
+    """F1 (updated r37): a plain eval MHA + include_activations now honestly ATTESTS.
 
-    The in-proj ``F.linear`` cannot be byte-reproduced from the no-grad run path
-    (grad-vs-no-grad BLAS reduction order), so the honest outcome is a faithful
-    (VERIFIED) replay whose numeric attestation is ``not_applicable`` -- never a
-    crash and never a false ``attested``.
+    The original F1 premise -- "the capture-time grad context is not recorded, so
+    the no-grad run path cannot byte-reproduce the grad-specialized in-proj
+    ``F.linear`` BLAS reduction" -- is obsolete: the per-call grad context has been
+    recorded since r35, and r37 (corr2-7/R13 clone fidelity) restores the RECORDED
+    per-slot trainable bit on state clones, so replay recomputes the in-proj under
+    the same grad-specialized reduction as capture and byte-MATCHES the archive.
+    ``attested`` is only reachable when EVERY recomputed slot digest equals the
+    recorded and archived digests (the byte-exact tripwire is unchanged), and the
+    eval capture consumes no host RNG (monitor: zero channels). Verified
+    empirically: 3/3 independent load+run cycles ATTESTED, 28 archived members, 0
+    digest mismatches; stripping the trainable restore reproduces the old
+    ``not_applicable`` via the benign-BLAS fallback (which stays armed as a
+    fail-safe and, per the tamper tests below, never masks corruption).
     """
 
     torch.manual_seed(0)
@@ -252,20 +262,17 @@ def test_eval_mha_include_activations_is_honest_no_raise(tmp_path: Path) -> None
     result = _run(path, x)
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    # Honest: not a false ATTESTED, and (fallback landed) not a crash.
-    assert result.report.numeric_attestation in {
-        NumericAttestationStatus.NOT_APPLICABLE,
-        NumericAttestationStatus.ATTESTED,
-    }
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
-def test_eval_transformer_encoder_layer_is_honest_not_applicable(tmp_path: Path) -> None:
-    """A ``TransformerEncoderLayer(dropout=0.0)`` is honest: not_applicable, not a raise.
+def test_eval_transformer_encoder_layer_attests_byte_exact(tmp_path: Path) -> None:
+    """A ``TransformerEncoderLayer(dropout=0.0)`` honestly ATTESTS (updated r37).
 
-    Its dropout no longer taints (F2), but it *contains* an MHA whose in-proj
-    ``F.linear`` is grad-vs-no-grad non-byte-reproducible (F1), so the honest
-    aggregate is ``not_applicable`` rather than a false ``attested`` or a crash.
+    Its dropout does not taint (F2: eval/p==0 consumes no RNG), and its contained
+    MHA in-proj ``F.linear`` byte-reproduces since r37 restores the recorded
+    trainable bit on state clones (see the eval-MHA test above for the mechanism
+    and byte evidence). ``attested`` structurally requires every recomputed slot
+    to byte-match the recorded and archived digests -- the tripwire is unchanged.
     """
 
     torch.manual_seed(0)
@@ -285,7 +292,7 @@ def test_eval_transformer_encoder_layer_is_honest_not_applicable(tmp_path: Path)
     result = _run(path, x)
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
 @pytest.mark.smoke
