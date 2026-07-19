@@ -26,6 +26,7 @@ from menagerie.crawler.tests.conftest import (
     RealEnvironmentFixture,
     RealEnvironmentLane,
     RealEnvironmentSealCounter,
+    _copy_up_real_environment_member,
     real_environment_registry,
 )
 from menagerie.crawler.tests.dry_run_support import DRY_RUN_CASES, TinyModelAuthor
@@ -85,14 +86,7 @@ def _private_mutable_member(
         and entry.sha256 is not None
     )
     path = prefix / relative
-    original = path.read_bytes()
-    before = path.stat()
-    path.unlink()
-    path.write_bytes(original)
-    path.chmod(before.st_mode)
-    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
-    if path.stat().st_nlink != 1:
-        raise AssertionError("round-21 mutation member is not privately owned")
+    _copy_up_real_environment_member(path, fixture.source_prefix / relative)
     return path
 
 

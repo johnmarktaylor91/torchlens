@@ -17,7 +17,10 @@ from menagerie.crawler.authority import (
     verify_environment_authority,
 )
 from menagerie.crawler.driver import bind_materialized_environment
-from menagerie.crawler.tests.conftest import RealEnvironmentFixture
+from menagerie.crawler.tests.conftest import (
+    RealEnvironmentFixture,
+    _copy_up_real_environment_member,
+)
 from menagerie.crawler.tests import test_round17_structural_inventories as structural
 from menagerie.crawler.tests.test_round19_environment_authority_composition import (
     _run_host_denial_composition,
@@ -159,13 +162,16 @@ def _require_observable_change(before: int, after: int, field: str) -> None:
     pytest.skip(message)
 
 
-def _make_private_copy(path: Path) -> tuple[bytes, os.stat_result]:
+def _make_private_copy(
+    path: Path,
+    source_path: Path,
+) -> tuple[bytes, os.stat_result]:
     """Break one fixture hardlink while preserving its bytes and metadata.
 
     Parameters
     ----------
-    path:
-        Hardlinked clone member that later mutation arms own privately.
+    path, source_path:
+        Hardlinked clone member and private-source member that must remain unchanged.
 
     Returns
     -------
@@ -173,15 +179,7 @@ def _make_private_copy(path: Path) -> tuple[bytes, os.stat_result]:
         Original bytes and post-copy metadata baseline.
     """
 
-    original = path.read_bytes()
-    before = path.stat()
-    with path.open("rb") as retained_inode:
-        path.unlink()
-        path.write_bytes(original)
-        _restore_metadata(path, before)
-        assert path.stat().st_ino != before.st_ino
-        assert retained_inode.read() == original
-    return original, path.stat()
+    return _copy_up_real_environment_member(path, source_path)
 
 
 def _assert_one_stale_rehash(
@@ -329,7 +327,10 @@ def test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false
         and entry.sha256 is not None
     )
     mutable = primary / mutable_relative
-    original, private_status = _make_private_copy(mutable)
+    original, private_status = _make_private_copy(
+        mutable,
+        real_environment_fixture.source_prefix / mutable_relative,
+    )
     verify_environment_authority(fixture_authority)
     clone_cache.verify(clone_authority)
     assert private_status.st_nlink == 1

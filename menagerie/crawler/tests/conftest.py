@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 import json
 import os
 from pathlib import Path
+import shutil
+import stat
 import subprocess
 import sys
 from typing import Any, Iterator, NoReturn, Optional
@@ -73,6 +75,32 @@ from menagerie.crawler.policy import detect_os_sandbox
 HASH = "sha256:" + "a" * 64
 OTHER_HASH = "sha256:" + "b" * 64
 NOW = "2026-07-14T12:00:00Z"
+
+_MINIMAL_REAL_SITE_MEMBERS = (
+    "filelock",
+    "fsspec",
+    "jinja2",
+    "markupsafe",
+    "mpmath",
+    "networkx",
+    "numpy",
+    "numpy.libs",
+    "sympy",
+    "torchgen",
+    "typing_extensions.py",
+)
+_MINIMAL_REAL_DIST_INFO_PREFIXES = (
+    "filelock-",
+    "fsspec-",
+    "jinja2-",
+    "MarkupSafe-",
+    "mpmath-",
+    "networkx-",
+    "numpy-",
+    "sympy-",
+    "torch-",
+    "typing_extensions-",
+)
 
 _FACT_KEYS = (
     "identity",
@@ -391,8 +419,197 @@ def _hardlink_clone_real_environment(source: Path, prefix: Path) -> None:
         _real_environment_failure(f"hardlink clone failed: {exc}")
 
 
+def _copy_real_environment_member(source: Path, destination: Path) -> None:
+    """Privately copy one selected real-environment member without following symlinks.
+
+    Parameters
+    ----------
+    source, destination:
+        Existing trusted member and exact destination path in the minimal private source.
+    """
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        subprocess.run(
+            ("cp", "-a", str(source), str(destination)),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        _real_environment_failure(f"minimal real-environment member copy failed: {exc}")
+
+
+def _linux_native_dependency_closure(
+    source: Path,
+    roots: tuple[Path, ...],
+) -> tuple[Path, ...]:
+    """Return trusted environment-local ELF dependencies needed by minimal Python/Torch.
+
+    Parameters
+    ----------
+    source:
+        Selected real conda-family prefix.
+    roots:
+        Executables and native extensions whose recursive ``ldd`` closure is required.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Canonical lexical dependency paths beneath ``source``.
+    """
+
+    pending = list(roots)
+    inspected: set[Path] = set()
+    dependencies: set[Path] = set()
+    while pending:
+        member = pending.pop()
+        resolved = member.resolve(strict=True)
+        if resolved in inspected:
+            continue
+        inspected.add(resolved)
+        try:
+            completed = subprocess.run(
+                ("ldd", str(member)),
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, subprocess.CalledProcessError) as exc:
+            _real_environment_failure(f"minimal native dependency probe failed: {exc}")
+        for line in completed.stdout.splitlines():
+            if "=>" not in line:
+                continue
+            value = line.split("=>", 1)[1].split("(", 1)[0].strip()
+            if not value.startswith("/"):
+                continue
+            dependency = Path(os.path.normpath(value))
+            if not dependency.is_relative_to(source):
+                continue
+            dependencies.add(dependency)
+            pending.append(dependency)
+    return tuple(sorted(dependencies, key=lambda path: path.relative_to(source).as_posix()))
+
+
+def _minimal_real_environment_source(source: Path, private_source: Path) -> None:
+    """Build a small executable real prefix with sealed external native dependencies.
+
+    Parameters
+    ----------
+    source, private_source:
+        Selected full conda environment and empty per-test private-source directory.
+    """
+
+    site_candidates = sorted(source.glob("lib/python*/site-packages"))
+    if not site_candidates:
+        _real_environment_failure("selected prefix has no immediate site-packages directory")
+    site_packages = site_candidates[-1]
+    python_root = site_packages.parent
+    private_site = private_source / site_packages.relative_to(source)
+
+    interpreter = source / "bin" / "python"
+    interpreter_target = interpreter.resolve(strict=True)
+    _copy_real_environment_member(interpreter, private_source / interpreter.relative_to(source))
+    _copy_real_environment_member(
+        interpreter_target,
+        private_source / interpreter_target.relative_to(source),
+    )
+    for member in sorted(python_root.iterdir(), key=lambda path: path.name):
+        if member != site_packages:
+            _copy_real_environment_member(member, private_source / member.relative_to(source))
+    _copy_real_environment_member(source / "ssl", private_source / "ssl")
+
+    torch_root = site_packages / "torch"
+    if not torch_root.is_dir():
+        _real_environment_failure("selected prefix has no real Torch package")
+    for member in sorted(torch_root.iterdir(), key=lambda path: path.name):
+        if member.name != "lib":
+            _copy_real_environment_member(member, private_site / "torch" / member.name)
+    for name in _MINIMAL_REAL_SITE_MEMBERS:
+        member = site_packages / name
+        if not member.exists():
+            _real_environment_failure(f"selected prefix lacks minimal runtime member: {name}")
+        _copy_real_environment_member(member, private_site / name)
+    for member in sorted(site_packages.glob("*.dist-info"), key=lambda path: path.name):
+        if member.name.startswith(_MINIMAL_REAL_DIST_INFO_PREFIXES):
+            _copy_real_environment_member(member, private_site / member.name)
+
+    metadata = source / "conda-meta"
+    if not metadata.is_dir():
+        _real_environment_failure("selected prefix lacks real conda metadata")
+    _copy_real_environment_member(metadata, private_source / "conda-meta")
+    header = next(
+        (
+            path
+            for path in sorted((source / "include").rglob("*.h"))
+            if path.is_file() and path.stat().st_size > 0
+        ),
+        None,
+    )
+    if header is None:
+        _real_environment_failure("selected prefix lacks a nonempty real native header")
+    _copy_real_environment_member(header, private_source / header.relative_to(source))
+
+    global_deps = torch_root / "lib" / "libtorch_global_deps.so"
+    native_roots = (
+        interpreter_target,
+        global_deps,
+        *tuple(sorted((python_root / "lib-dynload").glob("*.so"))),
+        *tuple(sorted(torch_root.glob("_C*.so"))),
+        *tuple(sorted((site_packages / "markupsafe").glob("*.so"))),
+        *tuple(sorted((site_packages / "numpy").rglob("*.so"))),
+        *tuple(sorted((site_packages / "numpy.libs").glob("*.so*"))),
+    )
+    dependencies = {
+        global_deps,
+        source / "lib" / "libgcc_s.so.1",
+        source / "lib" / "libstdc++.so.6",
+        *_linux_native_dependency_closure(source, native_roots),
+    }
+    for member in sorted(dependencies, key=lambda path: path.relative_to(source).as_posix()):
+        destination = private_source / member.relative_to(source)
+        if destination.exists() or destination.is_symlink():
+            continue
+        _copy_real_environment_member(member.resolve(strict=True), destination)
+
+
+def _linux_reflinks_supported(source: Path, root: Path) -> bool:
+    """Return whether GNU ``cp`` can require a real reflink in the fixture filesystem.
+
+    Parameters
+    ----------
+    source, root:
+        Selected full prefix and isolated fixture root used for the one-file probe.
+
+    Returns
+    -------
+    bool
+        ``True`` only when ``--reflink=always`` succeeds without a copy fallback.
+    """
+
+    probe = root / "reflink-probe"
+    try:
+        completed = subprocess.run(
+            (
+                "cp",
+                "-a",
+                "--reflink=always",
+                str((source / "bin" / "python").resolve(strict=True)),
+                str(probe),
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return False
+    finally:
+        probe.unlink(missing_ok=True)
+    return completed.returncode == 0
+
+
 def _private_real_environment_source(source: Path, root: Path) -> Path:
-    """Create a copy-on-write source whose inodes are private to one mutating test.
+    """Create a disk-bounded source whose inodes are private to one mutating test.
 
     Parameters
     ----------
@@ -407,16 +624,52 @@ def _private_real_environment_source(source: Path, root: Path) -> Path:
 
     private_source = root / "private-source"
     private_source.mkdir()
+    if sys.platform == "linux" and not _linux_reflinks_supported(source, root):
+        _minimal_real_environment_source(source, private_source)
+        return private_source
     command = (
         ("cp", "-a", "-c", f"{source}/.", str(private_source))
         if sys.platform == "darwin"
-        else ("cp", "-a", "--reflink=auto", f"{source}/.", str(private_source))
+        else ("cp", "-a", "--reflink=always", f"{source}/.", str(private_source))
     )
     try:
         subprocess.run(command, check=True, capture_output=True, text=True)
     except (OSError, subprocess.CalledProcessError) as exc:
         _real_environment_failure(f"private real-environment source copy failed: {exc}")
     return private_source
+
+
+def _copy_up_real_environment_member(
+    member: Path,
+    source_member: Path,
+) -> tuple[bytes, os.stat_result]:
+    """Detach one sealed member before mutation and prove its source bytes stay unchanged.
+
+    Parameters
+    ----------
+    member, source_member:
+        Test-owned hardlink and the private-source member whose bytes must remain intact.
+
+    Returns
+    -------
+    tuple[bytes, os.stat_result]
+        Original bytes and the detached member's post-copy metadata baseline.
+    """
+
+    if not member.samefile(source_member):
+        raise AssertionError("mutation member is not linked to its private source")
+    original = source_member.read_bytes()
+    before = member.stat()
+    member.unlink()
+    member.write_bytes(original)
+    member.chmod(stat.S_IMODE(before.st_mode))
+    os.utime(member, ns=(before.st_atime_ns, before.st_mtime_ns))
+    after = member.stat()
+    if after.st_nlink != 1 or member.samefile(source_member):
+        raise AssertionError("mutation member copy-up did not create a private inode")
+    if source_member.read_bytes() != original:
+        raise AssertionError("mutation member copy-up changed its private source")
+    return original, after
 
 
 def _build_real_environment_fixture(
@@ -460,7 +713,8 @@ def _build_real_environment_fixture(
     os.link(sentinel_source, site_packages / sentinel_source.name)
     pth_source = overlay / "menagerie_round19_startup.pth"
     pth_source.write_text(
-        "import os; os.environ['MENAGERIE_ROUND19_PTH_SENTINEL']='sealed-startup'\n",
+        "import os, sys; os.environ['MENAGERIE_ROUND19_PTH_SENTINEL']='sealed-startup'; "
+        "os.environ['OPENSSL_CONF']=os.path.join(sys.prefix,'ssl','openssl.cnf')\n",
         encoding="utf-8",
     )
     startup_pth = site_packages / pth_source.name
@@ -537,6 +791,14 @@ def real_environment_seal_counter() -> Iterator[RealEnvironmentSealCounter]:
     counter = RealEnvironmentSealCounter()
     yield counter
     counter.assert_bounded()
+
+
+@pytest.fixture(autouse=True)
+def _clean_crawler_test_scratch(tmp_path: Path) -> Iterator[None]:
+    """Remove crawler per-test scratch promptly, including retained failed-test trees."""
+
+    yield
+    shutil.rmtree(tmp_path, ignore_errors=True)
 
 
 @pytest.fixture(scope="session")

@@ -6,6 +6,7 @@ from dataclasses import replace
 import json
 import os
 from pathlib import Path
+import stat
 import sys
 from typing import Any, Mapping, Optional
 
@@ -32,6 +33,7 @@ from menagerie.crawler.reducer import CanonicalReducer
 from menagerie.crawler.tests.conftest import (
     RealEnvironmentFixture,
     RealEnvironmentLane,
+    _copy_up_real_environment_member,
     real_environment_registry,
 )
 from menagerie.crawler.tests.dry_run_support import DRY_RUN_CASES, TinyModelAuthor
@@ -289,10 +291,9 @@ def test_real_multi_model_cache_closes_currentness_and_quarantines_mutation(
     )
     changed = real_environment_fixture.prefix / relative_member
     source = real_environment_fixture.source_prefix / relative_member
-    original_mode = changed.stat().st_mode
-    changed.unlink()
-    changed.write_bytes(source.read_bytes() + b"\n# round19 cache mutation\n")
-    changed.chmod(original_mode)
+    original, private_status = _copy_up_real_environment_member(changed, source)
+    changed.write_bytes(original + b"\n# round19 cache mutation\n")
+    changed.chmod(stat.S_IMODE(private_status.st_mode))
     try:
         mutated = driver.run()
     finally:
