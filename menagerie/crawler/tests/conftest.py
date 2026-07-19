@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
-from typing import Any, NoReturn, Optional
+from typing import Any, Iterator, NoReturn, Optional
 
 import pytest
 
@@ -105,6 +105,73 @@ class RealEnvironmentFixture:
     startup_pth: Path
 
 
+@dataclass
+class RealEnvironmentSealCounter:
+    """Session accounting for shared and isolated real-prefix fixture seals."""
+
+    shared_caches: list[EnvironmentAuthorityCache] = field(default_factory=list)
+    isolated_caches: list[EnvironmentAuthorityCache] = field(default_factory=list)
+    base_seals: int = 0
+
+    def record(self, cache: EnvironmentAuthorityCache, *, shared: bool) -> None:
+        """Record one fixture cache immediately after its shipped strict bind.
+
+        Parameters
+        ----------
+        cache:
+            Production authority cache that performed the fixture's strict bind.
+        shared:
+            Whether the cache belongs to the sole session-shared fixture.
+        """
+
+        if cache.full_seals != 1:
+            raise AssertionError("a real fixture bind must perform exactly one initial full seal")
+        caches = self.shared_caches if shared else self.isolated_caches
+        caches.append(cache)
+        self.base_seals += cache.full_seals
+
+    def snapshot(self) -> dict[str, int]:
+        """Return deterministic fixture-seal counts for composition assertions.
+
+        Returns
+        -------
+        dict[str, int]
+            Shared/isolated fixture counts and observed production full-seal totals.
+        """
+
+        shared_full_seals = sum(cache.full_seals for cache in self.shared_caches)
+        isolated_full_seals = sum(cache.full_seals for cache in self.isolated_caches)
+        return {
+            "shared_fixtures": len(self.shared_caches),
+            "isolated_fixtures": len(self.isolated_caches),
+            "base_seals": self.base_seals,
+            "shared_full_seals": shared_full_seals,
+            "isolated_full_seals": isolated_full_seals,
+            "observed_full_seals": shared_full_seals + isolated_full_seals,
+            "maximum_full_seals": len(self.shared_caches) + 2 * len(self.isolated_caches),
+        }
+
+    def assert_bounded(self, *, require_shared: bool = False) -> None:
+        """Assert one shared seal and at most one mutation re-seal per isolate.
+
+        Parameters
+        ----------
+        require_shared:
+            Whether the caller requires the session-shared fixture to have been used.
+        """
+
+        counts = self.snapshot()
+        expected_shared = 1 if require_shared else counts["shared_fixtures"]
+        if counts["shared_fixtures"] > 1 or counts["shared_fixtures"] != expected_shared:
+            raise AssertionError("the pytest session must own at most one shared real fixture")
+        if counts["base_seals"] != counts["shared_fixtures"] + counts["isolated_fixtures"]:
+            raise AssertionError("every real fixture must perform exactly one initial base seal")
+        if counts["shared_full_seals"] != counts["shared_fixtures"]:
+            raise AssertionError("the shared real environment was re-sealed")
+        if counts["observed_full_seals"] > counts["maximum_full_seals"]:
+            raise AssertionError("real fixture full seals exceeded the session bound")
+
+
 class RealEnvironmentLane(SequentialEnvironmentLifecycle):
     """Expose a prebuilt strict real prefix through the production lifecycle type."""
 
@@ -120,7 +187,9 @@ class RealEnvironmentLane(SequentialEnvironmentLifecycle):
         self.fixture = fixture
         self.events: list[str] = []
         self._active = fixture.prefix
-        self._authority_cache = EnvironmentAuthorityCache()
+        self._authority_cache = fixture.binding.environment_authority_cache
+        if self._authority_cache is None:
+            raise AssertionError("real fixture lane requires its shipped strict-bind cache")
 
     def run(
         self,
@@ -292,16 +361,15 @@ def _fixture_intent(
     return intent, probe_results
 
 
-@pytest.fixture(scope="session")
-def real_environment_fixture(
-    tmp_path_factory: pytest.TempPathFactory,
-) -> RealEnvironmentFixture:
-    """Hardlink-clone, probe, and strictly seal one real Torch conda prefix."""
+def _hardlink_clone_real_environment(source: Path, prefix: Path) -> None:
+    """Create one checked hardlink clone of a selected real environment.
 
-    source = _real_environment_source()
-    root = tmp_path_factory.mktemp("round19-real-environment")
-    prefix = root / "prefix"
-    prefix.mkdir()
+    Parameters
+    ----------
+    source, prefix:
+        Existing source environment and empty destination directory.
+    """
+
     try:
         subprocess.run(
             ("cp", "-al", f"{source}/.", str(prefix)),
@@ -311,6 +379,64 @@ def real_environment_fixture(
         )
     except (OSError, subprocess.CalledProcessError) as exc:
         _real_environment_failure(f"hardlink clone failed: {exc}")
+
+
+def _private_real_environment_source(source: Path, root: Path) -> Path:
+    """Create a copy-on-write source whose inodes are private to one mutating test.
+
+    Parameters
+    ----------
+    source, root:
+        Selected immutable environment and isolated fixture root.
+
+    Returns
+    -------
+    pathlib.Path
+        Private source used for the mutating test's required hardlink clone.
+    """
+
+    private_source = root / "private-source"
+    private_source.mkdir()
+    command = (
+        ("cp", "-a", "-c", f"{source}/.", str(private_source))
+        if sys.platform == "darwin"
+        else ("cp", "-a", "--reflink=auto", f"{source}/.", str(private_source))
+    )
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        _real_environment_failure(f"private real-environment source copy failed: {exc}")
+    return private_source
+
+
+def _build_real_environment_fixture(
+    root: Path,
+    counter: RealEnvironmentSealCounter,
+    *,
+    shared: bool,
+) -> RealEnvironmentFixture:
+    """Hardlink-clone, probe, and strictly seal one real Torch conda prefix.
+
+    Parameters
+    ----------
+    root:
+        Session-shared or function-isolated fixture root.
+    counter:
+        Session counter receiving the production cache after strict binding.
+    shared:
+        Whether to clone the immutable base directly or first make private inodes.
+
+    Returns
+    -------
+    RealEnvironmentFixture
+        Strict binding and artifacts backed by one production authority cache.
+    """
+
+    source = _real_environment_source()
+    clone_source = source if shared else _private_real_environment_source(source, root)
+    prefix = root / "prefix"
+    prefix.mkdir()
+    _hardlink_clone_real_environment(clone_source, prefix)
     site_candidates = sorted(prefix.glob("lib/python*/site-packages"))
     if not site_candidates:
         _real_environment_failure("clone has no immediate site-packages directory")
@@ -369,14 +495,16 @@ def real_environment_fixture(
     ):
         _real_environment_failure("clone has no package metadata")
     intent, probe_results = _fixture_intent(root / "artifacts", prefix)
+    authority_cache = EnvironmentAuthorityCache()
     binding = bind_materialized_environment(
         intent,
         prefix,
         probe_results,
-        authority_cache=EnvironmentAuthorityCache(),
+        authority_cache=authority_cache,
     )
+    counter.record(authority_cache, shared=shared)
     return RealEnvironmentFixture(
-        source_prefix=source,
+        source_prefix=clone_source,
         prefix=prefix,
         binding=binding,
         intent=intent,
@@ -384,6 +512,53 @@ def real_environment_fixture(
         sentinel_module="menagerie_round19_sentinel",
         startup_pth=startup_pth,
     )
+
+
+@pytest.fixture(scope="session")
+def real_environment_seal_counter() -> Iterator[RealEnvironmentSealCounter]:
+    """Yield session accounting and enforce its seal bound during teardown.
+
+    Yields
+    ------
+    RealEnvironmentSealCounter
+        Mutable session counter populated only by real fixture strict binds.
+    """
+
+    counter = RealEnvironmentSealCounter()
+    yield counter
+    counter.assert_bounded()
+
+
+@pytest.fixture(scope="session")
+def _shared_real_environment_fixture(
+    tmp_path_factory: pytest.TempPathFactory,
+    real_environment_seal_counter: RealEnvironmentSealCounter,
+) -> RealEnvironmentFixture:
+    """Build the sole session-shared, read-only real environment binding."""
+
+    root = tmp_path_factory.mktemp("round19-shared-real-environment")
+    return _build_real_environment_fixture(root, real_environment_seal_counter, shared=True)
+
+
+@pytest.fixture
+def real_environment_fixture(
+    _shared_real_environment_fixture: RealEnvironmentFixture,
+) -> RealEnvironmentFixture:
+    """Return the session-shared real binding for read-only compositions."""
+
+    return _shared_real_environment_fixture
+
+
+@pytest.fixture
+def isolated_real_environment_fixture(
+    tmp_path: Path,
+    real_environment_seal_counter: RealEnvironmentSealCounter,
+) -> RealEnvironmentFixture:
+    """Build a fresh private-source clone and seal for one mutating composition."""
+
+    root = tmp_path / "isolated-real-environment"
+    root.mkdir()
+    return _build_real_environment_fixture(root, real_environment_seal_counter, shared=False)
 
 
 def make_worker_result_v3_mapping(

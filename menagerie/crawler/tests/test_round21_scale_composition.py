@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 import subprocess
@@ -26,6 +25,7 @@ from menagerie.crawler.tests import test_round17_structural_inventories as struc
 from menagerie.crawler.tests.conftest import (
     RealEnvironmentFixture,
     RealEnvironmentLane,
+    RealEnvironmentSealCounter,
     real_environment_registry,
 )
 from menagerie.crawler.tests.dry_run_support import DRY_RUN_CASES, TinyModelAuthor
@@ -52,100 +52,6 @@ def _hardlink_clone(source: Path, destination: Path) -> None:
         check=True,
         capture_output=True,
         text=True,
-    )
-
-
-def _isolated_real_fixture(
-    tmp_path: Path,
-) -> RealEnvironmentFixture:
-    """Create a copy-on-write private source followed by a real hardlink clone.
-
-    Parameters
-    ----------
-    tmp_path:
-        Isolated source and hardlink-clone root.
-    Returns
-    -------
-    RealEnvironmentFixture
-        Test-owned real prefix immune to concurrent source-inode mutation.
-    """
-
-    from menagerie.crawler.tests.conftest import (  # noqa: PLC0415
-        _fixture_intent,
-        _real_environment_source,
-    )
-
-    source = _real_environment_source()
-    private_source = tmp_path / "private-real-source"
-    private_source.mkdir()
-    subprocess.run(
-        (
-            "cp",
-            "-a",
-            "--reflink=auto",
-            f"{source}/.",
-            str(private_source),
-        ),
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    prefix = tmp_path / "private-real-prefix"
-    _hardlink_clone(private_source, prefix)
-    site_candidates = sorted(prefix.glob("lib/python*/site-packages"))
-    if not site_candidates:
-        raise AssertionError("round-21 private clone has no immediate site-packages")
-    site_packages = site_candidates[-1]
-    overlay = tmp_path / "private-real-overlay"
-    overlay.mkdir()
-    sentinel_source = overlay / "menagerie_round19_sentinel.py"
-    sentinel_source.write_text(
-        "INTERPRETER_SENTINEL = 'round19-selected-prefix'\n",
-        encoding="utf-8",
-    )
-    os.link(sentinel_source, site_packages / sentinel_source.name)
-    pth_source = overlay / "menagerie_round19_startup.pth"
-    pth_source.write_text(
-        "import os; os.environ['MENAGERIE_ROUND19_PTH_SENTINEL']='sealed-startup'\n",
-        encoding="utf-8",
-    )
-    startup_pth = site_packages / pth_source.name
-    os.link(pth_source, startup_pth)
-    interpreter = prefix / "bin" / "python"
-    completed = subprocess.run(
-        (
-            str(interpreter),
-            "-B",
-            "-c",
-            "import json, os, sys, torch, menagerie_round19_sentinel as s; "
-            "print(json.dumps({'prefix':sys.prefix,'torch':torch.__version__,"
-            "'sentinel':s.INTERPRETER_SENTINEL,'pth':"
-            "os.environ.get('MENAGERIE_ROUND19_PTH_SENTINEL')}))",
-        ),
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    observation = json.loads(completed.stdout)
-    assert Path(str(observation["prefix"])).resolve() == prefix.resolve()
-    assert observation["sentinel"] == "round19-selected-prefix"
-    assert observation["pth"] == "sealed-startup"
-    intent, probe_results = _fixture_intent(tmp_path / "private-real-artifacts", prefix)
-    binding = bind_materialized_environment(
-        intent,
-        prefix,
-        probe_results,
-        authority_cache=EnvironmentAuthorityCache(),
-    )
-    return RealEnvironmentFixture(
-        source_prefix=private_source,
-        prefix=prefix,
-        binding=binding,
-        intent=intent,
-        probe_results=probe_results,
-        sentinel_module="menagerie_round19_sentinel",
-        startup_pth=startup_pth,
     )
 
 
@@ -302,6 +208,7 @@ def _assert_spawn_validation_catches_post_pass_mutation(
 
 def test_round21_pass_and_spawn_validation_walks_are_constant_bounded(
     tmp_path: Path,
+    isolated_real_environment_fixture: RealEnvironmentFixture,
 ) -> None:
     """One real walk per currentness pass and per actual worker spawn.
 
@@ -320,7 +227,7 @@ def test_round21_pass_and_spawn_validation_walks_are_constant_bounded(
         "T02",
         "T03",
     }
-    isolated_fixture = _isolated_real_fixture(tmp_path)
+    isolated_fixture = isolated_real_environment_fixture
     master = tmp_path / "scale-master.jsonl"
     deferred = tmp_path / "scale-deferred.jsonl"
     _write_jsonl(
@@ -380,3 +287,21 @@ def test_round21_pass_and_spawn_validation_walks_are_constant_bounded(
     _compile_count_arm(tmp_path, isolated_fixture, cache)
     assert cache.cheap_tree_walks == cache.currentness_passes + cache.real_spawns
     _assert_spawn_validation_catches_post_pass_mutation(tmp_path, isolated_fixture)
+
+
+def test_round21_real_environment_fixture_full_seals_are_session_bounded(
+    real_environment_fixture: RealEnvironmentFixture,
+    real_environment_seal_counter: RealEnvironmentSealCounter,
+) -> None:
+    """Read-only compositions share one seal while mutators receive bounded isolates."""
+
+    real_environment_seal_counter.assert_bounded(require_shared=True)
+    counts = real_environment_seal_counter.snapshot()
+    assert (
+        real_environment_fixture.binding.environment_authority_cache
+        is (real_environment_seal_counter.shared_caches[0])
+    )
+    assert counts["shared_fixtures"] == 1
+    assert counts["shared_full_seals"] == 1
+    assert counts["base_seals"] == 1 + counts["isolated_fixtures"]
+    assert counts["observed_full_seals"] <= counts["maximum_full_seals"]

@@ -247,7 +247,7 @@ def _bind_clone(
 
 def test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone(
     tmp_path: Path,
-    real_environment_fixture: RealEnvironmentFixture,
+    isolated_real_environment_fixture: RealEnvironmentFixture,
 ) -> None:
     """Field-complete cheap checks stale mutations but re-baseline clone churn.
 
@@ -266,6 +266,7 @@ def test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false
         "T01-CI",
         "T02",
     }
+    real_environment_fixture = isolated_real_environment_fixture
     fixture_authority = real_environment_fixture.binding.environment_authority
     if fixture_authority is None:
         raise AssertionError("real environment fixture lacks strict authority")

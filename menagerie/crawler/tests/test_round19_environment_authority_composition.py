@@ -226,9 +226,11 @@ def test_hardlinked_prefix_is_one_sealed_authority_and_mutation_stales(
 
 def test_real_multi_model_cache_closes_currentness_and_quarantines_mutation(
     tmp_path: Path,
-    real_environment_fixture: RealEnvironmentFixture,
+    isolated_real_environment_fixture: RealEnvironmentFixture,
 ) -> None:
     """One lifecycle cache serves repeated currentness and rejects changed prefix bytes."""
+
+    real_environment_fixture = isolated_real_environment_fixture
 
     master = tmp_path / "cache-master.jsonl"
     deferred = tmp_path / "cache-deferred.jsonl"
