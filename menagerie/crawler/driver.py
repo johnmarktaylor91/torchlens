@@ -4882,6 +4882,7 @@ class CrawlerDriver:
                     return repair_pause
                 continue
             pending = list(by_intent[intent_name])
+            current_before_failure = reducer.current_records
             stage, reason = _environment_failure(environment_failure)
             for item in pending:
                 attempt = _driver_failure_attempt(
@@ -4906,6 +4907,7 @@ class CrawlerDriver:
                     reducer,
                     operational,
                     state,
+                    superseded_model=current_before_failure.get(item.stable_id),
                 )
         return None
 
@@ -5599,8 +5601,23 @@ class CrawlerDriver:
         *,
         human_review: bool = False,
         root_cause_fingerprint: Optional[str] = None,
+        superseded_model: Optional[Mapping[str, Any]] = None,
     ) -> None:
-        """Append one driver-owned non-run terminal revision through the reducer."""
+        """Append one driver-owned non-run terminal revision through the reducer.
+
+        Parameters
+        ----------
+        item, artifact, status_code, reason_code, detail, attempts:
+            Terminal work, retained artifact, disposition, diagnostics, and decisive attempts.
+        reducer, operational, state:
+            Canonical authority, operational ledger, and mutable driver state.
+        human_review:
+            Whether the terminal requires explicit human review before requeue.
+        root_cause_fingerprint:
+            Optional checker-derived failure identity.
+        superseded_model:
+            Exact current predecessor captured before a decisive attempt made it stale.
+        """
 
         terminal_attempts = tuple(attempts)
         gates = scan_jsonl(self.paths.ledgers.gates)
@@ -5642,7 +5659,13 @@ class CrawlerDriver:
                 variant_token=item.intake.variant,
             )
             model["accuracy_gate"] = deepcopy(representative_model["accuracy_gate"])
-        current_model = reducer.current_records.get(item.stable_id)
+        current_model = (
+            superseded_model
+            if superseded_model is not None
+            else reducer.current_records.get(item.stable_id)
+        )
+        if current_model is not None and current_model.get("stable_id") != item.stable_id:
+            raise DriverIntegrationError("terminal predecessor stable_id does not match work")
         model["parent_revision"] = (
             current_model["record_revision"] if current_model is not None else None
         )
