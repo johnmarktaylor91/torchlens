@@ -1512,7 +1512,7 @@ def test_environment_cache_has_one_lifecycle_owner_and_no_default_collector() ->
     assert "active_authority_cache(" in inspect.getsource(
         driver_module.CrawlerDriver._run_environment_work
     )
-    assert "cache.assert_active(authority)" in inspect.getsource(
+    assert "cache.verify(authority, verification_token=verification_token)" in inspect.getsource(
         driver_module._current_run_is_fresh
     )
 
