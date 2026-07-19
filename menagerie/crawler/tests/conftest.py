@@ -11,7 +11,7 @@ import shutil
 import stat
 import subprocess
 import sys
-from typing import Any, Iterator, NoReturn, Optional
+from typing import Any, Callable, Iterator, NoReturn, Optional
 
 import pytest
 
@@ -133,12 +133,19 @@ class RealEnvironmentFixture:
     startup_pth: Path
 
 
+RealEnvironmentConfigurator = Callable[[Path, Path], None]
+RealEnvironmentFixtureFactory = Callable[
+    [Optional[RealEnvironmentConfigurator]], RealEnvironmentFixture
+]
+
+
 @dataclass
 class RealEnvironmentSealCounter:
     """Session accounting for shared and isolated real-prefix fixture seals."""
 
     shared_caches: list[EnvironmentAuthorityCache] = field(default_factory=list)
     isolated_caches: list[EnvironmentAuthorityCache] = field(default_factory=list)
+    replacement_caches: list[EnvironmentAuthorityCache] = field(default_factory=list)
     base_seals: int = 0
 
     def record(self, cache: EnvironmentAuthorityCache, *, shared: bool) -> None:
@@ -160,6 +167,19 @@ class RealEnvironmentSealCounter:
         caches.append(cache)
         self.base_seals += cache.full_seals
 
+    def record_replacement(self, cache: EnvironmentAuthorityCache) -> None:
+        """Record one independently expected replacement-generation seal.
+
+        Parameters
+        ----------
+        cache:
+            Production authority cache that strictly bound a rebuilt generation.
+        """
+
+        if cache.full_seals != 1:
+            raise AssertionError("a replacement bind must perform exactly one full seal")
+        self.replacement_caches.append(cache)
+
     def snapshot(self) -> dict[str, int]:
         """Return deterministic fixture-seal counts for composition assertions.
 
@@ -172,6 +192,7 @@ class RealEnvironmentSealCounter:
         shared_full_seals = sum(cache.full_seals for cache in self.shared_caches)
         isolated_full_seals = sum(cache.full_seals for cache in self.isolated_caches)
         isolated_rehashes = sum(cache.rehashes for cache in self.isolated_caches)
+        replacement_full_seals = sum(cache.full_seals for cache in self.replacement_caches)
         return {
             "shared_fixtures": len(self.shared_caches),
             "isolated_fixtures": len(self.isolated_caches),
@@ -179,9 +200,16 @@ class RealEnvironmentSealCounter:
             "shared_full_seals": shared_full_seals,
             "isolated_full_seals": isolated_full_seals,
             "isolated_rehashes": isolated_rehashes,
-            "observed_full_seals": shared_full_seals + isolated_full_seals,
+            "replacement_caches": len(self.replacement_caches),
+            "replacement_full_seals": replacement_full_seals,
+            "observed_full_seals": (
+                shared_full_seals + isolated_full_seals + replacement_full_seals
+            ),
             "maximum_full_seals": (
-                len(self.shared_caches) + len(self.isolated_caches) + isolated_rehashes
+                len(self.shared_caches)
+                + len(self.isolated_caches)
+                + isolated_rehashes
+                + len(self.replacement_caches)
             ),
         }
 
@@ -206,6 +234,8 @@ class RealEnvironmentSealCounter:
             counts["isolated_fixtures"] + counts["isolated_rehashes"]
         ):
             raise AssertionError("an isolated real fixture performed an unexplained full seal")
+        if counts["replacement_full_seals"] != counts["replacement_caches"]:
+            raise AssertionError("a replacement generation performed an unexplained full seal")
         if counts["observed_full_seals"] > counts["maximum_full_seals"]:
             raise AssertionError("real fixture full seals exceeded the session bound")
 
@@ -677,6 +707,7 @@ def _build_real_environment_fixture(
     counter: RealEnvironmentSealCounter,
     *,
     shared: bool,
+    configure: Optional[RealEnvironmentConfigurator] = None,
 ) -> RealEnvironmentFixture:
     """Hardlink-clone, probe, and strictly seal one real Torch conda prefix.
 
@@ -688,6 +719,8 @@ def _build_real_environment_fixture(
         Session counter receiving the production cache after strict binding.
     shared:
         Whether to clone the immutable base directly or first make private inodes.
+    configure:
+        Optional test-owned pre-seal mutation applied only to an isolated clone.
 
     Returns
     -------
@@ -719,6 +752,10 @@ def _build_real_environment_fixture(
     )
     startup_pth = site_packages / pth_source.name
     os.link(pth_source, startup_pth)
+    if configure is not None:
+        if shared:
+            raise AssertionError("the session-shared real fixture cannot be configured")
+        configure(root, prefix)
     interpreter = prefix / "bin" / "python"
     try:
         completed = subprocess.run(
@@ -822,6 +859,54 @@ def isolated_real_environment_fixture(
     root = tmp_path / "isolated-real-environment"
     root.mkdir()
     return _build_real_environment_fixture(root, real_environment_seal_counter, shared=False)
+
+
+@pytest.fixture
+def isolated_real_environment_factory(
+    tmp_path: Path,
+    real_environment_seal_counter: RealEnvironmentSealCounter,
+) -> RealEnvironmentFixtureFactory:
+    """Return a one-use builder for a pre-seal configured private real prefix.
+
+    Returns
+    -------
+    RealEnvironmentFixtureFactory
+        Disk-bounded factory using the existing private-source and hardlink-clone path.
+    """
+
+    used = False
+
+    def build(
+        configure: Optional[RealEnvironmentConfigurator] = None,
+    ) -> RealEnvironmentFixture:
+        """Build one isolated fixture with an optional pre-seal configurator.
+
+        Parameters
+        ----------
+        configure:
+            Test-owned callback invoked after the standard sentinel and startup ``.pth``
+            are linked but before the shipped strict binder seals the prefix.
+
+        Returns
+        -------
+        RealEnvironmentFixture
+            Fresh private real-prefix fixture.
+        """
+
+        nonlocal used
+        if used:
+            raise AssertionError("an isolated real-environment factory is one-use")
+        used = True
+        root = tmp_path / "isolated-real-environment"
+        root.mkdir()
+        return _build_real_environment_fixture(
+            root,
+            real_environment_seal_counter,
+            shared=False,
+            configure=configure,
+        )
+
+    return build
 
 
 def make_worker_result_v3_mapping(

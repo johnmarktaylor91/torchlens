@@ -318,6 +318,22 @@ ROUND21_VS3_PROOF_REGISTRY: dict[str, str] = {
     ),
 }
 
+ROUND21_VS4_PROOF_REGISTRY: dict[str, str] = {
+    **ROUND21_VS3_PROOF_REGISTRY,
+    "P04": (
+        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::"
+        "test_round21_environment_unit_matrix"
+    ),
+    "P12": _ROUND17_CI_NODES[0],
+    "P13": _ROUND19_RELEASE_NODE_INVENTORY["interpreter"],
+    "P14": _ROUND19_RELEASE_NODE_INVENTORY["linux-denial"],
+    "P17": _ROUND19_RELEASE_NODE_INVENTORY["unverifiable"],
+    "P19": (
+        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+        "test_manifest_v3_rejects_changed_interpreter_association"
+    ),
+}
+
 
 def test_round21_verification_tree_walk_inventory_is_closed() -> None:
     """Every complete prefix walk and v3 reuse site stays explicitly registered."""

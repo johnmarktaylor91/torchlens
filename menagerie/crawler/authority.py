@@ -2560,6 +2560,7 @@ def _validate_static_import_closure_v3(
     members: Sequence[RuntimeMember],
     lookup_directories: Sequence[RuntimeLookupDirectory],
     environment_prefix: Path,
+    external_targets: Sequence[EnvironmentExternalTarget],
 ) -> None:
     """Require static imports outside the sealed prefix to remain exact members.
 
@@ -2571,9 +2572,14 @@ def _validate_static_import_closure_v3(
         Import resolution scaffolds.
     environment_prefix:
         Sole digest-bound semantic root.
+    external_targets:
+        Exact digest-bound regular files reached by sealed-prefix symlinks.
     """
 
-    member_paths = {member.path for member in members}
+    member_paths = {
+        *(member.path for member in members),
+        *(target.path for target in external_targets),
+    }
     roots = tuple(directory.path for directory in lookup_directories)
     for member in members:
         if member.kind != "python-source" or member.path.suffix != ".py":
@@ -2759,6 +2765,7 @@ def compile_execution_read_manifest_v3(
         (*normalized_code, *normalized_worker),
         normalized_lookup,
         environment_authority.prefix,
+        environment_authority.external_targets,
     )
     payload = _manifest_v3_payload(
         stable_id=stable_id,
