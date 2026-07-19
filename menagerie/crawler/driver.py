@@ -176,7 +176,7 @@ from menagerie.crawler.metadata import (
 )
 from menagerie.crawler.modes import classify_observed_mode_receipts
 from menagerie.crawler.models import JsonObject, LedgerPaths
-from menagerie.crawler.mirrors import ArtifactOrigin, MirrorStore
+from menagerie.crawler.mirrors import ArtifactOrigin, MirrorClass, MirrorStore
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.recordio import (
     JsonlLedger,
@@ -5730,8 +5730,9 @@ class CrawlerDriver:
                 transaction = self._final_artifact_transactions.get(transaction_key)
             if transaction is None:
                 raise DriverIntegrationError("retained-artifact-authority-mismatch")
+            retained_artifact = _artifact_with_final_authority_objects(artifact, transaction)
             self._assert_retained_artifact_authority_matches(
-                artifact,
+                retained_artifact,
                 prior_artifact_authority,
                 transaction,
             )
@@ -7668,6 +7669,47 @@ def _canonical_crawler_root(paths: DriverPaths) -> Path:
     if candidate.name != "records":
         raise DriverIntegrationError("canonical model ledger is not below a records root")
     return candidate.parent
+
+
+def _artifact_with_final_authority_objects(
+    artifact: AuthorArtifact,
+    transaction: ArtifactTransactionProjection,
+) -> AuthorArtifact:
+    """Return ``artifact`` with the finalized artifact object inventory attached.
+
+    Parameters
+    ----------
+    artifact:
+        Cached or rehydrated author result carrying its staged-private custody root.
+    transaction:
+        Verified final transaction projection whose object inventory includes
+        retained private custody and any published public objects.
+
+    Returns
+    -------
+    AuthorArtifact
+        Equivalent artifact whose staged transaction exposes the complete final
+        object inventory for retained-authority comparison.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If the staged-private custody no longer matches the finalized transaction.
+    """
+
+    if artifact.staged is None:
+        raise DriverIntegrationError("retained-artifact-authority-mismatch")
+    private_objects = tuple(
+        obj for obj in transaction.objects if obj.mirror_class == MirrorClass.PRIVATE.value
+    )
+    if tuple(sorted(private_objects, key=lambda obj: str(obj.object_id))) != tuple(
+        sorted(artifact.staged.objects, key=lambda obj: str(obj.object_id))
+    ):
+        raise DriverIntegrationError("retained-artifact-authority-mismatch")
+    return replace(
+        artifact,
+        staged=replace(artifact.staged, objects=transaction.objects),
+    )
 
 
 def _assert_persisted_handoff_authority_available(
