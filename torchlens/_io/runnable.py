@@ -2929,6 +2929,27 @@ def _preflight_output_contracts(trace: Any, ops: Sequence[Any]) -> list[Runnable
             )
         )
         return diagnostics
+    if not output_ops:
+        # r37 corr1_1 (INV-3): a PROVED-lossless output tree with ZERO tensor
+        # slots (all-literal / literal-root / empty containers) has no output Op
+        # to carry the root ContainerSpec in the v2 schema, so the run would
+        # reconstruct ``None`` -- an accepted-then-dropped output. Unrepresentable
+        # means REFUSE AT SAVE, uniformly with every other output refusal; the
+        # relaxation path is a future versioned root-spec schema bump, not an
+        # implicit carrier.
+        diagnostics.append(
+            _diagnostic(
+                RunnableErrorCode.MISSING_OUTPUT_CONTAINER_CONTRACT,
+                "Model output contains no tensor leaves (zero output slots), so the "
+                "v2 descriptor has no carrier for its container contract and the "
+                "loaded artifact could not reconstruct it "
+                "(missing_output_container_contract). The runnable save is refused; "
+                "ordinary analysis save levels remain available.",
+                detection_stage="producer_output_binding",
+                details=(("reason", "zero_tensor_slot_output"),),
+            )
+        )
+        return diagnostics
     containers = getattr(trace, "__dict__", {}).get("_containers", {}) or {}
     model_output_snapshots = [
         snapshot

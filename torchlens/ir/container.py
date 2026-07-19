@@ -984,6 +984,8 @@ class RegisteredContainer:
         self,
         flatten: Callable[[Any], tuple[list[Any] | tuple[Any, ...], Any]],
         unflatten: Callable[[Any, list[Any]], Any],
+        *,
+        state_complete: bool = False,
     ) -> None:
         """Create a registered container hook pair.
 
@@ -993,10 +995,18 @@ class RegisteredContainer:
             Callable returning ``(children, aux_data)``.
         unflatten:
             Callable accepting ``(aux_data, children)``.
+        state_complete:
+            Explicit trusted declaration (r37 R11) that ``unflatten(aux_data,
+            children)`` restores EVERY piece of per-instance state ``flatten``
+            observed -- nothing is dropped. Defaults ``False``: a registration
+            without the declaration keeps working for analysis capture, but a
+            RUNNABLE save of an instance carrying extra ``__dict__`` state
+            refuses rather than silently dropping it on replay.
         """
 
         self.flatten = flatten
         self.unflatten = unflatten
+        self.state_complete = bool(state_complete)
 
 
 _CONTAINER_REGISTRY: dict[type[Any], RegisteredContainer] = {}
@@ -1006,6 +1016,8 @@ def register_container(
     container_type: type[Any],
     flatten: Callable[[Any], tuple[list[Any] | tuple[Any, ...], Any]],
     unflatten: Callable[[Any, list[Any]], Any],
+    *,
+    state_complete: bool = False,
 ) -> None:
     """Register a custom container type for capture and reconstruction.
 
@@ -1017,9 +1029,15 @@ def register_container(
         Callable returning ``(children, aux_data)`` for an instance.
     unflatten:
         Callable accepting ``(aux_data, children)`` and returning an instance.
+    state_complete:
+        Trusted declaration that the hook pair round-trips ALL per-instance
+        state (r37 R11); without it, runnable saves refuse instances carrying
+        extra ``__dict__`` state instead of dropping it silently on replay.
     """
 
-    _CONTAINER_REGISTRY[container_type] = RegisteredContainer(flatten, unflatten)
+    _CONTAINER_REGISTRY[container_type] = RegisteredContainer(
+        flatten, unflatten, state_complete=state_complete
+    )
 
 
 def get_registered_container(container_type: type[Any]) -> RegisteredContainer | None:
@@ -1042,7 +1060,134 @@ def get_registered_container(container_type: type[Any]) -> RegisteredContainer |
     return None
 
 
+def namedtuple_extra_instance_state(value: Any) -> bool:
+    """Return whether a namedtuple INSTANCE carries non-field ``__dict__`` state.
+
+    r37 secB_1: a namedtuple subclass without ``__slots__ = ()`` can stash
+    tensor-derived attributes on the instance (``self.total = a + b`` in a custom
+    ``__new__``); the inert ``tuple.__new__`` rebuild drops them. This is the
+    NAMEDTUPLE-SPECIFIC capture-side signal -- never route namedtuples through the
+    dataclass helper (:func:`reconstruction_is_lossy`), whose no-``__dict__``
+    interpretation is inverted for tuple storage (it would mark every plain
+    namedtuple lossy). ``None``-valued extras carry no droppable derived state.
+    """
+
+    instance_dict = getattr(value, "__dict__", None)
+    if not isinstance(instance_dict, dict):
+        return False
+    return any(item is not None for item in instance_dict.values())
+
+
+def namedtuple_type_can_carry_instance_state(container_type: type[Any]) -> bool:
+    """Return whether a RESOLVED namedtuple type can hold per-instance state (r37).
+
+    The load-time forged-flag defense: a persisted ``lossy_reconstruction=False``
+    on a namedtuple spec is only honored when the resolved type structurally
+    CANNOT carry dropped state (plain ``collections.namedtuple`` /
+    ``typing.NamedTuple`` / a ``__slots__ = ()`` subclass -> no instance
+    ``__dict__``). A resolved type WITH an instance ``__dict__`` is treated as
+    lossy even when the persisted flag says otherwise.
+    """
+
+    return _type_has_instance_dict(container_type)
+
+
+def mapping_extra_instance_state(value: Any) -> bool:
+    """Return whether a trusted-base mapping INSTANCE carries extra ``__dict__`` state.
+
+    Exact ``dict`` has no instance ``__dict__`` (structurally stateless);
+    ``OrderedDict``/``defaultdict`` instances can carry arbitrary attributes the
+    key/value rebuild drops (r37 3-ADJ-2). Capture-side signal, mirrored by the
+    save-side losslessness refusal.
+    """
+
+    instance_dict = getattr(value, "__dict__", None)
+    if not isinstance(instance_dict, dict):
+        return False
+    return any(item is not None for item in instance_dict.values())
+
+
+CONTAINER_KIND_CAPABILITIES: dict[str, dict[str, str | bool]] = {
+    # r37 R11 -- THE per-kind reconstruction capability table. One truth consumed
+    # by spec construction (torchlens/backends/torch/ops.py::_build_container_spec),
+    # the producer losslessness proof (_prove_runnable_output_lossless), and the
+    # runtime independent recompute (_runnable_execution::_spec_node_reconstruction_lossy).
+    # ``instance_state_rule`` answers "can this kind's resolved type carry
+    # per-instance state beyond its recorded fields/keys/items, and how is that
+    # policed": builtin_stateless (structurally impossible), instance_refused
+    # (capture-side instance check + save refusal; persisted flag supplementary),
+    # type_recompute (load-time type-level recompute overrides a forged flag),
+    # declaration_required (explicit trusted state_complete registration), and
+    # refused (the kind itself is a typed save refusal).
+    "tuple": {
+        "children": "positional",
+        "literal_support": True,
+        "exact_type": True,
+        "instance_state_rule": "builtin_stateless",
+        "addressable": True,
+    },
+    "list": {
+        "children": "positional",
+        "literal_support": True,
+        "exact_type": True,
+        "instance_state_rule": "builtin_stateless",
+        "addressable": True,
+    },
+    "dict": {
+        "children": "keys",
+        "literal_support": True,
+        "exact_type": True,
+        "instance_state_rule": "instance_refused",
+        "addressable": True,
+    },
+    "namedtuple": {
+        "children": "fields",
+        "literal_support": True,
+        "exact_type": True,
+        "instance_state_rule": "type_recompute",
+        "addressable": True,
+    },
+    "dataclass": {
+        "children": "fields",
+        "literal_support": True,
+        "exact_type": True,
+        "instance_state_rule": "type_recompute",
+        "addressable": True,
+    },
+    "hf_model_output": {
+        "children": "keys",
+        "literal_support": True,
+        "exact_type": True,
+        "instance_state_rule": "type_recompute",
+        "addressable": True,
+    },
+    "literal": {
+        "children": "none",
+        "literal_support": True,
+        "exact_type": True,
+        "instance_state_rule": "builtin_stateless",
+        "addressable": False,
+    },
+    "opaque": {
+        "children": "none",
+        "literal_support": False,
+        "exact_type": False,
+        "instance_state_rule": "refused",
+        "addressable": False,
+    },
+    "registered": {
+        "children": "registered",
+        "literal_support": True,
+        "exact_type": True,
+        "instance_state_rule": "declaration_required",
+        "addressable": True,
+    },
+}
+"""Frozen capability rows for every ``ContainerSpec.kind`` (r37 R11)."""
+
+
 __all__ = [
+    "CONTAINER_KIND_CAPABILITIES",
     "ContainerReconstructionError",
     "ContainerSpec",
     "DataclassField",
@@ -1053,6 +1198,9 @@ __all__ = [
     "RegisteredContainer",
     "TupleIndex",
     "get_registered_container",
+    "mapping_extra_instance_state",
+    "namedtuple_extra_instance_state",
+    "namedtuple_type_can_carry_instance_state",
     "reconstruction_is_lossy",
     "reconstruction_is_lossy_by_type",
     "register_container",

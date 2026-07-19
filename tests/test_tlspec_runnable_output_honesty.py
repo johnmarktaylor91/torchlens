@@ -399,28 +399,27 @@ class _FloatScalarOutput(nn.Module):
         (_FloatScalarOutput, torch.randn(2, 4)),
     ],
 )
-def test_r26_host_escaped_scalar_output_is_unverifiable(
+def test_r26_host_escaped_scalar_output_refuses_at_save(
     model_factory: Any, x: torch.Tensor, tmp_path: Path
 ) -> None:
     """A model returning a host-escaped Python scalar has no reproducible output.
 
-    ``trace.output_layers == []`` (no output tensor slot) and no output ``ContainerSpec``, so
-    the sparse replay emits a dropped ``None`` that was never produced or compared. Stage-6 must
-    report UNVERIFIABLE, never a false VERIFIED on that None output.
+    ``trace.output_layers == []`` (no output tensor slot), so the v2 descriptor has
+    no carrier for the output contract. r37 corr1_1/INV-3 hardening: the runnable
+    save REFUSES uniformly at preflight (missing_output_container_contract) --
+    accept-then-``None`` (the pre-r37 posture this test used to pin as a run-time
+    UNVERIFIABLE ceiling) is gone; the artifact is never produced.
     """
+
+    from torchlens.errors import RunnablePreflightError
 
     model = model_factory()
     trace = _capture(model, x)
     assert trace.output_layers == []
     path = tmp_path / "scalar_out.tlspec"
-    trace.save(path, level="runnable", include_activations=True)
-
-    result = tl.load(path).run(inputs=x)
-
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
-    assert result.report.poisoned
-    assert result.output is None
+    with pytest.raises(RunnablePreflightError) as excinfo:
+        trace.save(path, level="runnable", include_activations=True)
+    assert "missing_output_container_contract" in str(excinfo.value.fields.get("diagnostics"))
 
 
 @pytest.mark.smoke
@@ -496,16 +495,18 @@ class _H4FloatScalarModel(nn.Module):
 
 
 @pytest.mark.smoke
-def test_h4_host_escaped_scalar_output_not_attested(tmp_path: Path) -> None:
-    """A dropped (host-escaped) output must not be ATTESTED while path is UNVERIFIABLE."""
+def test_h4_host_escaped_scalar_output_refuses_at_save(tmp_path: Path) -> None:
+    """A dropped (host-escaped) output can never reach attestation: since r37 the
+    zero-tensor-slot artifact is refused at SAVE (missing_output_container_contract),
+    so no run -- attested or otherwise -- exists to mis-report."""
+
+    from torchlens.errors import RunnablePreflightError
 
     x = torch.randn(2, 4)
-    result = _roundtrip(
-        _H4FloatScalarModel(), x, tmp_path / "h4_scalar.tlspec", include_activations=True
-    )
-
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
+    trace = _capture(_H4FloatScalarModel(), x)
+    with pytest.raises(RunnablePreflightError) as excinfo:
+        trace.save(tmp_path / "h4_scalar.tlspec", level="runnable", include_activations=True)
+    assert "missing_output_container_contract" in str(excinfo.value.fields.get("diagnostics"))
 
 
 @pytest.mark.smoke

@@ -29,8 +29,10 @@ from .errors import (
 )
 from .intervention.replay import _CallConeNode, _walk_call_cone
 from .ir.container import (
+    CONTAINER_KIND_CAPABILITIES,
     ContainerReconstructionError,
     ContainerSpec,
+    namedtuple_type_can_carry_instance_state,
     rebuild_container_from_spec,
     reconstruction_is_lossy_by_type,
     resolve_container_type,
@@ -2696,8 +2698,29 @@ def _spec_node_reconstruction_lossy(spec: ContainerSpec) -> bool:
 
     if getattr(spec, "lossy_reconstruction", False):
         return True
-    if spec.kind not in {"dataclass", "hf_model_output"}:
+    # r37 R11: the load-time recompute follows the capability table's per-kind
+    # instance-state rule. ``type_recompute`` kinds re-derive lossiness from the
+    # RESOLVED type so a forged ``lossy_reconstruction=False`` cannot suppress it;
+    # builtin-stateless kinds short-circuit False; ``instance_refused`` /
+    # ``declaration_required`` kinds are policed at save (their persisted flag is
+    # supplementary and honest captures never produce a stateful instance).
+    rule = CONTAINER_KIND_CAPABILITIES.get(spec.kind, {}).get("instance_state_rule")
+    if rule != "type_recompute":
         return False
+    if spec.kind == "namedtuple":
+        try:
+            container_type = resolve_container_type(spec)
+        except ContainerReconstructionError:
+            return True
+        if container_type is None:
+            # Unresolved namedtuple type: reconstruction substitutes a synthesized
+            # type -- a lossy type substitution, never a false VERIFIED.
+            return True
+        # secB_1 forged-flag defense: a resolved namedtuple type that CAN carry
+        # per-instance state (no ``__slots__ = ()``) is treated as lossy even when
+        # the persisted flag is false. Plain ``collections.namedtuple`` /
+        # ``typing.NamedTuple`` / slotted subclasses stay VERIFIED-eligible.
+        return namedtuple_type_can_carry_instance_state(container_type)
     captured_names = spec.fields if spec.kind == "dataclass" else spec.keys
     try:
         container_type = resolve_container_type(spec)

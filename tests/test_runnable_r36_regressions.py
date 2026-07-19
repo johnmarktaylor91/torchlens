@@ -1084,13 +1084,14 @@ class TestOutputCapabilityTable:
         trace = tl.trace(model_cls(), torch.tensor([1.0]), capture=_CAPTURE)
         with pytest.raises(RunnablePreflightError) as excinfo:
             trace.save(tmp_path / "literal.tlspec", level="runnable")
-        assert "missing_output_container_contract" in str(excinfo.value)
+        assert "missing_output_container_contract" in str(excinfo.value.fields.get("diagnostics"))
 
     def test_stateful_namedtuple_subclass_refuses_at_save(self, tmp_path: Path) -> None:
         trace = tl.trace(_nt_model(_StatefulNT), torch.tensor([1.0, 2.0]), capture=_CAPTURE)
         with pytest.raises(RunnablePreflightError) as excinfo:
             trace.save(tmp_path / "stateful_nt.tlspec", level="runnable")
-        assert "missing_output_container_contract" in str(excinfo.value)
+        assert "missing_output_container_contract" in str(excinfo.value.fields.get("diagnostics"))
+        assert "namedtuple_instance_state" in str(excinfo.value.fields.get("diagnostics"))
 
     @pytest.mark.parametrize(
         ("label", "factory"),
@@ -1277,3 +1278,112 @@ class TestClassClosureMetaGates:
                     if name in stripped and not stripped.startswith("#"):
                         offenders.append(f"{rel}:{lineno}: {stripped[:100]}")
         assert not offenders, offenders
+
+
+class TestOutputCapabilityMetaGates:
+    """R11 meta-guards: one table, all kinds covered, forged flags impotent."""
+
+    def test_capability_table_covers_every_container_kind(self) -> None:
+        """A kind added to ContainerSpec without a capability row must fail here."""
+
+        import re
+        import typing
+
+        from torchlens.ir import container as container_module
+        from torchlens.ir.container import CONTAINER_KIND_CAPABILITIES, ContainerSpec
+
+        declared = set(typing.get_args(ContainerSpec.__dataclass_fields__["kind"].type))
+        table = set(CONTAINER_KIND_CAPABILITIES)
+        if declared:
+            assert table == declared
+        # Belt: every kind literal CONSTRUCTED at the capture site has a row.
+        ops_source = (
+            Path(container_module.__file__).resolve().parents[2]
+            / "torchlens"
+            / "backends"
+            / "torch"
+            / "ops.py"
+        ).read_text()
+        constructed = set(re.findall(r'ContainerSpec\(\s*kind="([a-z_]+)"', ops_source))
+        assert constructed <= table, constructed - table
+        assert table == {
+            "tuple",
+            "list",
+            "dict",
+            "namedtuple",
+            "dataclass",
+            "hf_model_output",
+            "literal",
+            "opaque",
+            "registered",
+        }
+        for row in CONTAINER_KIND_CAPABILITIES.values():
+            assert {
+                "children",
+                "literal_support",
+                "exact_type",
+                "instance_state_rule",
+                "addressable",
+            } <= set(row)
+
+    def test_forged_namedtuple_flag_cannot_suppress_recompute(self) -> None:
+        """secB_1 adversarial pin: a hand-edited lossy_reconstruction=False is impotent."""
+
+        from torchlens._runnable_execution import _spec_node_reconstruction_lossy
+        from torchlens.ir.container import ContainerSpec
+
+        forged = ContainerSpec(
+            kind="namedtuple",
+            length=2,
+            fields=("a", "b"),
+            type_module=_StatefulNT.__module__,
+            type_qualname=_StatefulNT.__qualname__,
+            lossy_reconstruction=False,  # forged
+        )
+        assert _spec_node_reconstruction_lossy(forged) is True
+
+    def test_plain_namedtuple_spec_recompute_stays_lossless(self) -> None:
+        from torchlens._runnable_execution import _spec_node_reconstruction_lossy
+        from torchlens.ir.container import ContainerSpec
+
+        plain = ContainerSpec(
+            kind="namedtuple",
+            length=2,
+            fields=("a", "b"),
+            type_module=_PlainNT.__module__,
+            type_qualname=_PlainNT.__qualname__,
+            lossy_reconstruction=False,
+        )
+        assert _spec_node_reconstruction_lossy(plain) is False
+
+    def test_registered_container_without_declaration_refuses_stateful_instance(
+        self, tmp_path: Path
+    ) -> None:
+        """3-ADJ-3: undeclared registrations refuse instances with extra state."""
+
+        from torchlens.ir.container import _CONTAINER_REGISTRY, register_container
+
+        class _Holder:
+            def __init__(self, a: torch.Tensor, b: torch.Tensor) -> None:
+                self.a = a
+                self.b = b
+
+        register_container(
+            _Holder,
+            lambda holder: ([holder.a, holder.b], None),
+            lambda aux, children: _Holder(children[0], children[1]),
+        )
+        try:
+
+            class _Model(nn.Module):
+                def forward(self, x: torch.Tensor) -> _Holder:
+                    return _Holder(x + 1, x * 2)
+
+            trace = tl.trace(_Model(), torch.tensor([1.0, 2.0]), capture=_CAPTURE)
+            with pytest.raises(RunnablePreflightError) as excinfo:
+                trace.save(tmp_path / "registered.tlspec", level="runnable")
+            assert "registered_container_instance_state" in str(
+                excinfo.value.fields.get("diagnostics")
+            )
+        finally:
+            _CONTAINER_REGISTRY.pop(_Holder, None)

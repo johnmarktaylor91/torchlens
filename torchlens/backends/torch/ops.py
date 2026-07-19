@@ -92,6 +92,8 @@ from ...ir.container import (
     OutputPathComponent,
     TupleIndex,
     get_registered_container,
+    mapping_extra_instance_state,
+    namedtuple_extra_instance_state,
     reconstruction_is_lossy,
 )
 from ...ir.container_registry import (
@@ -1090,6 +1092,9 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
             type_module=module,
             type_qualname=qualname,
             child_specs=tuple(child_specs),
+            # r37 secB_1 capture-side parity with dataclass/hf: the inert
+            # ``tuple.__new__`` rebuild drops non-field instance state.
+            lossy_reconstruction=namedtuple_extra_instance_state(value),
         )
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         fields = tuple(field.name for field in dataclasses.fields(value))
@@ -1319,6 +1324,15 @@ def _prove_runnable_output_lossless(value: Any) -> tuple[bool, str]:
         return True, ""
     registered = get_registered_container(type(value))
     if registered is not None:
+        if not getattr(registered, "state_complete", False):
+            instance_dict = getattr(value, "__dict__", None)
+            if isinstance(instance_dict, dict) and any(
+                item is not None for item in instance_dict.values()
+            ):
+                # r37 3-ADJ-3: registration without the explicit state_complete
+                # declaration cannot prove the hooks round-trip this instance's
+                # extra state -- refuse at save rather than drop it on replay.
+                return False, f"registered_container_instance_state:{type(value).__qualname__}"
         children, _aux = registered.flatten(value)
         for item in children:
             proved, reason = _prove_runnable_output_lossless(item)
@@ -1336,6 +1350,10 @@ def _prove_runnable_output_lossless(value: Any) -> tuple[bool, str]:
         fields = torch_fields or tuple(value._fields)
         if type(value).__module__ == "torch.return_types" and not torch_fields:
             return False, "structseq_fields_unprovable"
+        if namedtuple_extra_instance_state(value):
+            # r37 secB_1: non-field instance state the inert rebuild drops --
+            # refuse at save (capability-table rule for the namedtuple kind).
+            return False, f"namedtuple_instance_state:{type(value).__qualname__}"
         for field_name in fields:
             proved, reason = _prove_runnable_output_lossless(getattr(value, field_name))
             if not proved:
@@ -1351,6 +1369,10 @@ def _prove_runnable_output_lossless(value: Any) -> tuple[bool, str]:
         recon = _mapping_reconstruction(value)
         if recon is None:
             return False, f"unreconstructable_mapping:{type(value).__qualname__}"
+        if mapping_extra_instance_state(value):
+            # r37 3-ADJ-2: OrderedDict/defaultdict instances can carry attributes
+            # the key/value rebuild drops -- refuse at save.
+            return False, f"mapping_instance_state:{type(value).__qualname__}"
         for key in value.keys():
             if not isinstance(key, (str, int)):
                 return False, f"unsupported_mapping_key:{type(key).__qualname__}"
