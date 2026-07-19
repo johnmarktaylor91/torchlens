@@ -512,6 +512,7 @@ input_tree_mismatch
 input_shape_mismatch
 input_dtype_mismatch
 call_arity_mismatch
+input_arity_extra
 call_structure_mismatch
 output_structure_mismatch
 output_shape_mismatch
@@ -528,6 +529,11 @@ context_field_invalid
 numeric_attestation_failed
 poisoned_run_refused
 ```
+
+`input_arity_extra` (r43, corr1_1) is raised when a loaded sparse `.run()` call carries MORE
+top-level positional/keyword input sites than the capture recorded: the descriptor encodes a
+finite concrete site set (even for Python variadic signatures), so an extra runtime argument is
+outside the recorded taken path and must never report `verified`.
 
 `input_alias_topology_unresolved` is an unverifiability CEILING, not a contradiction: the
 three-valued alias engine (section 11) could prove neither overlap nor disjointness for a

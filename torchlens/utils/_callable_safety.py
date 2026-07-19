@@ -910,6 +910,19 @@ _PURE_TENSOR_FACTORY_NAMES: frozenset[str] = frozenset(
 # how a future bare-root legit op is rescued -- NOT by loosening the operator gate.
 _PURE_TENSOR_WRAPPER_NAMES: frozenset[str] = frozenset({"to_sparse_coo"})
 
+# Safe, pure-READ tensor PROPERTY accessors (``x.T`` / ``x.mT`` / ``x.real`` /
+# ``x.imag``): getset descriptors on the C ``TensorBase`` whose access is a pure view /
+# read with no side effect. The loader resolves a recorded
+# ``("torch.Tensor", <name>, "method")`` property key to a SYNTHETIC Python getter
+# (``torchlens._io.runnable_load._safe_tensor_property_getter``) whose ``__module__`` is
+# ``"torch._tensor"``, so it lands on the operator-gated roots with a FRESH function id
+# (never torch-overridable) and no aten schema by terminal name -- the r43 inversion
+# denied the whole class (a regression; pre-r43 module-prefix admission allowed it).
+# This is the CANONICAL copy of the safe-property allowlist; the capture-side keyer
+# (``torchlens.backends.torch.ops``) and the load-side resolver import it, so the three
+# surfaces cannot drift. Only pure views/reads may ever be added here.
+_PURE_TENSOR_PROPERTY_NAMES: frozenset[str] = frozenset({"T", "mT", "real", "imag"})
+
 
 @lru_cache(maxsize=1)
 def _torch_overridable_callable_ids() -> frozenset[int]:
@@ -973,7 +986,9 @@ def _is_recognized_operator(real: Callable[..., Any], terminal_name: str) -> boo
 
     Admission on the exact operator-gated roots (``torch`` / ``torch._C`` /
     ``torch._tensor``): torch-overridable identity OR an aten operator schema OR a small
-    stable pure tensor factory name OR a narrow audited pure Tensor wrapper name. Every
+    stable pure tensor factory name OR a narrow audited pure Tensor wrapper name OR a
+    safe pure-read tensor PROPERTY name (the loader's synthetic ``x.T`` / ``x.mT`` /
+    ``x.real`` / ``x.imag`` getters -- see ``_PURE_TENSOR_PROPERTY_NAMES``). Every
     other internal builtin on those roots is default-DENIED (the r43 inversion). Note the
     name/verb belts in ``_is_side_effecting_callable_name`` run BEFORE this and catch the
     overridable-but-unsafe cases (e.g. ``share_memory_``), so identity-recognition here
@@ -986,7 +1001,9 @@ def _is_recognized_operator(real: Callable[..., Any], terminal_name: str) -> boo
         return True
     if terminal_name in _PURE_TENSOR_FACTORY_NAMES:
         return True
-    return terminal_name in _PURE_TENSOR_WRAPPER_NAMES
+    if terminal_name in _PURE_TENSOR_WRAPPER_NAMES:
+        return True
+    return terminal_name in _PURE_TENSOR_PROPERTY_NAMES
 
 
 def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
@@ -1001,8 +1018,9 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     Module resolution (r43): the exact internal-builtin roots ``torch`` / ``torch._C``
     / ``torch._tensor`` are gated by the STRUCTURAL recognized-operator predicate
     (``_is_recognized_operator``) -- DEFAULT-DENY, admit ONLY torch-overridable
-    identities, aten-schema ops, the small pure tensor factories, and the audited
-    ``to_sparse_coo`` wrapper. This closes, as a CLASS, the non-forward internal
+    identities, aten-schema ops, the small pure tensor factories, the audited
+    ``to_sparse_coo`` wrapper, and the safe pure-read tensor property getters
+    (``T`` / ``mT`` / ``real`` / ``imag``). This closes, as a CLASS, the non-forward internal
     builtins those roots host (functionalization dispatch controls, JIT / type
     constructors, Storage / legacy ``*Tensor`` ctors, process-global state getters,
     deprecated Tensor methods) that the pre-r43 module-prefix admission let through.

@@ -27,7 +27,9 @@ and admits ONLY structurally-recognized genuine forward operators, decided again
 torch's OWN operator authority (``torch.overrides.get_overridable_functions`` /
 ``torch.ops.aten``) -- independent of the buggy gate and self-updating across torch
 versions: torch-overridable identity OR an aten operator schema OR a small stable pure
-tensor factory name OR the narrow audited ``to_sparse_coo`` wrapper. This closes the
+tensor factory name OR the narrow audited ``to_sparse_coo`` wrapper OR a safe pure-read
+tensor property name (``T`` / ``mT`` / ``real`` / ``imag`` -- the r43 fixup rung for the
+loader's synthetic property getters, which the original inversion over-denied). This closes the
 whole functionalization family, ``share_memory_``, JIT / IR type constructors, Storage /
 legacy ``*Tensor`` ctors, state getters, and deprecated methods as a CLASS, not instance
 by instance.
@@ -71,6 +73,12 @@ wrap_torch()
 _OPERATOR_GATED_ROOTS = frozenset({"torch", "torch._C", "torch._tensor"})
 _FACTORY_NAMES = frozenset({"from_numpy", "frombuffer", "asarray", "from_dlpack"})
 _WRAPPER_NAMES = frozenset({"to_sparse_coo"})
+# Safe pure-read tensor PROPERTY accessors (r43 fixup): the loader resolves a recorded
+# ``("torch.Tensor", <name>, "method")`` property key to a SYNTHETIC getter whose
+# ``__module__`` is ``"torch._tensor"`` -- a fresh function id (never overridable), and
+# ``T`` carries no aten schema by terminal name -- so the recognizer admits the class by
+# NAME. Every name is a pure view/read.
+_PROPERTY_NAMES = frozenset({"T", "mT", "real", "imag"})
 
 
 def _indep_overridable_ids() -> frozenset[int]:
@@ -130,6 +138,7 @@ def _indep_is_recognized_operator(real: Callable[..., Any]) -> bool:
         or _indep_has_aten_schema(name)
         or name in _FACTORY_NAMES
         or name in _WRAPPER_NAMES
+        or name in _PROPERTY_NAMES
     )
 
 
@@ -437,6 +446,41 @@ def test_to_sparse_coo_wrapper_rescue_admitted() -> None:
     assert id(real) not in _OVERRIDABLE_IDS
     assert not _indep_has_aten_schema("to_sparse_coo")
     assert is_pure_forward_callable(torch.Tensor.to_sparse_coo)
+
+
+@pytest.mark.smoke
+def test_safe_tensor_property_getters_admitted() -> None:
+    """The loader's synthetic safe-property getters (``x.T`` / ``x.mT`` / ``x.real`` /
+    ``x.imag``) pass the structural gate (r43 fixup).
+
+    The loader resolves a recorded ``("torch.Tensor", <name>, "method")`` property key to
+    a SYNTHETIC Python getter with ``__module__ == "torch._tensor"`` -- a fresh function
+    id the overridable-identity rung can never cover, and ``T`` has no aten schema by
+    terminal name -- so the original r43 inversion DENIED the class and broke replay of
+    legit property-reading captures (``ReattachError``). Pinned ADMITTED here, over the
+    REAL loader factory, so a future refactor cannot silently drop the class again.
+    """
+
+    from torchlens._io.runnable_load import _safe_tensor_property_getter
+    from torchlens.intervention.types import FunctionRegistryKey
+    from torchlens.utils._callable_safety import _PURE_TENSOR_PROPERTY_NAMES
+
+    # The shipped canonical allowlist IS the audited frozen surface (drift goes RED).
+    assert _PURE_TENSOR_PROPERTY_NAMES == _PROPERTY_NAMES
+    for name in sorted(_PROPERTY_NAMES):
+        getter = _safe_tensor_property_getter(FunctionRegistryKey("torch.Tensor", name, "method"))
+        assert getter is not None, f"loader refused safe property key: {name}"
+        real = _unwrap_capture_wrapper(getter)
+        # A synthetic getter can never be admitted on identity; the class needs the
+        # property-name rung (``T`` also has no aten schema).
+        assert id(real) not in _OVERRIDABLE_IDS
+        assert is_pure_forward_callable(getter), f"safe tensor property WRONGLY DENIED: {name}"
+    assert not _indep_has_aten_schema("T")
+    # A property-shaped key OUTSIDE the audited surface gets NO synthetic getter (the
+    # rescue is a closed allowlist, not a property-wide admission).
+    assert (
+        _safe_tensor_property_getter(FunctionRegistryKey("torch.Tensor", "grad", "method")) is None
+    )
 
 
 # --------------------------------------------------------------------------- #

@@ -72,7 +72,11 @@ from ..runnable import (
     TensorUseSite,
     WitnessCompleteness,
 )
-from ..utils._callable_safety import is_pure_forward_callable, unsafe_callable_reason
+from ..utils._callable_safety import (
+    _PURE_TENSOR_PROPERTY_NAMES,
+    is_pure_forward_callable,
+    unsafe_callable_reason,
+)
 from ..utils._torch_compat import resolve_runnable_torch_alias
 
 
@@ -100,7 +104,10 @@ _ENUMERATED_TORCH_NAMESPACES = frozenset(
     }
 )
 _REMOVED_TORCH_CALLABLES = frozenset({"torch.gesv"})
-_SAFE_TENSOR_PROPERTY_NAMES = frozenset({"T", "mT", "real", "imag"})
+# Canonical copy lives in ``torchlens.utils._callable_safety`` so the capture-side
+# keyer, this resolver, and the security gate's recognized-operator predicate can
+# never drift apart on the safe pure-read property surface.
+_SAFE_TENSOR_PROPERTY_NAMES = _PURE_TENSOR_PROPERTY_NAMES
 
 
 @dataclass(frozen=True, slots=True)
