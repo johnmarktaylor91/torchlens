@@ -776,7 +776,12 @@ def test_r27_getattr_static_does_not_fire_module_pep562_getattr() -> None:
 
 
 def test_r27_foreign_init_detection_matrix() -> None:
-    """``_model_output_has_foreign_init`` trusts mapping bases / transformers, flags custom init."""
+    """``_model_output_has_foreign_init`` trusts mapping bases; transformers trust is spec-keyed.
+
+    r42 secB_1: a non-base field-mirroring init is trusted ONLY by RESOLUTION AUTHORITY
+    (identity re-resolution from the genuine ``transformers`` package via the spec), never the
+    spoofable/loose ``__module__`` string. Without a spec the check fail-closes to foreign.
+    """
 
     class _CustomInitMO(dict[str, Any]):
         def __init__(self, **kwargs: Any) -> None:
@@ -792,6 +797,21 @@ def test_r27_foreign_init_detection_matrix() -> None:
     assert _model_output_has_foreign_init(_CustomInitMO) is True
     assert _model_output_has_foreign_init(_NoInitMO) is False
     assert _model_output_has_foreign_init(_OrderedNoInitMO) is False
-
+    # r42 secB_1: no spec / no resolution authority -> a non-base init fail-closes to foreign.
     modeling_outputs = pytest.importorskip("transformers.modeling_outputs")
-    assert _model_output_has_foreign_init(modeling_outputs.BaseModelOutput) is False
+    assert _model_output_has_foreign_init(modeling_outputs.BaseModelOutput) is True
+    # WITH the genuine resolution authority (identity re-resolution from the real package) the
+    # transformers field-mirroring init is trusted -> not foreign.
+    genuine_spec = ContainerSpec(
+        kind="hf_model_output",
+        type_module="transformers.modeling_outputs",
+        type_qualname="BaseModelOutput",
+    )
+    assert _model_output_has_foreign_init(modeling_outputs.BaseModelOutput, genuine_spec) is False
+    # A SPOOFED ``__module__`` string (loose prefix / non-identity) is never trusted.
+    spoof_spec = ContainerSpec(
+        kind="hf_model_output",
+        type_module="transformers_evil",
+        type_qualname="BaseModelOutput",
+    )
+    assert _model_output_has_foreign_init(modeling_outputs.BaseModelOutput, spoof_spec) is True

@@ -610,7 +610,43 @@ def _dataclass_defines_post_init(container_type: type[Any]) -> bool:
 _TRUSTED_MODEL_OUTPUT_INIT_BASES: tuple[type[Any], ...] = (object, dict, OrderedDict)
 
 
-def _model_output_has_foreign_init(container_type: type[Any]) -> bool:
+def _is_trusted_transformers_output_type(
+    container_type: type[Any], spec: "ContainerSpec | None"
+) -> bool:
+    """Return whether ``container_type`` is a genuine ``transformers`` output by resolution authority.
+
+    r42 secB_1: mirrors :func:`_is_trusted_structseq_type`. The trust decision keys on the SPEC's
+    resolution authority (``spec.type_module`` / ``spec.type_qualname``), never the resolved
+    class's spoofable ``__module__`` string nor a loose ``startswith("transformers")`` prefix
+    (which matches ``transformers_evil``). Trust requires ALL of: the spec named the genuine
+    package (``transformers`` or ``transformers.``-prefixed), that module is actually loaded in
+    ``sys.modules``, and static re-resolution of ``spec.type_qualname`` from it returns the
+    IDENTICAL class object. A ``None`` spec (a legacy direct call with no resolution authority)
+    is never trusted -- fail closed.
+    """
+
+    if spec is None:
+        return False
+    module = spec.type_module or ""
+    if module != "transformers" and not module.startswith("transformers."):
+        return False
+    if not spec.type_qualname:
+        return False
+    loaded = sys.modules.get(module)
+    if loaded is None:
+        return False
+    resolved: Any = loaded
+    try:
+        for attribute_name in spec.type_qualname.split("."):
+            resolved = inspect.getattr_static(resolved, attribute_name)
+    except AttributeError:
+        return False
+    return resolved is container_type
+
+
+def _model_output_has_foreign_init(
+    container_type: type[Any], spec: "ContainerSpec | None" = None
+) -> bool:
     """Return whether an ``hf_model_output`` type's own ``__init__`` is an untrusted constructor.
 
     A custom (non-dataclass) ``dict``-subclass ``ModelOutput`` can compute, in its ``__init__``,
@@ -650,13 +686,19 @@ def _model_output_has_foreign_init(container_type: type[Any]) -> bool:
         # First (most-derived) class that defines ``__init__`` -- the one that would run.
         if klass in _TRUSTED_MODEL_OUTPUT_INIT_BASES:
             return False
-        module = getattr(klass, "__module__", "") or ""
-        return not module.startswith("transformers")
+        # r42 secB_1: trust a non-base field-mirroring init ONLY when the CONTAINER type is a
+        # genuine ``transformers`` ModelOutput by RESOLUTION AUTHORITY (identity re-resolution
+        # from the real loaded package), never the spoofable / loose ``__module__`` prefix.
+        # Unresolved or non-identical -> foreign (fail closed to lossy).
+        return not _is_trusted_transformers_output_type(container_type, spec)
     return False
 
 
 def reconstruction_is_lossy_by_type(
-    container_type: type[Any], captured_names: tuple[Any, ...], kind: str
+    container_type: type[Any],
+    captured_names: tuple[Any, ...],
+    kind: str,
+    spec: "ContainerSpec | None" = None,
 ) -> bool:
     """Recompute reconstruction lossiness from the RESOLVED type at LOAD time.
 
@@ -707,7 +749,7 @@ def reconstruction_is_lossy_by_type(
         return True
     if kind == "dataclass" and _dataclass_defines_post_init(container_type):
         return True
-    if kind == "hf_model_output" and _model_output_has_foreign_init(container_type):
+    if kind == "hf_model_output" and _model_output_has_foreign_init(container_type, spec):
         return True
     return False
 

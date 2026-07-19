@@ -30,7 +30,7 @@ import time as _time_module
 from collections.abc import Callable
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
-from types import TracebackType
+from types import ModuleType, TracebackType
 from typing import Any, Dict, List, TypeVar, cast
 
 import _random as _c_random_module
@@ -639,6 +639,37 @@ def _rng_exempt_instances() -> tuple[Any, ...]:
     return tuple(exempt)
 
 
+_CUSTOM_HOLDER_SKIP_MODULES = frozenset(
+    {
+        # Stdlib runtime primitives + torch/numpy implementation objects the custom-holder
+        # generator sweep (r42 corr2_1) must NOT recurse into: threading/queue/asyncio/file/
+        # socket handles, builtin/collection containers (handled structurally), and torch/numpy
+        # internals (a digestable RNG is snapshotted BEFORE this skip check; everything else in
+        # those namespaces is impl noise). Keyed on the top-level module of the value's TYPE.
+        "builtins",
+        "threading",
+        "queue",
+        "asyncio",
+        "socket",
+        "io",
+        "_io",
+        "selectors",
+        "subprocess",
+        "multiprocessing",
+        "concurrent",
+        "ctypes",
+        "collections",
+        "weakref",
+        "typing",
+        "functools",
+        "pathlib",
+        "logging",
+        "numpy",
+        "torch",
+    }
+)
+"""Top-level module names whose instances the custom-holder generator sweep skips (r42 corr2_1)."""
+
 _INVENTORY_NODE_CAP = 1_000_000
 """Defensive node cap for the model-attribute generator sweep (r41 hon1_2).
 
@@ -911,12 +942,49 @@ class host_nondeterminism_monitor:
         ):
             self._mark("c_rng_instance_draw")
             return
-        # Immutable ``datetime`` current-clock readers, matched by (receiver, method).
+        # Immutable ``datetime`` current-clock readers (r42 hon1_1: subclass-safe). The base
+        # readers are class methods on unpatchable C extension types, so a ``datetime.datetime``
+        # / ``datetime.date`` SUBCLASS inherits them and reads the SAME wall clock -- but the
+        # exact ``id(receiver)`` key misses the subclass. Classify subclass-safe, mirroring the
+        # numpy instance-draw ``isinstance`` branch, while guarding a genuinely re-implemented
+        # subclass method (an override that does not call the inherited reader is not attributed).
         name = getattr(arg, "__name__", None)
-        if name is not None:
-            channel = self._clock_ccall_keys.get((id(receiver), name))
+        if name is not None and isinstance(receiver, type):
+            channel = self._datetime_clock_channel(receiver, name)
             if channel is not None:
                 self._mark(channel)
+
+    def _datetime_clock_channel(self, receiver: type, name: str) -> str | None:
+        """Classify a ``datetime``/``date`` current-clock ``c_call`` receiver (r42 hon1_1)."""
+
+        # Exact base receiver: the original registered key (fast path, unchanged).
+        exact = self._clock_ccall_keys.get((id(receiver), name))
+        if exact is not None:
+            return exact
+        # Inherited C reader on a subclass: ``now``/``utcnow``/``today`` on a ``datetime``
+        # subclass, ``today`` on a (non-datetime) ``date`` subclass. Not attributed when the
+        # subclass genuinely OVERRIDES the reader (its own ``__dict__`` defines the name before
+        # the base in the MRO) -- an override that returns a fixed value is not a clock read; if
+        # it calls the inherited reader, that inner call is caught by the exact-key path.
+        if name in ("now", "utcnow", "today") and issubclass(receiver, _datetime_module.datetime):
+            if not self._subclass_overrides_reader(receiver, name, _datetime_module.datetime):
+                return f"datetime.datetime.{name}"
+            return None
+        if name == "today" and issubclass(receiver, _datetime_module.date):
+            if not self._subclass_overrides_reader(receiver, name, _datetime_module.date):
+                return "datetime.date.today"
+        return None
+
+    @staticmethod
+    def _subclass_overrides_reader(receiver: type, name: str, base: type) -> bool:
+        """Return whether ``receiver`` redefines ``name`` above ``base`` in its MRO (r42 hon1_1)."""
+
+        for klass in receiver.__mro__:
+            if klass is base:
+                return False
+            if name in getattr(klass, "__dict__", {}):
+                return True
+        return False
 
     def _make_profile_hook(self, predecessor: Any, *, records_thread_ident: bool = False) -> Any:
         def hook(frame: Any, event: str, arg: Any) -> Any:
@@ -942,6 +1010,75 @@ class host_nondeterminism_monitor:
 
         return hook
 
+    @staticmethod
+    def _is_recursable_custom_holder(value: Any) -> bool:
+        """Return whether ``value`` is an inert custom holder to recurse into (r42 corr2_1).
+
+        Recurse ONLY into plain user objects that carry an attribute surface. Skips scalars,
+        types/callables, modules, tensors, ``nn.Module`` (swept separately), ndarrays, and any
+        stdlib/torch/numpy implementation object (:data:`_CUSTOM_HOLDER_SKIP_MODULES`). A
+        digestable RNG never reaches here (it is snapshotted before this branch).
+        """
+
+        if value is None or isinstance(value, (str, bytes, bytearray, int, float, bool, complex)):
+            return False
+        if isinstance(value, type) or callable(value):
+            return False
+        if isinstance(value, ModuleType):
+            return False
+        if isinstance(value, (np.ndarray, np.generic)):
+            return False
+        if isinstance(value, (torch.Tensor, torch.nn.Module)):
+            return False
+        module = getattr(type(value), "__module__", "") or ""
+        if module.split(".", 1)[0] in _CUSTOM_HOLDER_SKIP_MODULES:
+            return False
+        try:
+            has_dict = isinstance(object.__getattribute__(value, "__dict__"), dict)
+        except (AttributeError, TypeError):
+            has_dict = False
+        has_slots = any(
+            "__slots__" in getattr(klass, "__dict__", {}) for klass in type(value).__mro__
+        )
+        return has_dict or has_slots
+
+    @staticmethod
+    def _custom_holder_children(value: Any) -> list[Any]:
+        """Return an inert custom holder's attribute values (r42 corr2_1).
+
+        Reads only ``__dict__`` values and ``__slots__`` slot values (via the slot member
+        descriptor, never ``getattr`` -- so no property getter and no ``__getattr__`` fires).
+        """
+
+        children: list[Any] = []
+        try:
+            instance_dict = object.__getattribute__(value, "__dict__")
+        except (AttributeError, TypeError):
+            instance_dict = None
+        if isinstance(instance_dict, dict):
+            children.extend(instance_dict.values())
+        for klass in type(value).__mro__:
+            slots = klass.__dict__.get("__slots__")
+            if slots is None:
+                continue
+            if isinstance(slots, str):
+                slots = (slots,)
+            try:
+                slot_names = list(slots)
+            except TypeError:
+                continue
+            for slot in slot_names:
+                if not isinstance(slot, str) or slot in ("__dict__", "__weakref__"):
+                    continue
+                getter = getattr(klass.__dict__.get(slot), "__get__", None)
+                if getter is None:
+                    continue
+                try:
+                    children.append(getter(value, klass))
+                except (AttributeError, TypeError, ValueError):
+                    continue
+        return children
+
     def _sweep_model_generators(self) -> list[tuple[Any, str]]:
         """Digest numpy/`random` generators reachable from the MODEL's submodule attributes.
 
@@ -954,8 +1091,10 @@ class host_nondeterminism_monitor:
         recursion -- every submodule ``__dict__`` value, descending through ``list`` /
         ``tuple`` / ``set`` / ``frozenset`` elements and ``dict`` KEYS and VALUES (so
         ``self.pool = [gen]``, ``{"g": gen}``, ``[[gen]]``, and a dict-key generator are
-        all digested). It does NOT walk arbitrary custom-object attributes, tensors,
-        ndarray internals, or modules outside ``model.modules()``. The former
+        all digested). r42 corr2_1: it ADDITIONALLY recurses into inert CUSTOM object
+        holders (``self.holder.rng``) through their ``__dict__`` / ``__slots__`` values,
+        skipping tensors, ``nn.Module`` (swept separately), ndarrays, callables, modules,
+        and stdlib/torch/numpy implementation objects. The former
         ``budget = 2000`` early return truncated SILENTLY (a generator on a late
         submodule of any >~120-module model was missed -> false VERIFIED); the
         replacement :data:`_INVENTORY_NODE_CAP` is defensive only -- exhaustion flags
@@ -967,10 +1106,10 @@ class host_nondeterminism_monitor:
         the immutable ``datetime`` readers by the ``sys.setprofile`` classifier;
         unseeded construction and Python ``random`` by the construction/class patches.
         This digest is the thread-independent belt for a generator the model itself
-        HOLDS (caught even on a pre-existing thread). Residuals (contract s11): an
-        EXTERNALLY-held generator drawn on a PRE-EXISTING (non-hooked) thread, and a
-        generator behind a CUSTOM object attribute (``self.cfg.gen`` -- not swept;
-        hooked-thread draws of it stay receiver-classified).
+        HOLDS (caught even on a pre-existing thread; r42 corr2_1 extends this to a
+        generator behind a custom holder attribute). Residual (contract s11): an
+        EXTERNALLY-held generator drawn on a PRE-EXISTING (non-hooked) thread that is NOT
+        reachable from the model inventory.
         """
 
         snapshots: list[tuple[Any, str]] = []
@@ -1008,6 +1147,17 @@ class host_nondeterminism_monitor:
                 try:
                     digest = self._digest_rng_instance(value)
                 except _NotADigestableRng:
+                    # r42 corr2_1: a model-held generator behind a CUSTOM object holder
+                    # (``self.holder.rng``) is neither a builtin container nor itself a
+                    # digestable RNG. Recurse into the holder's inert attributes so the held
+                    # generator is snapshotted; the thread-independent before/after digest then
+                    # catches a draw on ANY thread once the generator is FOUND. Cycle-guarded
+                    # and node-capped exactly like the builtin-container recursion.
+                    if id(value) not in seen_container_ids and self._is_recursable_custom_holder(
+                        value
+                    ):
+                        seen_container_ids.add(id(value))
+                        pending.extend(self._custom_holder_children(value))
                     continue
                 except Exception:
                     self._flag_uncertain("inventory_state_read_failed")

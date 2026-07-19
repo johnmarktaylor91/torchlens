@@ -838,6 +838,7 @@ def _record_runnable_input_literal_leaves(
     if not bool(getattr(trace, "intervention_ready", False)):
         return
 
+    import dataclasses as _dataclasses
     from collections.abc import Mapping as _Mapping
 
     import torch as _torch
@@ -883,6 +884,14 @@ def _record_runnable_input_literal_leaves(
         if isinstance(value, tuple) and hasattr(value, "_fields"):
             for name in value._fields:
                 _walk(position, getattr(value, name), (*path, str(name)))
+            return
+        # r42 corr1_2: a dataclass container descends by DECLARED FIELD, using the same
+        # tensor/non-tensor leaf vocabulary as tuples/mappings/namedtuples, so a tensor-only
+        # dataclass input records ZERO opaque leaves (stays fully witnessable -> VERIFIED); a
+        # genuinely-opaque field still surfaces as an opaque leaf (no weakening).
+        if _dataclasses.is_dataclass(value) and not isinstance(value, type):
+            for _field in _dataclasses.fields(value):
+                _walk(position, getattr(value, _field.name), (*path, _field.name))
             return
         if isinstance(value, _Mapping):
             for key, child in value.items():
