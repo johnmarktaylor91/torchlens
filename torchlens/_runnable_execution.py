@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import dataclasses
-import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
+import sys
 from contextlib import contextmanager, nullcontext
 from itertools import count
 import struct
@@ -40,6 +40,7 @@ from .utils.rng import (
     restore_host_rng,
     snapshot_host_rng,
 )
+from .utils.tensor_utils import touched_bytes_relation
 from .runnable import (
     ActivationPayloadLayerDescriptor,
     ActivationPayloadMember,
@@ -1239,149 +1240,20 @@ def _tensor_storage_key(value: torch.Tensor) -> int | None:
         return None
 
 
-def _tensor_storage_footprint(value: torch.Tensor) -> tuple[int, int, int] | None:
-    """Return ``(storage_ptr, start_byte, end_byte)`` spanned by a tensor's elements.
-
-    ``end_byte`` is exclusive and covers the highest linear storage index the tensor's
-    shape+stride reaches (r29-C3, F4). Two same-storage inputs whose byte spans do NOT
-    overlap (``a = base[:2]``, ``b = base[2:]``) share a base pointer but touch disjoint
-    memory, so an in-place mutation of one cannot reach the other -- keying aliasing on the
-    base pointer alone falsely diverges them. Overlap of the spans is the honest hazard test.
-    """
-
-    try:
-        storage_ptr = int(value.untyped_storage().data_ptr())
-        element_size = int(value.element_size())
-        offset_bytes = int(value.storage_offset()) * element_size
-        if value.numel() == 0:
-            return storage_ptr, offset_bytes, offset_bytes
-        max_linear_index = sum(
-            (int(dim) - 1) * int(stride) for dim, stride in zip(value.shape, value.stride())
-        )
-        end_byte = offset_bytes + (max_linear_index + 1) * element_size
-        return storage_ptr, offset_bytes, end_byte
-    except (RuntimeError, AttributeError, TypeError, ValueError):
-        return None
-
-
-def _footprints_overlap(left: tuple[int, int, int], right: tuple[int, int, int]) -> bool:
-    """Return whether two ``(storage_ptr, start, end)`` byte spans can touch shared memory."""
-
-    if left[0] != right[0]:
-        return False
-    return left[1] < right[2] and right[1] < left[2]
-
-
-_ALIAS_ENUMERATION_ELEMENT_CAP = 65536
-"""Exact-enumeration bound (inclusive, per view) for the alias proof engine."""
-
-
-def _stride_gcd(value: torch.Tensor) -> int:
-    """Return the gcd of a view's nonzero element strides over nonsingleton dims.
-
-    Zero strides (broadcast) and singleton dimensions contribute no reachable
-    offset variation and drop out. ``0`` means the view touches exactly one
-    element (scalar, all-broadcast, or all-singleton).
-    """
-
-    result = 0
-    for size, stride in zip(value.shape, value.stride()):
-        if int(size) > 1 and int(stride) != 0:
-            result = math.gcd(result, abs(int(stride)))
-    return result
-
-
-def _touched_element_offsets(value: torch.Tensor) -> set[int]:
-    """Enumerate the exact storage element offsets a strided view touches.
-
-    Bounded by ``_ALIAS_ENUMERATION_ELEMENT_CAP`` at the call site; runs under
-    ``pause_logging`` so the integer arithmetic is never captured.
-    """
-
-    with _state.pause_logging():
-        offset = int(value.storage_offset())
-        if value.numel() == 0:
-            return set()
-        if value.dim() == 0:
-            return {offset}
-        index_grid = torch.ones(tuple(value.shape), dtype=torch.int8).nonzero()
-        strides = torch.tensor([int(s) for s in value.stride()], dtype=torch.int64)
-        offsets = (index_grid.to(torch.int64) * strides).sum(dim=1) + offset
-        return {int(item) for item in torch.unique(offsets)}
+# r37 INV-2: the alias/overlap proof engine lives in ``utils.tensor_utils`` --
+# absolute, device-scoped byte intervals, three-valued relation, pure-integer
+# enumeration. The former local implementation keyed "same memory" on
+# ``untyped_storage().data_ptr()`` EQUALITY, which mis-proved disjointness for
+# overlapping views of one external buffer (``torch.from_numpy(arr[:6])`` vs
+# ``arr[2:8]`` -- distinct torch storages, genuinely shared host memory; hon1_1).
+# No local reimplementation or pointer-equality shortcut may reappear here.
 
 
 def _touched_bytes_relation(left: torch.Tensor, right: torch.Tensor) -> str:
-    """Three-valued exact touched-byte relation for two same-storage-capable views.
+    """Shared-engine adapter (see :func:`torchlens.utils.tensor_utils.touched_bytes_relation`)."""
 
-    r35 decision D (corr2_1): returns ``"overlap"`` only on a PROOF of shared
-    touched bytes, ``"disjoint"`` only on a PROOF of disjointness, and
-    ``"unknown"`` otherwise. Proof layers, in order: distinct storages / empty
-    views / disjoint bounding byte intervals (exact); identical geometry
-    (exact overlap); an element-grid-normalized residue/GCD proof (disjointness
-    only -- applicable when both views share element size, so their byte starts
-    are automatically congruent on the element grid and all strides are element
-    multiples); and bounded exact enumeration of touched offsets up to
-    65,536 logical elements per view (byte-range expansion for mixed element
-    sizes). No bounding-box overlap alone is an overlap proof, and no
-    complexity cap is a disjointness proof.
-    """
-
-    left_footprint = _tensor_storage_footprint(left)
-    right_footprint = _tensor_storage_footprint(right)
-    if left_footprint is None or right_footprint is None:
-        return "unknown"
-    if left_footprint[0] != right_footprint[0]:
-        return "disjoint"
-    try:
-        left_numel = int(left.numel())
-        right_numel = int(right.numel())
-        left_esize = int(left.element_size())
-        right_esize = int(right.element_size())
-    except (RuntimeError, TypeError, ValueError):
-        return "unknown"
-    if left_numel == 0 or right_numel == 0:
-        return "disjoint"
-    if not _footprints_overlap(left_footprint, right_footprint):
-        return "disjoint"
-    if (
-        left_esize == right_esize
-        and left_footprint[1] == right_footprint[1]
-        and tuple(left.shape) == tuple(right.shape)
-        and tuple(left.stride()) == tuple(right.stride())
-    ):
-        return "overlap"
-    if left_esize == right_esize:
-        # Element-grid residue proof: every touched element offset of a view is
-        # congruent to its start modulo the gcd of its nonzero strides, so a
-        # start-residue disagreement modulo gcd(g_left, g_right) proves
-        # disjointness. A congruence NEVER proves overlap.
-        left_start = int(left.storage_offset())
-        right_start = int(right.storage_offset())
-        combined = math.gcd(_stride_gcd(left), _stride_gcd(right))
-        if combined == 0:
-            # Both views touch exactly one element inside overlapping bounds.
-            return "overlap" if left_start == right_start else "disjoint"
-        if (left_start - right_start) % combined != 0:
-            return "disjoint"
-    if (
-        left_numel <= _ALIAS_ENUMERATION_ELEMENT_CAP
-        and right_numel <= _ALIAS_ENUMERATION_ELEMENT_CAP
-    ):
-        try:
-            left_offsets = _touched_element_offsets(left)
-            right_offsets = _touched_element_offsets(right)
-        except (RuntimeError, TypeError, ValueError):
-            return "unknown"
-        if left_esize == right_esize:
-            return "overlap" if left_offsets & right_offsets else "disjoint"
-        left_bytes = {
-            offset * left_esize + byte for offset in left_offsets for byte in range(left_esize)
-        }
-        right_bytes = {
-            offset * right_esize + byte for offset in right_offsets for byte in range(right_esize)
-        }
-        return "overlap" if left_bytes & right_bytes else "disjoint"
-    return "unknown"
+    with _state.pause_logging():
+        return touched_bytes_relation(left, right)
 
 
 def _input_alias_topology_checks(
@@ -2046,6 +1918,25 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
         "math_sdp_enabled": ambient.math_sdp_enabled,
     }
     saved = snapshot_ambient_execution_context()
+    # r37 R4 (corr2-3/corr2-2): the recorded DEFAULT DEVICE is entered as a SCOPED
+    # ``with torch.device(recorded)`` mode nested above the caller's existing mode
+    # stack -- never via ``torch.set_default_device`` (which mutates process-global
+    # mode bookkeeping and, measured, leaks/clobbers DeviceContext modes on every
+    # policy: implicit callers gained a mode, nested callers were corrupted). The
+    # context-manager exit IS the restoration mechanism -- correct by construction on
+    # success, divergence, callable exception, and attestation rollback -- so no
+    # restore logic exists for the device at all. A mode-stack length postcondition
+    # (feature-probed introspection) is a belt-and-suspenders tripwire.
+    device_scope: Any = nullcontext()
+    if ambient.default_device is not None:
+        try:
+            device_scope = torch.device(str(ambient.default_device))
+        except (RuntimeError, TypeError, ValueError) as exc:
+            raise _context_unavailable_error("default_device", str(exc)) from exc
+    from .utils._torch_compat import get_current_function_mode_stack
+
+    stack_before = get_current_function_mode_stack()
+    depth_before = len(list(stack_before)) if stack_before is not None else None
     try:
         apply_ambient_execution_context(recorded)
     except RuntimeError as exc:
@@ -2055,9 +1946,20 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
             pass
         raise _context_unavailable_error("ambient_context", str(exc)) from exc
     try:
-        yield
+        with device_scope:
+            yield
     finally:
         apply_ambient_execution_context(saved)
+        if depth_before is not None and sys.exc_info()[0] is None:
+            stack_after = get_current_function_mode_stack()
+            depth_after = len(list(stack_after)) if stack_after is not None else None
+            if depth_after is not None and depth_after != depth_before:
+                raise RuntimeError(
+                    "Internal invariant violation: the run transaction changed the "
+                    f"caller's TorchFunctionMode stack depth ({depth_before} -> "
+                    f"{depth_after}); scoped device-context restoration must be "
+                    "exact on every exit path."
+                )
 
 
 @contextmanager

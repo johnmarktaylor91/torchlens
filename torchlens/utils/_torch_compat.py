@@ -1326,18 +1326,16 @@ def apply_ambient_execution_context(values: dict[str, Any]) -> None:
             raise RuntimeError(f"Recorded default dtype {default_dtype!r} is unavailable.")
         if torch.get_default_dtype() is not dtype:
             torch.set_default_dtype(dtype)
-    default_device = values.get("default_device")
-    if default_device is not None:
-        # Apply only on a REAL difference: ``torch.set_default_device`` installs a
-        # process-level DeviceContext TorchFunctionMode even for the default
-        # "cpu" value, which would perturb subsequent captures (the 2.31.0
-        # meta-device-context regression class). Equality means there is nothing
-        # to restore.
-        current_device = str(getattr(torch, "get_default_device", lambda: "cpu")())
-        if str(default_device) != current_device:
-            if not callable(getattr(torch, "set_default_device", None)):
-                raise RuntimeError("Recorded default device cannot be restored on this runtime.")
-            torch.set_default_device(torch.device(str(default_device)))
+    # r37 R4 (corr2-3/corr2-2): ``default_device`` is deliberately NOT applied here.
+    # ``torch.set_default_device`` mutates the PROCESS-level TorchFunctionMode stack
+    # (installing or replacing a DeviceContext), so setter-based apply/restore leaks
+    # a mode into the caller (measured: a fresh implicit-CPU consumer ended with a
+    # process DeviceContext installed) and corrupts nested caller modes. The recorded
+    # default device is entered as a SCOPED ``with torch.device(recorded)`` context
+    # around the run transaction (see ``_ambient_execution_context_restored``), whose
+    # ``__exit__`` restores the caller's exact mode stack by construction on every
+    # exit path -- no restore logic, no global mutation. The snapshot schema keeps
+    # the ``default_device`` key unchanged.
     deterministic = values.get("deterministic_algorithms")
     if deterministic is not None:
         _require(HAS_DETERMINISTIC_ALGORITHMS_QUERY, "deterministic_algorithms")
