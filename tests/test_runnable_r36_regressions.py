@@ -934,13 +934,26 @@ class TestCudaStagingAndReadiness:
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
     def test_nondeterministic_context_marker_leg(self, tmp_path: Path) -> None:
-        """3-ADJ-9: the R1 attestation-ineligibility marker is exercised E2E."""
+        """3-ADJ-9: the R1 attestation-ineligibility marker is exercised E2E.
 
-        torch.manual_seed(0)
-        model = nn.ConvTranspose2d(2, 2, 3).cuda().eval()
-        x = torch.randn(1, 2, 5, 5, device="cuda")
-        loaded = _save_load(model, x, tmp_path, acts=True)
-        result = loaded.run(inputs=x, on_divergence="return_diverged")
+        The suite conftest enables deterministic algorithms globally (under which
+        CUDA conv_transpose IS deterministic and attesting is honest); the marker
+        leg needs the nondeterministic ambient context the finding described.
+        """
+
+        deterministic_before = torch.are_deterministic_algorithms_enabled()
+        torch.use_deterministic_algorithms(False)
+        try:
+            torch.manual_seed(0)
+            model = nn.ConvTranspose2d(2, 2, 3).cuda().eval()
+            x = torch.randn(1, 2, 5, 5, device="cuda")
+            loaded = _save_load(model, x, tmp_path, acts=True)
+            descriptor = loaded.runnable_descriptor
+            assert descriptor is not None
+            assert descriptor.ambient_context.attestation_ineligible_context is True
+            result = loaded.run(inputs=x, on_divergence="return_diverged")
+        finally:
+            torch.use_deterministic_algorithms(deterministic_before)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
         assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 

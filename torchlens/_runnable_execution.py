@@ -132,7 +132,7 @@ def run_loaded_sparse_trace(
         input_byte_digests = {}
         input_fingerprints = {}
     prepared_state = prepare_runnable_state(trace, seed=seed)
-    slot_values.update(_clone_state_values(prepared_state.slot_values))
+    slot_values.update(_clone_state_values(descriptor, prepared_state.slot_values))
     fork = trace._fork_trace(name=_run_fork_name(trace))
     try:
         return _execute_loaded_sparse_transaction(
@@ -1411,16 +1411,35 @@ def _input_alias_topology_checks(
 
 
 def _clone_state_values(
+    descriptor: SparseRunDescriptor,
     values: Mapping[str, torch.Tensor],
 ) -> dict[str, torch.Tensor]:
-    """Clone run-local state while preserving recorded alias groups."""
+    """Clone run-local state while preserving alias groups, device, and trainability.
 
+    r37 R5/R13: this second clone runs AFTER staging normalized every value to its
+    slot device, so it must not strip anything staging established -- ``clone()``
+    keeps the device; alias groups keep one shared clone (identity-keyed); and the
+    RECORDED per-slot ``trainable`` bit is restored on the clone (state semantics
+    come from the recorded binding, unlike runtime INPUTS whose mirror follows the
+    live leaf -- see ``_runtime_mirror_clone``).
+    """
+
+    trainable_by_slot = {
+        slot.slot_id: bool(slot.state_binding.trainable)
+        for slot in descriptor.tensor_slots
+        if slot.state_binding is not None
+    }
     clones_by_identity: dict[int, torch.Tensor] = {}
     cloned: dict[str, torch.Tensor] = {}
     for slot_id, value in values.items():
         clone = clones_by_identity.get(id(value))
         if clone is None:
             clone = value.detach().clone()
+            if trainable_by_slot.get(slot_id, False) and not clone.requires_grad:
+                try:
+                    clone.requires_grad_(True)
+                except RuntimeError:
+                    pass  # non-differentiable dtype cannot carry the trainable bit
             clones_by_identity[id(value)] = clone
         cloned[slot_id] = clone
     return cloned
@@ -1806,6 +1825,27 @@ def _state_contract_checks(
                     ("slot_id", slot.slot_id),
                     ("expected_shape", repr(slot.shape)),
                     ("actual_shape", repr(tuple(value.shape))),
+                ),
+            )
+        )
+        # r37 R5 in-transaction tripwire: staging is the sole placement authority,
+        # so a device mismatch HERE is a broken staging/state hook -- a typed state
+        # failure before any callable, never a mid-call runtime_signature_drift.
+        device_ok = value.device.type == slot.device_type and (
+            slot.device_index is None
+            or value.device.index is None
+            or value.device.index == slot.device_index
+        )
+        checks.append(
+            _contract_check(
+                f"state_device:{slot.slot_id}",
+                device_ok,
+                RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+                f"State slot {slot.slot_id!r} was not staged to its recorded device.",
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("expected_device", f"{slot.device_type}:{slot.device_index}"),
+                    ("actual_device", str(value.device)),
                 ),
             )
         )

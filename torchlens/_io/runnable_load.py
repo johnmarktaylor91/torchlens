@@ -495,6 +495,58 @@ def attach_sparse_run_readiness(
     return report
 
 
+def _device_capability_diagnostics(
+    descriptor: SparseRunDescriptor,
+) -> tuple[RunnableDiagnostic, ...]:
+    """Capability-check every recorded slot device WITHOUT allocation (r37 R5).
+
+    Validates device class existence and index bounds against this runtime. Only
+    accelerator classes with runtime probes are gated; the check must never
+    allocate payload memory or initialize a device context beyond the cheap
+    availability query.
+    """
+
+    diagnostics: list[RunnableDiagnostic] = []
+    seen: set[tuple[str, int | None]] = set()
+    for slot in descriptor.tensor_slots:
+        key = (slot.device_type, slot.device_index)
+        if key in seen:
+            continue
+        seen.add(key)
+        unavailable: str | None = None
+        if slot.device_type == "cuda":
+            if not torch.cuda.is_available():
+                unavailable = "CUDA is unavailable on this runtime"
+            elif slot.device_index is not None and slot.device_index >= torch.cuda.device_count():
+                unavailable = (
+                    f"CUDA device index {slot.device_index} exceeds "
+                    f"device_count()={torch.cuda.device_count()}"
+                )
+        elif slot.device_type == "mps":
+            mps_module = getattr(torch.backends, "mps", None)
+            if mps_module is None or not bool(mps_module.is_available()):
+                unavailable = "MPS is unavailable on this runtime"
+        if unavailable is not None:
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+                    f"Recorded slot {slot.slot_id!r} requires device "
+                    f"{slot.device_type}"
+                    + (f":{slot.device_index}" if slot.device_index is not None else "")
+                    + f": {unavailable}. The artifact stays loadable for analysis; "
+                    "execution requires a runtime exposing the recorded device.",
+                    descriptor=descriptor,
+                    detection_stage="readiness_device_capability",
+                    details=(
+                        ("slot_id", slot.slot_id),
+                        ("device_type", slot.device_type),
+                        ("device_index", repr(slot.device_index)),
+                    ),
+                )
+            )
+    return tuple(diagnostics)
+
+
 def preflight_sparse_run_descriptor(
     descriptor: SparseRunDescriptor,
 ) -> tuple[ReadinessReport, Mapping[str, Callable[..., Any]] | None]:
@@ -513,6 +565,19 @@ def preflight_sparse_run_descriptor(
     """
 
     version_diagnostics = _descriptor_version_diagnostics(descriptor)
+    device_diagnostics = _device_capability_diagnostics(descriptor)
+    if device_diagnostics:
+        # r37 R5 readiness gate: recorded slot devices are capability-checked
+        # WITHOUT allocating anything -- a CPU-only host loads a CUDA artifact for
+        # analysis fine, reports UNAVAILABLE here, and ``.run()`` refuses typed
+        # before any callable resolution or payload transfer.
+        report = _readiness_report(
+            descriptor,
+            records=(),
+            diagnostics=(*version_diagnostics, *device_diagnostics),
+            ready=False,
+        )
+        return report, None
     if descriptor.backend != "torch":
         diagnostic = _diagnostic(
             RunnableErrorCode.UNSUPPORTED_BACKEND_REPLAY,
