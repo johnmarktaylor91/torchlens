@@ -1247,6 +1247,26 @@ HAS_CUDNN_FLAGS: bool = _probe_cudnn_flags()
 HAS_SDP_TOGGLES: bool = _probe_sdp_toggles()
 
 
+def tensor_version_or_none(tensor: Any) -> int | None:
+    """Return ``tensor._version`` for TorchLens-internal bookkeeping, or ``None``.
+
+    r37 hon1_4: inference tensors REJECT ``_version`` with ``RuntimeError``
+    ("Inference tensors do not track version counter"), which ``getattr(...,
+    None)`` does not swallow -- every capture under ambient
+    ``torch.inference_mode()`` crashed on TL's own dedup/reference/version
+    bookkeeping reads. This helper is the ONE safe accessor for every
+    TorchLens-owned ``_version`` read; an unavailable version degrades the
+    optimization (dedup miss / conservative mutation fallback), never aborts
+    capture. Genuine USER ``_version`` reads keep their native torch behavior.
+    """
+
+    try:
+        version = tensor._version
+    except (RuntimeError, AttributeError, NotImplementedError, TypeError):
+        return None
+    return int(version) if isinstance(version, int) else None
+
+
 def snapshot_ambient_execution_context() -> dict[str, Any]:
     """Snapshot the capture-scoped ambient backend execution context (decision E).
 

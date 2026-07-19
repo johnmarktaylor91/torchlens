@@ -41,7 +41,7 @@ from .aliasing import (
 from .buffer_writes import resolve_registered_buffer_address
 from . import module_stack as _mstack
 from ...fastlog._halt import HaltSignal
-from ...utils._torch_compat import torch_structseq_field_names
+from ...utils._torch_compat import tensor_version_or_none, torch_structseq_field_names
 from ...utils.introspection import (
     _get_code_context,
     _get_tensors_and_params_from_obj,
@@ -3155,7 +3155,7 @@ def _tag_tensor_and_track_variations(
         # spuriously records a ``_version`` fact for every model, falsely diverging any
         # runtime input whose version counter differs from capture (an over-trigger).
         with internal_scalar_read():
-            version = getattr(out, "_version", None)
+            version = tensor_version_or_none(out)
         if version is not None:
             _LABEL_VERSION_SNAPSHOT[out] = version
     _add_tensor_backward_hook(self, out, out_label)
@@ -4023,7 +4023,7 @@ def _log_output_tensor_info(
         # still detected while a non-mutating identity return (``x.cpu()`` / ``x.contiguous()``,
         # which has no mutation-signature name) is not, and does not crash.
         baseline = _LABEL_VERSION_SNAPSHOT.get(t)
-        current_version = getattr(t, "_version", None)
+        current_version = tensor_version_or_none(t)
         if baseline is not None and current_version is not None:
             fields_dict["is_inplace"] = current_version != baseline
         else:

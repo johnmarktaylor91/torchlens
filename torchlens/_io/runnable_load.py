@@ -195,11 +195,78 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
     )
 
 
+class ContextFieldInvalidError(ValueError):
+    """A persisted execution-context field failed closed-vocabulary validation (INV-4).
+
+    Raised at PARSE time -- before readiness, staging, or any torch setter/callable
+    can observe the attacker-controllable bytes -- and surfaced as the frozen
+    ``context_field_invalid`` readiness diagnostic.
+    """
+
+    def __init__(self, field: str, detail: str) -> None:
+        super().__init__(f"Persisted execution-context field {field!r} is invalid: {detail}")
+        self.field = field
+        self.detail = detail
+
+
+_MATMUL_PRECISION_VOCABULARY = frozenset({"highest", "high", "medium"})
+"""Closed vocabulary for ``float32_matmul_precision`` (torch's exact accepted set)."""
+
+_DEVICE_TYPE_VOCABULARY = frozenset(
+    {
+        "cpu",
+        "cuda",
+        "meta",
+        "mps",
+        "xpu",
+        "hpu",
+        "mtia",
+        "ipu",
+        "xla",
+        "vulkan",
+        "lazy",
+        "privateuseone",
+    }
+)
+"""Closed vocabulary of device TYPE literals a persisted context may name."""
+
+
+def _validated_device_literal(field: str, raw: str) -> str:
+    """Validate a persisted device literal against the closed type[:index] grammar."""
+
+    device_type, separator, index = raw.partition(":")
+    if device_type not in _DEVICE_TYPE_VOCABULARY:
+        raise ContextFieldInvalidError(
+            field, f"device type {device_type!r} is outside the closed device vocabulary"
+        )
+    if separator and not index.isdigit():
+        raise ContextFieldInvalidError(
+            field, f"device index {index!r} is not a nonnegative integer"
+        )
+    return raw
+
+
+def _validated_dtype_literal(field: str, raw: str) -> str:
+    """Validate a persisted ``torch.<dtype>`` literal against the live dtype table."""
+
+    name = raw.removeprefix("torch.")
+    resolved = getattr(torch, name, None)
+    if not isinstance(resolved, torch.dtype):
+        raise ContextFieldInvalidError(field, f"{raw!r} does not name a torch dtype")
+    return raw
+
+
 def _parse_ambient_context(value: Mapping[str, Any]) -> AmbientExecutionContext:
     """Parse the required v2 capture-scoped ambient execution context.
 
     Every field must be present explicitly; ``None`` means the producing runtime
-    did not expose that control. Missing keys raise (fail closed).
+    did not expose that control. Missing keys raise (fail closed). r37 INV-4:
+    every VALUE validates here against a closed vocabulary -- device literals
+    against the type[:index] grammar, dtype literals against the live dtype
+    table, matmul precision against torch's exact accepted set, Booleans
+    strictly -- so no torch setter (and no callable) ever receives an
+    unvalidated persisted byte. The ambient-apply guards remain as a second
+    belt.
     """
 
     def _optional_bool_field(name: str) -> bool | None:
@@ -207,7 +274,9 @@ def _parse_ambient_context(value: Mapping[str, Any]) -> AmbientExecutionContext:
         if raw is None:
             return None
         if not isinstance(raw, bool):
-            raise TypeError(f"ambient_context.{name} must be a boolean or null.")
+            raise ContextFieldInvalidError(
+                f"ambient_context.{name}", f"{raw!r} is not a strict boolean or null"
+            )
         return raw
 
     def _optional_str_field(name: str) -> str | None:
@@ -216,10 +285,20 @@ def _parse_ambient_context(value: Mapping[str, Any]) -> AmbientExecutionContext:
             return None
         return _string_item(raw, f"ambient_context.{name}")
 
+    precision = _optional_str_field("float32_matmul_precision")
+    if precision is not None and precision not in _MATMUL_PRECISION_VOCABULARY:
+        raise ContextFieldInvalidError(
+            "ambient_context.float32_matmul_precision",
+            f"{precision!r} is outside {sorted(_MATMUL_PRECISION_VOCABULARY)}",
+        )
     return AmbientExecutionContext(
-        default_dtype=_string(value, "default_dtype"),
-        default_device=_string(value, "default_device"),
-        float32_matmul_precision=_optional_str_field("float32_matmul_precision"),
+        default_dtype=_validated_dtype_literal(
+            "ambient_context.default_dtype", _string(value, "default_dtype")
+        ),
+        default_device=_validated_device_literal(
+            "ambient_context.default_device", _string(value, "default_device")
+        ),
+        float32_matmul_precision=precision,
         deterministic_algorithms=_optional_bool_field("deterministic_algorithms"),
         deterministic_algorithms_warn_only=_optional_bool_field(
             "deterministic_algorithms_warn_only"
@@ -244,9 +323,18 @@ def _parse_call_execution_context(value: Mapping[str, Any]) -> CallExecutionCont
         dtype = item.get("dtype")
         autocast_entries.append(
             AutocastDeviceContext(
-                device_type=_string(item, "device_type"),
+                device_type=_validated_device_literal(
+                    "execution_context.autocast.device_type", _string(item, "device_type")
+                ),
                 enabled=_boolean(item, "enabled"),
-                dtype=None if dtype is None else _string_item(dtype, "autocast.dtype"),
+                dtype=(
+                    None
+                    if dtype is None
+                    else _validated_dtype_literal(
+                        "execution_context.autocast.dtype",
+                        _string_item(dtype, "autocast.dtype"),
+                    )
+                ),
             )
         )
     return CallExecutionContext(
@@ -359,6 +447,29 @@ def attach_sparse_run_readiness(
         return report
     try:
         descriptor = parse_sparse_run_descriptor(raw_descriptor)
+    except ContextFieldInvalidError as exc:
+        # r37 INV-4: an invalid persisted context VALUE is its own frozen refusal
+        # class -- refused at parse, before readiness/staging, so no torch setter
+        # or resolved callable ever observes the bytes.
+        diagnostic = _diagnostic(
+            RunnableErrorCode.CONTEXT_FIELD_INVALID,
+            str(exc),
+            backend=str(getattr(trace, "backend", "unknown")),
+            detection_stage="context_parse_validation",
+            details=(("context_field", exc.field), ("reason", exc.detail)),
+        )
+        report = ReadinessReport(
+            status=ReadinessStatus.UNAVAILABLE,
+            provider=RunProvider.LOADED_SPARSE,
+            backend=str(getattr(trace, "backend", "unknown")),
+            capability=cast(str | None, raw_descriptor.get("capability")),
+            resolver_records=(),
+            state_sources_available=(),
+            witness_completeness=None,
+            diagnostics=(diagnostic,),
+        )
+        _store_readiness(trace, None, report, None)
+        return report
     except (KeyError, TypeError, ValueError) as exc:
         diagnostic = _diagnostic(
             RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,

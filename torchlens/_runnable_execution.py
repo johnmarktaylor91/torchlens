@@ -40,6 +40,7 @@ from .utils.rng import (
     restore_host_rng,
     snapshot_host_rng,
 )
+from .utils._torch_compat import tensor_version_or_none
 from .utils.tensor_utils import touched_bytes_relation
 from .runnable import (
     ActivationPayloadLayerDescriptor,
@@ -980,6 +981,38 @@ def _bind_runtime_inputs(
                 slot,
                 f"Runtime input leaf is {type(value).__name__}, expected torch.Tensor.",
             )
+        # r37 corr2-6 phase 0: EXACT-type admission precedes every dispatchable
+        # property read. A tensor SUBCLASS routes ``shape``/``dtype``/``device``/
+        # ``names`` through ``__torch_function__``, so reading any of them before
+        # this gate would execute user subclass code and leak its raw exception in
+        # place of the typed hard-precondition refusal. Diagnostics use ONLY
+        # ``type(value).__qualname__`` -- never a property.
+        if type(value) not in {torch.Tensor, torch.nn.Parameter}:
+            subclass_check = _contract_check(
+                f"input_layout:{slot.slot_id}",
+                False,
+                RunnableErrorCode.INPUT_TREE_MISMATCH,
+                "Runtime input is a tensor SUBCLASS the sparse replay cannot "
+                "faithfully reproduce; runnable capture records only plain "
+                "strided torch.Tensor/Parameter leaves, so such an input fails "
+                "closed (typed) before any property dispatch, under every "
+                "divergence policy.",
+                affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("tensor_class", type(value).__qualname__),
+                ),
+            )
+            diagnostic = subclass_check.diagnostic
+            raise PathDivergenceError(
+                diagnostic.message
+                if diagnostic is not None
+                else "Unsupported tensor-subclass input.",
+                code=RunnableErrorCode.INPUT_TREE_MISMATCH.value,
+                path_faithfulness=PathFaithfulness.DIVERGED,
+                first_mismatch=diagnostic,
+                contract_check=subclass_check,
+            )
         raw_values[slot.slot_id] = value
         # Phase-1 facts are exception-safe: exotic layouts (nested tensors) can
         # refuse even a ``sizes()`` read, which must surface as a failed check,
@@ -1118,8 +1151,34 @@ def _bind_runtime_inputs(
     for slot in input_slots:
         raw = raw_values.get(slot.slot_id)
         if isinstance(raw, torch.Tensor):
-            values[slot.slot_id] = raw.detach().clone()
+            values[slot.slot_id] = _runtime_mirror_clone(raw)
     return values, tuple(checks), input_alias_unresolved
+
+
+def _runtime_mirror_clone(raw: torch.Tensor) -> torch.Tensor:
+    """Defensively clone one leaf while MIRRORING its runtime autograd metadata.
+
+    r37 corr2-7 (R13): ``detach().clone()`` strips a leaf's ``requires_grad``, so
+    the recorded ``grad_enabled=True`` call context became semantically inert (no
+    autograd history on replay) and the exact original input was needlessly
+    attestation-ineligible (fingerprint flag mismatch). The runtime mirror restores
+    ``raw.requires_grad`` on the clone where legal; fingerprints stay on the
+    executed-clone basis, so an intentionally changed-flag input remains a physical
+    input change (attestation ``not_applicable``), never normalized away. This is
+    the ONE second-clone helper -- every input-bind/state-clone/staging site routes
+    through it or the staging helper's recorded-trainable rule.
+    """
+
+    clone = raw.detach().clone()
+    if bool(raw.requires_grad) and not clone.requires_grad:
+        try:
+            clone.requires_grad_(True)
+        except RuntimeError:
+            # Non-differentiable dtype cannot require grad; the raw flag could not
+            # have been set either, so this is unreachable in practice -- degrade
+            # to the detached clone rather than aborting the bind.
+            pass
+    return clone
 
 
 def _model_input_version_closure(descriptor: SparseRunDescriptor) -> set[str]:
@@ -1879,11 +1938,19 @@ def _pre_call_contract_checks(
             ),
         ),
     )
-    versions = {
-        argument.slot_id: slot_values[argument.slot_id]._version
-        for argument in call.tensor_arguments
-        if argument.slot_id in slot_values
-    }
+    # r37 hon1_4: inference tensors carry NO version counter (reading ``_version``
+    # raises), so a slot whose version is unavailable records NO baseline. The
+    # mutation tripwire then enforces only its version-independent legs for that
+    # slot (alias identity for in-place calls); value fidelity remains guarded by
+    # the output comparison and numeric attestation layers.
+    versions: dict[str, int] = {}
+    for argument in call.tensor_arguments:
+        value = slot_values.get(argument.slot_id)
+        if value is None:
+            continue
+        version = tensor_version_or_none(value)
+        if version is not None:
+            versions[argument.slot_id] = version
     return checks, versions
 
 
@@ -2345,7 +2412,7 @@ def _mutation_contract_checks(
     changed = {
         slot_id
         for slot_id, before in before_versions.items()
-        if slot_id in slot_values and slot_values[slot_id]._version != before
+        if slot_id in slot_values and tensor_version_or_none(slot_values[slot_id]) != before
     }
     if not call.is_inplace:
         non_state_changed = changed - state_slot_ids
@@ -2382,10 +2449,14 @@ def _mutation_contract_checks(
         and isinstance(output_value, torch.Tensor)
         and (input_value is output_value or input_value.data_ptr() == output_value.data_ptr())
     )
+    # Version leg: enforced only when a baseline exists. An inference tensor has no
+    # version counter, so its in-place relation is proven by alias identity alone
+    # (hon1_4); a versioned tensor keeps the full version-bump requirement.
+    version_leg = input_slot_id in changed if input_slot_id in before_versions else True
     return (
         _contract_check(
             f"mutation:{call.call_id}",
-            input_slot_id in changed and aliases,
+            version_leg and aliases,
             RunnableErrorCode.MUTATION_VERSION_MISMATCH,
             f"In-place call {call.call_id!r} violated its alias/version expectation.",
             affected_op_labels=call.op_labels,

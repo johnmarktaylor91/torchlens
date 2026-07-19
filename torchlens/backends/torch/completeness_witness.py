@@ -34,6 +34,7 @@ import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 from torch.utils._python_dispatch import TorchDispatchMode
 
+from ...utils._torch_compat import tensor_version_or_none
 from ... import _state
 from ..._errors import TorchLensCaptureGapWarning
 from ._tl import get_buffer_address, get_tensor_label, get_tensor_meta
@@ -2234,7 +2235,7 @@ def _snapshot_writeback_source(state: _WitnessState, source: torch.Tensor) -> No
 
     try:
         with _state.pause_logging():
-            version = getattr(source, "_version", None)
+            version = tensor_version_or_none(source)
             before = _whole_storage_uint8(source).clone()
     except (RuntimeError, TypeError, NotImplementedError):
         _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
@@ -2308,7 +2309,7 @@ def _sample_writeback_at_consumption(
                 try:
                     if source.untyped_storage().data_ptr() not in consumed_ptrs:
                         continue
-                    if getattr(source, "_version", None) != version:
+                    if tensor_version_or_none(source) != version:
                         continue
                     if not torch.equal(
                         _whole_storage_uint8(source), before

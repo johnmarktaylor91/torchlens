@@ -53,6 +53,8 @@ from typing import (
 
 import torch
 
+from ..utils._torch_compat import tensor_version_or_none
+
 from .._deprecations import MISSING
 from .._io import (
     FieldPolicy,
@@ -757,7 +759,7 @@ def _stamp_reference_out(
     if save_mode != "reference":
         return
     annotations["save_mode"] = "reference"
-    annotations["saved_out_version"] = getattr(raw_out, "_version", None)
+    annotations["saved_out_version"] = tensor_version_or_none(raw_out)
 
 
 def _validate_reference_out_not_mutated(state: dict[str, Any]) -> None:
@@ -770,7 +772,7 @@ def _validate_reference_out_not_mutated(state: dict[str, Any]) -> None:
     if not isinstance(out, torch.Tensor):
         return
     saved_version = annotations.get("saved_out_version")
-    current_version = getattr(out, "_version", None)
+    current_version = tensor_version_or_none(out)
     if saved_version is not None and current_version != saved_version:
         label = state.get("label") or state.get("layer_label") or state.get("_label_raw")
         raise MutatedReferenceError(
@@ -867,7 +869,7 @@ def _dedup_saved_activation_out(
         setattr(trace, "_out_identity_cache", identity_cache)
 
     source_key = id(source_tensor)
-    source_version = getattr(source_tensor, "_version", None)
+    source_version = tensor_version_or_none(source_tensor)
     cached = identity_cache.get(source_key)
     if cached is not None:
         cached_source, cached_label, cached_out, cached_version = cached

@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any, Iterator, Protocol, cast
 
 import torch
 
+from ..utils._torch_compat import tensor_version_or_none
+
 from ..fastlog.exceptions import PredicateError
 from ..fastlog.types import (
     ActivationRecord,
@@ -912,7 +914,7 @@ def _reference_annotations(save_mode: str, payload: Any) -> dict[str, Any]:
         return {}
     return {
         "save_mode": "reference",
-        "saved_out_version": getattr(payload, "_version", None),
+        "saved_out_version": tensor_version_or_none(payload),
     }
 
 

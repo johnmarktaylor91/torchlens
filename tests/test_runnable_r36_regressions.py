@@ -843,9 +843,9 @@ class TestCorr26SubclassAdmission:
         exotic = torch.Tensor._make_subclass(_PropertyTrapTensor, x, False)
         with pytest.raises(PathDivergenceError) as excinfo:
             loaded.run(inputs=(exotic, x.clone()), on_divergence=policy)
-        assert "input_layout" in str(excinfo.value) or "input_tree_mismatch" in str(
-            getattr(excinfo.value, "code", "")
-        )
+        # The TYPED hard-precondition refusal, never the subclass's raw trap error.
+        assert "subclass" in str(excinfo.value).lower()
+        assert "property trap" not in str(excinfo.value)
 
 
 # ======================================================================================
@@ -1134,7 +1134,11 @@ class TestContextFieldValidation:
         x = torch.randn(2, 4)
         trace = tl.trace(model, x, capture=_CAPTURE)
         bundle = tmp_path / "ctx.tlspec"
-        trace.save(bundle, level="runnable", include_weights=True)
+        # Value-free descriptor: a weight payload would make the load hard-fail on
+        # the missing parsed descriptor before readiness can carry the context
+        # diagnostic (still a pre-callable refusal, but the pinned surface here is
+        # the typed context_field_invalid readiness).
+        trace.save(bundle, level="runnable")
         manifest_path = bundle / "manifest.json"
         manifest = json.loads(manifest_path.read_text())
         mutate(manifest)
