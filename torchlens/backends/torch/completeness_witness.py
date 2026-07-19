@@ -619,6 +619,11 @@ def record_runnable_input_storage_sites(
 
     if not tensor_leaves:
         return
+    # INV-2 annotation (r37): this map keys candidate input-leaf sites by storage
+    # POINTER for attribution-only lookups (a ``.data``/view metadata read resolves
+    # to its leaf). A pointer miss fails CLOSED (no attribution -> the fail-closed
+    # nets keep the run honest), never proves disjointness, so identity keying is
+    # sound without the absolute-interval engine.
     storage_sites: dict[int, list[Any]] = {}
     # ``pause_logging`` suppresses OP CAPTURE (``storage_offset`` / ``untyped_storage`` are
     # torch-function-wrapped and would otherwise be logged as spurious ops, shifting call ids);
@@ -2293,6 +2298,11 @@ def _sample_writeback_at_consumption(
 
     if not state.writeback_watch and not _has_state_toctou_watch(state.trace):
         return
+    # INV-2 annotation (r37): the ``data_ptr`` matching below is ATTRIBUTION-ONLY
+    # identity -- it decides which watched source a consuming op MIGHT touch, and a
+    # missed match merely defers to the end-of-forward WHOLE-STORAGE content compare
+    # (which needs no pointer reasoning at all). Pointer identity is never used as a
+    # disjointness proof here, so the absolute-interval engine is not required.
     try:
         with _state.pause_logging():
             consumed_ptrs: set[int] = set()
