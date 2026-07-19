@@ -15,14 +15,23 @@ re-entry, so the nested op is genuinely invisible to the witness and cannot be
 detected. This is an adversarial construction, not a capture bug -- a normal
 model validating its own forward pass cannot trigger it. See docs/LIMITATIONS.md.
 
-Thread posture (r41 hon2_1): the aten census is OWNER-thread-scoped (a
+Thread posture (r43, JMT-locked): the aten census is OWNER-thread-scoped (a
 ``TorchDispatchMode`` is thread-local), while the mode-independent tensor->host
 escape belt (method/module/property/storage patches) fires on EVERY thread and is
-the designated CROSS-thread observer. Each belt observer routes through the
-3-class thread gate (:func:`_escape_thread_class`): owner unchanged; a thread
-started IN-WINDOW records through the full fail-closed ladder; a PRE-EXISTING
-(foreign) thread records positive attributions only, so a benign background
-thread never ceilings a capture.
+the designated CROSS-thread observer. The belt collapses to ONE fail-closed
+owner-vs-non-owner rule: the OWNER thread keeps the precise attribution ladder
+(gated on ``_state._logging_enabled``); ANY NON-OWNER thread that TOUCHES A
+CAPTURED TENSOR during the armed forward window permanently ceilings the artifact
+to ``unverifiable`` (+ ``not_applicable``). Captured membership is decided by
+:func:`_nonowner_touch_is_captured` (label OR registered-state OR dispatch-origin
+ledger OR STORAGE IDENTITY via the true-original ``untyped_storage``/``data_ptr``
+accessors that bypass every torchlens wrapper). The non-owner gate keys on the
+per-capture ``belt_armed`` flag, NEVER the racy ``_logging_enabled`` toggle (which
+the owner flips constantly under ``pause_logging``). A benign non-owner thread that
+never touches a captured tensor -- or that only reads its OWN uncaptured tensors --
+records nothing and stays ``verified``. This ONE rule subsumes the r42 hon2_1
+(raw ``_thread``), hon2_2 (owner-derived alias on a worker), hon2_3 (the
+``pause_logging`` toggle race), and hon2_4 (the string hook) findings.
 """
 
 from __future__ import annotations
@@ -44,7 +53,6 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ...utils._torch_compat import tensor_version_or_none
-from ...utils.rng import active_in_window_thread_idents
 from ... import _state
 from ..._errors import TorchLensCaptureGapWarning
 from ._tl import get_buffer_address, get_tensor_label, get_tensor_meta
@@ -243,6 +251,12 @@ class _WitnessState:
     census: bool = True
     record_escapes: bool = False
     ledger: bool = False
+    # r43: armed for the entire forward window (SAME lifetime as
+    # ``_observe_invisible_host_escapes``), cleared in its ``finally``. The
+    # non-owner captured-tensor belt gates on THIS flag, never the racy global
+    # ``_state._logging_enabled`` (which the owner flips under ``pause_logging``),
+    # closing the hon2_3 pause-race coin-flip.
+    belt_armed: bool = False
     # (source_tensor, version_at_escape, byte_snapshot) for each mutable zero-copy alias
     # (``numpy`` / ``__array__``) handed to the host this forward. Checked for host write-back
     # at forward end. Strong refs keep the aliased storage alive until the comparison.
@@ -1190,6 +1204,169 @@ def host_escape_has_raw_pointer(trace: Any) -> bool:
     return trace in _HOST_ESCAPE_RAW_POINTER
 
 
+# --- r43 CLASS 2: non-owner captured-tensor touch (ONE fail-closed rule) --------------------
+#
+# JMT-locked: ANY non-owner thread that TOUCHES A CAPTURED TENSOR during the armed forward
+# window permanently ceilings the artifact to UNVERIFIABLE (+ NOT_APPLICABLE). This subsumes
+# the whole r41 in-window/foreign 3-class distinction (which let raw ``_thread`` and
+# pre-existing workers slip through). Captured membership is decided by
+# :func:`_nonowner_touch_is_captured`; the storage-identity catch-all uses the true-original
+# accessors captured at import (below), which bypass every torchlens wrapper.
+
+_HOST_ESCAPE_CROSS_THREAD_CAPTURED: "weakref.WeakSet[Any]" = weakref.WeakSet()
+"""Traces where a NON-OWNER thread touched a CAPTURED tensor during the armed window (r43).
+
+The single JMT-locked concurrency ceiling: a captured tensor's Python-visible value/pointer/
+string/metadata escape (or a positively-known captured-derived alias) observed on any thread
+other than the capture owner is outside the single-owner-thread replay model, so the runnable
+producer folds it into an INCOMPLETE witness downgrade -> UNVERIFIABLE + NOT_APPLICABLE.
+Presence-only. A non-owner thread that never touches a captured tensor records nothing.
+"""
+
+
+def host_escape_has_cross_thread_captured_tensor(trace: Any) -> bool:
+    """Return whether a non-owner thread touched a captured tensor during the window (r43)."""
+
+    return trace in _HOST_ESCAPE_CROSS_THREAD_CAPTURED
+
+
+_CAPTURED_STORAGE_PTRS: "weakref.WeakKeyDictionary[Any, dict[int, tuple[weakref.ref[Any], ...]]]" = weakref.WeakKeyDictionary()
+"""Per-trace ptr -> LIVE producing-tensor weakrefs for the activation storage-identity catch-all (r43).
+
+Populated by :func:`_register_dispatch_result_origins` (owner thread) so the storage-identity
+catch-all recognizes a ``.data`` / view / detach alias of a captured ACTIVATION touched off-owner.
+Input-leaf pointers (``_RUNNABLE_INPUT_STORAGE_SITES``) and parameter pointers
+(``_param_storage_addresses``) are held ALIVE for the whole capture, so their addresses never
+churn and a FLAT int set is sound for them. Transient activation storages, by contrast, are freed
+mid-forward and their addresses REUSED by unrelated (possibly worker-thread) allocations -- a flat
+int set would then false-positive a benign own-tensor touch (hon2_4 over-trigger). Storing a WEAKREF
+to each producing tensor makes the check LIVENESS-VERIFIED: a ptr matches only when a captured
+tensor is STILL ALIVE and STILL occupies that address (i.e. the touched tensor genuinely aliases
+it); a freed-then-reused address has only dead weakrefs and never matches. Meta/storageless tensors
+(ptr 0 -> ``None``) are never recorded.
+"""
+
+# True-original storage accessors captured at IMPORT (before any per-forward escape patch
+# replaces ``torch.Tensor.untyped_storage`` / ``torch.UntypedStorage.data_ptr``). Calling these
+# bypasses ALL torchlens wrappers -- no op, no dispatch, no toggle, no observer recursion -- so a
+# non-owner thread can test storage identity with zero side effects (probe:
+# ``calls_through_public_patches=[]``). ``TensorBase.untyped_storage`` is NOT patched (the belt
+# shadows ``torch.Tensor`` only), and ``UntypedStorage.data_ptr`` IS patched per-forward, so both
+# originals must be snapshotted here.
+_ORIG_TENSORBASE_UNTYPED_STORAGE = torch._C.TensorBase.untyped_storage
+_ORIG_UNTYPED_STORAGE_DATA_PTR = torch.UntypedStorage.data_ptr
+
+
+def _raw_storage_ptr_no_observe(tensor: Any) -> int | None:
+    """Return a tensor's untyped-storage data pointer via the true originals, ptr 0 -> None (r43).
+
+    GIL-atomic, wrapper-free, side-effect-free: it never fires an escape observer, a dispatch,
+    or a logging toggle, so it is safe to call from ANY thread. ``0`` (a meta / storageless
+    tensor) normalizes to ``None`` so distinct storageless tensors never alias one synthetic
+    pointer.
+    """
+
+    if not isinstance(tensor, torch.Tensor):
+        return None
+    try:
+        storage = _ORIG_TENSORBASE_UNTYPED_STORAGE(tensor)
+        ptr = _ORIG_UNTYPED_STORAGE_DATA_PTR(storage)
+    except (RuntimeError, TypeError, NotImplementedError, AttributeError):
+        return None
+    return int(ptr) if ptr else None
+
+
+def _nonowner_ptr_is_captured(state: "_WitnessState", ptr: int) -> bool:
+    """Return whether a storage pointer belongs to a captured input / param / activation (r43)."""
+
+    trace = state.trace
+    param_addresses = getattr(trace, "_param_storage_addresses", None)
+    if param_addresses and ptr in param_addresses:
+        return True
+    input_sites = _RUNNABLE_INPUT_STORAGE_SITES.get(trace)
+    if input_sites is not None and ptr in input_sites:
+        return True
+    # Activation storage identity is LIVENESS-VERIFIED: the ptr matches only when a captured
+    # producing tensor is still alive AND still occupies this exact address (so the touched
+    # tensor genuinely aliases it). A freed-then-reused address has only dead weakrefs -> no match
+    # (no over-trigger on a benign own-tensor allocation that inherited a stale address).
+    captured = _CAPTURED_STORAGE_PTRS.get(trace)
+    if captured is not None:
+        for producer_ref in captured.get(ptr, ()):
+            producer = producer_ref()
+            if producer is not None and _raw_storage_ptr_no_observe(producer) == ptr:
+                return True
+    return False
+
+
+def _nonowner_touch_is_captured(state: "_WitnessState", tensor: Any) -> bool:
+    """Return whether a non-owner thread's touched tensor is a CAPTURED tensor (r43).
+
+    Captured membership (all reads GIL-atomic; NO torch op, NO ``pause_logging``, NO observer
+    recursion): a capture label OR a registered param/buffer state address OR a dispatch-origin
+    ledger hit (a previously-registered owner-derived alias) OR STORAGE IDENTITY -- the tensor's
+    true-original storage pointer is a captured input-leaf, parameter, or activation pointer. A
+    benign own-tensor read (no label, no state, no ledger entry, unrelated storage) returns
+    ``False`` and never ceilings the capture.
+    """
+
+    if not isinstance(tensor, torch.Tensor):
+        return False
+    trace = state.trace
+    if isinstance(get_tensor_label(tensor), str):
+        return True
+    meta = get_tensor_meta(tensor)
+    if meta is not None and getattr(meta, "address", None) is not None:
+        return True
+    if get_buffer_address(tensor) is not None:
+        return True
+    registry = _DISPATCH_TENSOR_ORIGINS.get(trace)
+    if registry is not None and registry.get(tensor) is not None:
+        return True
+    ptr = _raw_storage_ptr_no_observe(tensor)
+    if ptr is not None and _nonowner_ptr_is_captured(state, ptr):
+        return True
+    return False
+
+
+def _nonowner_escape_observe(state: "_WitnessState", tensor: Any) -> None:
+    """Ceiling the capture if a non-owner thread touched a captured tensor (r43).
+
+    The ONE non-owner belt action: NO origin resolution, NO ``pause_logging``, NO precise
+    witness -- a captured-tensor touch off-owner is outside the single-owner-thread replay
+    model and simply marks the cross-thread ceiling. Must be called only when the caller has
+    confirmed ``not owner`` and ``state.belt_armed``.
+    """
+
+    if _nonowner_touch_is_captured(state, tensor):
+        _HOST_ESCAPE_CROSS_THREAD_CAPTURED.add(state.trace)
+
+
+_ACTIVE_WITNESS_STATE: "_WitnessState | None" = None
+"""The runnable-capture witness state currently installed, or ``None`` (r43).
+
+Published as the LAST step of ``capture_completeness_witness`` armation and cleared on exit so
+the wrappers.py string interception can classify owner vs non-owner without threading the state
+through the torch-function wrapper. Captures do not nest, so a single slot suffices.
+"""
+
+
+def string_escape_is_owner_thread(trace: Any) -> bool:
+    """Return whether the current thread is the capture owner for the string hook (r43).
+
+    Consumed by the wrappers.py ``__repr__``/``__str__``/``_str`` interception: the OWNER
+    thread keeps ``print_override`` (which formats under a global ``pause_logging``); a
+    NON-OWNER thread must NEVER flip that global toggle mid-forward (the hon2_4 crash), so it
+    calls the original torch string function unchanged. With no active runnable witness state
+    the legacy owner behavior is preserved (``True``).
+    """
+
+    state = _ACTIVE_WITNESS_STATE
+    if state is None or state.trace is not trace:
+        return True
+    return threading.get_ident() == state.owner_thread_id
+
+
 _HOST_ESCAPE_OBSERVER_FAILED: "weakref.WeakSet[Any]" = weakref.WeakSet()
 """Traces where a REQUIRED tensor->host value observer could not be installed/restored (r39).
 
@@ -1234,6 +1411,20 @@ def record_host_string_escape_source(trace: Any, tensor: Any) -> None:
     if not isinstance(tensor, torch.Tensor):
         return
     if _internal_read_active():
+        return
+    # r43 hon2_4: route the string hook through the SAME owner-vs-non-owner rule as every
+    # other belt observer. The OWNER thread keeps the precise attribution ladder. A NON-OWNER
+    # thread applies the captured-tensor predicate (never origin resolution -- that flips the
+    # global ``pause_logging`` toggle, the hon2_4 crash path): a captured-tensor stringification
+    # ceilings, a benign OWN-tensor ``str()`` records nothing (no over-trigger).
+    state = _ACTIVE_WITNESS_STATE
+    if (
+        state is not None
+        and state.trace is trace
+        and threading.get_ident() != state.owner_thread_id
+    ):
+        if state.belt_armed:
+            _nonowner_escape_observe(state, tensor)
         return
     _record_escape_source_tensor(trace, tensor, invisible=True)
 
@@ -1705,11 +1896,30 @@ def _register_dispatch_result_origins(
     if registry is None:
         registry = _TensorOriginRegistry()
         _DISPATCH_TENSOR_ORIGINS[trace] = registry
+    # r43 CLASS 2: index every owner-produced activation's storage pointer so the non-owner
+    # storage-identity catch-all recognizes a ``.data`` / view / detach alias of a captured
+    # activation touched off-owner. The true-original accessor is wrapper-free.
+    captured_ptrs = _CAPTURED_STORAGE_PTRS.get(trace)
+    if captured_ptrs is None:
+        captured_ptrs = {}
+        _CAPTURED_STORAGE_PTRS[trace] = captured_ptrs
     for produced in _iter_tensors_deep(result):
         # Labeled results register too: the display ladder still prefers their own
         # label (finest witness), but the LEAF set must flow through them so a later
         # orphan-pruned chain can fall back to a surviving witness basis.
         registry.set(produced, display, leaf)
+        produced_ptr = _raw_storage_ptr_no_observe(produced)
+        if produced_ptr is None:
+            continue
+        try:
+            produced_ref = weakref.ref(produced)
+        except TypeError:
+            continue  # non-weakref-able exotic subclass: storage identity not indexed
+        # Copy-on-write, prune-dead on append (bounds a reused address to its LIVE aliases,
+        # keeping the per-ptr tuple tiny and the worker-side read race-free against an
+        # atomic dict-value reassignment).
+        live = tuple(ref for ref in captured_ptrs.get(produced_ptr, ()) if ref() is not None)
+        captured_ptrs[produced_ptr] = (*live, produced_ref)
 
 
 def _resolved_dispatch_origins(
@@ -2683,57 +2893,22 @@ def _sample_buffer_toctou_at_consumption(
     return False
 
 
-def _escape_thread_class(state: _WitnessState) -> Literal["owner", "in_window", "foreign"]:
-    """Classify the current thread for the escape belt's 3-class gate (r41 hon2_1).
-
-    The belt is class/module/property patched, so it FIRES on every thread; this gate
-    decides what each observer may record:
-
-    * ``owner`` -- the capture owner thread; existing behavior, unchanged.
-    * ``in_window`` -- a thread STARTED during the forward, positively identified by the
-      RNG monitor's ``threading.setprofile`` window registry (populated during thread
-      bootstrap BEFORE the thread's first user statement -- race-free even for an
-      escape-first thread). Records through the FULL fail-closed attribution ladder: a
-      helper-thread ``item()``/``tolist()``/``equal()`` escape is witnessed by its
-      source or ceilings the capture. Origin RESOLUTION (rung 2 + leaf fallback) stays
-      owner-only because it flips the global ``pause_logging`` toggle; on a non-owner
-      thread the ladder substitutes its fail-closed exits instead -- conservative,
-      never blessing.
-    * ``foreign`` -- a pre-existing (non-hooked) thread. Records POSITIVE attributions
-      only: a direct touch of a captured/labelled tensor or registered-state alias is
-      witnessed, but the unattributable fail-closed rungs, blanket flags (raw pointer,
-      writeback watch), and input-metadata observers are skipped so a benign background
-      thread (DataLoader/Jupyter/pytest worker) touching its OWN tensors never ceilings
-      the capture (the r39 over-trigger gate). Pre-existing-thread entries can never
-      appear in the registry (only hooked threads register), so ident reuse is safe.
-
-    The aten census (``_CompletenessDispatchMode``) stays owner-thread-scoped -- a
-    ``TorchDispatchMode`` is thread-local, so it is structurally unreachable elsewhere;
-    this belt is the designated cross-thread observer.
-    """
-
-    if threading.get_ident() == state.owner_thread_id:
-        return "owner"
-    if threading.get_ident() in active_in_window_thread_idents():
-        return "in_window"
-    return "foreign"
-
-
 def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: str) -> Any:
     """Wrap a tensor->host conversion method to record its SOURCE, then call through.
 
     The wrapper records the receiver tensor (the escape SOURCE) into the shared escape
-    tables, gated to the active trace / logging-enabled window so a TorchLens-internal
-    conversion (run under ``pause_logging``) is never mistaken for a user escape. Fires
-    on every thread under the r41 3-class gate (:func:`_escape_thread_class`): owner and
-    in-window threads record through the full fail-closed ladder plus the blanket
-    flags/watches; a foreign (pre-existing) thread records positive attributions only
-    and skips the raw-pointer flag, storage-geometry fact, and write-back watch (blanket
-    mechanisms with no attribution must never ceiling unrelated background work). For a
+    tables, gated to the active trace so a TorchLens-internal conversion (run under
+    ``pause_logging``) is never mistaken for a user escape. Fires on every thread under
+    the r43 owner-vs-non-owner rule: the OWNER thread (gated on ``_logging_enabled``)
+    records through the full precise ladder plus the blanket flags/watches; a NON-owner
+    thread (gated on ``belt_armed``) ceilings only when it touches a captured tensor and
+    otherwise records nothing (a benign background thread touching its OWN tensors never
+    ceilings the capture). For a
     mutable zero-copy alias conversion (``numpy`` / ``__array__``) it also records a
     before-image so a subsequent host write-back through the alias is detected at
     forward end. It always calls the original method unchanged, so values, goldens, and
-    outputs are byte-identical.
+    outputs are byte-identical. r43: the OWNER thread keeps the precise ladder; a NON-owner
+    thread's captured-tensor touch ceilings via :func:`_nonowner_escape_observe`.
     """
 
     # Storage-pointer bridges (untyped_storage / storage / data_ptr) are watched for host
@@ -2753,42 +2928,36 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
 
     def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
         result_holder: dict[str, Any] = {}
-        if (
-            isinstance(self, torch.Tensor)
-            and _state._logging_enabled
-            and _state._active_trace is state.trace
-        ):
-            thread_class = _escape_thread_class(state)
-            if record_source:
-                _record_escape_source_tensor(
-                    state.trace,
-                    self,
-                    invisible=True,
-                    fail_closed=thread_class != "foreign",
-                    resolve_origins=thread_class == "owner",
-                )
-            if thread_class != "foreign":
-                if records_storage_geometry and not _internal_read_active():
-                    storage = original(self, *args, **kwargs)
-                    result_holder["value"] = storage
-                    _maybe_record_input_storage_geometry(state.trace, self, storage)
-                # A raw ``data_ptr()`` pointer is unobservable; only a genuine USER call (internal
-                # marker inactive -- TorchLens's own bookkeeping ``data_ptr`` reads run under it)
-                # fails closed so the tensor's subsequent value cannot be silently VERIFIED.
-                if is_raw_pointer and not _internal_read_active():
-                    _HOST_ESCAPE_RAW_POINTER.add(state.trace)
-                # TorchLens's OWN capture-internal aliasing / version bookkeeping reads storage
-                # pointers (``aliasing._tensors_alias`` -> ``untyped_storage().data_ptr()``) under
-                # the explicit ``internal_scalar_read`` marker. Those are NOT user exposures:
-                # snapshotting them and then byte-comparing under the r14-H1 gate would falsely
-                # trip on a later legitimate TRACKED in-place op. Only watch a storage bridge when
-                # the marker is inactive -- a genuine user ``data_ptr()`` / ``storage()`` call.
-                # (The numpy / __array__ mutable alias is never called internally, so it is always
-                # watched, as in r13.) A FOREIGN thread skips the watch entirely: the forward-end
-                # byte compare is a blanket flag, and a foreign thread's own mutated tensor must
-                # never ceiling the capture.
-                if watch_writeback and not (is_storage_bridge and _internal_read_active()):
-                    _snapshot_writeback_source(state, self)
+        if isinstance(self, torch.Tensor) and _state._active_trace is state.trace:
+            if threading.get_ident() == state.owner_thread_id:
+                if _state._logging_enabled:
+                    if record_source:
+                        _record_escape_source_tensor(state.trace, self, invisible=True)
+                    if records_storage_geometry and not _internal_read_active():
+                        storage = original(self, *args, **kwargs)
+                        result_holder["value"] = storage
+                        _maybe_record_input_storage_geometry(state.trace, self, storage)
+                    # A raw ``data_ptr()`` pointer is unobservable; only a genuine USER call
+                    # (internal marker inactive -- TorchLens's own bookkeeping ``data_ptr``
+                    # reads run under it) fails closed so the tensor's subsequent value cannot
+                    # be silently VERIFIED.
+                    if is_raw_pointer and not _internal_read_active():
+                        _HOST_ESCAPE_RAW_POINTER.add(state.trace)
+                    # TorchLens's OWN capture-internal aliasing / version bookkeeping reads
+                    # storage pointers (``aliasing._tensors_alias`` ->
+                    # ``untyped_storage().data_ptr()``) under the explicit ``internal_scalar_read``
+                    # marker. Those are NOT user exposures: snapshotting them and byte-comparing
+                    # under the r14-H1 gate would falsely trip on a later legitimate TRACKED
+                    # in-place op. Only watch a storage bridge when the marker is inactive -- a
+                    # genuine user ``data_ptr()`` / ``storage()`` call. (The numpy / __array__
+                    # mutable alias is never called internally, so it is always watched, as r13.)
+                    if watch_writeback and not (is_storage_bridge and _internal_read_active()):
+                        _snapshot_writeback_source(state, self)
+            elif state.belt_armed:
+                # r43: a non-owner touch of a captured tensor (this receiver, or a captured-
+                # derived alias by storage identity) ceilings the capture. A benign OWN-tensor
+                # conversion records nothing.
+                _nonowner_escape_observe(state, self)
         if "value" in result_holder:
             return result_holder["value"]
         return original(self, *args, **kwargs)
@@ -2810,19 +2979,24 @@ def _make_storage_raw_pointer_wrapper(original: Any, state: _WitnessState) -> An
     ``untyped_storage().nbytes()`` / ``.size()`` (pure metadata, no pointer) never trips it.
     TorchLens's own capture-internal storage-pointer reads (``aliasing._tensors_alias`` ->
     ``untyped_storage().data_ptr()``) run under the ``internal_scalar_read`` marker and are excluded.
-    r41: fires on the owner and every in-window thread; a FOREIGN (pre-existing) thread is skipped
-    -- this is a blanket flag with no per-tensor attribution, and a foreign library's own
-    ``data_ptr()`` reads must never ceiling the capture.
+    r43: the OWNER thread fails closed (blanket raw-pointer flag) exactly as before; a NON-OWNER
+    thread ceilings ONLY when the storage belongs to a CAPTURED tensor (its raw pointer, read via
+    the original accessor, is a captured input/param/activation pointer), so a foreign library's
+    own ``data_ptr()`` reads never ceiling the capture.
     """
 
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
-        if (
-            _state._logging_enabled
-            and _state._active_trace is state.trace
-            and not _internal_read_active()
-            and _escape_thread_class(state) != "foreign"
-        ):
-            _HOST_ESCAPE_RAW_POINTER.add(state.trace)
+        if _state._active_trace is state.trace:
+            if threading.get_ident() == state.owner_thread_id:
+                if _state._logging_enabled and not _internal_read_active():
+                    _HOST_ESCAPE_RAW_POINTER.add(state.trace)
+            elif state.belt_armed:
+                try:
+                    ptr = original(self, *args, **kwargs)
+                except (RuntimeError, TypeError, NotImplementedError):
+                    ptr = None
+                if isinstance(ptr, int) and ptr and _nonowner_ptr_is_captured(state, ptr):
+                    _HOST_ESCAPE_CROSS_THREAD_CAPTURED.add(state.trace)
         return original(self, *args, **kwargs)
 
     return wrapper
@@ -2864,11 +3038,11 @@ def _make_host_value_escape_method(original: Any, state: _WitnessState, name: st
     the escape is witnessed by its SOURCE tensor's capture-time digest either way.
 
     Records ``self`` plus any tensor argument (``equal`` / ``allclose`` take a second tensor
-    operand), gated to the active trace / logging window with TorchLens's own marked internal
-    reads excluded. r41: fires on every thread under the 3-class gate -- on a NON-owner thread
-    the census mode is never on that thread's dispatch stack (a ``TorchDispatchMode`` is
-    thread-local), so this belt is correctly PRIMARY there; an in-window thread records
-    fail-closed, a foreign thread positive-only. Always calls the exact original unchanged
+    operand), gated to the active trace with TorchLens's own marked internal reads excluded.
+    r43: fires on every thread under the owner-vs-non-owner rule -- on a NON-owner thread the
+    census mode is never on that thread's dispatch stack (a ``TorchDispatchMode`` is
+    thread-local), so this belt is correctly PRIMARY there and ceilings a captured-tensor touch;
+    a benign own-tensor touch records nothing. Always calls the exact original unchanged
     (byte-identical values, goldens, and control flow). On the owner the census stays the
     primary observer; this is the idempotent mode-independent belt (shared source table -> no
     double count).
@@ -2877,31 +3051,24 @@ def _make_host_value_escape_method(original: Any, state: _WitnessState, name: st
     del name  # recorded uniformly; the operand set determines the source, not the spelling
 
     def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
-        if (
-            isinstance(self, torch.Tensor)
-            and _state._logging_enabled
-            and _state._active_trace is state.trace
-            and not _internal_read_active()
-            and not _completeness_census_active()
-        ):
-            thread_class = _escape_thread_class(state)
-            fail_closed = thread_class != "foreign"
-            _record_escape_source_tensor(
-                state.trace,
-                self,
-                invisible=True,
-                fail_closed=fail_closed,
-                resolve_origins=thread_class == "owner",
-            )
-            for value in (*args, *kwargs.values()):
-                if isinstance(value, torch.Tensor):
-                    _record_escape_source_tensor(
-                        state.trace,
-                        value,
-                        invisible=True,
-                        fail_closed=fail_closed,
-                        resolve_origins=thread_class == "owner",
-                    )
+        if isinstance(self, torch.Tensor) and _state._active_trace is state.trace:
+            if threading.get_ident() == state.owner_thread_id:
+                if (
+                    _state._logging_enabled
+                    and not _internal_read_active()
+                    and not _completeness_census_active()
+                ):
+                    _record_escape_source_tensor(state.trace, self, invisible=True)
+                    for value in (*args, *kwargs.values()):
+                        if isinstance(value, torch.Tensor):
+                            _record_escape_source_tensor(state.trace, value, invisible=True)
+            elif state.belt_armed:
+                # r43: a NON-owner value escape ceilings iff its receiver OR any tensor operand
+                # is a captured tensor (the census is thread-local, so the belt is PRIMARY here).
+                _nonowner_escape_observe(state, self)
+                for value in (*args, *kwargs.values()):
+                    if isinstance(value, torch.Tensor):
+                        _nonowner_escape_observe(state, value)
         return original(self, *args, **kwargs)
 
     return wrapper
@@ -2913,29 +3080,27 @@ def _make_host_value_predicate_module_wrapper(original: Any, state: _WitnessStat
     Like the Tensor-method belt, records every tensor operand ONLY when the aten census is not
     currently observing (a ``_disable_current_modes()`` region), so it complements -- never
     duplicates or pre-empts -- the census. On a non-owner thread the census mode is never on
-    that thread's stack, so this belt is correctly primary there (r41 3-class gate: in-window
-    fail-closed, foreign positive-only). Distinct from :func:`_make_module_escape_wrapper`
-    (dlpack export), which is census-INVISIBLE always and therefore records unconditionally.
+    that thread's stack, so this belt is correctly primary there (r43 owner-vs-non-owner rule:
+    a captured-tensor operand ceilings, a benign own-tensor operand records nothing). Distinct
+    from :func:`_make_module_escape_wrapper` (dlpack export), which is census-INVISIBLE always
+    and therefore records unconditionally.
     """
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-        if (
-            _state._logging_enabled
-            and _state._active_trace is state.trace
-            and not _internal_read_active()
-            and not _completeness_census_active()
-        ):
-            thread_class = _escape_thread_class(state)
-            fail_closed = thread_class != "foreign"
-            for value in (*args, *kwargs.values()):
-                if isinstance(value, torch.Tensor):
-                    _record_escape_source_tensor(
-                        state.trace,
-                        value,
-                        invisible=True,
-                        fail_closed=fail_closed,
-                        resolve_origins=thread_class == "owner",
-                    )
+        if _state._active_trace is state.trace:
+            if threading.get_ident() == state.owner_thread_id:
+                if (
+                    _state._logging_enabled
+                    and not _internal_read_active()
+                    and not _completeness_census_active()
+                ):
+                    for value in (*args, *kwargs.values()):
+                        if isinstance(value, torch.Tensor):
+                            _record_escape_source_tensor(state.trace, value, invisible=True)
+            elif state.belt_armed:
+                for value in (*args, *kwargs.values()):
+                    if isinstance(value, torch.Tensor):
+                        _nonowner_escape_observe(state, value)
         return original(*args, **kwargs)
 
     return wrapper
@@ -2952,18 +3117,16 @@ def _make_module_escape_wrapper(original: Any, state: _WitnessState) -> Any:
     """
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-        if _state._logging_enabled and _state._active_trace is state.trace:
-            thread_class = _escape_thread_class(state)
-            fail_closed = thread_class != "foreign"
-            for value in (*args, *kwargs.values()):
-                if isinstance(value, torch.Tensor):
-                    _record_escape_source_tensor(
-                        state.trace,
-                        value,
-                        invisible=True,
-                        fail_closed=fail_closed,
-                        resolve_origins=thread_class == "owner",
-                    )
+        if _state._active_trace is state.trace:
+            if threading.get_ident() == state.owner_thread_id:
+                if _state._logging_enabled:
+                    for value in (*args, *kwargs.values()):
+                        if isinstance(value, torch.Tensor):
+                            _record_escape_source_tensor(state.trace, value, invisible=True)
+            elif state.belt_armed:
+                for value in (*args, *kwargs.values()):
+                    if isinstance(value, torch.Tensor):
+                        _nonowner_escape_observe(state, value)
         return original(*args, **kwargs)
 
     return wrapper
@@ -2980,20 +3143,12 @@ def _make_invisible_escape_property(descriptor: Any, state: _WitnessState) -> pr
     """
 
     def getter(self: torch.Tensor) -> Any:
-        if (
-            isinstance(self, torch.Tensor)
-            and _state._logging_enabled
-            and _state._active_trace is state.trace
-        ):
-            thread_class = _escape_thread_class(state)
-            fail_closed = thread_class != "foreign"
-            _record_escape_source_tensor(
-                state.trace,
-                self,
-                invisible=True,
-                fail_closed=fail_closed,
-                resolve_origins=thread_class == "owner",
-            )
+        if isinstance(self, torch.Tensor) and _state._active_trace is state.trace:
+            if threading.get_ident() == state.owner_thread_id:
+                if _state._logging_enabled:
+                    _record_escape_source_tensor(state.trace, self, invisible=True)
+            elif state.belt_armed:
+                _nonowner_escape_observe(state, self)
         return descriptor.__get__(self, torch.Tensor)
 
     return property(getter)
@@ -3019,29 +3174,30 @@ def _make_input_metadata_wrapper(
 
     def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
         result = original(self, *args, **kwargs)
-        if (
-            isinstance(self, torch.Tensor)
-            and _state._logging_enabled
-            and _state._active_trace is state.trace
-            and not _internal_read_active()
-            # r41: owner + in-window threads observe (same input-leaf gating); a FOREIGN
-            # thread is skipped -- input-metadata facts must never be attributed from
-            # unrelated pre-existing background work.
-            and _escape_thread_class(state) != "foreign"
-        ):
-            if name == "storage_offset":
-                try:
-                    _observe_input_metadata_read(state.trace, self, "storage_offset", int(result))
-                except (RuntimeError, TypeError, ValueError):
-                    return result
-            elif name == "is_contiguous" and not args and not kwargs:
-                _observe_input_metadata_read(state.trace, self, "is_contiguous", bool(result))
-            elif stride_original is not None:
-                try:
-                    full_stride = tuple(int(v) for v in stride_original(self))
-                except (RuntimeError, TypeError):
-                    return result
-                _observe_input_metadata_read(state.trace, self, "stride", full_stride)
+        if isinstance(self, torch.Tensor) and _state._active_trace is state.trace:
+            if threading.get_ident() == state.owner_thread_id:
+                if _state._logging_enabled and not _internal_read_active():
+                    if name == "storage_offset":
+                        try:
+                            _observe_input_metadata_read(
+                                state.trace, self, "storage_offset", int(result)
+                            )
+                        except (RuntimeError, TypeError, ValueError):
+                            return result
+                    elif name == "is_contiguous" and not args and not kwargs:
+                        _observe_input_metadata_read(
+                            state.trace, self, "is_contiguous", bool(result)
+                        )
+                    elif stride_original is not None:
+                        try:
+                            full_stride = tuple(int(v) for v in stride_original(self))
+                        except (RuntimeError, TypeError):
+                            return result
+                        _observe_input_metadata_read(state.trace, self, "stride", full_stride)
+            elif state.belt_armed:
+                # r43: a non-owner metadata read on a CAPTURED input tensor is a captured-tensor
+                # touch -> ceiling; a read on an unrelated own tensor records nothing.
+                _nonowner_escape_observe(state, self)
         return result
 
     return wrapper
@@ -3063,21 +3219,20 @@ def _make_input_metadata_bool_method(original: Any, state: _WitnessState, name: 
 
     def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
         result = original(self, *args, **kwargs)
-        if (
-            isinstance(self, torch.Tensor)
-            and not args
-            and not kwargs
-            and _state._logging_enabled
-            and _state._active_trace is state.trace
-            and not _internal_read_active()
-            # r41: owner + in-window observe; foreign threads skipped (blanket
-            # input-metadata gating never fires from pre-existing background work).
-            and _escape_thread_class(state) != "foreign"
-        ):
-            try:
-                _observe_input_metadata_read(state.trace, self, name, bool(result))
-            except (RuntimeError, TypeError, ValueError):
-                return result
+        if isinstance(self, torch.Tensor) and _state._active_trace is state.trace:
+            if threading.get_ident() == state.owner_thread_id:
+                if (
+                    not args
+                    and not kwargs
+                    and _state._logging_enabled
+                    and not _internal_read_active()
+                ):
+                    try:
+                        _observe_input_metadata_read(state.trace, self, name, bool(result))
+                    except (RuntimeError, TypeError, ValueError):
+                        return result
+            elif state.belt_armed:
+                _nonowner_escape_observe(state, self)
         return result
 
     return wrapper
@@ -3103,25 +3258,22 @@ def _make_input_metadata_grad_property(
 
     def getter(self: torch.Tensor) -> Any:
         value = descriptor.__get__(self, torch.Tensor)
-        if (
-            isinstance(self, torch.Tensor)
-            and _state._logging_enabled
-            and _state._active_trace is state.trace
-            and not _internal_read_active()
-            # r41: owner + in-window observe; foreign threads skipped.
-            and _escape_thread_class(state) != "foreign"
-        ):
-            if records_presence:
-                fact: Any = value is not None
-            elif records_int:
-                try:
-                    fact = int(value)
-                except (TypeError, ValueError):
-                    fact = None
-            else:
-                fact = bool(value)
-            if fact is not None:
-                _observe_input_metadata_read(state.trace, self, name, fact)
+        if isinstance(self, torch.Tensor) and _state._active_trace is state.trace:
+            if threading.get_ident() == state.owner_thread_id:
+                if _state._logging_enabled and not _internal_read_active():
+                    if records_presence:
+                        fact: Any = value is not None
+                    elif records_int:
+                        try:
+                            fact = int(value)
+                        except (TypeError, ValueError):
+                            fact = None
+                    else:
+                        fact = bool(value)
+                    if fact is not None:
+                        _observe_input_metadata_read(state.trace, self, name, fact)
+            elif state.belt_armed:
+                _nonowner_escape_observe(state, self)
         return value
 
     has_setter = hasattr(descriptor, "__set__")
@@ -3283,9 +3435,13 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
         except (TypeError, AttributeError):
             continue
         grad_property_restore[prop_name] = (shadowed, prop_descriptor)
+    # r43: arm the non-owner captured-tensor belt for the whole forward window. The non-owner
+    # observers gate on THIS flag, never the owner's ``pause_logging``-toggled ``_logging_enabled``.
+    state.belt_armed = True
     try:
         yield
     finally:
+        state.belt_armed = False
         for name, original in originals.items():
             try:
                 setattr(torch.Tensor, name, original)
@@ -3630,6 +3786,12 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
         # owner-accounted discharge rule) even with both shadow modes off.
         prior_ledger_armed = _state._runnable_ledger_armed
         _state._runnable_ledger_armed = True
+        # r43: publish the witness state so the wrappers.py string-hook interception can
+        # classify owner vs non-owner (the ONE place a non-owner thread must not flip the
+        # global ``pause_logging`` toggle). Cleared FIRST on exit.
+        global _ACTIVE_WITNESS_STATE
+        prior_active_state = _ACTIVE_WITNESS_STATE
+        _ACTIVE_WITNESS_STATE = state
         try:
             with _observe_invisible_host_escapes(state), mode_context:
                 try:
@@ -3639,6 +3801,7 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
                         _finalize_census(state)
                     _finalize_runnable_ledger(state)
         finally:
+            _ACTIVE_WITNESS_STATE = prior_active_state
             _state._runnable_ledger_armed = prior_ledger_armed
         return
     with mode_context:

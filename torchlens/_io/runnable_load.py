@@ -72,7 +72,11 @@ from ..runnable import (
     TensorUseSite,
     WitnessCompleteness,
 )
-from ..utils._callable_safety import is_pure_forward_callable, unsafe_callable_reason
+from ..utils._callable_safety import (
+    _PURE_TENSOR_PROPERTY_NAMES,
+    is_pure_forward_callable,
+    unsafe_callable_reason,
+)
 from ..utils._torch_compat import resolve_runnable_torch_alias
 
 
@@ -100,7 +104,10 @@ _ENUMERATED_TORCH_NAMESPACES = frozenset(
     }
 )
 _REMOVED_TORCH_CALLABLES = frozenset({"torch.gesv"})
-_SAFE_TENSOR_PROPERTY_NAMES = frozenset({"T", "mT", "real", "imag"})
+# Canonical copy lives in ``torchlens.utils._callable_safety`` so the capture-side
+# keyer, this resolver, and the security gate's recognized-operator predicate can
+# never drift apart on the safe pure-read property surface.
+_SAFE_TENSOR_PROPERTY_NAMES = _PURE_TENSOR_PROPERTY_NAMES
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,7 +257,9 @@ def _validated_dtype_literal(field: str, raw: str) -> str:
     """Validate a persisted ``torch.<dtype>`` literal against the live dtype table."""
 
     name = raw.removeprefix("torch.")
-    resolved = getattr(torch, name, None)
+    # r42 secC_1: ``torch.__dict__.get`` never fires ``torch.__getattr__`` (no lazy submodule
+    # import, no deprecated-attr call). Every real dtype is a ``torch.__dict__`` entry.
+    resolved = torch.__dict__.get(name)
     if not isinstance(resolved, torch.dtype):
         raise ContextFieldInvalidError(field, f"{raw!r} does not name a torch dtype")
     return raw
@@ -966,7 +975,17 @@ def _getattr_allowlisted(namespace: str, qualname: str) -> Callable[..., Any] | 
         return None
     if root is None:
         return None
-    value = getattr(root, qualname, None)
+    # r42 secC_1: the PEP-562 lazy-submodule ``__getattr__`` hazard (unrequested
+    # ``_inductor``/``_dynamo``/``_export``/``onnx`` import + raw error leak) lives ONLY on the
+    # top-level ``torch`` module. Reading its ``__dict__`` directly never fires ``__getattr__``
+    # and still resolves every real ``torch.*`` callable. Class roots (``torch.Tensor`` /
+    # ``_VariableFunctions``) and the proxying ``torch._VF`` module expose inherited/proxied
+    # callables only through ``getattr`` and carry no lazy-import hazard (their enumerated
+    # namespaces are fixed, never attacker-chosen lazy submodules).
+    if root is torch:
+        value = torch.__dict__.get(qualname)
+    else:
+        value = getattr(root, qualname, None)
     return cast(Callable[..., Any], value) if callable(value) else None
 
 

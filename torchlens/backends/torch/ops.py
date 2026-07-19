@@ -41,6 +41,7 @@ from .aliasing import (
 from .buffer_writes import resolve_registered_buffer_address
 from . import module_stack as _mstack
 from ...fastlog._halt import HaltSignal
+from ...utils._callable_safety import _PURE_TENSOR_PROPERTY_NAMES
 from ...utils._torch_compat import tensor_version_or_none, torch_structseq_field_names
 from ...utils.introspection import (
     _get_code_context,
@@ -1518,7 +1519,10 @@ def _walk_output_tensors_with_paths(
     yield from _walk_supported_output_container(out, root_spec=root_spec, path=())
 
 
-_SAFE_TENSOR_PROPERTY_NAMES: frozenset[str] = frozenset({"T", "mT", "real", "imag"})
+# Canonical copy lives in ``torchlens.utils._callable_safety`` so this capture-side
+# keyer, the load-side resolver, and the security gate's recognized-operator predicate
+# can never drift apart on the safe pure-read property surface.
+_SAFE_TENSOR_PROPERTY_NAMES: frozenset[str] = _PURE_TENSOR_PROPERTY_NAMES
 
 
 def _function_registry_key(

@@ -101,11 +101,18 @@ values, sets, arbitrary enums/objects, tensors, callables, classes, import refer
 opaque reprs are outside the grammar and fail preflight with `unsupported_literal`.
 
 `LiteralTorchSymbol.qualname` is resolved only through an explicit non-callable allowlist. It never
-authorizes `importlib`, arbitrary attribute walking, custom modules, or a callable fallback. A
-malformed `torch.device(...)` literal payload raises a typed `RunPreconditionError`
-(`unsupported_literal`) at decode (r41 secC -- never a raw torch error); a malformed device
-qualname additionally refuses at descriptor parse, degrading the load to analysis-only with the
-typed diagnostic intact per the corr2_3 disposition.
+authorizes `importlib`, arbitrary attribute walking, custom modules, or a callable fallback. It
+resolves by direct module `__dict__` lookup over the non-callable symbol allowlist; it never invokes
+the `torch` module `__getattr__` or a lazy submodule import / deprecated-attr call (r42 secC_1 --
+`torch.__dict__.get(name)` bypasses `__getattr__` entirely, so an attacker qualname triggers no
+unrequested import and leaks no raw native error). The two sibling torch-symbol validators
+(`_validated_dtype_literal`, `_getattr_allowlisted`) apply the same direct `torch.__dict__` lookup
+for the `torch` module root; class roots (`torch.Tensor` / `_VariableFunctions`) and the proxying
+`torch._VF` module -- which carry no lazy-import hazard on their fixed enumerated namespaces --
+resolve inherited/proxied callables through `getattr`. A malformed `torch.device(...)` literal
+payload raises a typed `RunPreconditionError` (`unsupported_literal`) at decode (r41 secC -- never a
+raw torch error); a malformed device qualname additionally refuses at descriptor parse, degrading the
+load to analysis-only with the typed diagnostic intact per the corr2_3 disposition.
 
 ## 3. Callable key and capture-spine coupling
 
@@ -423,7 +430,13 @@ instance-state rules it encodes:
   markers. Trust follows the RESOLUTION AUTHORITY, never the resolved class's spoofable
   `__module__` attribute, so a non-torch tuple subclass with a forged `__module__` (or an
   alias-module pointing at a genuine structseq) is refused before its `__new__` runs.
-- `dataclass`/`hf_model_output` keep their r25/r27 type-level recompute.
+- `dataclass`/`hf_model_output` keep their r25/r27 type-level recompute. **`hf_model_output` trust
+  authority (r42 secB_1).** The lossy-reconstruction recompute trusts an `hf_model_output` type's
+  field-mirroring init ONLY by RESOLUTION AUTHORITY: the loaded type is identically re-resolvable
+  (identity, not name) from the genuine `transformers` package via `spec.type_module` /
+  `spec.type_qualname` in `sys.modules`. A spoofable `__module__` string or a loose `transformers*`
+  prefix (e.g. `transformers_evil`) is never sufficient to suppress the lossy-reconstruction
+  recompute; an unresolved or non-identical type fails closed to lossy (`unverifiable`).
 - `dict` admits only the exact trusted bases (`dict`/`OrderedDict`/`defaultdict` with an
   allowlisted factory); an instance carrying extra non-`None` `__dict__` state refuses at save
   (`mapping_instance_state`). The load-time recompute for this kind is the persisted flag plus
@@ -499,6 +512,7 @@ input_tree_mismatch
 input_shape_mismatch
 input_dtype_mismatch
 call_arity_mismatch
+input_arity_extra
 call_structure_mismatch
 output_structure_mismatch
 output_shape_mismatch
@@ -515,6 +529,11 @@ context_field_invalid
 numeric_attestation_failed
 poisoned_run_refused
 ```
+
+`input_arity_extra` (r43, corr1_1) is raised when a loaded sparse `.run()` call carries MORE
+top-level positional/keyword input sites than the capture recorded: the descriptor encodes a
+finite concrete site set (even for Python variadic signatures), so an extra runtime argument is
+outside the recorded taken path and must never report `verified`.
 
 `input_alias_topology_unresolved` is an unverifiability CEILING, not a contradiction: the
 three-valued alias engine (section 11) could prove neither overlap nor disjointness for a
@@ -852,9 +871,11 @@ seed) reports `unverifiable` + `not_applicable`:
    generator drawn on the owner or an in-window helper thread is caught, including the
    hon1_1/corr2_2 cross-thread case), belted by a cheap thread-independent before/after state
    digest of any generator or bare BitGenerator the MODEL itself holds, swept over submodule
-   attributes INCLUDING builtin-container nesting (list/tuple/set/dict keys and values,
-   cycle-safe, unbounded for any realistic model) -- never a process-wide `gc` scan; exhaustion
-   of the defensive sweep cap downgrades capture completeness to INCOMPLETE
+   attributes INCLUDING builtin-container nesting (list/tuple/set/dict keys and values) AND inert
+   custom holder attributes (`self.holder.rng`, via `__dict__` / `__slots__` values, never
+   invoking a property or `__getattr__`; r42 corr2_1), cycle-safe and unbounded for any realistic
+   model -- never a process-wide `gc` scan and never treating unrelated worker threads as evidence;
+   exhaustion of the defensive sweep cap downgrades capture completeness to INCOMPLETE
    (`inventory_budget_exhausted`) -- a truncated inventory never reads as no-consumption;
 3. UNSEEDED numpy generator CONSTRUCTION, via `numpy.random.default_rng` and the writable
    `numpy.random.bit_generator.randbits` construction-entropy alias (r39): an unseeded
@@ -871,7 +892,11 @@ seed) reports `unverifiable` + `not_applicable`:
    time argument is a pure transform); the immutable `datetime.datetime.now` / `utcnow` / `today`
    and `datetime.date.today` (c_call identity, since these extension-type methods cannot be
    class-patched); and `os.times` / `resource.getrusage`. A forward that reads no clock records
-   nothing.
+   nothing. The datetime current-clock readers include inherited C readers on `datetime.datetime`
+   and `datetime.date` SUBCLASSES; classification is based on receiver type/subclass identity at
+   the Python-visible `c_call`, not exact base-class object id (r42 hon1_1). A subclass method that
+   genuinely OVERRIDES the current-clock reader is not attributed to the base reader merely because
+   of its name.
 
 Every module-attr channel is ADDITIONALLY identity-registered at monitor install (r41): a held
 pre-window reference to the original builtin (the idiomatic `from time import time` /
@@ -912,9 +937,10 @@ call surface, including C-mediated indirect calls of held builtins (a
 builtin); (iii) legacy `RandomState()` C-level CONSTRUCTION entropy (its DRAWS stay
 digest/profile-witnessed); (iv) an externally-held generator drawn on a PRE-EXISTING
 (already-running, non-owner, non-hooked) thread -- which `threading.setprofile` cannot reach on
-Python <= 3.11 and which the model-attribute digest does not cover (the generator is not a model
-attribute, nor inside builtin-container nesting of one; a generator behind a CUSTOM object
-attribute is witnessed by the receiver classifiers on hooked threads only) -- of the same class
+Python <= 3.11 and which the model-attribute digest does not cover because the generator is NOT
+reachable from the model inventory (not a model attribute, nor inside builtin-container nesting or
+an inert custom holder of one; r42 corr2_1 extended the sweep to custom holders, so a
+model-held generator behind `self.holder.rng` is now witnessed on any thread) -- of the same class
 as the adversarial draw+`state`-restore a cooperative model does not exercise; (v) a
 held-reference module-builtin call on a PRE-EXISTING (non-hooked) thread -- the module-attr
 patched spelling stays thread-independent; and (vi) a held-reference implicit-now converter
@@ -928,29 +954,45 @@ original state stays `verified` and a changed staged state restales the witness 
 "unattributable pruned bool" fail-closed exception no longer applies to positively-resolved
 cases.
 
-### Cross-thread escape qualification (r41)
+### Cross-thread captured-tensor qualification (r43)
 
-The mode-independent tensor->host escape belt (scalar/method/module-predicate/dlpack/
-property/storage-pointer observers) is class-patched and fires on EVERY thread. The
-OWNER thread records as before (aten census primary; belt when the census is
-mode-blinded). An IN-WINDOW thread (started during the forward; positively identified
-by the same threading-profile window registry that classifies cross-thread RNG
-receivers) records through the FULL attribution ladder including the fail-closed
-unattributable rungs -- a helper-thread `item()`/`tolist()`/`equal()` escape is
-witnessed by its source or ceilings the capture. A PRE-EXISTING (non-hooked) thread
-records POSITIVE attributions only: a direct touch of a captured/labelled tensor or
-registered-state alias is witnessed; an unattributable foreign-thread read never
-ceilings the capture (the benign-background-thread over-trigger gate). Deterministic
-tensor-only helper-thread work records nothing and never downgrades; a helper thread
-matters only when it performs a declared tensor-to-host value escape or when observer
-installation/classification/restoration is uncertain. The aten census remains
-owner-thread-scoped (a TorchDispatchMode is thread-local); the belt is the designated
-cross-thread observer. An in-window thread that escapes AFTER the forward has returned
-is outside the recording window (the registry is cleared with the capture); only a
-tensor DERIVED on such a thread then escaped joins the residual below. Residual: an
-escape, on a pre-existing thread (or on an in-window thread after the forward has
-returned), of a tensor DERIVED on that thread from captured values -- the direct
-captured-tensor escape is witnessed on any thread.
+TorchLens runnable capture is single-owner-thread by design. During the forward window, any
+non-owner thread that performs a Python-visible tensor-to-host value escape, storage/pointer
+exposure, stringification, or model-input metadata read on a captured tensor, or on a tensor
+positively known by the dispatch-origin ledger or storage identity to derive from captured tensors,
+permanently ceilings the artifact's replay proof to `unverifiable` with numeric attestation
+`not_applicable`. The rule does not depend on the owner thread's per-dispatch logging toggle and does
+not require the thread to have been created by `threading.Thread`; raw `_thread` and pre-existing
+worker threads are covered when they touch captured tensors.
+
+The rule keys on the tensor, not on thread existence. A background thread that never touches a
+captured tensor, or that only reads/stringifies tensors it created independently of the capture,
+records nothing and does not downgrade a deterministic artifact. Tensor-only helper work whose result
+never escapes to Python host control remains outside this ceiling.
+
+Owner-thread tensor escapes keep the ordinary precise witness ladder. Non-owner captured-tensor
+touches are not promoted to precise `verified` proofs, even if a label or state origin is visible,
+because concurrent host interaction is outside the replay model.
+
+Op-logging is owner-thread-scoped: the global torch-function wrapper skips any thread other than the
+capture owner, so a non-owner thread running torch ops during a capture (a worker formatting
+`str(tensor)`, a DataLoader thread) is never recorded into the owner's Trace and never corrupts
+owner-op attribution. The mode-independent belt (tensor-method patches) is the designated cross-thread
+observer and is independent of that wrapper. Captured activation storage identity is liveness-verified
+(a freed-then-reused storage address never false-positives a benign own-tensor touch). The aten census
+remains owner-thread-scoped (a `TorchDispatchMode` is thread-local).
+
+### Input site-set exactness (r42 corr1)
+
+Loaded sparse `.run(inputs=...)` must match the captured top-level model input site set exactly.
+Extra positional arguments or keyword arguments not present in the captured site set are observed
+input-tree contradictions and cannot be ignored or reported `verified`, including for captures of
+Python variadic signatures whose recorded taken path contains only a finite concrete site set
+(`INPUT_ARITY_EXTRA`; default policy raises `PathDivergenceError`, `return_diverged` returns
+`diverged`). Dataclass model-input containers are traversed by declared fields using the same
+tensor/non-tensor leaf vocabulary as tuples, mappings, and namedtuples; a tensor-only dataclass is
+fully witnessable (`verified`, attestation-eligible), while a genuinely-opaque dataclass field still
+surfaces and fails the run closed.
 
 ### Three-valued input alias topology
 

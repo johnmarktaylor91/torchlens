@@ -59,6 +59,7 @@ from torchlens.backends.torch.completeness_witness import (
     INVISIBLE_HOST_ESCAPE_FUNCS,
     INVISIBLE_HOST_ESCAPE_PROPERTIES,
     STORAGE_BRIDGE_ESCAPE_FUNCS,
+    host_escape_has_cross_thread_captured_tensor,
     host_escape_has_raw_pointer,
     host_escape_has_unattributable_bool,
     host_escape_has_unattributable_opaque,
@@ -721,22 +722,32 @@ class _InWindowEscapeModel(nn.Module):
 
 
 def _escape_witnessed(trace: Any) -> bool:
-    """Return whether ANY escape witness (positive or fail-closed) recorded."""
+    """Return whether ANY escape witness (positive, fail-closed, OR cross-thread) recorded.
+
+    r43 (JMT-locked): a NON-owner captured-tensor touch no longer records a precise
+    source/fail-closed witness -- it sets the ONE cross-thread ceiling, which is the
+    witness that downgrades the artifact to UNVERIFIABLE.
+    """
 
     return bool(
         host_escape_source_labels(trace)
         or host_escape_state_source_names(trace)
         or host_escape_has_unattributable_bool(trace)
         or host_escape_has_unattributable_opaque(trace)
+        or host_escape_has_cross_thread_captured_tensor(trace)
     )
 
 
 @pytest.mark.parametrize("member", _ESCAPE_MEMBERS)
 def test_in_window_thread_escape_witnessed(member: str) -> None:
-    """Every declared escape vocabulary member is witnessed from an IN-WINDOW thread.
+    """Every declared escape vocabulary member on a CAPTURED tensor ceilings from a non-owner thread.
 
-    Frozenset-derived: a future member without a recipe fails loudly, and a wrapper
-    that regains an owner-only thread gate fails behaviorally (nothing witnessed).
+    r43 (JMT-locked): a non-owner thread that touches a CAPTURED tensor (here the model
+    inputs ``gate_f``/``gate_i``) via any escape spelling permanently ceilings the artifact
+    -- the ONE cross-thread rule replaces the r41 in-window/foreign 3-class witness. A raw
+    storage ``data_ptr()`` on a captured tensor is caught by storage identity, not the
+    owner-only raw-pointer flag. Frozenset-derived: a future member without a recipe fails
+    loudly, and a wrapper that regains an owner-only thread gate fails behaviorally.
     """
 
     recipe = _ESCAPE_RECIPES.get(member)
@@ -744,14 +755,21 @@ def test_in_window_thread_escape_witnessed(member: str) -> None:
         pytest.fail(f"no in-window escape recipe for vocabulary member {member!r}")
     if recipe.requires_cuda and not torch.cuda.is_available():
         pytest.skip("CUDA unavailable; recipe entry present as required")
+    if member == "__cuda_array_interface__":
+        # Structural: the property requires a CUDA tensor, so its recipe reads it on a
+        # ``gf.cuda()`` COPY (fresh device storage, no capture label). A device copy is a
+        # NEW tensor, not the captured one, so the captured-tensor rule correctly does not
+        # ceiling it (parity with the benign own-tensor case). Exercising the property on a
+        # genuinely-captured CUDA tensor would ceiling, but the CPU-input harness cannot feed
+        # one; the recipe entry stays present for vocabulary completeness.
+        pytest.skip("__cuda_array_interface__ recipe reads a device COPY, not the captured tensor")
     gate_f = torch.tensor([0.5])
     gate_i = torch.tensor(3)
     data = torch.randn(1, 4)
     trace = _capture(_InWindowEscapeModel(recipe), (gate_f, gate_i, data))
-    if recipe.witness == "raw_pointer":
-        assert host_escape_has_raw_pointer(trace)
-    else:
-        assert _escape_witnessed(trace), f"in-window {member!r} escape left no witness"
+    assert host_escape_has_cross_thread_captured_tensor(trace), (
+        f"in-window {member!r} captured-tensor escape did not ceiling"
+    )
 
 
 # ======================================================================================
@@ -908,6 +926,8 @@ def test_benign_foreign_thread_own_tensors_stays_verified(
     assert not host_escape_has_unattributable_bool(trace)
     assert not host_escape_has_unattributable_opaque(trace)
     assert not host_escape_has_raw_pointer(trace)
+    # r43: a benign worker touching its OWN uncaptured tensors never sets the cross-thread ceiling.
+    assert not host_escape_has_cross_thread_captured_tensor(trace)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -935,12 +955,15 @@ def test_in_window_unused_tensor_op_stays_verified(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-def test_foreign_thread_captured_tensor_escape_positively_witnessed(
+def test_foreign_thread_captured_tensor_escape_ceilings(
     preexisting_worker: Any, tmp_path: Path
 ) -> None:
-    """A PRE-EXISTING thread's DIRECT `.item()` on a CAPTURED tensor is positively
-    witnessed (the realistic queue-fed worker), and the original-input run stays
-    VERIFIED -- a witness, not a ceiling."""
+    """A PRE-EXISTING thread's DIRECT `.item()` on a CAPTURED tensor CEILINGS (r43, JMT-locked).
+
+    Superseding the r41 "foreign positive-only witness -> VERIFIED" posture: concurrent host
+    interaction with a captured tensor is outside the single-owner-thread replay model, so it
+    is never promoted to a precise `verified` proof even though a label/state origin is visible
+    -- it permanently ceilings the artifact to UNVERIFIABLE + NOT_APPLICABLE."""
 
     class _HandsToForeignWorker(nn.Module):
         def __init__(self) -> None:
@@ -954,8 +977,9 @@ def test_foreign_thread_captured_tensor_escape_positively_witnessed(
 
     x = torch.randn(1, 1)
     trace, result = _roundtrip(_HandsToForeignWorker(), x, tmp=tmp_path)
-    assert _escape_witnessed(trace), "foreign direct captured-tensor escape unwitnessed"
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert host_escape_has_cross_thread_captured_tensor(trace)
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
 # ======================================================================================
@@ -1106,4 +1130,216 @@ def test_untampered_device_literal_still_runs_verified(tmp_path: Path) -> None:
     shutil.rmtree(path, ignore_errors=True)
     trace.save(path, level="runnable")
     result = tl.load(path).run(inputs=x)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+# ======================================================================================
+# r43 (JMT-locked) immunizers -- ONE fail-closed cross-thread captured-tensor rule + RNG rows
+# ======================================================================================
+
+import _thread  # noqa: E402
+import datetime as _datetime  # noqa: E402
+
+
+class _RawThreadGate(nn.Module):
+    """Steer a branch by a captured-tensor escape on a raw ``_thread.start_new_thread`` thread."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.a = nn.Linear(4, 4)
+        self.b = nn.Linear(4, 4)
+
+    def forward(self, gate: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+        """Escape ``gate`` on a raw stdlib thread (never ``threading.Thread``)."""
+
+        done = threading.Event()
+        box: dict[str, bool] = {}
+
+        def _worker() -> None:
+            try:
+                box["flag"] = bool(gate.data.item() > 0)  # .data alias derived ON this thread
+            finally:
+                done.set()
+
+        _thread.start_new_thread(_worker, ())
+        done.wait()
+        return self.a(data) if box.get("flag") else self.b(data)
+
+
+def test_raw_thread_captured_escape_ceilings(tmp_path: Path) -> None:
+    """r42 hon2_1: a raw ``_thread`` captured-tensor escape ceilings (not just ``threading.Thread``)."""
+
+    gate = torch.tensor([1.0])
+    data = torch.randn(1, 4)
+    trace = _capture(_RawThreadGate(), (gate, data))
+    assert host_escape_has_cross_thread_captured_tensor(trace)
+    path = tmp_path / "rawthread.tlspec"
+    shutil.rmtree(path, ignore_errors=True)
+    trace.save(path, level="runnable", include_weights=True, include_activations=True)
+    result = tl.load(path).run(inputs=(torch.tensor([-1.0]), data))
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+def test_owner_derived_alias_foreign_escape_ceilings(
+    preexisting_worker: Any, tmp_path: Path
+) -> None:
+    """r42 hon2_2: an OWNER-derived alias escaped on a pre-existing worker ceilings."""
+
+    class _OwnerDerivedAliasGate(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.a = nn.Linear(4, 4)
+            self.b = nn.Linear(4, 4)
+
+        def forward(self, gate: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+            alias = gate.data  # derived on the OWNER thread (census sees it)
+            flag = preexisting_worker.run(lambda: bool(alias.item() > 0))
+            return self.a(data) if flag else self.b(data)
+
+    gate = torch.tensor([1.0])
+    data = torch.randn(1, 4)
+    trace = _capture(_OwnerDerivedAliasGate(), (gate, data))
+    assert host_escape_has_cross_thread_captured_tensor(trace)
+    path = tmp_path / "ownerderived.tlspec"
+    shutil.rmtree(path, ignore_errors=True)
+    trace.save(path, level="runnable", include_weights=True, include_activations=True)
+    result = tl.load(path).run(inputs=(torch.tensor([-1.0]), data))
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+
+
+def test_concurrent_foreign_str_loop_is_crash_free_and_verified(tmp_path: Path) -> None:
+    """r42 hon2_4: a daemon looping ``str(own_tensor)`` during a pure capture never crashes and
+    the deterministic capture stays VERIFIED (no over-trigger, owner-scoped op logging)."""
+
+    own = torch.randn(64)  # the daemon's OWN pre-window tensor, never captured
+    stop = threading.Event()
+    inside = threading.Event()
+
+    def _loop() -> None:
+        inside.set()
+        while not stop.is_set():
+            str(own)
+
+    bg = threading.Thread(target=_loop, daemon=True)
+    bg.start()
+    inside.wait()
+    try:
+
+        class _PureLoop(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.lin = nn.Linear(64, 64)
+
+            def forward(self, data: torch.Tensor) -> torch.Tensor:
+                y = data
+                for _ in range(20):
+                    y = torch.relu(self.lin(y))
+                return y
+
+        x = torch.randn(1, 64)
+        # Must NOT raise (the hon2_4 crash) and must stay VERIFIED (no over-trigger).
+        trace, result = _roundtrip(_PureLoop(), x, tmp=tmp_path)
+        assert not host_escape_has_cross_thread_captured_tensor(trace)
+        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    finally:
+        stop.set()
+        bg.join(timeout=2)
+
+
+class _SubclassDatetime(_datetime.datetime):
+    """A ``datetime.datetime`` subclass inheriting the C current-clock readers (hon1_1)."""
+
+
+@pytest.mark.parametrize("reader", ["now", "utcnow"])
+def test_datetime_subclass_clock_reader_ceilings(reader: str, tmp_path: Path) -> None:
+    """r42 hon1_1: a ``datetime.datetime`` SUBCLASS ``now``/``utcnow`` reads the wall clock and
+    ceilings (subclass-safe classification), exactly like the base spelling."""
+
+    class _SubclassClockBranch(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            v = getattr(_SubclassDatetime, reader)()
+            h = self.lin(x)
+            return h * 2.0 if v.microsecond % 2 == 0 else h * 3.0
+
+    x = torch.randn(2, 4)
+    trace, result = _roundtrip(_SubclassClockBranch(), x, tmp=tmp_path)
+    assert "datetime.datetime.%s" % reader in getattr(trace, "_runnable_host_rng_channels", ())
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+def test_datetime_subclass_localtime_transform_stays_verified(tmp_path: Path) -> None:
+    """No-over-trigger pin: a pure ``localtime(fixed_t)`` transform stays VERIFIED even though a
+    subclass clock reader is defined in the same process."""
+
+    fixed_t = 1_000_000.0
+
+    class _PureLocaltime(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            parts = _time.localtime(fixed_t)
+            return self.lin(x) * float(parts.tm_year % 7 + 1)
+
+    x = torch.randn(2, 4)
+    _trace, result = _roundtrip(_PureLocaltime(), x, tmp=tmp_path)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+class _CustomRngHolder:
+    """A non-builtin custom holder wrapping a numpy Generator (corr2_1)."""
+
+    def __init__(self, seed: int) -> None:
+        self.rng = np.random.default_rng(seed)
+
+
+def test_custom_holder_generator_drawn_on_worker_ceilings(
+    preexisting_worker: Any, tmp_path: Path
+) -> None:
+    """r42 corr2_1: a model-held generator behind a CUSTOM holder, drawn on a pre-existing worker,
+    is inventoried by the custom-holder sweep -> ``model_attribute_generator`` -> UNVERIFIABLE."""
+
+    class _CustomHolderGenModel(nn.Module):
+        def __init__(self, worker: Any) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self.holder = _CustomRngHolder(777)
+            self._worker = worker
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            v = self._worker.run(lambda: float(self.holder.rng.random()))
+            h = self.lin(x)
+            return h * 2.0 if v < 0.5 else h * 3.0
+
+    x = torch.randn(2, 4)
+    trace, result = _roundtrip(_CustomHolderGenModel(preexisting_worker), x, tmp=tmp_path)
+    assert "model_attribute_generator" in getattr(trace, "_runnable_host_rng_channels", ())
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+def test_custom_holder_undrawn_generator_stays_clean(
+    preexisting_worker: Any, tmp_path: Path
+) -> None:
+    """Over-trigger pin: a custom-holder generator that is NOT drawn stays VERIFIED."""
+
+    class _UndrawnHolderModel(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self.holder = _CustomRngHolder(3)  # present but never drawn
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.lin(x).relu()
+
+    x = torch.randn(2, 4)
+    trace, result = _roundtrip(_UndrawnHolderModel(), x, tmp=tmp_path)
+    assert "model_attribute_generator" not in getattr(trace, "_runnable_host_rng_channels", ())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
