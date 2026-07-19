@@ -215,11 +215,14 @@ def test_inplace_elementwise_ops_still_admitted() -> None:
 
 
 def test_pure_getters_and_factories_still_admitted() -> None:
-    """Pure reads / factories whose names dodge the guard stay resolvable."""
+    """Recognized reads / factories / ops stay resolvable.
+
+    ``initial_seed`` / ``get_rng_state`` carry an aten operator schema, the factories and
+    forward ops are overridable/aten, and ``operator.add`` is on the operator allowlist --
+    all recognized operators, so the r43 structural inversion keeps them admitted.
+    """
 
     for func in (
-        torch.get_default_dtype,
-        torch.get_num_threads,
         torch.initial_seed,
         torch.get_rng_state,
         torch.from_numpy,
@@ -230,6 +233,28 @@ def test_pure_getters_and_factories_still_admitted() -> None:
         operator.add,
     ):
         assert is_pure_forward_callable(func) is True, func
+
+
+def test_nonoperator_config_getters_denied_under_r43() -> None:
+    """r43: pure CONFIG getters that are NOT recognized operators are now DEFAULT-DENIED.
+
+    These ``torch``-root reads (``get_default_dtype`` / ``get_num_threads`` /
+    ``get_default_device`` / ``are_deterministic_algorithms_enabled`` /
+    ``get_num_interop_threads``) are neither torch-overridable nor aten-schema ops and
+    never appear as nodes in a captured forward DAG, so the r43 structural
+    recognized-operator inversion refuses them by default (harmless tightening: they are
+    pure reads, but default-deny is the point). Pre-r43 they slipped the module-prefix
+    admission because their names dodged the mutator verb guard.
+    """
+
+    for func in (
+        torch.get_default_dtype,
+        torch.get_num_threads,
+        torch.get_default_device,
+        torch.are_deterministic_algorithms_enabled,
+        torch.get_num_interop_threads,
+    ):
+        assert is_pure_forward_callable(func) is False, func
 
 
 @pytest.mark.parametrize("qualname", ["from_numpy", "frombuffer", "matmul", "conv2d"])
