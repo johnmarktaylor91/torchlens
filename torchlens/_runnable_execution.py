@@ -449,7 +449,10 @@ def _execute_loaded_sparse_transaction(
     )
     report = _run_report(
         readiness,
-        prepared_state,
+        state_source=prepared_state.state_source,
+        initializer_policy_version=prepared_state.initializer_policy_version,
+        seed=prepared_state.seed,
+        random_filled_slot_ids=prepared_state.random_filled_slot_ids,
         contract_checks=tuple(contract_checks),
         path_faithfulness=path_faithfulness,
         first_mismatch=mismatch,
@@ -463,8 +466,16 @@ def run_live_trace(
     inputs: Any,
     *,
     seed: int | None,
+    on_divergence: DivergencePolicy | str = DivergencePolicy.RAISE,
 ) -> RunResult:
     """Run the live-model refresh provider on a transactional fork.
+
+    r37 corr2-5: the live provider finalizes through the SAME spine as the sparse
+    provider -- ``mark_trace_path_status`` (monotonic Trace poison), the shared
+    divergence-policy enforcement, and the one ``_run_report`` finalizer (poison
+    derived solely from the faithfulness lattice). A lossy live reconstruction
+    therefore returns a POISONED report and a monotonically marked Trace that
+    every faithful consumer (``to_pandas``, export, chaining) refuses.
 
     Parameters
     ----------
@@ -474,6 +485,8 @@ def run_live_trace(
         New forward input accepted by the existing ``save_new_outs`` path.
     seed:
         Optional refresh seed.
+    on_divergence:
+        Divergence policy threaded from the public ``run`` surface.
 
     Returns
     -------
@@ -486,6 +499,7 @@ def run_live_trace(
         If the live source model is no longer available.
     """
 
+    divergence_policy = DivergencePolicy(on_divergence)
     source_ref = getattr(trace, "_source_model_ref", None)
     model = source_ref() if source_ref is not None else None
     if model is None:
@@ -527,8 +541,11 @@ def run_live_trace(
         # Honesty gate: only a faithfully reconstructed output (exact container type
         # and non-tensor leaves) is VERIFIED. An output we could only approximate
         # from naive leaf paths is UNVERIFIABLE, never blessed with a wrong object.
-        report = RunReport(
-            readiness=readiness,
+        provisional = PathFaithfulness.VERIFIED if faithful else PathFaithfulness.UNVERIFIABLE
+        path_faithfulness, mismatch = mark_trace_path_status(fork, provisional, None)
+        _raise_monotonic_divergence(fork, path_faithfulness, mismatch, divergence_policy)
+        report = _run_report(
+            readiness,
             state_source=StateSource.LIVE_MODEL_STATE,
             initializer_policy_version=None,
             seed=seed,
@@ -542,12 +559,9 @@ def run_live_trace(
                     "captured container contract.",
                 ),
             ),
-            path_faithfulness=(
-                PathFaithfulness.VERIFIED if faithful else PathFaithfulness.UNVERIFIABLE
-            ),
-            first_mismatch=None,
+            path_faithfulness=path_faithfulness,
+            first_mismatch=mismatch,
             numeric_attestation=NumericAttestationStatus.NOT_PRESENT,
-            poisoned=False,
         )
         return RunResult(output=output, trace=fork, report=report)
     except BaseException:
@@ -3392,19 +3406,24 @@ def _path_faithfulness(
 
 def _run_report(
     readiness: ReadinessReport,
-    state: PreparedRunnableState,
     *,
+    state_source: StateSource,
+    initializer_policy_version: str | None,
+    seed: int | None,
+    random_filled_slot_ids: tuple[str, ...],
     contract_checks: tuple[ContractCheck, ...],
     path_faithfulness: PathFaithfulness,
     first_mismatch: RunnableDiagnostic | None,
     numeric_attestation: NumericAttestationStatus,
 ) -> RunReport:
-    """Build the settled sparse run-report surface.
+    """Build the settled run-report surface -- the ONE report finalizer (r37 corr2-5).
 
-    r35 I3 tripwire-on-the-tripwire: ``attested`` structurally implies a
-    ``verified``, unpoisoned path. The prohibited combination is asserted
-    unrepresentable at construction, so no future code path can emit an
-    internally contradictory positive numeric claim.
+    EVERY provider (loaded sparse AND live refresh) routes its report through this
+    constructor: ``poisoned`` is DERIVED solely from ``path_faithfulness is not
+    VERIFIED`` (no caller Boolean exists), and the r35 I3 tripwire-on-the-tripwire
+    asserts ``attested`` structurally implies a verified, unpoisoned path, so no
+    provider can emit an internally contradictory report. Direct ``RunReport(``
+    construction outside this finalizer is forbidden (source-scan meta-test).
     """
 
     poisoned = path_faithfulness is not PathFaithfulness.VERIFIED
@@ -3417,10 +3436,10 @@ def _run_report(
         )
     return RunReport(
         readiness=readiness,
-        state_source=state.state_source,
-        initializer_policy_version=state.initializer_policy_version,
-        seed=state.seed,
-        random_filled_slot_ids=state.random_filled_slot_ids,
+        state_source=state_source,
+        initializer_policy_version=initializer_policy_version,
+        seed=seed,
+        random_filled_slot_ids=random_filled_slot_ids,
         contract_checks=contract_checks,
         path_faithfulness=path_faithfulness,
         first_mismatch=first_mismatch,

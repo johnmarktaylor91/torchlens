@@ -91,9 +91,6 @@ def test_r35_report_constructor_rejects_attested_nonverified() -> None:
     """The prohibited ATTESTED + non-VERIFIED combination is unrepresentable."""
 
     from torchlens._runnable_execution import _run_report
-    from torchlens._runnable_state import PreparedRunnableState
-    from types import MappingProxyType
-
     from torchlens.runnable import (
         ReadinessReport,
         ReadinessStatus,
@@ -112,18 +109,14 @@ def test_r35_report_constructor_rejects_attested_nonverified() -> None:
         witness_completeness=WitnessCompleteness.COMPLETE,
         diagnostics=(),
     )
-    state = PreparedRunnableState(
-        slot_values=MappingProxyType({}),
-        state_source=StateSource.RANDOM_INITIALIZATION,
-        initializer_policy_version=None,
-        seed=None,
-        random_filled_slot_ids=(),
-    )
     for verdict in (PathFaithfulness.DIVERGED, PathFaithfulness.UNVERIFIABLE):
         with pytest.raises(RuntimeError, match="attested"):
             _run_report(
                 readiness,
-                state,
+                state_source=StateSource.RANDOM_INITIALIZATION,
+                initializer_policy_version=None,
+                seed=None,
+                random_filled_slot_ids=(),
                 contract_checks=(),
                 path_faithfulness=verdict,
                 first_mismatch=None,

@@ -1179,3 +1179,84 @@ class TestContextFieldValidation:
         loaded = _save_load(model, x, tmp_path)
         verdict, _ = _verdict(loaded, x)
         assert verdict == "verified"
+
+
+# ======================================================================================
+# Class-closure meta-gates (Sol r37): structural guards a round-38 hunter cannot bypass
+# ======================================================================================
+
+
+_COUPLED_WITNESS_EXEC_FILES = (
+    "torchlens/_runnable_execution.py",
+    "torchlens/_runnable_state.py",
+    "torchlens/_io/runnable.py",
+    "torchlens/backends/torch/completeness_witness.py",
+    "torchlens/backends/torch/backend.py",
+    "torchlens/backends/torch/ops.py",
+)
+
+
+class TestClassClosureMetaGates:
+    """Source-scan gates: banned mechanisms cannot silently reappear."""
+
+    def _repo_root(self) -> Path:
+        return Path(__file__).resolve().parents[1]
+
+    def test_run_report_constructed_only_by_finalizer(self) -> None:
+        """corr2-5 / 3-ADJ-7: every provider routes through the one report finalizer."""
+
+        root = self._repo_root()
+        offenders: list[str] = []
+        for path in (root / "torchlens").rglob("*.py"):
+            text = path.read_text()
+            for lineno, line in enumerate(text.split("\n"), start=1):
+                stripped = line.strip()
+                if "RunReport(" not in stripped or stripped.startswith("#"):
+                    continue
+                if "return RunReport(" in stripped and path.name == "_runnable_execution.py":
+                    continue  # the _run_report finalizer itself
+                if "class RunReport" in stripped or "RunReport(`" in stripped:
+                    continue
+                if "-> RunReport" in stripped or ": RunReport" in stripped:
+                    continue
+                if "``RunReport(" in stripped:
+                    continue  # docstring reference
+                offenders.append(f"{path.relative_to(root)}:{lineno}: {stripped}")
+        assert not offenders, offenders
+
+    def test_no_pointer_equality_disjointness_outside_engine(self) -> None:
+        """INV-2: storage-pointer (in)equality never proves disjointness locally."""
+
+        root = self._repo_root()
+        banned_fragments = (
+            "left_footprint[0] != right_footprint[0]",
+            ".data_ptr() != ",
+            ".data_ptr() !=\n",
+        )
+        offenders: list[str] = []
+        for rel in _COUPLED_WITNESS_EXEC_FILES:
+            text = (root / rel).read_text()
+            for fragment in banned_fragments:
+                if fragment in text:
+                    offenders.append(f"{rel}: {fragment!r}")
+        assert not offenders, offenders
+
+    def test_banned_discharge_helpers_are_gone(self) -> None:
+        """INV-1: the value-collision and autograd-purity helpers stay deleted."""
+
+        root = self._repo_root()
+        banned_names = (
+            "_HOST_ESCAPE_UNATTRIBUTABLE_VALUES",
+            "_autograd_leaf_storage_ptrs",
+            "unmatched_unattr",
+            "matched_value_here",
+        )
+        offenders: list[str] = []
+        for rel in _COUPLED_WITNESS_EXEC_FILES:
+            text = (root / rel).read_text()
+            for name in banned_names:
+                for lineno, line in enumerate(text.split("\n"), start=1):
+                    stripped = line.strip()
+                    if name in stripped and not stripped.startswith("#"):
+                        offenders.append(f"{rel}:{lineno}: {stripped[:100]}")
+        assert not offenders, offenders
