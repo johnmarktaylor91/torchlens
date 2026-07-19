@@ -21,13 +21,11 @@ mixed-precision ops can be replayed under the same dtype context.
 """
 
 import datetime as _datetime_module
-import gc as _gc_module
 import os as _os_module
 import random
 import sys as _sys_module
 import threading as _threading_module
 import time as _time_module
-import warnings as _warnings_module
 from collections.abc import Callable
 from dataclasses import dataclass
 from types import TracebackType
@@ -553,6 +551,10 @@ future stdlib clock/RNG endpoint is a failing meta-test until it is given a regi
 """
 
 
+class _NotADigestableRng(Exception):
+    """Internal sentinel: the value is not a digestable numpy/`random` generator."""
+
+
 class HostRngMonitorResult:
     """Outcome of one capture-scoped host-nondeterminism monitoring window."""
 
@@ -665,9 +667,9 @@ class host_nondeterminism_monitor:
     """
 
     def __init__(self, model: Any = None) -> None:
-        # ``model`` is accepted for call-site compatibility; the process-wide inventory
-        # subsumes the r37 model-attribute-only sweep, so it is intentionally unused.
-        del model
+        # The model is swept for held numpy/`random` generators (a cheap O(attributes)
+        # thread-independent digest belt) -- NOT a process-wide ``gc.get_objects()`` scan.
+        self._model = model
         self.result = HostRngMonitorResult()
         self._restores: list[Callable[[], None]] = []
         self._owner_thread = _threading_module.get_ident()
@@ -781,35 +783,49 @@ class host_nondeterminism_monitor:
 
         return hook
 
-    def _inventory_rng_instances(self) -> list[tuple[Any, str]]:
+    def _sweep_model_generators(self) -> list[tuple[Any, str]]:
+        """Digest numpy/`random` generators reachable from the MODEL's submodule attributes.
+
+        r39 perf fix: this is the CHEAP belt (O(model attributes)), NOT a process-wide
+        ``gc.get_objects()`` scan. The earlier r39 draft's GC-wide inventory cost ~900 ms per
+        capture (measured; the dominant 3x-slowdown source), ran for EVERY capture ungated, its
+        ``gc.get_objects()`` allocation inside the peak-memory bracket perturbed the tracemalloc
+        peak, and it risked over-triggering on unrelated generators. It is removed.
+
+        The realistic hon1_1/corr2_2 CROSS-THREAD draw (an externally-held numpy Generator drawn
+        on an in-window helper thread) is caught by the ``threading.setprofile`` receiver
+        classifier; owner-thread instance draws and the immutable ``datetime`` readers by the
+        ``sys.setprofile`` classifier; unseeded construction and Python ``random`` by the
+        construction/class patches. This model-attribute digest is the thread-independent belt
+        for a generator the model itself HOLDS (caught even on a pre-existing thread). An
+        externally-held generator drawn on a PRE-EXISTING (non-hooked) thread is the documented
+        residual (contract s11), same class as the adversarial self-cleaning draw+state-restore.
+        """
+
         snapshots: list[tuple[Any, str]] = []
+        model = self._model
+        modules = getattr(model, "modules", None)
+        if not callable(modules):
+            return snapshots
         try:
-            objects = _gc_module.get_objects()
+            budget = 2000
+            for module in modules():
+                for value in list(getattr(module, "__dict__", {}).values()):
+                    budget -= 1
+                    if budget <= 0:
+                        return snapshots
+                    if id(value) in self._exempt_ids:
+                        continue
+                    try:
+                        digest = self._digest_rng_instance(value)
+                    except _NotADigestableRng:
+                        continue
+                    except Exception:
+                        self._flag_uncertain("inventory_state_read_failed")
+                        continue
+                    snapshots.append((value, digest))
         except Exception:
             self._flag_uncertain("inventory_scan_failed")
-            return snapshots
-        budget = 500_000
-        # A process-wide sweep touches unrelated third-party objects; suppress their
-        # incidental deprecation chatter (e.g. torch's ``reduce_op`` alias) so a plain
-        # capture stays quiet. The scan itself only does ``isinstance`` + state ``repr``.
-        with _warnings_module.catch_warnings():
-            _warnings_module.simplefilter("ignore")
-            for obj in objects:
-                budget -= 1
-                if budget <= 0:
-                    self._flag_uncertain("inventory_budget_exhausted")
-                    break
-                if id(obj) in self._exempt_ids:
-                    continue
-                try:
-                    if isinstance(obj, np.random.Generator):
-                        snapshots.append((obj, repr(obj.bit_generator.state)))
-                    elif isinstance(obj, np.random.RandomState):
-                        snapshots.append((obj, repr(obj.get_state())))
-                    elif isinstance(obj, np.random.BitGenerator):
-                        snapshots.append((obj, repr(obj.state)))
-                except Exception:
-                    self._flag_uncertain("inventory_state_read_failed")
         return snapshots
 
     @staticmethod
@@ -818,7 +834,9 @@ class host_nondeterminism_monitor:
             return repr(holder.bit_generator.state)
         if isinstance(holder, np.random.RandomState):
             return repr(holder.get_state())
-        return repr(holder.state)
+        if isinstance(holder, random.Random):
+            return repr(holder.getstate())
+        raise _NotADigestableRng
 
     # -- context protocol ---------------------------------------------------------
 
@@ -907,23 +925,20 @@ class host_nondeterminism_monitor:
                         f"datetime.{receiver.__name__}.{method}"
                     )
             # PRIMARY: process-wide GC instance inventory (thread-independent digests).
-            # This is the load-bearing witness for a REALISTIC pre-existing-thread RNG use:
-            # a draw from a persistent Generator/RandomState/BitGenerator on ANY thread
-            # (owner, in-window, OR a live pre-existing worker) advances that instance's
-            # state, which the before/after digest catches thread-independently (measured E3).
-            # Combined with the thread-independent construction/entropy/class patches
-            # (default_rng, randbits, _random.Random -- module/class-level, so they fire from
-            # any thread including pre-existing ones), realistic background-thread RNG is
-            # witnessed. The ONLY residual is an ADVERSARIAL persistent-instance draw followed
-            # by a bit_generator.state RESTORE on a pre-existing thread (E4), which nets zero
-            # observable state change and which no py<=3.11 mechanism can witness -- a
-            # documented residual (contract s11), analogous to ctypes / self-cleaning entropy,
-            # NOT a blanket ceiling on every capture that merely happens to run alongside a
-            # benign background thread (a DataLoader worker, a Jupyter history thread, a pytest
-            # plugin thread). The r38 draft's blanket thread-presence ceiling over-triggered
-            # INCOMPLETE on every such capture and is intentionally NOT applied here.
-            self._generator_states = self._inventory_rng_instances()
-            # BELT: dual chained profile hooks (owner thread + threads started in-window).
+            # BELT (thread-independent, CHEAP -- model attributes only): digest generators the
+            # model HOLDS, so a draw on ANY thread (incl. a pre-existing worker) is caught by the
+            # before/after state comparison. This replaces the r39-draft process-wide
+            # ``gc.get_objects()`` inventory that cost ~900 ms/capture (the dominant 3x slowdown),
+            # perturbed the tracemalloc peak (its list allocation ran inside the peak bracket),
+            # and could over-trigger on unrelated generators. Realistic CROSS-THREAD external
+            # draws (hon1_1/corr2_2) are caught by ``threading.setprofile`` below; an
+            # externally-held generator drawn on a PRE-EXISTING (non-hooked) thread is the
+            # documented residual (contract s11), same class as the adversarial draw+state-restore.
+            self._generator_states = self._sweep_model_generators()
+            # BELT: dual chained profile hooks (owner thread + threads started in-window). These
+            # are the r37/base mechanism (base runs them and is fast); the owner hook catches
+            # owner-thread numpy Generator instance draws and the immutable ``datetime`` readers,
+            # the threading hook catches an in-window helper-thread draw (hon1_1/corr2_2).
             self._previous_sys_profile = _sys_module.getprofile()
             self._sys_hook = self._make_profile_hook(self._previous_sys_profile)
             _sys_module.setprofile(self._sys_hook)
@@ -964,6 +979,6 @@ class host_nondeterminism_monitor:
         for holder, before in self._generator_states:
             try:
                 if self._digest_rng_instance(holder) != before:
-                    self._mark("rng_instance_inventory")
+                    self._mark("model_attribute_generator")
             except Exception:
                 self._flag_uncertain("inventory_compare_failed")

@@ -195,14 +195,16 @@ pytest tests/ -m "not slow" -x --tb=short
     `CONTAINER_KIND_CAPABILITIES` -- governs capture proof, save refusal, and forged-flag-proof
     load recompute; `tl.register_container` gains an explicit `state_complete=` declaration).
     Host nondeterminism outside the two replayable global engines (RNG instances incl.
-    outside-held NumPy Generators via a thread-independent process-wide state inventory, bare
+    outside-held NumPy Generators via a chained `sys`/`threading.setprofile` classifier + a cheap
+    model-attribute state digest (no process-wide gc scan), bare
     `_random.Random`, unseeded-construction `randbits` entropy, `SystemRandom`/`secrets`, OS
     entropy, `uuid4`, `default_rng`, the full clock family incl. `datetime.now`/`localtime`/
     `os.times`/`getrusage`) permanently ceilings replay at `unverifiable` + `not_applicable`;
     monitor uncertainty (install/chain/restore/inventory failure) downgrades completeness to
     INCOMPLETE; a realistic pre-existing-thread persistent-generator draw is witnessed by the
-    state inventory, and only an adversarial draw+state-restore on such a thread is a documented
-    residual (a benign background thread never ceilings a capture). Loaded-sparse and live
+    setprofile classifier / model digest, and only an externally-held generator drawn on a
+    pre-existing non-hooked thread is a documented residual (a benign background thread never
+    ceilings a capture). Loaded-sparse and live
     providers settle through ONE finalizer
     (identical verdict class): a live opaque-container output is `unverifiable`+poisoned, a
     parse-refused descriptor degrades every payload family to analysis-only, and an inexecutable

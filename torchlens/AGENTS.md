@@ -82,9 +82,10 @@ alias topology and zero-tensor-leaf or instance-stateful container outputs refus
 (`state_alias_topology_unsupported` / `missing_output_container_contract`); tied live-identity
 state stages as one alias-group allocation; persisted context values validate at parse
 (`context_field_invalid`); non-global host RNG/entropy/clock touches permanently ceiling replay
-(r39: numpy instances via a thread-independent process-wide state inventory, unseeded-construction
-`randbits` entropy, `datetime`/`localtime` clocks, and a live pre-existing non-owner Python thread
--> INCOMPLETE on py<=3.11); tensor->host VALUE escapes are caught by dual observer routes (aten
+(r39: numpy instances via a chained `sys`/`threading.setprofile` classifier + a cheap
+model-attribute state digest -- NO process-wide gc scan; unseeded-construction `randbits` entropy;
+`datetime`/`localtime` clocks; an externally-held generator on a pre-existing non-hooked thread is
+a documented residual, and a benign background thread never ceilings a capture); tensor->host VALUE escapes are caught by dual observer routes (aten
 census + a mode-independent method/predicate belt for `_disable_current_modes` regions, plus the
 `__repr__`/`__str__` print interception); loaded-sparse and live providers settle through one
 finalizer (a live opaque output is `unverifiable`+poisoned, a parse-refused descriptor degrades

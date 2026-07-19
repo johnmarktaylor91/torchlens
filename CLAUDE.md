@@ -272,16 +272,17 @@ tensor leaves (all-literal trees, literal roots, empty containers) and namedtupl
 registered-container outputs carrying extra per-instance state refuse at save
 (`missing_output_container_contract`; one per-kind capability table governs capture proof, save
 refusal, and load-time recompute). Host nondeterminism beyond the two replayable global engines
--- RNG instances (incl. outside-held NumPy Generators, witnessed by a thread-independent
-process-wide state inventory; bare `_random.Random`; unseeded-construction entropy via the
+-- RNG instances (incl. outside-held NumPy Generators, witnessed by a chained
+`sys`/`threading.setprofile` receiver classifier + a cheap model-attribute state digest -- NO
+process-wide gc scan; bare `_random.Random`; unseeded-construction entropy via the
 `randbits` alias), `SystemRandom`/`secrets`, OS entropy, `uuid4`, the `default_rng` factory, and
 the full clock family (`time.*` counters, `localtime`/`strftime`/`datetime.now`/`date.today`,
 `os.times`/`getrusage`) -- ceilings every replay permanently (`unverifiable` + `not_applicable`);
 monitor uncertainty (install/chain/restore/inventory failure) downgrades completeness, never reads
 as no-consumption. A realistic pre-existing-thread draw from a persistent numpy generator is
-witnessed thread-independently by the state inventory; only an adversarial persistent-instance
-draw+state-restore on a pre-existing thread is a documented residual (a benign background thread
-never ceilings a capture). The loaded-sparse and live-refresh
+witnessed by the setprofile classifier / model digest; only an externally-held generator drawn on
+a pre-existing (non-hooked) thread is a documented residual (a benign background thread never
+ceilings a capture). The loaded-sparse and live-refresh
 providers settle through ONE finalizer (identical verdict class): a live opaque-container output
 is `unverifiable` + poisoned (never a wrongly-blessed bare tensor), a parse-refused descriptor
 degrades EVERY payload family to analysis-only with its typed diagnostic intact, and an

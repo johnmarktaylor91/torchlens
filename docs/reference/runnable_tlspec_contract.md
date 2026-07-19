@@ -838,12 +838,14 @@ seed) reports `unverifiable` + `not_applicable`:
 1. non-global `random.Random` / `random.SystemRandom` / bare `_random.Random` draw primitives
    (`random`, `getrandbits`, `randbytes`) -- private instances and subclasses included
    (class-level monitoring; the bare C base `_random.Random()` channel is patched too, r39);
-2. numpy `Generator` / `BitGenerator` / `RandomState` INSTANCE draws, witnessed by a PRIMARY
-   thread-independent process-wide state inventory (a bounded `gc`-visible before/after state
-   digest of every such instance minus the replayable global singletons + barcode RNG -- an
-   externally-held generator drawn on ANY thread, including a pre-existing worker, is caught by
-   its state digest, r39), belted by a chained `sys.setprofile` (owner) + `threading.setprofile`
-   (threads started in-window) receiver classifier;
+2. numpy `Generator` / `BitGenerator` / `RandomState` INSTANCE draws, witnessed by a chained
+   `sys.setprofile` (owner thread) + `threading.setprofile`
+   (threads started in-window) receiver classifier (the immutable numpy Generator classes cannot
+   be class-patched, so the profile-hook receiver typing is the mechanism -- an externally-held
+   generator drawn on the owner or an in-window helper thread is caught, including the
+   hon1_1/corr2_2 cross-thread case), belted by a cheap thread-independent before/after state
+   digest of any generator the MODEL itself holds as a submodule attribute (O(attributes), not a
+   process-wide `gc` scan -- the r39-draft process-wide inventory was removed for cost);
 3. UNSEEDED numpy generator CONSTRUCTION, via `numpy.random.default_rng` and the writable
    `numpy.random.bit_generator.randbits` construction-entropy alias (r39): an unseeded
    `PCG64()` / `default_rng()` built on any thread marks;
@@ -871,28 +873,26 @@ or event classification failure) downgrades capture completeness to INCOMPLETE -
 as no-consumption.
 
 **Positively-covered thread qualification (r39).** Entropy / instance / construction / clock
-positives mark on ANY COVERED thread (thread-independent module/class patches, the process
-inventory, and every profile-hooked thread -- the owner plus threads started in-window). A
-REALISTIC pre-existing non-owner Python thread RNG use (a background worker drawing from a
-persistent `Generator`/`RandomState`/`BitGenerator`, or constructing an unseeded generator) IS
-witnessed: the process-wide before/after state inventory catches the persistent-instance draw
-thread-independently, and the module/class construction/entropy patches (`default_rng`,
-`randbits`, `random.Random`/`SystemRandom`/`_random.Random`) fire from any thread. The monitor
-does NOT ceiling a capture merely because a benign background thread (a DataLoader worker, a
-Jupyter history thread, a pytest plugin thread) is alive -- that over-triggered every such
-capture and is not applied.
+positives mark on ANY COVERED thread (thread-independent module/class patches; the cheap
+model-attribute generator digest; and every profile-hooked thread -- the owner plus threads
+started in-window). An IN-WINDOW cross-thread external-generator draw (hon1_1/corr2_2) is caught
+by `threading.setprofile`; an owner-thread numpy instance draw and the immutable `datetime`
+readers by `sys.setprofile`; a model-held generator on any thread by its state digest; unseeded
+construction and Python `random` by the construction/class patches. The monitor does NOT ceiling a
+capture merely because a benign background thread (a DataLoader worker, a Jupyter history thread, a
+pytest plugin thread) is alive, and it does NOT run a process-wide `gc` scan per capture (the
+r39-draft inventory cost ~900 ms/capture and perturbed the peak-memory measurement -- removed).
 
 Absence of a touch proves no touch of THIS NAMED vocabulary; it does not claim environmental
 determinism for channels outside it. The residual tail is exactly: (i) direct `/dev/urandom` file
 reads; (ii) ctypes / user C-extension entropy or clock reads that never cross a Python-visible
 call surface; (iii) legacy `RandomState()` C-level CONSTRUCTION entropy (its DRAWS stay
-inventory/digest-witnessed); and (iv) an ADVERSARIAL persistent-instance draw immediately
-followed by a `bit_generator.state` RESTORE on a PRE-EXISTING (already-running, non-owner) thread
--- a self-cleaning sequence that nets zero observable state change and that `threading.setprofile`
-cannot reach on Python <= 3.11, analogous to the tensor-subclass dispatch-disable adversarial
-construction a cooperative model does not exercise. `datetime.now()` / `localtime()` are NOT
-residual (covered above). Future all-thread coverage of the adversarial case is `sys.monitoring`
-(PEP 669, 3.12+, interpreter-wide).
+digest/profile-witnessed); and (iv) an externally-held generator drawn on a PRE-EXISTING
+(already-running, non-owner, non-hooked) thread -- which `threading.setprofile` cannot reach on
+Python <= 3.11 and which the model-attribute digest does not cover (the generator is not a model
+attribute) -- of the same class as the adversarial draw+`state`-restore a cooperative model does
+not exercise. `datetime.now()` / `localtime()` are NOT residual (covered above). Future all-thread
+coverage is `sys.monitoring` (PEP 669, 3.12+, interpreter-wide).
 
 A pruned `.data`-alias BOOL control predicate whose leaf origins resolve positively (e.g.
 `bool(self.gate.data > 0.5)` -> the gate's state digest) is witnessed by that basis: the

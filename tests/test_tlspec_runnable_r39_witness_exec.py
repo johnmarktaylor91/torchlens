@@ -312,22 +312,29 @@ def test_benign_background_thread_does_not_ceiling_capture(tmp_path: Path) -> No
         worker.join()
 
 
-def test_pre_existing_thread_persistent_draw_is_witnessed_by_inventory() -> None:
-    """A REAL persistent-instance draw on a pre-existing thread is still witnessed (E3).
+def test_model_held_generator_draw_is_witnessed_by_digest() -> None:
+    """A model-HELD numpy generator draw is witnessed thread-independently by the cheap digest.
 
-    Dropping the blanket ceiling does not lose the realistic case: the thread-independent state
-    inventory catches a background worker's draw from a persistent numpy Generator, so the
-    monitor still marks host-RNG consumption (the run would ceiling honestly).
+    The r39-draft process-wide GC inventory (the ~900 ms/capture 3x-slowdown source) is replaced
+    by an O(model-attributes) state digest. A generator the model holds is still caught on ANY
+    thread by the before/after digest, so no realistic model-held RNG use is lost.
     """
 
     from torchlens.utils.rng import host_nondeterminism_monitor
 
-    gen = np.random.default_rng(7)  # persistent, held across the window
-    with host_nondeterminism_monitor(None) as result:
+    class _HeldGen:
+        def __init__(self) -> None:
+            self.rng = np.random.default_rng(7)
+
+        def modules(self) -> Any:
+            return [self]
+
+    holder = _HeldGen()
+    with host_nondeterminism_monitor(holder) as result:
         done = threading.Event()
 
         def _draw() -> None:
-            float(gen.standard_normal())
+            float(holder.rng.standard_normal())
             done.set()
 
         worker = threading.Thread(target=_draw, name="drawing-worker", daemon=True)
@@ -335,7 +342,20 @@ def test_pre_existing_thread_persistent_draw_is_witnessed_by_inventory() -> None
         worker.join()
         done.wait(1.0)
     assert result.uncertain is False
-    assert "rng_instance_inventory" in result.channels
+    assert "model_attribute_generator" in result.channels
+
+
+def test_external_generator_helper_thread_draw_is_witnessed_by_profile() -> None:
+    """A cross-thread external-generator draw (hon1_1/corr2_2) is caught without the GC scan.
+
+    An externally-held generator drawn on an IN-WINDOW helper thread is witnessed by the
+    ``threading.setprofile`` receiver classifier -- the realistic case the plan requires, kept
+    after dropping the GC-wide inventory.
+    """
+
+    x = torch.randn(2, 4)
+    assert _host_rng_consumed(_ThreadedNpGenBranch(), x) is True
+    assert _host_rng_consumed(_ThreadedRandomStateBranch(), x) is True
 
 
 def test_back_to_back_captures_are_isolated(tmp_path: Path) -> None:
