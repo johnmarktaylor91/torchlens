@@ -435,10 +435,10 @@ them is redundant and is pinned by regression tests instead.
 HOST_VALUE_ESCAPE_MODULE_FUNCS = frozenset({"equal", "allclose", "is_nonzero"})
 """``torch.*`` MODULE predicate spellings of the pure tensor->``bool`` escapes (r39 hon2_1).
 
-``torch.equal(a, b)`` / ``torch.allclose(a, b)`` / ``torch.is_nonzero(t)`` return a raw Python
-bool DIRECTLY from the dispatcher and, under an explicit ``_disable_current_modes()`` region,
-bypass the census (E6). The module functions are wrapped to record every tensor operand as an
-escape source, mirroring the Tensor-method belt.
+The module-level ``equal`` / ``allclose`` / ``is_nonzero`` functions return a raw Python bool
+DIRECTLY from the dispatcher and, under an explicit ``_disable_current_modes()`` region, bypass
+the census (E6). The module functions are wrapped to record every tensor operand as an escape
+source, mirroring the Tensor-method belt.
 """
 
 INPUT_METADATA_PREDICATE_FUNCS = frozenset({"is_contiguous", "stride", "storage_offset"})
