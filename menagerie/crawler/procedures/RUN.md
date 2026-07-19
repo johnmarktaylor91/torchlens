@@ -73,3 +73,10 @@ the first subsequent check rehashes once and, when content is byte-identical, re
 authority's cheap baseline without changing its authority or generation. A changed content digest
 invalidates the authority before spawn. Only a privileged/out-of-band actor preserving every cheap
 field, a release-rejected coarse filesystem, or the final verify/read TOCTOU can defer detection.
+
+On Linux, host ELF transport is a named exact capability derived from the selected interpreter's
+`ldd` inventory. The same frozen member set and digest drive bubblewrap's read-only mounts and the
+parent strace classifier after the exact worker-interpreter `execve`. `/lib*` and `/usr/lib*` remain
+loader lookup locations, not read authorities; an unlisted host library is never blessed merely
+because its pathname is below one of those directories. Bubblewrap's own pre-worker loader traffic
+is launcher activity outside the model worker audit phase.

@@ -34,6 +34,7 @@ from menagerie.crawler.authority import (
     verify_execution_read_manifest_v2,
     verify_execution_read_manifest_v3,
 )
+from menagerie.crawler.identity import hash_bytes, stable_hash
 
 _CREDENTIAL_MARKERS = (
     "SECRET",
@@ -173,6 +174,44 @@ class OperatingSystemSandbox:
 
     kind: SandboxKind
     executable: str
+
+
+@dataclass(frozen=True)
+class HostTransportLibraryCapability:
+    """Closed exact ELF-library capability for one Linux worker interpreter.
+
+    Parameters
+    ----------
+    interpreter:
+        Canonical selected worker interpreter that owns this transport inventory.
+    members:
+        Exact loader and shared-library pathnames mounted into the worker namespace.
+    canonical_members:
+        Resolved forms of ``members`` used by parent syscall classification.
+    digest:
+        Stable identity over the interpreter, member paths, and member bytes.
+    """
+
+    interpreter: Path
+    members: tuple[Path, ...]
+    canonical_members: tuple[Path, ...]
+    digest: str
+
+    def allows(self, path: Path) -> bool:
+        """Return whether ``path`` is an exact declared transport member.
+
+        Parameters
+        ----------
+        path:
+            Parent-observed path proposed for transport classification.
+
+        Returns
+        -------
+        bool
+            True only when the canonical path belongs to this closed capability.
+        """
+
+        return path.resolve() in self.canonical_members
 
 
 class SandboxUnavailableError(RuntimeError):
@@ -408,6 +447,61 @@ def _linux_dynamic_runtime_files(executable: Path) -> tuple[Path, ...]:
     return tuple(dict.fromkeys(paths))
 
 
+def _linux_host_transport_library_capability(
+    executable: Path,
+) -> HostTransportLibraryCapability:
+    """Derive the closed host-library capability for one Linux interpreter.
+
+    Parameters
+    ----------
+    executable:
+        Selected worker interpreter whose exact ELF dependencies will be mounted.
+
+    Returns
+    -------
+    HostTransportLibraryCapability
+        Frozen canonical member set and content-bound digest shared by mount and audit.
+
+    Raises
+    ------
+    SandboxUnavailableError
+        If an inventoried member cannot be resolved or read.
+    """
+
+    interpreter = executable.resolve()
+    try:
+        members = tuple(
+            sorted(
+                {path.absolute() for path in _linux_dynamic_runtime_files(interpreter)},
+                key=lambda path: str(path),
+            )
+        )
+        canonical_members = tuple(path.resolve(strict=True) for path in members)
+        member_records = [
+            {
+                "mount_path": str(path),
+                "canonical_path": str(canonical),
+                "sha256": hash_bytes(canonical.read_bytes()),
+            }
+            for path, canonical in zip(members, canonical_members)
+        ]
+    except OSError as exc:
+        raise SandboxUnavailableError("Linux transport capability member is unavailable") from exc
+    digest = stable_hash(
+        {
+            "kind": "host-transport-library-capability.v1",
+            "interpreter": str(interpreter),
+            "members": member_records,
+        }
+    )
+    return HostTransportLibraryCapability(
+        interpreter=interpreter,
+        members=members,
+        canonical_members=canonical_members,
+        digest=digest,
+    )
+
+
 def _linux_environment_prefix(executable: Path) -> Path:
     """Return the closed interpreter/environment prefix for a Linux executable.
 
@@ -470,31 +564,6 @@ def _linux_runtime_code_roots(argv: Sequence[str], cwd: Path) -> tuple[Path, ...
             )
         )
     )
-
-
-def _linux_runtime_read_paths(argv: Sequence[str]) -> tuple[Path, ...]:
-    """Return exact interpreter and ELF runtime files needed by a Linux worker.
-
-    Parameters
-    ----------
-    argv:
-        Original child command whose first entry is the worker interpreter.
-
-    Returns
-    -------
-    tuple[pathlib.Path, ...]
-        Exact executable, loader, and shared-library paths.
-
-    Raises
-    ------
-    SandboxUnavailableError
-        If the worker command is empty or its runtime cannot be inventoried.
-    """
-
-    if not argv:
-        raise SandboxUnavailableError("worker command is empty")
-    executable = Path(argv[0]).resolve()
-    return tuple(dict.fromkeys((executable, *_linux_dynamic_runtime_files(executable))))
 
 
 def _runtime_static_path_allowed(path: Path) -> bool:
@@ -937,7 +1006,11 @@ def _runtime_code_path_allowed(path: Path, runtime_code_roots: Sequence[Path]) -
 
 
 def _linux_minimal_read_mounts(
-    argv: Sequence[str], cwd: Path, allowed_read_paths: Sequence[Path]
+    argv: Sequence[str],
+    cwd: Path,
+    allowed_read_paths: Sequence[Path],
+    *,
+    host_transport_capability: Optional[HostTransportLibraryCapability] = None,
 ) -> tuple[Path, ...]:
     """Build the minimal read-only Linux namespace mount inventory.
 
@@ -949,6 +1022,8 @@ def _linux_minimal_read_mounts(
         Parent-verified source root used by the child.
     allowed_read_paths:
         Exact request, adapter, and declared-input paths.
+    host_transport_capability:
+        Precomputed exact ELF transport members. Direct callers derive it when omitted.
 
     Returns
     -------
@@ -964,12 +1039,15 @@ def _linux_minimal_read_mounts(
     if not argv:
         raise SandboxUnavailableError("worker command is empty")
     executable = Path(argv[0]).resolve()
+    transport = host_transport_capability or _linux_host_transport_library_capability(executable)
+    if transport.interpreter != executable:
+        raise SandboxUnavailableError("Linux transport capability belongs to another interpreter")
     source_root = cwd.resolve()
     candidates = [
         _linux_environment_prefix(executable),
         source_root,
         *allowed_read_paths,
-        *_linux_dynamic_runtime_files(executable),
+        *transport.members,
     ]
     normalized: list[Path] = []
     for candidate in candidates:
@@ -995,6 +1073,7 @@ def _bubblewrap_argv(
     cwd: Path,
     write_roots: Sequence[Path],
     allowed_read_paths: Sequence[Path],
+    host_transport_capability: Optional[HostTransportLibraryCapability] = None,
 ) -> tuple[str, ...]:
     """Build a bubblewrap command with a default-invisible host filesystem.
 
@@ -1010,6 +1089,8 @@ def _bubblewrap_argv(
         Sole writable scratch and result roots.
     allowed_read_paths:
         Exact declared source/input paths outside the source root.
+    host_transport_capability:
+        Exact interpreter ELF capability shared with parent syscall audit.
 
     Returns
     -------
@@ -1028,7 +1109,12 @@ def _bubblewrap_argv(
         "--dev",
         "/dev",
     ]
-    for path in _linux_minimal_read_mounts(argv, cwd, allowed_read_paths):
+    for path in _linux_minimal_read_mounts(
+        argv,
+        cwd,
+        allowed_read_paths,
+        host_transport_capability=host_transport_capability,
+    ):
         wrapped.extend(("--ro-bind", str(path), str(path)))
     for device in _linux_compute_devices():
         wrapped.extend(("--dev-bind", str(device), str(device)))
@@ -1132,6 +1218,7 @@ def wrap_with_os_sandbox(
     *,
     macos_profile_path: Optional[Path] = None,
     allowed_read_paths: Sequence[Path] = (),
+    host_transport_capability: Optional[HostTransportLibraryCapability] = None,
 ) -> tuple[str, ...]:
     """Wrap a child command in a capability-probed OS sandbox.
 
@@ -1149,6 +1236,8 @@ def wrap_with_os_sandbox(
         Generated profile path required by sandbox-exec.
     allowed_read_paths:
         Exact source/input paths exposed inside a minimal Linux namespace.
+    host_transport_capability:
+        Exact Linux interpreter ELF capability shared with parent syscall audit.
 
     Returns
     -------
@@ -1173,6 +1262,7 @@ def wrap_with_os_sandbox(
             cwd,
             roots,
             allowed_read_paths,
+            host_transport_capability,
         )
     raise SandboxUnavailableError("unsupported OS sandbox implementation")
 

@@ -44,10 +44,11 @@ from menagerie.crawler.policy import (
     _PARENT_ALLOWED_READ_PATHS_ENV,
     _PARENT_STANDARD_INPUT_ASSET_ENV,
     _MODEL_DATA_SUFFIXES,
+    HostTransportLibraryCapability,
     SandboxUnavailableError,
     _allowed_exact_or_derived_file,
+    _linux_host_transport_library_capability,
     _linux_runtime_code_roots,
-    _linux_runtime_read_paths,
     _runtime_code_path_allowed,
     _runtime_import_metadata_path_allowed,
     _runtime_model_data_path,
@@ -1913,6 +1914,7 @@ def _read_path_is_allowed(
     allowed_read_paths: Sequence[Path],
     runtime_code_roots: Sequence[Path],
     *,
+    host_transport_capability: Optional[HostTransportLibraryCapability] = None,
     directory_only: bool = False,
     standard_input_asset: Optional[Path] = None,
 ) -> bool:
@@ -1930,6 +1932,8 @@ def _read_path_is_allowed(
         Exact source/input paths derived from the immutable worker request.
     runtime_code_roots:
         Environment and verified-source roots limited to runtime-code reads.
+    host_transport_capability:
+        Exact interpreter ELF members mounted for this worker launch.
     directory_only:
         Whether the traced open explicitly required a directory descriptor.
     standard_input_asset:
@@ -1975,7 +1979,7 @@ def _read_path_is_allowed(
         pass
     if _runtime_native_code_path_allowed(candidate, runtime_roots):
         return True
-    if _system_transport_library_path_allowed(candidate):
+    if _system_transport_library_path_allowed(candidate, host_transport_capability):
         return True
     if _runtime_code_path_allowed(candidate, runtime_code_roots):
         return True
@@ -1997,24 +2001,26 @@ def _read_path_is_allowed(
     return False
 
 
-def _system_transport_library_path_allowed(path: Path) -> bool:
-    """Return whether a path is a host native library for sandbox transport.
+def _system_transport_library_path_allowed(
+    path: Path,
+    capability: Optional[HostTransportLibraryCapability] = None,
+) -> bool:
+    """Return whether a path belongs to the exact host transport capability.
 
     Parameters
     ----------
     path:
         Resolved candidate path observed by parent syscall telemetry.
+    capability:
+        Closed exact capability derived for the selected worker interpreter.
 
     Returns
     -------
     bool
-        True for native shared libraries under conventional host library roots.
+        True only for an exact declared transport member.
     """
 
-    library_roots = (Path("/lib"), Path("/lib64"), Path("/usr/lib"), Path("/usr/lib64"))
-    return any(path == root or root in path.parents for root in library_roots) and (
-        path.suffix in {".so", ".dylib"} or ".so." in path.name.lower()
-    )
+    return capability is not None and capability.allows(path)
 
 
 def _trace_process_id(line: str) -> str:
@@ -2124,6 +2130,38 @@ def _trace_line_is_well_formed(line: str) -> bool:
     )
 
 
+def _worker_trace_records(
+    records: Sequence[str],
+    capability: HostTransportLibraryCapability,
+) -> Optional[tuple[str, ...]]:
+    """Return records at and after the selected worker interpreter exec.
+
+    Parent strace starts outside bubblewrap, so the sandbox launcher's own loader
+    traffic precedes the model worker and is not part of worker read authority.
+
+    Parameters
+    ----------
+    records:
+        Complete chronological syscall records for the bubblewrap process tree.
+    capability:
+        Exact transport capability bound to the selected worker interpreter.
+
+    Returns
+    -------
+    tuple[str, ...] | None
+        Worker-phase records beginning with its exact exec, or ``None`` when the
+        audited process tree never entered the declared interpreter.
+    """
+
+    for index, line in enumerate(records):
+        if _syscall_name(line) != "execve":
+            continue
+        paths = _decoded_trace_paths(line)
+        if paths and _resolved_trace_path(paths[0], Path("/")) == capability.interpreter:
+            return tuple(records[index:])
+    return None
+
+
 def _parse_linux_denial_audit(
     audit_path: Path,
     cwd: Path,
@@ -2132,6 +2170,7 @@ def _parse_linux_denial_audit(
     expected_identity: Optional[tuple[int, int]] = None,
     allowed_read_paths: Sequence[Path] = (),
     runtime_code_roots: Sequence[Path] = (),
+    host_transport_capability: Optional[HostTransportLibraryCapability] = None,
     standard_input_asset: Optional[Path] = None,
 ) -> SandboxDenialObservation:
     """Parse Linux syscall telemetry into closed worker policy observations.
@@ -2150,6 +2189,8 @@ def _parse_linux_denial_audit(
         Explicit source/input paths authorized for model execution.
     runtime_code_roots:
         Environment and verified-source roots limited to runtime-code reads.
+    host_transport_capability:
+        Exact interpreter ELF members mounted for this worker launch.
     standard_input_asset:
         Exact trusted standard asset allowed through deny-first model-data checks.
 
@@ -2185,6 +2226,11 @@ def _parse_linux_denial_audit(
     completed_lines = _complete_trace_records(raw_lines)
     if completed_lines is None:
         return _telemetry_failure_observation("unparsable-continuation")
+    if host_transport_capability is not None:
+        worker_records = _worker_trace_records(completed_lines, host_transport_capability)
+        if worker_records is None:
+            return _telemetry_failure_observation("missing-worker-exec")
+        completed_lines = worker_records
     socket_targets: list[str] = []
     write_paths: list[str] = []
     checkpoint_paths: list[str] = []
@@ -2208,6 +2254,7 @@ def _parse_linux_denial_audit(
                     write_roots,
                     allowed_read_paths,
                     runtime_code_roots,
+                    host_transport_capability=host_transport_capability,
                     directory_only="O_DIRECTORY" in line,
                     standard_input_asset=standard_input_asset,
                 )
@@ -2243,6 +2290,7 @@ def _parse_linux_denial_audit(
                 write_roots,
                 allowed_read_paths,
                 runtime_code_roots,
+                host_transport_capability=host_transport_capability,
                 standard_input_asset=standard_input_asset,
             ):
                 checkpoint_paths.append(paths[0])
@@ -2262,6 +2310,7 @@ def _parse_linux_denial_audit(
                     write_roots,
                     allowed_read_paths,
                     runtime_code_roots,
+                    host_transport_capability=host_transport_capability,
                     standard_input_asset=standard_input_asset,
                 )
             ):
@@ -2279,6 +2328,7 @@ def _parse_linux_denial_audit(
                     write_roots,
                     allowed_read_paths,
                     runtime_code_roots,
+                    host_transport_capability=host_transport_capability,
                     standard_input_asset=standard_input_asset,
                 )
             ):
@@ -3157,7 +3207,7 @@ def run_isolated_subprocess(
         raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
     profile_path: Optional[Path] = None
     linux_runtime_code_roots: tuple[Path, ...] = ()
-    linux_runtime_read_paths: tuple[Path, ...] = ()
+    linux_host_transport_capability: Optional[HostTransportLibraryCapability] = None
     macos_runtime_read_roots: tuple[Path, ...] = ()
     if sandbox.kind == "sandbox-exec":
         discovered_roots = _runtime_read_roots(argv, working_directory)
@@ -3189,7 +3239,7 @@ def run_isolated_subprocess(
             linux_runtime_code_roots = (execution_read_manifest.environment_authority.prefix,)
         elif isinstance(execution_read_manifest, ExecutionReadManifestV2):
             linux_runtime_code_roots = ()
-        linux_runtime_read_paths = _linux_runtime_read_paths(argv)
+        linux_host_transport_capability = _linux_host_transport_library_capability(Path(argv[0]))
     sandboxed_argv = wrap_with_os_sandbox(
         sandbox,
         argv,
@@ -3197,6 +3247,7 @@ def run_isolated_subprocess(
         write_roots,
         macos_profile_path=profile_path,
         allowed_read_paths=allowed_read_paths,
+        host_transport_capability=linux_host_transport_capability,
     )
     denial_audit_path: Optional[Path] = None
     denial_audit_identity: Optional[tuple[int, int]] = None
@@ -3337,8 +3388,9 @@ def run_isolated_subprocess(
             working_directory,
             write_roots,
             expected_identity=denial_audit_identity,
-            allowed_read_paths=(*allowed_read_paths, *linux_runtime_read_paths),
+            allowed_read_paths=allowed_read_paths,
             runtime_code_roots=linux_runtime_code_roots,
+            host_transport_capability=linux_host_transport_capability,
             standard_input_asset=(
                 None
                 if execution_read_manifest is None

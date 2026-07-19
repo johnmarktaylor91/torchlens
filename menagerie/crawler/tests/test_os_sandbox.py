@@ -13,6 +13,8 @@ from menagerie.crawler import worker_supervisor
 from menagerie.crawler.policy import (
     ExecutionPolicy,
     PolicyViolation,
+    _linux_host_transport_library_capability,
+    _linux_minimal_read_mounts,
     detect_os_sandbox,
     generate_macos_sandbox_profile,
 )
@@ -90,6 +92,42 @@ def test_linux_os_sandbox_wraps_command_and_denies_network_and_outside_write(
     assert observation.exit_code == 71
     assert "write_denied=True network_denied=True" in observation.stdout_tail
     assert not outside.exists()
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux transport capability test")
+def test_linux_mount_and_parent_audit_share_exact_transport_capability() -> None:
+    """Linux mount and audit accept only one interpreter's exact ELF members."""
+
+    interpreter = Path(sys.executable).resolve()
+    capability = _linux_host_transport_library_capability(interpreter)
+    assert capability.members
+    assert capability.digest.startswith("sha256:")
+    mounts = _linux_minimal_read_mounts(
+        (str(interpreter),),
+        Path.cwd(),
+        (),
+        host_transport_capability=capability,
+    )
+    prefix = interpreter.parent.parent
+    assert all(path in mounts or path.is_relative_to(prefix) for path in capability.members)
+    assert all(
+        worker_supervisor._system_transport_library_path_allowed(  # noqa: SLF001
+            path,
+            capability,
+        )
+        for path in capability.canonical_members
+    )
+
+    unlisted = next(
+        resolved
+        for candidate in sorted(Path("/usr/lib").rglob("*.so*"), key=lambda path: str(path))
+        if (resolved := candidate.resolve()).is_file()
+        and resolved not in capability.canonical_members
+    )
+    assert not worker_supervisor._system_transport_library_path_allowed(  # noqa: SLF001
+        unlisted,
+        capability,
+    )
 
 
 def test_supervisor_fails_closed_when_no_os_sandbox_is_available(

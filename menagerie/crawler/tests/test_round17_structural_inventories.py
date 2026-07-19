@@ -350,6 +350,14 @@ ROUND21_VS6_PROOF_REGISTRY: dict[str, str] = {
     ),
 }
 
+ROUND21_VS7_PROOF_REGISTRY: dict[str, str] = {
+    **ROUND21_VS6_PROOF_REGISTRY,
+    "P07": (
+        "menagerie/crawler/tests/test_round21_transport_composition.py::"
+        "test_round21_closed_transport_capability_awards_and_rejects_unlisted_library"
+    ),
+}
+
 
 def test_round21_verification_tree_walk_inventory_is_closed() -> None:
     """Every complete prefix walk and v3 reuse site stays explicitly registered."""
