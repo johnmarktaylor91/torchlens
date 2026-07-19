@@ -1116,10 +1116,6 @@ def _bind_runtime_inputs(
     checks.extend(_input_literal_contract_checks(descriptor, inputs, positions))
     checks.extend(_input_metadata_contract_checks(descriptor, inputs, positions))
     checks.extend(_input_nontensor_tree_contract_checks(descriptor, inputs, positions))
-    alias_checks, input_alias_unresolved = _input_alias_topology_checks(
-        descriptor, input_slots, raw_values
-    )
-    checks.extend(alias_checks)
     # ------------------------------------------------------------------
     # r35 I5 (corr2_6) -- CONTRACT-BEFORE-TOUCH admission choke point.
     # Everything ABOVE this comment reads only non-materializing, exception-
@@ -1149,6 +1145,14 @@ def _bind_runtime_inputs(
             first_mismatch=diagnostic,
             contract_check=hard_failure,
         )
+    # r37 3-ADJ-6 (R10 ordering): alias-topology math runs BELOW the hard layout
+    # precondition raise, so the shared byte engine's domain is admitted plain
+    # strided tensors BY CONSTRUCTION -- it can never see a meta/nested/named/
+    # quantized layout the gate is about to reject.
+    alias_checks, input_alias_unresolved = _input_alias_topology_checks(
+        descriptor, input_slots, raw_values
+    )
+    checks.extend(alias_checks)
     # Phase 4: clone only ACCEPTED (executable) tensors.
     for slot in input_slots:
         raw = raw_values.get(slot.slot_id)

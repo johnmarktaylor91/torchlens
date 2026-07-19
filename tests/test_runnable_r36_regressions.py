@@ -1410,3 +1410,115 @@ class TestContractLockstep:
         doc_codes = [line.strip() for line in match.group(1).strip().split("\n")]
         enum_codes = [member.value for member in RunnableErrorCode]
         assert doc_codes == enum_codes
+
+
+class TestAliasEngineUnit:
+    """INV-2 unit pins on the ONE shared absolute-byte relation engine."""
+
+    @staticmethod
+    def _relation(left: torch.Tensor, right: torch.Tensor) -> str:
+        from torchlens.utils.tensor_utils import touched_bytes_relation
+
+        return touched_bytes_relation(left, right)
+
+    def test_cross_storage_overlap_proved(self) -> None:
+        arr = np.arange(8.0, dtype=np.float32)
+        assert self._relation(torch.from_numpy(arr[:6]), torch.from_numpy(arr[2:8])) == "overlap"
+
+    def test_cross_storage_disjoint_proved(self) -> None:
+        arr = np.arange(8.0, dtype=np.float32)
+        assert self._relation(torch.from_numpy(arr[:4]), torch.from_numpy(arr[4:])) == "disjoint"
+
+    def test_interleaved_same_storage_views_disjoint(self) -> None:
+        base = torch.arange(8.0)
+        assert self._relation(base[0::2], base[1::2]) == "disjoint"
+
+    def test_negative_stride_via_numpy_sound(self) -> None:
+        arr = np.arange(8.0, dtype=np.float32)
+        reversed_view = torch.from_numpy(arr[::-1].copy())  # torch rejects neg strides
+        assert self._relation(reversed_view, reversed_view) == "overlap"  # identity
+
+    def test_zero_stride_broadcast_view(self) -> None:
+        base = torch.arange(4.0)
+        expanded = base[:1].expand(16)
+        assert self._relation(expanded, base[1:]) == "disjoint"
+        assert self._relation(expanded, base[:2]) == "overlap"
+
+    def test_mixed_element_sizes_byte_expanded(self) -> None:
+        buf = bytearray(16)
+        left = torch.frombuffer(buf, dtype=torch.float32, count=2, offset=0)
+        right = torch.frombuffer(buf, dtype=torch.float64, count=1, offset=4)
+        assert self._relation(left, right) == "overlap"
+        right_disjoint = torch.frombuffer(buf, dtype=torch.float64, count=1, offset=8)
+        assert self._relation(left, right_disjoint) == "disjoint"
+
+    def test_empty_views_disjoint(self) -> None:
+        base = torch.arange(4.0)
+        assert self._relation(base[:0], base) == "disjoint"
+
+    def test_over_cap_intersecting_is_unknown_never_disjoint(self) -> None:
+        from torchlens.utils.tensor_utils import ALIAS_ENUMERATION_ELEMENT_CAP
+
+        big = torch.zeros(ALIAS_ENUMERATION_ELEMENT_CAP + 2, 2)
+        # Incongruent element grids inside one storage with intersecting bounds and
+        # numel above the cap: unproven -> unknown (no complexity-cap disjointness).
+        left = big.view(-1)[: 2 * ALIAS_ENUMERATION_ELEMENT_CAP + 2]
+        right = big.view(-1)[1:].view(torch.int8)[: 4 * (ALIAS_ENUMERATION_ELEMENT_CAP + 1)]
+        assert self._relation(left, right) in {"unknown", "overlap"}
+        assert self._relation(left, right) != "disjoint"
+
+    def test_relation_is_symmetric(self) -> None:
+        arr = np.arange(8.0, dtype=np.float32)
+        pairs = [
+            (torch.from_numpy(arr[:6]), torch.from_numpy(arr[2:8])),
+            (torch.from_numpy(arr[:4]), torch.from_numpy(arr[4:])),
+        ]
+        base = torch.arange(8.0)
+        pairs.append((base[0::2], base[1::2]))
+        for left, right in pairs:
+            assert self._relation(left, right) == self._relation(right, left)
+
+    def test_meta_tensor_is_unknown(self) -> None:
+        meta = torch.empty(4, device="meta")
+        assert self._relation(meta, meta.clone()) == "unknown"
+
+    def test_relation_identical_under_device_contexts(self) -> None:
+        base = torch.randn(4, 4)
+        tiles = (base[:2, :2], base[:2, 2:])
+        plain = self._relation(*tiles)
+        with torch.device("meta"):
+            under_meta = self._relation(*tiles)
+        with torch.device("meta"), torch.device("meta"):
+            nested = self._relation(*tiles)
+        assert plain == under_meta == nested == "disjoint"
+
+
+class TestMappingInstanceState:
+    """3-ADJ-2: trusted-base mapping instances with extra attrs refuse at save."""
+
+    def test_ordereddict_with_extra_attr_refuses(self, tmp_path: Path) -> None:
+        from collections import OrderedDict
+
+        class _Model(nn.Module):
+            def forward(self, x: torch.Tensor) -> Any:
+                out = OrderedDict(y=x + 1)
+                out.stash = x * 2  # instance state the key/value rebuild drops
+                return out
+
+        trace = tl.trace(_Model(), torch.tensor([1.0, 2.0]), capture=_CAPTURE)
+        with pytest.raises(RunnablePreflightError) as excinfo:
+            trace.save(tmp_path / "od.tlspec", level="runnable")
+        assert "mapping_instance_state" in str(excinfo.value.fields.get("diagnostics"))
+
+    def test_plain_ordereddict_stays_verified(self, tmp_path: Path) -> None:
+        from collections import OrderedDict
+
+        class _Model(nn.Module):
+            def forward(self, x: torch.Tensor) -> Any:
+                return OrderedDict(y=x + 1)
+
+        x = torch.tensor([1.0, 2.0])
+        loaded = _save_load(_Model(), x, tmp_path)
+        result = loaded.run(inputs=x)
+        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+        assert type(result.output) is OrderedDict
