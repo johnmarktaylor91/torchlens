@@ -35,6 +35,7 @@ from menagerie.crawler.artifact_transactions import (
     ArtifactEventKind,
     ArtifactInput,
     ArtifactRehydrationError,
+    ArtifactTransactionProjection,
     ReconstructionInputs,
     StagedArtifact,
     publish_authorized_artifact,
@@ -1941,6 +1942,9 @@ class CrawlerDriver:
         self.registry = registry or load_environment_registry(target=config.target)
         self._reduced = 0
         self._family_artifacts: dict[str, AuthorArtifact] = {}
+        self._final_artifact_transactions: dict[
+            tuple[str, str, ArtifactTransactionId], ArtifactTransactionProjection
+        ] = {}
         self._intake_snapshot: Optional[IntakeSnapshot] = None
         self._authority_context: Optional[AuthorityContext] = None
         self._shutdown_event = threading.Event()
@@ -3705,6 +3709,9 @@ class CrawlerDriver:
             )
             if transaction is None:
                 return None
+            self._final_artifact_transactions[
+                (transaction.stable_id, transaction.work_id, transaction.transaction_id)
+            ] = transaction
             inputs = transaction.reconstruction_inputs
             if self.config.only_status is not None and inputs.handoff_execution is None:
                 raise DriverIntegrationError("handoff-authority-unavailable")
@@ -5705,10 +5712,28 @@ class CrawlerDriver:
         if retain_prior_artifact_authority:
             assert artifact is not None
             assert isinstance(prior_artifact_authority, Mapping)
+            transaction_value = prior_artifact_authority.get("transaction_id")
+            if not isinstance(transaction_value, str) or not transaction_value:
+                raise DriverIntegrationError("retained-artifact-authority-mismatch")
+            binding = artifact.author_result.binding
+            transaction_key = (
+                binding.stable_id,
+                binding.work_id,
+                ArtifactTransactionId(transaction_value),
+            )
+            transaction = self._final_artifact_transactions.get(transaction_key)
+            if transaction is None:
+                try:
+                    self._rehydrate_final_authority(item, reducer)
+                except DriverIntegrationError as exc:
+                    raise DriverIntegrationError("retained-artifact-authority-mismatch") from exc
+                transaction = self._final_artifact_transactions.get(transaction_key)
+            if transaction is None:
+                raise DriverIntegrationError("retained-artifact-authority-mismatch")
             self._assert_retained_artifact_authority_matches(
                 artifact,
                 prior_artifact_authority,
-                reducer,
+                transaction,
             )
             model["artifact_authority"] = deepcopy(dict(prior_artifact_authority))
 
@@ -5755,7 +5780,7 @@ class CrawlerDriver:
         self,
         artifact: AuthorArtifact,
         authority: Mapping[str, Any],
-        reducer: CanonicalReducer,
+        transaction: ArtifactTransactionProjection,
     ) -> None:
         """Require retained final authority to identify the exact new artifact.
 
@@ -5765,8 +5790,9 @@ class CrawlerDriver:
             New terminal artifact that would inherit prior finalized authority.
         authority:
             Prior model revision's finalized artifact-authority projection.
-        reducer:
-            Active reducer supplying the validated append-only authority context.
+        transaction:
+            Single final transaction projection already resolved and validated by
+            :meth:`_rehydrate_final_authority`.
 
         Raises
         ------
@@ -5777,38 +5803,7 @@ class CrawlerDriver:
 
         if artifact.staged is None:
             raise DriverIntegrationError("retained-artifact-authority-mismatch")
-        transaction_value = authority.get("transaction_id")
-        if not isinstance(transaction_value, str) or not transaction_value:
-            raise DriverIntegrationError("retained-artifact-authority-mismatch")
-        canonical_root = _canonical_crawler_root(self.paths)
-        repository_root = _canonical_repo_root(canonical_root)
-        mirrors = MirrorStore(
-            self.paths.runtime_root / "mirrors" / "public",
-            self.paths.runtime_root / "mirrors" / "private",
-            self.paths.runtime_root / "mirrors" / "local",
-        )
-        artifact_paths = tuple(sorted(self.paths.ledgers.artifacts.parent.glob("*.jsonl"))) or (
-            self.paths.ledgers.artifacts,
-        )
         binding = artifact.author_result.binding
-        try:
-            projection = validate_artifact_checkpoint(
-                artifact_paths,
-                context=reducer.context,
-                mirrors=mirrors,
-                canonical_root=canonical_root,
-                repository_root=repository_root,
-            )
-            transaction = resolve_final_artifact_transaction(
-                projection,
-                stable_id=binding.stable_id,
-                work_id=binding.work_id,
-                transaction_id=ArtifactTransactionId(transaction_value),
-            )
-        except (ArtifactCheckpointError, ArtifactRehydrationError, TypeError, ValueError) as exc:
-            raise DriverIntegrationError("retained-artifact-authority-mismatch") from exc
-        if transaction is None:
-            raise DriverIntegrationError("retained-artifact-authority-mismatch")
         inputs = transaction.reconstruction_inputs
         raw_result = artifact.author_result.binding.raw_result
         expected_proposal = (
