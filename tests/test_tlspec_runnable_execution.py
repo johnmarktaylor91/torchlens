@@ -18,7 +18,6 @@ from torchlens.errors import (
     PathDivergenceError,
     PoisonedRunError,
     RunCapabilityUnavailableError,
-    RuntimeSignatureDriftError,
 )
 from torchlens.options import CaptureOptions
 from torchlens.runnable import (
@@ -769,20 +768,29 @@ def test_shape_divergence_return_mode_finishes_and_poison_marks_result(
 def test_unfinishable_sparse_call_raises_typed_error_without_leaking_fork(
     runnable_execution_artifact: tuple[Path, RunnableExecutionModel, tl.Trace],
 ) -> None:
-    """Rollback registry state when wrong-shape replay fails inside a native call."""
+    """Rollback registry state when a wrong-shape divergent input is inexecutable.
+
+    r39 corr2_4: an admitted-but-INEXECUTABLE divergent input (wrong FEATURE shape that fails
+    the native call) under ``return_diverged`` surfaces as ``PathDivergenceError`` carrying the
+    already-failed ``input_shape`` contract check -- NOT ``RuntimeSignatureDriftError`` (which is
+    reserved for genuine resolved-callable/torch-version drift with all input checks passing).
+    The transactional fork is still rolled back either way (no leaked log).
+    """
 
     path, model, _ = runnable_execution_artifact
     loaded = tl.load(path)
     loaded.load_state_dict(model.state_dict())
     logs_before = set(_state.list_logs())
 
-    with pytest.raises(RuntimeSignatureDriftError) as caught:
+    with pytest.raises(PathDivergenceError) as caught:
         loaded.run(
             inputs=torch.ones(2, 4),
             on_divergence=DivergencePolicy.RETURN_DIVERGED,
         )
 
-    assert caught.value.fields["code"] == "runtime_signature_drift"
+    assert caught.value.fields["path_faithfulness"] is PathFaithfulness.DIVERGED
+    check = caught.value.fields.get("contract_check")
+    assert check is not None and check.name.startswith("input_shape:")
     assert set(_state.list_logs()) == logs_before
 
 

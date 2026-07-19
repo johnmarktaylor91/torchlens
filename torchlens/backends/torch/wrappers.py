@@ -76,6 +76,7 @@ from .escape_detection import (
 from .completeness_witness import (
     CompletenessWitnessMode,
     completeness_scope_for_wrapper,
+    record_host_string_escape_source,
     record_uncaptured_owner_callsite,
 )
 from .sources import log_source_tensor
@@ -1024,6 +1025,15 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
 
         # Intercept print functions to show TorchLens label info in repr.
         if (func_name in print_funcs) and (len(arg_tensorlike) > 0):
+            # r39 hon2_1: stringifying a captured tensor extracts its VALUES into the returned
+            # string (a genuine tensor->host value escape the user can fold back into control
+            # flow -- a string NaN guard). ``print_override`` runs that extraction under
+            # ``pause_logging()``, blinding the ordinary ``.numpy()``/``.item()`` escape
+            # observers, so record the source here BEFORE the paused format, through the same
+            # attribution ladder. A runnable capture then ceilings a changed-input run whose
+            # stringified source differs, exactly like a ``.numpy()`` escape.
+            for stringified in arg_tensorlike:
+                record_host_string_escape_source(trace, stringified)
             out = print_override(args[0], func_name)
             return out
 

@@ -587,6 +587,14 @@ def save_new_outs(
         projected_layer_nums,
         projected_grad_layer_nums,
     ).project(refreshed)
+    # r39 corr2_5: copy the FRESH refresh forward's output-losslessness proof onto the
+    # projected fork. A changed input may select a different return-container KIND than the
+    # original capture, so the live provider must gate its bare-tensor fast path on the fresh
+    # proof (``bare_tensor_root``), not the stale capture-time one. Missing/malformed fresh
+    # proof leaves the field absent -> the live reconstructor fails closed (not faithful).
+    self.__dict__["_runnable_output_losslessness"] = refreshed.__dict__.get(
+        "_runnable_output_losslessness"
+    )
     if self.save_arg_values:
         self._replay_arg_version_data_complete = True
 
@@ -1377,6 +1385,11 @@ def run_and_log_inputs_through_model(
                             self._runnable_host_rng_unreplayable = bool(_rng_channels.channels)
                             self._runnable_host_rng_channels = tuple(sorted(_rng_channels.channels))
                             self._runnable_rng_monitor_uncertain = bool(_rng_channels.uncertain)
+                            # r39 CLASS A: name the offending threads / coverage failure so
+                            # the INCOMPLETE ceiling's readiness diagnostic is actionable.
+                            self._runnable_rng_monitor_uncertain_detail = tuple(
+                                _rng_channels.uncertain_detail
+                            )
 
         backend.finalize_forward_session(self)
 

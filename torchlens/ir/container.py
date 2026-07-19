@@ -191,7 +191,7 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
         ]
         container_type = _resolve_container_type(spec)
         if container_type is not None:
-            if _is_trusted_structseq_type(container_type):
+            if _is_trusted_structseq_type(container_type, spec):
                 # Genuine torch structseq (``torch.return_types.*``): reconstruct through its
                 # own INERT builtin ``__new__`` (a single-iterable C constructor that runs no
                 # arbitrary Python). Admissibility already pinned the RESOLVED ``__module__`` to
@@ -482,27 +482,58 @@ def reconstruction_is_lossy(value: Any, captured_names: tuple[Any, ...]) -> bool
     return False
 
 
-def _is_trusted_structseq_type(container_type: type[Any]) -> bool:
-    """Return whether ``container_type`` is a genuine torch structseq (``torch.return_types.*``).
+def _is_trusted_structseq_type(container_type: type[Any], spec: ContainerSpec) -> bool:
+    """Return whether ``container_type`` is a genuine torch structseq (r39 secB_1, spec-aware).
 
-    Structseq classes are ``tuple`` subclasses whose ``__new__`` is an inert builtin (C)
-    single-iterable constructor. We key on the RESOLVED ``__module__`` -- not the attacker's
-    ``spec.type_module`` string -- so only genuine torch structseqs (which cannot be forged
-    into ``sys.modules['torch.return_types']``) reconstruct through their own ``__new__``.
+    The structseq branch is the ONLY container-reconstruction path that invokes an arbitrary
+    type's own ``__new__`` (``container_type(values)``), so its trust decision must key on the
+    RESOLUTION AUTHORITY that supplied the type -- never the resolved class's ``__module__``
+    attribute, which is an ordinary spoofable class attribute ANY tuple subclass can set to
+    ``"torch.return_types"``. This gate requires ALL of:
+
+    * ``spec.type_module == "torch.return_types"`` (the spec named the genuine module, not an
+      alias module pointing look-alikes at it);
+    * resolution begins from the REAL already-loaded ``sys.modules["torch.return_types"]``;
+    * re-resolving ``spec.type_qualname`` from that module yields the IDENTICAL class object
+      (identity, not a name/attr match) -- defeating both the spoofed-``__module__`` gadget and
+      an alias-module trick; and
+    * the class is a ``tuple`` subclass carrying the structseq ``n_fields`` marker.
+
+    A genuine ``torch.return_types`` structseq is only ever reachable via
+    ``spec.type_module == "torch.return_types"``, so this loses no legitimate capture while
+    closing the latent arbitrary-``__new__`` sink.
 
     Parameters
     ----------
     container_type:
         Already-resolved, admissible container class.
+    spec:
+        The container spec being reconstructed (the resolution-authority evidence).
 
     Returns
     -------
     bool
-        True when the class is a genuine ``torch.return_types`` structseq.
+        True only when the class is a genuine ``torch.return_types`` structseq by resolution
+        authority AND structural markers.
     """
 
-    return getattr(container_type, "__module__", None) == "torch.return_types" and hasattr(
-        container_type, "n_fields"
+    if spec.type_module != "torch.return_types" or not spec.type_qualname:
+        return False
+    module = sys.modules.get("torch.return_types")
+    if module is None:
+        return False
+    resolved: Any = module
+    try:
+        for attribute_name in spec.type_qualname.split("."):
+            resolved = inspect.getattr_static(resolved, attribute_name)
+    except AttributeError:
+        return False
+    if resolved is not container_type:
+        return False
+    return (
+        isinstance(container_type, type)
+        and issubclass(container_type, tuple)
+        and hasattr(container_type, "n_fields")
     )
 
 
@@ -881,9 +912,10 @@ def _container_type_is_admissible(container_type: type[Any], spec: ContainerSpec
             return False
         if hasattr(container_type, "_fields"):
             return True
-        return getattr(container_type, "__module__", None) == "torch.return_types" and hasattr(
-            container_type, "n_fields"
-        )
+        # r39 secB_1: a tuple subclass posing as a structseq is admissible ONLY when the
+        # spec-aware resolution-authority gate confirms it -- never the spoofable
+        # ``__module__`` class attribute.
+        return _is_trusted_structseq_type(container_type, spec)
     if kind == "dataclass":
         return dataclasses.is_dataclass(container_type)
     if kind == "hf_model_output":

@@ -235,6 +235,53 @@ def _host_rng_unreproduced(descriptor: SparseRunDescriptor, seed: int | None) ->
     return seed != profile.capture_seed
 
 
+def _finalize_provider_run(
+    *,
+    fork: Any,
+    output: Any,
+    readiness: ReadinessReport,
+    state_source: StateSource,
+    initializer_policy_version: str | None,
+    seed: int | None,
+    random_filled_slot_ids: tuple[str, ...],
+    contract_checks: tuple[ContractCheck, ...],
+    provisional_path_faithfulness: PathFaithfulness,
+    provisional_mismatch: RunnableDiagnostic | None,
+    numeric_attestation: NumericAttestationStatus,
+    divergence_policy: DivergencePolicy,
+) -> RunResult:
+    """THE single provider settlement finalizer (r39 CLASS B sparse<->live parity immunizer).
+
+    Both providers -- loaded sparse and live refresh -- settle EXCLUSIVELY here: the monotonic
+    Trace-poison mark (``mark_trace_path_status``), divergence-policy enforcement
+    (``_raise_monotonic_divergence``), the one report constructor (``_run_report``, which derives
+    ``poisoned`` solely from the faithfulness lattice), and ``RunResult`` construction. Providers
+    differ in the EVIDENCE they gather (sparse computes numeric attestation before entering; live
+    passes ``NOT_PRESENT``) but never in the settlement DECISION. A source-scan meta-test forbids
+    constructing ``RunResult`` or calling ``_run_report`` anywhere else, so a future provider or
+    payload family cannot fork the settlement path and reintroduce a parity drift.
+    """
+
+    path_faithfulness, mismatch = mark_trace_path_status(
+        fork,
+        provisional_path_faithfulness,
+        provisional_mismatch,
+    )
+    _raise_monotonic_divergence(fork, path_faithfulness, mismatch, divergence_policy)
+    report = _run_report(
+        readiness,
+        state_source=state_source,
+        initializer_policy_version=initializer_policy_version,
+        seed=seed,
+        random_filled_slot_ids=random_filled_slot_ids,
+        contract_checks=contract_checks,
+        path_faithfulness=path_faithfulness,
+        first_mismatch=mismatch,
+        numeric_attestation=numeric_attestation,
+    )
+    return RunResult(output=output, trace=fork, report=report)
+
+
 def _execute_loaded_sparse_transaction(
     trace: Any,
     inputs: Any,
@@ -335,8 +382,20 @@ def _execute_loaded_sparse_transaction(
                 )
                 contract_checks.extend(call_checks)
                 _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
-                with _call_execution_context_entered(call.execution_context):
-                    output = _execute_sparse_call(call, callables[call.call_id], slot_values)
+                try:
+                    with _call_execution_context_entered(call.execution_context):
+                        output = _execute_sparse_call(call, callables[call.call_id], slot_values)
+                except RuntimeSignatureDriftError:
+                    # r39 corr2_4: under ``return_diverged`` an admitted-but-INEXECUTABLE
+                    # divergent input (wrong feature shape/dtype/device) reaches the resolved
+                    # callable and throws. If an input contract check ALREADY failed, this is
+                    # input DIVERGENCE, not resolved-callable signature drift -- roll back and
+                    # raise the typed ``PathDivergenceError`` carrying the first failed check.
+                    # Genuine drift (no prior failed check) keeps ``RuntimeSignatureDriftError``.
+                    failed = _first_failed_contract(contract_checks)
+                    if failed is not None:
+                        _raise_failed_contract_as_divergence(failed, fork=fork)
+                    raise
                 call_outputs[call.call_id] = output
                 contract_checks.extend(
                     _bind_call_outputs(
@@ -438,30 +497,20 @@ def _execute_loaded_sparse_transaction(
         contract_checks.append(attestation_check)
         if not attestation_check.passed:
             _raise_numeric_attestation_failure(fork, attestation_check)
-    path_faithfulness, mismatch = provisional_verdict, provisional_mismatch
-    path_faithfulness, mismatch = mark_trace_path_status(
-        fork,
-        path_faithfulness,
-        mismatch,
-    )
-    _raise_monotonic_divergence(
-        fork,
-        path_faithfulness,
-        mismatch,
-        divergence_policy,
-    )
-    report = _run_report(
-        readiness,
+    return _finalize_provider_run(
+        fork=fork,
+        output=output,
+        readiness=readiness,
         state_source=prepared_state.state_source,
         initializer_policy_version=prepared_state.initializer_policy_version,
         seed=prepared_state.seed,
         random_filled_slot_ids=prepared_state.random_filled_slot_ids,
         contract_checks=tuple(contract_checks),
-        path_faithfulness=path_faithfulness,
-        first_mismatch=mismatch,
+        provisional_path_faithfulness=provisional_verdict,
+        provisional_mismatch=provisional_mismatch,
         numeric_attestation=numeric_attestation,
+        divergence_policy=divergence_policy,
     )
-    return RunResult(output=output, trace=fork, report=report)
 
 
 def run_live_trace(
@@ -545,10 +594,10 @@ def run_live_trace(
         # and non-tensor leaves) is VERIFIED. An output we could only approximate
         # from naive leaf paths is UNVERIFIABLE, never blessed with a wrong object.
         provisional = PathFaithfulness.VERIFIED if faithful else PathFaithfulness.UNVERIFIABLE
-        path_faithfulness, mismatch = mark_trace_path_status(fork, provisional, None)
-        _raise_monotonic_divergence(fork, path_faithfulness, mismatch, divergence_policy)
-        report = _run_report(
-            readiness,
+        return _finalize_provider_run(
+            fork=fork,
+            output=output,
+            readiness=readiness,
             state_source=StateSource.LIVE_MODEL_STATE,
             initializer_policy_version=None,
             seed=seed,
@@ -562,11 +611,11 @@ def run_live_trace(
                     "captured container contract.",
                 ),
             ),
-            path_faithfulness=path_faithfulness,
-            first_mismatch=mismatch,
+            provisional_path_faithfulness=provisional,
+            provisional_mismatch=None,
             numeric_attestation=NumericAttestationStatus.NOT_PRESENT,
+            divergence_policy=divergence_policy,
         )
-        return RunResult(output=output, trace=fork, report=report)
     except BaseException:
         _state._unregister_log(fork)
         for log in _state.list_logs():
@@ -2739,6 +2788,30 @@ def _spec_node_reconstruction_lossy(spec: ContainerSpec) -> bool:
     return reconstruction_is_lossy_by_type(container_type, captured_names, spec.kind)
 
 
+def _fresh_bare_tensor_root(trace: Any) -> bool:
+    """Return whether the fresh refresh proof positively attests a bare-tensor output root (r39).
+
+    Consumes the ``_runnable_output_losslessness`` proof ``save_new_outs`` copies from the FRESH
+    refresh forward onto the projected fork (corr2_5). The live bare-tensor fast path is honest
+    ONLY when that proof is present, lossless, its root kind is exactly ``bare_tensor``, it walked
+    a single leaf, and it used no fallback/duplicate traversal -- otherwise an opaque
+    set/frozenset/custom container (which yields the same one-leaf/no-spec/no-path signature)
+    could be wrongly blessed. A missing or malformed proof fails closed (returns ``False``).
+    """
+
+    proof = getattr(trace, "__dict__", {}).get("_runnable_output_losslessness")
+    if not isinstance(proof, Mapping):
+        return False
+    return (
+        bool(proof.get("lossless"))
+        and bool(proof.get("bare_tensor_root"))
+        and proof.get("root_kind") == "bare_tensor"
+        and int(proof.get("leaf_count", 0)) <= 1
+        and not bool(proof.get("used_fallback"))
+        and not bool(proof.get("duplicate_paths"))
+    )
+
+
 def _reconstruct_live_output(trace: Any) -> tuple[Any, bool]:
     """Reconstruct refreshed live output faithfully and report reconstruction fidelity.
 
@@ -2774,8 +2847,13 @@ def _reconstruct_live_output(trace: Any) -> tuple[Any, bool]:
         op = trace.ops[output_labels[0]]
         has_spec = getattr(op, "container_spec", None) is not None
         has_path = bool(getattr(op, "container_path", ()) or ())
-        if not has_spec and not has_path:
-            # Genuine single bare-tensor model output: no container to reconstruct.
+        if not has_spec and not has_path and _fresh_bare_tensor_root(trace):
+            # Genuine single bare-tensor model output: no container to reconstruct. r39
+            # corr2_5: gated on the FRESH refresh proof's ``bare_tensor_root`` fact -- an
+            # opaque set/frozenset/custom container the traversal fell back on produces the
+            # SAME "one leaf, no spec, no path" signature, so without this positive proof a
+            # wrong bare-tensor object would be blessed faithful (and a multi-tensor set would
+            # silently drop a leaf). A missing/opaque proof falls through to faithful=False.
             return op.out, True
     # Multi-leaf output lacking a faithful reconstructable container contract, or a
     # single leaf that was actually a non-reconstructable (opaque) container. Return
@@ -4425,17 +4503,21 @@ def _contract_check(
     return ContractCheck(name=name, passed=passed, diagnostic=diagnostic)
 
 
-def _raise_first_divergence(
-    checks: Sequence[ContractCheck],
-    policy: DivergencePolicy,
-    *,
-    fork: Any | None,
-) -> None:
-    """Raise and discard transactional state at the first observed contradiction."""
+def _first_failed_contract(checks: Sequence[ContractCheck]) -> ContractCheck | None:
+    """Return the first failed contract check, or ``None`` when all passed (r39 corr2_4)."""
 
-    failed = next((check for check in checks if not check.passed), None)
-    if failed is None or policy is DivergencePolicy.RETURN_DIVERGED:
-        return
+    return next((check for check in checks if not check.passed), None)
+
+
+def _raise_failed_contract_as_divergence(failed: ContractCheck, *, fork: Any | None) -> None:
+    """Roll back and raise a first-failed contract check as a typed ``PathDivergenceError``.
+
+    The single typed-divergence raise shared by hard admission (:func:`_raise_first_divergence`)
+    and the call loop (r39 corr2_4): a call that throws AFTER an input contract check already
+    failed is INPUT DIVERGENCE, not resolved-callable ``RuntimeSignatureDriftError``, so it must
+    surface as ``PathDivergenceError`` carrying that first failed check under either policy.
+    """
+
     if fork is not None:
         _state._unregister_log(fork)
     diagnostic = failed.diagnostic
@@ -4450,6 +4532,20 @@ def _raise_first_divergence(
         first_mismatch=diagnostic,
         contract_check=failed,
     )
+
+
+def _raise_first_divergence(
+    checks: Sequence[ContractCheck],
+    policy: DivergencePolicy,
+    *,
+    fork: Any | None,
+) -> None:
+    """Raise and discard transactional state at the first observed contradiction."""
+
+    failed = _first_failed_contract(checks)
+    if failed is None or policy is DivergencePolicy.RETURN_DIVERGED:
+        return
+    _raise_failed_contract_as_divergence(failed, fork=fork)
 
 
 def _raise_monotonic_divergence(

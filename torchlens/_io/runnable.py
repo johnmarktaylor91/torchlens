@@ -2261,6 +2261,7 @@ def _escape_witnesses(
         host_escape_has_raw_pointer,
         host_escape_has_unattributable_bool,
         host_escape_has_unattributable_opaque,
+        host_escape_observer_install_failed,
         host_escape_state_source_names,
     )
 
@@ -2288,6 +2289,11 @@ def _escape_witnesses(
     # value unobservable (a raw ctypes read/write bypasses every dispatch and byte watch), so the
     # run must fail closed to UNVERIFIABLE rather than a false VERIFIED.
     if host_escape_has_raw_pointer(trace):
+        incomplete = True
+    # r39 hon2_1: a REQUIRED mode-independent host-value observer (the scalar numeric protocol
+    # / predicate belt) failed to install or restore, so a ``_disable_current_modes()``-region
+    # value escape could have gone unwitnessed this forward -- coverage is unknowable, fail closed.
+    if host_escape_observer_install_failed(trace):
         incomplete = True
 
     # r37 INV-1 (hon2_2): the former unattributable-VALUE plumbing is deleted. An

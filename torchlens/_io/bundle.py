@@ -1115,19 +1115,36 @@ def _warn_nonpersistent_buffer_disclosure_once() -> None:
     )
 
 
-def _is_legacy_runnable_readiness(trace: Trace) -> bool:
-    """Return whether load-time readiness marked a LEGACY analysis-only capability.
+def _runnable_payload_disposition(trace: Trace, entries: tuple[Any, ...]) -> str:
+    """Return ``"bind"`` / ``"skip"`` / ``"error"`` for one runnable payload family (r39 corr2_3).
 
-    Decision G: legacy v1 artifacts load for analysis with a typed readiness
-    refusal; their payload blob families stay unbound because no supported
-    descriptor exists to validate them against.
+    THE single structural disposition every payload binder (weights, non-persistent buffers,
+    archived activations, and any future execution-only family) consults before decoding a blob,
+    so ONE typed-analysis degradation rule covers EVERY typed descriptor-parse refusal -- not just
+    ``context_field_invalid`` or the legacy v1 carve-out. Three-way:
+
+    * ``"bind"`` -- a parsed sparse descriptor exists; validate and bind normally.
+    * ``"skip"`` -- a runnable descriptor was PRESENT but refused at parse (``context_field_invalid``,
+      legacy v1, or any typed parse refusal), so the trace loaded ANALYSIS-ONLY
+      (``provider == LOADED_SPARSE``, ``descriptor is None``, readiness UNAVAILABLE with the typed
+      diagnostic). Its payload blobs stay unbound (no supported descriptor validates them) and the
+      typed readiness diagnostic survives -- the load must NOT hard-fail on the payload binder
+      (the round-38 corr2_3 bug: an ``include_weights`` artifact with a tampered context field
+      raised an untyped IO error pointing at intact weights and lost the typed diagnostic).
+    * ``"error"`` -- a genuine analysis artifact (``provider == LOADED_ANALYSIS`` / no runnable
+      descriptor) carrying STRAY runnable payload blobs is a real inconsistency; hard-fail.
     """
 
-    from ..runnable import LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS
+    from ..runnable import RunProvider
 
+    if trace.runnable_descriptor is not None:
+        return "bind"
     readiness = trace.__dict__.get("_runnable_readiness")
-    capability = getattr(readiness, "capability", None)
-    return isinstance(capability, str) and capability in LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS
+    if getattr(readiness, "provider", None) is RunProvider.LOADED_SPARSE:
+        # A refused/legacy sparse descriptor degrades to analysis-only; skip binding.
+        return "skip"
+    # No runnable descriptor at all: stray runnable blobs on a true analysis artifact hard-fail.
+    return "error" if entries else "skip"
 
 
 def _bind_embedded_nonpersistent_buffer_payload(
@@ -1162,16 +1179,16 @@ def _bind_embedded_nonpersistent_buffer_payload(
     entries = tuple(
         entry for entry in manifest.tensors if entry.kind == _RUNNABLE_NONPERSISTENT_BUFFER_KIND
     )
-    if descriptor is None:
-        if _is_legacy_runnable_readiness(trace):
-            # Decision G: legacy v1 artifacts load analysis-only; their payload
-            # blobs stay unbound because no supported descriptor can validate them.
-            return
-        if entries:
-            raise TorchLensIOError(
-                "Non-persistent buffer payloads require a parsed sparse runnable descriptor."
-            )
+    disposition = _runnable_payload_disposition(trace, entries)
+    if disposition == "skip":
+        # Parse-refused / legacy analysis-only degradation: payload blobs stay unbound and the
+        # typed readiness diagnostic survives (r39 corr2_3).
         return
+    if disposition == "error":
+        raise TorchLensIOError(
+            "Non-persistent buffer payloads require a parsed sparse runnable descriptor."
+        )
+    assert descriptor is not None  # disposition == "bind"
     declared = descriptor.payload_layers.nonpersistent_buffers
     if not declared.present:
         if entries:
@@ -1243,14 +1260,15 @@ def _bind_embedded_weight_payload(
     weight_entries = tuple(
         entry for entry in manifest.tensors if entry.kind == _RUNNABLE_WEIGHT_KIND
     )
-    if descriptor is None:
-        if _is_legacy_runnable_readiness(trace):
-            return
-        if weight_entries:
-            raise TorchLensIOError(
-                "Weight payload blobs require a parsed sparse runnable descriptor."
-            )
+    disposition = _runnable_payload_disposition(trace, weight_entries)
+    if disposition == "skip":
+        # r39 corr2_3: an ``include_weights`` artifact whose sparse descriptor was refused at
+        # parse (e.g. ``context_field_invalid``) loads ANALYSIS-ONLY; the intact weight blobs
+        # stay unbound and the typed diagnostic survives -- never an untyped hard IO error.
         return
+    if disposition == "error":
+        raise TorchLensIOError("Weight payload blobs require a parsed sparse runnable descriptor.")
+    assert descriptor is not None  # disposition == "bind"
     declared = descriptor.payload_layers.weights
     if not declared.present:
         if weight_entries:
@@ -1317,14 +1335,16 @@ def _bind_archived_activation_payload(
         for entry in manifest.tensors
         if entry.kind == _RUNNABLE_ACTIVATION_KIND
     }
-    if descriptor is None:
-        if _is_legacy_runnable_readiness(trace):
-            return
-        if activation_entries:
-            raise TorchLensIOError(
-                "Activation payload blobs require a parsed sparse runnable descriptor."
-            )
+    disposition = _runnable_payload_disposition(trace, tuple(activation_entries.values()))
+    if disposition == "skip":
+        # Parse-refused / legacy analysis-only degradation (r39 corr2_3): archived activation
+        # blobs stay unbound and the typed readiness diagnostic survives.
         return
+    if disposition == "error":
+        raise TorchLensIOError(
+            "Activation payload blobs require a parsed sparse runnable descriptor."
+        )
+    assert descriptor is not None  # disposition == "bind"
     declared = descriptor.payload_layers.activations
     if not declared.present:
         if activation_entries:

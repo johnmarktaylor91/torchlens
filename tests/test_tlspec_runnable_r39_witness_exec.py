@@ -545,7 +545,8 @@ def test_live_opaque_output_never_verified(factory: Any) -> None:
     """corr2_5: a live opaque-container output is UNVERIFIABLE + poisoned, never VERIFIED."""
 
     x = torch.randn(2, 4)
-    live = tl.trace(factory(), x, capture=CaptureOptions(random_seed=1, **_CAP))
+    model = factory()  # retain a strong ref: the live Trace holds only a weakref to it
+    live = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
     result = live.run(inputs=x, on_divergence="return_diverged")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert result.report.poisoned is True
@@ -555,7 +556,8 @@ def test_live_bare_tensor_output_stays_verified() -> None:
     """Over-trigger control: a genuine bare-tensor live output stays VERIFIED."""
 
     x = torch.randn(2, 4)
-    live = tl.trace(_BareTensorOut(), x, capture=CaptureOptions(random_seed=1, **_CAP))
+    model = _BareTensorOut()
+    live = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
     result = live.run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.poisoned is False
@@ -573,7 +575,8 @@ def test_live_dict_output_stays_verified() -> None:
             return {"y": self.lin(x).relu()}
 
     x = torch.randn(2, 4)
-    live = tl.trace(_DictOut(), x, capture=CaptureOptions(random_seed=1, **_CAP))
+    model = _DictOut()
+    live = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
     result = live.run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
@@ -649,7 +652,9 @@ def test_inexecutable_divergent_input_raises_path_divergence(tmp_path: Path) -> 
     loaded = tl.load(path)
     with pytest.raises(PathDivergenceError) as exc:
         loaded.run(inputs=torch.randn(3, 5), on_divergence="return_diverged")
-    assert exc.value.path_faithfulness is PathFaithfulness.DIVERGED
+    assert exc.value.fields.get("path_faithfulness") is PathFaithfulness.DIVERGED
+    check = exc.value.fields.get("contract_check")
+    assert check is not None and check.name.startswith("input_shape:")
 
 
 def test_executable_divergent_input_returns_diverged(tmp_path: Path) -> None:
@@ -703,6 +708,10 @@ def test_single_provider_finalizer_owns_settlement() -> None:
 # ======================================================================================
 
 
+_PlainPair = collections.namedtuple("_PlainPair", ["a", "b"])
+"""A module-level plain namedtuple (resolvable at load; ``__slots__=()`` -> stateless)."""
+
+
 class _OutputPair(collections.namedtuple("_OutputPair", ["a", "b"])):
     """A namedtuple SUBCLASS (unslotted) -- can carry per-instance state (corr1-1)."""
 
@@ -732,19 +741,22 @@ def test_namedtuple_subclass_refused_at_save(tmp_path: Path) -> None:
         trace.save(path, level="runnable", include_weights=True)
 
 
+class _PlainNamedtupleOut(nn.Module):
+    """Return a module-level plain namedtuple output (control)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> Any:
+        """Return a plain ``collections.namedtuple`` output."""
+
+        h = self.lin(x)
+        return _PlainPair(h, h * 2.0)
+
+
 def test_plain_namedtuple_output_stays_verified(tmp_path: Path) -> None:
     """Control: a plain ``collections.namedtuple`` output stays VERIFIED."""
-
-    PlainPair = collections.namedtuple("PlainPair", ["a", "b"])
-
-    class _PlainNamedtupleOut(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-
-        def forward(self, x: torch.Tensor) -> Any:
-            h = self.lin(x)
-            return PlainPair(h, h * 2.0)
 
     x = torch.randn(2, 4)
     result = _roundtrip(_PlainNamedtupleOut(), x, tmp=tmp_path, run_seed=1)
@@ -855,3 +867,69 @@ def test_sparse_overcap_stays_unknown() -> None:
     # Interleaved even/odd elements never share a byte but are not a provable dense
     # interval; the sound engine keeps ``unknown`` rather than guessing.
     assert touched_bytes_relation(left, right) in {"unknown", "disjoint"}
+
+
+def test_dense_interval_proof_independent_byte_oracle_fuzz() -> None:
+    """corr2_6 soundness: the dense-interval proof never lies vs an independent byte oracle.
+
+    Enumerates a deterministic small + seeded-random corpus of strided footprints, builds each
+    tensor's TRUE touched-byte set WITHOUT the dense recurrence, and asserts:
+      * every footprint the proof calls dense actually covers its whole ``[start, end)`` span; and
+      * whenever BOTH members of a pair are proved dense, the recurrence-free byte-set relation
+        matches the ``overlap``/``disjoint`` the dense rung would return.
+    """
+
+    import itertools
+    import random as _random
+
+    from torchlens.utils.tensor_utils import (
+        _footprint_is_dense_interval,
+        footprint_touched_element_addresses,
+        tensor_byte_footprint,
+        touched_bytes_relation,
+    )
+
+    def true_bytes(footprint: Any) -> set[int]:
+        starts = footprint_touched_element_addresses(footprint)
+        return {addr + b for addr in starts for b in range(footprint.element_size)}
+
+    views: list[torch.Tensor] = []
+    base1 = torch.zeros(64)
+    # Deterministic dense + sparse small views (contiguous slices, transposes, strided).
+    grid = torch.zeros(8, 8)
+    views += [base1[:20], base1[10:40], base1[::1][:16], grid, grid.t(), grid[:, ::2]]
+    views += [base1[::2][:10], base1[1::2][:10], base1[3:50:1]]
+    rng = _random.Random(20260719)
+    flat = torch.zeros(256)
+    for _ in range(60):
+        start = rng.randint(0, 200)
+        length = rng.randint(1, 40)
+        step = rng.choice([1, 1, 1, 2, 3])
+        views.append(flat[start : start + length * step : step])
+
+    footprints = [(v, tensor_byte_footprint(v)) for v in views]
+    for _view, fp in footprints:
+        if fp is None:
+            continue
+        if _footprint_is_dense_interval(fp) and fp.numel > 0:
+            # A proved-dense footprint must fully cover its own byte span (no holes).
+            assert true_bytes(fp) == set(range(fp.start_byte, fp.end_byte))
+
+    for (_lv, lfp), (_rv, rfp) in itertools.combinations(footprints, 2):
+        if lfp is None or rfp is None:
+            continue
+        if lfp.device_key != rfp.device_key or lfp.numel == 0 or rfp.numel == 0:
+            continue
+        if not (_footprint_is_dense_interval(lfp) and _footprint_is_dense_interval(rfp)):
+            continue
+        oracle = "overlap" if true_bytes(lfp) & true_bytes(rfp) else "disjoint"
+        # For a both-dense pair the engine returns exactly this relation (overlap via the new
+        # rung, disjoint via the earlier interval check) -- never a mis-verdict.
+        assert oracle in {"overlap", "disjoint"}
+        result = touched_bytes_relation(_lv, _rv)
+        assert result == oracle, (
+            result,
+            oracle,
+            (lfp.shape, lfp.strides, lfp.start_byte, lfp.end_byte),
+            (rfp.shape, rfp.strides, rfp.start_byte, rfp.end_byte),
+        )

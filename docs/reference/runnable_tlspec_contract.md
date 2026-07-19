@@ -401,12 +401,24 @@ instance-state rules it encodes:
 
 - `tuple`/`list`/`literal` are structurally stateless (exact builtins, no instance `__dict__`).
 - `namedtuple` uses NAMEDTUPLE-SPECIFIC helpers (never the dataclass helper, whose
-  no-`__dict__` interpretation is inverted for tuple storage): an instance carrying non-field,
-  non-`None` `__dict__` state refuses at save (`namedtuple_instance_state`); at load, a RESOLVED
-  namedtuple type that CAN carry per-instance state (no `__slots__ = ()`) is treated as lossy
-  even when the persisted `lossy_reconstruction` flag says `False` (forged-flag defense). Plain
-  `collections.namedtuple`, `typing.NamedTuple`, `__slots__ = ()` subclasses, and supported
-  `torch.return_types` stay admitted.
+  no-`__dict__` interpretation is inverted for tuple storage). r39 corr1-1: the SAVE refusal keys
+  on the TYPE-LEVEL criterion the load recompute already uses -- a namedtuple TYPE that CAN carry
+  per-instance state (no `__slots__ = ()`) refuses at save (`namedtuple_instance_state`) EVEN when
+  the captured instance's `__dict__` is currently empty, because load cannot see the original
+  instance and (secB_1) a persisted "no extras" flag is not an independent proof. Producer and
+  consumer therefore share one criterion (closing the r37 instance-vs-type disagreement that let
+  an unslotted subclass save a permanently-`unverifiable` artifact). At load, that same resolved
+  type is lossy even when the persisted `lossy_reconstruction` flag says `False` (forged-flag
+  defense). Plain `collections.namedtuple`, `typing.NamedTuple`, `__slots__ = ()` subclasses, and
+  supported `torch.return_types` structseqs stay admitted.
+  **Structseq resolution authority (r39 secB_1).** The structseq reconstruction branch -- the one
+  path that invokes an arbitrary resolved type's own `__new__` -- trusts a type ONLY when the
+  SPEC-AWARE gate holds: `spec.type_module == "torch.return_types"` AND resolution began from the
+  real already-loaded `sys.modules["torch.return_types"]` AND re-resolving `spec.type_qualname`
+  from that module yields the IDENTICAL class AND the class carries the tuple-subclass structseq
+  markers. Trust follows the RESOLUTION AUTHORITY, never the resolved class's spoofable
+  `__module__` attribute, so a non-torch tuple subclass with a forged `__module__` (or an
+  alias-module pointing at a genuine structseq) is refused before its `__new__` runs.
 - `dataclass`/`hf_model_output` keep their r25/r27 type-level recompute.
 - `dict` admits only the exact trusted bases (`dict`/`OrderedDict`/`defaultdict` with an
   allowlisted factory); an instance carrying extra non-`None` `__dict__` state refuses at save
@@ -786,6 +798,22 @@ attribute to the input slot and keep the ORIGINAL input `verified` while any cha
 restales the witness. Raw seeded-RNG products taint their origins and can never launder
 attribution.
 
+**Dual observer routes and disabled-mode coverage (r39 hon2_1).** Every known tensor->host VALUE
+exit has TWO independent routes to the ONE escape-source ledger: the aten dispatch census (primary)
+and a mode-independent Python belt. The belt method-patches the scalar numeric protocol
+(`item`, `__bool__`, `__int__`, `__float__`, `__index__`, `__complex__`) and the pure predicates
+(`equal`, `allclose`, `is_nonzero`, in both `torch.Tensor.*` and `torch.*` spellings); it records
+its operands ONLY when the census dispatch mode is NOT on the active stack (i.e. inside a
+`torch._C._DisableTorchDispatch()` / `_disable_current_modes()` region that popped the census),
+so it complements -- never pre-empts -- the census. String/format spellings (`str`/`repr`/`print`/
+f-string/`format`) are NOT patched exits: TorchLens intercepts its own tensor `__repr__`/`__str__`/
+`_str` and extracts values under `pause_logging()`, so a captured tensor's stringification is
+recorded as a value escape AT that interception (a string NaN guard therefore ceilings a changed
+run exactly like a `.numpy()` escape). A REQUIRED belt observer that fails to install or restore
+is itself a fail-closed INCOMPLETE fact; `__repr__`/`__str__`/`__format__` transitivity is pinned
+by regression tests, and a future uncovered escape spelling or eager mode-disable site is a RED
+coverage meta-test, not a false `verified`.
+
 A future replayable exception witness may recover `verified` ONLY when all five preconditions
 hold: (1) exact pre-call argument binding recorded; (2) purity proof -- no RNG consumption, no
 `out=`/in-place mutation, no allocator-visible or global side effect before the raise; (3)
@@ -794,41 +822,72 @@ recorded-handler compatibility; (4) full execution-context restoration around th
 RNG bracket proving zero generator advance. This recovery is DEFERRED (not shipped); until it
 lands every in-forward caught raise ceilings at `unverifiable`.
 
-### Host nondeterminism channel vocabulary (r37)
+### Host nondeterminism channel vocabulary (r37, extended r39)
 
 The replayable engines are exactly the module-global Python `random` engine and the legacy global
 `numpy.random` singleton: their consumption is snapshot-detected, records the capture seed, and a
 matching-seed replay stays `verified`/`attested` while an off-seed or seedless run ceilings.
 
-Every OTHER host channel is monitored over this FROZEN vocabulary, and ANY capture-time touch is
-permanently unreplayable -- `host_rng_consumed=true` with NO identifiable seed, so every run of
-the artifact (any input, any seed) reports `unverifiable` + `not_applicable`:
+Every OTHER host channel is monitored over a FROZEN, DATA-DRIVEN registry (r39: each row declares
+its family, matcher, observation strategy, and thread scope; the runtime classifiers are built
+from the registry, and a coverage meta-test makes a new stdlib RNG/clock endpoint a FAILING test
+rather than a silent gap). ANY capture-time touch is permanently unreplayable --
+`host_rng_consumed=true` with NO identifiable seed, so every run of the artifact (any input, any
+seed) reports `unverifiable` + `not_applicable`:
 
-1. non-global `random.Random` / `random.SystemRandom` draw primitives (`random`, `getrandbits`,
-   `randbytes`) -- private instances and subclasses included (class-level monitoring);
-2. any C call bound to a `numpy.random.Generator` / `BitGenerator` / `RandomState` receiver
-   (a capture-scoped chained `sys.setprofile` classifier -- an OUTSIDE-held generator drawn
-   in-forward is observed without discovering its holder; the formerly declared residual is
-   CLOSED), plus `numpy.random.default_rng` construction;
-3. the `secrets` family (funnels through `SystemRandom` and the import-time `random._urandom`
+1. non-global `random.Random` / `random.SystemRandom` / bare `_random.Random` draw primitives
+   (`random`, `getrandbits`, `randbytes`) -- private instances and subclasses included
+   (class-level monitoring; the bare C base `_random.Random()` channel is patched too, r39);
+2. numpy `Generator` / `BitGenerator` / `RandomState` INSTANCE draws, witnessed by a PRIMARY
+   thread-independent process-wide state inventory (a bounded `gc`-visible before/after state
+   digest of every such instance minus the replayable global singletons + barcode RNG -- an
+   externally-held generator drawn on ANY thread, including a pre-existing worker, is caught by
+   its state digest, r39), belted by a chained `sys.setprofile` (owner) + `threading.setprofile`
+   (threads started in-window) receiver classifier;
+3. UNSEEDED numpy generator CONSTRUCTION, via `numpy.random.default_rng` and the writable
+   `numpy.random.bit_generator.randbits` construction-entropy alias (r39): an unseeded
+   `PCG64()` / `default_rng()` built on any thread marks;
+4. the `secrets` family (funnels through `SystemRandom` and the import-time `random._urandom`
    alias -- monitored directly because `secrets.token_bytes` bypasses the `os.urandom`
    attribute);
-4. `os.urandom` / `os.getrandom` and `uuid.uuid4` (feeds through `os.urandom`);
-5. the full clock family: `time`, `time_ns`, `monotonic`, `monotonic_ns`, `perf_counter`,
-   `perf_counter_ns`, `process_time`, `process_time_ns`, `thread_time`, `thread_time_ns`,
-   `clock_gettime`, `clock_gettime_ns` (any in-forward user read ceilings; a forward that reads
-   no clock records nothing).
+5. `os.urandom` / `os.getrandom` and `uuid.uuid4` (feeds through `os.urandom`);
+6. the clock family (a classified bounded-namespace inventory, r39): the current-clock `time.*`
+   counters (`time`, `time_ns`, `monotonic`, `monotonic_ns`, `perf_counter`, `perf_counter_ns`,
+   `process_time`, `process_time_ns`, `thread_time`, `thread_time_ns`, `clock_gettime`,
+   `clock_gettime_ns`); the implicit-now converters `time.localtime` / `gmtime` / `asctime` /
+   `ctime` / `strftime` (marking only when called with NO explicit-time argument -- an explicit
+   time argument is a pure transform); the immutable `datetime.datetime.now` / `utcnow` / `today`
+   and `datetime.date.today` (c_call identity, since these extension-type methods cannot be
+   class-patched); and `os.times` / `resource.getrusage`. A forward that reads no clock records
+   nothing.
 
 TorchLens's own per-op timing reads are excluded by EXACT module ownership of the caller frame
 (the registered `torchlens.*` module globals), never by filename strings or frame ancestry -- a
 user callback's code stays user code even when invoked from a TorchLens frame, and a plain
-deterministic capture records nothing (the critical over-trigger pin). Monitor UNCERTAINTY
-(installation, chaining, restoration, or classification failure) downgrades capture completeness
-to INCOMPLETE -- it never reads as no-consumption. Absence of a touch proves no touch of THIS
-NAMED vocabulary; it does not claim environmental determinism for channels outside it (residual
-tail: direct `/dev/urandom` file reads, user C-extension RNGs, ctypes -- outside any sane
-monitor). Entropy/instance channels mark from any thread; clock channels mark only on the
-capture owner thread.
+deterministic capture records nothing (the critical over-trigger pin; the legacy `mtrand._rand`
+singleton and its underlying bit generator are identity-exempt, so a SEEDED `np.random` model
+stays `verified`). Monitor UNCERTAINTY (patch/inventory install, hook chaining, exact restoration,
+or event classification failure) downgrades capture completeness to INCOMPLETE -- it never reads
+as no-consumption.
+
+**Positively-covered thread qualification (r39).** Entropy / instance / construction / clock
+positives mark on ANY COVERED thread (thread-independent module/class patches, the process
+inventory, and every profile-hooked thread -- the owner plus threads started in-window). A live
+PRE-EXISTING non-owner Python thread at window open is an UNWITNESSABLE domain on Python <= 3.11
+(a draw followed by a `bit_generator.state` restore on such a thread defeats the inventory, and
+`threading.setprofile` cannot reach an already-running worker), so its presence ceilings the
+capture to INCOMPLETE -- the locked conservative default, with the offending threads NAMED in the
+uncertainty detail. This is NOT a claim that the hook reached the thread; it is honest
+over-triggering. Future relaxation (a positive all-thread proof) is `sys.monitoring` (PEP 669,
+3.12+, interpreter-wide); it is not in this contract.
+
+Absence of a touch proves no touch of THIS NAMED vocabulary; it does not claim environmental
+determinism for channels outside it. The residual tail is exactly: (i) direct `/dev/urandom` file
+reads; (ii) ctypes / user C-extension entropy or clock reads that never cross a Python-visible
+call surface; and (iii) legacy `RandomState()` C-level CONSTRUCTION entropy (its DRAWS stay
+inventory/digest-witnessed). `datetime.now()` / `localtime()` are NOT residual (covered above), and
+self-cleaning RNG/clock use confined to a pre-existing thread is NOT residual -- it is INCOMPLETE
+via the thread-domain rule.
 
 A pruned `.data`-alias BOOL control predicate whose leaf origins resolve positively (e.g.
 `bool(self.gate.data > 0.5)` -> the gate's state digest) is witnessed by that basis: the
@@ -852,10 +911,18 @@ views own DISTINCT torch storage objects over genuinely overlapping host memory,
 "distinct storages are trivially disjoint" rule was unsound (r36 hon1_1) and is REMOVED. Proof
 layers: disjoint absolute byte intervals; identical absolute geometry; an
 element-grid-normalized residue/GCD proof on absolute coordinates (disjointness only; applicable
-when both views share element size and byte starts congruent on the shared grid); and bounded
-exact enumeration up to 65,536 logical elements per view, computed in PURE Python integers so
-the verdict is identical under an implicit CPU default, a process-global meta default, and
-nested `torch.device(...)` modes (r36 corr2-2). Distinct device address spaces are disjoint by
+when both views share element size and byte starts congruent on the shared grid); a canonical
+DENSE-INTERVAL proof (r39 corr2_6, the sole verdict-precision relaxation) -- when BOTH footprints
+prove they cover one contiguous byte interval (drop singleton dims, reject zero stride, sort by
+absolute element stride, require the recurrence `abs(stride) == running size product` starting at
+1, which is sound for contiguous, transposed/permuted-dense, and signed-stride layouts and is
+independently byte-oracle fuzzed), their already device-scoped byte intervals decide
+`overlap`/`disjoint` exactly and numel-independently, WITHOUT enumeration and above the cap; it
+never turns an `unknown` into a false `overlap` (expanded/zero-stride and genuinely sparse
+over-cap geometry stay `unknown`, NOT the unsound `numel*esize == span`); and bounded exact
+enumeration up to 65,536 logical elements per view, computed in PURE Python integers so the
+verdict is identical under an implicit CPU default, a process-global meta default, and nested
+`torch.device(...)` modes (r36 corr2-2). Distinct device address spaces are disjoint by
 construction (cross-device aliasing is not constructible through public torch APIs); the device
 key prevents spurious cross-device numerical collisions. A meta tensor (`data_ptr() == 0`) or
 any unprovable footprint is `unknown`, never a proof. No bounding-interval overlap alone is an
@@ -947,6 +1014,41 @@ faithful model gains information by reading it off the view instead of the leaf;
 require instrumenting TorchLens's own per-op autograd reads on the core capture hot path, imposing
 capture-wide risk for a case no real model exercises. The residual is the conservative engineering
 choice, not a divergence the runnable path claims to catch.
+
+### Sparse/live provider parity (r39 CLASS B)
+
+The loaded-sparse and live-refresh providers may gather DIFFERENT evidence but never make a
+different SETTLEMENT decision: both route through ONE finalizer (`_finalize_provider_run`), the
+sole owner of the monotonic Trace-poison mark, divergence-policy enforcement, the single
+`_run_report` constructor (which derives `poisoned` solely from the faithfulness lattice), and
+`RunResult` construction. A source-scan meta-test forbids constructing `RunResult` or calling
+`_run_report` anywhere else, so a future provider or payload family cannot fork the settlement
+path.
+
+- **Live opaque output (corr2_5).** The live provider's bare-tensor fast path is gated on the
+  FRESH refresh forward's output-losslessness proof (`bare_tensor_root` + `lossless`, one leaf, no
+  fallback/duplicate) -- `save_new_outs` copies that proof onto the projected fork, because a
+  changed input may select a different return-container kind than the original capture. An opaque
+  `set`/`frozenset`/custom container (which yields the same "one leaf, no spec, no path" signature)
+  is therefore NOT blessed a bare tensor: it returns the best-effort value with a failed
+  `live_output_reconstruction` check -> `unverifiable` + poison, never `verified`. The sparse
+  producer refuses the same outputs at save (`missing_output_container_contract`); the parity
+  matrix asserts an identical verdict CLASS across both providers.
+- **Descriptorless payload degradation (corr2_3).** ONE structural disposition governs every
+  runnable payload family (weights, non-persistent buffers, archived activations, and any future
+  execution-only family) and EVERY typed descriptor-parse refusal -- not just `context_field_invalid`
+  or legacy v1. When a runnable descriptor was PRESENT but refused at parse, the trace loads
+  ANALYSIS-ONLY (`provider == loaded_sparse`, `descriptor is None`, readiness `unavailable` with the
+  typed diagnostic): its payload blobs stay unbound and the typed diagnostic SURVIVES -- the load
+  never hard-fails on the payload binder (a tampered context field on an `include_weights` artifact
+  no longer raises an untyped IO error pointing at intact weights). A genuine analysis artifact
+  (`provider == loaded_analysis`) carrying STRAY runnable blobs still hard-fails.
+- **Divergence-aware call raise (corr2_4).** Shape/dtype/device input checks stay SOFT so an
+  EXECUTABLE divergent input (a changed batch dimension) returns `diverged` + poison under
+  `return_diverged`. But an admitted-but-INEXECUTABLE divergent input (a wrong feature shape that
+  fails the native call) surfaces as `PathDivergenceError` carrying the first-failed input check --
+  NOT `RuntimeSignatureDriftError`, which stays reserved for genuine resolved-callable / torch-version
+  drift with all input checks passing. Both policies roll back the transactional fork.
 
 ## 12. Optional-payload API spelling and docs lockstep
 

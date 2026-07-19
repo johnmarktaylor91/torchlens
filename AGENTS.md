@@ -195,9 +195,16 @@ pytest tests/ -m "not slow" -x --tb=short
     `CONTAINER_KIND_CAPABILITIES` -- governs capture proof, save refusal, and forged-flag-proof
     load recompute; `tl.register_container` gains an explicit `state_complete=` declaration).
     Host nondeterminism outside the two replayable global engines (RNG instances incl.
-    outside-held NumPy Generators, `SystemRandom`/`secrets`, OS entropy, `uuid4`, `default_rng`,
-    the full clock family) permanently ceilings replay at `unverifiable` + `not_applicable`;
-    monitor uncertainty downgrades completeness. Alias proofs run on absolute device-scoped byte
+    outside-held NumPy Generators via a thread-independent process-wide state inventory, bare
+    `_random.Random`, unseeded-construction `randbits` entropy, `SystemRandom`/`secrets`, OS
+    entropy, `uuid4`, `default_rng`, the full clock family incl. `datetime.now`/`localtime`/
+    `os.times`/`getrusage`) permanently ceilings replay at `unverifiable` + `not_applicable`;
+    monitor uncertainty (incl. a live pre-existing non-owner Python thread on py<=3.11) downgrades
+    completeness to INCOMPLETE. Loaded-sparse and live providers settle through ONE finalizer
+    (identical verdict class): a live opaque-container output is `unverifiable`+poisoned, a
+    parse-refused descriptor degrades every payload family to analysis-only, and an inexecutable
+    divergent input raises `PathDivergenceError`; structseq trust keys on the resolution authority
+    (`spec.type_module`), never the spoofable `__module__`. Alias proofs run on absolute device-scoped byte
     intervals (storage-pointer equality never decides); the recorded default device enters as a
     scoped `with torch.device(...)`; CUDA state stages lazily and atomically at run preparation
     with a no-allocation readiness capability gate.
