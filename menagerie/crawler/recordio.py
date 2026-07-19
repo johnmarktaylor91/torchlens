@@ -612,6 +612,7 @@ class JsonlLedger:
             raise LedgerConflictError(f"conflicting replay for immutable identity {key!r}")
         validate_payload(record, self.schema_version)
         line = canonical_json_bytes(record) + b"\n"
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("ab") as handle:
             handle.write(line)
             handle.flush()

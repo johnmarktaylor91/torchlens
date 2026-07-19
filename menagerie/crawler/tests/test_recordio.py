@@ -44,6 +44,28 @@ def test_append_is_persisted_and_idempotent(tmp_path: Path) -> None:
     assert len(scan_jsonl(path)) == 1
 
 
+def test_first_append_materializes_missing_ledger_parent(tmp_path: Path) -> None:
+    """An empty ledger recreates its canonical parent at the first append.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    path = tmp_path / "records" / "attempts.jsonl"
+    payload = make_attempt()
+    payload.pop("ledger_seq")
+    payload.pop("payload_sha256")
+    with JsonlLedger(path, ATTEMPT_SCHEMA_VERSION_V3) as ledger:
+        path.with_suffix(f"{path.suffix}.lock").unlink()
+        path.parent.rmdir()
+        result = ledger.append(payload)
+        assert result.appended
+    assert path.parent.is_dir()
+    assert len(scan_jsonl(path)) == 1
+
+
 def test_single_writer_lock_is_exclusive(tmp_path: Path) -> None:
     """Two live canonical writers cannot own one ledger.
 
