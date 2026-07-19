@@ -525,6 +525,14 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             else WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
         )
     if (
+        bool(getattr(trace, "_runnable_rng_monitor_uncertain", False))
+        and completeness is WitnessCompleteness.COMPLETE
+    ):
+        # r37 hon1_2 fail-closed rule: the host-nondeterminism monitor could not
+        # prove its own installation/chain/restoration, so channel coverage for
+        # this forward is unknowable -- INCOMPLETE, never "no consumption".
+        completeness = WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
+    if (
         getattr(trace, "capture_verified", None) is False
         and completeness is WitnessCompleteness.COMPLETE
     ):
@@ -706,6 +714,14 @@ def _build_rng_profile(trace: Any) -> RunnableRngProfile:
     consumed = bool(getattr(trace, "_runnable_host_rng_consumed", False))
     seed = getattr(trace, "random_seed", None)
     capture_seed = int(seed) if isinstance(seed, int) and not isinstance(seed, bool) else None
+    # r37 hon1_2: a touch on any NON-global monitored channel (RNG instances,
+    # SystemRandom/secrets, os entropy, clocks, the default_rng factory) is
+    # permanently unreplayable -- no seed reproduces it -- so the profile records
+    # host consumption with NO identifiable capture seed, landing every run in
+    # the permanent-unreproduced ceiling (UNVERIFIABLE + NOT_APPLICABLE). The
+    # replayable global engines keep their seeded-reproduction semantics.
+    if bool(getattr(trace, "_runnable_host_rng_unreplayable", False)):
+        return RunnableRngProfile(host_rng_consumed=True, capture_seed=None)
     return RunnableRngProfile(host_rng_consumed=consumed, capture_seed=capture_seed)
 
 
