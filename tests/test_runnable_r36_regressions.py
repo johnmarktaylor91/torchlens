@@ -1387,3 +1387,26 @@ class TestOutputCapabilityMetaGates:
             )
         finally:
             _CONTAINER_REGISTRY.pop(_Holder, None)
+
+
+class TestContractLockstep:
+    """The contract document IS the spec: its frozen tables track the code exactly."""
+
+    def test_contract_error_table_matches_enum_exactly(self) -> None:
+        import re
+
+        from torchlens.runnable import RunnableErrorCode
+
+        doc = (
+            Path(__file__).resolve().parents[1]
+            / "docs"
+            / "reference"
+            / "runnable_tlspec_contract.md"
+        ).read_text()
+        match = re.search(
+            r"The exact `RunnableErrorCode` values are:\n\n```text\n(.*?)```", doc, re.S
+        )
+        assert match is not None
+        doc_codes = [line.strip() for line in match.group(1).strip().split("\n")]
+        enum_codes = [member.value for member in RunnableErrorCode]
+        assert doc_codes == enum_codes

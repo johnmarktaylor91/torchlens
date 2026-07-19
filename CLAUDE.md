@@ -237,7 +237,13 @@ name every initialized slot.
 tensor-value-free. Load validates embedded state through the same strict binder; run reports
 `embedded_capture_state`, never a reconstructed model, and a later `load_state_dict()` overrides it.
 Used NON-persistent buffers always ship in the REQUIRED `runnable_nonpersistent_buffer_v1` family
-(declared state, not gated on either include flag; the save discloses it).
+(declared state, not gated on either include flag; the save discloses it). State ALIAS topology is
+declared (r37): repeated live object identity (tied weights, double-registered buffers) becomes a
+shared alias group staged as ONE allocation; distinct-object overlapping or unprovable state
+topology refuses at save with `state_alias_topology_unsupported`. Payload blobs keep their
+`map_location` transport placement; readiness capability-checks recorded slot devices without
+allocating, and one atomic run-preparation staging pass moves all state families to their recorded
+devices (a CUDA artifact on a CPU-only host loads for analysis and refuses `.run()` typed).
 
 `tl.save(trace, path, level="runnable", include_activations=True)` independently archives exactly
 the activations already retained by the capture-time `save=` decision, including retained raw and
@@ -261,7 +267,17 @@ unchanged. Analysis-only loads raise typed `run_capability_unavailable`. Stage 5
 and rolls back by default; `return_diverged` is the sole opt-in and returns a monotonic poisoned
 Trace refused by validation, export, faithful comparison, and path-assuming intervention chaining.
 Incomplete witness coverage is `unverifiable`, never `verified`; numeric attestation is
-`not_applicable` for sparse-only or ineligible activation-payload runs.
+`not_applicable` for sparse-only or ineligible activation-payload runs. Model outputs with ZERO
+tensor leaves (all-literal trees, literal roots, empty containers) and namedtuple/mapping/
+registered-container outputs carrying extra per-instance state refuse at save
+(`missing_output_container_contract`; one per-kind capability table governs capture proof, save
+refusal, and load-time recompute). Host nondeterminism beyond the two replayable global engines
+-- RNG instances (incl. outside-held NumPy Generators), `SystemRandom`/`secrets`, OS entropy,
+`uuid4`, the `default_rng` factory, and the full clock family incl. `perf_counter` -- ceilings
+every replay permanently (`unverifiable` + `not_applicable`); monitor uncertainty downgrades
+completeness, never reads as no-consumption. Persisted execution-context values validate at parse
+time against closed vocabularies (`context_field_invalid`); the recorded default device is entered
+as a scoped `with torch.device(...)` context, never via `set_default_device`.
 
 Runnable descriptors are `sparse_recorded_taken_path_v2`: per-call `CallExecutionContext` and the
 capture-scoped `AmbientExecutionContext` are REQUIRED and EXPLICIT, restored at replay or refused
