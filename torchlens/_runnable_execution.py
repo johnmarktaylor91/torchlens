@@ -6,6 +6,7 @@ import dataclasses
 from collections.abc import Callable, Iterable, Mapping, Sequence
 import sys
 from contextlib import contextmanager, nullcontext
+from functools import lru_cache
 from itertools import count
 import struct
 from typing import Any, cast
@@ -17,6 +18,7 @@ from . import _state
 from ._io._torch_symbols import torch_attr
 from ._runnable_state import (
     PreparedRunnableState,
+    _allocation_budget_bytes,
     prepare_runnable_state,
     runnable_tensor_byte_digest,
 )
@@ -43,10 +45,12 @@ from .utils.rng import (
     aten_qualname_is_seeded_rng,
     deterministic_fill_governs,
     qualname_is_uninit_growth_resize,
+    qualname_is_uninit_size_gated_alloc,
     qualname_is_uninit_total_writer,
     qualname_is_uninitialized_alloc,
     restore_host_rng,
     snapshot_host_rng,
+    uninit_new_call_is_size_form,
 )
 from .utils._torch_compat import tensor_version_or_none
 from .utils.tensor_utils import touched_bytes_relation
@@ -345,6 +349,9 @@ def _execute_loaded_sparse_transaction(
     call_outputs: dict[str, Any] = {}
     attestation_slot_ids = _raw_activation_slot_ids(descriptor)
     attestation_slot_values: dict[str, torch.Tensor] = {}
+    # r55 C3: registry lookup for the per-call allocation preflight (namespace /
+    # qualname drive the size-driving classification).
+    registry_by_id = {entry.registry_id: entry for entry in descriptor.callable_registry}
 
     # r35 corr2_4: the fork/restore set follows the SEEDING PRIMITIVE, never the
     # bound-input overlay -- every visible CUDA device is forked when CUDA is
@@ -393,7 +400,12 @@ def _execute_loaded_sparse_transaction(
                 _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
                 try:
                     with _call_execution_context_entered(call.execution_context):
-                        output = _execute_sparse_call(call, callables[call.call_id], slot_values)
+                        output = _execute_sparse_call(
+                            call,
+                            callables[call.call_id],
+                            slot_values,
+                            registry_entry=registry_by_id.get(call.registry_id),
+                        )
                 except RuntimeSignatureDriftError:
                     # r39 corr2_4: under ``return_diverged`` an admitted-but-INEXECUTABLE
                     # divergent input (wrong feature shape/dtype/device) reaches the resolved
@@ -2471,10 +2483,227 @@ def _call_execution_context_entered(context: Any) -> Any:
             ctx.__exit__(None, None, None)
 
 
+# r55 C3 (free_1 HIGH / sec_1 MED): op-agnostic allocation-bomb preflight.
+#
+# The op-execution literal-argument path is the seam r53 free_1 missed: a hostile
+# ``.tlspec`` can edit one plaintext ``manifest.json`` integer so a taken-path call
+# (``torch.zeros(10**12)``/``arange(n)``/``x.expand(n)``) drives a multi-terabyte
+# allocation and OOM-kills the default ``tl.load(path).run(inputs)`` victim. The
+# recorded-output-slot bound (``_preflight_run_allocation`` at run-prep) catches the
+# *self-consistent* tamper (literal AND output slot both huge) but NOT the
+# literal-only tamper (output slot left honest/small), and per-arg ``.to("meta")``
+# never forces a *factory* op (no tensor operand) onto meta. ``FakeTensorMode``
+# closes the class op-agnostically: it projects the call's output shape/bytes
+# WITHOUT allocating (fake tensors never allocate -- factory ops included), so a
+# projected over-budget request is refused BEFORE the real allocator runs. It is
+# the primary layer; the run-prep recorded-output bound is layer 2.
+_SIZE_DRIVING_QUALNAME_TAILS: frozenset[str] = frozenset(
+    {
+        # Factory ops: the attacker owns ``numel`` outright through a literal
+        # (no tensor operand), the case per-arg ``.to("meta")`` cannot bound.
+        "zeros",
+        "ones",
+        "empty",
+        "full",
+        "randn",
+        "rand",
+        "randint",
+        "randperm",
+        "arange",
+        "range",
+        "eye",
+        "linspace",
+        "logspace",
+        "empty_strided",
+        "new_zeros",
+        "new_ones",
+        "new_empty",
+        "new_full",
+        "new_empty_strided",
+        # MATERIALIZING shape-expanding ops: a literal size/multiplier composes
+        # with live dims and actually allocates. Pure VIEW ops (``expand``,
+        # ``broadcast_to``, ``as_strided``, ``unfold``) are DELIBERATELY excluded:
+        # they allocate nothing (stride-0 / overlapping views), so projecting their
+        # logical numel would over-refuse a legitimate large view. Their INDIRECT
+        # bomb (a downstream op that materializes the view) carries no literal and
+        # is bounded by the run-prep recorded-output-slot preflight instead.
+        "repeat",
+        "tile",
+        "repeat_interleave",
+        "interpolate",
+    }
+)
+"""Size-driving call tails whose output bytes a literal argument can inflate.
+
+This is the cheap GATE that decides whether the (op-agnostic, ~100us)
+``FakeTensorMode`` projection runs for a call -- it is deliberately a superset
+heuristic over MATERIALIZING ops, never the authority. A tail the gate misses is
+still bounded by the run-prep recorded-output-slot preflight
+(``op_allocation_preflight``), so an incomplete gate is a cost optimization, never
+a security hole.
+"""
+
+
+@lru_cache(maxsize=1)
+def _fake_tensor_mode_class() -> type[Any] | None:
+    """Return torch's ``FakeTensorMode`` class if importable, else ``None``.
+
+    Feature-detected per the ``_torch_compat`` convention (never a version
+    string): the projection is a runtime allocation preflight, not a capture-hot
+    probe, so an absent ``FakeTensorMode`` fails OPEN to the run-prep
+    recorded-output bound rather than refusing a legitimate run.
+    """
+
+    try:
+        from torch._subclasses.fake_tensor import FakeTensorMode
+    except Exception:  # pragma: no cover - FakeTensorMode ships on supported torch.
+        return None
+    return FakeTensorMode
+
+
+def _has_integer_literal(value: Any, _depth: int = 0) -> bool:
+    """Return whether a decoded argument tree carries a plain (non-bool) integer.
+
+    The second gate on the projection: a size-driving op whose sizes come only
+    from live tensor shapes (no literal) cannot be a literal allocation bomb, so
+    it skips the projection. Bounded recursion mirrors the literal-nesting
+    ceiling; ``bool`` is excluded (it is not a size argument).
+    """
+
+    if _depth > _MAX_DECODE_NESTING_DEPTH:
+        return False
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    if isinstance(value, (list, tuple)):
+        return any(_has_integer_literal(item, _depth + 1) for item in value)
+    if isinstance(value, Mapping):
+        return any(_has_integer_literal(item, _depth + 1) for item in value.values())
+    return False
+
+
+def _call_is_size_driving(
+    entry: CallableRegistryEntry | None, args: Sequence[Any], kwargs: Mapping[str, Any]
+) -> bool:
+    """Return whether a call is a literal-driven size candidate worth projecting."""
+
+    if entry is None:
+        return False
+    namespace = entry.key.namespace
+    qualname = entry.key.qualname
+    if not qualname:
+        return False
+    tail = qualname.rsplit(".", 1)[-1]
+    family = (
+        tail in _SIZE_DRIVING_QUALNAME_TAILS
+        or qualname_is_uninitialized_alloc(namespace, qualname)
+        or qualname_is_uninit_size_gated_alloc(namespace, qualname)
+        or qualname_is_uninit_growth_resize(namespace, qualname)
+    )
+    if not family:
+        return False
+    return _has_integer_literal(list(args)) or _has_integer_literal(dict(kwargs))
+
+
+def _tree_to_fake(mode: Any, value: Any) -> Any:
+    """Replace every live tensor in an argument tree with its fake stand-in."""
+
+    if isinstance(value, torch.Tensor):
+        try:
+            return mode.from_tensor(value)
+        except Exception:
+            return value
+    if isinstance(value, tuple):
+        return tuple(_tree_to_fake(mode, item) for item in value)
+    if isinstance(value, list):
+        return [_tree_to_fake(mode, item) for item in value]
+    if isinstance(value, dict):
+        return {key: _tree_to_fake(mode, item) for key, item in value.items()}
+    return value
+
+
+def _projected_output_bytes(projected: Any) -> dict[torch.device, int]:
+    """Sum projected tensor output bytes per device across an output tree."""
+
+    totals: dict[torch.device, int] = {}
+    stack: list[Any] = [projected]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, torch.Tensor):
+            try:
+                nbytes = int(node.numel()) * int(node.element_size())
+                device = node.device
+            except Exception:
+                continue
+            totals[device] = totals.get(device, 0) + nbytes
+        elif isinstance(node, (tuple, list)):
+            stack.extend(node)
+        elif isinstance(node, Mapping):
+            stack.extend(node.values())
+    return totals
+
+
+def _preflight_call_allocation(
+    entry: CallableRegistryEntry | None,
+    func: Callable[..., Any],
+    args: Sequence[Any],
+    kwargs: Mapping[str, Any],
+    call: RunnableCallDescriptor,
+) -> None:
+    """Refuse a size-driving call whose projected output exceeds the live budget.
+
+    Runs the resolved callable under ``FakeTensorMode(allow_non_fake_inputs=True)``
+    (ZERO allocation) and compares each projected output-device's total against the
+    never-under-estimating live budget. A projected over-budget request refuses
+    typed BEFORE the real call allocates. If the projection RAISES -- a
+    data-dependent op with no fake/meta impl (``nonzero``/``unique`` ->
+    ``DynamicOutputShapeException``) -- it FAILS OPEN to the run-prep
+    recorded-output bound, so a legitimate such op is never over-refused (the
+    r51 over-catch anti-pattern). An unavailable ``FakeTensorMode`` fails open
+    identically.
+    """
+
+    if not _call_is_size_driving(entry, args, kwargs):
+        return
+    mode_cls = _fake_tensor_mode_class()
+    if mode_cls is None:
+        return  # feature-detect fail-open -> run-prep recorded-output bound
+    try:
+        with mode_cls(allow_non_fake_inputs=True) as mode:
+            fake_args = _tree_to_fake(mode, list(args))
+            fake_kwargs = _tree_to_fake(mode, dict(kwargs))
+            projected = func(*fake_args, **fake_kwargs)
+    except Exception:
+        # Data-dependent / no fake impl (nonzero/unique) OR any projection
+        # failure: FAIL OPEN. The recorded-output-slot bound (run-prep) and the
+        # parse-time literal-magnitude gate remain in force; a legitimate
+        # data-dependent op MUST still run.
+        return
+    for device, requested in _projected_output_bytes(projected).items():
+        available = _allocation_budget_bytes(device)
+        if requested > available:
+            raise RunCapabilityUnavailableError(
+                f"Sparse call {call.call_id!r} projects a {requested}-byte allocation "
+                f"on device {str(device)!r}, but only {available} bytes are available "
+                "on this host. The recorded literal arguments would drive an "
+                "out-of-budget allocation; the descriptor may be tampered.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                detection_stage="op_allocation_preflight",
+                call_id=call.call_id,
+                device=str(device),
+                required_bytes=requested,
+                available_bytes=available,
+                affected_op_labels=call.op_labels,
+            )
+
+
 def _execute_sparse_call(
     call: RunnableCallDescriptor,
     func: Callable[..., Any],
     slot_values: Mapping[str, torch.Tensor],
+    *,
+    registry_entry: CallableRegistryEntry | None = None,
 ) -> Any:
     """Construct and execute one sparse call from literal and tensor leaves."""
 
@@ -2499,6 +2728,11 @@ def _execute_sparse_call(
                 slot_id=tensor_argument.slot_id,
             ) from exc
         _write_argument(args, kwargs, tensor_argument.argument_path, value)
+    # r55 C3: op-agnostic allocation preflight BEFORE the real dispatch. A typed
+    # refusal here replaces the raw allocator OOM-kill a hostile literal would
+    # otherwise cause; it never masks a genuine signature drift (the drift path
+    # below still runs the real call for every non-refused request).
+    _preflight_call_allocation(registry_entry, func, args, kwargs, call)
     try:
         return func(*args, **kwargs)
     except Exception as exc:
@@ -4520,6 +4754,24 @@ _UNINIT_SANITIZER_NAMESPACES = frozenset({"torch", "torch.Tensor", "torch.nn.fun
 """Trusted namespaces whose ``out=`` convention is a total destination overwrite."""
 
 
+def _decoded_positional_literals(call: RunnableCallDescriptor) -> tuple[Any, ...]:
+    """Return a call's positional LITERAL arguments, decoded, in index order.
+
+    Tensor operands (a method receiver at ``args[0]``, other tensor arguments)
+    are naturally excluded -- they are ``tensor_arguments``, not literals -- so
+    the result is exactly the size-argument tuple ``uninit_new_call_is_size_form``
+    classifies for ``Tensor.new(...)``. Index gaps are collapsed (order is
+    preserved), which is all the arg-form predicate needs.
+    """
+
+    indexed: dict[int, Any] = {}
+    for literal in call.literal_arguments:
+        path = tuple(literal.argument_path)
+        if len(path) == 2 and path[0] == "args" and isinstance(path[1], int):
+            indexed[path[1]] = _decode_literal(literal.value)
+    return tuple(indexed[index] for index in sorted(indexed))
+
+
 def _nondeterministic_value_sources(
     descriptor: SparseRunDescriptor,
 ) -> dict[str, frozenset[str]]:
@@ -4586,6 +4838,20 @@ def _nondeterministic_value_sources(
                 if tuple(ref.argument_path) == ("kwargs", "out"):
                     dest_slot_id = ref.slot_id
                     break
+            # r55 hon_2: an ``out=`` that ALIASES a value operand
+            # (``torch.add(a, x, out=a)``) computes a result that READS the
+            # destination's prior (uninitialized) bytes -- it is NOT a pure total
+            # overwrite. "All elements written" is not "result independent of
+            # prior content". Preserve the destination's taint (fail closed, r35
+            # unknown-alias precedent) by declining to treat it as a total-write
+            # destination; only a genuine total write to a destination that is
+            # not itself read (below, or the ``copy_``/``zero_``/``fill_`` receiver
+            # branch) drops taint.
+            if dest_slot_id is not None and any(
+                ref.slot_id == dest_slot_id and tuple(ref.argument_path) != ("kwargs", "out")
+                for ref in call.tensor_arguments
+            ):
+                dest_slot_id = None
         if dest_slot_id is None and qualname_is_uninit_total_writer(namespace, qualname):
             for ref in call.tensor_arguments:
                 if tuple(ref.argument_path) == ("args", 0):
@@ -4604,6 +4870,25 @@ def _nondeterministic_value_sources(
         if consumes_seeded:
             produced = produced | {_SEEDED_SOURCE_KIND}
         is_uninit_factory = qualname_is_uninitialized_alloc(namespace, qualname)
+        # r55 hon_1 consumer: ``Tensor.new`` is uninitialized-memory ONLY in its
+        # SIZE-argument form (``new(*sizes)`` redispatches ``aten.empty``); the
+        # DATA form (``new([values])``/``new(tensor)``) is a deterministic copy
+        # constructor. Decode the call's positional literal sizes and consult
+        # W1's arg-form predicate; the data form (``False``) stays clean, and an
+        # undecidable form (``None`` -- a plain int-tuple, since the portable
+        # grammar erases ``torch.Size``) fails CLOSED to tainted (grow-gate
+        # posture). ``new`` has no aten spelling, so this Python-method surface
+        # is the only place its uninit taint is recognized.
+        is_size_gated_uninit = False
+        if qualname_is_uninit_size_gated_alloc(namespace, qualname):
+            try:
+                new_sizes = _decoded_positional_literals(call)
+            except Exception:
+                new_sizes = None
+            if new_sizes is None:
+                is_size_gated_uninit = True  # undecodable form -> fail closed
+            else:
+                is_size_gated_uninit = uninit_new_call_is_size_form(new_sizes) is not False
         is_growth_resize = qualname_is_uninit_growth_resize(namespace, qualname)
         receiver_numel: int | None = None
         if is_growth_resize:
@@ -4617,7 +4902,7 @@ def _nondeterministic_value_sources(
             )
         for out_slot_id in call.output_slot_ids:
             slot_taint = set(produced)
-            if is_uninit_factory:
+            if is_uninit_factory or is_size_gated_uninit:
                 # A factory product's value derives from NO operand: it is pure
                 # allocator garbage (tainted) unless deterministically filled
                 # or empty of elements (both value-constant).
@@ -5121,9 +5406,27 @@ def _raise_monotonic_divergence(
     )
 
 
-def _decode_literal(value: NonTensorLiteral | LiteralTupleKey) -> Any:
+_MAX_DECODE_NESTING_DEPTH = 200
+"""Defensive run-side literal-decode nesting ceiling (r55 C4).
+
+W3's load-side parser (``_io/runnable_load._parse_literal``) already bounds
+descriptor nesting to the SAME ceiling at parse, so a legitimately-loaded
+descriptor never approaches this here. This is the belt-and-suspenders guard on
+the run-side decoder: an over-depth decode raises ``ValueError`` -- routed to the
+same typed refusal surface as any other malformed literal -- rather than an
+uncaught ``RecursionError``. 200 sits far above any real literal nesting and
+below the interpreter's default recursion crash depth.
+"""
+
+
+def _decode_literal(value: NonTensorLiteral | LiteralTupleKey, _depth: int = 0) -> Any:
     """Decode one safe sparse literal without importing artifact-selected code."""
 
+    if _depth > _MAX_DECODE_NESTING_DEPTH:
+        raise ValueError(
+            f"Runnable literal nesting exceeds the maximum decode depth of "
+            f"{_MAX_DECODE_NESTING_DEPTH}."
+        )
     if isinstance(value, LiteralAtom):
         # ``ELLIPSIS`` and ``NONE`` both carry ``value is None`` on the wire (``...`` has
         # no JSON-native representation), so the atom KIND -- not the stored value -- is
@@ -5135,17 +5438,20 @@ def _decode_literal(value: NonTensorLiteral | LiteralTupleKey) -> Any:
         return value.value
     if isinstance(value, LiteralSlice):
         return slice(
-            _decode_literal(value.start),
-            _decode_literal(value.stop),
-            _decode_literal(value.step),
+            _decode_literal(value.start, _depth + 1),
+            _decode_literal(value.stop, _depth + 1),
+            _decode_literal(value.step, _depth + 1),
         )
     if isinstance(value, LiteralTupleKey):
-        return tuple(_decode_literal(item) for item in value.items)
+        return tuple(_decode_literal(item, _depth + 1) for item in value.items)
     if isinstance(value, LiteralSequence):
-        items = [_decode_literal(item) for item in value.items]
+        items = [_decode_literal(item, _depth + 1) for item in value.items]
         return tuple(items) if value.kind is LiteralSequenceKind.TUPLE else items
     if isinstance(value, LiteralMapping):
-        return {_decode_literal(entry.key): _decode_literal(entry.value) for entry in value.entries}
+        return {
+            _decode_literal(entry.key, _depth + 1): _decode_literal(entry.value, _depth + 1)
+            for entry in value.entries
+        }
     if isinstance(value, LiteralTorchSymbol):
         return _decode_torch_symbol(value.qualname)
     raise TypeError(f"Unknown sparse literal type {type(value).__name__}.")
