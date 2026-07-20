@@ -206,12 +206,28 @@ def test_affine_batchnorm_saves_runs_verified_and_value_correct(
         torch.testing.assert_close(result.output, expected)
 
 
+_COMPLEX_2X3 = torch.tensor(
+    [[1 + 1j, 2 + 2j, 3 + 3j], [4 + 4j, 5 + 5j, 6 + 6j]], dtype=torch.complex64
+)
+
+
 @pytest.mark.parametrize(
     ("property_name", "x"),
     (
         ("T", torch.arange(6.0).reshape(2, 3)),
         ("mT", torch.arange(6.0).reshape(2, 3)),
         ("real", torch.tensor([1 + 2j, 3 + 4j])),
+        # r45: ``.H`` / ``.mH`` are the pure-view siblings of ``.T`` / ``.mT`` (the r44
+        # corr1_1 / secF_1 over-deny). Cover both real and complex sources; ``.imag`` is
+        # complex-only. Non-square inputs sidestep the square/real capture quirk noted in
+        # the finding.
+        ("H", torch.arange(6.0).reshape(2, 3)),
+        ("mH", torch.arange(6.0).reshape(2, 3)),
+        ("H", _COMPLEX_2X3),
+        ("mH", _COMPLEX_2X3),
+        ("real", _COMPLEX_2X3),
+        ("imag", _COMPLEX_2X3),
+        ("imag", torch.tensor([1 + 2j, 3 + 4j])),
     ),
 )
 def test_safe_tensor_properties_resolve_and_run_verified(
