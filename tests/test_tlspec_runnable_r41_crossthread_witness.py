@@ -1523,3 +1523,409 @@ def test_unregistered_submodule_undrawn_generator_stays_verified(tmp_path: Path)
     trace, result = _roundtrip(_UnregUndrawn(), x, tmp=tmp_path)
     assert "model_attribute_generator" not in getattr(trace, "_runnable_host_rng_channels", ())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+# ======================================================================================
+# K -- r53 corr_1/corr_2/F1: inert-reachability immunizer matrix. The sweep must follow
+# EVERY reference edge followable WITHOUT executing user code (class-MRO surfaces /
+# weakrefs / callable interiors / callable instances), so a model-held generator behind
+# any such edge, drawn on a PRE-EXISTING non-hooked thread, ceilings to UNVERIFIABLE.
+# The matrix IS the class definition: a new holder shape gets a row, not a bespoke fix.
+# ======================================================================================
+
+import functools  # noqa: E402
+import weakref  # noqa: E402
+
+_R53_FIRED: list[str] = []
+"""Side-effect ledger: ANY entry means the inventory executed user code (hard fail)."""
+
+
+class _GenOwningDescriptor:
+    """A class descriptor OBJECT owning the generator-bearing target (the corr_1 shape)."""
+
+    def __init__(self, target: Any) -> None:
+        self._target = target
+
+    def __get__(self, obj: Any, objtype: Any = None) -> Any:
+        _R53_FIRED.append("descriptor.__get__")
+        return self._target
+
+
+class _RngLeaf:
+    """A plain user object owning a generator (weakref target / bound-method receiver)."""
+
+    def __init__(self, gen: Any) -> None:
+        self.rng = gen
+
+    def draw(self) -> float:
+        return float(self.rng.random())
+
+
+def _closure_over(gen: Any) -> Callable[[float], float]:
+    """A function whose ONLY route to ``gen`` is its closure cell."""
+
+    def _fn(x: float) -> float:
+        return float(gen.random()) + x
+
+    return _fn
+
+
+def _consume(*args: Any, **kwargs: Any) -> None:
+    """Inert partial target (never called by the sweep)."""
+
+
+class _CallableSampler:
+    """The idiomatic callable transform/sampler instance (F1's callable-INSTANCE shape)."""
+
+    def __init__(self, gen: Any) -> None:
+        self.rng = gen
+
+    def __call__(self, x: float) -> float:
+        return x * float(self.rng.random())
+
+
+class _HostilePartial(functools.partial):
+    """Shadows ``func``/``args`` with side-effecting properties; base-type slot reads bypass."""
+
+    func = property(lambda self: _R53_FIRED.append("partial.func"))  # type: ignore[assignment]
+    args = property(lambda self: _R53_FIRED.append("partial.args"))  # type: ignore[assignment]
+
+
+class _HostileProperty(property):
+    """Shadows the ``fget`` accessor itself; the base ``property.fget`` slot read bypasses."""
+
+    fget = property(lambda self: _R53_FIRED.append("property.fget"))  # type: ignore[assignment]
+
+
+class _HostileRef(weakref.ref):
+    """Overrides ``__call__``; the base-C ``weakref.ref.__call__`` deref bypasses."""
+
+    def __call__(self) -> None:
+        _R53_FIRED.append("weakref.__call__")
+
+
+def _build_inert_reach_holder(shape: str) -> tuple[Any, Any, list[Any]]:
+    """Build ``(model, generator, keepalive)`` for one inert-reachability holder shape.
+
+    The generator is reachable from the model ONLY through the r53 inert edge under
+    test -- never through a plain instance-attribute chain the pre-r53 sweep walked.
+    """
+
+    gen = np.random.default_rng(777)
+    keep: list[Any] = []
+    if shape == "descriptor_object":
+        leaf = _RngLeaf(gen)
+        cls = type("_R53DescModel", (_AttrHolder,), {"extra": _GenOwningDescriptor(leaf)})
+        return cls(), gen, keep
+    if shape == "class_attribute":
+        cls = type("_R53ClsAttrModel", (_AttrHolder,), {"shared_rng": gen})
+        return cls(), gen, keep
+    if shape == "weakref":
+        leaf = _RngLeaf(gen)
+        keep.append(leaf)
+        return _AttrHolder(subref=weakref.ref(leaf)), gen, keep
+    if shape == "weakmethod":
+        leaf = _RngLeaf(gen)
+        keep.append(leaf)
+        return _AttrHolder(cb=weakref.WeakMethod(leaf.draw)), gen, keep
+    if shape == "hostile_weakref_subclass":
+        leaf = _RngLeaf(gen)
+        keep.append(leaf)
+        return _AttrHolder(subref=_HostileRef(leaf)), gen, keep
+    if shape == "weakset_member":
+        leaf = _RngLeaf(gen)
+        keep.append(leaf)
+        return _AttrHolder(pool=weakref.WeakSet([leaf])), gen, keep
+    if shape == "weak_value_dict_member":
+        leaf = _RngLeaf(gen)
+        keep.append(leaf)
+        return _AttrHolder(table=weakref.WeakValueDictionary({"s": leaf})), gen, keep
+    if shape == "weak_key_dict_member":
+        leaf = _RngLeaf(gen)
+        keep.append(leaf)
+        return _AttrHolder(table=weakref.WeakKeyDictionary({leaf: 1})), gen, keep
+    if shape == "closure_cell":
+        return _AttrHolder(fn=_closure_over(gen)), gen, keep
+    if shape == "default_arg":
+
+        def _fn_default(x: float, g: Any = gen) -> float:
+            return x
+
+        return _AttrHolder(fn=_fn_default), gen, keep
+    if shape == "kwdefault":
+
+        def _fn_kwonly(x: float, *, g: Any = gen) -> float:
+            return x
+
+        return _AttrHolder(fn=_fn_kwonly), gen, keep
+    if shape == "partial_arg":
+        return _AttrHolder(op=functools.partial(_consume, gen)), gen, keep
+    if shape == "partial_keyword":
+        return _AttrHolder(op=functools.partial(_consume, g=gen)), gen, keep
+    if shape == "hostile_partial_subclass":
+        return _AttrHolder(op=_HostilePartial(_consume, gen)), gen, keep
+    if shape == "property_fget_closure":
+        cls = type("_R53PropModel", (_AttrHolder,), {"sample": property(_closure_over(gen))})
+        return cls(), gen, keep
+    if shape == "hostile_property_subclass":
+        cls = type(
+            "_R53HostilePropModel", (_AttrHolder,), {"sample": _HostileProperty(_closure_over(gen))}
+        )
+        return cls(), gen, keep
+    if shape == "staticmethod_func":
+        cls = type("_R53StaticModel", (_AttrHolder,), {"helper": staticmethod(_closure_over(gen))})
+        return cls(), gen, keep
+    if shape == "classmethod_func":
+        cls = type("_R53ClassmModel", (_AttrHolder,), {"helper": classmethod(_closure_over(gen))})
+        return cls(), gen, keep
+    if shape == "bound_method_self":
+        leaf = _RngLeaf(gen)
+        return _AttrHolder(cb=leaf.draw), gen, keep
+    if shape == "callable_instance":
+        return _AttrHolder(op=_CallableSampler(gen)), gen, keep
+    raise AssertionError(shape)
+
+
+_R53_INERT_SHAPES: tuple[str, ...] = (
+    "descriptor_object",
+    "class_attribute",
+    "weakref",
+    "weakmethod",
+    "hostile_weakref_subclass",
+    "weakset_member",
+    "weak_value_dict_member",
+    "weak_key_dict_member",
+    "closure_cell",
+    "default_arg",
+    "kwdefault",
+    "partial_arg",
+    "partial_keyword",
+    "hostile_partial_subclass",
+    "property_fget_closure",
+    "hostile_property_subclass",
+    "staticmethod_func",
+    "classmethod_func",
+    "bound_method_self",
+    "callable_instance",
+)
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("shape", _R53_INERT_SHAPES)
+def test_r53_inert_reach_generator_swept(shape: str) -> None:
+    """REACHABILITY: the sweep snapshots the EXACT generator through the inert edge alone
+    (0 before r53 for every row), firing zero user code along the way."""
+
+    _R53_FIRED.clear()
+    model, gen, _keep = _build_inert_reach_holder(shape)
+    monitor = host_nondeterminism_monitor(model)
+    with monitor:  # __enter__ sets ``_exempt_ids`` that the sweep consults
+        snapshots = monitor._sweep_model_generators()
+    assert any(holder is gen for holder, _ in snapshots), f"{shape}: generator not reached"
+    assert _R53_FIRED == [], f"{shape}: inventory executed user code {_R53_FIRED!r}"
+
+
+@pytest.mark.parametrize("thread", ["owner", "preexisting"])
+@pytest.mark.parametrize("shape", _R53_INERT_SHAPES)
+def test_r53_inert_reach_generator_drawn_is_witnessed(
+    shape: str, thread: str, preexisting_worker: Any
+) -> None:
+    """DRAW witness on BOTH thread axes: an inertly-reachable generator drawn during the
+    window -- including on a PRE-EXISTING non-hooked worker, where the state digest is the
+    ONLY mechanism -- records ``model_attribute_generator`` (false VERIFIED before r53)."""
+
+    _R53_FIRED.clear()
+    model, gen, _keep = _build_inert_reach_holder(shape)
+    with host_nondeterminism_monitor(model) as result:
+        if thread == "preexisting":
+            preexisting_worker.run(lambda: float(gen.random()))
+        else:
+            float(gen.random())
+    assert "model_attribute_generator" in result.channels
+    assert _R53_FIRED == []
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("shape", _R53_INERT_SHAPES)
+def test_r53_inert_reach_undrawn_stays_clean(shape: str) -> None:
+    """Over-trigger pin: every holder shape PRESENT but UNDRAWN records no channel and no
+    uncertainty -- finding a generator is never itself a ceiling (the digest diff is)."""
+
+    _R53_FIRED.clear()
+    model, _gen, _keep = _build_inert_reach_holder(shape)
+    with host_nondeterminism_monitor(model) as result:
+        pass
+    assert result.channels == set()
+    assert result.uncertain is False
+    assert _R53_FIRED == []
+
+
+@pytest.mark.smoke
+def test_r53_user_class_surfaces_never_flag_uncertain() -> None:
+    """Boundedness / no-over-trigger pin: a user-class-heavy model (methods, properties,
+    bound-method attrs, defaults across 100 blocks) sweeps completely -- per-class dedup
+    keeps the class/interior edges far under the node cap, with no channels and no flags."""
+
+    class _Block(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(2, 2)
+            self.cb = self.helper  # bound method: the __func__/__self__ interior edge
+
+        def helper(self, x: float = 1.0) -> float:
+            return x
+
+        @property
+        def scaled(self) -> float:
+            return 2.0
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.lin(x)
+
+    model = nn.ModuleList([_Block() for _ in range(100)])
+    with host_nondeterminism_monitor(model) as result:
+        pass
+    assert result.channels == set()
+    assert result.uncertain is False
+
+
+def test_r53_descriptor_owned_generator_end_to_end_unverifiable(
+    preexisting_worker: Any, tmp_path: Path
+) -> None:
+    """corr_1 END-TO-END (the r52 false-VERIFIED repro shape): a class-descriptor-provided
+    UNREGISTERED submodule's generator, drawn on a pre-existing thread to steer a branch,
+    now ceilings the runnable verdict (was VERIFIED + ATTESTED with delta 0.884 vs fresh)."""
+
+    sub = nn.Linear(2, 2)
+    sub.rng = np.random.default_rng(0)
+
+    class _DescriptorRngModel(nn.Module):
+        extra = _GenOwningDescriptor(sub)
+
+        def __init__(self, worker: Any) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self._worker = worker
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            v = self._worker.run(lambda: float(self.extra.rng.random()))
+            h = self.lin(x)
+            return h * 2.0 if v < 0.5 else h * 3.0
+
+    x = torch.randn(2, 4)
+    trace, result = _roundtrip(_DescriptorRngModel(preexisting_worker), x, tmp=tmp_path)
+    assert "model_attribute_generator" in getattr(trace, "_runnable_host_rng_channels", ())
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+def test_r53_weakref_reached_generator_end_to_end_unverifiable(
+    preexisting_worker: Any, tmp_path: Path
+) -> None:
+    """corr_2 END-TO-END (the r52 false-VERIFIED repro shape): a weakref-reached
+    unregistered submodule's generator, drawn on a pre-existing thread, now ceilings."""
+
+    sub = nn.Linear(2, 2)  # kept alive by this frame for the whole roundtrip
+    sub.rng = np.random.default_rng(0)
+
+    class _WeakrefRngModel(nn.Module):
+        def __init__(self, worker: Any) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self.subref = weakref.ref(sub)
+            self._worker = worker
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            target = self.subref()
+            assert target is not None
+            v = self._worker.run(lambda: float(target.rng.random()))
+            h = self.lin(x)
+            return h * 2.0 if v < 0.5 else h * 3.0
+
+    x = torch.randn(2, 4)
+    trace, result = _roundtrip(_WeakrefRngModel(preexisting_worker), x, tmp=tmp_path)
+    assert "model_attribute_generator" in getattr(trace, "_runnable_host_rng_channels", ())
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+def test_r53_callable_instance_generator_end_to_end_unverifiable(
+    preexisting_worker: Any, tmp_path: Path
+) -> None:
+    """F1 END-TO-END (the probe's callable_instance shape, the most realistic of the corr
+    family): a generator on a callable sampler object, drawn on a pre-existing thread,
+    now ceilings (the blanket ``callable()`` hard-leaf gate previously hid it)."""
+
+    class _CallableOpModel(nn.Module):
+        def __init__(self, worker: Any) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self.op = _CallableSampler(np.random.default_rng(0))
+            self._worker = worker
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            v = self._worker.run(lambda: self.op(1.0))
+            h = self.lin(x)
+            return h * 2.0 if v < 0.5 else h * 3.0
+
+    x = torch.randn(2, 4)
+    trace, result = _roundtrip(_CallableOpModel(preexisting_worker), x, tmp=tmp_path)
+    assert "model_attribute_generator" in getattr(trace, "_runnable_host_rng_channels", ())
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+def test_r53_inert_holders_present_undrawn_e2e_stays_verified(tmp_path: Path) -> None:
+    """Over-trigger pin END-TO-END: a deterministic model CARRYING every new holder shape
+    (class attribute, weakref, closure, partial, callable instance) with NO draw stays
+    VERIFIED -- inert reachability alone never ceilings a benign capture."""
+
+    leaf = _RngLeaf(np.random.default_rng(3))  # weakref target, alive for the roundtrip
+
+    class _BenignLoadedModel(nn.Module):
+        shared_rng = np.random.default_rng(5)  # class attribute, undrawn
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self.subref = weakref.ref(leaf)
+            self.fn = _closure_over(np.random.default_rng(6))
+            self.op = _CallableSampler(np.random.default_rng(7))
+            self.part = functools.partial(_consume, np.random.default_rng(8))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.lin(x).relu()
+
+    x = torch.randn(2, 4)
+    trace, result = _roundtrip(_BenignLoadedModel(), x, tmp=tmp_path)
+    assert "model_attribute_generator" not in getattr(trace, "_runnable_host_rng_channels", ())
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+_R53_EXTERNAL_STORE: dict[str, Any] = {}
+"""External module state reachable ONLY by executing a property body (the residual pin)."""
+
+
+def test_r53_getter_only_dynamic_generator_stays_residual(preexisting_worker: Any) -> None:
+    """BOUNDARY pin for the DOCUMENTED contract-s11 residual (not a gap): a generator
+    reachable ONLY by EXECUTING user code -- here a property body reading external module
+    state, with no inert edge to the generator -- drawn on a pre-existing non-hooked
+    thread records nothing. The inventory must NOT call the getter to find it (calling
+    user code during inventory is forbidden); witnessing this shape requires exactly the
+    user-code execution the walk's invariant excludes. If a future mechanism closes it,
+    flipping this assertion is a deliberate strengthening."""
+
+    _R53_EXTERNAL_STORE["g"] = np.random.default_rng(11)
+    try:
+
+        class _GetterOnlyModel(_AttrHolder):
+            @property
+            def gen(self) -> Any:
+                return _R53_EXTERNAL_STORE["g"]
+
+        model = _GetterOnlyModel()
+        with host_nondeterminism_monitor(model) as result:
+            preexisting_worker.run(lambda: float(_R53_EXTERNAL_STORE["g"].random()))
+        assert result.channels == set()
+    finally:
+        _R53_EXTERNAL_STORE.clear()
