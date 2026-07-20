@@ -928,6 +928,14 @@ class _DenyMissingDispatch(dict):  # type: ignore[type-arg]
     -- callers (e.g. ``bundle.py::_load_trace_payload``) catch ``pickle.UnpicklingError``
     to translate a corrupt ``metadata.pkl`` into a clean ``TorchLensIOError``. A missing
     opcode here therefore surfaces as ``UnpicklingError``, matching the C VM.
+
+    This hook covers ONLY the unknown-opcode facet. The OTHER corrupt-input facets the
+    pure-Python VM leaks -- a stack underflow on a valid opcode (``IndexError``), a
+    truncated fixed-width read (``struct.error``), a missing memo key (``KeyError``), a
+    bad ``SHORT_BINUNICODE`` (``UnicodeDecodeError``), etc. -- are normalized to
+    ``UnpicklingError`` by the ``SafeBundleUnpickler.load()`` boundary (r51, secA_1),
+    which wraps the whole VM run, so the full corruption family reaches the load-site
+    ``except UnpicklingError`` and becomes a clean ``TorchLensIOError``.
     """
 
     def __missing__(self, key: int) -> None:
@@ -989,6 +997,46 @@ class SafeBundleUnpickler(pickle._Unpickler):
             if allowed_custom_callable_modules is not None
             else None
         )
+
+    def load(self) -> Any:
+        """Run the pure-Python VM, normalizing the WHOLE corrupt-input error family.
+
+        The C ``pickle.Unpickler`` translated every corrupt / truncated / malformed
+        stream into a single observable failure mode -- ``pickle.UnpicklingError`` --
+        which the load sites (``bundle.py::_load_trace_payload`` /
+        ``_load_unified_bundle``) catch to turn a corrupt ``metadata.pkl`` into a clean
+        :class:`~torchlens._io._errors.TorchLensIOError`. The pure-Python
+        ``pickle._Unpickler`` (base class since r49, secA_1) does NOT: a *valid* opcode
+        with too few operands raises a bare ``IndexError`` (stack underflow), a
+        truncated fixed-width int raises ``struct.error``, a missing memo key raises
+        ``KeyError``, a bad ``SHORT_BINUNICODE`` raises ``UnicodeDecodeError``, and so on
+        -- none of which the load sites catch, so they escaped ``tl.load()`` as raw
+        builtins (r51, secA_1). ``_DenyMissingDispatch`` only restores the invariant for
+        the UNKNOWN-opcode facet.
+
+        This single boundary restores the C VM's observable for the WHOLE family by
+        re-raising any non-``UnpicklingError`` the VM raises as ``UnpicklingError``
+        (preserving the original as ``__cause__`` for diagnostics). It is version-robust
+        where enumerating the opcode-/read-specific exception types is fragile.
+
+        Nothing legitimate is masked: on a VALID stream the base ``load`` returns
+        normally (its internal ``_Stop`` sentinel never escapes), and every deliberate
+        refusal surface in this unpickler (``find_class`` denials, ``_safe_getattr``,
+        ``_safe_load_from_bytes``, and the four opcode overrides) already raises ONLY
+        ``pickle.UnpicklingError`` -- which passes through unchanged -- so the residual
+        non-``UnpicklingError`` exceptions reaching this boundary are exclusively genuine
+        corruption. ``except Exception`` (NOT ``BaseException``) preserves
+        ``KeyboardInterrupt`` / ``SystemExit`` / ``GeneratorExit``.
+        """
+
+        try:
+            return super().load()
+        except pickle.UnpicklingError:
+            raise
+        except Exception as exc:  # noqa: BLE001 -- normalize corruption to the C VM contract
+            raise pickle.UnpicklingError(
+                f"corrupt or malformed pickle stream: {type(exc).__name__}: {exc}"
+            ) from exc
 
     def _custom_module_trusted(self, module: str) -> bool:
         """Return whether a foreign module may be imported+resolved via trust flags.

@@ -28,6 +28,18 @@ from torchlens.runnable import (
 )
 
 
+def _fresh_warning() -> bool:
+    import torchlens._io.bundle as bundle
+
+    return not bundle._NONPERSISTENT_DISCLOSURE_WARNED
+
+
+def _null():
+    import contextlib
+
+    return contextlib.nullcontext()
+
+
 class WeightPayloadModel(nn.Module):
     """Small deterministic model with parameter and buffer state."""
 
@@ -156,7 +168,13 @@ def test_used_nonpersistent_buffer_is_embedded_without_becoming_canonical_state(
 
     sparse_path = tmp_path / "nonpersistent.tlspec"
     weighted_path = tmp_path / "nonpersistent-weighted.tlspec"
-    trace.save(sparse_path, level="runnable")
+    # The first used-non-persistent-buffer runnable save in the process emits the
+    # one-time disclosure UserWarning; the project pytest policy escalates torchlens
+    # UserWarnings to errors. Assert-or-tolerate exactly like the r35 sibling so this
+    # test is order-independent both ways (r51, corr_1). Line 160 does not re-emit
+    # (once-flag already set) and stays unwrapped.
+    with pytest.warns(UserWarning, match="NON-persistent") if _fresh_warning() else _null():
+        trace.save(sparse_path, level="runnable")
     trace.save(weighted_path, level="runnable", include_weights=True)
 
     sparse_manifest = _manifest(sparse_path)

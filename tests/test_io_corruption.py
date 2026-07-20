@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import io
 import json
+import pickle
 import re
 from pathlib import Path
 from typing import Any
@@ -16,6 +18,7 @@ pytest.importorskip("safetensors")
 
 from torchlens import load, save
 from torchlens._io import TorchLensIOError
+from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._io.manifest import sha256_of_file
 from torchlens.data_classes.trace import Trace
 
@@ -255,3 +258,88 @@ def test_checksum_mismatch_raises_with_blob_id_and_path(tmp_path: Path) -> None:
         ),
     ):
         load(bundle_path)
+
+
+# --- secA_1 (r51): corrupt-metadata unpickle exception-family normalization ---------
+#
+# r49 migrated ``SafeBundleUnpickler`` from the C ``pickle.Unpickler`` to the pure-Python
+# ``pickle._Unpickler``. The C VM translated EVERY corrupt/truncated/malformed stream into
+# ``pickle.UnpicklingError`` (which the load path maps to ``TorchLensIOError``); the
+# pure-Python VM instead leaks bare ``IndexError`` (stack underflow), ``struct.error``
+# (truncated fixed-width read), ``KeyError`` (missing memo), ``UnicodeDecodeError`` (bad
+# utf-8), ``EOFError`` (truncation), etc. ``_DenyMissingDispatch`` only restored the
+# invariant for the UNKNOWN-opcode facet; the ``SafeBundleUnpickler.load()`` boundary now
+# restores it for the WHOLE family. This corpus is a per-FACET immunizer -- one payload per
+# distinct corruption facet across the whole opcode family, NOT a version-fragile
+# enumeration of every affected opcode.
+#
+# Payloads are built from ``pickle`` opcode constants (version-robust). The comment on each
+# names the raw builtin the pure-Python base VM would leak WITHOUT the ``load()`` boundary.
+_CORRUPTION_CORPUS: dict[str, bytes] = {
+    # Stack underflow on a valid opcode -> bare IndexError from the base VM.
+    "build_underflow": pickle.BUILD + pickle.STOP,
+    "reduce_underflow": pickle.REDUCE + pickle.STOP,
+    "pop_underflow": pickle.POP + pickle.STOP,
+    "append_underflow": pickle.APPEND + pickle.STOP,
+    "setitem_underflow": pickle.SETITEM + pickle.STOP,
+    "tuple_underflow": pickle.TUPLE + pickle.STOP,
+    "stack_global_underflow": pickle.STACK_GLOBAL + pickle.STOP,
+    # Truncated fixed-width int read -> struct.error.
+    "binint_truncated": pickle.BININT + b"\x01\x02",
+    # Truncated variable-width read -> EOFError (no STOP after the short read).
+    "binunicode_truncated": pickle.BINUNICODE + b"\x05\x00\x00\x00ab",
+    # Invalid utf-8 in a SHORT_BINUNICODE -> UnicodeDecodeError.
+    "bad_utf8_short_binunicode": pickle.SHORT_BINUNICODE + b"\x01\xff",
+    # Missing memo key -> KeyError.
+    "missing_memo_binget": pickle.BINGET + b"\x00" + pickle.STOP,
+    # Empty stream / no STOP -> EOFError.
+    "empty_stream": b"",
+    "no_stop": pickle.EMPTY_LIST,
+    # Unknown opcode -> already clean via _DenyMissingDispatch (passthrough coverage).
+    "unknown_opcode": b"\xff" + pickle.STOP,
+}
+
+
+@pytest.mark.parametrize("facet", sorted(_CORRUPTION_CORPUS))
+def test_secA_corpus_unit_normalizes_to_unpickling_error(facet: str) -> None:
+    """Every corruption facet raises a clean ``UnpicklingError``, never a raw builtin."""
+
+    payload = _CORRUPTION_CORPUS[facet]
+    with pytest.raises(pickle.UnpicklingError) as excinfo:
+        SafeBundleUnpickler(io.BytesIO(payload)).load()
+    # The raised type must be exactly the pickle contract type, not a leaked builtin
+    # (IndexError / struct.error / KeyError / UnicodeDecodeError / EOFError) that the
+    # load-site ``except UnpicklingError`` would fail to catch.
+    assert not isinstance(excinfo.value, (IndexError, KeyError, UnicodeDecodeError, EOFError))
+
+
+def test_secA_valid_stream_still_loads_through_boundary() -> None:
+    """A VALID pickle stream still round-trips through the ``load()`` boundary unmasked."""
+
+    for value in ({"a": 1, "b": [1, 2, 3]}, ("x", 2, 3.5), [1, {"k": "v"}], "hello"):
+        stream = io.BytesIO(pickle.dumps(value))
+        assert SafeBundleUnpickler(stream).load() == value
+
+
+@pytest.mark.parametrize("facet", sorted(_CORRUPTION_CORPUS))
+def test_secA_corpus_e2e_metadata_raises_torchlens_io_error(tmp_path: Path, facet: str) -> None:
+    """A corrupt ``metadata.pkl`` (any facet) fails ``tl.load`` with a clean IO error."""
+
+    bundle_path = _save_bundle(tmp_path, path_name=f"bundle_{facet}.tl")
+    metadata_path = bundle_path / "metadata.pkl"
+    metadata_path.write_bytes(_CORRUPTION_CORPUS[facet])
+
+    with pytest.raises(
+        TorchLensIOError,
+        match=rf"Failed to load bundle metadata from {re.escape(str(metadata_path))}\.",
+    ):
+        load(bundle_path)
+
+
+def test_secA_valid_bundle_still_round_trips(tmp_path: Path) -> None:
+    """Over-deny pin: a genuine, uncorrupted bundle still loads unchanged."""
+
+    bundle_path = _save_bundle(tmp_path)
+    restored = load(bundle_path)
+    assert isinstance(restored, Trace)
+    assert restored._loaded_from_bundle is True
