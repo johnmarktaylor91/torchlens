@@ -910,18 +910,27 @@ seed) reports `unverifiable` + `not_applicable`:
    be class-patched, so the profile-hook receiver typing is the mechanism -- an externally-held
    generator drawn on the owner or an in-window helper thread is caught, including the
    hon1_1/corr2_2 cross-thread case), belted by a cheap thread-independent before/after state
-   digest of any generator or bare BitGenerator the MODEL itself holds, swept over submodule
-   attributes through standard Python container PROTOCOLS (not a fixed concrete container list;
-   r45 hon1_1): every `collections.abc.Mapping` contributes BOTH its keys/values AND, when the
-   mapping object is a custom (non-stdlib) inert holder, its own `__dict__`/`__slots__` values; every
-   non-leaf `collections.abc.Collection` likewise contributes BOTH its elements AND, when the
-   collection object is a custom (non-stdlib) inert holder, its own `__dict__`/`__slots__` values
-   (deque, OrderedDict, Counter, defaultdict, ChainMap, UserList/UserDict, namedtuple, and any custom
-   Sequence/Mapping, including a generator held as `self.rng` on a container SUBCLASS -- r47 hon1_1);
-   safe queue objects
-   contribute their inspectable storage snapshot (`queue.Queue`/`LifoQueue`/`PriorityQueue` via a
-   non-mutating read of the internal deque); inert custom holders contribute `__dict__` /
-   `__slots__` values (`self.holder.rng`), never invoking a property or `__getattr__` (r42 corr2_1).
+   digest of any generator or bare BitGenerator the MODEL itself holds. The model inventory walks
+   every reference edge that can be followed WITHOUT executing user-defined code (r53 corr/F1):
+   instance `__dict__`/`__slots__` surfaces (never invoking a property or `__getattr__` --
+   r42 corr2_1), Mapping/Collection container protocols (every `collections.abc.Mapping`
+   contributes BOTH its keys/values AND, when the mapping object is a custom (non-stdlib) inert
+   holder, its own `__dict__`/`__slots__` values; every non-leaf `collections.abc.Collection`
+   likewise contributes BOTH its elements AND its own custom-subclass `__dict__`/`__slots__`
+   values -- deque, OrderedDict, Counter, defaultdict, ChainMap, UserList/UserDict, namedtuple,
+   and any custom Sequence/Mapping, including a generator held as `self.rng` on a container
+   SUBCLASS; r45/r47 hon1_1), inspectable queue buffers (`queue.Queue`/`LifoQueue`/`PriorityQueue`
+   via a non-mutating read of the internal deque), class-MRO `__dict__` surfaces of user-defined
+   classes (raw mappingproxy reads -- the descriptor protocol never fires; torch/stdlib/numpy
+   implementation classes are trusted leaves), weak references (`weakref.ref`/`WeakMethod`
+   referents through the base C dereference, weak containers through the container protocols),
+   and callable interiors (`__closure__` cells, `__defaults__`/`__kwdefaults__`,
+   `functools.partial` `func`/`args`/`keywords`, `property` `fget`/`fset`/`fdel`,
+   `staticmethod`/`classmethod` `__func__`, bound-method `__func__`/`__self__`, and callable
+   instances' own attribute surfaces), all via base-type descriptor reads immune to hostile
+   subclass shadowing. It never invokes properties, descriptors, `__getattr__`, or arbitrary
+   callables. Every reachable `nn.Module` -- registered or held UNREGISTERED behind any walked
+   edge -- is descended through the same surfaces (r51 hon1_1).
    Descent is gated on `collections.abc.Collection` (Sized), so a one-shot iterator / generator
    attribute is NEVER consumed. An opaque queue with no non-mutating payload snapshot is SKIPPED only
    when it is non-mutatingly PROVABLY EMPTY at inventory time (`empty()` is exactly `True`, else
@@ -1000,21 +1009,15 @@ call surface, including C-mediated indirect calls of held builtins (a
 builtin); (iii) legacy `RandomState()` C-level CONSTRUCTION entropy (its DRAWS stay
 digest/profile-witnessed); (iv) an externally-held generator drawn on a PRE-EXISTING
 (already-running, non-owner, non-hooked) thread -- which `threading.setprofile` cannot reach on
-Python <= 3.11 and which the model-attribute digest does not cover because the generator is NOT
-reachable from the model inventory (not a model attribute, nor inside any standard-protocol
-container -- Mapping / non-leaf Collection / a safe queue's inspectable buffer / an inert custom
-holder of one; r42 corr2_1 + r45 hon1_1 extended the sweep to descend by container protocol, so a
-model-held generator behind `self.holder.rng`, a `deque`, a `ChainMap`, or a `queue.Queue` is now
-witnessed on any thread; r47 hon1_1 further descends a container SUBCLASS's own `__dict__`/`__slots__`,
-so `self.rng` on a `Sequence`/`Mapping`/`UserList`/`UserDict` subclass is witnessed**; r51 hon1_1
-stops treating `nn.Module` as a hard inventory leaf and descends every reachable `nn.Module`'s own
-`__dict__`/`__slots__` (registered submodules AND submodules held UNREGISTERED in a plain attribute,
-`list`, `dict`, nested container, or custom holder -- the "modules must live in an `nn.ModuleList`"
-footgun), so a numpy Generator behind an unregistered submodule is witnessed on any thread**, and
-only a NON-EMPTY OPAQUE queue's contents remain a conservative fail-closed residual, never a false
-negative),
-plus a bare one-shot iterator attribute which cannot be inspected without
-consuming it -- of the same class
+Python <= 3.11 -- that is reachable only BY EXECUTING USER CODE: a property/descriptor `__get__`
+body, `__getattr__`, or a callable's return value. Every INERTLY-followable reference edge IS
+walked by the model inventory (r53 corr/F1; the full edge vocabulary in item 2 above), so
+descriptor-held, weakref-held, class-attribute, closure/default/kwdefault/partial/property-interior,
+and callable-instance holders -- like the earlier container-protocol, container-subclass, and
+unregistered-`nn.Module` holders (r42/r45/r47/r51) -- are all witnessed on any thread; only a
+NON-EMPTY OPAQUE queue's contents remain a conservative fail-closed residual, never a false
+negative. Also of this class: a bare one-shot iterator attribute, which cannot be inspected
+without consuming it -- the same class
 as the adversarial draw+`state`-restore a cooperative model does not exercise; (v) a
 held-reference module-builtin call on a PRE-EXISTING (non-hooked) thread -- the module-attr
 patched spelling stays thread-independent; and (vi) a held-reference implicit-now converter
