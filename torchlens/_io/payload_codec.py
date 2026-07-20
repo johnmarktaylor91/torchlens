@@ -18,6 +18,8 @@ import numpy as np
 import torch
 
 from . import JaxPayloadLoadHint, PayloadLoadHints
+from . import _json
+from ._artifact_strings import _resolve_portable_device
 from .tensor_policy import FailReason, Ok, SkipReason, TensorPolicyDecision, is_supported_for_save
 
 
@@ -420,9 +422,14 @@ class TinygradPayloadCodec:
                 "the installed tinygrad runtime."
             )
 
-        device = map_location
-        if device is None:
-            device = _entry_field(entry, "logical_device") or _entry_field(entry, "device_at_save")
+        # r54 sec_2: the artifact ``logical_device``/``device_at_save`` string is
+        # attacker-controlled and was passed straight into ``Tensor(device=...)``,
+        # where tinygrad's ``disk:<path>`` backend writes an attacker-named file on
+        # a default ``tl.load()``. Route it through the shared closed device
+        # grammar so a path/scheme token is refused to the runtime default; a
+        # trusted caller ``map_location`` still passes through unchanged.
+        raw_device = _entry_field(entry, "logical_device") or _entry_field(entry, "device_at_save")
+        device = _resolve_portable_device("tinygrad", raw_device, map_location)
         kwargs: dict[str, Any] = {"dtype": dtype}
         if device not in (None, "", "unknown"):
             kwargs["device"] = device
@@ -642,7 +649,14 @@ class PaddlePayloadCodec:
 
         place = _resolve_paddle_place(paddle, map_location)
         if place is None:
-            place = _resolve_paddle_place(paddle, _entry_field(entry, "logical_device"))
+            # r54 sec_2 (sibling unification): the artifact ``logical_device`` is
+            # attacker data -- gate it through the shared closed device grammar
+            # before it reaches Paddle's place resolver, so no codec can smuggle a
+            # path/scheme token (probe D: 0 legit Paddle tokens over-refused).
+            safe_device = _resolve_portable_device(
+                "paddle", _entry_field(entry, "logical_device"), None
+            )
+            place = _resolve_paddle_place(paddle, safe_device)
         try:
             if logical_dtype == "paddle.bfloat16":
                 value = paddle.to_tensor(np.ascontiguousarray(array), place=place)
@@ -1074,7 +1088,7 @@ def _logical_shape_from_metadata(codec_metadata: Any) -> tuple[int, ...] | None:
     logical_shape = codec_metadata.get("logical_shape")
     if isinstance(logical_shape, str):
         try:
-            logical_shape = json.loads(logical_shape)
+            logical_shape = _json.loads_bounded(logical_shape)
         except json.JSONDecodeError:
             return None
     if not isinstance(logical_shape, list):

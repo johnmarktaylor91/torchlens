@@ -663,12 +663,46 @@ never surfaced as a raw allocator error. `call_arity_mismatch` and `state_shape_
 additionally originate at detection stage `descriptor_parse` (section 5), degrading the load to
 analysis-only with the diagnostic intact.
 
+The same host-infeasibility fact also fires at detection stage `op_allocation_preflight` (r55
+free_1): before the taken-path DAG executes, every recorded op-output slot (roles `intermediate`
+and `output`) is compared **per slot** -- never a whole-graph sum, so a long trace with many small
+outputs is never over-refused -- against the identical never-under-estimating live budget, and a
+single recorded output larger than the whole device budget is refused typed before it can allocate.
+This closes the op-execution literal-argument seam the r53 state-slot / arity gates did not cover:
+an attacker who edits a taken-path size literal (`torch.arange(n)`/`zeros(n)`) to a huge value can
+no longer drive an allocation bomb on the default `tl.load(path).run(inputs)` path. Symmetrically,
+the parser bounds a literal integer's magnitude under the SAME signed-64-bit ceiling the slot-shape
+parser enforces, so a literal can never be more extreme than a slot dimension is allowed to be; an
+over-ceiling literal refuses at `descriptor_parse` (`state_shape_mismatch`) and degrades the load to
+analysis-only. The allocation invariant thus covers literal sizes, tensor slots, output slots, and
+staged state uniformly, before allocation. (W2's per-call fake-tensor projection preflight is the
+primary op-agnostic layer and composes with this run-preparation output-slot bound.)
+
 `callable_moved_or_renamed` is a successful alias diagnostic. `runtime_signature_drift` rolls back
 but is compatibility failure, not path divergence. `semantic_drift` comes only from the independent
 live-model oracle and never rebaselines an artifact. A malformed `torch.device(...)` literal
 payload raises `RunPreconditionError` (`unsupported_literal`) at decode -- every branch of the
 torch-symbol decoder is typed (r41 secC); a malformed device qualname additionally refuses at
 descriptor parse and degrades the load to analysis-only per the corr2_3 disposition.
+
+Load trust-boundary invariants (r55). An artifact device string is closed-vocabulary DATA, never a
+materialization authority: every non-torch payload codec routes an artifact-supplied
+`logical_device`/`device_at_save` token through one shared closed device grammar
+(`cpu|gpu|cuda|mps|clang|metal|npu|xpu|xla|tpu|rocm|hip|llvm|python` plus an optional pure-integer
+index, after unwrapping `Device(...)`/`Place(...)`/`DeviceType....` reprs); any path/URL/scheme
+token (`disk:`, `file:`, a leading `/`/`\`, `..`) is refused to the runtime default and never
+reaches a backend tensor constructor (closes r54 sec_2, tinygrad arbitrary file write). A caller
+`map_location` remains trusted input and is unaffected. Slot `device_type` is validated against the
+closed torch device-type vocabulary at parse for the same reason. Rehydrate resolves any invoked
+protocol setter (`_internal_set`) off the CLASS via `inspect.getattr_static`, never off the
+attacker-controllable instance state, and every portable `__setstate__` additionally refuses an
+incoming state key that shadows a class-owned plain method (a NARROW filter: `@property`/descriptor
+field names are deliberately never caught, so there is no legitimate-key over-refusal) -- closing
+the read-then-call enabler (r54 sec_3). Finally, every manifest/metadata/format-detection JSON read
+passes a byte ceiling and a string-aware nesting-depth prescan before stdlib `json.loads`, and the
+recursive literal parser carries an independent depth counter; an over-nested or over-size artifact
+degrades typed (malformed-descriptor / analysis-only disposition) instead of escaping as an uncaught
+`RecursionError` (r54 free_2). These are format limits, not model-size limits.
 
 `RunnableDiagnostic` is exactly:
 

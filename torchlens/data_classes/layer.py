@@ -776,6 +776,9 @@ class Layer:
         ):
             if state.get(field_name) is not None:
                 state[field_name] = Bytes(state[field_name])
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
         self.__dict__.update(state)
 
     # ********************************************

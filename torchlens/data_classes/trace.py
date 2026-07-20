@@ -2649,6 +2649,9 @@ class Trace(
             state[field_name] = Bytes(state.get(field_name, 0) or 0)
         if state.get("total_autograd_memory") is not None:
             state["total_autograd_memory"] = Bytes(state["total_autograd_memory"])
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
         self.__dict__.update(state)
         if not containers_were_serialized:
             self.__dict__.pop("_containers", None)

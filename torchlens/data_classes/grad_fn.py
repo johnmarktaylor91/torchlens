@@ -373,6 +373,9 @@ class GradFn:
             state["has_op"] = not bool(state.pop(legacy_intervening_key))
         state.pop("trace_" + "index", None)
         state.pop("overall_" + "index", None)
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
         self.__dict__.update(state)
         self.__post_init__()
 
