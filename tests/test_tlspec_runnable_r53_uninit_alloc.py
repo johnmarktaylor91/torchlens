@@ -584,23 +584,39 @@ def test_new_size_form_redispatches_uninit_family_aten() -> None:
 
 
 def test_single_classifier_owns_qualname_derivation() -> None:
-    """Source-scan immunizer: inside the execution module, the family
-    predicates are consulted ONLY by ``_nondeterministic_value_sources`` -- no
-    second call site can re-derive uninit nondeterminism and drift from the
-    single classifier (the r52 raise-vs-not_applicable inconsistency class)."""
+    """Source-scan immunizer: inside the execution module, the uninit family
+    predicates are consulted for NONDETERMINISM DERIVATION only by
+    ``_nondeterministic_value_sources`` -- no second call site can re-derive
+    uninit nondeterminism and drift from the single classifier (the r52
+    raise-vs-not_applicable inconsistency class).
+
+    r55 hon_1/C3: the scan additionally covers the size-gated ``Tensor.new``
+    predicates (``qualname_is_uninit_size_gated_alloc``/
+    ``uninit_new_call_is_size_form``). Exactly ONE other reader is justified and
+    named: ``_call_is_size_driving`` (r55 C3) consults the SAME family predicates
+    only to decide whether to run the op-agnostic ``FakeTensorMode`` allocation
+    projection -- an allocation-preflight GATE returning a bool, never a taint
+    derivation. Any THIRD reader still trips this tripwire."""
 
     source = (
         Path(__file__).resolve().parents[1] / "torchlens" / "_runnable_execution.py"
     ).read_text()
     functions = re.split(r"(?m)^def ", source)
-    users = [
-        chunk.split("(", 1)[0]
-        for chunk in functions
-        if "qualname_is_uninitialized_alloc(" in chunk
-        or "qualname_is_uninit_growth_resize(" in chunk
-        or "qualname_is_uninit_total_writer(" in chunk
-    ]
-    assert users == ["_nondeterministic_value_sources"], users
+    predicates = (
+        "qualname_is_uninitialized_alloc(",
+        "qualname_is_uninit_growth_resize(",
+        "qualname_is_uninit_total_writer(",
+        "qualname_is_uninit_size_gated_alloc(",
+        "uninit_new_call_is_size_form(",
+    )
+    users = sorted(
+        {
+            chunk.split("(", 1)[0]
+            for chunk in functions
+            if any(predicate in chunk for predicate in predicates)
+        }
+    )
+    assert users == ["_call_is_size_driving", "_nondeterministic_value_sources"], users
 
 
 class SeededRandModel(nn.Module):

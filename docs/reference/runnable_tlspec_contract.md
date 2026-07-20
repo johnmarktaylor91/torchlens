@@ -674,9 +674,24 @@ no longer drive an allocation bomb on the default `tl.load(path).run(inputs)` pa
 the parser bounds a literal integer's magnitude under the SAME signed-64-bit ceiling the slot-shape
 parser enforces, so a literal can never be more extreme than a slot dimension is allowed to be; an
 over-ceiling literal refuses at `descriptor_parse` (`state_shape_mismatch`) and degrades the load to
-analysis-only. The allocation invariant thus covers literal sizes, tensor slots, output slots, and
-staged state uniformly, before allocation. (W2's per-call fake-tensor projection preflight is the
-primary op-agnostic layer and composes with this run-preparation output-slot bound.)
+analysis-only. The PRIMARY, op-agnostic layer (r55 free_1/sec_1) runs immediately before each
+size-driving taken-path call: the resolved callable is projected under
+`FakeTensorMode(allow_non_fake_inputs=True)`, which computes the call's output shape/bytes WITHOUT
+allocating (fake tensors never allocate -- a `torch.zeros(10**12)` factory, which has no tensor
+operand and so cannot be bounded by a per-argument `.to("meta")` pass, projects `4e12` bytes and is
+refused). A projected per-device total above the same live budget refuses typed at
+`op_allocation_preflight` before the real call. This closes the literal-only tamper the
+recorded-output-slot bound cannot (an honest small output slot with an inflated size literal). It
+FAILS OPEN by design: a data-dependent op with no fake/meta implementation
+(`nonzero`/`unique` raise `DynamicOutputShapeException`), or an unavailable `FakeTensorMode`, does
+NOT refuse -- the run falls through to the recorded-output-slot bound and the parse-time literal
+gate -- so a legitimate data-dependent op is never over-refused (the r51 over-catch anti-pattern).
+The gate is restricted to MATERIALIZING size-driving ops carrying an integer literal; pure view ops
+(`expand`/`broadcast_to`/`as_strided`) allocate nothing and are deliberately excluded, their indirect
+blow-up caught by the downstream materializing op's recorded-output bound. The allocation invariant
+thus covers literal sizes, tensor slots, output slots, and staged state uniformly, before allocation:
+the fake-tensor projection is the primary per-call layer and the run-preparation output-slot bound is
+its fail-open fallback.
 
 `callable_moved_or_renamed` is a successful alias diagnostic. `runtime_signature_drift` rolls back
 but is compatibility failure, not path divergence. `semantic_drift` comes only from the independent
@@ -1180,7 +1195,12 @@ sources of kind `uninitialized_alloc`, UNLESS the governing ambient context reco
 deterministically), or the product has zero elements. Taint propagates along the value DAG and
 is removed exactly by a TOTAL WRITE of the tainted bytes independent of their prior content:
 an `out=` destination, `copy_`, `zero_`, `fill_`, or an RNG fill (which replaces the
-`uninitialized_alloc` taint with the RNG source classification). A partial or unprovable
+`uninitialized_alloc` taint with the RNG source classification). The `out=` sanitization is
+ALIASING-AWARE (r55 hon_2): an `out=` destination that is ALSO a value operand of the same op --
+`torch.add(a, x, out=a)`, whose result `a + x` READS `a`'s prior uninitialized bytes -- is NOT a
+prior-independent total write, so its taint is PRESERVED (fail closed, r35 unknown-alias precedent);
+only an `out=` to a destination not itself read, and the pure `copy_`/`zero_`/`fill_` receiver
+total-writers, drop taint. A partial or unprovable
 in-place write propagates taint (unprovable is never a proof of cleanliness). Consequences,
 in parity with seeded-RNG sources at every consumer: a control fact (scalar-bool, conditional
 arm, loop predicate, tensor-derived scalar witness) whose source is tainted ceilings the run
@@ -1403,6 +1423,11 @@ per-call `inference_mode=true` context is recorded and re-entered at replay, wit
 TorchLens-owned `_version` reads routed through one safe accessor (an unavailable version
 degrades bookkeeping to its conservative fallback, never a capture crash; the replay mutation
 tripwire keeps its version-independent alias leg for version-less inference tensors).
+Symmetrically at capture start (r55 corr_3), the lazily-imported callable-safety classifier probe
+runs its import-time pure-view detection under a fully neutral context -- disabled torch-function,
+`torch.inference_mode(False)`, and `torch.enable_grad()` -- so the FIRST capture inside an ambient
+`torch.inference_mode()` no longer crashes on the probe's `_version` read; the neutralization is
+scoped to the probe and never leaks into the caller's ambient grad/inference state.
 
 A third, pathological boundary is an autograd property read off an input-*derived view* rather than
 the input leaf. Direct-leaf autograd reads (`requires_grad`, gradient presence, `_version`,

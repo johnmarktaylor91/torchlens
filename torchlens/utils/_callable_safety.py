@@ -136,8 +136,9 @@ from __future__ import annotations
 import inspect
 import sys
 import warnings
+from contextlib import ExitStack, contextmanager
 from functools import lru_cache
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 import torch
 
@@ -977,21 +978,39 @@ def _iter_tensor_getset_descriptor_names() -> tuple[str, ...]:
     )
 
 
-def _mode_free_probe_context() -> Any:
-    """Return a context manager that neutralizes ambient torch-function modes for a probe.
+@contextmanager
+def _mode_free_probe_context() -> Iterator[None]:
+    """Neutralize ambient torch execution modes for the import-time view probe.
 
-    ``_pure_view`` allocates probe tensors and runs real tensor ops; disabling
-    torch-function makes those yield real CPU tensors and real kernels regardless of any
-    ambient mode (a default-device / meta / subclass mode) that is active when this module
-    is lazily imported. Feature-detected (``torch._C.DisableTorchFunction`` is the stable
-    disabler across supported torch); falls back to a CPU device context on an unexpected
-    build. Neither path mutates the caller's default device.
+    ``_pure_view`` allocates probe tensors and runs real tensor ops; the probe
+    must be steered by NONE of the caller's ambient execution state, because this
+    module is imported LAZILY -- the first ``tl.trace`` triggers the import, so the
+    ambient torch state can be hostile:
+
+    * a torch-FUNCTION mode (a default-device / meta / subclass mode) would make
+      ``torch.randn`` build meta tensors and ``aten::equal`` raise; disabled via
+      the feature-detected ``torch._C.DisableTorchFunction`` (CPU-device fallback
+      on an unexpected build). Neither path mutates the caller's default device.
+    * ``torch.inference_mode()`` (r55 corr_3): an inference tensor does NOT track a
+      version counter, so ``probe._version`` raises
+      ``RuntimeError: Inference tensors do not track version counter`` and the
+      first inference-mode capture crashes before recording. Enter
+      ``torch.inference_mode(False)`` + ``torch.enable_grad()`` so the probe
+      always allocates a normal, version-tracked, autograd-live tensor.
+
+    The neutralization is scoped to the probe only; the caller's ambient
+    grad/inference/default-device state is untouched on exit.
     """
 
-    disabler = getattr(torch._C, "DisableTorchFunction", None)
-    if disabler is not None:
-        return disabler()
-    return torch.device("cpu")
+    with ExitStack() as stack:
+        disabler = getattr(torch._C, "DisableTorchFunction", None)
+        if disabler is not None:
+            stack.enter_context(disabler())
+        else:
+            stack.enter_context(torch.device("cpu"))
+        stack.enter_context(torch.inference_mode(False))
+        stack.enter_context(torch.enable_grad())
+        yield
 
 
 def _pure_view(name: str) -> bool:
