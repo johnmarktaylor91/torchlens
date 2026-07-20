@@ -27,7 +27,7 @@ import random
 import sys as _sys_module
 import threading as _threading_module
 import time as _time_module
-from collections.abc import Callable
+from collections.abc import Callable, Collection, Mapping
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from types import ModuleType, TracebackType
@@ -642,13 +642,16 @@ def _rng_exempt_instances() -> tuple[Any, ...]:
 _CUSTOM_HOLDER_SKIP_MODULES = frozenset(
     {
         # Stdlib runtime primitives + torch/numpy implementation objects the custom-holder
-        # generator sweep (r42 corr2_1) must NOT recurse into: threading/queue/asyncio/file/
-        # socket handles, builtin/collection containers (handled structurally), and torch/numpy
-        # internals (a digestable RNG is snapshotted BEFORE this skip check; everything else in
-        # those namespaces is impl noise). Keyed on the top-level module of the value's TYPE.
+        # generator sweep (r42 corr2_1) must NOT recurse into: threading/asyncio/file/
+        # socket handles and torch/numpy internals (a digestable RNG is snapshotted BEFORE this
+        # skip check; everything else in those namespaces is impl noise). Keyed on the top-level
+        # module of the value's TYPE. r45 hon1_1: ``collections`` and ``queue`` are REMOVED --
+        # ``deque`` / ``ChainMap`` / ``UserList`` / ``UserDict`` / ``Counter`` and the ``queue.*``
+        # containers are now reached structurally (the ``Mapping`` / non-leaf ``Collection`` descent
+        # and the queue-protocol snapshot) BEFORE this skip check ever runs, so their held
+        # generators are no longer silently missed.
         "builtins",
         "threading",
-        "queue",
         "asyncio",
         "socket",
         "io",
@@ -658,7 +661,6 @@ _CUSTOM_HOLDER_SKIP_MODULES = frozenset(
         "multiprocessing",
         "concurrent",
         "ctypes",
-        "collections",
         "weakref",
         "typing",
         "functools",
@@ -669,6 +671,26 @@ _CUSTOM_HOLDER_SKIP_MODULES = frozenset(
     }
 )
 """Top-level module names whose instances the custom-holder generator sweep skips (r42 corr2_1)."""
+
+_INVENTORY_LEAF_TYPES: tuple[type, ...] = (
+    str,
+    bytes,
+    bytearray,
+    memoryview,
+    np.ndarray,
+    np.generic,
+    torch.Tensor,
+    torch.nn.Module,
+    ModuleType,
+)
+"""Types the model-attribute generator sweep treats as LEAVES (r45 hon1_1).
+
+``str`` / ``bytes`` / ``bytearray`` / ``memoryview`` / ``np.ndarray`` / a bare ``torch.Tensor``
+satisfy ``collections.abc.Collection`` yet must NOT be descended element-wise: a string would
+explode into per-character strings (huge / cyclic node blow-up) and a tensor / ndarray holds no
+Python-level RNG. ``torch.nn.Module`` (swept separately via ``model.modules()``) and ``ModuleType``
+are likewise excluded from the ``Collection`` descent branch.
+"""
 
 _INVENTORY_NODE_CAP = 1_000_000
 """Defensive node cap for the model-attribute generator sweep (r41 hon1_2).
@@ -1079,6 +1101,24 @@ class host_nondeterminism_monitor:
                     continue
         return children
 
+    @staticmethod
+    def _exposes_queue_protocol(value: Any) -> bool:
+        """Return whether ``value``'s TYPE implements the standard queue protocol (r45 hon1_1).
+
+        Duck-typed on the CLASS (never the instance, so no property getter or ``__getattr__``
+        side effect fires): ``get`` + ``put`` + (``qsize`` or ``empty``) as callables. This
+        matches ``queue.Queue`` / ``LifoQueue`` / ``PriorityQueue`` (an inspectable ``.queue``
+        deque) AND ``queue.SimpleQueue`` / ``multiprocessing.Queue`` / any future opaque queue
+        (no non-mutating buffer) by construction -- NOT a concrete ``SimpleQueue`` type list.
+        Ordinary ``Mapping`` / ``Collection`` holders are caught by earlier descent branches and
+        never reach this predicate.
+        """
+
+        cls = type(value)
+        if not (callable(getattr(cls, "get", None)) and callable(getattr(cls, "put", None))):
+            return False
+        return callable(getattr(cls, "qsize", None)) or callable(getattr(cls, "empty", None))
+
     def _sweep_model_generators(self) -> list[tuple[Any, str]]:
         """Digest numpy/`random` generators reachable from the MODEL's submodule attributes.
 
@@ -1087,14 +1127,21 @@ class host_nondeterminism_monitor:
         ~900 ms/capture, perturbed the peak-memory bracket, and over-trigger-risked
         unrelated generators -- removed for cause and never reintroduced).
 
-        r41 hon1_2: the sweep is an ITERATIVE, cycle-safe, FULL builtin-container
-        recursion -- every submodule ``__dict__`` value, descending through ``list`` /
-        ``tuple`` / ``set`` / ``frozenset`` elements and ``dict`` KEYS and VALUES (so
-        ``self.pool = [gen]``, ``{"g": gen}``, ``[[gen]]``, and a dict-key generator are
-        all digested). r42 corr2_1: it ADDITIONALLY recurses into inert CUSTOM object
-        holders (``self.holder.rng``) through their ``__dict__`` / ``__slots__`` values,
-        skipping tensors, ``nn.Module`` (swept separately), ndarrays, callables, modules,
-        and stdlib/torch/numpy implementation objects. The former
+        r41 hon1_2 / r45 hon1_1: the sweep is an ITERATIVE, cycle-safe recursion by
+        container PROTOCOL (not a fixed concrete-type list) -- every submodule ``__dict__``
+        value, descending through every ``collections.abc.Mapping`` (KEYS and VALUES) and
+        every non-leaf ``collections.abc.Collection`` (elements), so ``self.pool = [gen]``,
+        ``{"g": gen}``, ``[[gen]]``, a dict-key generator, and a generator inside a ``deque``
+        / ``ChainMap`` / ``UserList`` / ``UserDict`` / namedtuple / custom ``Sequence`` or
+        ``Mapping`` are all digested. Descent is gated on ``Collection`` (Sized), NEVER bare
+        ``Iterable``, so a one-shot generator / ``map`` / ``itertools`` attribute is never
+        consumed. A safe queue (``queue.Queue`` / ``LifoQueue`` / ``PriorityQueue``) is reached
+        through a non-mutating snapshot of its internal ``.queue`` deque; an opaque queue
+        (``SimpleQueue`` / ``mp.Queue``) with no inspectable buffer fails closed to INCOMPLETE
+        (``inventory_opaque_container``). r42 corr2_1: it ADDITIONALLY recurses into inert
+        CUSTOM object holders (``self.holder.rng``) through their ``__dict__`` / ``__slots__``
+        values, skipping tensors, ``nn.Module`` (swept separately), ndarrays, callables,
+        modules, and stdlib/torch/numpy implementation objects. The former
         ``budget = 2000`` early return truncated SILENTLY (a generator on a late
         submodule of any >~120-module model was missed -> false VERIFIED); the
         replacement :data:`_INVENTORY_NODE_CAP` is defensive only -- exhaustion flags
@@ -1129,33 +1176,60 @@ class host_nondeterminism_monitor:
                 if visited_nodes > _INVENTORY_NODE_CAP:
                     self._flag_uncertain("inventory_budget_exhausted")
                     return snapshots
-                if isinstance(value, (list, tuple, set, frozenset)):
-                    if id(value) in seen_container_ids:
-                        continue
-                    seen_container_ids.add(id(value))
-                    pending.extend(value)
-                    continue
-                if isinstance(value, dict):
+                # r45 hon1_1: descend by container PROTOCOL, not a fixed concrete-type list, so a
+                # model-held generator inside a ``deque`` / ``ChainMap`` / ``UserList`` /
+                # ``UserDict`` / namedtuple / custom ``Sequence`` / custom ``Mapping`` is reached
+                # (the r44 hon1_1 gap). ``Mapping`` first (a ``Mapping`` is also a ``Collection``);
+                # then any non-leaf ``Collection``. The gate is ``Collection`` (Sized+Iterable+
+                # Container), NEVER bare ``Iterable`` -- a generator / ``map`` / ``zip`` /
+                # ``itertools`` object is ``Iterable`` but not ``Collection``, so it is NEVER
+                # iterated and a one-shot iterator is never consumed / corrupted.
+                if isinstance(value, Mapping):
                     if id(value) in seen_container_ids:
                         continue
                     seen_container_ids.add(id(value))
                     pending.extend(value.keys())
                     pending.extend(value.values())
                     continue
+                if isinstance(value, Collection) and not isinstance(value, _INVENTORY_LEAF_TYPES):
+                    if id(value) in seen_container_ids:
+                        continue
+                    seen_container_ids.add(id(value))
+                    pending.extend(value)
+                    continue
                 if id(value) in self._exempt_ids:
                     continue
                 try:
                     digest = self._digest_rng_instance(value)
                 except _NotADigestableRng:
+                    if id(value) in seen_container_ids:
+                        continue
+                    # r45 hon1_1: a model-held generator can sit inside a QUEUE whose buffer is a
+                    # non-mutating-inspectable deque (``queue.Queue`` / ``LifoQueue`` /
+                    # ``PriorityQueue`` expose ``.queue``). Snapshot that deque non-destructively.
+                    # A queue with NO inspectable buffer (``SimpleQueue`` / ``mp.Queue`` / any
+                    # opaque queue) cannot be inventoried without draining it -> FAIL CLOSED to
+                    # INCOMPLETE (``inventory_opaque_container``) rather than reading as
+                    # no-consumption. Checked BEFORE the custom-holder ``__dict__`` walk so an
+                    # opaque queue that happens to carry a ``__dict__`` (``mp.Queue``) still
+                    # fail-closes instead of being mis-walked into its threading internals.
+                    if self._exposes_queue_protocol(value):
+                        seen_container_ids.add(id(value))
+                        inner = getattr(value, "queue", None)
+                        if isinstance(inner, Collection) and not isinstance(
+                            inner, _INVENTORY_LEAF_TYPES
+                        ):
+                            pending.append(inner)
+                        else:
+                            self._flag_uncertain("inventory_opaque_container")
+                        continue
                     # r42 corr2_1: a model-held generator behind a CUSTOM object holder
-                    # (``self.holder.rng``) is neither a builtin container nor itself a
-                    # digestable RNG. Recurse into the holder's inert attributes so the held
-                    # generator is snapshotted; the thread-independent before/after digest then
-                    # catches a draw on ANY thread once the generator is FOUND. Cycle-guarded
-                    # and node-capped exactly like the builtin-container recursion.
-                    if id(value) not in seen_container_ids and self._is_recursable_custom_holder(
-                        value
-                    ):
+                    # (``self.holder.rng``) is neither a container nor itself a digestable RNG.
+                    # Recurse into the holder's inert ``__dict__`` / ``__slots__`` values so the
+                    # held generator is snapshotted; the thread-independent before/after digest
+                    # then catches a draw on ANY thread once the generator is FOUND. Cycle-guarded
+                    # and node-capped exactly like the container recursion.
+                    if self._is_recursable_custom_holder(value):
                         seen_container_ids.add(id(value))
                         pending.extend(self._custom_holder_children(value))
                     continue

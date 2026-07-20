@@ -63,6 +63,17 @@ independent of this wrapper). Set with ``_active_trace`` in ``active_logging`` a
 exit.
 """
 
+_nonowner_belt_armed: bool = False
+"""Global gate for the r45 hon2_1 cross-thread captured-operand observer.
+
+Set True (beside ``_WitnessState.belt_armed``) for exactly the runnable-capture forward
+window inside ``_observe_invisible_host_escapes`` and cleared in its ``finally``. The global
+torch-function wrapper's NON-owner fast path reads this single bool: when False (every plain
+trace and the entire steady state) the wrapper stays a near-noop; when True a non-owner thread's
+torch op is inspected for consumption of a captured operand (which ceilings replay proof to
+``unverifiable``). A bare bool keeps ``_state.py`` import-free.
+"""
+
 _active_trace: "Trace | None" = None
 """The Trace accumulating data for the current forward pass.
 

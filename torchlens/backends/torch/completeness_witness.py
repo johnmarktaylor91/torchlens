@@ -1342,6 +1342,62 @@ def _nonowner_escape_observe(state: "_WitnessState", tensor: Any) -> None:
         _HOST_ESCAPE_CROSS_THREAD_CAPTURED.add(state.trace)
 
 
+def observe_nonowner_operands(args: tuple[Any, ...], kwargs: dict[str, Any] | None) -> None:
+    """Ceiling the runnable capture when a NON-owner thread CONSUMES a captured operand (r45 hon2_1).
+
+    The r43 cross-thread belt patches tensor METHODS, so it only recognizes a non-owner thread's
+    tensor->host escape when the escaped tensor's OBJECT IDENTITY is captured / owner-registered
+    (a capture label, a registered state address, a dispatch-origin ledger hit, or captured
+    storage identity). A tensor DERIVED on the worker from a captured input (``(gate * 2).sum()``,
+    ``gate.clone()``, ``gate + 0``, ``gate @ w``, ``torch.cat([gate], 0)`` ...) has FRESH storage
+    that the OWNER-thread-only census / dispatch-origin ledger never registered, so its later value
+    escape was unwitnessed -> false ``VERIFIED`` on a changed input a fresh live run would branch
+    differently on (the r44 hon2_1 finding).
+
+    Every Python-visible torch/Tensor op flows through the GLOBAL torch-function wrapper (a
+    process-wide monkeypatch, unlike the thread-local aten census / dispatch mode). This observer
+    runs on the wrapper's NON-owner fast path and ceilings the artifact the FIRST time a non-owner
+    thread runs ANY torch op that consumes a captured tensor as an OPERAND -- op-agnostic, so it
+    covers the whole worker-derivation class by construction (no derived-product registry: ceiling
+    at the first consumption makes deeper-chain and escape-time provenance moot; the derived tensor
+    does not even exist yet).
+
+    Fail-CLOSED (r45 Fork C): any operand-inspection error during an armed capture ceilings the
+    trace -- an inspection failure on a non-owner op cannot be read as "no captured touch"
+    (validation is a tripwire). Benign-worker-safe: a non-owner thread operating only on tensors it
+    created INDEPENDENTLY of the capture matches no captured-membership signal and stays
+    ``VERIFIED``. The wrapper caller has already confirmed ``_state._nonowner_belt_armed`` and
+    non-owner identity, so the disarmed global hot path pays only a single bool read.
+
+    Parameters
+    ----------
+    args:
+        The positional operands of the wrapped torch call (``*args``).
+    kwargs:
+        The keyword operands of the wrapped torch call (``**kwargs``), or ``None``.
+    """
+
+    state = _ACTIVE_WITNESS_STATE
+    if state is None or not state.belt_armed:
+        return
+    if _state._active_trace is not state.trace:
+        return
+    if threading.get_ident() == state.owner_thread_id:
+        return
+    try:
+        for container in (args, kwargs):
+            if container is None:
+                continue
+            for operand in _iter_tensors_deep(container):
+                if _nonowner_touch_is_captured(state, operand):
+                    _HOST_ESCAPE_CROSS_THREAD_CAPTURED.add(state.trace)
+                    return
+    except Exception:
+        # An operand-inspection failure on a non-owner op during an armed capture cannot prove
+        # "no captured touch": fail closed (ceiling), never silently pass.
+        _HOST_ESCAPE_CROSS_THREAD_CAPTURED.add(state.trace)
+
+
 _ACTIVE_WITNESS_STATE: "_WitnessState | None" = None
 """The runnable-capture witness state currently installed, or ``None`` (r43).
 
@@ -3437,11 +3493,16 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
         grad_property_restore[prop_name] = (shadowed, prop_descriptor)
     # r43: arm the non-owner captured-tensor belt for the whole forward window. The non-owner
     # observers gate on THIS flag, never the owner's ``pause_logging``-toggled ``_logging_enabled``.
+    # r45 hon2_1: ``_state._nonowner_belt_armed`` mirrors ``belt_armed`` (SAME lifetime) so the
+    # GLOBAL torch-function wrapper's non-owner fast path can short-circuit on one bool read and
+    # only invoke the captured-operand observer during an armed runnable capture.
     state.belt_armed = True
+    _state._nonowner_belt_armed = True
     try:
         yield
     finally:
         state.belt_armed = False
+        _state._nonowner_belt_armed = False
         for name, original in originals.items():
             try:
                 setattr(torch.Tensor, name, original)

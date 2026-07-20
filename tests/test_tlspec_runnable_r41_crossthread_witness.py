@@ -931,18 +931,23 @@ def test_benign_foreign_thread_own_tensors_stays_verified(
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-def test_in_window_unused_tensor_op_stays_verified(tmp_path: Path) -> None:
-    """An in-window helper thread doing tensor-only work (result unused, no host
-    escape) records nothing and the capture stays VERIFIED."""
+def test_in_window_captured_tensor_op_ceilings_even_when_unused(tmp_path: Path) -> None:
+    """r45 hon2_1 (supersedes the r43 posture): an in-window helper thread that CONSUMES a
+    CAPTURED tensor as an operand ceilings the capture even when the result is discarded and
+    never escapes to host. TorchLens cannot prove the worker-derived tensor's storage (invisible
+    to the owner-thread census) will not later escape unwitnessed, so consumption is the
+    fail-closed trigger -- the contract's former "tensor-only helper work whose result never
+    escapes remains outside this ceiling" exemption is DELETED. (An OWN-tensor unused op stays
+    VERIFIED; that is pinned in ``test_tlspec_runnable_r45_crossthread_provenance.py``.)"""
 
-    class _ThreadUnusedTensorOp(nn.Module):
+    class _ThreadCapturedTensorOp(nn.Module):
         def __init__(self) -> None:
             super().__init__()
             self.lin = nn.Linear(4, 4)
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             def _worker() -> None:
-                _ = (x * 2.0).sum()  # tensor-only; result discarded; no host read
+                _ = (x * 2.0).sum()  # consumes the CAPTURED input x; result discarded
 
             t = threading.Thread(target=_worker)
             t.start()
@@ -950,9 +955,10 @@ def test_in_window_unused_tensor_op_stays_verified(tmp_path: Path) -> None:
             return self.lin(x).relu()
 
     x = torch.randn(2, 4)
-    trace, result = _roundtrip(_ThreadUnusedTensorOp(), x, tmp=tmp_path)
-    assert host_escape_source_labels(trace) == frozenset()
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    trace, result = _roundtrip(_ThreadCapturedTensorOp(), x, tmp=tmp_path)
+    assert host_escape_has_cross_thread_captured_tensor(trace)
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
 def test_foreign_thread_captured_tensor_escape_ceilings(
