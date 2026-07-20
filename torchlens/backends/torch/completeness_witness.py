@@ -36,6 +36,7 @@ records nothing and stays ``verified``. This ONE rule subsumes the r42 hon2_1
 
 from __future__ import annotations
 
+import functools
 import inspect
 import sys
 import threading
@@ -49,10 +50,12 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import torch
+import torch._ops as _torch_ops  # r47 hon2_1: enumerate the ``torch.ops.*`` __call__ classes
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ...utils._torch_compat import tensor_version_or_none
+from ...utils._torch_symbols import torch_attr
 from ... import _state
 from ..._errors import TorchLensCaptureGapWarning
 from ._tl import get_buffer_address, get_tensor_label, get_tensor_meta
@@ -1396,6 +1399,65 @@ def observe_nonowner_operands(args: tuple[Any, ...], kwargs: dict[str, Any] | No
         # An operand-inspection failure on a non-owner op during an armed capture cannot prove
         # "no captured touch": fail closed (ceiling), never silently pass.
         _HOST_ESCAPE_CROSS_THREAD_CAPTURED.add(state.trace)
+
+
+def _torch_ops_call_classes() -> tuple[type, ...]:
+    """Feature-detect every ``torch._ops`` class that defines its OWN ``__call__`` (r47 hon2_1).
+
+    The r45 hon2_1 non-owner operand observer runs on the GLOBAL torch-FUNCTION wrapper, but the
+    ``torch.ops.*`` (aten / higher-order / TorchBind) surface bypasses that wrapper entirely: a
+    worker thread deriving from / reading a captured tensor via ``torch.ops.aten.mul.Tensor(...)``,
+    ``torch.ops.aten.sum.default(...)``, ``torch.ops.aten._local_scalar_dense(...)``, ... never
+    hits the wrapper and the aten dispatch census is thread-LOCAL (a ``TorchDispatchMode`` cannot
+    see a non-owner thread), so its captured-operand consumption went unwitnessed -> false
+    ``VERIFIED`` on a diverging changed input (the r46 hon2_1 finding).
+
+    Every Python-visible ``torch.ops.*`` call flows through the ``__call__`` of a small set of
+    ``torch._ops`` classes (``OpOverloadPacket`` / ``OpOverload`` / ``TorchBindOpOverload`` /
+    ``HigherOrderOperator`` (+ the abstract ``OperatorBase``)). This scans STRUCTURALLY -- every
+    ``torch._ops`` class object defining its own callable ``__call__`` -- rather than importing the
+    names, which is version-robust across the declared torch floor->ceiling (2.1 -> 2.12+):
+    ``TorchBindOpOverload`` only appeared ~2.4, so a by-name import would ``ImportError`` on older
+    torch. A future torch that adds a call class is auto-covered by shape; a class whose ``__call__``
+    is removed silently drops out (fail-closed install downgrades the capture, never a silent hole).
+
+    Wrapping the WHOLE set including the abstract ``OperatorBase`` never double-observes: a concrete
+    subclass's ``__call__`` does NOT chain to ``super().__call__``, so a single ``aten.mul.Tensor``
+    call fires the observer exactly once (probed on torch 2.8).
+    """
+
+    out: list[type] = []
+    for attr in dir(_torch_ops):
+        obj = getattr(_torch_ops, attr, None)
+        if isinstance(obj, type) and callable(obj.__dict__.get("__call__")):
+            out.append(obj)
+    return tuple(out)
+
+
+def _make_nonowner_ops_call(original: Any) -> Any:
+    """Wrap a ``torch._ops`` class ``__call__`` with the non-owner captured-operand observer (r47).
+
+    The patched ``__call__`` short-circuits on a SINGLE bool read (``_nonowner_belt_armed``) so the
+    disarmed steady state pays ~nothing, and a real eager OWNER forward hits the Python
+    ``torch.ops.*.__call__`` path ZERO times (C++ dispatch; probed), so the armed owner window adds
+    ~no overhead. When the belt is armed, a runnable capture is active, and the caller is a
+    NON-owner thread, it routes the operands through the SAME storage-identity captured-membership
+    test (:func:`observe_nonowner_operands`, fail-closed internally) BEFORE delegating to the
+    original ``__call__``. The worker op is NEVER logged into the owner trace.
+    """
+
+    @functools.wraps(original)
+    def _patched(self: Any, *args: Any, **kwargs: Any) -> Any:
+        if (
+            _state._nonowner_belt_armed
+            and _state._active_trace is not None
+            and _state._active_owner_thread_id != threading.get_ident()
+        ):
+            observe_nonowner_operands(args, kwargs)
+        return original(self, *args, **kwargs)
+
+    _patched.__tl_nonowner_ops_observer__ = True  # type: ignore[attr-defined]
+    return _patched
 
 
 _ACTIVE_WITNESS_STATE: "_WitnessState | None" = None
@@ -3403,7 +3465,7 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
     # explicit ``_disable_current_modes()`` region, bypass the census (E6). Record every tensor
     # operand -- the same shared source table as the Tensor-method belt.
     for predicate_name in HOST_VALUE_ESCAPE_MODULE_FUNCS:
-        original_predicate = getattr(torch, predicate_name, None)
+        original_predicate = torch_attr(predicate_name)  # r47 secD_1: no lazy ``torch.__getattr__``
         if original_predicate is None or not callable(original_predicate):
             _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
             continue
@@ -3498,11 +3560,41 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
     # only invoke the captured-operand observer during an armed runnable capture.
     state.belt_armed = True
     _state._nonowner_belt_armed = True
+    # r47 hon2_1: install a PROCESS-WIDE class-level observer on every ``torch._ops`` class that
+    # defines its own ``__call__`` (the ``torch.ops.*`` aten / higher-order / TorchBind surface,
+    # which bypasses the global torch-FUNCTION wrapper and whose aten census is thread-local). This
+    # is armed-lifecycle-scoped: installed for EXACTLY this forward window and restored FIRST in the
+    # ``finally`` so global torch dispatch is pristine the instant the forward ends. Fail CLOSED: an
+    # empty scan or an install/restore failure downgrades the capture to INCOMPLETE via
+    # ``_HOST_ESCAPE_OBSERVER_FAILED`` -- never a silent "no non-owner op touch".
+    torch_ops_call_restore: list[tuple[type, Any]] = []
+    _ops_call_classes = _torch_ops_call_classes()
+    if not _ops_call_classes:
+        _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
+    for _ops_cls in _ops_call_classes:
+        try:
+            _ops_original = _ops_cls.__dict__["__call__"]
+            setattr(_ops_cls, "__call__", _make_nonowner_ops_call(_ops_original))
+        except (TypeError, AttributeError, KeyError):
+            _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
+            continue
+        torch_ops_call_restore.append((_ops_cls, _ops_original))
     try:
         yield
     finally:
         state.belt_armed = False
         _state._nonowner_belt_armed = False
+        # r47 hon2_1: restore the ``torch._ops`` class ``__call__`` patches FIRST and only when the
+        # current attr is still OUR wrapper (preserve a user mutation). A restore failure fails
+        # closed. A leaked patch would corrupt ALL torch dispatch process-wide, so this must always
+        # run -- it is the first action of the unconditional ``finally``.
+        for _ops_cls, _ops_original in torch_ops_call_restore:
+            try:
+                _current_call = _ops_cls.__dict__.get("__call__")
+                if getattr(_current_call, "__tl_nonowner_ops_observer__", False):
+                    setattr(_ops_cls, "__call__", _ops_original)
+            except (TypeError, AttributeError):
+                _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
         for name, original in originals.items():
             try:
                 setattr(torch.Tensor, name, original)
@@ -3564,7 +3656,7 @@ def _STORAGE_RAW_POINTER_TARGETS() -> tuple[Any, ...]:
 
     targets: list[Any] = []
     for name in ("UntypedStorage", "TypedStorage"):
-        cls = getattr(torch, name, None)
+        cls = torch_attr(name)  # r47 secD_1: no lazy ``torch.__getattr__``
         if cls is not None and hasattr(cls, "data_ptr"):
             targets.append(cls)
     return tuple(targets)

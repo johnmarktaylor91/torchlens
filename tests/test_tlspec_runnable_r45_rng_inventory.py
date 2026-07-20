@@ -241,6 +241,30 @@ def test_simplequeue_held_generator_fails_closed_opaque(
     assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
 
 
+@pytest.mark.parametrize("queue_factory", [queue.SimpleQueue, queue.Queue, queue.LifoQueue])
+def test_empty_opaque_queue_stays_verified(queue_factory: Any, tmp_path: Path) -> None:
+    """r47 hon1_2 precision pin: a deterministic model holding an EMPTY opaque queue is
+    NON-MUTATINGLY provably empty (``empty()``/``qsize()``), so it CANNOT hold a generator and must
+    stay VERIFIED + ATTESTED -- no ``inventory_opaque_container`` over-trigger. The non-empty
+    opaque-queue fail-closed residual (above) is unchanged."""
+
+    class _EmptyQueueModel(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self.holder: Any = queue_factory()  # created empty, never populated
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.lin(x).relu()
+
+    trace, result = _roundtrip(_EmptyQueueModel(), torch.randn(2, 4), tmp_path)
+    assert "inventory_opaque_container" not in getattr(
+        trace, "_runnable_rng_monitor_uncertain_detail", ()
+    ), "an empty opaque queue must not fail closed to inventory_opaque_container"
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
+
+
 def test_oneshot_generator_attribute_is_not_consumed(tmp_path: Path) -> None:
     """A model attribute that is a one-shot python generator is NEVER iterated by the sweep (the
     ``Collection`` gate, not ``Iterable``): the side-effect marker must not fire and the model

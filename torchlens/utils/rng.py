@@ -1119,6 +1119,40 @@ class host_nondeterminism_monitor:
             return False
         return callable(getattr(cls, "qsize", None)) or callable(getattr(cls, "empty", None))
 
+    @staticmethod
+    def _opaque_queue_provably_empty(value: Any) -> bool:
+        """Return whether an opaque queue is NON-MUTATINGLY provably empty (r47 hon1_2).
+
+        ``queue.SimpleQueue`` / ``multiprocessing.Queue`` expose no non-mutating payload snapshot
+        (``.get`` would DRAIN), so their contents cannot be inventoried. But ``empty()`` and
+        ``qsize()`` are NON-MUTATING (probed), so a queue they report EMPTY provably holds no
+        generator and can safely stay VERIFIED. True IFF ``empty()`` is exactly ``True`` (authoritative
+        non-empty when it is exactly ``False``), else ``qsize()`` is integer ``0``. Any exception,
+        non-bool ``empty()``, non-int/negative ``qsize()``, or unsupported value fails closed to
+        ``False`` -- ``mp.Queue`` can raise/flake, so a non-empty or unknown queue is NEVER read as
+        empty.
+        """
+
+        empty_fn = getattr(value, "empty", None)
+        if callable(empty_fn):
+            try:
+                empty_result = empty_fn()
+            except Exception:
+                empty_result = None
+            if empty_result is True:
+                return True
+            if empty_result is False:
+                return False
+        qsize_fn = getattr(value, "qsize", None)
+        if callable(qsize_fn):
+            try:
+                size = qsize_fn()
+            except Exception:
+                return False
+            if type(size) is int and size == 0:
+                return True
+        return False
+
     def _sweep_model_generators(self) -> list[tuple[Any, str]]:
         """Digest numpy/`random` generators reachable from the MODEL's submodule attributes.
 
@@ -1190,12 +1224,26 @@ class host_nondeterminism_monitor:
                     seen_container_ids.add(id(value))
                     pending.extend(value.keys())
                     pending.extend(value.values())
+                    # r47 hon1_1: a Mapping that is ALSO a custom (non-stdlib) inert holder can
+                    # carry a generator as its OWN attribute (``self.rng`` on a ``UserDict`` /
+                    # custom ``Mapping`` subclass), which is NOT among its keys/values. Walk its
+                    # own ``__dict__`` / ``__slots__`` too so the held generator is digest-
+                    # witnessed. ``_is_recursable_custom_holder`` excludes stdlib/torch/numpy, so a
+                    # plain ``dict`` is never double-walked; cycle-guarded via ``seen_container_ids``
+                    # (already added above), node-capped, and never invokes a property/``__getattr__``.
+                    if self._is_recursable_custom_holder(value):
+                        pending.extend(self._custom_holder_children(value))
                     continue
                 if isinstance(value, Collection) and not isinstance(value, _INVENTORY_LEAF_TYPES):
                     if id(value) in seen_container_ids:
                         continue
                     seen_container_ids.add(id(value))
                     pending.extend(value)
+                    # r47 hon1_1: same dual-walk for a non-leaf Collection that is ALSO a custom
+                    # inert holder -- ``self.rng`` on a ``Sequence`` / ``MutableSequence`` /
+                    # ``UserList`` / ``__slots__`` collection subclass, not among its elements.
+                    if self._is_recursable_custom_holder(value):
+                        pending.extend(self._custom_holder_children(value))
                     continue
                 if id(value) in self._exempt_ids:
                     continue
@@ -1220,6 +1268,14 @@ class host_nondeterminism_monitor:
                             inner, _INVENTORY_LEAF_TYPES
                         ):
                             pending.append(inner)
+                        elif self._opaque_queue_provably_empty(value):
+                            # r47 hon1_2: a non-mutatingly PROVABLY-EMPTY opaque queue
+                            # (``SimpleQueue`` / ``mp.Queue``) cannot hold a generator, so it stays
+                            # VERIFIED -- no over-trigger for a deterministic model that merely
+                            # holds an empty queue. A NON-EMPTY or unknown opaque queue still fails
+                            # closed below (a queue-held generator drawn on a pre-existing worker
+                            # would otherwise be unwitnessed).
+                            pass
                         else:
                             self._flag_uncertain("inventory_opaque_container")
                         continue

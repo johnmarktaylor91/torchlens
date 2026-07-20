@@ -48,6 +48,8 @@ import warnings
 
 import torch
 
+from ._torch_symbols import torch_attr
+
 __all__ = [
     "AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED",
     "HAS_ACCUMULATE_GRAD_CLASS",
@@ -1341,7 +1343,8 @@ def apply_ambient_execution_context(values: dict[str, Any]) -> None:
 
     default_dtype = values.get("default_dtype")
     if default_dtype is not None:
-        dtype = getattr(torch, str(default_dtype).removeprefix("torch."), None)
+        # r47 secD_1: ``torch_attr`` reads ``torch.__dict__`` (no lazy ``torch.__getattr__``).
+        dtype = torch_attr(str(default_dtype).removeprefix("torch."))
         if not isinstance(dtype, torch.dtype):
             raise RuntimeError(f"Recorded default dtype {default_dtype!r} is unavailable.")
         if torch.get_default_dtype() is not dtype:

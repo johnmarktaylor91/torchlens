@@ -21,6 +21,7 @@ import torch
 
 from ... import _state
 from ...utils._torch_compat import get_accumulate_grad_class
+from ...utils._torch_symbols import torch_attr
 
 from ..._deprecations import MISSING, MissingType
 from ...quantities import Bytes, Duration
@@ -1376,7 +1377,7 @@ def _torch_dtype_from_string(dtype_name: str) -> torch.dtype | str:
 
     if dtype_name.startswith("torch."):
         dtype_attr = dtype_name.removeprefix("torch.")
-        dtype = getattr(torch, dtype_attr, None)
+        dtype = torch_attr(dtype_attr)  # r47 secD_1: no lazy ``torch.__getattr__``
         if isinstance(dtype, torch.dtype):
             return dtype
     return dtype_name

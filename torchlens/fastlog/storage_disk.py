@@ -15,6 +15,7 @@ import torch
 
 from .. import __version__ as TORCHLENS_VERSION
 from .._io import TLSPEC_VERSION, TorchLensIOError
+from .._io._torch_symbols import torch_attr
 from .._io.manifest import Manifest, TensorEntry
 from .._io.streaming import BundleStreamWriter
 from ._indexes import write_label_index, write_pass_index
@@ -344,7 +345,7 @@ def _torch_dtype_from_ref(dtype: Any) -> torch.dtype | None:
     if dtype is None or isinstance(dtype, torch.dtype):
         return dtype
     name = str(dtype).replace("torch.", "")
-    return cast(torch.dtype | None, getattr(torch, name, None))
+    return cast(torch.dtype | None, torch_attr(name))  # r47 secD_1: no lazy ``torch.__getattr__``
 
 
 def _ctx_from_json(data: dict[str, Any]) -> Any:
@@ -410,7 +411,7 @@ def _dtype_from_name(name: str | None) -> torch.dtype | None:
 
     if name is None:
         return None
-    dtype_obj = getattr(torch, str(name), None)
+    dtype_obj = torch_attr(str(name))  # r47 secD_1: no lazy ``torch.__getattr__``
     if not isinstance(dtype_obj, torch.dtype):
         raise TorchLensIOError(f"Unsupported dtype name in fastlog spec: {name!r}.")
     return cast(torch.dtype, dtype_obj)
