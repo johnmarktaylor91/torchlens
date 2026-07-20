@@ -1029,6 +1029,11 @@ IGNORED_FUNCS = [
     ("torch.Tensor", "T"),
     ("torch.Tensor", "mT"),
     ("torch.Tensor", "H"),
+    # r45: ``mH`` (batched conjugate transpose) must be wrapped for capture exactly like
+    # its sibling ``H`` / ``mT`` -- otherwise a forward using ``x.mH`` records the adjoint
+    # result as an unattributed literal and the runnable artifact cannot save/run (the r44
+    # corr1_1 / secF_1 finding: ``.mH`` "not modeled as a property op at all").
+    ("torch.Tensor", "mH"),
 ]
 
 
