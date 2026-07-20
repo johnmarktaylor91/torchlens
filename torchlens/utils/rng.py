@@ -689,8 +689,11 @@ _INVENTORY_LEAF_TYPES: tuple[type, ...] = (
 ``str`` / ``bytes`` / ``bytearray`` / ``memoryview`` / ``np.ndarray`` / a bare ``torch.Tensor``
 satisfy ``collections.abc.Collection`` yet must NOT be descended element-wise: a string would
 explode into per-character strings (huge / cyclic node blow-up) and a tensor / ndarray holds no
-Python-level RNG. ``torch.nn.Module`` (swept separately via ``model.modules()``) and ``ModuleType``
-are likewise excluded from the ``Collection`` descent branch.
+Python-level RNG. ``torch.nn.Module`` and ``ModuleType`` are likewise excluded from the
+``Collection`` descent branch (this entry is inert for ``nn.Module`` -- it is not a
+``collections.abc.Collection`` -- and documents intent). r51 hon1_1: an ``nn.Module`` is NO LONGER
+a hard inventory leaf; it is descended via ``_is_recursable_custom_holder`` (its own
+``__dict__`` / ``__slots__``), reaching a generator behind an UNREGISTERED submodule.
 """
 
 _INVENTORY_NODE_CAP = 1_000_000
@@ -1063,24 +1066,37 @@ class host_nondeterminism_monitor:
 
     @staticmethod
     def _is_recursable_custom_holder(value: Any) -> bool:
-        """Return whether ``value`` is an inert custom holder to recurse into (r42 corr2_1).
+        """Return whether ``value`` is a holder to recurse into (r42 corr2_1 / r51 hon1_1).
 
-        Recurse ONLY into plain user objects that carry an attribute surface. Skips scalars,
-        types/callables, modules, tensors, ``nn.Module`` (swept separately), ndarrays, and any
-        stdlib/torch/numpy implementation object (:data:`_CUSTOM_HOLDER_SKIP_MODULES`). A
-        digestable RNG never reaches here (it is snapshotted before this branch).
+        Recurse into plain user objects that carry an attribute surface AND (r51 hon1_1) into
+        every reachable ``nn.Module`` -- its own ``__dict__`` / ``__slots__`` (which hold
+        ``_parameters`` / ``_buffers`` / ``_modules`` plus arbitrary user attributes). A REGISTERED
+        submodule is additionally seeded via the top ``model.modules()`` loop (and premarked in
+        ``seen_container_ids`` so it is not double-walked); an UNREGISTERED submodule (held in a
+        plain attribute, ``list`` / ``dict`` / nested container, or custom holder -- the "modules
+        must live in an ``nn.ModuleList``" footgun) is reachable ONLY through this branch, so a
+        numpy Generator behind it is finally witnessed. Skips scalars, types / non-module callables,
+        modules, tensors, ndarrays, and any stdlib/torch/numpy implementation object
+        (:data:`_CUSTOM_HOLDER_SKIP_MODULES`). A digestable RNG never reaches here (it is snapshotted
+        before this branch).
         """
 
         if value is None or isinstance(value, (str, bytes, bytearray, int, float, bool, complex)):
             return False
+        # r51 hon1_1: an nn.Module is a recursable holder. This branch MUST precede the callable /
+        # module / torch-namespace gates below because an nn.Module IS callable (``__call__``) and a
+        # torch built-in module (``nn.Linear``) lives in the skipped ``torch`` top-level namespace --
+        # either gate would otherwise short-circuit it to a hard leaf, the hon_1 hole.
+        if isinstance(value, torch.nn.Module):
+            return True
         if isinstance(value, type) or callable(value):
             return False
         if isinstance(value, ModuleType):
             return False
         if isinstance(value, (np.ndarray, np.generic)):
             return False
-        if isinstance(value, (torch.Tensor, torch.nn.Module)):
-            return False
+        if isinstance(value, torch.Tensor):  # r51 hon1_1: was ``(torch.Tensor, torch.nn.Module)``;
+            return False  # nn.Module is now recursable via the branch above.
         module = getattr(type(value), "__module__", "") or ""
         if module.split(".", 1)[0] in _CUSTOM_HOLDER_SKIP_MODULES:
             return False
@@ -1203,8 +1219,13 @@ class host_nondeterminism_monitor:
         (``SimpleQueue`` / ``mp.Queue``) with no inspectable buffer fails closed to INCOMPLETE
         (``inventory_opaque_container``). r42 corr2_1: it ADDITIONALLY recurses into inert
         CUSTOM object holders (``self.holder.rng``) through their ``__dict__`` / ``__slots__``
-        values, skipping tensors, ``nn.Module`` (swept separately), ndarrays, callables,
-        modules, and stdlib/torch/numpy implementation objects. The former
+        values, skipping tensors, ndarrays, callables, modules, and stdlib/torch/numpy
+        implementation objects. r51 hon1_1: an ``nn.Module`` is NO LONGER a hard leaf -- every
+        reachable module (REGISTERED via the top ``model.modules()`` loop AND an UNREGISTERED
+        submodule held in a plain attribute / ``list`` / ``dict`` / nested container / custom
+        holder) is descended through the same ``__dict__`` / ``__slots__`` protocol, so a numpy
+        Generator behind an unregistered submodule is witnessed (registered ids are premarked so
+        there is no double-walk). The former
         ``budget = 2000`` early return truncated SILENTLY (a generator on a late
         submodule of any >~120-module model was missed -> false VERIFIED); the
         replacement :data:`_INVENTORY_NODE_CAP` is defensive only -- exhaustion flags
@@ -1217,9 +1238,10 @@ class host_nondeterminism_monitor:
         unseeded construction and Python ``random`` by the construction/class patches.
         This digest is the thread-independent belt for a generator the model itself
         HOLDS (caught even on a pre-existing thread; r42 corr2_1 extends this to a
-        generator behind a custom holder attribute). Residual (contract s11): an
-        EXTERNALLY-held generator drawn on a PRE-EXISTING (non-hooked) thread that is NOT
-        reachable from the model inventory.
+        generator behind a custom holder attribute; r51 hon1_1 to a generator behind an
+        UNREGISTERED submodule). Residual (contract s11): an EXTERNALLY-held generator
+        drawn on a PRE-EXISTING (non-hooked) thread that is NOT reachable from the model
+        inventory (model-held-behind-unregistered-module is no longer a residual).
         """
 
         snapshots: list[tuple[Any, str]] = []
@@ -1231,7 +1253,14 @@ class host_nondeterminism_monitor:
             pending: list[Any] = []
             for module in modules():
                 pending.extend(getattr(module, "__dict__", {}).values())
-            seen_container_ids: set[int] = set()
+            # r51 hon1_1: nn.Module is now a recursable holder (``_is_recursable_custom_holder``),
+            # so a REGISTERED submodule reached during descent would be re-walked even though the
+            # top loop already seeded its ``__dict__``. Premark every registered module id so the
+            # ``id in seen_container_ids`` guards skip that re-walk -- a coverage-NEUTRAL dedup (a
+            # generator directly on a registered module is seeded and digested from its ``__dict__``
+            # before the module OBJECT is ever reached) that kills the ~2x double-walk. UNREGISTERED
+            # submodules are absent from ``modules()`` and stay un-premarked, so they ARE descended.
+            seen_container_ids: set[int] = {id(module) for module in modules()}
             visited_nodes = 0
             while pending:
                 value = pending.pop()
