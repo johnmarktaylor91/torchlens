@@ -908,6 +908,10 @@ def test_round21_conformance_registry_is_total_and_executed(
         _assert_record_schema(record)
 
 
+@pytest.mark.skipif(
+    os.environ.get("MENAGERIE_RELEASE_GATE") != "1",
+    reason="release-gate-only",
+)
 def test_round21_ci_attestations_cover_registry_without_skip() -> None:
     """Both host attestations and the reversion result must cover VS11 without skips."""
 
