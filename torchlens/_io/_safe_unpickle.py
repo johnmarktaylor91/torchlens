@@ -918,6 +918,46 @@ _BASE_LOAD_NEWOBJ = pickle._Unpickler.dispatch[pickle.NEWOBJ[0]]
 _BASE_LOAD_NEWOBJ_EX = pickle._Unpickler.dispatch[pickle.NEWOBJ_EX[0]]
 
 
+def _exception_arose_outside_vm(exc: BaseException) -> bool:
+    """Return whether any traceback frame of ``exc`` lies outside the unpickle VM.
+
+    LOCUS discriminator for the ``SafeBundleUnpickler.load()`` boundary (r51
+    secA_1, narrowed): a VM-internal corruption failure -- stack underflow
+    (``IndexError``), truncated fixed-width read (``struct.error``), missing memo
+    key (``KeyError``), bad utf-8 (``UnicodeDecodeError``), truncation
+    (``EOFError``) -- is raised either by pure-Python VM code in stdlib
+    ``pickle.py`` / this module, or by a C call (``struct.unpack`` / ``str``
+    decode / dict lookup) that adds NO Python frame; its traceback never leaves
+    the two VM files. An APPLICATION/reconstruction failure -- a REDUCE
+    callable's body, a ``__setstate__``, a ``find_class`` module import
+    (importlib frames), the ``_RenameAwareUnpickler`` rename hook (a bundle.py
+    frame) -- necessarily executes at least one Python frame outside them.
+    Classifying by WHERE the exception arose is version-robust where enumerating
+    exception TYPES is fragile: both file names are derived from live code
+    objects, so the comparison matches the code that actually runs under any
+    install layout, and if a future Python relocated VM internals the secA
+    corruption-corpus tests fail LOUD (a raw builtin escapes) rather than
+    silently misclassifying.
+    """
+
+    tb = exc.__traceback__
+    while tb is not None:
+        if tb.tb_frame.f_code.co_filename not in _VM_INTERNAL_CODE_FILES:
+            return True
+        tb = tb.tb_next
+    return False
+
+
+_VM_INTERNAL_CODE_FILES: frozenset[str] = frozenset(
+    {
+        # The stdlib pure-Python VM (pickle.py), via the executing code object.
+        pickle._Unpickler.load.__code__.co_filename,
+        # This module: the Layer-1/Layer-2 overrides and the load() boundary.
+        _exception_arose_outside_vm.__code__.co_filename,
+    }
+)
+
+
 class _DenyMissingDispatch(dict):  # type: ignore[type-arg]
     """Opcode dispatch table that raises ``UnpicklingError`` on an unknown opcode.
 
@@ -934,8 +974,8 @@ class _DenyMissingDispatch(dict):  # type: ignore[type-arg]
     truncated fixed-width read (``struct.error``), a missing memo key (``KeyError``), a
     bad ``SHORT_BINUNICODE`` (``UnicodeDecodeError``), etc. -- are normalized to
     ``UnpicklingError`` by the ``SafeBundleUnpickler.load()`` boundary (r51, secA_1),
-    which wraps the whole VM run, so the full corruption family reaches the load-site
-    ``except UnpicklingError`` and becomes a clean ``TorchLensIOError``.
+    which wraps the VM run and normalizes failures whose traceback stays INSIDE the VM
+    (locus-classified); application/reconstruction failures keep their identity.
     """
 
     def __missing__(self, key: int) -> None:
@@ -999,41 +1039,52 @@ class SafeBundleUnpickler(pickle._Unpickler):
         )
 
     def load(self) -> Any:
-        """Run the pure-Python VM, normalizing the WHOLE corrupt-input error family.
+        """Run the pure-Python VM, normalizing ONLY VM-internal corruption failures.
 
-        The C ``pickle.Unpickler`` translated every corrupt / truncated / malformed
-        stream into a single observable failure mode -- ``pickle.UnpicklingError`` --
-        which the load sites (``bundle.py::_load_trace_payload`` /
-        ``_load_unified_bundle``) catch to turn a corrupt ``metadata.pkl`` into a clean
-        :class:`~torchlens._io._errors.TorchLensIOError`. The pure-Python
-        ``pickle._Unpickler`` (base class since r49, secA_1) does NOT: a *valid* opcode
-        with too few operands raises a bare ``IndexError`` (stack underflow), a
-        truncated fixed-width int raises ``struct.error``, a missing memo key raises
-        ``KeyError``, a bad ``SHORT_BINUNICODE`` raises ``UnicodeDecodeError``, and so on
-        -- none of which the load sites catch, so they escaped ``tl.load()`` as raw
-        builtins (r51, secA_1). ``_DenyMissingDispatch`` only restores the invariant for
-        the UNKNOWN-opcode facet.
+        The C ``pickle.Unpickler`` contract this preserves has TWO halves:
+        (1) every corrupt / truncated / malformed STREAM failure surfaces as
+        ``pickle.UnpicklingError`` -- which the load sites
+        (``bundle.py::_load_trace_payload`` / ``_load_unified_bundle``) translate
+        into a clean :class:`~torchlens._io._errors.TorchLensIOError`; and (2) an
+        exception raised by APPLICATION code the stream invokes (a REDUCE
+        callable, ``__setstate__``, a ``find_class`` module import) propagates RAW
+        with its identity intact -- the C VM never relabeled those, and the load
+        sites enumerate that family (``TypeError`` / ``ValueError`` /
+        ``ImportError`` / ...) to attach the original exception as the DIRECT
+        ``__cause__`` of ``TorchLensIOError`` (the legacy-bundle live-resource
+        contract).
 
-        This single boundary restores the C VM's observable for the WHOLE family by
-        re-raising any non-``UnpicklingError`` the VM raises as ``UnpicklingError``
-        (preserving the original as ``__cause__`` for diagnostics). It is version-robust
-        where enumerating the opcode-/read-specific exception types is fragile.
+        The pure-Python base VM leaks half (1) as raw builtins (``IndexError`` /
+        ``struct.error`` / ``KeyError`` / ``UnicodeDecodeError`` / ``EOFError``);
+        ``_DenyMissingDispatch`` restores only the unknown-opcode facet. This
+        boundary restores the WHOLE family, classified by LOCUS
+        (``_exception_arose_outside_vm``), never by exception type: only a failure
+        whose traceback stays inside the VM itself is stream corruption; a failure
+        that executed application frames keeps its identity and direct cause.
 
-        Nothing legitimate is masked: on a VALID stream the base ``load`` returns
-        normally (its internal ``_Stop`` sentinel never escapes), and every deliberate
-        refusal surface in this unpickler (``find_class`` denials, ``_safe_getattr``,
-        ``_safe_load_from_bytes``, and the four opcode overrides) already raises ONLY
-        ``pickle.UnpicklingError`` -- which passes through unchanged -- so the residual
-        non-``UnpicklingError`` exceptions reaching this boundary are exclusively genuine
-        corruption. ``except Exception`` (NOT ``BaseException``) preserves
-        ``KeyboardInterrupt`` / ``SystemExit`` / ``GeneratorExit``.
+        Nothing legitimate is masked: a valid stream returns normally, every
+        deliberate refusal surface in this unpickler already raises ONLY
+        ``pickle.UnpicklingError`` (which passes through unchanged), and
+        ``except Exception`` (not ``BaseException``) preserves
+        ``KeyboardInterrupt`` / ``SystemExit`` / ``GeneratorExit``. Residual,
+        stated honestly: an interpreter-raised CALL-SITE failure on an admitted
+        reconstructor (arity mismatch, or a C-implemented callable raising with
+        no Python frame) executed ZERO application code, shows only VM frames,
+        and is normalized as corrupt -- semantically true (the stream is
+        inconsistent with the admitted callable) and unreachable for the
+        live-resource contract, which by definition executes application code.
         """
 
         try:
             return super().load()
         except pickle.UnpicklingError:
             raise
-        except Exception as exc:  # noqa: BLE001 -- normalize corruption to the C VM contract
+        except Exception as exc:  # noqa: BLE001 -- locus-classified; see docstring
+            if _exception_arose_outside_vm(exc):
+                # Application/reconstruction failure on a well-formed stream: NOT
+                # corruption; never labeled so. Propagate raw so load sites keep
+                # the original type as the DIRECT __cause__ of TorchLensIOError.
+                raise
             raise pickle.UnpicklingError(
                 f"corrupt or malformed pickle stream: {type(exc).__name__}: {exc}"
             ) from exc
