@@ -412,7 +412,10 @@ typed producer refusal -- refuse-unless-proved, never accept-unless-flagged.
 
 r37 adds ONE per-kind reconstruction capability table (`CONTAINER_KIND_CAPABILITIES` in
 `torchlens/ir/container.py`) shared by spec construction, this producer proof, and the runtime
-independent recompute; a kind existing in only one site fails a coverage meta-test. The
+independent recompute; a kind existing in only one site fails a coverage meta-test. The load-time
+recompute and sparse reconstruction are additionally coupled through ONE shared plain-substitution
+predicate (`_reconstruction_would_substitute_plain`), so any future gate/reconstruction criterion
+divergence is a failing coverage meta-test rather than a silent false `verified` (r49 secB_1). The
 instance-state rules it encodes:
 
 - `tuple`/`list`/`literal` are structurally stateless (exact builtins, no instance `__dict__`).
@@ -426,7 +429,11 @@ instance-state rules it encodes:
   an unslotted subclass save a permanently-`unverifiable` artifact). At load, that same resolved
   type is lossy even when the persisted `lossy_reconstruction` flag says `False` (forged-flag
   defense). Plain `collections.namedtuple`, `typing.NamedTuple`, `__slots__ = ()` subclasses, and
-  supported `torch.return_types` structseqs stay admitted.
+  supported `torch.return_types` structseqs stay admitted. The load recompute additionally treats a
+  namedtuple type that is neither a generated namedtuple nor a trusted structseq as lossy (sparse
+  reconstruction would substitute a plain `tuple`), so gate and reconstruction share ONE substitution
+  criterion and a non-`FunctionType`-`__new__` tuple subclass can no longer forge a false `verified`
+  (r49 secB_1).
   **Structseq resolution authority (r39 secB_1).** The structseq reconstruction branch -- the one
   path that invokes an arbitrary resolved type's own `__new__` -- trusts a type ONLY when the
   SPEC-AWARE gate holds: `spec.type_module == "torch.return_types"` AND resolution began from the
@@ -442,7 +449,11 @@ instance-state rules it encodes:
   dataclass whose WINNING `__init__` is not the dataclasses-GENERATED one (detected by the generated
   init's feature-detected `co_filename` marker) is unverifiable for runnable output reconstruction.
   Generated field-mirroring initializers (incl. a dataclass that generates its own init over an evil
-  base) stay lossless. A custom `__init__` compiled in a `<string>`/exec context yet resolvable at the
+  base) stay lossless. A dataclass whose `__new__` is not an inert allocator (`object.__new__`), or
+  whose fields are not inertly settable, is likewise lossy at load: sparse reconstruction substitutes a
+  plain container for such a type and drops any `__new__`-computed state, so the recompute mirrors
+  `_rebuild_container_from_spec` exactly through the shared substitution predicate (r49 secB_1). A
+  custom `__init__` compiled in a `<string>`/exec context yet resolvable at the
   spec's `type_module`/`type_qualname` reads as generated -- a narrow documented residual, fail-safe in
   the realistic file-defined case. **`hf_model_output` trust
   authority (r42 secB_1).** The lossy-reconstruction recompute trusts an `hf_model_output` type's
@@ -450,7 +461,11 @@ instance-state rules it encodes:
   (identity, not name) from the genuine `transformers` package via `spec.type_module` /
   `spec.type_qualname` in `sys.modules`. A spoofable `__module__` string or a loose `transformers*`
   prefix (e.g. `transformers_evil`) is never sufficient to suppress the lossy-reconstruction
-  recompute; an unresolved or non-identical type fails closed to lossy (`unverifiable`).
+  recompute; an unresolved or non-identical type fails closed to lossy (`unverifiable`). An
+  `hf_model_output` type whose `__new__` is not the inert `dict.__new__`, that is not a `dict`
+  subclass, or whose fields are not inertly settable is likewise lossy through the same shared
+  substitution predicate (reconstruction substitutes a plain container, dropping `__new__`-computed
+  state), mirroring `_rebuild_container_from_spec` (r49 secB_1).
 - `dict` admits only the exact trusted bases (`dict`/`OrderedDict`/`defaultdict` with an
   allowlisted factory); an instance carrying extra non-`None` `__dict__` state refuses at save
   (`mapping_instance_state`). The load-time recompute for this kind is the persisted flag plus
@@ -899,7 +914,12 @@ seed) reports `unverifiable` + `not_applicable`:
    Descent is gated on `collections.abc.Collection` (Sized), so a one-shot iterator / generator
    attribute is NEVER consumed. An opaque queue with no non-mutating payload snapshot is SKIPPED only
    when it is non-mutatingly PROVABLY EMPTY at inventory time (`empty()` is exactly `True`, else
-   `qsize()` is integer `0`; any exception / negative / disagreement fails closed -- r47 hon1_2). A
+   `qsize()` is integer `0`; any exception / negative / disagreement fails closed -- r47 hon1_2). The
+   emptiness probe is CLOCK-NEUTRAL: the monitor suppresses its OWN transitive channel marks during
+   the probe (a monitor-initiated read is not a model host read, enforced at the single `_mark` choke
+   point), so an empty `multiprocessing.Queue` -- whose `.empty()` reads a poll clock through
+   `multiprocessing.connection` -- narrows correctly, matching `queue.SimpleQueue` (r49 hon1_1);
+   user/model/worker clock reads outside the probe still mark. A
    NON-EMPTY or unknown non-enumerable model-reachable container
    (`queue.SimpleQueue`, `multiprocessing.Queue`, any object exposing the queue protocol with no
    non-mutating snapshot) fails closed to INCOMPLETE (`inventory_opaque_container`) rather than
@@ -1017,8 +1037,14 @@ Python-visible net is universal, so coverage of the op surface is the UNION of p
 own `__call__` (`OpOverloadPacket` / `OpOverload` / `TorchBindOpOverload` / `HigherOrderOperator`,
 feature-detected by a structural scan so the set self-updates across torch versions; installed for the
 armed window because a `TorchDispatchMode` / aten census is thread-local and cannot see a non-owner
-thread); and (3) the r43 Tensor host-escape method belt (`.item` / `.tolist` / `.numpy` / storage
-reads, which do not route through `torch._ops.__call__`). All observers call the SAME storage-identity
+thread); (3) the r43 Tensor host-escape method belt (`.item` / `.tolist` / `.numpy` / storage
+reads, which do not route through `torch._ops.__call__`); and (4) an armed-window module-function belt
+over the patchable private-C free-function modules `torch._C._{nn,special,fft,linalg,sparse,nested}`,
+structurally enumerated from the canonical forward-op module authority (`_ALLOWED_FORWARD_OP_MODULES`
+via `private_c_forward_op_module_names`) filtered to module-typed `torch._C._*` submodules, so a future
+private-C op module added to that set is auto-covered and a torch lacking one degrades gracefully -- a
+private-C free function bypasses BOTH the global torch-function wrapper (no `__torch_function__`) and the
+`torch._ops.*` class patch (it dispatches its inner aten op in C++) (r49 hon2_1). All observers call the SAME storage-identity
 captured-membership test and never log the worker op into the owner trace. The FIRST worker op
 consuming a captured operand on any surface permanently ceilings the artifact to `unverifiable` /
 `not_applicable`, regardless of derivation depth or the eventual escape spelling. A worker that
@@ -1030,11 +1056,12 @@ failure -- during an armed capture fails closed (INCOMPLETE / ceiling), never si
 observer is gated on a global belt-armed flag mirroring the forward window, so the disarmed steady
 state and every plain (non-runnable) trace pay only a single bool read; an eager owner forward hits the
 Python `torch._ops.*.__call__` path zero times (C++ dispatch), so the armed owner window adds ~no
-overhead. **Accepted residuals (unclosable / narrow):** (a) the undocumented, read-only,
-non-Python-patchable private-C free-function surface `torch._C._VariableFunctions.<op>` -- its public
-alias `torch.<op>` is the SAME object and IS wrapped, so only a worker calling the private spelling
-DIRECTLY on a captured tensor from a pre-existing thread slips (same class as the `.__call__()` /
-`partial()`-mediated C-call residual; C-level dispatch observation is only thread-local); (b) a
+overhead. **Accepted residuals (unclosable / narrow):** (a) the read-only, non-Python-patchable
+private-C free-function CLASS `torch._C._VariableFunctions.<op>` -- its public alias `torch.<op>` is the
+SAME object and IS wrapped, so only a worker calling the private CLASS spelling DIRECTLY on a captured
+tensor from a pre-existing thread slips (same class as the `.__call__()` / `partial()`-mediated C-call
+residual; C-level dispatch observation is only thread-local); the patchable private-C MODULES
+`_nn/_special/_fft/_linalg/_sparse/_nested` are now CLOSED by observer (4) (r49 hon2_1); (b) a
 `torch.ops.higher_order.*` HOP whose subclass OVERRIDES `__call__` and consumes a captured operand
 PURELY in C++ without dispatching any Python-level `OpOverload` / `OpOverloadPacket` call -- the
 overwhelmingly common inner-ATen dispatch IS observed on the worker thread, so only a

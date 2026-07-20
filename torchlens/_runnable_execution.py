@@ -33,6 +33,7 @@ from .ir.container import (
     CONTAINER_KIND_CAPABILITIES,
     ContainerReconstructionError,
     ContainerSpec,
+    _reconstruction_would_substitute_plain,
     namedtuple_type_can_carry_instance_state,
     rebuild_container_from_spec,
     reconstruction_is_lossy_by_type,
@@ -2988,7 +2989,13 @@ def _spec_node_reconstruction_lossy(spec: ContainerSpec) -> bool:
         # per-instance state (no ``__slots__ = ()``) is treated as lossy even when
         # the persisted flag is false. Plain ``collections.namedtuple`` /
         # ``typing.NamedTuple`` / slotted subclasses stay VERIFIED-eligible.
-        return namedtuple_type_can_carry_instance_state(container_type)
+        # r49 secB_1: ALSO couple to reconstruction's substitution criterion -- a namedtuple
+        # type that is neither a generated namedtuple nor a trusted structseq rebuilds as a
+        # plain ``tuple`` (type substitution), which the instance-dict signal alone misses
+        # (the r48 non-``FunctionType``-``__new__`` hole).
+        return namedtuple_type_can_carry_instance_state(
+            container_type
+        ) or _reconstruction_would_substitute_plain(container_type, "namedtuple", spec.fields, spec)
     captured_names = spec.fields if spec.kind == "dataclass" else spec.keys
     try:
         container_type = resolve_container_type(spec)
