@@ -217,6 +217,140 @@ class ContextFieldInvalidError(ValueError):
         self.detail = detail
 
 
+class DescriptorStructuralBoundError(ValueError):
+    """A persisted runnable-descriptor integer failed structural cross-validation (r53 free_1).
+
+    Raised at PARSE time -- before readiness resolution, signature binding, state
+    staging, or any allocation whose size is a function of the persisted integer
+    -- so a hostile ``manifest.json`` integer (``num_positional_args=1e10``,
+    ``shape=[1e9,1e9]``) can never drive an allocation bomb on the default
+    ``tl.load()``/``.run()`` path. Surfaced as an analysis-only readiness
+    diagnostic (frozen ``call_arity_mismatch`` / ``state_shape_mismatch`` codes)
+    at detection stage ``descriptor_parse``; the load still succeeds for
+    analysis and ``.run()`` refuses typed.
+    """
+
+    def __init__(self, code: RunnableErrorCode, field: str, detail: str) -> None:
+        super().__init__(f"Persisted runnable descriptor field {field!r} is invalid: {detail}")
+        self.code = code
+        self.field = field
+        self.detail = detail
+
+
+_MAX_RUNNABLE_TENSOR_RANK = 64
+"""Structural rank sanity bound: no real tensor produced by torch exceeds it."""
+
+_INT64_MAX = 2**63 - 1
+"""Signed 64-bit ceiling: torch sizes/storage byte counts are int64 quantities."""
+
+
+def _validate_call_arity(
+    call_id: str,
+    num_positional_args: int,
+    num_keyword_args: int,
+    tensor_arguments: tuple[TensorArgumentRef, ...],
+    literal_arguments: tuple[LiteralArgumentRef, ...],
+) -> None:
+    """Anchor persisted call arity to the DENSE first-level argument leaves (r53 free_1).
+
+    A legitimate producer records ``num_positional_args`` equal to the count of
+    distinct first-level positional roots ``("args", i)`` with ``i`` dense in
+    ``[0, n)``, and ``num_keyword_args`` equal to the count of distinct keyword
+    names -- the run-time tripwire in ``_pre_call_contract_checks`` has always
+    required exactly this, so anchoring it at parse cannot over-trigger. The
+    density check is the allocation-free pigeonhole (len/min/max over the root
+    set); it never materializes ``set(range(n))`` from the untrusted integer.
+    """
+
+    def _refuse(detail: str) -> DescriptorStructuralBoundError:
+        return DescriptorStructuralBoundError(
+            RunnableErrorCode.CALL_ARITY_MISMATCH, f"calls[{call_id}]", detail
+        )
+
+    if num_positional_args < 0 or num_keyword_args < 0:
+        raise _refuse(
+            f"negative arity (num_positional_args={num_positional_args}, "
+            f"num_keyword_args={num_keyword_args})"
+        )
+    positional_roots: set[int] = set()
+    keyword_names: set[str] = set()
+    paths = tuple(argument.argument_path for argument in tensor_arguments) + tuple(
+        argument.argument_path for argument in literal_arguments
+    )
+    for path in paths:
+        if len(path) < 2 or path[0] not in ("args", "kwargs"):
+            raise _refuse(f"argument path {path!r} is not rooted at args/kwargs")
+        head = path[1]
+        if path[0] == "args":
+            if not isinstance(head, int) or isinstance(head, bool) or head < 0:
+                raise _refuse(f"positional argument root {head!r} is not a nonnegative integer")
+            positional_roots.add(head)
+        else:
+            if not isinstance(head, str):
+                raise _refuse(f"keyword argument root {head!r} is not a string")
+            keyword_names.add(head)
+    n = num_positional_args
+    dense = len(positional_roots) == n and (
+        n == 0 or (min(positional_roots) == 0 and max(positional_roots) == n - 1)
+    )
+    if not dense:
+        raise _refuse(
+            f"num_positional_args={n} does not match the dense first-level positional "
+            f"leaf roots (count={len(positional_roots)}, "
+            f"span={sorted(positional_roots)[:8]!r}...)"
+        )
+    if num_keyword_args != len(keyword_names):
+        raise _refuse(
+            f"num_keyword_args={num_keyword_args} does not match the "
+            f"{len(keyword_names)} distinct keyword leaf names"
+        )
+
+
+def _validate_slot_shape(
+    slot_id: str,
+    shape: tuple[int, ...],
+    rank: int,
+    dtype_literal: str,
+) -> None:
+    """Anchor a persisted slot shape to its declared rank and an int64-safe byte product.
+
+    Structural bounds only (r53 free_1): nonnegative dimensions, ``rank ==
+    len(shape)``, rank within torch's practical ceiling, and a total byte count
+    that fits signed 64-bit (torch storage sizes are int64). Deliberately NO
+    absolute byte cap here -- real slots (multi-GiB LLM embeddings) must keep
+    loading; run-preparation magnitude gating is the allocation preflight in
+    ``_runnable_state.py``, and embedded-payload slots stay value-anchored by
+    the strict binder and the safetensors header.
+    """
+
+    def _refuse(detail: str) -> DescriptorStructuralBoundError:
+        return DescriptorStructuralBoundError(
+            RunnableErrorCode.STATE_SHAPE_MISMATCH, f"tensor_slots[{slot_id}]", detail
+        )
+
+    if rank < 0:
+        raise _refuse(f"negative rank {rank}")
+    if rank != len(shape):
+        raise _refuse(f"rank={rank} contradicts len(shape)={len(shape)}")
+    if rank > _MAX_RUNNABLE_TENSOR_RANK:
+        raise _refuse(f"rank={rank} exceeds the structural ceiling {_MAX_RUNNABLE_TENSOR_RANK}")
+    numel = 1
+    for dim in shape:
+        if dim < 0:
+            raise _refuse(f"negative dimension {dim} in shape {shape[:8]!r}")
+        numel *= dim
+        if numel > _INT64_MAX:
+            raise _refuse("shape element product exceeds the signed 64-bit ceiling")
+    name = dtype_literal.removeprefix("torch.")
+    resolved = torch_attr(name)
+    itemsize = resolved.itemsize if isinstance(resolved, torch.dtype) else 1
+    if numel * itemsize > _INT64_MAX:
+        raise _refuse(
+            f"shape byte product numel={numel} x itemsize={itemsize} exceeds the "
+            "signed 64-bit ceiling"
+        )
+
+
 _MATMUL_PRECISION_VOCABULARY = frozenset({"highest", "high", "medium"})
 """Closed vocabulary for ``float32_matmul_precision`` (torch's exact accepted set)."""
 
@@ -468,6 +602,31 @@ def attach_sparse_run_readiness(
             backend=str(getattr(trace, "backend", "unknown")),
             detection_stage="context_parse_validation",
             details=(("context_field", exc.field), ("reason", exc.detail)),
+        )
+        report = ReadinessReport(
+            status=ReadinessStatus.UNAVAILABLE,
+            provider=RunProvider.LOADED_SPARSE,
+            backend=str(getattr(trace, "backend", "unknown")),
+            capability=cast(str | None, raw_descriptor.get("capability")),
+            resolver_records=(),
+            state_sources_available=(),
+            witness_completeness=None,
+            diagnostics=(diagnostic,),
+        )
+        _store_readiness(trace, None, report, None)
+        return report
+    except DescriptorStructuralBoundError as exc:
+        # r53 free_1: a structurally impossible persisted integer (arity not
+        # matching the dense argument leaves, shape contradicting rank, an
+        # int64-overflowing byte product) is refused at PARSE with its frozen
+        # code -- before readiness resolution or any allocation the integer
+        # could scale. The load stays analysis-only; ``.run()`` refuses typed.
+        diagnostic = _diagnostic(
+            exc.code,
+            str(exc),
+            backend=str(getattr(trace, "backend", "unknown")),
+            detection_stage="descriptor_parse",
+            details=(("descriptor_field", exc.field), ("reason", exc.detail)),
         )
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
@@ -1166,11 +1325,21 @@ def _signature_accepts_call(
         signature = inspect.signature(func)
     except (TypeError, ValueError):
         return True
-    placeholders = (object(),) * call.num_positional_args
     argument_paths = (
         *(argument.argument_path for argument in call.tensor_arguments),
         *(argument.argument_path for argument in call.literal_arguments),
     )
+    # r53 free_1: the placeholder count derives from the VALIDATED positional
+    # leaf roots, never directly from the persisted ``num_positional_args``
+    # integer -- parse anchoring guarantees the two agree for any loaded
+    # descriptor, and an in-memory descriptor that bypassed parsing can no
+    # longer scale this allocation with a hostile integer.
+    positional_roots = {
+        path[1]
+        for path in argument_paths
+        if len(path) >= 2 and path[0] == "args" and isinstance(path[1], int)
+    }
+    placeholders = (object(),) * len(positional_roots)
     keyword_names = {
         path[1]
         for path in argument_paths
@@ -1423,30 +1592,45 @@ def _parse_registry_key(value: Mapping[str, Any]) -> FunctionRegistryKey:
 
 
 def _parse_call(value: Mapping[str, Any]) -> RunnableCallDescriptor:
-    """Parse one runnable computational call descriptor."""
+    """Parse one runnable computational call descriptor.
 
+    r53 free_1: the persisted arity integers are anchored to the actual dense
+    argument leaves BEFORE the descriptor is constructed, so no downstream
+    consumer (`_signature_accepts_call`, `_pre_call_contract_checks`,
+    `_execute_sparse_call`) ever scales an allocation by an unvalidated
+    manifest integer.
+    """
+
+    call_id = _string(value, "call_id")
+    num_positional_args = _integer(value, "num_positional_args")
+    num_keyword_args = _integer(value, "num_keyword_args")
+    tensor_arguments = tuple(
+        TensorArgumentRef(
+            argument_path=_path(item, "argument_path"),
+            slot_id=_string(item, "slot_id"),
+        )
+        for item in _mapping_sequence(value, "tensor_arguments")
+    )
+    literal_arguments = tuple(
+        LiteralArgumentRef(
+            argument_path=_path(item, "argument_path"),
+            value=_parse_literal(item["value"]),
+        )
+        for item in _mapping_sequence(value, "literal_arguments")
+    )
+    _validate_call_arity(
+        call_id, num_positional_args, num_keyword_args, tensor_arguments, literal_arguments
+    )
     return RunnableCallDescriptor(
-        call_id=_string(value, "call_id"),
+        call_id=call_id,
         op_labels=_string_tuple(value, "op_labels"),
         registry_id=_string(value, "registry_id"),
         dispatch_kind=cast(Any, _string(value, "dispatch_kind")),
         argument_names=_string_tuple(value, "argument_names"),
-        num_positional_args=_integer(value, "num_positional_args"),
-        num_keyword_args=_integer(value, "num_keyword_args"),
-        tensor_arguments=tuple(
-            TensorArgumentRef(
-                argument_path=_path(item, "argument_path"),
-                slot_id=_string(item, "slot_id"),
-            )
-            for item in _mapping_sequence(value, "tensor_arguments")
-        ),
-        literal_arguments=tuple(
-            LiteralArgumentRef(
-                argument_path=_path(item, "argument_path"),
-                value=_parse_literal(item["value"]),
-            )
-            for item in _mapping_sequence(value, "literal_arguments")
-        ),
+        num_positional_args=num_positional_args,
+        num_keyword_args=num_keyword_args,
+        tensor_arguments=tensor_arguments,
+        literal_arguments=literal_arguments,
         output_slot_ids=_string_tuple(value, "output_slot_ids"),
         parent_call_ids=_string_tuple(value, "parent_call_ids"),
         is_inplace=_boolean(value, "is_inplace"),
@@ -1466,8 +1650,20 @@ def _parse_slot(value: Mapping[str, Any]) -> TensorSlotDescriptor:
     version_of = value.get("version_of")
     producer_slot_id = value.get("producer_slot_id")
     device_index = value.get("device_index")
+    slot_id = _string(value, "slot_id")
+    shape = tuple(_integer_item(item, "shape") for item in _sequence(value, "shape"))
+    rank = _integer(value, "rank")
+    # r47 secD_1/secF_1: the tensor-slot dtype is attacker-controlled. Parse-validate it against
+    # the live dtype table (closed vocabulary, like the ambient/autocast dtypes) so a hazardous
+    # ``"onnx"`` / ``"_dynamo"`` / ``"has_cuda"`` slot-dtype is refused at PARSE -- before the
+    # ``.run()`` random-initializer would resolve it -- via ``torch_attr`` (no lazy import).
+    dtype = _validated_dtype_literal("tensor_slots.dtype", _string(value, "dtype"))
+    # r53 free_1: anchor the persisted shape/rank BEFORE the descriptor exists, so
+    # the ``.run()`` random role-initializer's ``torch.empty(slot.shape)`` can never
+    # be scaled by a structurally impossible manifest integer.
+    _validate_slot_shape(slot_id, shape, rank, dtype)
     return TensorSlotDescriptor(
-        slot_id=_string(value, "slot_id"),
+        slot_id=slot_id,
         role=TensorSlotRole(_string(value, "role")),
         use_sites=tuple(
             TensorUseSite(
@@ -1476,13 +1672,9 @@ def _parse_slot(value: Mapping[str, Any]) -> TensorSlotDescriptor:
             )
             for item in _mapping_sequence(value, "use_sites")
         ),
-        shape=tuple(_integer_item(item, "shape") for item in _sequence(value, "shape")),
-        # r47 secD_1/secF_1: the tensor-slot dtype is attacker-controlled. Parse-validate it against
-        # the live dtype table (closed vocabulary, like the ambient/autocast dtypes) so a hazardous
-        # ``"onnx"`` / ``"_dynamo"`` / ``"has_cuda"`` slot-dtype is refused at PARSE -- before the
-        # ``.run()`` random-initializer would resolve it -- via ``torch_attr`` (no lazy import).
-        dtype=_validated_dtype_literal("tensor_slots.dtype", _string(value, "dtype")),
-        rank=_integer(value, "rank"),
+        shape=shape,
+        dtype=dtype,
+        rank=rank,
         device_type=_string(value, "device_type"),
         device_index=None if device_index is None else _integer_item(device_index, "device_index"),
         mutable=_boolean(value, "mutable"),

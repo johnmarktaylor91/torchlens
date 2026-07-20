@@ -334,6 +334,42 @@ input-conditional at run time, not a static descriptor flag.
 
 ## 5. Producer preflight and no-payload invariant
 
+### Load-side structural integer anchoring (r53 free_1)
+
+The load-side parser anchors every persisted descriptor integer that can scale an allocation to the
+structure it must describe, BEFORE readiness resolution, signature binding, state staging, or any
+allocation whose size is a function of that integer. This bounds the whole "a parsed integer scales
+an allocation" class at the parse layer rather than at each individual allocation site, so a hostile
+`manifest.json` integer (`num_positional_args=1e10`, `shape=[1e9,1e9]`) can never drive an
+80 GB-8 EB single-shot allocation on the default-untrusting `tl.load(path)` / `tl.load(path).run(...)`
+path.
+
+Per-call arity anchoring: `num_positional_args` and `num_keyword_args` are non-negative;
+`num_positional_args` equals the count of distinct first-level positional argument roots `("args", i)`,
+which are dense over `[0, num_positional_args)` (verified by an allocation-free length/min/max
+pigeonhole, never by materializing `set(range(n))`); `num_keyword_args` equals the count of distinct
+first-level keyword argument names; every argument path is rooted at `args`/`kwargs` with a
+non-negative integer or string first component. These are load-side anchors of facts the producer
+already guarantees (the run-time tripwire has always required exactly this dense arity), so they
+never over-trigger on a producible artifact.
+
+Per-slot shape anchoring: `rank == len(shape)` with `rank >= 0` and `rank` within a structural
+ceiling (64, which no real tensor exceeds); every dimension is non-negative; and the total byte
+product `prod(shape) * itemsize(dtype)` is computed in bounded Python integers and must fit signed
+64-bit (torch storage sizes are int64 quantities). There is deliberately NO absolute byte cap at
+parse: real multi-GiB state slots (large-model embeddings) must keep loading; run-preparation
+magnitude gating is the allocation preflight (section 7), and embedded-payload slots stay
+value-anchored downstream by the strict binder and the safetensors header.
+
+Structural violations surface as the frozen `call_arity_mismatch` (arity) and `state_shape_mismatch`
+(shape/rank/product) codes at detection stage `descriptor_parse`, degrading the load to
+analysis-only with the diagnostic intact -- the same analysis-only disposition as `context_field_invalid`.
+The `.tlspec` manifest JSON schema additionally declares `minimum: 0` on the arity, rank, and shape
+integers; the parser stays authoritative for the density and product cross-checks the schema cannot
+express.
+
+### Preflight rejection rules
+
 Preflight is whole-graph and fail-closed. After diagnostic failure a producer may write ordinary
 analysis output but must not write runnable capability. It rejects when:
 
@@ -594,6 +630,23 @@ observe the bytes (the ambient-apply guards remain as a second belt). Device-UNA
 CUDA artifact on a CPU-only host) deliberately reuses `run_capability_unavailable` -- it is a
 runtime capability fact, not a new class -- as a readiness diagnostic at detection stage
 `readiness_device_capability` naming the slot and device.
+
+Host allocation infeasibility (r53 free_1) likewise reuses `run_capability_unavailable` -- it is
+the same "this host cannot execute this artifact" runtime capability fact, not a new class -- as a
+run-preparation diagnostic at detection stage `state_allocation_preflight` naming the target device
+and the per-device required and available byte totals. Before random role initialization allocates
+any slot, the byte total of the slots that fall to `torchlens_role_init_v2` is summed per target
+device (once per alias group) and compared against a never-under-estimating live budget: the target
+CUDA device's free memory plus the caching allocator's reusable reserve via `torch.cuda.mem_get_info`;
+for host-backed devices the available host memory plus free swap (`psutil`, else `/proc/meminfo`
+`MemAvailable + SwapFree`); else a static 1 TiB defense ceiling. A total above the budget could
+never have been allocated, so refusing it typed can never over-trigger -- it strictly replaces the
+`MemoryError`/OOM-kill the raw allocator would otherwise raise, and a legitimate large-model slot
+(there is NO static per-slot byte cap) is never refused. The refusal fires before the first
+allocation; a residual allocator failure inside staging is wrapped into the same typed diagnostic,
+never surfaced as a raw allocator error. `call_arity_mismatch` and `state_shape_mismatch`
+additionally originate at detection stage `descriptor_parse` (section 5), degrading the load to
+analysis-only with the diagnostic intact.
 
 `callable_moved_or_renamed` is a successful alias diagnostic. `runtime_signature_drift` rolls back
 but is compatibility failure, not path divergence. `semantic_drift` comes only from the independent

@@ -2219,9 +2219,19 @@ def _pre_call_contract_checks(
         for path in referenced_paths
         if len(path) >= 2 and path[0] == "kwargs" and isinstance(path[1], str)
     }
-    arity_ok = positional_indices == set(range(call.num_positional_args)) and (
-        len(keyword_names) == call.num_keyword_args
+    # r53 free_1: allocation-free dense pigeonhole. A set of nonnegative ints
+    # equals ``set(range(n))`` iff it has exactly ``n`` members spanning
+    # ``[0, n-1]`` -- checked WITHOUT materializing ``set(range(n))`` from the
+    # persisted integer, so an in-memory descriptor bypassing parse anchoring
+    # can no longer scale this tripwire into an allocation bomb. (A negative
+    # ``n`` now fails the check outright; previously ``set(range(-n))`` was
+    # empty and vacuously matched an empty leaf set.)
+    n_positional = call.num_positional_args
+    positional_dense = len(positional_indices) == n_positional and (
+        n_positional == 0
+        or (min(positional_indices) == 0 and max(positional_indices) == n_positional - 1)
     )
+    arity_ok = positional_dense and len(keyword_names) == call.num_keyword_args
     checks = (
         _contract_check(
             f"call_dispatch:{call.call_id}",

@@ -146,8 +146,24 @@
           }
         },
         "callable_registry": {"type": "array"},
-        "calls": {"type": "array"},
-        "tensor_slots": {"type": "array"},
+        "calls": {
+          "type": "array",
+          "items": {
+            "properties": {
+              "num_positional_args": {"minimum": 0},
+              "num_keyword_args": {"minimum": 0}
+            }
+          }
+        },
+        "tensor_slots": {
+          "type": "array",
+          "items": {
+            "properties": {
+              "rank": {"minimum": 0},
+              "shape": {"items": {"minimum": 0}}
+            }
+          }
+        },
         "control_witnesses": {"type": "array"},
         "rng_profile": {
           "type": "object",
