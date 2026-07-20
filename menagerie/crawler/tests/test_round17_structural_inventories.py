@@ -1907,6 +1907,38 @@ def test_round21_conformance_workflow_and_reversion_inventory_is_exact() -> None
     assert [case["reversion_id"] for case in payload["cases"]] == payload[
         "deliberate_reversion_ids"
     ]
+    cases_by_id = {case["reversion_id"]: case for case in payload["cases"]}
+    assert all("proof_nodes" in case and "proof_node" not in case for case in cases_by_id.values())
+    assert cases_by_id["D02"]["proof_nodes"] == [
+        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::"
+        "test_round21_environment_unit_matrix[E02]",
+        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::"
+        "test_round21_environment_unit_matrix[E03]",
+    ]
+    assert cases_by_id["D17"]["proof_nodes"] == [
+        "menagerie/crawler/tests/test_round21_transport_composition.py::"
+        "test_round21_closed_transport_capability_awards_and_rejects_unlisted_library",
+        "menagerie/crawler/tests/test_round21_ci_composition.py::"
+        "test_round21_macos_committed_lock_seatbelt_award_and_denial",
+    ]
+    assert cases_by_id["D18"]["proof_nodes"] == [
+        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
+        "test_round21_handoff_authority_identity_matrix[H02]"
+    ]
+    assert cases_by_id["D19"]["proof_nodes"] == [
+        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
+        "test_round21_handoff_authority_identity_matrix[H03]",
+        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
+        "test_round21_handoff_authority_identity_matrix[H04]",
+        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
+        "test_round21_handoff_authority_identity_matrix[H01]",
+    ]
+    assert all(
+        "test_round21_conformance_registry_is_total_and_executed"
+        not in "\n".join(case["proof_nodes"])
+        for reversion_id, case in cases_by_id.items()
+        if reversion_id != "D28"
+    )
     assert set(ROUND21_VS11_PROOF_REGISTRY) == {
         "P01",
         "T01",
