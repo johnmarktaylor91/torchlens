@@ -320,6 +320,9 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_CUDA_MATMUL_TF32": tc.HAS_CUDA_MATMUL_TF32,
         "HAS_CUDNN_FLAGS": tc.HAS_CUDNN_FLAGS,
         "HAS_SDP_TOGGLES": tc.HAS_SDP_TOGGLES,
+        # r53 hon_1: the global uninitialized-memory fill knob is an ambient
+        # execution-context knob, feature-detected and surfaced like the others.
+        "HAS_FILL_UNINITIALIZED_MEMORY": tc.HAS_FILL_UNINITIALIZED_MEMORY,
         "AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED": tc.AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED,
     }
 

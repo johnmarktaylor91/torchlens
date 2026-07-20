@@ -199,10 +199,25 @@ live outside the sparse core.
 `AmbientExecutionContext` (one per descriptor, capture-scoped) records exactly: `default_dtype`,
 `default_device`, `float32_matmul_precision`, `deterministic_algorithms` (+`_warn_only`),
 `cuda_matmul_allow_tf32`, `cudnn_allow_tf32`, `cudnn_deterministic`, `cudnn_benchmark`,
-`cudnn_enabled`, `flash_sdp_enabled`, `mem_efficient_sdp_enabled`, `math_sdp_enabled`, and
+`cudnn_enabled`, `flash_sdp_enabled`, `mem_efficient_sdp_enabled`, `math_sdp_enabled`,
+`grad_enabled`, `inference_mode`, `fill_uninitialized_memory`, and
 `attestation_ineligible_context`. Every control the producing runtime exposes is recorded
 affirmatively (explicit `false`); `null` means only "the producer runtime did not expose this
 control" (feature-detected through `utils/_torch_compat.py` with named `HAS_*` flags).
+
+`AmbientExecutionContext` additionally records `grad_enabled` (required), `inference_mode`
+(required), and `fill_uninitialized_memory` (feature-detected; `null` when the runtime does
+not expose `torch.utils.deterministic.fill_uninitialized_memory`). The producer records the
+global autograd/inference mode and the deterministic uninitialized-memory fill flag with the
+ambient snapshot. Replay restores the global autograd/inference mode as scoped contexts around
+the whole sparse run; `CallExecutionContext` remains the tighter per-call record. A v2
+descriptor missing these fields refuses at parse (`context_field_invalid`, detection stage
+`context_parse_validation`) and loads analysis-only: absent context is never defaulted, because
+a defaulted grad mode could bless a different-context comparison as `verified`. A Python READ
+of `torch.is_grad_enabled()` / `is_inference_mode_enabled()` is deliberately never witnessed or
+ceilinged: library code reads the flag constantly, and recording plus restoring the global makes
+a fresh-instance replay take the same branch, so a read witness would be a mass over-trigger for
+zero honesty gain.
 
 `attestation_ineligible_context` is the POSITIVE capture-time marking for a nondeterministic
 execution context: `cudnn.benchmark=true`, or a documented CUDA-nondeterministic op (the
@@ -333,6 +348,42 @@ reports `verified` + `attested`; `witness_completeness` stays `complete` because
 input-conditional at run time, not a static descriptor flag.
 
 ## 5. Producer preflight and no-payload invariant
+
+### Load-side structural integer anchoring (r53 free_1)
+
+The load-side parser anchors every persisted descriptor integer that can scale an allocation to the
+structure it must describe, BEFORE readiness resolution, signature binding, state staging, or any
+allocation whose size is a function of that integer. This bounds the whole "a parsed integer scales
+an allocation" class at the parse layer rather than at each individual allocation site, so a hostile
+`manifest.json` integer (`num_positional_args=1e10`, `shape=[1e9,1e9]`) can never drive an
+80 GB-8 EB single-shot allocation on the default-untrusting `tl.load(path)` / `tl.load(path).run(...)`
+path.
+
+Per-call arity anchoring: `num_positional_args` and `num_keyword_args` are non-negative;
+`num_positional_args` equals the count of distinct first-level positional argument roots `("args", i)`,
+which are dense over `[0, num_positional_args)` (verified by an allocation-free length/min/max
+pigeonhole, never by materializing `set(range(n))`); `num_keyword_args` equals the count of distinct
+first-level keyword argument names; every argument path is rooted at `args`/`kwargs` with a
+non-negative integer or string first component. These are load-side anchors of facts the producer
+already guarantees (the run-time tripwire has always required exactly this dense arity), so they
+never over-trigger on a producible artifact.
+
+Per-slot shape anchoring: `rank == len(shape)` with `rank >= 0` and `rank` within a structural
+ceiling (64, which no real tensor exceeds); every dimension is non-negative; and the total byte
+product `prod(shape) * itemsize(dtype)` is computed in bounded Python integers and must fit signed
+64-bit (torch storage sizes are int64 quantities). There is deliberately NO absolute byte cap at
+parse: real multi-GiB state slots (large-model embeddings) must keep loading; run-preparation
+magnitude gating is the allocation preflight (section 7), and embedded-payload slots stay
+value-anchored downstream by the strict binder and the safetensors header.
+
+Structural violations surface as the frozen `call_arity_mismatch` (arity) and `state_shape_mismatch`
+(shape/rank/product) codes at detection stage `descriptor_parse`, degrading the load to
+analysis-only with the diagnostic intact -- the same analysis-only disposition as `context_field_invalid`.
+The `.tlspec` manifest JSON schema additionally declares `minimum: 0` on the arity, rank, and shape
+integers; the parser stays authoritative for the density and product cross-checks the schema cannot
+express.
+
+### Preflight rejection rules
 
 Preflight is whole-graph and fail-closed. After diagnostic failure a producer may write ordinary
 analysis output but must not write runnable capability. It rejects when:
@@ -595,6 +646,23 @@ CUDA artifact on a CPU-only host) deliberately reuses `run_capability_unavailabl
 runtime capability fact, not a new class -- as a readiness diagnostic at detection stage
 `readiness_device_capability` naming the slot and device.
 
+Host allocation infeasibility (r53 free_1) likewise reuses `run_capability_unavailable` -- it is
+the same "this host cannot execute this artifact" runtime capability fact, not a new class -- as a
+run-preparation diagnostic at detection stage `state_allocation_preflight` naming the target device
+and the per-device required and available byte totals. Before random role initialization allocates
+any slot, the byte total of the slots that fall to `torchlens_role_init_v2` is summed per target
+device (once per alias group) and compared against a never-under-estimating live budget: the target
+CUDA device's free memory plus the caching allocator's reusable reserve via `torch.cuda.mem_get_info`;
+for host-backed devices the available host memory plus free swap (`psutil`, else `/proc/meminfo`
+`MemAvailable + SwapFree`); else a static 1 TiB defense ceiling. A total above the budget could
+never have been allocated, so refusing it typed can never over-trigger -- it strictly replaces the
+`MemoryError`/OOM-kill the raw allocator would otherwise raise, and a legitimate large-model slot
+(there is NO static per-slot byte cap) is never refused. The refusal fires before the first
+allocation; a residual allocator failure inside staging is wrapped into the same typed diagnostic,
+never surfaced as a raw allocator error. `call_arity_mismatch` and `state_shape_mismatch`
+additionally originate at detection stage `descriptor_parse` (section 5), degrading the load to
+analysis-only with the diagnostic intact.
+
 `callable_moved_or_renamed` is a successful alias diagnostic. `runtime_signature_drift` rolls back
 but is compatibility failure, not path divergence. `semantic_drift` comes only from the independent
 live-model oracle and never rebaselines an artifact. A malformed `torch.device(...)` literal
@@ -666,11 +734,20 @@ path_faithfulness: PathFaithfulness
 first_mismatch: RunnableDiagnostic | None
 numeric_attestation: NumericAttestationStatus
 poisoned: bool
+nondeterministic_sources: tuple[str, ...]
 ```
 
 `ContractCheck` is `name: str`, `passed: bool`, `diagnostic: RunnableDiagnostic | None`, ordered by
 execution. Random reports name the policy and every random-filled slot, including alias members,
 and never call those values original/recovered/reconstructed/trained/capture-time weights.
+
+"Deterministic raw selection" excludes seeded-RNG products and uninitialized-memory family
+products (section 11) whose bytes were not fully overwritten by a total writer, unless the
+recorded ambient context proves deterministic fill (`deterministic_algorithms` true and
+`fill_uninitialized_memory` not false). `RunReport.nondeterministic_sources` is the closed,
+sorted, deduplicated declared-source vocabulary `seeded_rng | host_rng | uninitialized_alloc`,
+derived only by the single report finalizer; it distinguishes a declared-nondeterministic
+path-only `verified` from a deterministic one and never alters verdict semantics.
 
 ## 9. Runtime API and state lifecycle
 
@@ -910,18 +987,27 @@ seed) reports `unverifiable` + `not_applicable`:
    be class-patched, so the profile-hook receiver typing is the mechanism -- an externally-held
    generator drawn on the owner or an in-window helper thread is caught, including the
    hon1_1/corr2_2 cross-thread case), belted by a cheap thread-independent before/after state
-   digest of any generator or bare BitGenerator the MODEL itself holds, swept over submodule
-   attributes through standard Python container PROTOCOLS (not a fixed concrete container list;
-   r45 hon1_1): every `collections.abc.Mapping` contributes BOTH its keys/values AND, when the
-   mapping object is a custom (non-stdlib) inert holder, its own `__dict__`/`__slots__` values; every
-   non-leaf `collections.abc.Collection` likewise contributes BOTH its elements AND, when the
-   collection object is a custom (non-stdlib) inert holder, its own `__dict__`/`__slots__` values
-   (deque, OrderedDict, Counter, defaultdict, ChainMap, UserList/UserDict, namedtuple, and any custom
-   Sequence/Mapping, including a generator held as `self.rng` on a container SUBCLASS -- r47 hon1_1);
-   safe queue objects
-   contribute their inspectable storage snapshot (`queue.Queue`/`LifoQueue`/`PriorityQueue` via a
-   non-mutating read of the internal deque); inert custom holders contribute `__dict__` /
-   `__slots__` values (`self.holder.rng`), never invoking a property or `__getattr__` (r42 corr2_1).
+   digest of any generator or bare BitGenerator the MODEL itself holds. The model inventory walks
+   every reference edge that can be followed WITHOUT executing user-defined code (r53 corr/F1):
+   instance `__dict__`/`__slots__` surfaces (never invoking a property or `__getattr__` --
+   r42 corr2_1), Mapping/Collection container protocols (every `collections.abc.Mapping`
+   contributes BOTH its keys/values AND, when the mapping object is a custom (non-stdlib) inert
+   holder, its own `__dict__`/`__slots__` values; every non-leaf `collections.abc.Collection`
+   likewise contributes BOTH its elements AND its own custom-subclass `__dict__`/`__slots__`
+   values -- deque, OrderedDict, Counter, defaultdict, ChainMap, UserList/UserDict, namedtuple,
+   and any custom Sequence/Mapping, including a generator held as `self.rng` on a container
+   SUBCLASS; r45/r47 hon1_1), inspectable queue buffers (`queue.Queue`/`LifoQueue`/`PriorityQueue`
+   via a non-mutating read of the internal deque), class-MRO `__dict__` surfaces of user-defined
+   classes (raw mappingproxy reads -- the descriptor protocol never fires; torch/stdlib/numpy
+   implementation classes are trusted leaves), weak references (`weakref.ref`/`WeakMethod`
+   referents through the base C dereference, weak containers through the container protocols),
+   and callable interiors (`__closure__` cells, `__defaults__`/`__kwdefaults__`,
+   `functools.partial` `func`/`args`/`keywords`, `property` `fget`/`fset`/`fdel`,
+   `staticmethod`/`classmethod` `__func__`, bound-method `__func__`/`__self__`, and callable
+   instances' own attribute surfaces), all via base-type descriptor reads immune to hostile
+   subclass shadowing. It never invokes properties, descriptors, `__getattr__`, or arbitrary
+   callables. Every reachable `nn.Module` -- registered or held UNREGISTERED behind any walked
+   edge -- is descended through the same surfaces (r51 hon1_1).
    Descent is gated on `collections.abc.Collection` (Sized), so a one-shot iterator / generator
    attribute is NEVER consumed. An opaque queue with no non-mutating payload snapshot is SKIPPED only
    when it is non-mutatingly PROVABLY EMPTY at inventory time (`empty()` is exactly `True`, else
@@ -1000,21 +1086,15 @@ call surface, including C-mediated indirect calls of held builtins (a
 builtin); (iii) legacy `RandomState()` C-level CONSTRUCTION entropy (its DRAWS stay
 digest/profile-witnessed); (iv) an externally-held generator drawn on a PRE-EXISTING
 (already-running, non-owner, non-hooked) thread -- which `threading.setprofile` cannot reach on
-Python <= 3.11 and which the model-attribute digest does not cover because the generator is NOT
-reachable from the model inventory (not a model attribute, nor inside any standard-protocol
-container -- Mapping / non-leaf Collection / a safe queue's inspectable buffer / an inert custom
-holder of one; r42 corr2_1 + r45 hon1_1 extended the sweep to descend by container protocol, so a
-model-held generator behind `self.holder.rng`, a `deque`, a `ChainMap`, or a `queue.Queue` is now
-witnessed on any thread; r47 hon1_1 further descends a container SUBCLASS's own `__dict__`/`__slots__`,
-so `self.rng` on a `Sequence`/`Mapping`/`UserList`/`UserDict` subclass is witnessed**; r51 hon1_1
-stops treating `nn.Module` as a hard inventory leaf and descends every reachable `nn.Module`'s own
-`__dict__`/`__slots__` (registered submodules AND submodules held UNREGISTERED in a plain attribute,
-`list`, `dict`, nested container, or custom holder -- the "modules must live in an `nn.ModuleList`"
-footgun), so a numpy Generator behind an unregistered submodule is witnessed on any thread**, and
-only a NON-EMPTY OPAQUE queue's contents remain a conservative fail-closed residual, never a false
-negative),
-plus a bare one-shot iterator attribute which cannot be inspected without
-consuming it -- of the same class
+Python <= 3.11 -- that is reachable only BY EXECUTING USER CODE: a property/descriptor `__get__`
+body, `__getattr__`, or a callable's return value. Every INERTLY-followable reference edge IS
+walked by the model inventory (r53 corr/F1; the full edge vocabulary in item 2 above), so
+descriptor-held, weakref-held, class-attribute, closure/default/kwdefault/partial/property-interior,
+and callable-instance holders -- like the earlier container-protocol, container-subclass, and
+unregistered-`nn.Module` holders (r42/r45/r47/r51) -- are all witnessed on any thread; only a
+NON-EMPTY OPAQUE queue's contents remain a conservative fail-closed residual, never a false
+negative. Also of this class: a bare one-shot iterator attribute, which cannot be inspected
+without consuming it -- the same class
 as the adversarial draw+`state`-restore a cooperative model does not exercise; (v) a
 held-reference module-builtin call on a PRE-EXISTING (non-hooked) thread -- the module-attr
 patched spelling stays thread-independent; and (vi) a held-reference implicit-now converter
@@ -1027,6 +1107,41 @@ A pruned `.data`-alias BOOL control predicate whose leaf origins resolve positiv
 original state stays `verified` and a changed staged state restales the witness -- the pre-r37
 "unattributable pruned bool" fail-closed exception no longer applies to positively-resolved
 cases.
+
+### Uninitialized-memory value sources (r53 hon_2)
+
+The uninitialized-memory op family -- the `empty` factory family (`empty`, `empty_like`,
+`empty_permuted`, `empty_strided`, `new_empty`, `new_empty_strided`, and their torch-level
+spellings including `empty_quantized`) plus a `resize_`/`resize_as_` that GROWS its receiver
+beyond its pre-call element count -- produces bytes that are not a function of the recorded
+computation. Family products (and anything value-derived from them) are nondeterministic value
+sources of kind `uninitialized_alloc`, UNLESS the governing ambient context records
+`deterministic_algorithms` true with `fill_uninitialized_memory` not false (torch then fills
+deterministically), or the product has zero elements. Taint propagates along the value DAG and
+is removed exactly by a TOTAL WRITE of the tainted bytes independent of their prior content:
+an `out=` destination, `copy_`, `zero_`, `fill_`, or an RNG fill (which replaces the
+`uninitialized_alloc` taint with the RNG source classification). A partial or unprovable
+in-place write propagates taint (unprovable is never a proof of cleanliness). Consequences,
+in parity with seeded-RNG sources at every consumer: a control fact (scalar-bool, conditional
+arm, loop predicate, tensor-derived scalar witness) whose source is tainted ceilings the run
+`unverifiable` -- including a family op whose control-driving chain was orphan-pruned from the
+descriptor, which the producer records through the pruned-nondeterministic-control side table;
+an archived activation or output slot reached by taint makes numeric attestation
+`not_applicable` upfront (never a contradictory `numeric_attestation_failed`); a byte mismatch
+on an UNTAINTED slot still raises `numeric_attestation_failed`. A tainted value that reaches
+only the model output leaves path faithfulness `verified` (path-only) and is declared through
+`RunReport.nondeterministic_sources`. Escape attribution treats `uninitialized_alloc` origins
+as unattributable (fail-closed), like raw seeded-RNG output.
+
+No `torch.Tag` marks uninitialized allocation, so the family is a closed name table in ONE
+shared predicate block (`utils/rng.py`) consumed by all three recognition layers (the load-side
+value-source classifier, the producer origin ledger, and the pruned-orphan control walk) and
+defended by an aten-namespace drift meta-test: a new `empty*`/`resize*` aten name that is
+neither tabled as family nor allowlisted as justified-non-family is a failing test. A
+partially-written uninitialized buffer is an accepted conservatism: a slice-filled cache that
+in fact fully covers its bytes reports attestation `not_applicable` (and `unverifiable` if
+branched on) rather than proving interval coverage -- never a false `verified`; interval-
+coverage refinement is deferred until a real-model sighting.
 
 ### Cross-thread captured-tensor qualification (r43)
 
@@ -1148,7 +1263,12 @@ by construction.
 
 Replay equivalence is EXPLICIT, never ambient: the per-call `CallExecutionContext` and the
 capture-scoped `AmbientExecutionContext` are recorded explicitly and restored transactionally
-(section 4). The consciously documented residual list -- contexts NOT captured, by decision --
+(section 4). The global autograd/inference mode (`grad_enabled`, `inference_mode`) is part of
+the recorded ambient context (r53 hon_1): oracle 1 is a fresh run from declared state UNDER THE
+RECORDED AMBIENT CONTEXT, including the global autograd/inference mode. A fresh run under a
+different ambient mode (for example the same capture re-evaluated inside `torch.no_grad()` when
+`grad_enabled=true` was recorded) is an out-of-declared-context comparison, not a divergence.
+The consciously documented residual list -- contexts NOT captured, by decision --
 is: thread/intra-op parallelism configuration (can change reduction bytes; forcing
 `set_num_threads` is a process-global hazard, so attestation is same-parallelism-config by
 contract); environment identity (CPU ISA dispatch, library builds, GPU architecture/driver,

@@ -41,6 +41,10 @@ from .ir.container import (
 )
 from .utils.rng import (
     aten_qualname_is_seeded_rng,
+    deterministic_fill_governs,
+    qualname_is_uninit_growth_resize,
+    qualname_is_uninit_total_writer,
+    qualname_is_uninitialized_alloc,
     restore_host_rng,
     snapshot_host_rng,
 )
@@ -63,6 +67,7 @@ from .runnable import (
     LiteralSlice,
     LiteralTorchSymbol,
     LiteralTupleKey,
+    NONDETERMINISTIC_SOURCE_VOCABULARY,
     NonTensorLiteral,
     NumericAttestationStatus,
     PathFaithfulness,
@@ -251,6 +256,7 @@ def _finalize_provider_run(
     provisional_mismatch: RunnableDiagnostic | None,
     numeric_attestation: NumericAttestationStatus,
     divergence_policy: DivergencePolicy,
+    nondeterministic_sources: Iterable[str] = (),
 ) -> RunResult:
     """THE single provider settlement finalizer (r39 CLASS B sparse<->live parity immunizer).
 
@@ -280,6 +286,7 @@ def _finalize_provider_run(
         path_faithfulness=path_faithfulness,
         first_mismatch=mismatch,
         numeric_attestation=numeric_attestation,
+        nondeterministic_sources=nondeterministic_sources,
     )
     return RunResult(output=output, trace=fork, report=report)
 
@@ -454,6 +461,17 @@ def _execute_loaded_sparse_transaction(
         descriptor, slot_values, witness_source_snapshots
     )
     unbound_state_escape_stale = _unbound_state_escape_stale(descriptor, slot_values)
+    # r53 hon_2: ONE load-side classifier settles declared nondeterministic value
+    # sources; the branch ceiling, the attestation gate, and the report signal
+    # all consult it (the r52 raise-vs-not_applicable inconsistency is
+    # structurally unrepresentable).
+    value_source_taint = _nondeterministic_value_sources(descriptor)
+    nondeterministic_control_source = _uninit_taint_reaches(
+        value_source_taint, _control_witness_source_slot_ids(descriptor)
+    )
+    declared_nondeterministic_sources = _declared_nondeterministic_sources(
+        descriptor, value_source_taint
+    )
     output_container_spec = _output_container_spec(fork)
     container_reconstruction_lossy = _container_spec_reconstruction_lossy(output_container_spec)
     output_not_reproduced = _output_not_reproduced(descriptor, output_container_spec)
@@ -475,6 +493,7 @@ def _execute_loaded_sparse_transaction(
         output_not_reproduced=output_not_reproduced,
         mode_sensitive_op_unwitnessed=mode_sensitive_op_unwitnessed,
         input_alias_unresolved=input_alias_unresolved,
+        nondeterministic_control_source=nondeterministic_control_source,
     )
     eligibility_verdict = provisional_verdict
     inherited_status = fork.__dict__.get("_runnable_path_faithfulness")
@@ -512,6 +531,7 @@ def _execute_loaded_sparse_transaction(
         provisional_mismatch=provisional_mismatch,
         numeric_attestation=numeric_attestation,
         divergence_policy=divergence_policy,
+        nondeterministic_sources=declared_nondeterministic_sources,
     )
 
 
@@ -2219,9 +2239,19 @@ def _pre_call_contract_checks(
         for path in referenced_paths
         if len(path) >= 2 and path[0] == "kwargs" and isinstance(path[1], str)
     }
-    arity_ok = positional_indices == set(range(call.num_positional_args)) and (
-        len(keyword_names) == call.num_keyword_args
+    # r53 free_1: allocation-free dense pigeonhole. A set of nonnegative ints
+    # equals ``set(range(n))`` iff it has exactly ``n`` members spanning
+    # ``[0, n-1]`` -- checked WITHOUT materializing ``set(range(n))`` from the
+    # persisted integer, so an in-memory descriptor bypassing parse anchoring
+    # can no longer scale this tripwire into an allocation bomb. (A negative
+    # ``n`` now fails the check outright; previously ``set(range(-n))`` was
+    # empty and vacuously matched an empty leaf set.)
+    n_positional = call.num_positional_args
+    positional_dense = len(positional_indices) == n_positional and (
+        n_positional == 0
+        or (min(positional_indices) == 0 and max(positional_indices) == n_positional - 1)
     )
+    arity_ok = positional_dense and len(keyword_names) == call.num_keyword_args
     checks = (
         _contract_check(
             f"call_dispatch:{call.call_id}",
@@ -2304,6 +2334,9 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
         "flash_sdp_enabled": ambient.flash_sdp_enabled,
         "mem_efficient_sdp_enabled": ambient.mem_efficient_sdp_enabled,
         "math_sdp_enabled": ambient.math_sdp_enabled,
+        # r53 hon_2: deterministic uninit-memory fill restores transactionally
+        # (setter-based) so a deterministic+fill capture NaN-fills identically.
+        "fill_uninitialized_memory": ambient.fill_uninitialized_memory,
     }
     saved = snapshot_ambient_execution_context()
     # r37 R4 (corr2-3/corr2-2): the recorded DEFAULT DEVICE is entered as a SCOPED
@@ -2334,7 +2367,24 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
             pass
         raise _context_unavailable_error("ambient_context", str(exc)) from exc
     try:
-        with device_scope:
+        # r53 hon_1: the recorded GLOBAL autograd/inference mode is entered as
+        # SCOPED contexts around the whole sparse run (outside every per-call
+        # context), so a Python branch on ``torch.is_grad_enabled()`` /
+        # ``is_inference_mode_enabled()`` inside replayed code observes the
+        # SAME global a fresh instance under the recorded ambient would --
+        # never the caller's ambient mode. Both nest legally inside a caller's
+        # ``no_grad()``/``inference_mode()`` and restore the caller's exact
+        # thread-local mode on every exit path by construction (the same
+        # correct-by-construction posture as the scoped default device above).
+        # A Python READ of either flag is deliberately never ceilinged:
+        # library code reads them constantly, and record+restore makes the
+        # branch deterministic, so a witness would be a mass over-trigger for
+        # zero honesty gain.
+        with (
+            device_scope,
+            torch.set_grad_enabled(bool(ambient.grad_enabled)),
+            torch.inference_mode(bool(ambient.inference_mode)),
+        ):
             yield
     finally:
         apply_ambient_execution_context(saved)
@@ -3787,6 +3837,7 @@ def _path_faithfulness(
     output_not_reproduced: bool = False,
     mode_sensitive_op_unwitnessed: bool = False,
     input_alias_unresolved: bool = False,
+    nondeterministic_control_source: bool = False,
 ) -> tuple[PathFaithfulness, RunnableDiagnostic | None]:
     """Classify exact three-state path faithfulness after all honesty checks."""
 
@@ -3827,6 +3878,13 @@ def _path_faithfulness(
         # the single recorded branch may not be the one a fresh seeded call takes,
         # so the honest ceiling is UNVERIFIABLE, never a false VERIFIED.
         return PathFaithfulness.UNVERIFIABLE, None
+    if nondeterministic_control_source:
+        # r53 hon_2: a recorded control fact (scalar-bool, loop predicate, or a
+        # tensor->host escape source) derives from surviving uninitialized-memory
+        # taint -- the taken branch is a function of allocator garbage no seed
+        # governs, so NO replay is reproducible. Exact parity with the seeded
+        # RNG-driven branch ceiling: UNVERIFIABLE, never a false VERIFIED.
+        return PathFaithfulness.UNVERIFIABLE, None
     if tensor_derived_scalar_stale:
         # A tensor->Python escape baked a derived constant into a downstream op or
         # steered pure-Python control flow; the source slot recomputed different
@@ -3853,6 +3911,7 @@ def _run_report(
     path_faithfulness: PathFaithfulness,
     first_mismatch: RunnableDiagnostic | None,
     numeric_attestation: NumericAttestationStatus,
+    nondeterministic_sources: Iterable[str] = (),
 ) -> RunReport:
     """Build the settled run-report surface -- the ONE report finalizer (r37 corr2-5).
 
@@ -3862,6 +3921,8 @@ def _run_report(
     asserts ``attested`` structurally implies a verified, unpoisoned path, so no
     provider can emit an internally contradictory report. Direct ``RunReport(``
     construction outside this finalizer is forbidden (source-scan meta-test).
+    ``nondeterministic_sources`` (r53 F4) is normalized (sorted, deduplicated)
+    and closed-vocabulary-checked HERE and only here.
     """
 
     poisoned = path_faithfulness is not PathFaithfulness.VERIFIED
@@ -3871,6 +3932,13 @@ def _run_report(
         raise RuntimeError(
             "Internal invariant violation: numeric_attestation=attested requires "
             f"a verified, unpoisoned path (got {path_faithfulness.value!r})."
+        )
+    declared_sources = tuple(sorted(set(nondeterministic_sources)))
+    unknown_sources = set(declared_sources) - NONDETERMINISTIC_SOURCE_VOCABULARY
+    if unknown_sources:
+        raise RuntimeError(
+            "Internal invariant violation: nondeterministic sources outside the "
+            f"closed vocabulary: {sorted(unknown_sources)!r}."
         )
     return RunReport(
         readiness=readiness,
@@ -3883,6 +3951,7 @@ def _run_report(
         first_mismatch=first_mismatch,
         numeric_attestation=numeric_attestation,
         poisoned=poisoned,
+        nondeterministic_sources=declared_sources,
     )
 
 
@@ -4381,8 +4450,8 @@ def _raw_activation_slot_ids(descriptor: SparseRunDescriptor) -> frozenset[str]:
     return frozenset(member.slot_id for member in layer.members if member.field == "out")
 
 
-def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> bool:
-    """Return whether replay actually consumes non-reproducible RNG.
+def _descriptor_has_seeded_rng(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether replay actually consumes non-reproducible seeded RNG.
 
     A captured RNG source slot always taints the replay. For seeded-RNG ATen
     ops the answer is keyed off *actual RNG consumption*, not the op name: a
@@ -4409,6 +4478,257 @@ def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> boo
         return True
     registry = {entry.registry_id: entry for entry in descriptor.callable_registry}
     return any(_call_consumes_seeded_rng(call, registry) for call in descriptor.calls)
+
+
+def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether declared nondeterminism reaches the byte-exact attestation claim.
+
+    Seeded-RNG consumption anywhere in the replay keeps its historical
+    presence-based ineligibility (``_descriptor_has_seeded_rng``). r53 hon_2
+    additionally consults the uninitialized-memory value-source classifier
+    (``_nondeterministic_value_sources``): surviving ``uninitialized_alloc``
+    taint that reaches an archived-activation member slot or a model output
+    slot makes the artifact declared-nondeterministic, so numeric attestation
+    is ``not_applicable`` UPFRONT -- never the r52 contradictory
+    ``numeric_attestation_failed`` raise on bytes the recorded computation
+    never determined. Fully sanitized flows (``empty`` then a total write) and
+    dead tainted intermediates keep the run attestation-eligible, and a byte
+    mismatch on an UNTAINTED slot still raises (the tripwire is untouched).
+    """
+
+    if _descriptor_has_seeded_rng(descriptor):
+        return True
+    taint = _nondeterministic_value_sources(descriptor)
+    if not taint:
+        return False
+    reach: set[str] = {
+        slot.slot_id
+        for slot in descriptor.tensor_slots
+        if slot.role is TensorSlotRole.OUTPUT or slot.output_path is not None
+    }
+    layer = descriptor.payload_layers.activations
+    if isinstance(layer, ActivationPayloadLayerDescriptor):
+        reach.update(member.slot_id for member in layer.members)
+    return _uninit_taint_reaches(taint, reach)
+
+
+_UNINIT_SOURCE_KIND = "uninitialized_alloc"
+_SEEDED_SOURCE_KIND = "seeded_rng"
+_HOST_RNG_SOURCE_KIND = "host_rng"
+
+_UNINIT_SANITIZER_NAMESPACES = frozenset({"torch", "torch.Tensor", "torch.nn.functional"})
+"""Trusted namespaces whose ``out=`` convention is a total destination overwrite."""
+
+
+def _nondeterministic_value_sources(
+    descriptor: SparseRunDescriptor,
+) -> dict[str, frozenset[str]]:
+    """Classify every tensor slot's declared nondeterministic VALUE sources (r53 hon_2).
+
+    THE single load-side choke point for nondeterministic-value recognition: no
+    call site outside this function may re-derive nondeterminism from qualnames
+    (source-scan meta-test). Sources are the uninitialized-memory op family
+    (``empty`` factories; a GROWING ``resize_``/``resize_as_`` decided from the
+    recorded receiver-vs-product element counts) and seeded-RNG products
+    (``RNG_SOURCE`` slots plus actually-consuming seeded calls). Taint
+    propagates along the recorded call schedule: a product inherits the union
+    of its tensor-argument taints, EXCEPT at a total write -- an ``out=``
+    destination or an in-place ``copy_``/``zero_``/``fill_``/RNG-fill receiver
+    -- where the destination's prior taint is dropped and the written version
+    carries only the value-source operands' taint (exact value semantics; the
+    RNG fills replace uninit taint with the seeded classification through the
+    ordinary seeded-consumption rule). A partial or unprovable in-place write
+    propagates (fail closed; r35 unknown-alias precedent). The whole family is
+    clean when the recorded ambient context proves deterministic fill
+    (``deterministic_algorithms`` true and ``fill_uninitialized_memory`` not
+    false) and per-product when the product has zero elements.
+
+    Returns
+    -------
+    dict[str, frozenset[str]]
+        Mapping from slot id to its non-empty declared source-kind set; slots
+        with no declared nondeterministic source are absent.
+    """
+
+    registry = {entry.registry_id: entry for entry in descriptor.callable_registry}
+    slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
+    ambient = descriptor.ambient_context
+    fill_deterministic = deterministic_fill_governs(
+        ambient.deterministic_algorithms, ambient.fill_uninitialized_memory
+    )
+
+    def _slot_numel(slot_id: str) -> int | None:
+        slot = slots.get(slot_id)
+        if slot is None:
+            return None
+        numel = 1
+        for dim in slot.shape:
+            numel *= int(dim)
+        return numel
+
+    taint: dict[str, frozenset[str]] = {
+        slot.slot_id: frozenset({_SEEDED_SOURCE_KIND})
+        for slot in descriptor.tensor_slots
+        if slot.role is TensorSlotRole.RNG_SOURCE
+    }
+    for call in descriptor.calls:
+        entry = registry.get(call.registry_id)
+        namespace = entry.key.namespace if entry is not None else None
+        qualname = entry.key.qualname if entry is not None else None
+        consumes_seeded = _call_consumes_seeded_rng(call, registry)
+        # Total-write destination: exact first-level receiver/out leaf only; a
+        # nested or absent destination path never sanitizes, and an ``out=``
+        # kwarg sanitizes only for trusted torch-namespace callables whose
+        # ``out=`` convention IS a total overwrite (fail closed for customs).
+        dest_slot_id: str | None = None
+        if namespace in _UNINIT_SANITIZER_NAMESPACES:
+            for ref in call.tensor_arguments:
+                if tuple(ref.argument_path) == ("kwargs", "out"):
+                    dest_slot_id = ref.slot_id
+                    break
+        if dest_slot_id is None and qualname_is_uninit_total_writer(namespace, qualname):
+            for ref in call.tensor_arguments:
+                if tuple(ref.argument_path) == ("args", 0):
+                    dest_slot_id = ref.slot_id
+                    break
+        operand_union: set[str] = set()
+        sanitized_union: set[str] = set()
+        for ref in call.tensor_arguments:
+            ref_taint = taint.get(ref.slot_id)
+            if not ref_taint:
+                continue
+            operand_union |= ref_taint
+            if ref.slot_id != dest_slot_id:
+                sanitized_union |= ref_taint
+        produced = sanitized_union if dest_slot_id is not None else operand_union
+        if consumes_seeded:
+            produced = produced | {_SEEDED_SOURCE_KIND}
+        is_uninit_factory = qualname_is_uninitialized_alloc(namespace, qualname)
+        is_growth_resize = qualname_is_uninit_growth_resize(namespace, qualname)
+        receiver_numel: int | None = None
+        if is_growth_resize:
+            receiver_numel = next(
+                (
+                    _slot_numel(ref.slot_id)
+                    for ref in call.tensor_arguments
+                    if tuple(ref.argument_path) == ("args", 0)
+                ),
+                None,
+            )
+        for out_slot_id in call.output_slot_ids:
+            slot_taint = set(produced)
+            if is_uninit_factory:
+                # A factory product's value derives from NO operand: it is pure
+                # allocator garbage (tainted) unless deterministically filled
+                # or empty of elements (both value-constant).
+                out_numel = _slot_numel(out_slot_id)
+                slot_taint = set()
+                if not fill_deterministic and (out_numel is None or out_numel > 0):
+                    slot_taint = {_UNINIT_SOURCE_KIND}
+            elif is_growth_resize and not fill_deterministic:
+                # Shrink/same-size preserves the element prefix (probed clean);
+                # a GROW exposes stale allocator tail bytes. An undecidable
+                # grow fact fails closed to tainted.
+                out_numel = _slot_numel(out_slot_id)
+                if receiver_numel is None or out_numel is None or out_numel > receiver_numel:
+                    slot_taint.add(_UNINIT_SOURCE_KIND)
+            if slot_taint:
+                taint[out_slot_id] = frozenset(slot_taint)
+            else:
+                taint.pop(out_slot_id, None)
+    # Value-identity closure: an OUTPUT (or other alias) slot that no call
+    # produces is wired to its source through ``producer_slot_id``/``version_of``
+    # -- same value, same taint. ONLY call-orphan slots inherit here: a slot a
+    # call produces already carries that call's (possibly deliberately
+    # SANITIZED) taint, and re-unioning its ``version_of`` base would resurrect
+    # exactly the taint a total write removed. Iterate to fixpoint (chains are
+    # short and acyclic by construction).
+    call_produced: set[str] = {
+        out_slot_id for call in descriptor.calls for out_slot_id in call.output_slot_ids
+    }
+    changed = True
+    while changed:
+        changed = False
+        for slot in descriptor.tensor_slots:
+            if slot.slot_id in call_produced:
+                continue
+            inherited: set[str] = set(taint.get(slot.slot_id, frozenset()))
+            before = len(inherited)
+            for link in (slot.producer_slot_id, slot.version_of):
+                if link is not None:
+                    inherited |= taint.get(link, frozenset())
+            if len(inherited) > before:
+                taint[slot.slot_id] = frozenset(inherited)
+                changed = True
+    return taint
+
+
+def _uninit_taint_reaches(taint: Mapping[str, frozenset[str]], slot_ids: Iterable[str]) -> bool:
+    """Return whether surviving uninitialized-memory taint reaches any listed slot."""
+
+    return any(_UNINIT_SOURCE_KIND in taint.get(slot_id, frozenset()) for slot_id in slot_ids)
+
+
+def _control_witness_source_slot_ids(descriptor: SparseRunDescriptor) -> frozenset[str]:
+    """Return every slot whose VALUE decided a recorded control fact.
+
+    The set is the tensor->host escape-source witnesses
+    (``TENSOR_DERIVED_SCALAR_LITERAL`` site labels are their source slot ids)
+    plus the predicate-producing call outputs of ``SCALAR_BOOL`` /
+    ``LOOP_PREDICATE`` witnesses. ``CONDITIONAL_ARM_ENTRY`` witnesses carry
+    ``call_id=None`` (they record arm-edge structure, not a predicate source)
+    and contribute nothing here -- a tainted value computed INSIDE an arm never
+    ceilings the branch decision itself (over-trigger guard).
+    """
+
+    sources: set[str] = set(_tensor_derived_scalar_witness_slot_ids(descriptor))
+    calls_by_id = {call.call_id: call for call in descriptor.calls}
+    for witness in descriptor.control_witnesses:
+        if witness.kind not in {
+            ControlWitnessKind.SCALAR_BOOL,
+            ControlWitnessKind.LOOP_PREDICATE,
+            ControlWitnessKind.CONDITIONAL_ARM_ENTRY,
+        }:
+            continue
+        if witness.call_id is None:
+            continue
+        call = calls_by_id.get(witness.call_id)
+        if call is not None:
+            sources.update(call.output_slot_ids)
+    return frozenset(sources)
+
+
+def _declared_nondeterministic_sources(
+    descriptor: SparseRunDescriptor,
+    taint: Mapping[str, frozenset[str]],
+) -> frozenset[str]:
+    """Derive the run's declared nondeterministic sources (closed vocabulary, r53 F4).
+
+    ``seeded_rng`` and ``host_rng`` are the descriptor's existing presence
+    facts; ``uninitialized_alloc`` is declared exactly when surviving family
+    taint reaches an observable surface (a model output slot, an archived
+    activation member, or a control-fact source) -- a fully sanitized scratch
+    or a dead tainted intermediate declares nothing.
+    """
+
+    sources: set[str] = set()
+    if _descriptor_has_seeded_rng(descriptor):
+        sources.add(_SEEDED_SOURCE_KIND)
+    if descriptor.rng_profile.host_rng_consumed:
+        sources.add(_HOST_RNG_SOURCE_KIND)
+    if taint:
+        reach: set[str] = {
+            slot.slot_id
+            for slot in descriptor.tensor_slots
+            if slot.role is TensorSlotRole.OUTPUT or slot.output_path is not None
+        }
+        layer = descriptor.payload_layers.activations
+        if isinstance(layer, ActivationPayloadLayerDescriptor):
+            reach.update(member.slot_id for member in layer.members)
+        reach.update(_control_witness_source_slot_ids(descriptor))
+        if _uninit_taint_reaches(taint, reach):
+            sources.add(_UNINIT_SOURCE_KIND)
+    return frozenset(sources)
 
 
 _MODULE_TRAINING_MODE_SITE_PREFIX = "module_training_mode:"

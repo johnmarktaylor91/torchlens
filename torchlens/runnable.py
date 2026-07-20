@@ -441,6 +441,18 @@ class AmbientExecutionContext:
     positive capture-time marking for a nondeterministic context (for example
     ``cudnn.benchmark=True``): such a capture can replay and verify its path
     but never claims byte-exact numeric attestation.
+
+    ``grad_enabled`` and ``inference_mode`` (r53 hon_1) record the capture-scoped
+    GLOBAL autograd/inference mode as REQUIRED strict booleans: a Python branch
+    on ``torch.is_grad_enabled()`` / ``torch.is_inference_mode_enabled()`` is
+    steered by this global, so replay must re-enter the recorded mode (as scoped
+    contexts around the whole sparse run) for a fresh instance to take the SAME
+    branch. A v2 descriptor missing either field refuses at parse and loads
+    analysis-only: there is no honest default -- a defaulted grad mode could
+    bless a different-context comparison as ``verified``.
+    ``fill_uninitialized_memory`` is feature-detected (``None`` when the runtime
+    does not expose ``torch.utils.deterministic.fill_uninitialized_memory``) and
+    governs the hon_2 deterministic-fill refinement for the ``empty`` op family.
     """
 
     default_dtype: str
@@ -456,6 +468,9 @@ class AmbientExecutionContext:
     flash_sdp_enabled: bool | None
     mem_efficient_sdp_enabled: bool | None
     math_sdp_enabled: bool | None
+    grad_enabled: bool
+    inference_mode: bool
+    fill_uninitialized_memory: bool | None
     attestation_ineligible_context: bool
 
 
@@ -694,9 +709,23 @@ class ContractCheck:
     diagnostic: RunnableDiagnostic | None
 
 
+NONDETERMINISTIC_SOURCE_VOCABULARY: Final[frozenset[str]] = frozenset(
+    {"seeded_rng", "host_rng", "uninitialized_alloc"}
+)
+"""Closed vocabulary for ``RunReport.nondeterministic_sources`` (r53 F4)."""
+
+
 @dataclass(frozen=True, slots=True)
 class RunReport:
-    """Honesty, state, resolution, and contract metadata for one run."""
+    """Honesty, state, resolution, and contract metadata for one run.
+
+    ``nondeterministic_sources`` (r53 F4) is the closed, sorted, deduplicated
+    declared-source vocabulary (``NONDETERMINISTIC_SOURCE_VOCABULARY``), derived
+    ONLY by the single report finalizer. It distinguishes a
+    declared-nondeterministic path-only ``verified`` (an unseeded ``torch.rand``
+    or an uninitialized ``empty`` product escaping to the output) from a
+    deterministic ``verified``; it never alters verdict semantics.
+    """
 
     readiness: ReadinessReport
     state_source: StateSource
@@ -708,6 +737,7 @@ class RunReport:
     first_mismatch: RunnableDiagnostic | None
     numeric_attestation: NumericAttestationStatus
     poisoned: bool
+    nondeterministic_sources: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
