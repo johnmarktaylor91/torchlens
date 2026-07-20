@@ -443,6 +443,146 @@ def test_uninit_family_table_matches_live_aten_registry() -> None:
     )
 
 
+def test_uninit_family_python_tensor_method_surface() -> None:
+    """r55 hon_1 drift immunizer: the aten test above cannot see a Python-level
+    ``torch.Tensor`` method with NO aten spelling (``Tensor.new``:
+    ``hasattr(torch.ops.aten, "new")`` is ``False`` -- the r54 hon_1 blind spot).
+    Enumerate the Python-``torch.Tensor``-method surface by the same allocation
+    name patterns: every candidate must be tabled as family (unconditional,
+    resize, or SIZE-GATED) or justified non-family below -- a future
+    ``Tensor.<x>()`` uninit factory with no aten name FAILS this test."""
+
+    from torchlens.utils.rng import (
+        _UNINIT_ALLOC_FACTORY_TAILS,
+        _UNINIT_ALLOC_RESIZE_TAILS,
+        _UNINIT_ALLOC_SIZE_GATED_TAILS,
+    )
+
+    # Justified NON-family Python-method names matching the patterns:
+    # - ``new_full``/``new_ones``/``new_zeros``: fully initialized (total write
+    #   by construction) -- deterministic values, never allocator garbage.
+    # - ``new_tensor``: data-copying constructor (values come from the operand).
+    # - sparse resizes: layout metadata growth materializes implicit zeros
+    #   (``and_clear_`` zeroes), never dense stale bytes (same justification as
+    #   the aten-surface allowlist).
+    allowlist = {
+        "new_full",
+        "new_ones",
+        "new_zeros",
+        "new_tensor",
+        "resize_as_sparse_",
+        "sparse_resize_",
+        "sparse_resize_and_clear_",
+    }
+    candidates = {
+        name
+        for name in dir(torch.Tensor)
+        if name == "new" or name.startswith("new_") or "empty" in name or "resize" in name
+    }
+    family = (
+        _UNINIT_ALLOC_FACTORY_TAILS | _UNINIT_ALLOC_RESIZE_TAILS | _UNINIT_ALLOC_SIZE_GATED_TAILS
+    )
+    unaccounted = candidates - family - allowlist
+    assert not unaccounted, (
+        "Python-level torch.Tensor allocation-pattern methods are neither in a "
+        f"closed family table nor in the justified allowlist: {sorted(unaccounted)}"
+    )
+    # The r54 hon_1 subject itself is TABLED (size-gated), never allowlisted away.
+    assert "new" in _UNINIT_ALLOC_SIZE_GATED_TAILS
+
+
+def test_size_gated_new_recognition_and_arg_form() -> None:
+    """r55 hon_1: ``Tensor.new`` recognition is size-gated -- the size form is
+    family, the data form is NOT (over-ceiling guard), and an undecidable form
+    fails closed to tainted (the grow-gate posture)."""
+
+    import numpy as np
+
+    from torchlens.utils.rng import (
+        qualname_is_uninit_size_gated_alloc,
+        qualname_is_uninitialized_alloc,
+        uninit_new_call_is_size_form,
+    )
+
+    assert qualname_is_uninit_size_gated_alloc("torch.Tensor", "Tensor.new")
+    assert qualname_is_uninit_size_gated_alloc("torch.Tensor", "new")
+    # NOT in the unconditional table: qualname-only consumers (which cannot see
+    # argument forms) must never taint the deterministic data spelling.
+    assert not qualname_is_uninitialized_alloc("torch.Tensor", "new")
+    assert not qualname_is_uninit_size_gated_alloc("torch.Tensor", "new_empty")
+    assert not qualname_is_uninit_size_gated_alloc("my.custom.ns", "new")
+    assert not qualname_is_uninit_size_gated_alloc("torch.Tensor", None)
+
+    # Probed live semantics: SIZE forms (uninitialized allocation).
+    assert uninit_new_call_is_size_form(()) is True
+    assert uninit_new_call_is_size_form((3, 4)) is True
+    assert uninit_new_call_is_size_form((np.int64(3),)) is True
+    assert uninit_new_call_is_size_form((3, np.int64(4))) is True
+    assert uninit_new_call_is_size_form((torch.Size([2, 2]),)) is True
+    # Probed live semantics: DATA forms (deterministic copy constructors).
+    assert uninit_new_call_is_size_form(([2, 2],)) is False
+    assert uninit_new_call_is_size_form((torch.ones(2),)) is False
+    assert uninit_new_call_is_size_form((np.array([1.0, 2.0]),)) is False
+    assert uninit_new_call_is_size_form((range(3),)) is False
+    # UNDECIDABLE -> ``None`` (caller fails closed to tainted): a live plain
+    # int-tuple is the data form, but the portable literal grammar erases
+    # ``torch.Size`` to a plain tuple, so a decoded int-tuple is ambiguous.
+    assert uninit_new_call_is_size_form(((2, 2),)) is None
+    assert uninit_new_call_is_size_form((True,)) is None  # bool is not a size (raises live)
+    assert uninit_new_call_is_size_form(("x",)) is None
+
+
+def test_python_method_surface_witness_recognition() -> None:
+    """r55 hon_1: the capture-side recognition of the Python-``torch.Tensor``
+    method surface consults the single ``utils/rng.py`` table block and applies
+    the size-vs-data gate; undecidable forms fail closed to recognized."""
+
+    from torchlens.backends.torch.completeness_witness import (
+        _python_tensor_method_uninit_family_tail as tail_of,
+    )
+
+    assert tail_of("torch.Tensor", "Tensor.new", (64,)) == "new"
+    assert tail_of("torch.Tensor", "Tensor.new", ()) == "new"
+    assert tail_of("torch.Tensor", "Tensor.new", ([1.0, 2.0],)) is None  # data form
+    assert tail_of("torch.Tensor", "Tensor.new", ((2, 2),)) == "new"  # undecidable: fail closed
+    assert tail_of("torch.Tensor", "Tensor.empty_like", ()) == "empty_like"
+    assert tail_of("torch.Tensor", "Tensor.resize_", ()) == "resize_"
+    assert tail_of("my.custom.ns", "Tensor.new", (64,)) is None  # namespace-gated
+    assert tail_of("torch.Tensor", "Tensor.add", ()) is None
+    assert tail_of("torch.Tensor", None, (64,)) is None
+
+
+def test_new_size_form_redispatches_uninit_family_aten() -> None:
+    """r55 hon_1 live-surface pin: ``Tensor.new(sizes)`` redispatches an aten
+    uninit-family op (``aten.empty.memory_format``, probed), which is exactly
+    how the dispatch-level origin ledger covers it transitively; the data form
+    redispatches a NON-family op. A torch upgrade that changes the
+    decomposition away from the family turns this RED instead of silently
+    breaking the transitive-coverage claim."""
+
+    from torch.utils._python_dispatch import TorchDispatchMode
+
+    from torchlens.backends.torch.completeness_witness import _operator_uninit_family_tail
+
+    calls: list[Any] = []
+
+    class _Spy(TorchDispatchMode):
+        def __torch_dispatch__(
+            self, func: Any, types: Any, args: tuple = (), kwargs: dict | None = None
+        ) -> Any:
+            calls.append(func)
+            return func(*args, **(kwargs or {}))
+
+    t = torch.randn(2)
+    with _Spy():
+        t.new(4)
+    assert any(_operator_uninit_family_tail(func) is not None for func in calls)
+    calls.clear()
+    with _Spy():
+        t.new([1.0, 2.0])
+    assert not any(_operator_uninit_family_tail(func) is not None for func in calls)
+
+
 def test_single_classifier_owns_qualname_derivation() -> None:
     """Source-scan immunizer: inside the execution module, the family
     predicates are consulted ONLY by ``_nondeterministic_value_sources`` -- no

@@ -22,18 +22,18 @@ mixed-precision ops can be replayed under the same dtype context.
 
 import datetime as _datetime_module
 import dis as _dis_module
-import functools as _functools_module
+import gc as _gc_module
 import os as _os_module
 import random
 import sys as _sys_module
 import threading as _threading_module
 import time as _time_module
 import weakref as _weakref_module
-from collections.abc import Callable, Collection, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from contextlib import contextmanager
 from dataclasses import dataclass
-from types import FunctionType, MethodType, ModuleType, TracebackType
+from types import BuiltinFunctionType, CodeType, FrameType, ModuleType, TracebackType
 from typing import Any, Dict, List, TypeVar, cast
 
 import _random as _c_random_module
@@ -129,6 +129,22 @@ _UNINIT_ALLOC_FACTORY_TAILS = frozenset(
 )
 """Factory ops whose freshly allocated bytes are uninitialized."""
 
+_UNINIT_ALLOC_SIZE_GATED_TAILS = frozenset({"new"})
+"""Python-level ``torch.Tensor`` allocators whose UNINIT semantics depend on ARG FORM.
+
+r55 hon_1: the legacy ``Tensor.new(*sizes)`` allocator returns byte-identical
+uninitialized memory to ``new_empty`` (probed: distinct ``.sum()`` across
+allocations; redispatches ``aten.empty.memory_format``), but the SAME name
+called with DATA (``Tensor.new([values])`` / ``Tensor.new(tensor)``) is a
+deterministic copy constructor (redispatches ``aten.lift_fresh``/``aten.alias``).
+``new`` has NO aten spelling (``hasattr(torch.ops.aten, "new")`` is ``False``), so
+the aten drift meta-test cannot see it; the Python-``torch.Tensor``-method drift
+meta-test (``tests/test_tlspec_runnable_r53_uninit_alloc.py``) defends this table
+instead. Membership here is NECESSARY but not SUFFICIENT for uninit taint: every
+consumer must additionally gate on :func:`uninit_new_call_is_size_form` (the
+size-vs-data argument-form predicate) so the data spelling is never over-ceilinged.
+"""
+
 _UNINIT_ALLOC_RESIZE_TAILS = frozenset({"resize_", "resize_as_", "resize", "resize_as"})
 """Resize spellings that expose stale allocator bytes ONLY when they GROW.
 
@@ -183,6 +199,63 @@ def qualname_is_uninitialized_alloc(namespace: str | None, qualname: str | None)
     if namespace not in _SEEDED_RNG_NAMESPACES or not qualname:
         return False
     return qualname.rsplit(".", 1)[-1] in _UNINIT_ALLOC_FACTORY_TAILS
+
+
+def qualname_is_uninit_size_gated_alloc(namespace: str | None, qualname: str | None) -> bool:
+    """Return whether a captured callable is an ARG-FORM-GATED uninit allocator.
+
+    r55 hon_1: matches the ``Tensor.new`` legacy allocator family
+    (:data:`_UNINIT_ALLOC_SIZE_GATED_TAILS`). A ``True`` here means the call is
+    uninitialized-memory-producing ONLY in its size-argument form; the caller
+    OWNS the form refinement via :func:`uninit_new_call_is_size_form` and must
+    fail closed to tainted on an undecidable form (the grow-gate precedent).
+    """
+
+    if namespace not in _SEEDED_RNG_NAMESPACES or not qualname:
+        return False
+    return qualname.rsplit(".", 1)[-1] in _UNINIT_ALLOC_SIZE_GATED_TAILS
+
+
+def uninit_new_call_is_size_form(args: Sequence[Any]) -> bool | None:
+    """Classify a ``Tensor.new(...)`` positional-argument tuple as SIZE vs DATA form.
+
+    Probed legacy-constructor semantics (the size form allocates UNINITIALIZED
+    memory; the data form is a deterministic copy):
+
+    - ``new()`` / ``new(int...)`` / ``new(np.integer...)`` / ``new(torch.Size)``
+      -> SIZE form (``aten.empty.memory_format``): returns ``True``.
+    - ``new(list)`` / ``new(tensor)`` / ``new(ndarray)`` / ``new(range)``
+      -> DATA form (``aten.lift_fresh`` / ``aten.alias``): returns ``False``.
+    - a single plain ``tuple`` of ints -> ``None`` (UNDECIDABLE): a LIVE plain
+      tuple is the data form (probed), but the portable literal grammar erases
+      ``torch.Size`` to a plain tuple, so a DECODED int-tuple may have been a
+      capture-time SIZE call. A caller holding live runtime types sees
+      ``torch.Size`` classified ``True`` before this case can fire; a caller
+      holding decoded literals must fail closed to tainted on ``None``.
+    - any other spelling -> ``None`` (fail closed to tainted; an invalid
+      spelling raises at execution time and never produces a value to classify).
+
+    ``bool`` is NOT an integral size argument (``Tensor.new(True)`` raises,
+    probed), so ``True``/``False`` literals fall through to ``None``.
+    """
+
+    positional = tuple(args)
+    if not positional:
+        return True  # zero-size uninit alloc; the zero-numel refinement is downstream
+    if all(
+        (isinstance(item, int) and not isinstance(item, bool)) or isinstance(item, np.integer)
+        for item in positional
+    ):
+        return True
+    if len(positional) == 1:
+        head = positional[0]
+        if isinstance(head, torch.Size):
+            return True
+        if isinstance(head, (torch.Tensor, np.ndarray, list, range)):
+            return False
+        if isinstance(head, tuple):
+            return None  # torch.Size erased by the portable grammar: undecidable
+    return None
 
 
 def qualname_is_uninit_growth_resize(namespace: str | None, qualname: str | None) -> bool:
@@ -838,6 +911,40 @@ a hard inventory leaf; it is descended via ``_is_recursable_custom_holder`` (its
 ``__dict__`` / ``__slots__``), reaching a generator behind an UNREGISTERED submodule.
 """
 
+_GC_EXPANSION_LEAF_TYPES: tuple[type, ...] = (
+    ModuleType,
+    CodeType,
+    BuiltinFunctionType,
+    FrameType,
+    np.ndarray,
+    np.generic,
+    torch.Tensor,
+)
+"""Types the authoritative ``gc.get_referents`` fallback never expands (r55 C6).
+
+Each exclusion is JUSTIFIED, not stylistic -- everything else reachable is walked:
+
+- ``ModuleType``: a module is a SHARED namespace; expanding it drops the rooted
+  walk into every imported framework's globals. A generator held in a shared
+  module global is the explicit documented residual (contract section 11).
+- ``CodeType``: code objects hold only compile-time constants (``co_consts``)
+  -- a live generator cannot exist there.
+- ``BuiltinFunctionType``: a C function's only referents are its ``__self__``
+  module and shared runtime plumbing.
+- ``FrameType``: frames chain through ``f_back`` into the ENTIRE interpreter
+  call stack (TorchLens's own frames included) -- shared, unbounded state.
+- ``np.ndarray`` / ``np.generic`` / ``torch.Tensor``: the r45 numeric-leaf
+  posture (``_INVENTORY_LEAF_TYPES``) -- a tensor's traverse reaches autograd
+  internals, and neither holds a Python-level RNG in supported usage.
+
+Deliberately NOT excluded: ``torch.nn.Module`` (r51 hon1_1 -- an unregistered
+submodule must stay reachable), ``type`` objects (a referent class is enqueued
+and handled by the r53 class-surface branch with its trusted-leaf gate), and
+stdlib wrapper instances such as ``functools._lru_cache_wrapper`` (r54 corr_4:
+the ``__wrapped__`` edge must be walked; boundedness is owned by the node cap,
+inertness by ``tp_traverse`` itself).
+"""
+
 _INVENTORY_NODE_CAP = 1_000_000
 """Defensive node cap for the model-attribute generator sweep (r41 hon1_2).
 
@@ -1228,12 +1335,11 @@ class host_nondeterminism_monitor:
         r53 corr/F1: the former blanket ``callable(value) -> False`` gate is GONE -- it made a
         user-defined CALLABLE INSTANCE (``self.op = CallableSampler()``, the idiomatic callable
         transform/sampler object) a hard leaf, leaving its held generator unwitnessed (false
-        VERIFIED). Known stdlib callable shapes (functions, bound methods, ``functools.partial``,
-        ``property``, ``static``/``classmethod``, ``weakref.ref``) are intercepted by their
-        dedicated INERT edges in the sweep before this predicate ever runs, and every other
-        stdlib/C callable (builtin functions, ufuncs, torch ops) stays a leaf via the module
-        gate below -- so ANY OTHER callable instance now falls through to the ordinary
-        attribute-surface check and is descended like any custom holder.
+        VERIFIED). r55 C6: this predicate now gates ONLY the dual-walk of container/weakref
+        SUBCLASS own-attribute surfaces (the Mapping / Collection / ``weakref.ref`` branches);
+        the sweep's terminal fallback expands every other node through the authoritative
+        ``gc.get_referents`` enumerator (:meth:`_inert_gc_children`) instead of this
+        module-gated attribute-surface check.
         """
 
         if value is None or isinstance(value, (str, bytes, bytearray, int, float, bool, complex)):
@@ -1326,67 +1432,60 @@ class host_nondeterminism_monitor:
         return module.split(".", 1)[0] in _CUSTOM_HOLDER_SKIP_MODULES
 
     @staticmethod
-    def _callable_interior_children(value: Any) -> list[Any] | None:
-        """Return a known callable shape's INERT interior values, or ``None`` (r53 corr/F1).
+    def _shared_namespace_dict_ids() -> frozenset[int]:
+        """Identity keys of every loaded module's ``__dict__`` (r55 C6 exclusion set).
 
-        The closed callable-shape vocabulary of the inert-reachability walk: exact-C
-        ``FunctionType`` (closure ``cell_contents`` / ``__defaults__`` / ``__kwdefaults__`` --
-        C-level field reads on a final type, un-interceptable) and bound ``MethodType``
-        (``__func__`` / ``__self__``, also final); the SUBCLASSABLE shapes
-        ``functools.partial`` (``func`` / ``args`` / ``keywords``), ``property``
-        (``fget`` / ``fset`` / ``fdel``), and ``staticmethod`` / ``classmethod``
-        (``__func__``) via BASE-type slot-descriptor reads
-        (``functools.partial.__dict__["func"].__get__(p)``) that bypass hostile subclass
-        shadowing -- the same immunity pattern as the weakref base deref; and the
-        ``functools.partialmethod`` / ``functools.cached_property`` wrappers (plain-Python
-        siblings of ``partial`` / ``property`` whose ``func`` lives in the instance
-        ``__dict__``, read through :meth:`_custom_holder_children`). A raising read is
-        skipped (matching ``_custom_holder_children``); an empty closure cell's
-        ``ValueError`` is the skip posture. NEVER calls the callable, a property getter, a
-        descriptor ``__get__``, or ``__getattr__``.
+        A function's ``__globals__`` / ``__builtins__`` and any other reference
+        into a live module namespace are SHARED state, not model state: expanding
+        one would walk every framework's globals from a single model attribute.
+        Excluding them by ``__dict__`` IDENTITY (never by name heuristics) makes
+        "a generator held in a shared module global, drawn on a pre-existing
+        non-hooked thread" the explicit documented residual of the inert sweep.
         """
 
+        ids = set()
+        for module in list(_sys_module.modules.values()):
+            module_dict = getattr(module, "__dict__", None)
+            if module_dict is not None:
+                ids.add(id(module_dict))
+        return frozenset(ids)
+
+    @staticmethod
+    def _inert_gc_children(value: Any, shared_namespace_ids: frozenset[int]) -> list[Any]:
+        """Return a node's AUTHORITATIVE inert reference edges (r55 C6, corr_2/corr_4).
+
+        ``gc.get_referents(value)`` runs CPython ``tp_traverse`` -- pure C field
+        enumeration that NEVER executes Python: no property getter, descriptor
+        ``__get__``, ``__getattr__``, or user callable can fire (probed: a hostile
+        ``@property``/``__getattr__`` counter stays at zero). Unlike the replaced
+        hand-maintained callable-interior vocabulary (closure/defaults/kwdefaults/
+        partial/property/...bound-method fields), the traverse exposes EVERY inert
+        reference field an object type declares -- ``__annotations__`` (r54
+        corr_2), ``functools`` wrapper ``__wrapped__`` chains (r54 corr_4),
+        ``__dict__``, slots, cells -- so a new hiding field is unreachable only if
+        CPython itself cannot reach it for garbage collection. This is a ROOTED
+        per-object enumerator feeding the existing cycle-guarded, node-capped
+        model walk -- NOT a process-wide ``gc.get_objects()`` scan.
+
+        Dropped edges are exactly the two documented exclusion families: referents
+        whose identity is a loaded module's ``__dict__`` (shared namespaces --
+        ``shared_namespace_ids``) and instances of the justified
+        :data:`_GC_EXPANSION_LEAF_TYPES`. Everything else is enqueued and handled
+        by the sweep's typed branches (a referent dict via the Mapping protocol, a
+        referent class via the trusted-leaf-gated class-surface branch, a referent
+        RNG via the digest).
+        """
+
+        if isinstance(value, _GC_EXPANSION_LEAF_TYPES):
+            return []
         children: list[Any] = []
-        if isinstance(value, FunctionType):
-            closure = value.__closure__
-            if closure is not None:
-                for cell in closure:
-                    try:
-                        children.append(cell.cell_contents)
-                    except ValueError:  # empty cell: nothing to reach yet
-                        continue
-            defaults = value.__defaults__
-            if defaults:
-                children.extend(defaults)
-            kwdefaults = value.__kwdefaults__
-            if kwdefaults:
-                children.extend(kwdefaults.values())
-            return children
-        if isinstance(value, MethodType):
-            children.append(value.__func__)
-            children.append(value.__self__)
-            return children
-        for base, field_names in (
-            (_functools_module.partial, ("func", "args", "keywords")),
-            (property, ("fget", "fset", "fdel")),
-            (staticmethod, ("__func__",)),
-            (classmethod, ("__func__",)),
-        ):
-            if isinstance(value, base):
-                for name in field_names:
-                    getter = getattr(base.__dict__.get(name), "__get__", None)
-                    if getter is None:
-                        continue
-                    try:
-                        item = getter(value, base)
-                    except (AttributeError, TypeError, ValueError):
-                        continue
-                    if item is not None:
-                        children.append(item)
-                return children
-        if isinstance(value, (_functools_module.partialmethod, _functools_module.cached_property)):
-            return host_nondeterminism_monitor._custom_holder_children(value)
-        return None
+        for referent in _gc_module.get_referents(value):
+            if id(referent) in shared_namespace_ids:
+                continue
+            if isinstance(referent, _GC_EXPANSION_LEAF_TYPES):
+                continue
+            children.append(referent)
+        return children
 
     @staticmethod
     def _exposes_queue_protocol(value: Any) -> bool:
@@ -1483,7 +1582,7 @@ class host_nondeterminism_monitor:
         generator behind a custom holder attribute; r51 hon1_1 to a generator behind an
         UNREGISTERED submodule).
 
-        r53 corr_1/corr_2/F1: the walk's structural invariant is now REACHABILITY --
+        r53 corr_1/corr_2/F1: the walk's structural invariant is REACHABILITY --
         it follows EVERY reference edge that can be followed WITHOUT executing
         user-defined code. Beyond the instance/container surfaces above it walks:
         (1) class-MRO ``__dict__`` surfaces of user-defined classes (raw mappingproxy
@@ -1494,16 +1593,23 @@ class host_nondeterminism_monitor:
         (2) ``weakref.ref`` / ``WeakMethod`` referents through ONE base-C dereference
         (``weakref.ref.__call__``, immune to hostile ``__call__`` overrides; weak
         CONTAINERS descend via the ordinary Mapping/Collection protocols);
-        (3) callable INTERIORS (closure cells, ``__defaults__`` / ``__kwdefaults__``,
-        ``functools.partial`` ``func``/``args``/``keywords``, ``property`` accessors,
-        ``static``/``classmethod`` ``__func__``, bound-method ``__func__``/``__self__``)
-        via C-level / base-type descriptor reads immune to hostile subclass shadowing;
-        (4) callable INSTANCES' own attribute surfaces (the blanket ``callable()``
-        hard-leaf gate is gone). The walk never invokes a property, a descriptor
-        ``__get__``, ``__getattr__``, or any user callable. Residual (contract s11): an
-        EXTERNALLY-held generator drawn on a PRE-EXISTING (non-hooked) thread that is
-        reachable ONLY BY EXECUTING USER CODE -- a property/descriptor ``__get__`` body,
-        ``__getattr__``, or a callable's return value.
+        (3) r55 C6 (corr_2/corr_4): every OTHER node's reference edges through the
+        AUTHORITATIVE ``gc.get_referents`` enumerator (:meth:`_inert_gc_children`)
+        -- CPython ``tp_traverse``, pure C, zero Python executed -- minus the two
+        documented exclusion families (loaded-module ``__dict__`` identities and
+        :data:`_GC_EXPANSION_LEAF_TYPES`). This SUBSUMES the r53 hand-maintained
+        callable-interior vocabulary (closure cells, defaults, kwdefaults,
+        ``partial``/``property``/``static``/``classmethod`` fields, bound-method
+        ``__func__``/``__self__``, callable-instance ``__dict__``/``__slots__``)
+        and closes its whole drift class: ``__annotations__`` (r54 corr_2),
+        ``functools`` wrapper ``__wrapped__`` chains (r54 corr_4), and any future
+        inert field a type declares are reached by construction, not by table
+        maintenance. The walk never invokes a property, a descriptor ``__get__``,
+        ``__getattr__``, or any user callable. Residual (contract s11): a generator
+        reachable ONLY BY EXECUTING USER CODE (a property/descriptor ``__get__``
+        body, ``__getattr__``, or a callable's return value) or held ONLY in a
+        SHARED module-global namespace, drawn on a PRE-EXISTING (non-hooked)
+        thread.
         """
 
         snapshots: list[tuple[Any, str]] = []
@@ -1512,6 +1618,9 @@ class host_nondeterminism_monitor:
         if not callable(modules):
             return snapshots
         try:
+            # r55 C6: shared-namespace exclusion set for the gc-referent fallback,
+            # computed ONCE per sweep (bounded by loaded-module count).
+            shared_namespace_ids = self._shared_namespace_dict_ids()
             pending: list[Any] = []
             for module in modules():
                 pending.extend(getattr(module, "__dict__", {}).values())
@@ -1625,31 +1734,15 @@ class host_nondeterminism_monitor:
                 except _NotADigestableRng:
                     if id(value) in seen_container_ids:
                         continue
-                    # r53 F1 (callable-interior edge): a function / bound method / partial /
-                    # property / static- / classmethod is no longer a hard leaf -- its INERT
-                    # interior fields (closure cells, defaults, kwdefaults,
-                    # ``partial.func/args/keywords``, ``property.fget/fset/fdel``,
-                    # ``__func__``/``__self__``) are enqueued via C-level / base-type
-                    # descriptor reads, closing the callable-interior false-VERIFIED class
-                    # without ever CALLING anything. The node also contributes its own
-                    # ``__dict__``/``__slots__`` (function attributes, hostile-subclass
-                    # instance state) and its class surface.
-                    interior = self._callable_interior_children(value)
-                    if interior is not None:
-                        seen_container_ids.add(id(value))
-                        pending.extend(interior)
-                        pending.extend(self._custom_holder_children(value))
-                        pending.append(type(value))
-                        continue
                     # r45 hon1_1: a model-held generator can sit inside a QUEUE whose buffer is a
                     # non-mutating-inspectable deque (``queue.Queue`` / ``LifoQueue`` /
                     # ``PriorityQueue`` expose ``.queue``). Snapshot that deque non-destructively.
                     # A queue with NO inspectable buffer (``SimpleQueue`` / ``mp.Queue`` / any
                     # opaque queue) cannot be inventoried without draining it -> FAIL CLOSED to
                     # INCOMPLETE (``inventory_opaque_container``) rather than reading as
-                    # no-consumption. Checked BEFORE the custom-holder ``__dict__`` walk so an
-                    # opaque queue that happens to carry a ``__dict__`` (``mp.Queue``) still
-                    # fail-closes instead of being mis-walked into its threading internals.
+                    # no-consumption. Checked BEFORE the gc-referent fallback so an opaque
+                    # queue still fail-closes instead of being walked into its
+                    # threading/connection internals.
                     if self._exposes_queue_protocol(value):
                         seen_container_ids.add(id(value))
                         inner = getattr(value, "queue", None)
@@ -1678,18 +1771,23 @@ class host_nondeterminism_monitor:
                                 # unwitnessed).
                                 self._flag_uncertain("inventory_opaque_container")
                         continue
-                    # r42 corr2_1: a model-held generator behind a CUSTOM object holder
-                    # (``self.holder.rng``) is neither a container nor itself a digestable RNG.
-                    # Recurse into the holder's inert ``__dict__`` / ``__slots__`` values so the
-                    # held generator is snapshotted; the thread-independent before/after digest
-                    # then catches a draw on ANY thread once the generator is FOUND. Cycle-guarded
-                    # and node-capped exactly like the container recursion. r53 corr/F1: this
-                    # branch now also descends user CALLABLE instances (the ``callable()``
-                    # hard-leaf gate is gone) and pushes the holder's class surface.
-                    if self._is_recursable_custom_holder(value):
-                        seen_container_ids.add(id(value))
-                        pending.extend(self._custom_holder_children(value))
-                        pending.append(type(value))
+                    # r55 C6 (corr_2/corr_4): AUTHORITATIVE inert fallback. Every node that
+                    # is neither a container, a weak reference, a class, a digestable RNG,
+                    # nor a queue expands through ``gc.get_referents`` (CPython
+                    # ``tp_traverse`` -- zero Python executed) minus the documented
+                    # shared-namespace/leaf exclusions. This replaces BOTH the r42
+                    # custom-holder recursion and the r53 hand-listed callable-interior
+                    # vocabulary at this terminal position: ``__dict__``/``__slots__``
+                    # values, closure cells, defaults, kwdefaults, ``__annotations__``,
+                    # ``functools`` wrapper ``__wrapped__`` chains, bound-method
+                    # ``__func__``/``__self__``, and any future inert field are enqueued by
+                    # construction into the same cycle-guarded, node-capped walk (a
+                    # referent dict descends via the Mapping branch; a referent class via
+                    # the trusted-leaf-gated class branch; a referent generator is
+                    # digested). The before/after digest then catches a draw on ANY thread
+                    # once the generator is FOUND.
+                    seen_container_ids.add(id(value))
+                    pending.extend(self._inert_gc_children(value, shared_namespace_ids))
                     continue
                 except Exception:
                     self._flag_uncertain("inventory_state_read_failed")
@@ -1711,7 +1809,23 @@ class host_nondeterminism_monitor:
         if isinstance(holder, np.random.BitGenerator):
             return repr(holder.state)
         if isinstance(holder, random.Random):
-            return repr(holder.getstate())
+            try:
+                state = holder.getstate()
+            except NotImplementedError:
+                # r55 corr_1: ``random.SystemRandom`` (and any stateless ``Random``
+                # subclass following its documented protocol) INTENTIONALLY has no
+                # digestible state -- ``getstate()`` raises ``NotImplementedError``
+                # by design. Possession of an UNDRAWN stateless engine is not
+                # nondeterminism: classify monitored-not-digestible (the sweep then
+                # walks it structurally like any holder) instead of letting the
+                # generic inventory error path over-trigger
+                # ``inventory_state_read_failed`` on a deterministic model. Actual
+                # draws stay witnessed by the class-method patches on
+                # ``random.SystemRandom.{random,getrandbits,randbytes}``. Any OTHER
+                # exception from ``getstate()`` (a genuinely broken state read)
+                # still propagates to the fail-closed inventory error path.
+                raise _NotADigestableRng from None
+            return repr(state)
         raise _NotADigestableRng
 
     # -- context protocol ---------------------------------------------------------
