@@ -931,7 +931,13 @@ def _resolve_exact_key(
     if property_getter is not None:
         return property_getter, f"torch.Tensor.{key.qualname}"
     if key.namespace in _ALLOWED_EXACT_ROOTS:
-        func = getattr(_ALLOWED_EXACT_ROOTS[key.namespace], key.qualname, None)
+        # r49 secF_1: resolve through the shared allowlisted reader, which special-cases the
+        # top-level ``torch`` root to ``torch_attr`` (no PEP-562 lazy ``torch.__getattr__``
+        # submodule import / deprecated ``replacement()``). The prior direct
+        # ``getattr(_ALLOWED_EXACT_ROOTS[key.namespace], ...)`` fired that lazy hazard on an
+        # attacker qualname (``onnx`` / ``_dynamo``) at plain ``tl.load()`` -- the exact
+        # subscript-aliased-root site the AST immunizer could not see.
+        func = _getattr_allowlisted(key.namespace, key.qualname)
         if callable(func):
             return cast(Callable[..., Any], func), f"{key.namespace}.{key.qualname}"
     if stock_path is None:
@@ -994,11 +1000,17 @@ def _getattr_allowlisted(namespace: str, qualname: str) -> Callable[..., Any] | 
 def _torch_namespace(namespace: str) -> Any | None:
     """Traverse an enumerated torch namespace without importing modules."""
 
-    current: Any = torch
-    for part in namespace.removeprefix("torch.").split("."):
-        current = getattr(current, part, None)
+    parts = namespace.removeprefix("torch.").split(".")
+    # r49 secF_1: the FIRST hop is off the TOP-LEVEL torch module, whose PEP-562
+    # ``__getattr__`` can fire a lazy submodule import; resolve it through ``torch_attr``
+    # (identifier-only ``torch.__dict__`` read -- proven behavior-preserving over all
+    # enumerated first-parts). Later hops are off submodule/class roots that carry no
+    # lazy-import hazard, so they stay on ``getattr``.
+    current: Any = torch_attr(parts[0])
+    for part in parts[1:]:
         if current is None:
             return None
+        current = getattr(current, part, None)
     return current
 
 
@@ -1082,7 +1094,11 @@ def _reverse_index() -> Mapping[str, tuple[_ReverseCandidate, ...]]:
         root = _torch_namespace(namespace) if namespace != "torch" else torch
         if root is None:
             continue
-        value = getattr(root, qualname, None)
+        # r49 secF_1: reading a top-level torch qualname via ``getattr`` can fire the PEP-562
+        # lazy ``__getattr__``; route the torch root through ``torch_attr`` (proven behavior-
+        # preserving over TorchLens's own top-level torch qualname inventory). Submodule roots
+        # carry no lazy hazard and stay on ``getattr``.
+        value = torch_attr(qualname) if root is torch else getattr(root, qualname, None)
         if not callable(value):
             continue
         candidate = _ReverseCandidate(

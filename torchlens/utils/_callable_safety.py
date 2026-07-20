@@ -162,6 +162,12 @@ _ALLOWED_FORWARD_OP_MODULES: frozenset[str] = frozenset(
         "torch._C._linalg",
         "torch._C._nested",
         "torch._C._special",
+        # r49 hon2_1: ENUMERATION-COMPLETENESS ONLY (gate-NEUTRAL). ``torch._C._sparse`` is
+        # ALREADY admitted by the ``torch._C`` prefix entry above (``_matches`` prefix-covers
+        # it), so adding it changes NO admission outcome; it is listed so the private-C
+        # forward-op MODULE enumeration (the single source of truth consumed by the
+        # cross-thread witness belt via ``private_c_forward_op_module_names``) is complete.
+        "torch._C._sparse",
         "torch._C._VariableFunctions",
         "torch._C._VariableFunctionsClass",
         "torch._C._TensorBase",
@@ -176,6 +182,24 @@ _ALLOWED_FORWARD_OP_MODULES: frozenset[str] = frozenset(
 # in-place mutators) that are plainly not forward ops. It is therefore
 # deliberately absent from ``_ALLOWED_FORWARD_OP_MODULES``.
 _OPERATOR_MODULES: frozenset[str] = frozenset({"operator", "_operator"})
+
+
+def private_c_forward_op_module_names() -> tuple[str, ...]:
+    """Return the canonical ``torch._C._*`` private-C forward-op MODULE names (r49 hon2_1).
+
+    Single source of truth for the cross-thread witness's private-C free-function belt
+    (:func:`torchlens.backends.torch.completeness_witness._private_c_forward_op_modules`): the
+    ``torch._C._*`` entries of :data:`_ALLOWED_FORWARD_OP_MODULES`, so a future private-C op
+    module added to that curated set is AUTO-covered by the witness. Names only -- the witness
+    resolves each on the RUNNING torch and filters to ``types.ModuleType`` objects, which drops
+    the class-typed, read-only / non-Python-patchable ``_VariableFunctions`` / ``_TensorBase``
+    holders (an accepted residual) and any name absent on the running torch (graceful degrade).
+    """
+
+    return tuple(
+        sorted(name for name in _ALLOWED_FORWARD_OP_MODULES if name.startswith("torch._C._"))
+    )
+
 
 # Pure, side-effect-free ``operator`` callables that legitimately appear in a
 # captured forward graph: arithmetic, comparison, bitwise, and index/sequence
