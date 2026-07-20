@@ -14,6 +14,7 @@ import numpy as np
 import torch
 
 from . import _state
+from ._io._torch_symbols import torch_attr
 from ._runnable_state import (
     PreparedRunnableState,
     prepare_runnable_state,
@@ -2369,7 +2370,11 @@ def _call_execution_context_entered(context: Any) -> Any:
         for entry in context.autocast:
             if entry.enabled:
                 dtype_name = str(entry.dtype or "").removeprefix("torch.")
-                dtype = getattr(torch, dtype_name, None)
+                # r45 secC_1 (defense-in-depth): route through the single ``torch_attr`` helper
+                # so this decode site cannot fire ``torch.__getattr__`` (lazy import /
+                # deprecated ``replacement()``) even if a context is ever built off the parser
+                # path. The subsequent ``isinstance(..., torch.dtype)`` gate is unchanged.
+                dtype = torch_attr(dtype_name)
                 if not isinstance(dtype, torch.dtype):
                     raise _context_unavailable_error(
                         f"autocast:{entry.device_type}",
@@ -4888,14 +4893,15 @@ def _decode_torch_symbol(qualname: str) -> Any:
             f"Unsupported torch literal symbol {qualname!r}.",
             code=RunnableErrorCode.UNSUPPORTED_LITERAL.value,
         )
-    # r42 secC_1: ``torch.__dict__.get`` reads module vars() WITHOUT firing ``torch.__getattr__``,
-    # so an attacker qualname (``torch._inductor`` / ``_dynamo`` / ``_export`` / ``onnx`` /
-    # deprecated ``has_cuda``) triggers NO lazy submodule import and invokes NO deprecated
-    # ``replacement()`` -- both unrequested side effects the old ``getattr(torch, name, None)``
-    # ran, one of which could also leak a raw ``ImportError`` outside the typed vocabulary. Every
-    # allowlisted dtype/layout/memory_format/qscheme/``Size`` symbol is a real ``torch.__dict__``
-    # entry and still resolves; everything else returns ``None`` -> the typed refusal below.
-    symbol = torch.__dict__.get(name)
+    # r42 secC_1 / r45: the shared ``torch_attr`` helper reads ``torch.__dict__`` WITHOUT firing
+    # ``torch.__getattr__``, so an attacker qualname (``torch._inductor`` / ``_dynamo`` /
+    # ``_export`` / ``onnx`` / deprecated ``has_cuda``) triggers NO lazy submodule import and
+    # invokes NO deprecated ``replacement()`` -- both unrequested side effects the old
+    # ``getattr(torch, name, None)`` ran, one of which could also leak a raw ``ImportError``
+    # outside the typed vocabulary. Every allowlisted dtype/layout/memory_format/qscheme/``Size``
+    # symbol is a real ``torch.__dict__`` entry and still resolves; everything else returns
+    # ``None`` -> the typed refusal below.
+    symbol = torch_attr(name)
     if symbol is torch.Size or isinstance(symbol, _ALLOWED_TORCH_SYMBOL_TYPES):
         return symbol
     raise RunPreconditionError(

@@ -77,6 +77,7 @@ from .escape_detection import (
 from .completeness_witness import (
     CompletenessWitnessMode,
     completeness_scope_for_wrapper,
+    observe_nonowner_operands,
     record_host_string_escape_source,
     record_uncaptured_owner_callsite,
     string_escape_is_owner_thread,
@@ -957,6 +958,17 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             or _state._active_trace is None
             or _state._active_owner_thread_id != threading.get_ident()
         ):
+            # r45 hon2_1: while a runnable capture is armed, a NON-owner thread's op that consumes
+            # a captured tensor as an operand ceilings replay proof to ``unverifiable`` (the
+            # worker-DERIVED cross-thread escape sibling: fresh worker-side storage the
+            # owner-only census never registered). ``_nonowner_belt_armed`` is False for every
+            # plain trace and the whole steady state, so the disarmed hot path pays one bool read.
+            if (
+                _state._nonowner_belt_armed
+                and _state._active_trace is not None
+                and _state._active_owner_thread_id != threading.get_ident()
+            ):
+                observe_nonowner_operands(args, kwargs)
             kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
             return func(*args, **kwargs)
 
