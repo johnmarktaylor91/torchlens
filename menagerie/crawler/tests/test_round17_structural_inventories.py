@@ -404,6 +404,19 @@ ROUND21_VS10_PROOF_REGISTRY: dict[str, str] = {
     ),
 }
 
+ROUND21_VS11_PROOF_REGISTRY: dict[str, str] = {
+    **ROUND21_VS10_PROOF_REGISTRY,
+    "P11": (
+        "menagerie/crawler/tests/test_round21_conformance_composition.py::"
+        "test_round21_conformance_registry_is_total_and_executed"
+    ),
+    "P11-CI": (
+        "menagerie/crawler/tests/test_round21_conformance_composition.py::"
+        "test_round21_ci_attestations_cover_registry_without_skip"
+    ),
+    "T06": "menagerie/crawler/tools/round21_reversions.py",
+}
+
 
 def test_round21_verification_tree_walk_inventory_is_closed() -> None:
     """Every complete prefix walk and v3 reuse site stays explicitly registered."""
@@ -1792,7 +1805,7 @@ def test_round21_linux_release_registry_is_exact() -> None:
     payload = json.loads(registry_path.read_bytes())
     nodes = payload["nodes"]
     assert payload["target"] == "linux-64"
-    assert len(nodes) == 45
+    assert len(nodes) == 46
     assert len(nodes) == len(set(nodes))
     assert set(ROUND21_VS9_PROOF_REGISTRY) == {
         "P01",
@@ -1817,6 +1830,7 @@ def test_round21_linux_release_registry_is_exact() -> None:
         "T05",
     }
     assert ROUND21_VS9_PROOF_REGISTRY["P09"] in nodes
+    assert ROUND21_VS11_PROOF_REGISTRY["P11"] in nodes
     assert all(node.startswith("menagerie/crawler/tests/") and "::test_" in node for node in nodes)
 
 
@@ -1858,6 +1872,57 @@ def test_round21_macos_release_registry_is_exact() -> None:
     assert _ROUND19_RELEASE_NODE_INVENTORY["macos-positive-negative"] in nodes
     assert _ROUND19_RELEASE_NODE_INVENTORY["macos-profile"] in nodes
     assert all(node.startswith("menagerie/crawler/tests/") and "::test_" in node for node in nodes)
+
+
+def test_round21_conformance_workflow_and_reversion_inventory_is_exact() -> None:
+    """VS11 requires final fan-in CI and an exact deliberate-reversion matrix."""
+
+    workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
+    assert "crawler-round21-deliberate-reversions:" in workflow
+    assert "crawler-round21-conformance:" in workflow
+    assert "round21-linux-release-attestation" in workflow
+    assert "round21-macos-release-attestation" in workflow
+    assert "round21-reversion-attestation" in workflow
+    assert "test_round21_ci_attestations_cover_registry_without_skip" in workflow
+    assert "continue-on-error: true" not in workflow
+    assert "|| true" not in workflow
+    assert "if-no-files-found: error" in workflow
+
+    matrix_path = _CRAWLER_ROOT / "tools" / "round21_reversions.json"
+    payload = json.loads(matrix_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "menagerie.crawler.round21-reversion-matrix.v1"
+    assert payload["deliberate_reversion_ids"] == [f"D{index:02d}" for index in range(1, 30)]
+    assert [case["reversion_id"] for case in payload["cases"]] == payload[
+        "deliberate_reversion_ids"
+    ]
+    assert set(ROUND21_VS11_PROOF_REGISTRY) == {
+        "P01",
+        "T01",
+        "T01-CI",
+        "T02",
+        "P02",
+        "P03",
+        "T03",
+        "P04",
+        "P12",
+        "P13",
+        "P14",
+        "P17",
+        "P19",
+        "P05",
+        "P06",
+        "P07",
+        "P08",
+        "P09",
+        "T04",
+        "T05",
+        "P10",
+        "T04-mac",
+        "T05-mac",
+        "P11",
+        "P11-CI",
+        "T06",
+    }
 
 
 @pytest.mark.parametrize(

@@ -46,6 +46,7 @@
     "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes",
     "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
     "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error",
-    "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association"
+    "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association",
+    "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed"
   ]
 }
