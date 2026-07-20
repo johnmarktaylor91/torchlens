@@ -1887,6 +1887,18 @@ def test_round21_conformance_workflow_and_reversion_inventory_is_exact() -> None
     assert "continue-on-error: true" not in workflow
     assert "|| true" not in workflow
     assert "if-no-files-found: error" in workflow
+    conformance_job = workflow.split("crawler-round21-conformance:", 1)[1]
+    assert 'MENAGERIE_RELEASE_GATE: "1"' in conformance_job
+    assert "MENAGERIE_LINUX_RELEASE_ATTESTATION" in conformance_job
+    assert "MENAGERIE_MACOS_RELEASE_ATTESTATION" in conformance_job
+    assert "MENAGERIE_REVERSION_ATTESTATION" in conformance_job
+    reversion_job = workflow.split("crawler-round21-deliberate-reversions:", 1)[1].split(
+        "\n  crawler-round21-conformance:", 1
+    )[0]
+    assert 'MENAGERIE_RELEASE_GATE: "1"' in reversion_job
+    assert "MENAGERIE_PLATFORM_LOCK" in reversion_job
+    assert "MENAGERIE_REAL_ENV_PREFIX" in reversion_job
+    assert "menagerie.crawler.tools.release_lock" in reversion_job
 
     matrix_path = _CRAWLER_ROOT / "tools" / "round21_reversions.json"
     payload = json.loads(matrix_path.read_text(encoding="utf-8"))

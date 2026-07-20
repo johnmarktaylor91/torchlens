@@ -223,6 +223,10 @@ jobs:
     needs:
       - crawler-round21-linux-release
       - crawler-round21-macos-release
+    env:
+      MENAGERIE_RELEASE_GATE: "1"
+      MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-linux-64.lock
+      MENAGERIE_REAL_ENV_PREFIX: ${{ runner.temp }}/round21-reversion-prefix
     steps:
       - uses: actions/checkout@v4
 
@@ -230,15 +234,29 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install crawler test dependencies
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-activate-base: false
+          python-version: "3.11"
+
+      - name: Materialize and verify the committed SHA-256 Linux lock
+        shell: bash
         run: |
-          python -m pip install -e ".[dev,tabular]"
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap strace
+          python -m pip install jsonschema
+          PYTHONPATH=. python -m menagerie.crawler.tools.release_lock \
+            --lock "$MENAGERIE_PLATFORM_LOCK" \
+            --resolved-export "${MENAGERIE_PLATFORM_LOCK%.lock}.resolved.json" \
+            --prefix "$MENAGERIE_REAL_ENV_PREFIX" \
+            --conda conda
+          "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -c \
+            "import jsonschema, numpy, pytest, torch"
 
       - name: Run every D01-D29 disposable-checkout reversion
-        env:
-          MENAGERIE_RELEASE_GATE: "1"
+        shell: bash
         run: |
-          python -m menagerie.crawler.tools.round21_reversions \
+          PYTHONPATH=. "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -m menagerie.crawler.tools.round21_reversions \
             --source "$GITHUB_WORKSPACE" \
             --work-root "${{ runner.temp }}/round21-reversions" \
             --attestation "${{ runner.temp }}/round21-reversion-attestation.json"
@@ -259,6 +277,7 @@ jobs:
       - crawler-round21-macos-release
       - crawler-round21-deliberate-reversions
     env:
+      MENAGERIE_RELEASE_GATE: "1"
       MENAGERIE_LINUX_RELEASE_ATTESTATION: ${{ runner.temp }}/round21-attestations/linux/round21-linux-attestation.json
       MENAGERIE_MACOS_RELEASE_ATTESTATION: ${{ runner.temp }}/round21-attestations/macos/round21-macos-attestation.json
       MENAGERIE_REVERSION_ATTESTATION: ${{ runner.temp }}/round21-attestations/reversions/round21-reversion-attestation.json

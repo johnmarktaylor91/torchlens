@@ -701,6 +701,15 @@ def _load_release_nodes(path: Path, target: str) -> frozenset[str]:
     return frozenset(str(node) for node in nodes)
 
 
+def _workflow_job_block(workflow: str, job_id: str) -> str:
+    """Return one top-level GitHub Actions job block from workflow text."""
+
+    marker = f"  {job_id}:"
+    assert marker in workflow
+    tail = workflow.split(marker, 1)[1]
+    return tail.split("\n  crawler-", 1)[0]
+
+
 def _collect_node_ids(nodes: Iterable[str]) -> frozenset[str]:
     """Collect exact pytest nodes without running the tests."""
 
@@ -851,6 +860,11 @@ def test_round21_conformance_registry_is_total_and_executed(
     assert "round21-macos-release-attestation" in workflow
     assert "round21-reversion-attestation" in workflow
     assert "test_round21_ci_attestations_cover_registry_without_skip" in workflow
+    conformance_job = _workflow_job_block(workflow, "crawler-round21-conformance")
+    assert 'MENAGERIE_RELEASE_GATE: "1"' in conformance_job
+    assert "MENAGERIE_LINUX_RELEASE_ATTESTATION" in conformance_job
+    assert "MENAGERIE_MACOS_RELEASE_ATTESTATION" in conformance_job
+    assert "MENAGERIE_REVERSION_ATTESTATION" in conformance_job
     assert all(
         node in linux_nodes | macos_nodes | {P11, P11_CI}
         for node in all_real_nodes
