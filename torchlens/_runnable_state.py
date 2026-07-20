@@ -714,10 +714,19 @@ def _initialize_state_slots(
         group = binding.alias_group or f"name:{binding.state_dict_name}"
         groups[group].append(slot)
 
+    ordered_groups = [
+        sorted(members, key=lambda item: item.slot_id)
+        for members in sorted(
+            groups.values(), key=lambda items: min(item.slot_id for item in items)
+        )
+    ]
+    # r53 free_1: refuse an infeasible total BEFORE the first allocation, once
+    # per alias group (aliases share one allocation).
+    _preflight_random_init_allocation([ordered[0] for ordered in ordered_groups])
+
     values: dict[str, torch.Tensor] = {}
     generator_by_device: dict[str, torch.Generator] = {}
-    for members in sorted(groups.values(), key=lambda items: min(item.slot_id for item in items)):
-        ordered = sorted(members, key=lambda item: item.slot_id)
+    for ordered in ordered_groups:
         _validate_alias_allocation_contract(ordered)
         representative = ordered[0]
         generator = _generator_for_slot(representative, seed, generator_by_device)
@@ -726,6 +735,110 @@ def _initialize_state_slots(
             values[member.slot_id] = value
     random_slot_ids = tuple(sorted(slot.slot_id for slot in state_slots))
     return values, random_slot_ids
+
+
+_STATIC_ALLOCATION_BUDGET_BYTES = 1 << 40
+"""Last-resort 1 TiB defense ceiling when no live budget probe is available.
+
+Kills every 10^12+-byte allocation bomb while touching no real model: the
+largest legitimate single random-init state slot on record (a 70B-class
+embedding) is three orders of magnitude below it.
+"""
+
+
+def _host_memory_budget_bytes() -> int | None:
+    """Return available host memory plus free swap, or ``None`` when unprobeable."""
+
+    try:
+        import psutil
+    except ImportError:
+        psutil = None  # type: ignore[assignment]
+    if psutil is not None:
+        try:
+            return int(psutil.virtual_memory().available) + int(psutil.swap_memory().free)
+        except Exception:  # pragma: no cover - defensive probe fallback
+            pass
+    try:
+        fields: dict[str, int] = {}
+        with open("/proc/meminfo", encoding="ascii") as handle:
+            for line in handle:
+                name, _, rest = line.partition(":")
+                parts = rest.split()
+                if parts and parts[0].isdigit():
+                    fields[name.strip()] = int(parts[0]) * 1024
+        if "MemAvailable" in fields:
+            return fields["MemAvailable"] + fields.get("SwapFree", 0)
+    except OSError:  # pragma: no cover - non-Linux hosts without /proc
+        pass
+    return None
+
+
+def _allocation_budget_bytes(device: torch.device) -> int:
+    """Return a NEVER-under-estimating allocation budget for one device.
+
+    The budget deliberately over-estimates when uncertain (free device memory
+    PLUS the caching allocator's reusable reserve for CUDA; available + swap
+    for host-backed devices; the static 1 TiB ceiling otherwise), so the
+    preflight can only refuse requests that could never have succeeded --
+    a refusal here is strictly better than the OOM-kill it replaces, and a
+    legitimate large-model slot is never refused (no static per-slot cap).
+    """
+
+    if device.type == "cuda":
+        try:
+            free, _total = torch.cuda.mem_get_info(device)
+            reserved = torch.cuda.memory_reserved(device)
+            allocated = torch.cuda.memory_allocated(device)
+            return int(free) + max(0, int(reserved) - int(allocated))
+        except Exception:  # pragma: no cover - unprobeable CUDA runtime
+            return _STATIC_ALLOCATION_BUDGET_BYTES
+    if device.type in {"cpu", "mps"}:
+        budget = _host_memory_budget_bytes()
+        if budget is not None:
+            return budget
+    return _STATIC_ALLOCATION_BUDGET_BYTES
+
+
+def _preflight_random_init_allocation(
+    representatives: list[TensorSlotDescriptor],
+) -> None:
+    """Refuse an infeasible random role-init byte total BEFORE any allocation (r53 free_1).
+
+    Sums ``numel x itemsize`` per target device over exactly the representative
+    slots (one per alias group) that fall to ``torchlens_role_init_v2`` and
+    compares each device total against a never-under-estimating live budget.
+    A total above the budget could never have been allocated, so refusing it
+    typed (``run_capability_unavailable`` at detection stage
+    ``state_allocation_preflight``) can never over-trigger; it replaces the
+    raw allocator OOM/OOM-kill a hostile ``shape`` would otherwise cause.
+    """
+
+    from .errors import RunCapabilityUnavailableError
+
+    required: dict[str, int] = defaultdict(int)
+    slot_ids_by_device: dict[str, list[str]] = defaultdict(list)
+    devices: dict[str, torch.device] = {}
+    for slot in representatives:
+        device = _slot_device(slot)
+        key = str(device)
+        devices[key] = device
+        required[key] += math.prod(slot.shape) * _torch_dtype(slot.dtype).itemsize
+        slot_ids_by_device[key].append(slot.slot_id)
+    for key, requested in sorted(required.items()):
+        available = _allocation_budget_bytes(devices[key])
+        if requested > available:
+            sample = ",".join(sorted(slot_ids_by_device[key])[:8])
+            raise RunCapabilityUnavailableError(
+                f"Random state initialization for device {key!r} requires "
+                f"{requested} bytes, but only {available} bytes are available "
+                f"on this host (slots: {sample}). The declared state cannot be "
+                "allocated here; stage smaller state or run on a larger host.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                detection_stage="state_allocation_preflight",
+                device=key,
+                required_bytes=requested,
+                available_bytes=available,
+            )
 
 
 def _validate_alias_allocation_contract(members: list[TensorSlotDescriptor]) -> None:
@@ -838,7 +951,22 @@ def _initialize_slot(
     device = _slot_device(slot)
     policy = CANONICAL_INITIALIZER_BY_ROLE[binding.semantic_role]
     _validate_initializer_dtype(slot, dtype)
-    value = torch.empty(slot.shape, dtype=dtype, device=device)
+    try:
+        value = torch.empty(slot.shape, dtype=dtype, device=device)
+    except (RuntimeError, MemoryError) as exc:
+        # r53 free_1 belt: the allocation preflight refuses infeasible totals
+        # before this point; a RESIDUAL allocator failure (budget shifted under
+        # us, fragmentation) still surfaces as the SAME typed diagnostic, never
+        # a raw allocator traceback.
+        from .errors import RunCapabilityUnavailableError
+
+        raise RunCapabilityUnavailableError(
+            f"Random state initialization could not allocate slot {slot.slot_id!r} "
+            f"(shape={slot.shape!r}, dtype={slot.dtype!r}, device={device}): {exc}",
+            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+            detection_stage="state_allocation_preflight",
+            slot_id=slot.slot_id,
+        ) from exc
     if value.numel() == 0:
         # v2 degenerate totality: a legal empty slot returns its allocation
         # immediately -- no sampling, PROVABLY zero generator consumption.
