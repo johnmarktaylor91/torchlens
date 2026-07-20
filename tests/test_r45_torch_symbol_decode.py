@@ -52,14 +52,92 @@ def _name_arg_is_literal_str(name_arg: ast.expr) -> bool:
     return isinstance(name_arg, ast.Constant) and isinstance(name_arg.value, str)
 
 
-def _flagged_torch_probe_calls(tree: ast.AST) -> list[ast.Call]:
-    """Return every ``getattr(torch, <non-literal>, ...)`` OR ``hasattr(torch, <non-literal>)``
-    call where the target is the bare top-level ``torch`` module (an ``ast.Name(id="torch")``) and
-    the attribute is NOT a string literal (an f-string ``ast.JoinedStr`` or a ``.format()`` call is
-    non-literal -> flagged). Literal-name ``getattr(torch, "...")`` and non-top-level roots
-    (``getattr(torch._C, ...)`` / ``getattr(torch.backends, ...)`` -- ``ast.Attribute`` targets)
-    are allowed."""
+def _module_torch_aliases_and_dicts(tree: ast.AST) -> tuple[set[str], set[str]]:
+    """r49 secF_1 data-flow pass: collect MODULE-SCOPE names that statically resolve to the
+    TOP-LEVEL torch module, and module-scope dict names holding a bare-torch value.
 
+    Resolves module-scope torch bindings so the immunizer sees the SUBSCRIPT/ALIAS spellings the
+    r48 secF_1 finding proved invisible to the old ``ast.Name(id="torch")``-only walker (the
+    ``getattr(_ALLOWED_EXACT_ROOTS[key.namespace], ...)`` sink):
+
+    * ``import torch`` / ``import torch as X`` and module-level ``X = torch`` (transitively
+      ``Y = X``) -> torch aliases;
+    * a module-level dict literal a VALUE of which is a torch alias (``_ALLOWED_EXACT_ROOTS =
+      {"torch": torch, ...}``) -> a torch-valued dict whose ``NAME[...]`` subscripts are torch.
+
+    Deliberately MODULE-SCOPE only: a FUNCTION-LOCAL ``root = _ALLOWED_EXACT_ROOTS[ns]`` guarded by
+    ``if root is torch: torch_attr(...) else: getattr(root, ...)`` is NOT treated as torch here
+    (its getattr never runs on torch, and the spelling-independent BEHAVIORAL belt covers that
+    class), so the static invariant stays EXCEPTION-FREE after the r49 migration."""
+
+    aliases: set[str] = {"torch"}
+    dict_names: set[str] = set()
+    if not isinstance(tree, ast.Module):
+        return aliases, dict_names
+    changed = True
+    while changed:  # fixpoint: aliases/dicts can chain (A = torch; B = A; D = {"t": B})
+        changed = False
+        for stmt in tree.body:
+            if isinstance(stmt, ast.Import):
+                for imported in stmt.names:
+                    if (
+                        imported.name == "torch"
+                        and imported.asname
+                        and imported.asname not in aliases
+                    ):
+                        aliases.add(imported.asname)
+                        changed = True
+                continue
+            if isinstance(stmt, ast.Assign):
+                value: ast.expr | None = stmt.value
+                targets = [t for t in stmt.targets if isinstance(t, ast.Name)]
+            elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+                value = stmt.value
+                targets = [stmt.target]
+            else:
+                continue
+            if value is None:
+                continue
+            if isinstance(value, ast.Name) and value.id in aliases:
+                for target in targets:
+                    if target.id not in aliases:
+                        aliases.add(target.id)
+                        changed = True
+            elif isinstance(value, ast.Dict) and any(
+                isinstance(v, ast.Name) and v.id in aliases for v in value.values
+            ):
+                for target in targets:
+                    if target.id not in dict_names:
+                        dict_names.add(target.id)
+                        changed = True
+    return aliases, dict_names
+
+
+def _expr_is_top_level_torch(expr: ast.expr, aliases: set[str], dict_names: set[str]) -> bool:
+    """Return whether ``expr`` statically resolves to the top-level torch module: a bare/aliased
+    ``ast.Name`` in ``aliases``, or a ``NAME[...]`` subscript of a module-scope torch-valued dict."""
+
+    if isinstance(expr, ast.Name) and expr.id in aliases:
+        return True
+    return (
+        isinstance(expr, ast.Subscript)
+        and isinstance(expr.value, ast.Name)
+        and expr.value.id in dict_names
+    )
+
+
+def _flagged_torch_probe_calls(tree: ast.AST) -> list[ast.Call]:
+    """Return every ``getattr(EXPR, <non-literal>, ...)`` OR ``hasattr(EXPR, <non-literal>)`` call
+    whose target EXPR statically resolves to the top-level torch module -- the bare
+    ``ast.Name(id="torch")``, a module-scope torch alias (``X = torch`` / ``import torch as X``), OR
+    a subscript of a module-scope torch-valued dict (``_ALLOWED_EXACT_ROOTS[key.namespace]``) -- and
+    the attribute is NOT a string literal (an f-string / ``.format()`` name is non-literal ->
+    flagged). Literal-name ``getattr(torch, "...")`` and non-top-level roots (``torch._C`` /
+    ``torch.backends`` -- ``ast.Attribute`` targets) are allowed. r49 secF_1: the alias/subscript
+    resolution closes the module-aliasing blind spot the old ``Name(id="torch")``-only predicate
+    had."""
+
+    aliases, dict_names = _module_torch_aliases_and_dicts(tree)
     offenders: list[ast.Call] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -70,8 +148,8 @@ def _flagged_torch_probe_calls(tree: ast.AST) -> list[ast.Call]:
         if len(node.args) < 2:
             continue
         target, name_arg = node.args[0], node.args[1]
-        if not (isinstance(target, ast.Name) and target.id == "torch"):
-            continue  # non-top-level root (torch._C / torch.backends / ...) -> allowed
+        if not _expr_is_top_level_torch(target, aliases, dict_names):
+            continue  # non-top-level root / function-local guarded alias -> allowed
         if _name_arg_is_literal_str(name_arg):
             continue  # literal fixed-name module-layout constant -> allowed
         offenders.append(node)
@@ -127,6 +205,145 @@ def test_literal_and_nontoplevel_probes_not_flagged() -> None:
     offenders = _flagged_torch_probe_calls(tree)
     flagged_lines = sorted(call.lineno for call in offenders)
     assert flagged_lines == [6, 7, 8, 9], flagged_lines
+
+
+def test_module_aliased_and_subscript_torch_flagged() -> None:
+    """r49 secF_1: the data-flow pass FLAGS the module-scope torch ALIAS
+    (``alias = torch``; ``getattr(alias, name)``) and the torch-DICT SUBSCRIPT
+    (``_ROOTS = {"torch": torch}``; ``getattr(_ROOTS[k], name)``) spellings the old
+    ``Name(id="torch")``-only predicate missed -- yet stays EXCEPTION-FREE on the function-local
+    guarded form (``root = _ROOTS[k]; getattr(root, name)``) so no benign-alias suppression is
+    needed."""
+
+    src = textwrap.dedent(
+        """
+        import torch
+        _ROOTS = {"torch": torch, "op": operator}
+        alias = torch
+        alias2 = alias
+        a = getattr(_ROOTS[k], name)           # module torch-dict subscript -> FLAGGED
+        b = getattr(alias, name)               # module torch alias -> FLAGGED
+        c = getattr(alias2, name, None)        # transitive module alias -> FLAGGED
+        d = getattr(_ROOTS["torch"], "float32")  # literal attr -> allowed
+
+        def helper(k, name):
+            root = _ROOTS[k]                    # function-local subscript binding
+            if root is torch:
+                return torch_attr(name)         # guarded torch path -> no getattr(torch, ...)
+            return getattr(root, name, None)    # local guarded root -> NOT flagged (exception-free)
+        """
+    )
+    tree = ast.parse(src)
+    flagged_lines = sorted(call.lineno for call in _flagged_torch_probe_calls(tree))
+    # lines 6, 7, 8 flagged; line 9 (literal) and the function-local getattr(root, ...) allowed.
+    assert flagged_lines == [6, 7, 8], flagged_lines
+
+
+@pytest.mark.parametrize("hazard", ["onnx", "_dynamo", "_inductor", "has_cuda"])
+def test_r49_torch_lazy_import_belt_resolver_key(hazard: str) -> None:
+    """r49 secF_1 BEHAVIORAL belt (PRIMARY, spelling-independent): tampering the intervention
+    function-registry KEY to a hazardous top-level torch qualname refuses WITHOUT firing torch's
+    PEP-562 lazy ``__getattr__`` (no ``torch.onnx`` / ``torch._dynamo`` / ``torch._inductor`` in
+    ``sys.modules``, no deprecation warning) -- in a FRESH subprocess so the module table is
+    pristine. Closes the class by OBSERVABLE SIDE EFFECT: no AST spelling (subscript / alias /
+    param) can bypass it."""
+
+    code = textwrap.dedent(
+        f"""
+        import sys, warnings
+        warnings.simplefilter("error", DeprecationWarning)
+        import torch
+        from torchlens.intervention.resolver import resolve_function_registry_key
+        from torchlens.intervention.types import FunctionRegistryKey
+        key = FunctionRegistryKey(namespace="torch", qualname={hazard!r}, dispatch_kind="function")
+        try:
+            resolve_function_registry_key(key)
+            outcome = "no_error"
+        except Exception as exc:
+            outcome = type(exc).__name__
+        assert outcome != "no_error", "hazardous torch key was resolved (should refuse)"
+        assert "torch.onnx" not in sys.modules, "torch.onnx imported (lazy side effect)"
+        assert "torch._dynamo" not in sys.modules, "torch._dynamo imported (lazy side effect)"
+        assert "torch._inductor" not in sys.modules, "torch._inductor imported (lazy side effect)"
+        print("REFUSED", outcome)
+        """
+    )
+    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=180)
+    assert proc.returncode == 0, proc.stderr
+    assert "REFUSED" in proc.stdout, proc.stdout
+
+
+@pytest.mark.parametrize("hazard", ["onnx", "_dynamo"])
+def test_r49_torch_lazy_import_belt_runnable_registry_key(hazard: str, tmp_path: Path) -> None:
+    """r49 secF_1 BEHAVIORAL belt (runnable callable-registry KEY): tampering a runnable bundle's
+    ``run.callable_registry[*].key`` to ``namespace="torch"`` + a hazardous qualname yields NO
+    ``torch.onnx`` / ``torch._dynamo`` in ``sys.modules`` on ``tl.load()`` -- the exact end-to-end
+    repro from the r48 secF_1 finding (the ``_ALLOWED_EXACT_ROOTS[key.namespace]`` subscript-rooted
+    sink), promoted to a regression, run in a FRESH interpreter."""
+
+    bundle = tmp_path / "runnable.tlspec"
+    build = textwrap.dedent(
+        f"""
+        import torch, torch.nn as nn, torchlens as tl
+        from torchlens.options import CaptureOptions
+        m = nn.Linear(4, 4)
+        log = tl.trace(
+            m, torch.randn(2, 4),
+            capture=CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False),
+        )
+        log.save({str(bundle)!r}, level="runnable")
+        print("BUILT")
+        """
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", build], capture_output=True, text=True, timeout=300
+    )
+    assert proc.returncode == 0 and "BUILT" in proc.stdout, proc.stderr
+
+    manifest_path = bundle / "manifest.json"
+    if not manifest_path.exists():
+        pytest.skip("runnable bundle layout has no manifest.json to tamper")
+
+    attack = textwrap.dedent(
+        f"""
+        import json, sys, warnings
+
+        mpath = {str(manifest_path)!r}
+        data = json.loads(open(mpath).read())
+        run = data.get("run", {{}})
+        registry = run.get("callable_registry") or []
+        tampered = 0
+        for entry in registry:
+            key = entry.get("key")
+            if isinstance(key, dict):
+                key["namespace"] = "torch"
+                key["qualname"] = {hazard!r}
+                key["import_path"] = None
+                tampered += 1
+        assert tampered >= 1, "no callable_registry keys found to tamper"
+        open(mpath, "w").write(json.dumps(data))
+
+        import torchlens as tl
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                tl.load({str(bundle)!r})
+                outcome = "loaded"
+            except Exception as exc:
+                outcome = type(exc).__name__
+            deprecations = [str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)]
+
+        assert "torch.onnx" not in sys.modules, "torch.onnx imported (lazy side effect on tl.load)"
+        assert "torch._dynamo" not in sys.modules, "torch._dynamo imported (lazy side effect on tl.load)"
+        assert not any("deprecat" in d.lower() for d in deprecations), deprecations
+        print("CLEAN", outcome)
+        """
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", attack], capture_output=True, text=True, timeout=300
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "CLEAN" in proc.stdout, proc.stdout
 
 
 @pytest.mark.parametrize("name", ["float32", "int64", "bool", "float64", "complex64"])

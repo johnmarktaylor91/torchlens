@@ -27,8 +27,9 @@ import random
 import sys as _sys_module
 import threading as _threading_module
 import time as _time_module
-from collections.abc import Callable, Collection, Mapping
+from collections.abc import Callable, Collection, Iterator, Mapping
 from collections.abc import Set as AbstractSet
+from contextlib import contextmanager
 from dataclasses import dataclass
 from types import ModuleType, TracebackType
 from typing import Any, Dict, List, TypeVar, cast
@@ -844,11 +845,39 @@ class host_nondeterminism_monitor:
         # r41 hon2_1: idents of threads hooked by the in-window threading profile hook,
         # consumed by the escape belt's 3-class thread gate via ``_ACTIVE_MONITOR``.
         self._in_window_thread_idents: set[int] = set()
+        # r49 hon1_1: re-entrancy depth for monitor-INTERNAL probes. While > 0 the monitor is
+        # reading through its OWN inventory probe (owner-thread, ``__enter__``-scoped, BEFORE the
+        # user forward runs), so any channel a probe transitively touches must NOT be marked as a
+        # model host read. Guarded at the single ``_mark`` choke point -> surface-complete over
+        # every clock/entropy channel.
+        self._suppress_self_marks: int = 0
 
     # -- helpers -----------------------------------------------------------------
 
     def _mark(self, channel: str) -> None:
+        if self._suppress_self_marks:
+            return
         self.result.channels.add(channel)
+
+    @contextmanager
+    def _monitor_internal_probe(self) -> Iterator[None]:
+        """Suppress the monitor's OWN transitive channel marks during an internal probe (r49 hon1_1).
+
+        A monitor-initiated read is NOT a model host read. The opaque-queue emptiness proof calls
+        ``multiprocessing.Queue.empty()``, which reads ``time.monotonic`` through
+        ``multiprocessing.connection`` -- without this guard that TorchLens-initiated probe would
+        self-mark the clock channel and over-trigger a deterministic model merely holding an empty
+        ``mp.Queue`` to UNVERIFIABLE (the r48 hon1_1 regression). Guarding at the single ``_mark``
+        choke point is surface-complete: ANY channel a future inventory probe transitively touches
+        is auto-exempt. The bracket is owner-thread and ``__enter__``-scoped (BEFORE the user
+        forward runs), so no user/model/worker host read is ever inside it.
+        """
+
+        self._suppress_self_marks += 1
+        try:
+            yield
+        finally:
+            self._suppress_self_marks -= 1
 
     def _flag_uncertain(self, reason: str) -> None:
         self.result.uncertain = True
@@ -1268,16 +1297,26 @@ class host_nondeterminism_monitor:
                             inner, _INVENTORY_LEAF_TYPES
                         ):
                             pending.append(inner)
-                        elif self._opaque_queue_provably_empty(value):
-                            # r47 hon1_2: a non-mutatingly PROVABLY-EMPTY opaque queue
-                            # (``SimpleQueue`` / ``mp.Queue``) cannot hold a generator, so it stays
-                            # VERIFIED -- no over-trigger for a deterministic model that merely
-                            # holds an empty queue. A NON-EMPTY or unknown opaque queue still fails
-                            # closed below (a queue-held generator drawn on a pre-existing worker
-                            # would otherwise be unwitnessed).
-                            pass
                         else:
-                            self._flag_uncertain("inventory_opaque_container")
+                            # r49 hon1_1: the emptiness proof is a MONITOR-INTERNAL read. Bracket
+                            # ONLY the probe so a clock touched TRANSITIVELY by ``mp.Queue.empty()``
+                            # (via ``multiprocessing.connection``) is self-suppressed at the
+                            # ``_mark`` choke point, not mis-marked as a model host read. The
+                            # ``_flag_uncertain`` branch stays OUTSIDE the bracket so the NON-EMPTY
+                            # opaque-queue INCOMPLETE residual is preserved.
+                            with self._monitor_internal_probe():
+                                provably_empty = self._opaque_queue_provably_empty(value)
+                            if provably_empty:
+                                # r47 hon1_2: a non-mutatingly PROVABLY-EMPTY opaque queue
+                                # (``SimpleQueue`` / ``mp.Queue``) cannot hold a generator, so it
+                                # stays VERIFIED -- no over-trigger for a deterministic model that
+                                # merely holds an empty queue.
+                                pass
+                            else:
+                                # A NON-EMPTY or unknown opaque queue fails closed (a queue-held
+                                # generator drawn on a pre-existing worker would otherwise be
+                                # unwitnessed).
+                                self._flag_uncertain("inventory_opaque_container")
                         continue
                     # r42 corr2_1: a model-held generator behind a CUSTOM object holder
                     # (``self.holder.rng``) is neither a container nor itself a digestable RNG.

@@ -41,6 +41,7 @@ import inspect
 import sys
 import threading
 import time
+import types
 import warnings
 import weakref
 from collections.abc import Iterator, Mapping
@@ -56,6 +57,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from ...utils._torch_compat import tensor_version_or_none
 from ...utils._torch_symbols import torch_attr
+from ...utils._callable_safety import private_c_forward_op_module_names
 from ... import _state
 from ..._errors import TorchLensCaptureGapWarning
 from ._tl import get_buffer_address, get_tensor_label, get_tensor_meta
@@ -1455,6 +1457,85 @@ def _make_nonowner_ops_call(original: Any) -> Any:
         ):
             observe_nonowner_operands(args, kwargs)
         return original(self, *args, **kwargs)
+
+    _patched.__tl_nonowner_ops_observer__ = True  # type: ignore[attr-defined]
+    return _patched
+
+
+def _private_c_forward_op_modules() -> tuple[Any, ...]:
+    """Resolve the patchable module-typed private-C forward-op modules (r49 hon2_1).
+
+    Structurally enumerated from the canonical forward-op module authority
+    (:func:`torchlens.utils._callable_safety.private_c_forward_op_module_names` -> the
+    ``torch._C._*`` entries of ``_ALLOWED_FORWARD_OP_MODULES``), resolved on the RUNNING torch
+    and filtered to ``types.ModuleType`` so:
+
+    * a torch lacking one (``_sparse`` / ``_nested`` on an older build) degrades gracefully
+      (skip-if-absent), and
+    * the class-typed, read-only / non-Python-patchable holders (``_VariableFunctions`` /
+      ``_TensorBase``) are EXCLUDED (their setattr raises -- accepted residual).
+
+    On torch 2.8 this yields exactly ``{_nn, _special, _fft, _linalg, _sparse, _nested}``. A
+    future private-C op module added to the curated set is auto-covered.
+    """
+
+    modules: list[Any] = []
+    for name in private_c_forward_op_module_names():
+        obj: Any = torch
+        resolved = True
+        for part in name.split(".")[1:]:  # skip the leading "torch"
+            obj = getattr(obj, part, None)
+            if obj is None:
+                resolved = False
+                break
+        if resolved and isinstance(obj, types.ModuleType):
+            modules.append(obj)
+    return tuple(modules)
+
+
+def _private_c_module_callables() -> tuple[tuple[Any, str, Any], ...]:
+    """Return ``(module, attr, original)`` for every module-level callable of the patchable
+    private-C forward-op modules (r49 hon2_1).
+
+    Dunder module metadata (``__loader__`` / ``__spec__`` / ...) is skipped; every remaining
+    module-level callable (the ~225 ``torch._C._{nn,special,fft,linalg,sparse,nested}`` free
+    functions) is a patch target so the belt is surface-complete for the whole module, not a
+    known-alias subset.
+    """
+
+    out: list[tuple[Any, str, Any]] = []
+    for module in _private_c_forward_op_modules():
+        for attr in dir(module):
+            if attr.startswith("__"):
+                continue
+            value = getattr(module, attr, None)
+            if callable(value):
+                out.append((module, attr, value))
+    return tuple(out)
+
+
+def _make_nonowner_private_c_callable(original: Any) -> Any:
+    """Wrap a private-C module FREE function with the non-owner captured-operand observer (r49).
+
+    Twin of :func:`_make_nonowner_ops_call` for MODULE-level free functions (no ``self``
+    receiver): private-C ops (``torch._C._nn.gelu(gate)``) are a THIRD op surface -- they bypass
+    BOTH the global torch-FUNCTION wrapper (no ``__torch_function__``) AND the ``torch._ops.*``
+    class patch (they dispatch their inner aten op down in C++), so a non-owner worker consuming
+    a captured operand through one went unwitnessed -> false ``VERIFIED`` (the r48 hon2_1
+    finding). Same three-term armed/owner short-circuit (disarmed steady state pays one bool
+    read; an OWNER-thread forward never reaches ``observe_nonowner_operands``) and the same
+    fail-closed operand test.
+    """
+
+    @functools.wraps(original)
+    def _patched(*args: Any, **kwargs: Any) -> Any:
+        if (
+            _state._nonowner_belt_armed
+            and _state._active_trace is not None
+            and _state._active_owner_thread_id != threading.get_ident()
+        ):
+            observe_nonowner_operands(args, kwargs)
+        return original(*args, **kwargs)
 
     _patched.__tl_nonowner_ops_observer__ = True  # type: ignore[attr-defined]
     return _patched
@@ -3579,6 +3660,25 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
             _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
             continue
         torch_ops_call_restore.append((_ops_cls, _ops_original))
+    # r49 hon2_1: extend the armed-lifecycle observer to the patchable private-C FREE-FUNCTION
+    # modules (``torch._C._{nn,special,fft,linalg,sparse,nested}``), structurally enumerated
+    # from the SAME curated forward-op module authority. These are a THIRD op surface: a
+    # private-C free function bypasses BOTH the global torch-FUNCTION wrapper AND the
+    # ``torch._ops.*`` class patch (it dispatches its inner aten op in C++), so a non-owner
+    # worker consuming a captured operand through ``torch._C._nn.gelu(gate)`` was unwitnessed
+    # -> false VERIFIED. Same fail-CLOSED posture: an empty scan or an install/restore failure
+    # downgrades the capture to INCOMPLETE via ``_HOST_ESCAPE_OBSERVER_FAILED``.
+    private_c_call_restore: list[tuple[Any, str, Any]] = []
+    _private_c_callables = _private_c_module_callables()
+    if not _private_c_callables:
+        _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
+    for _pc_module, _pc_attr, _pc_original in _private_c_callables:
+        try:
+            setattr(_pc_module, _pc_attr, _make_nonowner_private_c_callable(_pc_original))
+        except (TypeError, AttributeError):
+            _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
+            continue
+        private_c_call_restore.append((_pc_module, _pc_attr, _pc_original))
     try:
         yield
     finally:
@@ -3593,6 +3693,17 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
                 _current_call = _ops_cls.__dict__.get("__call__")
                 if getattr(_current_call, "__tl_nonowner_ops_observer__", False):
                     setattr(_ops_cls, "__call__", _ops_original)
+            except (TypeError, AttributeError):
+                _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
+        # r49 hon2_1: restore the private-C module free-function patches, sentinel-guarded
+        # (preserve any user mutation) and fail-closed on a restore failure. A leaked patch
+        # would misobserve later forwards, so this runs in the unconditional ``finally``
+        # alongside the ``torch._ops`` restore.
+        for _pc_module, _pc_attr, _pc_original in private_c_call_restore:
+            try:
+                _pc_current = getattr(_pc_module, _pc_attr, None)
+                if getattr(_pc_current, "__tl_nonowner_ops_observer__", False):
+                    setattr(_pc_module, _pc_attr, _pc_original)
             except (TypeError, AttributeError):
                 _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
         for name, original in originals.items():

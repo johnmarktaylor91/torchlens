@@ -190,7 +190,13 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             for field_name in spec.fields
         ]
         container_type = _resolve_container_type(spec)
-        if container_type is not None:
+        # r49 secB_1: the SHARED substitution predicate decides plain-tuple fallback, so the
+        # load-time lossy gate and this reconstruction can never disagree. ``not substitute``
+        # means the type is a trusted structseq OR a generated namedtuple; the inner check only
+        # selects the correct INERT constructor for those two non-substituting cases.
+        if container_type is not None and not _reconstruction_would_substitute_plain(
+            container_type, "namedtuple", spec.fields, spec
+        ):
             if _is_trusted_structseq_type(container_type, spec):
                 # Genuine torch structseq (``torch.return_types.*``): reconstruct through its
                 # own INERT builtin ``__new__`` (a single-iterable C constructor that runs no
@@ -198,15 +204,14 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
                 # ``torch.return_types`` (not the attacker's spec string), so this is a genuine
                 # torch C type, never an attacker-named look-alike.
                 return container_type(values)
-            if _is_generated_namedtuple_type(container_type):
-                # Real compiler-generated namedtuple: allocate the tuple INERTLY via the builtin
-                # ``tuple.__new__`` and NEVER invoke ``container_type(*values)`` -- this is the
-                # RCE fix. The old ``container_type(*values)`` ran the resolved type's
-                # ``__new__`` / ``__init__``, so a spec naming a ``tuple``-subclass "namedtuple-
-                # like" type whose ``__new__`` executes code was a load/run construction gadget.
-                # ``tuple.__new__`` bypasses that ``__new__`` entirely, mirroring the inert
-                # non-invoking reconstruction used for the dataclass / HF branches.
-                return tuple.__new__(container_type, values)
+            # Real compiler-generated namedtuple: allocate the tuple INERTLY via the builtin
+            # ``tuple.__new__`` and NEVER invoke ``container_type(*values)`` -- this is the RCE
+            # fix. The old ``container_type(*values)`` ran the resolved type's ``__new__`` /
+            # ``__init__``, so a spec naming a ``tuple``-subclass "namedtuple-like" type whose
+            # ``__new__`` executes code was a load/run construction gadget. ``tuple.__new__``
+            # bypasses that ``__new__`` entirely, mirroring the inert non-invoking reconstruction
+            # used for the dataclass / HF branches.
+            return tuple.__new__(container_type, values)
         return tuple(values)
     if spec.kind == "dataclass":
         field_values = {
@@ -214,10 +219,11 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             for field_name in spec.fields
         }
         container_type = _resolve_container_type(spec)
-        if (
-            container_type is not None
-            and _type_has_safe_new(container_type)
-            and _fields_are_inert_settable(container_type, spec.fields)
+        # r49 secB_1: shared substitution predicate (== the old inline
+        # ``_type_has_safe_new and _fields_are_inert_settable`` conjunction) so gate and
+        # reconstruction stay coupled.
+        if container_type is not None and not _reconstruction_would_substitute_plain(
+            container_type, "dataclass", spec.fields, spec
         ):
             return _construct_dataclass_without_init(container_type, field_values)
         return field_values
@@ -226,11 +232,11 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             key: _rebuild_child_or_leaf(child_by_key, HFKey(key), leaf_iter) for key in spec.keys
         }
         container_type = _resolve_container_type(spec)
-        if (
-            container_type is not None
-            and _type_has_safe_new(container_type)
-            and issubclass(container_type, dict)
-            and _fields_are_inert_settable(container_type, spec.keys)
+        # r49 secB_1: shared substitution predicate (== the old inline
+        # ``_type_has_safe_new and issubclass(dict) and _fields_are_inert_settable`` conjunction)
+        # so gate and reconstruction stay coupled.
+        if container_type is not None and not _reconstruction_would_substitute_plain(
+            container_type, "hf_model_output", spec.keys, spec
         ):
             return _construct_model_output_without_init(container_type, key_values)
         return key_values
@@ -756,6 +762,48 @@ def _model_output_has_foreign_init(
     return False
 
 
+def _reconstruction_would_substitute_plain(
+    container_type: type[Any],
+    kind: str,
+    names: tuple[Any, ...],
+    spec: "ContainerSpec | None",
+) -> bool:
+    """Return whether ``_rebuild_container_from_spec`` would substitute a PLAIN container (r49 secB_1).
+
+    The SINGLE shared substitution criterion consulted by BOTH the reconstruction path
+    (:func:`_rebuild_container_from_spec`) AND the load-time forged-flag lossy gate
+    (:func:`reconstruction_is_lossy_by_type` / ``_spec_node_reconstruction_lossy``). Reconstruction
+    falls back to a plain ``dict`` / ``tuple`` -- dropping the recorded container TYPE and any
+    ``__new__``-computed state -- exactly when the type's ``__new__`` is not an inert allocator, its
+    fields are not inertly settable, or (namedtuple) it is neither a generated namedtuple nor a
+    trusted structseq. The gate must treat every such case as lossy, else a forged
+    ``lossy_reconstruction=False`` yields a false ``VERIFIED`` on a type-substituted output (the r48
+    secB_1 ``__new__`` / generated-namedtuple hole).
+
+    Coupling is enforced by SHARED CODE: because reconstruction and the gate call THIS predicate,
+    a future gate/reconstruction divergence is a failing coverage meta-test rather than a silent
+    false ``VERIFIED``. Over-trigger is safe -- a plain dataclass (``object.__new__``, inert fields)
+    and a real ``collections.namedtuple`` / ``typing.NamedTuple`` stay not-substituted -> VERIFIED.
+    """
+
+    if kind == "dataclass":
+        return not (
+            _type_has_safe_new(container_type) and _fields_are_inert_settable(container_type, names)
+        )
+    if kind == "hf_model_output":
+        return not (
+            _type_has_safe_new(container_type)
+            and issubclass(container_type, dict)
+            and _fields_are_inert_settable(container_type, names)
+        )
+    if kind == "namedtuple":
+        return not (
+            (spec is not None and _is_trusted_structseq_type(container_type, spec))
+            or _is_generated_namedtuple_type(container_type)
+        )
+    return False
+
+
 def reconstruction_is_lossy_by_type(
     container_type: type[Any],
     captured_names: tuple[Any, ...],
@@ -819,6 +867,13 @@ def reconstruction_is_lossy_by_type(
     ):
         return True
     if kind == "hf_model_output" and _model_output_has_foreign_init(container_type, spec):
+        return True
+    # r49 secB_1: couple the gate to reconstruction's OWN substitution criterion. If
+    # ``_rebuild_container_from_spec`` would substitute a PLAIN container for this type (its
+    # ``__new__`` is not an inert allocator, or its fields are not inertly settable), the
+    # recorded type and any ``__new__``-computed state are dropped -- treat it as lossy,
+    # mirroring reconstruction exactly through the shared predicate.
+    if _reconstruction_would_substitute_plain(container_type, kind, captured_names, spec):
         return True
     return False
 

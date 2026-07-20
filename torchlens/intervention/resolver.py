@@ -283,7 +283,21 @@ def resolve_function_registry_key(
                 )
             return internal_builtin
         if key.namespace in _fixed_roots:
-            resolved = cast(Callable[..., Any], getattr(_fixed_roots[key.namespace], key.qualname))
+            # r49 secF_1: the top-level ``torch`` root must resolve through ``torch_attr``
+            # (identifier-only ``torch.__dict__`` read) so an attacker qualname (``onnx`` /
+            # ``_dynamo`` / ``has_cuda``) cannot fire torch's PEP-562 lazy ``__getattr__``
+            # (unrequested submodule import / deprecated ``replacement()`` shim) BEFORE the
+            # purity gate below rejects it -- the co-located sibling of the runnable-load site.
+            # A genuinely-missing torch attr raises ``AttributeError`` exactly as the prior
+            # bare ``getattr`` did; non-torch fixed roots carry no lazy hazard.
+            _root = _fixed_roots[key.namespace]
+            if _root is torch:
+                _resolved = torch_attr(key.qualname)
+                if _resolved is None:
+                    raise AttributeError(f"module 'torch' has no attribute {key.qualname!r}")
+                resolved = cast(Callable[..., Any], _resolved)
+            else:
+                resolved = cast(Callable[..., Any], getattr(_root, key.qualname))
             # SECURITY BOUNDARY (tripwire). These fixed namespaces also expose
             # side-effecting callables -- above all torch.load / torch.save (both
             # in torch.serialization), which unpickle attacker files (RCE) or
