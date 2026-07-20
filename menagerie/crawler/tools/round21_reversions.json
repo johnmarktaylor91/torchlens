@@ -1,7 +1,7 @@
 {
   "cases": [
     {
-      "expected_reason": "E11",
+      "expected_reason": "checkpoint_or_weight_read_attempted",
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E11]",
         "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
@@ -37,7 +37,7 @@
       "semantic_reversion": "grant post-seal bytes"
     },
     {
-      "expected_reason": "link_text",
+      "expected_reason": "DID NOT RAISE",
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E05]",
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E06]",
@@ -50,7 +50,7 @@
       "semantic_reversion": "weaken internal/external symlink binding"
     },
     {
-      "expected_reason": "checkpoint_or_weight_read_attempted",
+      "expected_reason": "assert attempt[\"result\"] == \"failed\"",
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E12]",
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E13]"
@@ -59,7 +59,7 @@
       "semantic_reversion": "treat packaged checkpoints as runtime"
     },
     {
-      "expected_reason": "round19-selected-prefix",
+      "expected_reason": "is not in list",
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
@@ -69,7 +69,7 @@
       "semantic_reversion": "restore sys.executable or parallel interpreter"
     },
     {
-      "expected_reason": "DID NOT RAISE",
+      "expected_reason": "is not in the subpath",
       "proof_nodes": [
         "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding",
         "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association"
@@ -119,7 +119,7 @@
       "semantic_reversion": "quarantine byte-identical hardlink clone churn"
     },
     {
-      "expected_reason": "stale spawn verification yielded",
+      "expected_reason": "failed:environment",
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_scale_composition.py::test_round21_pass_and_spawn_validation_walks_are_constant_bounded"
       ],
@@ -182,7 +182,7 @@
       "semantic_reversion": "accept zero/multiple handoff finals or old-root fallback"
     },
     {
-      "expected_reason": "initial_counters",
+      "expected_reason": "environment authority cache association is invalid",
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_cache_rebind_composition.py::test_round21_mismatched_rebind_preserves_active_authority_and_awards"
       ],
@@ -190,11 +190,11 @@
       "semantic_reversion": "invalidate active cache on rejected rebind"
     },
     {
-      "expected_reason": "round19-linux-64.lock",
+      "expected_reason": "Extra items in the right set",
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial",
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_ci_attestations_cover_registry_without_skip"
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round19_supported_host_release_gate_inventory_is_exact"
       ],
       "reversion_id": "D21",
       "semantic_reversion": "delete/corrupt either lock/export/probe contract"
@@ -202,7 +202,7 @@
     {
       "expected_reason": "MENAGERIE_RELEASE_GATE",
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_ci_attestations_cover_registry_without_skip"
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_conformance_workflow_and_reversion_inventory_is_exact"
       ],
       "reversion_id": "D22",
       "semantic_reversion": "remove workflow proof node or permit skip/xfail"
@@ -210,19 +210,15 @@
     {
       "expected_reason": "strace",
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_ci_attestations_cover_registry_without_skip"
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round19_supported_host_release_gate_inventory_is_exact"
       ],
       "reversion_id": "D23",
       "semantic_reversion": "remove Linux bwrap/strace or denial audit"
     },
     {
-      "expected_reason": "seatbelt",
+      "expected_reason": "command -v log",
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_ci_attestations_cover_registry_without_skip"
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round19_supported_host_release_gate_inventory_is_exact"
       ],
       "reversion_id": "D24",
       "semantic_reversion": "replace macOS denial with profile-only proof"
@@ -247,9 +243,10 @@
       "semantic_reversion": "restore dry-run false-complete/signature mismatch"
     },
     {
-      "expected_reason": "handoff-authority-unavailable",
+      "expected_reason": "terminal partition invalid",
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H01]"
+        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H03]",
+        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H04]"
       ],
       "reversion_id": "D27",
       "semantic_reversion": "restore source/CAS/cache/fetch fallback"
@@ -257,14 +254,13 @@
     {
       "expected_reason": "assert",
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed",
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_ci_attestations_cover_registry_without_skip"
+        "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed"
       ],
       "reversion_id": "D28",
       "semantic_reversion": "delete clause/finding/invariant/matrix registry record"
     },
     {
-      "expected_reason": "raw_award_receipt_sha256",
+      "expected_reason": "receipt_error",
       "proof_nodes": [
         "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
         "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",

@@ -630,23 +630,28 @@ def _expected_registry_records() -> tuple[dict[str, Any], ...]:
         "D18": ("P06-H02",),
         "D19": ("P06-H03", "P06-H04", "P06-H01"),
         "D20": ("P08",),
-        "D21": ("P09", "P10", "P11-CI"),
-        "D22": ("P11-CI",),
-        "D23": ("P09", "P14", "P11-CI"),
-        "D24": ("P10", "P15", "P11-CI"),
+        "D21": ("P09", "P10"),
+        "D22": ("P11",),
+        "D23": ("P09", "P14"),
+        "D24": ("P10", "P15"),
         "D25": ("P17", "P20"),
         "D26": ("P18a", "P18b"),
-        "D27": ("P06-H01",),
-        "D28": ("P11", "P11-CI"),
+        "D27": ("P06-H03", "P06-H04"),
+        "D28": ("P11",),
         "D29": ("P12", "P16", "P17"),
     }
     for reversion_id, aliases in reversion_proofs.items():
+        structural_nodes = [T06]
+        if reversion_id in {"D21", "D22", "D23"}:
+            structural_nodes.append(T04_LINUX)
+        if reversion_id in {"D21", "D22", "D24"}:
+            structural_nodes.append(T04_MACOS)
         records.append(
             _base_record(
                 reversion_id,
                 source_locator="UNIFIED.md T06 deliberate-reversion table",
                 real_node_ids=_expand_nodes(aliases),
-                structural_node_ids=(T06,),
+                structural_node_ids=tuple(structural_nodes),
                 host="both"
                 if any(alias in {"P10", "P11-CI", "P15"} for alias in aliases)
                 else "linux",

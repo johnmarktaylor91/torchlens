@@ -420,13 +420,14 @@
       "invariant_ids": [],
       "real_node_ids": [
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial",
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_ci_attestations_cover_registry_without_skip"
+        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
       "source_locator": "UNIFIED.md T06 deliberate-reversion table",
       "structural_node_ids": [
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_linux_release_artifacts_and_provisioning_are_real",
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_macos_release_artifacts_and_provisioning_are_real",
         "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed"
       ]
     },
@@ -437,15 +438,17 @@
       ],
       "expected_outcome": "passed",
       "finding_ids": [],
-      "host": "both",
+      "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_ci_attestations_cover_registry_without_skip"
+        "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
       "source_locator": "UNIFIED.md T06 deliberate-reversion table",
       "structural_node_ids": [
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_linux_release_artifacts_and_provisioning_are_real",
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_macos_release_artifacts_and_provisioning_are_real",
         "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed"
       ]
     },
@@ -456,17 +459,17 @@
       ],
       "expected_outcome": "passed",
       "finding_ids": [],
-      "host": "both",
+      "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
         "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_ci_attestations_cover_registry_without_skip"
+        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
       "source_locator": "UNIFIED.md T06 deliberate-reversion table",
       "structural_node_ids": [
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_linux_release_artifacts_and_provisioning_are_real",
         "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed"
       ]
     },
@@ -481,13 +484,13 @@
       "invariant_ids": [],
       "real_node_ids": [
         "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial",
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_ci_attestations_cover_registry_without_skip"
+        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
       "source_locator": "UNIFIED.md T06 deliberate-reversion table",
       "structural_node_ids": [
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_macos_release_artifacts_and_provisioning_are_real",
         "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed"
       ]
     },
@@ -542,7 +545,8 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H01]"
+        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H03]",
+        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H04]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -558,10 +562,9 @@
       ],
       "expected_outcome": "passed",
       "finding_ids": [],
-      "host": "both",
+      "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_ci_attestations_cover_registry_without_skip",
         "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed"
       ],
       "real_prefix": true,

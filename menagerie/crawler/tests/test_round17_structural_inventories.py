@@ -1708,6 +1708,14 @@ def test_round19_supported_host_release_gate_inventory_is_exact() -> None:
     assert "-m round21_macos_real" in macos_job
     assert "runs-on: macos-14-xlarge" in macos_job
     assert "MENAGERIE_RELEASE_ATTESTATION" in macos_job
+    assert "Require Linux lock, provenance, conda, bwrap, and strace" in linux_job
+    assert "sudo apt-get install -y bubblewrap strace" in linux_job
+    assert "command -v bwrap" in linux_job
+    assert "command -v strace" in linux_job
+    assert "Linux bwrap/strace enforcement is unavailable" in linux_job
+    assert "Require macOS lock, provenance, conda, and Seatbelt denial audit" in macos_job
+    assert "command -v sandbox-exec" in macos_job
+    assert "command -v log" in macos_job
     assert "seatbelt-denial-audit-unavailable" in macos_job
     for job in (linux_job, macos_job):
         assert 'MENAGERIE_RELEASE_GATE: "1"' in job
@@ -1899,6 +1907,7 @@ def test_round21_conformance_workflow_and_reversion_inventory_is_exact() -> None
     assert "MENAGERIE_PLATFORM_LOCK" in reversion_job
     assert "MENAGERIE_REAL_ENV_PREFIX" in reversion_job
     assert "menagerie.crawler.tools.release_lock" in reversion_job
+    assert "sudo apt-get install -y bubblewrap strace" in reversion_job
 
     matrix_path = _CRAWLER_ROOT / "tools" / "round21_reversions.json"
     payload = json.loads(matrix_path.read_text(encoding="utf-8"))
@@ -1933,6 +1942,41 @@ def test_round21_conformance_workflow_and_reversion_inventory_is_exact() -> None
         "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
         "test_round21_handoff_authority_identity_matrix[H01]",
     ]
+    assert cases_by_id["D21"]["proof_nodes"] == [
+        "menagerie/crawler/tests/test_round21_ci_composition.py::"
+        "test_round21_linux_committed_lock_provenance_awards_in_ci",
+        "menagerie/crawler/tests/test_round21_ci_composition.py::"
+        "test_round21_macos_committed_lock_seatbelt_award_and_denial",
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
+        "test_round19_supported_host_release_gate_inventory_is_exact",
+    ]
+    assert cases_by_id["D22"]["proof_nodes"] == [
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
+        "test_round21_conformance_workflow_and_reversion_inventory_is_exact"
+    ]
+    assert cases_by_id["D23"]["proof_nodes"] == [
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
+        "test_round19_supported_host_release_gate_inventory_is_exact"
+    ]
+    assert cases_by_id["D24"]["proof_nodes"] == [
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
+        "test_round19_supported_host_release_gate_inventory_is_exact"
+    ]
+    assert cases_by_id["D27"]["proof_nodes"] == [
+        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
+        "test_round21_handoff_authority_identity_matrix[H03]",
+        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
+        "test_round21_handoff_authority_identity_matrix[H04]",
+    ]
+    assert cases_by_id["D28"]["proof_nodes"] == [
+        "menagerie/crawler/tests/test_round21_conformance_composition.py::"
+        "test_round21_conformance_registry_is_total_and_executed"
+    ]
+    assert all(
+        "test_round21_ci_attestations_cover_registry_without_skip"
+        not in "\n".join(case["proof_nodes"])
+        for case in cases_by_id.values()
+    )
     assert all(
         "test_round21_conformance_registry_is_total_and_executed"
         not in "\n".join(case["proof_nodes"])
