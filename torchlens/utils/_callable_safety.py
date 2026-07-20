@@ -1105,9 +1105,11 @@ def _is_recognized_operator(real: Callable[..., Any], terminal_name: str) -> boo
     ``x.H`` / ``x.mH`` / ``x.real`` / ``x.imag`` getters -- see
     ``_PURE_TENSOR_PROPERTY_NAMES``, structurally computed). Every
     other internal builtin on those roots is default-DENIED (the r43 inversion). Note the
-    name/verb belts in ``_is_side_effecting_callable_name`` run BEFORE this and catch the
-    overridable-but-unsafe cases (e.g. ``share_memory_``), so identity-recognition here
-    never re-admits a belt-denied op.
+    name/verb belts in ``_is_side_effecting_callable_name`` AND the r47 forward-dunder shape
+    gate (``_is_denied_forward_dunder_name``, positive ``_ALLOWED_FORWARD_DUNDERS`` allowlist)
+    run BEFORE this and catch the overridable-but-unsafe cases (e.g. ``share_memory_``, and the
+    non-forward pickle-protocol ``__setstate__`` storage rebind), so identity-recognition here
+    never re-admits a belt-denied or non-forward-dunder op.
     """
 
     if id(real) in _torch_overridable_callable_ids():
@@ -1121,14 +1123,148 @@ def _is_recognized_operator(real: Callable[..., Any], terminal_name: str) -> boo
     return terminal_name in _PURE_TENSOR_PROPERTY_NAMES
 
 
+# POSITIVE forward-dunder allowlist (r47, secE_1). The r43 recognized-operator gate
+# admits a callable by torch-OVERRIDABLE identity / aten schema; a NON-forward dunder
+# that satisfies overridable identity therefore slips (``Tensor.__setstate__`` -- the
+# pickle-protocol state restorer whose legacy tuple form REBINDS the tensor's storage to
+# an attacker donor with a fabricated size/stride, the SAME uninitialized/OOB heap-read
+# class the storage belt denies ``set_`` / ``resize_`` / ``share_memory_`` for; and its 9
+# siblings ``__reduce_ex__`` / ``__array__`` / ``__array_wrap__`` / ``__deepcopy__`` /
+# ``__dlpack__`` / ``__dlpack_device__`` / ``__format__`` / ``__repr__`` / ``__reversed__``).
+#
+# A blanket dunder-DENY is WRONG: the run path resolves genuine FORWARD dunders. An
+# exhaustive live ``torch.Tensor`` dunder sweep (torch 2.8, py3.11) found 14 Python-level
+# forward dunders on the gated root ``torch._tensor`` alone -- ``__pow__`` / ``__floordiv__``
+# / ``__rmatmul__`` / ``__rsub__`` / ``__rpow__`` / ``__rtruediv__`` / ``__rfloordiv__`` /
+# ``__rlshift__`` / ``__rrshift__`` / ``__rmod__`` / ``__rdiv__`` / ``__ipow__`` /
+# ``__len__`` / ``__contains__`` -- plus the arithmetic ``__add__`` / ``__mul__`` /
+# ``__matmul__`` / ``__getitem__`` and their in-place / comparison / bitwise siblings on the
+# module-less descriptor path. Denying those breaks replay (violates the LOCKED zero-
+# forward-regression + validation-tripwire rules).
+#
+# So we ADMIT exactly the operator-protocol dunders -- arithmetic / reflected / in-place /
+# comparison / bitwise / index-and-item / numeric-conversion -- and DENY every OTHER
+# ``__x__`` by SHAPE, even when torch-OVERRIDABLE. Verified against the full live sweep:
+# the allowlist yields ZERO forward regressions (every currently-admitted forward dunder
+# is a member) and newly denies EXACTLY the 10 dangerous non-forward dunders above. The
+# absent members (``__divmod__`` / ``__imatmul__`` / ``__rdivmod__`` / ``__round__`` /
+# ``__trunc__`` / ``__floor__`` / ``__ceil__``) are future-compatible siblings that harm
+# nothing when unbound. This is the same closure posture as the r43 ``share_memory_`` pin:
+# an overridable-but-non-forward op denied by shape, not by growing an enumeration.
+_ALLOWED_FORWARD_DUNDERS: frozenset[str] = frozenset(
+    {
+        # binary arithmetic + reflected + in-place
+        "__add__",
+        "__radd__",
+        "__iadd__",
+        "__sub__",
+        "__rsub__",
+        "__isub__",
+        "__mul__",
+        "__rmul__",
+        "__imul__",
+        "__matmul__",
+        "__rmatmul__",
+        "__imatmul__",
+        "__truediv__",
+        "__rtruediv__",
+        "__itruediv__",
+        "__div__",
+        "__rdiv__",
+        "__idiv__",
+        "__floordiv__",
+        "__rfloordiv__",
+        "__ifloordiv__",
+        "__mod__",
+        "__rmod__",
+        "__imod__",
+        "__divmod__",
+        "__rdivmod__",
+        "__pow__",
+        "__rpow__",
+        "__ipow__",
+        # bitwise
+        "__lshift__",
+        "__rlshift__",
+        "__ilshift__",
+        "__rshift__",
+        "__rrshift__",
+        "__irshift__",
+        "__and__",
+        "__rand__",
+        "__iand__",
+        "__or__",
+        "__ror__",
+        "__ior__",
+        "__xor__",
+        "__rxor__",
+        "__ixor__",
+        # unary arithmetic
+        "__neg__",
+        "__pos__",
+        "__abs__",
+        "__invert__",
+        # comparison
+        "__lt__",
+        "__le__",
+        "__eq__",
+        "__ne__",
+        "__gt__",
+        "__ge__",
+        # index / item / container-length / membership
+        "__getitem__",
+        "__setitem__",
+        "__delitem__",
+        "__len__",
+        "__contains__",
+        "__index__",
+        # numeric conversion (pure value reads; no storage/callable/state side effect)
+        "__int__",
+        "__float__",
+        "__complex__",
+        "__bool__",
+        "__nonzero__",
+        "__long__",
+        "__round__",
+        "__trunc__",
+        "__floor__",
+        "__ceil__",
+    }
+)
+
+
+def _is_denied_forward_dunder_name(name: str) -> bool:
+    """Return whether a dunder terminal name is a NON-forward protocol method to DENY (r47).
+
+    secE_1: a captured forward op node legitimately resolves to an OPERATOR-PROTOCOL dunder
+    (arithmetic / reflected / in-place / comparison / bitwise / index-item / numeric-
+    conversion -- ``_ALLOWED_FORWARD_DUNDERS``). EVERY OTHER ``__x__`` reaching the run-path
+    reattach gate is a NON-forward protocol method (pickle/state ``__setstate__`` /
+    ``__reduce_ex__``, copy ``__deepcopy__``, array/export ``__array__`` / ``__array_wrap__``
+    / ``__dlpack__`` / ``__dlpack_device__``, stringify ``__format__`` / ``__repr__``, iter
+    ``__reversed__``) a genuine forward op never names -- deny by SHAPE even when torch-
+    OVERRIDABLE, closing the storage-rebind ``__setstate__`` class the name/storage belts
+    miss (they key on ``set_`` prefix / ``resize`` / ``share_memory`` tokens, none of which a
+    leading-``__`` dunder carries). Non-dunder names return ``False`` (untouched), so the
+    ``operator`` / torch-function surface is unaffected.
+    """
+
+    return name.startswith("__") and name.endswith("__") and name not in _ALLOWED_FORWARD_DUNDERS
+
+
 def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     """Return whether a resolved callable is a pure, side-effect-free forward op.
 
     The callable is unwrapped to its real identity, then admitted only if (a) its
     terminal NAME is not a side-effecting callable (file-I/O / serialization /
     import gadget, process-global-state mutator, or storage-unsafe in-place op --
-    incl. the r43 ``share_memory_`` storage rebind), (b) its signature exposes no
-    arbitrary-callable parameter, and (c) its module clears the gate.
+    incl. the r43 ``share_memory_`` storage rebind), (a2) its terminal name, if a
+    dunder, is one of the operator-protocol forward dunders (``_ALLOWED_FORWARD_DUNDERS``:
+    arithmetic / reflected / in-place / comparison / bitwise / index-item / numeric-
+    conversion) -- every OTHER ``__x__`` (the r47 secE_1 storage-REBIND ``__setstate__``
+    and its pickle/copy/array/dlpack/format/repr/reversed siblings) is denied by shape
+    even when torch-OVERRIDABLE, (b) its signature exposes no arbitrary-callable
+    parameter, and (c) its module clears the gate.
 
     Module resolution (r43): the exact internal-builtin roots ``torch`` / ``torch._C``
     / ``torch._tensor`` are gated by the STRUCTURAL recognized-operator predicate
@@ -1163,6 +1299,18 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
 
     real = _unwrap_capture_wrapper(func)
     if _is_side_effecting_callable_name(real):
+        return False
+    # r47 (secE_1): deny NON-forward protocol dunders by SHAPE (positive forward-dunder
+    # allowlist). Runs BEFORE every module branch, so it covers BOTH the module-less
+    # ``_is_tensor_method_descriptor`` path AND the gated-root ``_is_recognized_operator``
+    # path -- closing ``Tensor.__setstate__`` (an overridable storage-REBIND the name/storage
+    # belts miss because its leading-``__`` carries no ``set_`` / ``resize`` / ``share_memory``
+    # token) and its pickle/copy/array/dlpack/format/repr/reversed siblings, while the genuine
+    # forward operator dunders (``__add__`` / ``__mul__`` / ``__matmul__`` / ``__getitem__`` /
+    # ``__pow__`` / ``__floordiv__`` / reflected ops / ``__len__`` / ``__contains__``) stay
+    # admitted. Deliberately a DEDICATED helper, NOT folded into ``_is_side_effecting_callable_name``
+    # (whose second caller ``is_inert_first_party_callable`` gates ``torchlens.*`` facet recipes).
+    if _is_denied_forward_dunder_name(_terminal_callable_name(real)):
         return False
     # r41: deny higher-order / callback-taking ops by SIGNATURE shape (``torch.cond`` /
     # ``while_loop`` / ``handle_torch_function`` / ``triplet_margin_with_distance_loss`` /
