@@ -987,8 +987,13 @@ seed) reports `unverifiable` + `not_applicable`:
    be class-patched, so the profile-hook receiver typing is the mechanism -- an externally-held
    generator drawn on the owner or an in-window helper thread is caught, including the
    hon1_1/corr2_2 cross-thread case), belted by a cheap thread-independent before/after state
-   digest of any generator or bare BitGenerator the MODEL itself holds. The model inventory walks
-   every reference edge that can be followed WITHOUT executing user-defined code (r53 corr/F1):
+   digest of any generator or bare BitGenerator the MODEL itself holds. A STATELESS
+   `random.Random` subclass -- `random.SystemRandom`, whose `getstate()` raises
+   `NotImplementedError` by design -- is monitored-not-digestible (r55 corr_1): mere possession
+   of an UNDRAWN instance never ceilings a deterministic capture, while its draws stay
+   class-patch witnessed; any OTHER `getstate()` failure still fails closed to
+   `inventory_state_read_failed`. The model inventory walks
+   every reference edge that can be followed WITHOUT executing user-defined code:
    instance `__dict__`/`__slots__` surfaces (never invoking a property or `__getattr__` --
    r42 corr2_1), Mapping/Collection container protocols (every `collections.abc.Mapping`
    contributes BOTH its keys/values AND, when the mapping object is a custom (non-stdlib) inert
@@ -1001,12 +1006,22 @@ seed) reports `unverifiable` + `not_applicable`:
    classes (raw mappingproxy reads -- the descriptor protocol never fires; torch/stdlib/numpy
    implementation classes are trusted leaves), weak references (`weakref.ref`/`WeakMethod`
    referents through the base C dereference, weak containers through the container protocols),
-   and callable interiors (`__closure__` cells, `__defaults__`/`__kwdefaults__`,
-   `functools.partial` `func`/`args`/`keywords`, `property` `fget`/`fset`/`fdel`,
-   `staticmethod`/`classmethod` `__func__`, bound-method `__func__`/`__self__`, and callable
-   instances' own attribute surfaces), all via base-type descriptor reads immune to hostile
-   subclass shadowing. It never invokes properties, descriptors, `__getattr__`, or arbitrary
-   callables. Every reachable `nn.Module` -- registered or held UNREGISTERED behind any walked
+   and -- r55 C6 (corr_2/corr_4), superseding the r53 hand-maintained callable-interior
+   vocabulary -- EVERY remaining node's reference edges through the AUTHORITATIVE
+   `gc.get_referents` enumerator: CPython `tp_traverse`, pure C field enumeration that cannot
+   execute Python, exposing every inert reference field an object type declares (closure cells,
+   `__defaults__`/`__kwdefaults__`, `__annotations__`, `functools` wrapper `__wrapped__` chains,
+   `partial`/`property`/`staticmethod`/`classmethod` interiors, bound-method
+   `__func__`/`__self__`, function and callable-instance `__dict__`/`__slots__` surfaces) minus
+   exactly two documented exclusion families: referents whose identity is a loaded module's
+   `__dict__` (shared namespaces), and the justified expansion leaves (modules, code objects,
+   C builtin functions, frames, tensors, ndarrays). This enumerator is ROOTED at the model and
+   feeds the same cycle-guarded, node-capped walk -- it is not a process-wide `gc.get_objects()`
+   scan -- and a new inert hiding field is unreachable only if CPython itself cannot traverse it
+   for garbage collection: reachability holds by construction, not by table maintenance. The
+   inventory never invokes properties, descriptors, `__getattr__`, or arbitrary
+   callables (immunizer-pinned: hostile property/`__getattr__`/descriptor counters stay at
+   zero). Every reachable `nn.Module` -- registered or held UNREGISTERED behind any walked
    edge -- is descended through the same surfaces (r51 hon1_1).
    Descent is gated on `collections.abc.Collection` (Sized), so a one-shot iterator / generator
    attribute is NEVER consumed. An opaque queue with no non-mutating payload snapshot is SKIPPED only
@@ -1023,7 +1038,8 @@ seed) reports `unverifiable` + `not_applicable`:
    reading as no-consumption -- a documented conservative over-trigger for a deterministic model
    holding a non-empty opaque queue of non-RNG payloads, since a generator inside it drawn on a
    pre-existing worker would otherwise be unwitnessed. Cycle-safe and unbounded for any realistic
-   model -- never a process-wide `gc` scan and never treating unrelated worker threads as evidence;
+   model -- rooted per-object `gc.get_referents` enumeration, never a process-wide
+   `gc.get_objects()` scan, and never treating unrelated worker threads as evidence;
    exhaustion of the defensive sweep cap downgrades capture completeness to INCOMPLETE
    (`inventory_budget_exhausted`) -- a truncated inventory never reads as no-consumption;
 3. UNSEEDED numpy generator CONSTRUCTION, via `numpy.random.default_rng` and the writable
@@ -1084,13 +1100,17 @@ reads; (ii) ctypes / user C-extension entropy or clock reads that never cross a 
 call surface, including C-mediated indirect calls of held builtins (a
 `functools.partial(time.time)()` invoked from C emits no Python-visible call of the monitored
 builtin); (iii) legacy `RandomState()` C-level CONSTRUCTION entropy (its DRAWS stay
-digest/profile-witnessed); (iv) an externally-held generator drawn on a PRE-EXISTING
+digest/profile-witnessed); (iv) a generator drawn on a PRE-EXISTING
 (already-running, non-owner, non-hooked) thread -- which `threading.setprofile` cannot reach on
-Python <= 3.11 -- that is reachable only BY EXECUTING USER CODE: a property/descriptor `__get__`
-body, `__getattr__`, or a callable's return value. Every INERTLY-followable reference edge IS
-walked by the model inventory (r53 corr/F1; the full edge vocabulary in item 2 above), so
-descriptor-held, weakref-held, class-attribute, closure/default/kwdefault/partial/property-interior,
-and callable-instance holders -- like the earlier container-protocol, container-subclass, and
+Python <= 3.11 -- that is reachable only BY EXECUTING USER CODE (a property/descriptor `__get__`
+body, `__getattr__`, or a callable's return value) or held ONLY in a SHARED module-global
+namespace (the r55 C6 shared-namespace exclusion, explicit: loaded-module `__dict__` identities
+are never expanded). Every INERTLY-followable model-rooted reference edge IS
+walked by the model inventory (the r55 authoritative `gc.get_referents` enumeration in item 2
+above -- CPython `tp_traverse`, complete by construction), so descriptor-held, weakref-held,
+class-attribute, closure/default/kwdefault/annotation/partial/property-interior,
+`functools`-wrapper (`__wrapped__`), and callable-instance holders -- like the earlier
+container-protocol, container-subclass, and
 unregistered-`nn.Module` holders (r42/r45/r47/r51) -- are all witnessed on any thread; only a
 NON-EMPTY OPAQUE queue's contents remain a conservative fail-closed residual, never a false
 negative. Also of this class: a bare one-shot iterator attribute, which cannot be inspected
@@ -1112,7 +1132,13 @@ cases.
 
 The uninitialized-memory op family -- the `empty` factory family (`empty`, `empty_like`,
 `empty_permuted`, `empty_strided`, `new_empty`, `new_empty_strided`, and their torch-level
-spellings including `empty_quantized`) plus a `resize_`/`resize_as_` that GROWS its receiver
+spellings including `empty_quantized`), the SIZE-FORM legacy `Tensor.new` allocator (r55
+hon_1: `new(sizes)`/`new(int...)`/`new(torch.Size)` returns allocator garbage byte-identical
+to `new_empty` and has NO aten spelling; the DATA form `new([values])`/`new(tensor)` is a
+deterministic copy constructor and is NEVER tainted -- consumers gate the size-vs-data
+argument form through the shared predicate, and an UNDECIDABLE form -- e.g. a decoded
+int-tuple, since the portable literal grammar erases `torch.Size` to a plain tuple -- fails
+closed to tainted), plus a `resize_`/`resize_as_` that GROWS its receiver
 beyond its pre-call element count -- produces bytes that are not a function of the recorded
 computation. Family products (and anything value-derived from them) are nondeterministic value
 sources of kind `uninitialized_alloc`, UNLESS the governing ambient context records
@@ -1136,8 +1162,15 @@ as unattributable (fail-closed), like raw seeded-RNG output.
 No `torch.Tag` marks uninitialized allocation, so the family is a closed name table in ONE
 shared predicate block (`utils/rng.py`) consumed by all three recognition layers (the load-side
 value-source classifier, the producer origin ledger, and the pruned-orphan control walk) and
-defended by an aten-namespace drift meta-test: a new `empty*`/`resize*` aten name that is
-neither tabled as family nor allowlisted as justified-non-family is a failing test. A
+defended over BOTH spelling surfaces by drift meta-tests (r55 hon_1): the aten-namespace test
+(a new `empty*`/`resize*` aten name that is neither tabled as family nor allowlisted as
+justified-non-family is a failing test) AND the Python-`torch.Tensor`-method test (a
+`new`/`new_*`/`*empty*`/`*resize*` Tensor method -- with or without an aten spelling -- that is
+neither tabled nor justified-non-family is a failing test, so a future python-only uninit
+factory cannot slip both surfaces). At the dispatch level the size-form `Tensor.new`
+redispatches `aten.empty.memory_format` (pinned by a live decomposition test), so the producer
+origin ledger covers it transitively; the python-method recognition in the completeness witness
+declares the same family for the qualname surface the load-side classifier sees. A
 partially-written uninitialized buffer is an accepted conservatism: a slice-filled cache that
 in fact fully covers its bytes reports attestation `not_applicable` (and `unverifiable` if
 branched on) rather than proving interval coverage -- never a false `verified`; interval-
