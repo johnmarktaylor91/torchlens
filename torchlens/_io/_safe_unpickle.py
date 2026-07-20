@@ -78,6 +78,29 @@ Allowlist policy (fail-closed):
 
 If a future legitimate class is not yet covered, loading it fails closed with a
 clear error; we NEVER admit a code-exec gadget to make a load succeed.
+
+STRICT-SUBSET OF THE TORCH ``weights_only`` BASELINE (r49, secA_1). This unpickler's
+effective admit+execute surface is a documented STRICT SUBSET of torch's
+``_weights_only_unpickler._get_allowed_globals()`` baseline. Two layers enforce it:
+(1) torch STORAGE constructors are denied by IDENTITY at ``find_class``
+(``_is_torch_storage_type`` -- including ``torch.storage.{Typed,Untyped}Storage``,
+which torch's OWN baseline hands back as the real, constructable classes, and every
+legacy ``torch.<dtype>Storage``). Constructing a storage allocates raw memory
+(``UntypedStorage(N)`` -> a multi-GiB alloc DoS), and ``.tlspec`` NEVER needs one --
+tensor payloads travel as ``BlobRef``s and any embedded storage routes through the
+wrapped ``("torch.storage", "_load_from_bytes")`` path (a SEPARATE nested
+``weights_only`` VM). (2) ``SafeBundleUnpickler`` is a pure-Python
+``pickle._Unpickler`` whose rebuilt opcode ``dispatch`` gates BUILD / REDUCE / NEWOBJ /
+NEWOBJ_EX to baseline discipline: a BUILD may not apply a ``__setstate__`` /
+storage-rebind to a torch Tensor / Storage / Parameter (the ``find_class``-invisible
+``Tensor.__setstate__`` / ``set_`` uninitialized-heap-tensor vector), and a
+REDUCE/NEWOBJ may not construct a storage even if a storage type reached the stack by
+some means other than ``find_class``. This is enforced by
+``tests/test_r49_unpickler_weights_only_baseline.py``; its anti-drift invariant is that
+the set of ``(module, name)`` for which this unpickler resolves a CONSTRUCTABLE
+storage-or-tensor object is EMPTY -- a CONSTRUCTOR-SEMANTICS assertion, NOT a
+string-subset of ``_get_allowed_globals()`` (which is too weak, since the baseline set
+itself lists the two real storage classes by name).
 """
 
 from __future__ import annotations
@@ -356,6 +379,71 @@ def _torch_type_denied(pickled_module: str, pickled_name: str, obj: type) -> boo
     real_name = str(getattr(obj, "__qualname__", "") or getattr(obj, "__name__", "") or "")
     haystack = f"{pickled_name} {real_name}".lower()
     return any(token in haystack for token in _DENIED_TORCH_TYPE_NAME_TOKENS)
+
+
+# STORAGE-CONSTRUCTOR identity denylist (r49, secA_1). The torch-``type`` branch of
+# ``find_class`` admits any resolved torch DATA ``type`` on the premise that
+# "constructing a torch data type executes no attacker code". That premise HOLDS for
+# tensor / Size / Parameter / dtype / nn-module classes, but is FALSE for a torch
+# STORAGE class: a pickle ``REDUCE`` of ``torch.UntypedStorage`` with an attacker
+# integer -- ``UntypedStorage(6_000_000_000)`` -- allocates that many raw bytes at
+# unpickle time (a multi-GiB out-of-memory DoS), and a constructed storage is the only
+# source of an uninitialized-heap tensor that a following BUILD/``set_`` could rebind.
+# torch's own ``weights_only`` baseline (``_weights_only_unpickler``) DOES list the
+# real ``torch.storage.{Typed,Untyped}Storage`` classes, so denying them here makes
+# this unpickler a documented STRICT SUBSET of that baseline. No legitimate ``.tlspec``
+# metadata references a storage type in the outer stream: tensor payloads are
+# ``BlobRef``s, and any embedded storage is reconstructed by the wrapped
+# ``_safe_load_from_bytes`` path (a separate nested ``weights_only`` load), never by an
+# outer storage global. The set is built from ``torch._storage_classes`` (all 31
+# typed/untyped classes) plus the canonical ``TypedStorage`` / ``UntypedStorage``, and
+# an ``issubclass`` belt covers any future storage subclass (e.g. a legacy typed
+# ``FloatStorage`` is a ``TypedStorage`` subclass).
+_TORCH_STORAGE_BASE_CLASSES: tuple[type, ...] = tuple(
+    cls
+    for cls in (
+        getattr(torch.storage, "TypedStorage", None),
+        getattr(torch, "UntypedStorage", None),
+        getattr(torch.storage, "_StorageBase", None),
+    )
+    if isinstance(cls, type)
+)
+
+_TORCH_STORAGE_CLASSES: frozenset[type] = frozenset(
+    set(getattr(torch, "_storage_classes", frozenset())) | set(_TORCH_STORAGE_BASE_CLASSES)
+)
+
+
+def _is_torch_storage_type(obj: Any) -> bool:
+    """Return whether ``obj`` is a torch STORAGE *class* (its ctor allocates memory).
+
+    Surface-complete + version-robust: an identity membership test over
+    ``torch._storage_classes`` (plus ``TypedStorage`` / ``UntypedStorage`` /
+    ``_StorageBase``) and an ``issubclass`` belt so any future storage subclass is
+    also caught. Never raises (a non-type ``obj`` returns ``False``).
+    """
+
+    if not isinstance(obj, type):
+        return False
+    if obj in _TORCH_STORAGE_CLASSES:
+        return True
+    if not _TORCH_STORAGE_BASE_CLASSES:
+        return False
+    try:
+        return issubclass(obj, _TORCH_STORAGE_BASE_CLASSES)
+    except TypeError:  # pragma: no cover - defensive; issubclass on odd metaclasses.
+        return False
+
+
+def _is_torch_storage_instance(obj: Any) -> bool:
+    """Return whether ``obj`` is a torch STORAGE *instance* (a BUILD/rebind target)."""
+
+    if not _TORCH_STORAGE_BASE_CLASSES:
+        return False
+    try:
+        return isinstance(obj, _TORCH_STORAGE_BASE_CLASSES)
+    except TypeError:  # pragma: no cover - defensive.
+        return False
 
 
 @dataclass(frozen=True)
@@ -819,13 +907,50 @@ def _safe_load_from_bytes(data: bytes) -> Any:
         ) from exc
 
 
-class SafeBundleUnpickler(pickle.Unpickler):
+# Base pure-Python opcode handlers, captured from the dispatch table. typeshed does
+# NOT expose ``load_build`` / ``load_reduce`` / ``load_newobj`` / ``load_newobj_ex`` as
+# named methods on ``pickle._Unpickler``, so the Layer-2 overrides delegate to these
+# captured unbound functions (each called with ``self``) rather than
+# ``pickle._Unpickler.load_build(self)`` (which mypy cannot resolve).
+_BASE_LOAD_BUILD = pickle._Unpickler.dispatch[pickle.BUILD[0]]
+_BASE_LOAD_REDUCE = pickle._Unpickler.dispatch[pickle.REDUCE[0]]
+_BASE_LOAD_NEWOBJ = pickle._Unpickler.dispatch[pickle.NEWOBJ[0]]
+_BASE_LOAD_NEWOBJ_EX = pickle._Unpickler.dispatch[pickle.NEWOBJ_EX[0]]
+
+
+class _DenyMissingDispatch(dict):  # type: ignore[type-arg]
+    """Opcode dispatch table that raises ``UnpicklingError`` on an unknown opcode.
+
+    The C ``pickle.Unpickler`` raises ``pickle.UnpicklingError`` ("invalid load key")
+    on a corrupt / truncated / unknown opcode; the pure-Python ``pickle._Unpickler``
+    instead raises a bare ``KeyError`` from its ``dispatch[key]`` lookup. Migrating the
+    base class to pure-Python (r49, secA_1) must NOT change that observable failure mode
+    -- callers (e.g. ``bundle.py::_load_trace_payload``) catch ``pickle.UnpicklingError``
+    to translate a corrupt ``metadata.pkl`` into a clean ``TorchLensIOError``. A missing
+    opcode here therefore surfaces as ``UnpicklingError``, matching the C VM.
+    """
+
+    def __missing__(self, key: int) -> None:
+        raise pickle.UnpicklingError(f"invalid load key, {chr(key)!r}.")
+
+
+class SafeBundleUnpickler(pickle._Unpickler):
     """Default-deny unpickler for untrusted TorchLens bundle ``metadata.pkl``.
 
     Applies an optional rename map (for classes moved by locked renames) and then
     gates every resolved global through the module allowlist. Anything outside the
     allowlist raises :class:`pickle.UnpicklingError` without importing or calling
     attacker-chosen code.
+
+    Base class (r49, secA_1): this is the PURE-PYTHON ``pickle._Unpickler``, NOT the C
+    ``pickle.Unpickler``. The C VM runs REDUCE/BUILD entirely in C -- a subclass method
+    override of ``load_build`` is *bypassed* -- so opcode-level policy (Layer 2 below)
+    is impossible on the C base. The pure-Python VM dispatches each opcode through a
+    CLASS-LEVEL ``dispatch`` dict of unbound functions bound at class-body time; merely
+    ``def load_build`` on the subclass is INERT (the dict still points at the base
+    function). We therefore REBUILD ``dispatch`` in the class body (see the block after
+    ``find_class``) so the overrides are actually invoked. The one-time pure-Python cost
+    at ``tl.load()`` (tens of ms on a realistic ``metadata.pkl``) is never a hot path.
     """
 
     def __init__(
@@ -984,6 +1109,25 @@ class SafeBundleUnpickler(pickle.Unpickler):
                         f"resolved to a type owned by "
                         f"{str(getattr(obj, '__module__', '') or '')!r} (a dotted "
                         "name that escapes the torch package is refused)."
+                    )
+                # STORAGE-CONSTRUCTOR deny (r49, secA_1). A torch STORAGE class is a
+                # torch-owned DATA ``type`` and would otherwise pass here, but its
+                # construction is NOT inert: a following ``REDUCE`` of
+                # ``torch.UntypedStorage(N)`` allocates N raw bytes (a multi-GiB alloc
+                # DoS) and is the sole source of an uninitialized-heap storage a BUILD
+                # could rebind onto a tensor. torch's own ``weights_only`` baseline
+                # lists the real ``torch.storage.{Typed,Untyped}Storage`` classes, so
+                # denying them makes this unpickler a STRICT SUBSET of that baseline.
+                # ``.tlspec`` never needs one (payloads are BlobRefs; embedded storages
+                # route through the wrapped ``_safe_load_from_bytes`` nested load).
+                if _is_torch_storage_type(obj):
+                    raise pickle.UnpicklingError(
+                        "Blocked torch storage constructor during bundle metadata "
+                        f"unpickle: {module}.{name} (constructing a storage allocates "
+                        "raw memory -- an UntypedStorage(N) out-of-memory DoS and the "
+                        "source of an uninitialized-heap tensor; .tlspec tensor "
+                        "payloads are BlobRefs and embedded storages load through the "
+                        "wrapped weights_only _load_from_bytes path)."
                     )
                 if _torch_type_denied(module, name, obj):
                     raise pickle.UnpicklingError(
@@ -1244,3 +1388,93 @@ class SafeBundleUnpickler(pickle.Unpickler):
         #    reference is preserved so the trace loads structurally, and any attempt
         #    to CALL it (facet computation, or a ``__reduce__`` gadget) fails closed.
         return _DeferredForeignCallable(module, name)
+
+    # --- Layer 2: opcode-level policy (r49, secA_1) -------------------------------
+    #
+    # ``find_class`` gates which globals resolve, but three opcodes act on objects
+    # ALREADY on the stack, INVISIBLE to ``find_class``:
+    #   * BUILD applies a ``__setstate__`` / ``__dict__`` update to ``stack[-1]``. On a
+    #     torch Tensor / Storage / Parameter this reaches ``Tensor.__setstate__`` /
+    #     ``set_`` and can rebind the target onto an uninitialized or oversized storage
+    #     (an uninitialized-heap tensor) -- a storage rebind that never passed through
+    #     ``find_class``.
+    #   * REDUCE / NEWOBJ / NEWOBJ_EX CALL / ``__new__`` a callable or class on the
+    #     stack. That object normally arrives via ``find_class`` (Layer 1 already denies
+    #     storage ctors there), but a defense-in-depth belt refuses constructing a
+    #     storage even if a storage type reached the stack by some other route (a prior
+    #     REDUCE result, a memoized object, ...).
+    # Legit ``.tlspec`` metadata never BUILDs a torch tensor/storage/parameter and never
+    # constructs a storage in the outer stream, so these gates refuse nothing legit.
+
+    def load_build(self) -> None:
+        """Refuse a BUILD (``__setstate__`` / storage-rebind) on a torch tensor/storage."""
+
+        # Base ``load_build`` is ``state = stack.pop(); inst = stack[-1]`` -- so before
+        # it runs, the target instance is ``stack[-2]`` (``state`` is ``stack[-1]``).
+        inst = self.stack[-2]  # type: ignore[attr-defined]
+        if isinstance(inst, torch.Tensor) or _is_torch_storage_instance(inst):
+            raise pickle.UnpicklingError(
+                "Blocked BUILD applied to a torch "
+                f"{type(inst).__module__}.{type(inst).__qualname__} during bundle "
+                "metadata unpickle: a pickle BUILD invokes __setstate__ / storage "
+                "rebind (Tensor.set_) on the target, which can rebind it onto an "
+                "uninitialized or oversized storage. .tlspec metadata never BUILDs a "
+                "torch tensor/storage/parameter (payloads are BlobRefs)."
+            )
+        return _BASE_LOAD_BUILD(self)  # type: ignore[arg-type]
+
+    def load_reduce(self) -> None:
+        """Refuse a REDUCE that would construct a torch storage (DoS / uninit heap)."""
+
+        # Base ``load_reduce`` is ``args = stack.pop(); func = stack[-1]; ...`` -- so
+        # before it runs, ``func`` is ``stack[-2]`` (``args`` is ``stack[-1]``).
+        func = self.stack[-2]  # type: ignore[attr-defined]
+        if _is_torch_storage_type(func):
+            raise pickle.UnpicklingError(
+                "Blocked storage construction via REDUCE during bundle metadata "
+                f"unpickle: {getattr(func, '__module__', '')}."
+                f"{getattr(func, '__qualname__', func)!r} (constructing a torch storage "
+                "allocates raw memory -- an out-of-memory DoS and the source of an "
+                "uninitialized-heap tensor)."
+            )
+        return _BASE_LOAD_REDUCE(self)  # type: ignore[arg-type]
+
+    def load_newobj(self) -> None:
+        """Refuse a NEWOBJ (``cls.__new__``) that would allocate a torch storage."""
+
+        # Base ``load_newobj`` is ``args = stack.pop(); cls = stack.pop(); ...`` -- so
+        # ``cls`` is ``stack[-2]`` (``args`` is ``stack[-1]``).
+        cls = self.stack[-2]  # type: ignore[attr-defined]
+        if _is_torch_storage_type(cls):
+            raise pickle.UnpicklingError(
+                "Blocked storage construction via NEWOBJ during bundle metadata "
+                f"unpickle: {getattr(cls, '__module__', '')}."
+                f"{getattr(cls, '__qualname__', cls)!r}."
+            )
+        return _BASE_LOAD_NEWOBJ(self)  # type: ignore[arg-type]
+
+    def load_newobj_ex(self) -> None:
+        """Refuse a NEWOBJ_EX (``cls.__new__``) that would allocate a torch storage."""
+
+        # Base ``load_newobj_ex`` is ``kwargs = stack.pop(); args = stack.pop();
+        # cls = stack.pop()`` -- so ``cls`` is ``stack[-3]``.
+        cls = self.stack[-3]  # type: ignore[attr-defined]
+        if _is_torch_storage_type(cls):
+            raise pickle.UnpicklingError(
+                "Blocked storage construction via NEWOBJ_EX during bundle metadata "
+                f"unpickle: {getattr(cls, '__module__', '')}."
+                f"{getattr(cls, '__qualname__', cls)!r}."
+            )
+        return _BASE_LOAD_NEWOBJ_EX(self)  # type: ignore[arg-type]
+
+    # REBUILD the pure-Python opcode dispatch table so the overrides above are actually
+    # invoked (proven: ``def load_build`` alone is INERT -- ``pickle._Unpickler.load``
+    # reads ``self.dispatch``, a class-level dict of unbound base functions bound at
+    # class-body time; the subclass method is not consulted unless the dict is
+    # repointed). This is the single load-bearing detail of the C->pure-Python
+    # migration. ``_RenameAwareUnpickler`` inherits this ``dispatch`` unchanged.
+    dispatch = _DenyMissingDispatch(pickle._Unpickler.dispatch)
+    dispatch[pickle.BUILD[0]] = load_build  # type: ignore[assignment]
+    dispatch[pickle.REDUCE[0]] = load_reduce  # type: ignore[assignment]
+    dispatch[pickle.NEWOBJ[0]] = load_newobj  # type: ignore[assignment]
+    dispatch[pickle.NEWOBJ_EX[0]] = load_newobj_ex  # type: ignore[assignment]

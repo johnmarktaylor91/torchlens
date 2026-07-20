@@ -240,14 +240,20 @@ def test_torch_type_denied_helper_classifies_io_types() -> None:
 
 @pytest.mark.smoke
 def test_torch_type_denied_helper_admits_data_types() -> None:
-    """Legit torch DATA types are NOT denied (still admitted through unpickle)."""
+    """Legit torch DATA types are NOT denied (still admitted through unpickle).
+
+    r49 secA_1: storage constructors (``FloatStorage`` / ``TypedStorage`` /
+    ``UntypedStorage``) are NO LONGER admitted -- they are denied at ``find_class`` by
+    ``_is_torch_storage_type`` (their construction allocates raw memory). They are NOT
+    part of the I/O-type ``_torch_type_denied`` helper (which stays orthogonal), so they
+    are covered by the r49 immunizer, not here. This test now pins only the genuinely
+    inert torch DATA types.
+    """
 
     admitted = [
         ("torch", "Size", torch.Size),
         ("torch", "Tensor", torch.Tensor),
         ("torch.nn.parameter", "Parameter", torch.nn.parameter.Parameter),
-        ("torch", "FloatStorage", torch.FloatStorage),
-        ("torch.storage", "TypedStorage", torch.storage.TypedStorage),
         ("torch.nn.modules.linear", "Identity", torch.nn.modules.linear.Identity),
         ("torch.nn.modules.conv", "Conv2d", torch.nn.modules.conv.Conv2d),
         ("torch.nn.modules.linear", "Linear", torch.nn.modules.linear.Linear),
@@ -256,6 +262,20 @@ def test_torch_type_denied_helper_admits_data_types() -> None:
         assert not _torch_type_denied(module, name, obj), f"{module}.{name} should be admitted"
         resolved = SafeBundleUnpickler(io.BytesIO(b"")).find_class(module, name)
         assert isinstance(resolved, type)
+
+
+@pytest.mark.smoke
+def test_torch_storage_constructors_denied_at_find_class() -> None:
+    """r49 secA_1: torch storage classes are denied at ``find_class`` (alloc DoS)."""
+
+    for module, name in (
+        ("torch", "FloatStorage"),
+        ("torch.storage", "TypedStorage"),
+        ("torch.storage", "UntypedStorage"),
+        ("torch", "UntypedStorage"),
+    ):
+        with pytest.raises(pickle.UnpicklingError, match="torch storage constructor"):
+            SafeBundleUnpickler(io.BytesIO(b"")).find_class(module, name)
 
 
 # --------------------------------------------------------------------------- #
