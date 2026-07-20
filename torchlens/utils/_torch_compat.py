@@ -57,10 +57,13 @@ __all__ = [
     "HAS_CUDA_MATMUL_TF32",
     "HAS_CUDNN_FLAGS",
     "HAS_DETERMINISTIC_ALGORITHMS_QUERY",
+    "HAS_FILL_UNINITIALIZED_MEMORY",
     "HAS_FLOAT32_MATMUL_PRECISION",
     "HAS_SDP_TOGGLES",
     "apply_ambient_execution_context",
+    "read_fill_uninitialized_memory",
     "snapshot_ambient_execution_context",
+    "write_fill_uninitialized_memory",
     "HAS_DEVICE_CONTEXT_DISPATCH",
     "HAS_DEVICE_CONSTRUCTORS",
     "HAS_FUNCTORCH_APIS",
@@ -728,6 +731,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_CUDA_MATMUL_TF32",
     "HAS_CUDNN_FLAGS",
     "HAS_SDP_TOGGLES",
+    "HAS_FILL_UNINITIALIZED_MEMORY",
 )
 
 
@@ -1242,11 +1246,49 @@ def _probe_sdp_toggles() -> bool:
     )
 
 
+def _probe_fill_uninitialized_memory() -> bool:
+    """Return whether the deterministic uninit-memory fill knob is exposed.
+
+    ``torch.utils.deterministic.fill_uninitialized_memory`` (torch >= 2.1)
+    governs whether ``torch.use_deterministic_algorithms(True)`` deterministically
+    fills the ``empty`` factory family. Feature-detected for the r53 hon_1/hon_2
+    ambient wave; an absent knob records ``None`` (never a guessed boolean).
+    """
+
+    deterministic = getattr(getattr(torch, "utils", None), "deterministic", None)
+    if deterministic is None:
+        return False
+    try:
+        return isinstance(deterministic.fill_uninitialized_memory, bool)
+    except (AttributeError, RuntimeError):
+        return False
+
+
 HAS_FLOAT32_MATMUL_PRECISION: bool = _probe_float32_matmul_precision()
 HAS_DETERMINISTIC_ALGORITHMS_QUERY: bool = _probe_deterministic_algorithms_query()
 HAS_CUDA_MATMUL_TF32: bool = _probe_cuda_matmul_tf32()
 HAS_CUDNN_FLAGS: bool = _probe_cudnn_flags()
 HAS_SDP_TOGGLES: bool = _probe_sdp_toggles()
+HAS_FILL_UNINITIALIZED_MEMORY: bool = _probe_fill_uninitialized_memory()
+
+
+def read_fill_uninitialized_memory() -> bool | None:
+    """Return the deterministic uninit-memory fill flag, or ``None`` when absent.
+
+    THE one sanctioned read of ``torch.utils.deterministic.fill_uninitialized_memory``
+    (a module-``__getattr__`` property invisible to static typing): the ambient
+    snapshot and the producer-side determinism refinement both route here.
+    """
+
+    if not HAS_FILL_UNINITIALIZED_MEMORY:
+        return None
+    return bool(torch.utils.deterministic.fill_uninitialized_memory)  # type: ignore[attr-defined]
+
+
+def write_fill_uninitialized_memory(value: bool) -> None:
+    """Set the deterministic uninit-memory fill flag (caller checks the flag)."""
+
+    torch.utils.deterministic.fill_uninitialized_memory = bool(value)  # type: ignore[attr-defined]
 
 
 def tensor_version_or_none(tensor: Any) -> int | None:
@@ -1314,6 +1356,15 @@ def snapshot_ambient_execution_context() -> dict[str, Any]:
         "math_sdp_enabled": (
             bool(torch.backends.cuda.math_sdp_enabled()) if HAS_SDP_TOGGLES else None
         ),
+        # r53 hon_1: the GLOBAL autograd/inference mode is a result-affecting
+        # ambient control (a Python branch on ``torch.is_grad_enabled()`` /
+        # ``is_inference_mode_enabled()`` is steered by it). Every supported
+        # torch exposes both queries, so they are REQUIRED strict booleans --
+        # never ``None``, never defaulted.
+        "grad_enabled": bool(torch.is_grad_enabled()),
+        "inference_mode": bool(torch.is_inference_mode_enabled()),
+        # r53 hon_2: deterministic uninit-memory fill knob (feature-detected).
+        "fill_uninitialized_memory": read_fill_uninitialized_memory(),
     }
     return snapshot
 
@@ -1398,6 +1449,20 @@ def apply_ambient_execution_context(values: dict[str, Any]) -> None:
             continue
         _require(HAS_SDP_TOGGLES, field_name)
         getattr(torch.backends.cuda, setter)(bool(recorded))
+    # r53 hon_2: the deterministic uninit-memory fill knob restores through the
+    # ordinary setter path (module property setter; snapshot/apply transactional).
+    fill_uninitialized = values.get("fill_uninitialized_memory")
+    if fill_uninitialized is not None:
+        _require(HAS_FILL_UNINITIALIZED_MEMORY, "fill_uninitialized_memory")
+        write_fill_uninitialized_memory(bool(fill_uninitialized))
+    # r53 hon_1: ``grad_enabled``/``inference_mode`` are deliberately NOT applied
+    # here. Like ``default_device`` (r37 R4 above), they restore as SCOPED
+    # contexts (``torch.set_grad_enabled`` / ``torch.inference_mode``) around the
+    # run transaction in ``_ambient_execution_context_restored``, whose
+    # ``__exit__`` restores the caller's exact mode on every exit path by
+    # construction -- a setter-based apply of a THREAD-LOCAL autograd mode from a
+    # ``finally`` block could race an interleaved caller context. The snapshot
+    # schema keeps both keys for the ambient-coverage meta-test.
 
 
 # --- r35 hon1_4: repr-independent torch structseq field discovery -----------------

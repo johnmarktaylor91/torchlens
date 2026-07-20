@@ -110,7 +110,14 @@
         "input_binding": {"const": "model_site_io_role_v1"},
         "control_witness": {"const": "scalar_bool_and_arm_entry_v1"},
         "initializer_policy_version": {"const": "torchlens_role_init_v2"},
-        "ambient_context": {"type": "object"},
+        "ambient_context": {
+          "type": "object",
+          "properties": {
+            "grad_enabled": {"type": "boolean"},
+            "inference_mode": {"type": "boolean"},
+            "fill_uninitialized_memory": {"type": ["boolean", "null"]}
+          }
+        },
         "payload_layers": {
           "type": "object",
           "required": ["weights", "activations"],

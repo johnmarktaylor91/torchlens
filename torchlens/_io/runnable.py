@@ -241,6 +241,14 @@ def _ambient_execution_context(
     snapshot = getattr(trace, "_runnable_capture_ambient", None)
     if not isinstance(snapshot, Mapping) or "default_dtype" not in snapshot:
         return None
+    # r53 hon_1: the global autograd/inference mode is REQUIRED. A capture
+    # snapshot missing either key predates this schema wave (a stale in-memory
+    # dev capture); fail closed to the absent-context producer refusal -- a
+    # guessed grad mode could bless a different-context comparison as verified.
+    grad_enabled = snapshot.get("grad_enabled")
+    inference_mode = snapshot.get("inference_mode")
+    if not isinstance(grad_enabled, bool) or not isinstance(inference_mode, bool):
+        return None
 
     def _optional_bool(name: str) -> bool | None:
         value = snapshot.get(name)
@@ -270,6 +278,9 @@ def _ambient_execution_context(
         flash_sdp_enabled=_optional_bool("flash_sdp_enabled"),
         mem_efficient_sdp_enabled=_optional_bool("mem_efficient_sdp_enabled"),
         math_sdp_enabled=_optional_bool("math_sdp_enabled"),
+        grad_enabled=grad_enabled,
+        inference_mode=inference_mode,
+        fill_uninitialized_memory=_optional_bool("fill_uninitialized_memory"),
         attestation_ineligible_context=ineligible,
     )
 
@@ -576,6 +587,9 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             flash_sdp_enabled=None,
             mem_efficient_sdp_enabled=None,
             math_sdp_enabled=None,
+            grad_enabled=bool(torch.is_grad_enabled()),
+            inference_mode=bool(torch.is_inference_mode_enabled()),
+            fill_uninitialized_memory=None,
             attestation_ineligible_context=True,
         )
     diagnostics = _deduplicate_diagnostics(diagnostics)

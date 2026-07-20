@@ -113,6 +113,9 @@ def test_authoritative_descriptor_and_report_field_names() -> None:
         "flash_sdp_enabled",
         "mem_efficient_sdp_enabled",
         "math_sdp_enabled",
+        "grad_enabled",
+        "inference_mode",
+        "fill_uninitialized_memory",
         "attestation_ineligible_context",
     )
     assert tuple(field.name for field in fields(ActivationPayloadLayerDescriptor)) == (
@@ -153,6 +156,7 @@ def test_authoritative_descriptor_and_report_field_names() -> None:
         "first_mismatch",
         "numeric_attestation",
         "poisoned",
+        "nondeterministic_sources",
     )
     assert tuple(field.name for field in fields(ReadinessReport)) == (
         "status",

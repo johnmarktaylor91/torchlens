@@ -415,12 +415,34 @@ def _parse_ambient_context(value: Mapping[str, Any]) -> AmbientExecutionContext:
     """
 
     def _optional_bool_field(name: str) -> bool | None:
+        if name not in value:
+            # r53 hon_1 posture: an absent ambient field is a typed parse
+            # refusal (analysis-only load), never a defaulted control.
+            raise ContextFieldInvalidError(
+                f"ambient_context.{name}",
+                "required ambient field is absent; absent context is never "
+                "defaulted (re-capture with this TorchLens version)",
+            )
         raw = value[name]
         if raw is None:
             return None
         if not isinstance(raw, bool):
             raise ContextFieldInvalidError(
                 f"ambient_context.{name}", f"{raw!r} is not a strict boolean or null"
+            )
+        return raw
+
+    def _required_bool_field(name: str) -> bool:
+        # r53 hon_1: the global autograd/inference mode is REQUIRED and strictly
+        # boolean -- there is NO honest default (a defaulted grad mode could
+        # bless a different-ambient comparison as verified), and ``null`` is not
+        # a legal producer value (every supported torch exposes both queries).
+        raw = _optional_bool_field(name)
+        if raw is None:
+            raise ContextFieldInvalidError(
+                f"ambient_context.{name}",
+                "null is not a legal value: the global autograd/inference mode "
+                "is exposed by every supported torch and is never defaulted",
             )
         return raw
 
@@ -456,6 +478,9 @@ def _parse_ambient_context(value: Mapping[str, Any]) -> AmbientExecutionContext:
         flash_sdp_enabled=_optional_bool_field("flash_sdp_enabled"),
         mem_efficient_sdp_enabled=_optional_bool_field("mem_efficient_sdp_enabled"),
         math_sdp_enabled=_optional_bool_field("math_sdp_enabled"),
+        grad_enabled=_required_bool_field("grad_enabled"),
+        inference_mode=_required_bool_field("inference_mode"),
+        fill_uninitialized_memory=_optional_bool_field("fill_uninitialized_memory"),
         attestation_ineligible_context=_boolean(value, "attestation_ineligible_context"),
     )
 

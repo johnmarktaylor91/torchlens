@@ -199,10 +199,25 @@ live outside the sparse core.
 `AmbientExecutionContext` (one per descriptor, capture-scoped) records exactly: `default_dtype`,
 `default_device`, `float32_matmul_precision`, `deterministic_algorithms` (+`_warn_only`),
 `cuda_matmul_allow_tf32`, `cudnn_allow_tf32`, `cudnn_deterministic`, `cudnn_benchmark`,
-`cudnn_enabled`, `flash_sdp_enabled`, `mem_efficient_sdp_enabled`, `math_sdp_enabled`, and
+`cudnn_enabled`, `flash_sdp_enabled`, `mem_efficient_sdp_enabled`, `math_sdp_enabled`,
+`grad_enabled`, `inference_mode`, `fill_uninitialized_memory`, and
 `attestation_ineligible_context`. Every control the producing runtime exposes is recorded
 affirmatively (explicit `false`); `null` means only "the producer runtime did not expose this
 control" (feature-detected through `utils/_torch_compat.py` with named `HAS_*` flags).
+
+`AmbientExecutionContext` additionally records `grad_enabled` (required), `inference_mode`
+(required), and `fill_uninitialized_memory` (feature-detected; `null` when the runtime does
+not expose `torch.utils.deterministic.fill_uninitialized_memory`). The producer records the
+global autograd/inference mode and the deterministic uninitialized-memory fill flag with the
+ambient snapshot. Replay restores the global autograd/inference mode as scoped contexts around
+the whole sparse run; `CallExecutionContext` remains the tighter per-call record. A v2
+descriptor missing these fields refuses at parse (`context_field_invalid`, detection stage
+`context_parse_validation`) and loads analysis-only: absent context is never defaulted, because
+a defaulted grad mode could bless a different-context comparison as `verified`. A Python READ
+of `torch.is_grad_enabled()` / `is_inference_mode_enabled()` is deliberately never witnessed or
+ceilinged: library code reads the flag constantly, and recording plus restoring the global makes
+a fresh-instance replay take the same branch, so a read witness would be a mass over-trigger for
+zero honesty gain.
 
 `attestation_ineligible_context` is the POSITIVE capture-time marking for a nondeterministic
 execution context: `cudnn.benchmark=true`, or a documented CUDA-nondeterministic op (the
@@ -719,11 +734,20 @@ path_faithfulness: PathFaithfulness
 first_mismatch: RunnableDiagnostic | None
 numeric_attestation: NumericAttestationStatus
 poisoned: bool
+nondeterministic_sources: tuple[str, ...]
 ```
 
 `ContractCheck` is `name: str`, `passed: bool`, `diagnostic: RunnableDiagnostic | None`, ordered by
 execution. Random reports name the policy and every random-filled slot, including alias members,
 and never call those values original/recovered/reconstructed/trained/capture-time weights.
+
+"Deterministic raw selection" excludes seeded-RNG products and uninitialized-memory family
+products (section 11) whose bytes were not fully overwritten by a total writer, unless the
+recorded ambient context proves deterministic fill (`deterministic_algorithms` true and
+`fill_uninitialized_memory` not false). `RunReport.nondeterministic_sources` is the closed,
+sorted, deduplicated declared-source vocabulary `seeded_rng | host_rng | uninitialized_alloc`,
+derived only by the single report finalizer; it distinguishes a declared-nondeterministic
+path-only `verified` from a deterministic one and never alters verdict semantics.
 
 ## 9. Runtime API and state lifecycle
 
@@ -1084,6 +1108,41 @@ original state stays `verified` and a changed staged state restales the witness 
 "unattributable pruned bool" fail-closed exception no longer applies to positively-resolved
 cases.
 
+### Uninitialized-memory value sources (r53 hon_2)
+
+The uninitialized-memory op family -- the `empty` factory family (`empty`, `empty_like`,
+`empty_permuted`, `empty_strided`, `new_empty`, `new_empty_strided`, and their torch-level
+spellings including `empty_quantized`) plus a `resize_`/`resize_as_` that GROWS its receiver
+beyond its pre-call element count -- produces bytes that are not a function of the recorded
+computation. Family products (and anything value-derived from them) are nondeterministic value
+sources of kind `uninitialized_alloc`, UNLESS the governing ambient context records
+`deterministic_algorithms` true with `fill_uninitialized_memory` not false (torch then fills
+deterministically), or the product has zero elements. Taint propagates along the value DAG and
+is removed exactly by a TOTAL WRITE of the tainted bytes independent of their prior content:
+an `out=` destination, `copy_`, `zero_`, `fill_`, or an RNG fill (which replaces the
+`uninitialized_alloc` taint with the RNG source classification). A partial or unprovable
+in-place write propagates taint (unprovable is never a proof of cleanliness). Consequences,
+in parity with seeded-RNG sources at every consumer: a control fact (scalar-bool, conditional
+arm, loop predicate, tensor-derived scalar witness) whose source is tainted ceilings the run
+`unverifiable` -- including a family op whose control-driving chain was orphan-pruned from the
+descriptor, which the producer records through the pruned-nondeterministic-control side table;
+an archived activation or output slot reached by taint makes numeric attestation
+`not_applicable` upfront (never a contradictory `numeric_attestation_failed`); a byte mismatch
+on an UNTAINTED slot still raises `numeric_attestation_failed`. A tainted value that reaches
+only the model output leaves path faithfulness `verified` (path-only) and is declared through
+`RunReport.nondeterministic_sources`. Escape attribution treats `uninitialized_alloc` origins
+as unattributable (fail-closed), like raw seeded-RNG output.
+
+No `torch.Tag` marks uninitialized allocation, so the family is a closed name table in ONE
+shared predicate block (`utils/rng.py`) consumed by all three recognition layers (the load-side
+value-source classifier, the producer origin ledger, and the pruned-orphan control walk) and
+defended by an aten-namespace drift meta-test: a new `empty*`/`resize*` aten name that is
+neither tabled as family nor allowlisted as justified-non-family is a failing test. A
+partially-written uninitialized buffer is an accepted conservatism: a slice-filled cache that
+in fact fully covers its bytes reports attestation `not_applicable` (and `unverifiable` if
+branched on) rather than proving interval coverage -- never a false `verified`; interval-
+coverage refinement is deferred until a real-model sighting.
+
 ### Cross-thread captured-tensor qualification (r43)
 
 TorchLens runnable capture is single-owner-thread by design. During the forward window, any
@@ -1204,7 +1263,12 @@ by construction.
 
 Replay equivalence is EXPLICIT, never ambient: the per-call `CallExecutionContext` and the
 capture-scoped `AmbientExecutionContext` are recorded explicitly and restored transactionally
-(section 4). The consciously documented residual list -- contexts NOT captured, by decision --
+(section 4). The global autograd/inference mode (`grad_enabled`, `inference_mode`) is part of
+the recorded ambient context (r53 hon_1): oracle 1 is a fresh run from declared state UNDER THE
+RECORDED AMBIENT CONTEXT, including the global autograd/inference mode. A fresh run under a
+different ambient mode (for example the same capture re-evaluated inside `torch.no_grad()` when
+`grad_enabled=true` was recorded) is an out-of-declared-context comparison, not a divergence.
+The consciously documented residual list -- contexts NOT captured, by decision --
 is: thread/intra-op parallelism configuration (can change reduction bytes; forcing
 `set_num_threads` is a process-global hazard, so attestation is same-parallelism-config by
 contract); environment identity (CPU ISA dispatch, library builds, GPU architecture/driver,
