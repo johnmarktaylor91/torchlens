@@ -874,8 +874,11 @@ def _cases() -> tuple[ReversionCase, ...]:
         _case(
             "D07",
             "restore sys.executable or parallel interpreter",
-            (_P01,),
-            "selected interpreter is missing from worker argv",
+            (_P01, _P09),
+            (
+                "selected interpreter is missing from worker argv",
+                'assert fixture.binding.python_executable == fixture.prefix / "bin/python"',
+            ),
             _restore_parent_interpreter,
         ),
         _case(
@@ -945,7 +948,7 @@ def _cases() -> tuple[ReversionCase, ...]:
             "D16",
             "insert shutdown check inside atomic publication",
             (_node_for_shutdown("S11"),),
-            "S11",
+            "assert publication < append < post_award_hook < post_award_guard",
             _move_shutdown_inside_publication,
         ),
         _case(
@@ -989,8 +992,8 @@ def _cases() -> tuple[ReversionCase, ...]:
         _case(
             "D21",
             "delete/corrupt either lock/export/probe contract",
-            (_LINUX_RELEASE_ARTIFACTS_NODE,),
-            "Extra items in the right set",
+            (_LINUX_RELEASE_ARTIFACTS_NODE, _P09),
+            ("Extra items in the right set", "Extra items in the right set"),
             _delete_linux_lock,
         ),
         _case(
@@ -1028,7 +1031,7 @@ def _cases() -> tuple[ReversionCase, ...]:
             "D26",
             "restore dry-run false-complete/signature mismatch",
             (_P18B,),
-            "dry_run",
+            "assert failed.returncode == EXIT_ERROR",
             _restore_dry_run_false_complete,
         ),
         _case(
@@ -1135,11 +1138,18 @@ def _run_case(
             )
         combined = completed.stdout + "\n" + completed.stderr
         setup_failed = "ERROR at setup" in combined or "unmet-release-gate:" in combined
+        node_selector = node.split("::", maxsplit=1)[-1]
+        node_function = node_selector.split("[", maxsplit=1)[0]
+        diagnostic = "\n".join(
+            line
+            for line in combined.splitlines()
+            if node not in line and node_selector not in line and node_function not in line
+        )
         node_passed = (
             completed.returncode != 0
             and not timed_out
             and not setup_failed
-            and expected_reason in combined
+            and expected_reason in diagnostic
         )
         node_results.append(
             {

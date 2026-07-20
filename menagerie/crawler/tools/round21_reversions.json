@@ -79,10 +79,12 @@
     {
       "expected_reason": "selected interpreter is missing from worker argv",
       "expected_reasons": [
-        "selected interpreter is missing from worker argv"
+        "selected interpreter is missing from worker argv",
+        "assert fixture.binding.python_executable == fixture.prefix / \"bin/python\""
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
+        "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge",
+        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci"
       ],
       "reversion_id": "D07",
       "semantic_reversion": "restore sys.executable or parallel interpreter"
@@ -202,9 +204,9 @@
       "semantic_reversion": "delete shutdown guard or admit later work"
     },
     {
-      "expected_reason": "S11",
+      "expected_reason": "assert publication < append < post_award_hook < post_award_guard",
       "expected_reasons": [
-        "S11"
+        "assert publication < append < post_award_hook < post_award_guard"
       ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S11]"
@@ -261,10 +263,12 @@
     {
       "expected_reason": "Extra items in the right set",
       "expected_reasons": [
+        "Extra items in the right set",
         "Extra items in the right set"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_linux_release_artifacts_and_provisioning_are_real"
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_linux_release_artifacts_and_provisioning_are_real",
+        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci"
       ],
       "reversion_id": "D21",
       "semantic_reversion": "delete/corrupt either lock/export/probe contract"
@@ -314,9 +318,9 @@
       "semantic_reversion": "drop nullable evidence or misclassify mode"
     },
     {
-      "expected_reason": "dry_run",
+      "expected_reason": "assert failed.returncode == EXIT_ERROR",
       "expected_reasons": [
-        "dry_run"
+        "assert failed.returncode == EXIT_ERROR"
       ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"

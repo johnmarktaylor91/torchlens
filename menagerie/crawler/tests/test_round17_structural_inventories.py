@@ -1942,9 +1942,17 @@ def test_round21_conformance_workflow_and_reversion_inventory_is_exact() -> None
         "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
         "test_round21_handoff_authority_identity_matrix[H04]",
     ]
+    assert cases_by_id["D07"]["proof_nodes"] == [
+        "menagerie/crawler/tests/test_round21_preclusion_composition.py::"
+        "test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge",
+        "menagerie/crawler/tests/test_round21_ci_composition.py::"
+        "test_round21_linux_committed_lock_provenance_awards_in_ci",
+    ]
     assert cases_by_id["D21"]["proof_nodes"] == [
         "menagerie/crawler/tests/test_round17_structural_inventories.py::"
         "test_round21_linux_release_artifacts_and_provisioning_are_real",
+        "menagerie/crawler/tests/test_round21_ci_composition.py::"
+        "test_round21_linux_committed_lock_provenance_awards_in_ci",
     ]
     assert cases_by_id["D22"]["proof_nodes"] == [
         "menagerie/crawler/tests/test_round17_structural_inventories.py::"

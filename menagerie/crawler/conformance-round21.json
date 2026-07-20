@@ -130,6 +130,7 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
+        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
