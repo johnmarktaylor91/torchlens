@@ -343,3 +343,49 @@ def test_secA_valid_bundle_still_round_trips(tmp_path: Path) -> None:
     restored = load(bundle_path)
     assert isinstance(restored, Trace)
     assert restored._loaded_from_bundle is True
+
+
+# --- secA_1 follow-up (r51): the load() boundary is LOCUS-classified ----------------
+#
+# The ``SafeBundleUnpickler.load()`` boundary normalizes ONLY failures whose traceback
+# stays inside the pickle VM itself (stdlib ``pickle.py`` + ``_safe_unpickle.py``).
+# An exception that arose while executing APPLICATION/reconstruction code (a REDUCE
+# callable's body, a ``__setstate__``, a ``find_class`` import) propagates RAW with its
+# identity intact, so the ``bundle.py`` load sites keep it as the DIRECT ``__cause__``
+# of ``TorchLensIOError`` (the pre-existing legacy-bundle live-resource contract,
+# pinned by ``test_io_bundle.py::
+# test_legacy_multi_trace_bundle_load_typeerror_raises_torchlens_io_error``). These two
+# tests lock the narrowed boundary from BOTH sides.
+
+
+def test_secA_application_reconstruction_failure_keeps_identity() -> None:
+    """A failure INSIDE an admitted reconstructor propagates RAW, never 'corrupt'."""
+
+    import torch._utils
+
+    class _FailsInBody:
+        def __reduce__(self) -> Any:
+            """Reduce to an admitted reconstructor whose BODY raises on bad args."""
+
+            return (torch._utils._rebuild_tensor_v2, (None, 0, (), (), False, None))
+
+    stream = io.BytesIO(pickle.dumps(_FailsInBody()))
+    with pytest.raises(Exception) as excinfo:
+        SafeBundleUnpickler(stream).load()
+    assert not isinstance(excinfo.value, pickle.UnpicklingError)
+
+
+def test_secA_callsite_arity_mismatch_still_normalizes() -> None:
+    """An arity-mismatch REDUCE (zero application frames ran) stays 'corrupt'."""
+
+    import torch._utils
+
+    class _ArityMismatch:
+        def __reduce__(self) -> Any:
+            """Reduce to an admitted reconstructor invoked with too few arguments."""
+
+            return (torch._utils._rebuild_tensor_v2, ())
+
+    stream = io.BytesIO(pickle.dumps(_ArityMismatch()))
+    with pytest.raises(pickle.UnpicklingError):
+        SafeBundleUnpickler(stream).load()
