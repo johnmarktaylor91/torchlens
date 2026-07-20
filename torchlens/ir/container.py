@@ -602,6 +602,68 @@ def _dataclass_defines_post_init(container_type: type[Any]) -> bool:
     return False
 
 
+def _generated_dataclass_init_marker() -> str | None:
+    """Feature-detect the ``co_filename`` marker of a dataclasses-GENERATED ``__init__`` (r47 secB_1).
+
+    ``dataclasses`` builds a generated ``__init__`` via ``exec`` -- on CPython 3.11 / 3.12 its
+    ``__code__.co_filename`` is the literal ``"<string>"`` (a USER-authored ``__init__`` reads the
+    real source-file path). Rather than HARD-CODE ``"<string>"`` (a version-parse), probe a fresh
+    trivial dataclass on THIS interpreter and read its generated init's ``co_filename``. If a future
+    CPython emits a different marker, the probe returns that marker so the discriminator still
+    matches THIS interpreter's generated inits; a user dataclass in a different module then reads as
+    foreign -> a benign OVER-trigger (fail-safe), never a false VERIFIED.
+    """
+
+    @dataclasses.dataclass
+    class _Probe:
+        _x: int
+
+    for klass in _Probe.__mro__:
+        init = klass.__dict__.get("__init__")
+        if init is not None and klass is not object:
+            return getattr(getattr(init, "__code__", None), "co_filename", None)
+    return None
+
+
+_GENERATED_DC_INIT_MARKER: str | None = _generated_dataclass_init_marker()
+"""``co_filename`` of a dataclasses-generated ``__init__`` on this interpreter (``"<string>"``)."""
+
+
+def _dataclass_has_foreign_init(container_type: type[Any]) -> bool:
+    """Return whether a dataclass's winning ``__init__`` is NOT the dataclasses-generated one (r47 secB_1).
+
+    Sparse reconstruction sets only captured fields and never invokes ``__init__`` (that would be the
+    SEC1 construction-gadget RCE surface), so a USER-authored ``__init__`` that computes a dropped
+    tensor-derived non-field extra cannot be proven faithful -- exactly like ``__post_init__``. This
+    is TYPE-observable: the winning (most-derived) ``__init__`` is the dataclasses-GENERATED one only
+    when ``__dataclass_params__.init`` is true AND its ``__code__.co_filename`` equals the feature-
+    detected generated marker. A generated field-mirroring init (including a dataclass that generates
+    its OWN init shadowing an evil base) stays lossless; anything else -- a user init, ``init=False``
+    with a custom init, an undetectable/absent code object -- is foreign (lossy).
+
+    Fails CLOSED: an unknown or undetectable shape is treated as foreign (over-triggers to
+    UNVERIFIABLE), never a false VERIFIED, because it returns ``not generated`` only after
+    POSITIVELY confirming the generated marker.
+    """
+
+    for klass in getattr(container_type, "__mro__", (container_type,)):
+        if "__init__" not in getattr(klass, "__dict__", {}):
+            continue
+        # First (most-derived) class that defines ``__init__`` -- the one that would run.
+        if klass is object:
+            return False
+        init = klass.__dict__["__init__"]
+        code = getattr(init, "__code__", None)
+        params = getattr(container_type, "__dataclass_params__", None)
+        generated = (
+            getattr(params, "init", False)
+            and _GENERATED_DC_INIT_MARKER is not None
+            and getattr(code, "co_filename", None) == _GENERATED_DC_INIT_MARKER
+        )
+        return not generated
+    return False
+
+
 # Classes whose ``__init__`` only mirrors declared fields into the mapping/attribute views of a
 # ``ModelOutput`` (or allocates the mapping) and therefore cannot silently compute a dropped
 # tensor-derived extra attribute: the builtin mapping bases and the ``transformers`` ModelOutput
@@ -710,7 +772,12 @@ def reconstruction_is_lossy_by_type(
 
     * a ``__slots__`` layout with no instance ``__dict__`` (fields cannot be set inertly), or
     * a captured name that resolves to a data descriptor (cannot be set faithfully), or
-    * (dataclass kind only) a user ``__post_init__`` that may compute dropped non-field state.
+    * (dataclass kind only) a user ``__post_init__`` that may compute dropped non-field state, or
+    * (dataclass kind only, r47 secB_1) a winning ``__init__`` that is NOT the dataclasses-generated
+      one (a user-authored / foreign constructor that may compute dropped non-field state -- detected
+      by the generated init's feature-detected ``co_filename`` marker, see
+      ``_dataclass_has_foreign_init``). This defeats a forged ``lossy_reconstruction=False`` naming a
+      custom-init dataclass without invoking its constructor.
 
     The ``__post_init__`` signal is applied ONLY to the plain-``dataclass`` kind: HuggingFace
     ``ModelOutput`` dataclasses use ``__post_init__`` solely to populate their mapping from
@@ -747,7 +814,9 @@ def reconstruction_is_lossy_by_type(
         return True
     if any(_name_is_data_descriptor(container_type, name) for name in captured_names):
         return True
-    if kind == "dataclass" and _dataclass_defines_post_init(container_type):
+    if kind == "dataclass" and (
+        _dataclass_defines_post_init(container_type) or _dataclass_has_foreign_init(container_type)
+    ):
         return True
     if kind == "hf_model_output" and _model_output_has_foreign_init(container_type, spec):
         return True

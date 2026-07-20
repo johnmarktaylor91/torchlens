@@ -31,6 +31,7 @@ from ..data_classes._module_role_hints import (
 )
 from ..data_classes.trace import _init_module_hierarchy_data
 from ..utils import get_vars_of_type_from_obj, safe_copy
+from ..utils._torch_symbols import torch_attr
 from ..utils.display import _timed_phase
 
 if TYPE_CHECKING:
@@ -1811,7 +1812,9 @@ def _resolve_dtype(dtype: object | None) -> object | None:
         return dtype
     if dtype.startswith("torch."):
         dtype_name = dtype.split(".", 1)[1]
-        return getattr(torch, dtype_name, dtype)
+        # r47 secD_1: ``torch_attr`` reads ``torch.__dict__`` (no lazy ``torch.__getattr__``);
+        # fall back to the original string when the name is not a real top-level torch symbol.
+        return torch_attr(dtype_name) or dtype
     return dtype
 
 
