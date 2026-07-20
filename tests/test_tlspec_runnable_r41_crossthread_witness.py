@@ -1349,3 +1349,177 @@ def test_custom_holder_undrawn_generator_stays_clean(
     trace, result = _roundtrip(_UndrawnHolderModel(), x, tmp=tmp_path)
     assert "model_attribute_generator" not in getattr(trace, "_runnable_host_rng_channels", ())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+# ======================================================================================
+# J -- r51 hon1_1: a numpy generator behind an UNREGISTERED nn.Module submodule is swept
+# (whole-class by REACHABILITY -- nn.Module is descended, no longer a hard inventory leaf)
+# ======================================================================================
+
+
+class _WrapHolder:
+    """A plain (non-module) custom holder wrapping an arbitrary value (r51 hon1_1)."""
+
+    def __init__(self, value: Any) -> None:
+        self.value = value
+
+
+def _make_generator(kind: str) -> Any:
+    """Build one of the three digestable numpy RNG kinds."""
+
+    if kind == "generator":
+        return np.random.default_rng(777)
+    if kind == "randomstate":
+        return np.random.RandomState(777)
+    if kind == "bitgen":
+        return np.random.PCG64(777)
+    raise AssertionError(kind)
+
+
+def _install_generator(sub: nn.Module, style: str, rng: Any) -> None:
+    """Install ``rng`` INSIDE submodule ``sub`` via the chosen holder ``style``."""
+
+    if style == "attr":
+        sub.rng = rng  # plain attr (a Generator is not a Module -> stays in __dict__)
+    elif style == "list":
+        sub.pool = [rng]
+    elif style == "dict":
+        sub.table = {"g": rng}
+    elif style == "nested":
+        sub.deep = [[{"g": rng}]]
+    elif style == "holder":
+        sub.holder = _WrapHolder(rng)
+    else:
+        raise AssertionError(style)
+
+
+def _place_submodule(parent: nn.Module, sub: nn.Module, placement: str) -> None:
+    """Attach ``sub`` to ``parent`` UNREGISTERED (a plain container/holder bypasses
+    ``nn.Module.__setattr__`` registration), except the ``registered`` control."""
+
+    if placement == "list":
+        parent.extras = [sub]
+    elif placement == "dict":
+        parent.extras = {"s": sub}
+    elif placement == "nested":
+        parent.extras = [[sub]]
+    elif placement == "holder":
+        parent.extras = _WrapHolder(sub)
+    elif placement == "registered":
+        parent.sub = sub  # nn.Module.__setattr__ registers it in _modules (control)
+    else:
+        raise AssertionError(placement)
+
+
+def _build_unreg_model(placement: str, gen_style: str, rng_kind: str) -> nn.Module:
+    """A parent nn.Module holding a generator behind a (usually UNREGISTERED) submodule."""
+
+    parent = nn.Module()
+    parent.lin = nn.Linear(2, 2)  # a REGISTERED benign submodule (baseline / premark coverage)
+    sub = nn.Linear(2, 2)  # the submodule that will hold the generator
+    _install_generator(sub, gen_style, _make_generator(rng_kind))
+    _place_submodule(parent, sub, placement)
+    return parent
+
+
+def _sweep_generator_count(model: nn.Module) -> int:
+    """Number of digestable generators the model-attribute sweep REACHES (r51 hon1_1)."""
+
+    monitor = host_nondeterminism_monitor(model)
+    with monitor:  # __enter__ sets ``_exempt_ids`` that the sweep consults
+        return len(monitor._sweep_model_generators())
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("placement", ["list", "dict", "nested", "holder"])
+@pytest.mark.parametrize("rng_kind", ["generator", "randomstate", "bitgen"])
+def test_unregistered_submodule_generator_is_swept(placement: str, rng_kind: str) -> None:
+    """REACHABILITY (r51 hon1_1): a numpy generator held (plain attr) inside an UNREGISTERED
+    nn.Module submodule -- attached to the parent via a ``list`` / ``dict`` / nested container /
+    custom holder, so absent from ``model.modules()`` -- is now digest-reached by the sweep (0
+    before the fix). Whole-class: nn.Module is descended (``__dict__`` / ``__slots__``), not a hard
+    leaf, so the hole is closed by reachability for EVERY holder placement x every digestable kind."""
+
+    model = _build_unreg_model(placement, "attr", rng_kind)
+    assert _sweep_generator_count(model) >= 1
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("gen_style", ["attr", "list", "dict", "nested", "holder"])
+def test_unregistered_submodule_generator_holder_styles_swept(gen_style: str) -> None:
+    """REACHABILITY (r51 hon1_1): the generator behind an unregistered (list-held) submodule is
+    reached regardless of HOW the submodule holds it (plain attr / list / dict / nested / holder)."""
+
+    model = _build_unreg_model("list", gen_style, "generator")
+    assert _sweep_generator_count(model) >= 1
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("rng_kind", ["generator", "randomstate", "bitgen"])
+def test_registered_submodule_generator_still_swept(rng_kind: str) -> None:
+    """Control (premark is coverage-NEUTRAL): a generator on a REGISTERED submodule stays caught
+    (the top ``model.modules()`` loop seeds its ``__dict__``); the premark only skips the redundant
+    re-walk of the module OBJECT during descent, never a generator."""
+
+    model = _build_unreg_model("registered", "attr", rng_kind)
+    assert _sweep_generator_count(model) >= 1
+
+
+@pytest.mark.smoke
+def test_unregistered_submodule_no_generator_no_over_trigger() -> None:
+    """Over-trigger pin: an unregistered submodule with NO generator adds no channel (count 0) --
+    descending nn.Modules must not manufacture a false generator sighting."""
+
+    parent = nn.Module()
+    parent.lin = nn.Linear(2, 2)
+    parent.extras = [nn.Linear(2, 2)]  # unregistered but benign (no RNG)
+    assert _sweep_generator_count(parent) == 0
+
+
+def test_unregistered_submodule_generator_end_to_end_unverifiable(
+    preexisting_worker: Any, tmp_path: Path
+) -> None:
+    """END-TO-END (the r50 hon_1 false-VERIFIED repro): a numpy Generator behind an UNREGISTERED
+    submodule, drawn on a PRE-EXISTING thread to steer control flow, now ceilings the runnable
+    verdict to UNVERIFIABLE + NOT_APPLICABLE (was falsely VERIFIED + ATTESTED before r51)."""
+
+    class _UnregGenModel(nn.Module):
+        def __init__(self, worker: Any) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            sub = nn.Linear(2, 2)
+            sub.rng = np.random.default_rng(2)
+            self.extras = [sub]  # UNREGISTERED submodule (bypasses nn.Module registration)
+            self._worker = worker
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            v = self._worker.run(lambda: float(self.extras[0].rng.random()))
+            h = self.lin(x)
+            return h * 2.0 if v < 0.5 else h * 3.0
+
+    x = torch.randn(2, 4)
+    trace, result = _roundtrip(_UnregGenModel(preexisting_worker), x, tmp=tmp_path)
+    assert "model_attribute_generator" in getattr(trace, "_runnable_host_rng_channels", ())
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+def test_unregistered_submodule_undrawn_generator_stays_verified(tmp_path: Path) -> None:
+    """Over-trigger pin: an unregistered submodule holding an UNDRAWN generator stays VERIFIED (a
+    present-but-unused generator produces no channel)."""
+
+    class _UnregUndrawn(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            sub = nn.Linear(2, 2)
+            sub.rng = np.random.default_rng(3)  # present but never drawn
+            self.extras = [sub]
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.lin(x).relu()
+
+    x = torch.randn(2, 4)
+    trace, result = _roundtrip(_UnregUndrawn(), x, tmp=tmp_path)
+    assert "model_attribute_generator" not in getattr(trace, "_runnable_host_rng_channels", ())
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

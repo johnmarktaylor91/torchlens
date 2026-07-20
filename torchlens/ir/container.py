@@ -670,6 +670,26 @@ def _dataclass_has_foreign_init(container_type: type[Any]) -> bool:
     return False
 
 
+def _metaclass_defines_foreign_call(container_type: type[Any]) -> bool:
+    """Return whether ``container_type``'s METACLASS defines a non-``type`` ``__call__`` (r51 secB_1).
+
+    A custom metaclass ``__call__`` runs at construction and can compute a dropped tensor-derived
+    non-field/non-key instance attribute that non-invoking reconstruction (``cls.__new__(cls)`` +
+    inert writes) bypasses -- like ``__post_init__`` / a foreign ``__init__``, and not otherwise
+    type-observable without INVOKING the metaclass (the SEC1 construction surface). Walks the
+    metaclass MRO for the first class defining ``__call__``; ``type`` (the builtin, always present
+    since every metaclass derives from ``type``) -> not foreign; anything else -> foreign (lossy).
+    An ``ABCMeta`` metaclass defines no ``__call__`` of its own, so the walk falls through to
+    ``type.__call__`` -> not foreign (no over-trigger for the ``ABCMeta``-metaclass control).
+    """
+
+    metaclass = type(container_type)
+    for klass in getattr(metaclass, "__mro__", (metaclass,)):
+        if "__call__" in getattr(klass, "__dict__", {}):
+            return klass is not type
+    return False
+
+
 # Classes whose ``__init__`` only mirrors declared fields into the mapping/attribute views of a
 # ``ModelOutput`` (or allocates the mapping) and therefore cannot silently compute a dropped
 # tensor-derived extra attribute: the builtin mapping bases and the ``transformers`` ModelOutput
@@ -826,6 +846,13 @@ def reconstruction_is_lossy_by_type(
       by the generated init's feature-detected ``co_filename`` marker, see
       ``_dataclass_has_foreign_init``). This defeats a forged ``lossy_reconstruction=False`` naming a
       custom-init dataclass without invoking its constructor.
+    * (dataclass + ``hf_model_output`` kinds, r51 secB_1) a METACLASS (``type(container_type)``) that
+      defines a ``__call__`` other than the builtin ``type.__call__`` -- a fourth computed-dropped-
+      state constructor hook that non-invoking reconstruction (``cls.__new__(cls)``) bypasses,
+      applied GATE-DIRECT so reconstruction still rebuilds the correct inert type while the verdict
+      fail-closes to lossy (see ``_metaclass_defines_foreign_call``). A plain-``type`` metaclass, a
+      ``__call__``-free ``ABCMeta``, and a real namedtuple stay VERIFIED-eligible (no over-trigger);
+      the ``namedtuple`` kind is separately covered by ``namedtuple_type_can_carry_instance_state``.
 
     The ``__post_init__`` signal is applied ONLY to the plain-``dataclass`` kind: HuggingFace
     ``ModelOutput`` dataclasses use ``__post_init__`` solely to populate their mapping from
@@ -867,6 +894,19 @@ def reconstruction_is_lossy_by_type(
     ):
         return True
     if kind == "hf_model_output" and _model_output_has_foreign_init(container_type, spec):
+        return True
+    # r51 secB_1: a custom metaclass ``__call__`` is a FOURTH computed-dropped-state constructor
+    # hook (alongside ``__post_init__`` / foreign ``__init__`` / non-inert ``__new__``). It can
+    # compute a dropped tensor-derived extra that non-invoking reconstruction (``cls.__new__(cls)``,
+    # which bypasses the metaclass ``__call__`` entirely) drops, and is not type-observable without
+    # INVOKING the metaclass (the SEC1 surface). Applied GATE-DIRECT (mirroring
+    # ``_dataclass_has_foreign_init``), NOT via ``_reconstruction_would_substitute_plain`` -- the
+    # metaclass leaves ``__new__``/fields inert, so reconstruction still rebuilds the correct inert
+    # type (higher fidelity) while the honesty verdict fail-closes to ``unverifiable``. The
+    # ``namedtuple`` kind is deliberately excluded (already covered by
+    # ``namedtuple_type_can_carry_instance_state``: a ``__slots__=()`` namedtuple has no instance
+    # ``__dict__`` for the extra and an unslotted tuple subclass is separately flagged).
+    if kind in ("dataclass", "hf_model_output") and _metaclass_defines_foreign_call(container_type):
         return True
     # r49 secB_1: couple the gate to reconstruction's OWN substitution criterion. If
     # ``_rebuild_container_from_spec`` would substitute a PLAIN container for this type (its
