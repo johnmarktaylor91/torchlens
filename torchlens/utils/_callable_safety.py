@@ -135,6 +135,7 @@ from __future__ import annotations
 
 import inspect
 import sys
+import warnings
 from functools import lru_cache
 from typing import Any, Callable
 
@@ -910,9 +911,9 @@ _PURE_TENSOR_FACTORY_NAMES: frozenset[str] = frozenset(
 # how a future bare-root legit op is rescued -- NOT by loosening the operator gate.
 _PURE_TENSOR_WRAPPER_NAMES: frozenset[str] = frozenset({"to_sparse_coo"})
 
-# Safe, pure-READ tensor PROPERTY accessors (``x.T`` / ``x.mT`` / ``x.real`` /
-# ``x.imag``): getset descriptors on the C ``TensorBase`` whose access is a pure view /
-# read with no side effect. The loader resolves a recorded
+# Safe, pure-READ tensor PROPERTY accessors (``x.T`` / ``x.mT`` / ``x.H`` / ``x.mH`` /
+# ``x.real`` / ``x.imag``): getset descriptors on the C ``TensorBase`` whose access is a
+# pure view / read with no side effect. The loader resolves a recorded
 # ``("torch.Tensor", <name>, "method")`` property key to a SYNTHETIC Python getter
 # (``torchlens._io.runnable_load._safe_tensor_property_getter``) whose ``__module__`` is
 # ``"torch._tensor"``, so it lands on the operator-gated roots with a FRESH function id
@@ -920,8 +921,121 @@ _PURE_TENSOR_WRAPPER_NAMES: frozenset[str] = frozenset({"to_sparse_coo"})
 # denied the whole class (a regression; pre-r43 module-prefix admission allowed it).
 # This is the CANONICAL copy of the safe-property allowlist; the capture-side keyer
 # (``torchlens.backends.torch.ops``) and the load-side resolver import it, so the three
-# surfaces cannot drift. Only pure views/reads may ever be added here.
-_PURE_TENSOR_PROPERTY_NAMES: frozenset[str] = frozenset({"T", "mT", "real", "imag"})
+# surfaces cannot drift.
+#
+# STRUCTURAL, not hand-listed (r45): the set is COMPUTED by probing every live
+# ``TensorBase`` getset descriptor against ``_pure_view`` -- a descriptor is admitted
+# iff its getter returns a storage-sharing, autograd-PRESERVING, non-mutating tensor
+# view. This admits ``{T, mT, H, mH, real, imag}`` and DENIES ``data`` by construction
+# (``.data`` shares storage but DETACHES from autograd and is a live lvalue mutation
+# channel -- the autograd-bypass alias, not a pure forward read). A FUTURE torch tensor
+# property is auto-classified: admitted-if-pure-view / denied-otherwise, with no per-name
+# edit. The r45 immunizer (``tests/test_r45_property_classification.py``) pins the full
+# classification of every descriptor so drift goes RED. Recognizing ``.H``/``.mH`` closed
+# the r44 corr1_1 / secF_1 over-deny (a real capture used them; the frozen 4-name set
+# refused them).
+
+
+def _iter_tensor_getset_descriptor_names() -> tuple[str, ...]:
+    """Return the name of every getset descriptor on the C tensor base class.
+
+    ``torch._C.TensorBase`` (``_TensorBase`` on legacy torch) is the C base that owns
+    the property descriptors (``T``, ``mT``, ``H``, ``mH``, ``real``, ``imag``, ``data``,
+    ``grad``, ``shape`` ...). Enumerating it structurally means a torch upgrade that adds
+    a new tensor property is seen by the classifier automatically.
+    """
+
+    base = getattr(torch._C, "TensorBase", None) or getattr(torch._C, "_TensorBase", None)
+    if base is None:  # pragma: no cover - torch always exposes the C tensor base here.
+        return ()
+    return tuple(
+        name for name, obj in vars(base).items() if type(obj).__name__ == "getset_descriptor"
+    )
+
+
+def _mode_free_probe_context() -> Any:
+    """Return a context manager that neutralizes ambient torch-function modes for a probe.
+
+    ``_pure_view`` allocates probe tensors and runs real tensor ops; disabling
+    torch-function makes those yield real CPU tensors and real kernels regardless of any
+    ambient mode (a default-device / meta / subclass mode) that is active when this module
+    is lazily imported. Feature-detected (``torch._C.DisableTorchFunction`` is the stable
+    disabler across supported torch); falls back to a CPU device context on an unexpected
+    build. Neither path mutates the caller's default device.
+    """
+
+    disabler = getattr(torch._C, "DisableTorchFunction", None)
+    if disabler is not None:
+        return disabler()
+    return torch.device("cpu")
+
+
+def _pure_view(name: str) -> bool:
+    """Return whether tensor property ``name`` is a safe pure-read view getter.
+
+    A ``TensorBase`` getset descriptor is a safe pure-read view iff its getter, on a
+    ``requires_grad`` source, returns a Tensor that (a) SHARES STORAGE with the source,
+    (b) does NOT mutate the source (neither value nor version counter), and (c) PRESERVES
+    autograd -- a ``requires_grad`` source yields a ``requires_grad`` view. Probed on both
+    a real and a complex source (some descriptors, e.g. ``imag``, are only defined for one
+    dtype); a descriptor undefined for a dtype is skipped, and admission requires at least
+    one dtype to satisfy every clause.
+
+    This lands EXACTLY on ``{T, mT, H, mH, real, imag}`` and DENIES ``data``: ``.data``
+    shares storage but returns an autograd-DETACHED leaf (``requires_grad`` False, no
+    ``grad_fn``) and is the canonical lvalue mutation channel (``x.data = y`` swaps storage
+    under autograd/version tracking) -- exactly the surgery a faithful run-path must not
+    bless. The rule is purely structural, so no per-name carve-out is needed to exclude it.
+    """
+
+    ok_any = False
+    for use_complex in (False, True):
+        # The probe runs at MODULE IMPORT time, which is LAZY here -- the first capture
+        # imports this module, so the ambient torch state can be hostile: e.g. a forward
+        # under ``torch.set_default_device("meta")`` pushes a torch-function DeviceContext
+        # mode, which would make ``torch.randn`` build meta tensors and ``aten::equal``
+        # raise ``NotImplementedError`` (there is no meta kernel). Neutralize any ambient
+        # torch-function mode and pin CPU so the classification is deterministic and cannot
+        # crash import. ``DisableTorchFunction`` does NOT alter the default device, so no
+        # state leaks (verified: the caller's default device is untouched).
+        with _mode_free_probe_context():
+            if use_complex:
+                probe = torch.randn(2, 3, device="cpu", dtype=torch.complex64, requires_grad=True)
+            else:
+                probe = torch.randn(2, 3, device="cpu", requires_grad=True)
+            before = probe.detach().clone()
+            version = probe._version
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    result = getattr(probe, name)
+            except Exception:
+                continue  # undefined / raising for this dtype -- not evidence either way.
+            if not isinstance(result, torch.Tensor):
+                return False  # non-tensor read (metadata / flag / hooks) -- never a view.
+            if probe._version != version or not torch.equal(probe.detach(), before):
+                return False  # the getter mutated the source -- not a pure read.
+            try:
+                shares_storage = (
+                    result.untyped_storage().data_ptr() == probe.untyped_storage().data_ptr()
+                )
+            except Exception:
+                return False  # storage-sharing unprovable -> refuse (fail closed).
+            if not shares_storage:
+                return False  # materialized a copy -- not a pure view.
+            if probe.requires_grad and not result.requires_grad:
+                return False  # autograd-DETACHING alias (``.data``) -- not a pure forward read.
+            ok_any = True
+    return ok_any
+
+
+def _compute_pure_view_property_names() -> frozenset[str]:
+    """Return the structurally-classified safe pure-view tensor property getter names."""
+
+    return frozenset(name for name in _iter_tensor_getset_descriptor_names() if _pure_view(name))
+
+
+_PURE_TENSOR_PROPERTY_NAMES: frozenset[str] = _compute_pure_view_property_names()
 
 
 @lru_cache(maxsize=1)
@@ -988,7 +1102,8 @@ def _is_recognized_operator(real: Callable[..., Any], terminal_name: str) -> boo
     ``torch._tensor``): torch-overridable identity OR an aten operator schema OR a small
     stable pure tensor factory name OR a narrow audited pure Tensor wrapper name OR a
     safe pure-read tensor PROPERTY name (the loader's synthetic ``x.T`` / ``x.mT`` /
-    ``x.real`` / ``x.imag`` getters -- see ``_PURE_TENSOR_PROPERTY_NAMES``). Every
+    ``x.H`` / ``x.mH`` / ``x.real`` / ``x.imag`` getters -- see
+    ``_PURE_TENSOR_PROPERTY_NAMES``, structurally computed). Every
     other internal builtin on those roots is default-DENIED (the r43 inversion). Note the
     name/verb belts in ``_is_side_effecting_callable_name`` run BEFORE this and catch the
     overridable-but-unsafe cases (e.g. ``share_memory_``), so identity-recognition here

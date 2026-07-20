@@ -200,6 +200,7 @@ _KNOWN_UNSUPPORTED_ARG_SPEC_REASONS = {
     "maskedscale": "internal/private helper left on dynamic fallback until independently validated",
     "maskedsoftmax": "internal/private helper left on dynamic fallback until independently validated",
     "mixeddtypeslinear": "internal/private helper left on dynamic fallback until independently validated",
+    "mh": "demoted fragment: no operator schema available",
     "mkldnnreshape": "internal/private helper left on dynamic fallback until independently validated",
     "mkldnntranspose": "internal/private helper left on dynamic fallback until independently validated",
     "mod": "internal/private helper left on dynamic fallback until independently validated",

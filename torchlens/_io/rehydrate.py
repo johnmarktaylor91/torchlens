@@ -19,6 +19,7 @@ from safetensors import SafetensorError
 from safetensors.torch import load_file
 
 from . import BlobRef, FieldPolicy, PayloadLoadHints, TorchLensIOError
+from ._torch_symbols import torch_attr
 from .accessor_rebuild import rebuild_trace_accessors
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, sha256_of_file
@@ -926,7 +927,12 @@ def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
         If the dtype string is unknown to the runtime.
     """
 
-    dtype_obj = getattr(torch, dtype_name, None)
+    # r45 secC_1: the manifest ``dtype`` field is attacker-controlled. ``torch_attr`` reads
+    # ``torch.__dict__`` directly, so an arbitrary attribute name (``onnx`` / ``_dynamo`` /
+    # deprecated ``has_cuda``) fires NO lazy submodule import, NO deprecated ``replacement()``,
+    # and leaks NO raw ``ImportError`` before the ``isinstance`` value gate below. Every real
+    # dtype is a ``torch.__dict__`` entry and still resolves.
+    dtype_obj = torch_attr(dtype_name)
     if not isinstance(dtype_obj, torch.dtype):
         raise TorchLensIOError(f"Unsupported dtype string in manifest: {dtype_name}.")
     return dtype_obj

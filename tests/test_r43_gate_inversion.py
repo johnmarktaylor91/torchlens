@@ -73,12 +73,15 @@ wrap_torch()
 _OPERATOR_GATED_ROOTS = frozenset({"torch", "torch._C", "torch._tensor"})
 _FACTORY_NAMES = frozenset({"from_numpy", "frombuffer", "asarray", "from_dlpack"})
 _WRAPPER_NAMES = frozenset({"to_sparse_coo"})
-# Safe pure-read tensor PROPERTY accessors (r43 fixup): the loader resolves a recorded
-# ``("torch.Tensor", <name>, "method")`` property key to a SYNTHETIC getter whose
-# ``__module__`` is ``"torch._tensor"`` -- a fresh function id (never overridable), and
-# ``T`` carries no aten schema by terminal name -- so the recognizer admits the class by
-# NAME. Every name is a pure view/read.
-_PROPERTY_NAMES = frozenset({"T", "mT", "real", "imag"})
+# Safe pure-read tensor PROPERTY accessors (r43 fixup; r45 adds ``H``/``mH``): the loader
+# resolves a recorded ``("torch.Tensor", <name>, "method")`` property key to a SYNTHETIC
+# getter whose ``__module__`` is ``"torch._tensor"`` -- a fresh function id (never
+# overridable), and ``T`` carries no aten schema by terminal name -- so the recognizer
+# admits the class by NAME. Every name is a pure view/read; the canonical set is now
+# STRUCTURALLY computed (autograd-preserving pure-view probe) and the r45 immunizer in
+# ``tests/test_r45_property_classification.py`` pins the exhaustive descriptor
+# classification.
+_PROPERTY_NAMES = frozenset({"T", "mT", "H", "mH", "real", "imag"})
 
 
 def _indep_overridable_ids() -> frozenset[int]:

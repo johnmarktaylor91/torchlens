@@ -1519,9 +1519,15 @@ def _walk_output_tensors_with_paths(
     yield from _walk_supported_output_container(out, root_spec=root_spec, path=())
 
 
-# Canonical copy lives in ``torchlens.utils._callable_safety`` so this capture-side
+# Canonical set lives in ``torchlens.utils._callable_safety`` so this capture-side
 # keyer, the load-side resolver, and the security gate's recognized-operator predicate
-# can never drift apart on the safe pure-read property surface.
+# can never drift apart on the safe pure-read property surface. The set is STRUCTURALLY
+# computed there (r45) by probing every live ``TensorBase`` getset descriptor for a
+# storage-sharing, autograd-preserving, non-mutating view -- it admits
+# ``{T, mT, H, mH, real, imag}`` and denies ``data`` (autograd-detaching lvalue alias).
+# ``.H`` / ``.mH`` are keyed here as ``("torch.Tensor", <name>, "method")`` exactly like
+# ``.T`` / ``.mT`` rather than falling through to an unresolvable custom
+# ``getset_descriptor.__get__`` key (the r44 corr1_1 / secF_1 over-deny).
 _SAFE_TENSOR_PROPERTY_NAMES: frozenset[str] = _PURE_TENSOR_PROPERTY_NAMES
 
 

@@ -17,6 +17,7 @@ from typing import Any, cast
 import torch
 
 from .. import _state
+from ._torch_symbols import torch_attr
 from ..constants import get_orig_torch_funcs
 from ..intervention.types import FunctionRegistryKey
 from ..runnable import (
@@ -257,9 +258,10 @@ def _validated_dtype_literal(field: str, raw: str) -> str:
     """Validate a persisted ``torch.<dtype>`` literal against the live dtype table."""
 
     name = raw.removeprefix("torch.")
-    # r42 secC_1: ``torch.__dict__.get`` never fires ``torch.__getattr__`` (no lazy submodule
-    # import, no deprecated-attr call). Every real dtype is a ``torch.__dict__`` entry.
-    resolved = torch.__dict__.get(name)
+    # r42 secC_1 / r45: the shared ``torch_attr`` helper never fires ``torch.__getattr__`` (no
+    # lazy submodule import, no deprecated-attr call). Every real dtype is a ``torch.__dict__``
+    # entry.
+    resolved = torch_attr(name)
     if not isinstance(resolved, torch.dtype):
         raise ContextFieldInvalidError(field, f"{raw!r} does not name a torch dtype")
     return raw
@@ -983,7 +985,7 @@ def _getattr_allowlisted(namespace: str, qualname: str) -> Callable[..., Any] | 
     # callables only through ``getattr`` and carry no lazy-import hazard (their enumerated
     # namespaces are fixed, never attacker-chosen lazy submodules).
     if root is torch:
-        value = torch.__dict__.get(qualname)
+        value = torch_attr(qualname)
     else:
         value = getattr(root, qualname, None)
     return cast(Callable[..., Any], value) if callable(value) else None
