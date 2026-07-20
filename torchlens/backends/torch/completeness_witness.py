@@ -1947,6 +1947,14 @@ tensor objects so entries vanish with them.
 
 _ORIGIN_UNKNOWN = "unknown"
 _ORIGIN_RNG = "rng"
+_ORIGIN_UNINIT = "uninit"
+"""r53 hon_2: distinct uninitialized-memory origin marker.
+
+Deliberately NOT overloading ``rng``: the report vocabulary and the torch-RNG
+nets stay clean, while ``_resolved_dispatch_origins`` fails closed on BOTH --
+uninit-derived escapes can no longer be attributed as a "literal-only
+deterministic chain" through the empty-operand-set hole.
+"""
 _ORIGIN_LABEL_PREFIX = "label:"
 _ORIGIN_STATE_PREFIX = "state:"
 
@@ -2048,12 +2056,85 @@ def _operator_is_seeded_rng(func: Any) -> bool:
         return True  # unreadable tags: treat as RNG (fail closed)
 
 
+def _operator_uninit_family_tail(func: Any) -> str | None:
+    """Return a dispatcher overload's base op name IF it is in the uninit family.
+
+    r53 hon_2: the shared closed table lives in ``utils/rng.py`` (one predicate,
+    three layers). At this layer the spelling is the overload-independent aten
+    base name (``aten.empty_like`` -> ``empty_like``).
+    """
+
+    from ...utils.rng import _UNINIT_ALLOC_FACTORY_TAILS, _UNINIT_ALLOC_RESIZE_TAILS
+
+    base = _operator_base_name(func)
+    if not base.startswith("aten."):
+        return None
+    tail = base[len("aten.") :]
+    if tail in _UNINIT_ALLOC_FACTORY_TAILS or tail in _UNINIT_ALLOC_RESIZE_TAILS:
+        return tail
+    return None
+
+
+def _operator_is_growth_resize(func: Any) -> bool:
+    """Return whether a dispatcher overload is a resize spelling (grow-gated family)."""
+
+    from ...utils.rng import _UNINIT_ALLOC_RESIZE_TAILS
+
+    base = _operator_base_name(func)
+    return base.startswith("aten.") and base[len("aten.") :] in _UNINIT_ALLOC_RESIZE_TAILS
+
+
+def _operator_total_writer_destination(
+    func: Any, args: tuple[Any, ...], kwargs: dict[str, Any] | None
+) -> Any | None:
+    """Return the tensor whose bytes this dispatch TOTALLY overwrites, or ``None``.
+
+    Total writers per the shared r53 hon_2 sanitizer table: the ``out=`` kwarg
+    destination (torch's ``out=`` convention IS a full overwrite; only an exact
+    single-tensor ``out`` sanitizes) and the in-place
+    ``copy_``/``zero_``/``fill_``/RNG-fill receivers. Partial or unprovable
+    in-place writers return ``None`` (taint propagates, fail closed).
+    """
+
+    from ...utils.rng import _UNINIT_RNG_FILL_TAILS, _UNINIT_TOTAL_WRITER_TAILS
+
+    if kwargs:
+        out = kwargs.get("out")
+        if isinstance(out, torch.Tensor):
+            return out
+    base = _operator_base_name(func)
+    if base.startswith("aten."):
+        tail = base[len("aten.") :]
+        if tail in _UNINIT_TOTAL_WRITER_TAILS or tail in _UNINIT_RNG_FILL_TAILS:
+            if args and isinstance(args[0], torch.Tensor):
+                return args[0]
+    return None
+
+
+def _live_deterministic_fill_governs() -> bool:
+    """Return whether the LIVE capture context proves deterministic uninit fill."""
+
+    from ...utils._torch_compat import (
+        HAS_DETERMINISTIC_ALGORITHMS_QUERY,
+        read_fill_uninitialized_memory,
+    )
+    from ...utils.rng import deterministic_fill_governs
+
+    deterministic = (
+        bool(torch.are_deterministic_algorithms_enabled())
+        if HAS_DETERMINISTIC_ALGORITHMS_QUERY
+        else None
+    )
+    return deterministic_fill_governs(deterministic, read_fill_uninitialized_memory())
+
+
 def _register_dispatch_result_origins(
     state: "_WitnessState",
     func: Any,
     args: tuple[Any, ...],
     kwargs: dict[str, Any] | None,
     result: Any,
+    pre_dispatch_receiver_numel: int | None = None,
 ) -> None:
     """Propagate the union of operand origins onto every tensor result (mechanism A).
 
@@ -2062,6 +2143,18 @@ def _register_dispatch_result_origins(
     function of its operands. An in-place operator's mutated unlabelled receiver is
     covered because the receiver IS a result-aliasing operand: re-registering results
     updates its entry with the union (its VALUE now depends on all operands).
+
+    r53 hon_2: an uninitialized-memory family op (``empty`` factories; a GROWING
+    ``resize_``, decided against ``pre_dispatch_receiver_numel`` read at the
+    interpose BEFORE the receiver was resized, failing closed to tainted when
+    unavailable) additionally taints its results with the distinct ``uninit``
+    origin -- closing the empty-operand-set hole where allocator garbage
+    registered an EMPTY origin set and was later attributed as a "literal-only
+    deterministic chain". A total writer (``out=`` destination,
+    ``copy_``/``zero_``/``fill_``/RNG fill receiver) EXCLUDES the destination
+    operand's prior origins from the union: the post-write value derives from
+    the value-source operands only (exact value semantics -- strictly more
+    precise, never less safe).
     """
 
     trace = state.trace
@@ -2071,17 +2164,43 @@ def _register_dispatch_result_origins(
     # pointers/labels through torch-function-wrapped accessors; unpaused reads
     # would be logged as spurious ops mid-forward (shifting raw counters and
     # staling every label recorded after them) and would trip the escape census.
+    # The r53 hon_2 metadata reads (``numel`` on the result, the ``out=`` kwarg
+    # probe) live INSIDE the same paused scope for exactly that reason.
     with _state.pause_logging(), internal_scalar_read():
+        total_write_destination = _operator_total_writer_destination(func, args, kwargs)
         for operand in _iter_tensors_deep(args):
+            if operand is total_write_destination:
+                continue
             display_union |= _operand_origins(trace, operand)
             leaf_union |= _operand_leaf_origins(trace, operand)
         if kwargs:
             for operand in _iter_tensors_deep(kwargs):
+                if operand is total_write_destination:
+                    continue
                 display_union |= _operand_origins(trace, operand)
                 leaf_union |= _operand_leaf_origins(trace, operand)
+        exposes_uninit = False
+        if _operator_uninit_family_tail(func) is not None:
+            exposes_uninit = True
+            result_numel = result.numel() if isinstance(result, torch.Tensor) else None
+            if _operator_is_growth_resize(func):
+                # Shrink/same-size preserves the element prefix (probed clean);
+                # an unreadable pre-call size fails closed to tainted.
+                exposes_uninit = (
+                    pre_dispatch_receiver_numel is None
+                    or result_numel is None
+                    or result_numel > pre_dispatch_receiver_numel
+                )
+            elif result_numel == 0:
+                exposes_uninit = False  # zero elements: no bytes to expose
+            if exposes_uninit and _live_deterministic_fill_governs():
+                exposes_uninit = False  # torch fills deterministically (probed NaN)
     if _operator_is_seeded_rng(func):
         display_union.add(_ORIGIN_RNG)
         leaf_union.add(_ORIGIN_RNG)
+    if exposes_uninit:
+        display_union.add(_ORIGIN_UNINIT)
+        leaf_union.add(_ORIGIN_UNINIT)
     if _operator_base_name(func) == "aten.as_strided" and not _as_strided_result_contained(
         args, result
     ):
@@ -2127,16 +2246,19 @@ def _resolved_dispatch_origins(
     """Resolve an unlabelled escape source to positive (labels, state names), or ``None``.
 
     Returns ``None`` -- the caller MUST fail closed -- when the source's propagated
-    origin set contains ``unknown`` (an operand the census could not attribute) or
+    origin set contains ``unknown`` (an operand the census could not attribute),
     ``rng`` (raw seeded-RNG output; the torch-RNG nets own that class, and value
-    attribution through it would launder nondeterminism). An empty origin pair is a
-    positive result: the value derives from a literal-only deterministic chain that
-    replays identically, so it needs no witness.
+    attribution through it would launder nondeterminism), or ``uninit`` (r53
+    hon_2: uninitialized allocator bytes are not a function of the recorded
+    computation, so attributing through them would launder nondeterminism as a
+    deterministic chain). An empty origin pair is a positive result: the value
+    derives from a literal-only deterministic chain that replays identically, so
+    it needs no witness.
     """
 
     with _state.pause_logging(), internal_scalar_read():
         origins = _operand_origins(trace, source)
-    if _ORIGIN_UNKNOWN in origins or _ORIGIN_RNG in origins:
+    if _ORIGIN_UNKNOWN in origins or _ORIGIN_RNG in origins or _ORIGIN_UNINIT in origins:
         return None
     labels = {
         origin[len(_ORIGIN_LABEL_PREFIX) :]
@@ -2557,6 +2679,7 @@ class _CompletenessDispatchMode(TorchDispatchMode):
         started = time.perf_counter_ns()
         in_scope = False
         event: _DispatchEvent | None = None
+        pre_dispatch_receiver_numel: int | None = None
         try:
             in_scope = (
                 threading.get_ident() == self.state.owner_thread_id
@@ -2596,6 +2719,21 @@ class _CompletenessDispatchMode(TorchDispatchMode):
             # at forward end where a byte-exact restore would have already hidden it.
             if in_scope:
                 _sample_writeback_at_consumption(self.state, args, kwargs)
+            # r53 hon_2: a resize-family receiver must be sized BEFORE dispatch --
+            # afterwards the receiver has already been resized, so the grow fact
+            # (stale-byte exposure) would be unrecoverable. ``numel`` is a
+            # torch-function-wrapped accessor, so the read runs PAUSED (an
+            # unpaused read would log a spurious op mid-forward and stale the
+            # escape census); an unreadable size fails closed to tainted in the
+            # origin registration below.
+            if in_scope and self.state.record_escapes and _operator_is_growth_resize(func):
+                receiver = args[0] if args else None
+                if isinstance(receiver, torch.Tensor):
+                    try:
+                        with _state.pause_logging(), internal_scalar_read():
+                            pre_dispatch_receiver_numel = int(receiver.numel())
+                    except (RuntimeError, TypeError):
+                        pre_dispatch_receiver_numel = None
         finally:
             self.state.callback_ns += time.perf_counter_ns() - started
         try:
@@ -2631,7 +2769,14 @@ class _CompletenessDispatchMode(TorchDispatchMode):
         if in_scope and self.state.record_escapes:
             escape_started = time.perf_counter_ns()
             try:
-                _register_dispatch_result_origins(self.state, func, args, kwargs, result)
+                _register_dispatch_result_origins(
+                    self.state,
+                    func,
+                    args,
+                    kwargs,
+                    result,
+                    pre_dispatch_receiver_numel=pre_dispatch_receiver_numel,
+                )
                 _record_host_escape_source(self.state.trace, func, args, result)
             finally:
                 self.state.callback_ns += time.perf_counter_ns() - escape_started
