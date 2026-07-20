@@ -455,7 +455,18 @@ instance-state rules it encodes:
   `_rebuild_container_from_spec` exactly through the shared substitution predicate (r49 secB_1). A
   custom `__init__` compiled in a `<string>`/exec context yet resolvable at the
   spec's `type_module`/`type_qualname` reads as generated -- a narrow documented residual, fail-safe in
-  the realistic file-defined case. **`hf_model_output` trust
+  the realistic file-defined case. **Metaclass-`__call__` authority (r51 secB_1).** A `dataclass` or
+  `hf_model_output` type whose METACLASS (`type(container_type)`) defines a `__call__` other than the
+  builtin `type.__call__` is lossy at load, in the same spirit as the `__post_init__` /
+  foreign-`__init__` signals: a custom metaclass `__call__` can compute a dropped tensor-derived
+  instance attribute that non-invoking reconstruction (`cls.__new__(cls)` + inert field writes)
+  bypasses, and it is not type-observable without INVOKING the metaclass constructor (the SEC1
+  surface). The signal is applied to the load-time forged-flag recompute directly (mirroring
+  `_dataclass_has_foreign_init`), NOT to the shared plain-substitution predicate, so reconstruction
+  still rebuilds the correct inert type while the honesty verdict fail-closes to `unverifiable`. A
+  plain-`type`-metaclass dataclass, a real namedtuple, and a standard `ModelOutput` (metaclass
+  `type`, or a `__call__`-free `ABCMeta`) stay VERIFIED-eligible (no over-trigger); the namedtuple
+  kind is already covered by `namedtuple_type_can_carry_instance_state`. **`hf_model_output` trust
   authority (r42 secB_1).** The lossy-reconstruction recompute trusts an `hf_model_output` type's
   field-mirroring init ONLY by RESOLUTION AUTHORITY: the loaded type is identically re-resolvable
   (identity, not name) from the genuine `transformers` package via `spec.type_module` /
@@ -995,8 +1006,13 @@ container -- Mapping / non-leaf Collection / a safe queue's inspectable buffer /
 holder of one; r42 corr2_1 + r45 hon1_1 extended the sweep to descend by container protocol, so a
 model-held generator behind `self.holder.rng`, a `deque`, a `ChainMap`, or a `queue.Queue` is now
 witnessed on any thread; r47 hon1_1 further descends a container SUBCLASS's own `__dict__`/`__slots__`,
-so `self.rng` on a `Sequence`/`Mapping`/`UserList`/`UserDict` subclass is witnessed, and only a
-NON-EMPTY OPAQUE queue's contents remain a conservative fail-closed residual, never a false negative),
+so `self.rng` on a `Sequence`/`Mapping`/`UserList`/`UserDict` subclass is witnessed**; r51 hon1_1
+stops treating `nn.Module` as a hard inventory leaf and descends every reachable `nn.Module`'s own
+`__dict__`/`__slots__` (registered submodules AND submodules held UNREGISTERED in a plain attribute,
+`list`, `dict`, nested container, or custom holder -- the "modules must live in an `nn.ModuleList`"
+footgun), so a numpy Generator behind an unregistered submodule is witnessed on any thread**, and
+only a NON-EMPTY OPAQUE queue's contents remain a conservative fail-closed residual, never a false
+negative),
 plus a bare one-shot iterator attribute which cannot be inspected without
 consuming it -- of the same class
 as the adversarial draw+`state`-restore a cooperative model does not exercise; (v) a
