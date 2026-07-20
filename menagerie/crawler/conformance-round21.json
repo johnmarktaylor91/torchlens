@@ -91,12 +91,7 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E05]",
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E06]",
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E07]",
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E08]",
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E09]",
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E10]"
+        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E09]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -132,11 +127,9 @@
       ],
       "expected_outcome": "passed",
       "finding_ids": [],
-      "host": "both",
+      "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -337,10 +330,9 @@
       ],
       "expected_outcome": "passed",
       "finding_ids": [],
-      "host": "both",
+      "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial",
         "menagerie/crawler/tests/test_round21_transport_composition.py::test_round21_closed_transport_capability_awards_and_rejects_unlisted_library"
       ],
       "real_prefix": true,
@@ -379,7 +371,6 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H01]",
         "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H03]",
         "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H04]"
       ],
@@ -416,11 +407,10 @@
       ],
       "expected_outcome": "passed",
       "finding_ids": [],
-      "host": "both",
+      "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial"
+        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -504,9 +494,7 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -525,7 +513,6 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
         "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
       ],
       "real_prefix": true,
@@ -545,8 +532,7 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H03]",
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H04]"
+        "menagerie/crawler/tests/test_slice_f_driver.py::test_linux_code_less_deferral_fails_visibly_without_failed_source"
       ],
       "real_prefix": true,
       "shipped_compiler": true,

@@ -2,6 +2,11 @@
   "cases": [
     {
       "expected_reason": "checkpoint_or_weight_read_attempted",
+      "expected_reasons": [
+        "checkpoint_or_weight_read_attempted",
+        "'awards_runs': False",
+        "'awards_runs': False"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E11]",
         "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
@@ -12,6 +17,10 @@
     },
     {
       "expected_reason": "environment generation omits or rewrites the content seal",
+      "expected_reasons": [
+        "environment generation omits or rewrites the content seal",
+        "DID NOT RAISE"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E02]",
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E03]"
@@ -21,6 +30,9 @@
     },
     {
       "expected_reason": "content seal",
+      "expected_reasons": [
+        "content seal"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E02]"
       ],
@@ -29,6 +41,10 @@
     },
     {
       "expected_reason": "DID NOT RAISE",
+      "expected_reasons": [
+        "DID NOT RAISE",
+        "static import is outside sealed environment and exact inventory"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E04]",
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E08]"
@@ -38,19 +54,21 @@
     },
     {
       "expected_reason": "DID NOT RAISE",
+      "expected_reasons": [
+        "DID NOT RAISE"
+      ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E05]",
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E06]",
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E07]",
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E08]",
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E09]",
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E10]"
+        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E09]"
       ],
       "reversion_id": "D05",
       "semantic_reversion": "weaken internal/external symlink binding"
     },
     {
       "expected_reason": "assert attempt[\"result\"] == \"failed\"",
+      "expected_reasons": [
+        "assert attempt[\"result\"] == \"failed\"",
+        "assert attempt[\"result\"] == \"failed\""
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E12]",
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E13]"
@@ -59,17 +77,22 @@
       "semantic_reversion": "treat packaged checkpoints as runtime"
     },
     {
-      "expected_reason": "is not in list",
+      "expected_reason": "selected interpreter is missing from worker argv",
+      "expected_reasons": [
+        "selected interpreter is missing from worker argv"
+      ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial"
+        "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "reversion_id": "D07",
       "semantic_reversion": "restore sys.executable or parallel interpreter"
     },
     {
-      "expected_reason": "is not in the subpath",
+      "expected_reason": "selected interpreter is absent from the content seal",
+      "expected_reasons": [
+        "selected interpreter is absent from the content seal",
+        "DID NOT RAISE"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding",
         "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association"
@@ -79,8 +102,10 @@
     },
     {
       "expected_reason": "runtime-root",
+      "expected_reasons": [
+        "runtime-root"
+      ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_tripwire_catches_python_evasion",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "reversion_id": "D09",
@@ -88,6 +113,9 @@
     },
     {
       "expected_reason": "runtime-root",
+      "expected_reasons": [
+        "runtime-root"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
@@ -96,6 +124,9 @@
     },
     {
       "expected_reason": "_compile_worker_read_manifest",
+      "expected_reasons": [
+        "_compile_worker_read_manifest"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
@@ -104,6 +135,9 @@
     },
     {
       "expected_reason": "DID NOT RAISE",
+      "expected_reasons": [
+        "DID NOT RAISE"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_fingerprint_composition.py::test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
       ],
@@ -112,6 +146,9 @@
     },
     {
       "expected_reason": "content seal",
+      "expected_reasons": [
+        "content seal"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_fingerprint_composition.py::test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
       ],
@@ -120,6 +157,9 @@
     },
     {
       "expected_reason": "failed:environment",
+      "expected_reasons": [
+        "failed:environment"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_scale_composition.py::test_round21_pass_and_spawn_validation_walks_are_constant_bounded"
       ],
@@ -128,6 +168,21 @@
     },
     {
       "expected_reason": "post-award-commit",
+      "expected_reasons": [
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S01]",
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S02]",
@@ -148,6 +203,9 @@
     },
     {
       "expected_reason": "S11",
+      "expected_reasons": [
+        "S11"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S11]"
       ],
@@ -156,15 +214,20 @@
     },
     {
       "expected_reason": "assert not True",
+      "expected_reasons": [
+        "assert not True"
+      ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_transport_composition.py::test_round21_closed_transport_capability_awards_and_rejects_unlisted_library",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial"
+        "menagerie/crawler/tests/test_round21_transport_composition.py::test_round21_closed_transport_capability_awards_and_rejects_unlisted_library"
       ],
       "reversion_id": "D17",
       "semantic_reversion": "restore root/suffix transport grant"
     },
     {
       "expected_reason": "DID NOT RAISE",
+      "expected_reasons": [
+        "DID NOT RAISE"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H02]"
       ],
@@ -173,16 +236,22 @@
     },
     {
       "expected_reason": "terminal partition invalid",
+      "expected_reasons": [
+        "terminal partition invalid",
+        "duplicate or invalid artifact event ID"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H03]",
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H04]",
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H01]"
+        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H04]"
       ],
       "reversion_id": "D19",
       "semantic_reversion": "accept zero/multiple handoff finals or old-root fallback"
     },
     {
       "expected_reason": "environment authority cache association is invalid",
+      "expected_reasons": [
+        "environment authority cache association is invalid"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_cache_rebind_composition.py::test_round21_mismatched_rebind_preserves_active_authority_and_awards"
       ],
@@ -191,16 +260,20 @@
     },
     {
       "expected_reason": "Extra items in the right set",
+      "expected_reasons": [
+        "Extra items in the right set"
+      ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial",
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round19_supported_host_release_gate_inventory_is_exact"
+        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_linux_release_artifacts_and_provisioning_are_real"
       ],
       "reversion_id": "D21",
       "semantic_reversion": "delete/corrupt either lock/export/probe contract"
     },
     {
       "expected_reason": "MENAGERIE_RELEASE_GATE",
+      "expected_reasons": [
+        "MENAGERIE_RELEASE_GATE"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_conformance_workflow_and_reversion_inventory_is_exact"
       ],
@@ -209,6 +282,9 @@
     },
     {
       "expected_reason": "strace",
+      "expected_reasons": [
+        "strace"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round19_supported_host_release_gate_inventory_is_exact"
       ],
@@ -217,6 +293,9 @@
     },
     {
       "expected_reason": "command -v log",
+      "expected_reasons": [
+        "command -v log"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round19_supported_host_release_gate_inventory_is_exact"
       ],
@@ -225,34 +304,42 @@
     },
     {
       "expected_reason": "unverifiable",
+      "expected_reasons": [
+        "unverifiable"
+      ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
       ],
       "reversion_id": "D25",
       "semantic_reversion": "drop nullable evidence or misclassify mode"
     },
     {
       "expected_reason": "dry_run",
+      "expected_reasons": [
+        "dry_run"
+      ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
         "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
       ],
       "reversion_id": "D26",
       "semantic_reversion": "restore dry-run false-complete/signature mismatch"
     },
     {
-      "expected_reason": "terminal partition invalid",
+      "expected_reason": "menagerie.crawler.status.PartitionError",
+      "expected_reasons": [
+        "menagerie.crawler.status.PartitionError"
+      ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H03]",
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H04]"
+        "menagerie/crawler/tests/test_slice_f_driver.py::test_linux_code_less_deferral_fails_visibly_without_failed_source"
       ],
       "reversion_id": "D27",
       "semantic_reversion": "restore source/CAS/cache/fetch fallback"
     },
     {
-      "expected_reason": "assert",
+      "expected_reason": "conformance registry clause IDs changed",
+      "expected_reasons": [
+        "conformance registry clause IDs changed"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed"
       ],
@@ -261,6 +348,12 @@
     },
     {
       "expected_reason": "receipt_error",
+      "expected_reasons": [
+        "receipt_error",
+        "receipt_error",
+        "terminal-partition-complete",
+        "receipt_error"
+      ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
         "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",

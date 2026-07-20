@@ -568,6 +568,9 @@ def _run_host_denial_composition(
             == positive_attempts[0]["raw_award_receipt_sha256"]
         )
         positive_argv = list(positive_attempts[0]["invocation"]["argv"])
+        assert str(environment.python_executable) in positive_argv, (
+            "selected interpreter is missing from worker argv"
+        )
         interpreter_index = positive_argv.index(str(environment.python_executable))
         assert positive_argv[interpreter_index : interpreter_index + 4] == [
             str(environment.python_executable),

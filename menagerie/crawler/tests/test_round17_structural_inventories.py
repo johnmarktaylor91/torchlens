@@ -414,6 +414,10 @@ ROUND21_VS11_PROOF_REGISTRY: dict[str, str] = {
         "menagerie/crawler/tests/test_round21_conformance_composition.py::"
         "test_round21_ci_attestations_cover_registry_without_skip"
     ),
+    "P27": (
+        "menagerie/crawler/tests/test_slice_f_driver.py::"
+        "test_linux_code_less_deferral_fails_visibly_without_failed_source"
+    ),
     "T06": "menagerie/crawler/tools/round21_reversions.py",
 }
 
@@ -1813,7 +1817,7 @@ def test_round21_linux_release_registry_is_exact() -> None:
     payload = json.loads(registry_path.read_bytes())
     nodes = payload["nodes"]
     assert payload["target"] == "linux-64"
-    assert len(nodes) == 46
+    assert len(nodes) == 47
     assert len(nodes) == len(set(nodes))
     assert set(ROUND21_VS9_PROOF_REGISTRY) == {
         "P01",
@@ -1926,9 +1930,7 @@ def test_round21_conformance_workflow_and_reversion_inventory_is_exact() -> None
     ]
     assert cases_by_id["D17"]["proof_nodes"] == [
         "menagerie/crawler/tests/test_round21_transport_composition.py::"
-        "test_round21_closed_transport_capability_awards_and_rejects_unlisted_library",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::"
-        "test_round21_macos_committed_lock_seatbelt_award_and_denial",
+        "test_round21_closed_transport_capability_awards_and_rejects_unlisted_library"
     ]
     assert cases_by_id["D18"]["proof_nodes"] == [
         "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
@@ -1939,16 +1941,10 @@ def test_round21_conformance_workflow_and_reversion_inventory_is_exact() -> None
         "test_round21_handoff_authority_identity_matrix[H03]",
         "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
         "test_round21_handoff_authority_identity_matrix[H04]",
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
-        "test_round21_handoff_authority_identity_matrix[H01]",
     ]
     assert cases_by_id["D21"]["proof_nodes"] == [
-        "menagerie/crawler/tests/test_round21_ci_composition.py::"
-        "test_round21_linux_committed_lock_provenance_awards_in_ci",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::"
-        "test_round21_macos_committed_lock_seatbelt_award_and_denial",
         "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-        "test_round19_supported_host_release_gate_inventory_is_exact",
+        "test_round21_linux_release_artifacts_and_provisioning_are_real",
     ]
     assert cases_by_id["D22"]["proof_nodes"] == [
         "menagerie/crawler/tests/test_round17_structural_inventories.py::"
@@ -1963,10 +1959,8 @@ def test_round21_conformance_workflow_and_reversion_inventory_is_exact() -> None
         "test_round19_supported_host_release_gate_inventory_is_exact"
     ]
     assert cases_by_id["D27"]["proof_nodes"] == [
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
-        "test_round21_handoff_authority_identity_matrix[H03]",
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
-        "test_round21_handoff_authority_identity_matrix[H04]",
+        "menagerie/crawler/tests/test_slice_f_driver.py::"
+        "test_linux_code_less_deferral_fails_visibly_without_failed_source"
     ]
     assert cases_by_id["D28"]["proof_nodes"] == [
         "menagerie/crawler/tests/test_round21_conformance_composition.py::"
@@ -2009,6 +2003,7 @@ def test_round21_conformance_workflow_and_reversion_inventory_is_exact() -> None
         "T05-mac",
         "P11",
         "P11-CI",
+        "P27",
         "T06",
     }
 

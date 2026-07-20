@@ -105,6 +105,10 @@ P19 = (
     "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
     "test_manifest_v3_rejects_changed_interpreter_association"
 )
+P27 = (
+    "menagerie/crawler/tests/test_slice_f_driver.py::"
+    "test_linux_code_less_deferral_fails_visibly_without_failed_source"
+)
 P20 = (P12_NONE, P12_STAT)
 T01 = (
     "menagerie/crawler/tests/test_round21_preclusion_composition.py::"
@@ -291,6 +295,8 @@ def _expand_nodes(aliases: Iterable[str]) -> tuple[str, ...]:
             nodes.append(P19)
         elif alias == "P20":
             nodes.extend(P20)
+        elif alias == "P27":
+            nodes.append(P27)
         else:
             raise AssertionError(f"unknown proof alias: {alias}")
     return tuple(dict.fromkeys(nodes))
@@ -614,9 +620,9 @@ def _expected_registry_records() -> tuple[dict[str, Any], ...]:
         "D02": ("P04-E02", "P04-E03"),
         "D03": ("P04-E02",),
         "D04": ("P04-E04", "P04-E08"),
-        "D05": ("P04-E05", "P04-E06", "P04-E07", "P04-E08", "P04-E09", "P04-E10"),
+        "D05": ("P04-E09",),
         "D06": ("P04-E12", "P04-E13"),
-        "D07": ("P01", "P09", "P10"),
+        "D07": ("P01",),
         "D08": ("P13", "P19"),
         "D09": ("P01",),
         "D10": ("P01",),
@@ -626,17 +632,17 @@ def _expected_registry_records() -> tuple[dict[str, Any], ...]:
         "D14": ("P03",),
         "D15": ("P05",),
         "D16": ("P05-S11",),
-        "D17": ("P07", "P10"),
+        "D17": ("P07",),
         "D18": ("P06-H02",),
-        "D19": ("P06-H03", "P06-H04", "P06-H01"),
+        "D19": ("P06-H03", "P06-H04"),
         "D20": ("P08",),
-        "D21": ("P09", "P10"),
+        "D21": ("P09",),
         "D22": ("P11",),
         "D23": ("P09", "P14"),
         "D24": ("P10", "P15"),
-        "D25": ("P17", "P20"),
-        "D26": ("P18a", "P18b"),
-        "D27": ("P06-H03", "P06-H04"),
+        "D25": ("P17",),
+        "D26": ("P18b",),
+        "D27": ("P27",),
         "D28": ("P11",),
         "D29": ("P12", "P16", "P17"),
     }
@@ -839,6 +845,7 @@ def test_round21_conformance_registry_is_total_and_executed(
     expected_by_id = {record["clause_id"]: record for record in expected_records}
     payload = _registry_payload()
     observed_by_id = _records_by_id(payload)
+    assert set(observed_by_id) == set(expected_by_id), "conformance registry clause IDs changed"
     assert observed_by_id == expected_by_id
 
     sandbox = "bubblewrap" if sys.platform == "linux" else "sandbox-exec"

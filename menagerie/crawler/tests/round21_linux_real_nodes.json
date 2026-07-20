@@ -43,6 +43,7 @@
     "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding",
     "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
     "menagerie/crawler/tests/test_slice_f_driver.py::test_linux_handoff_attempts_both_deferred_statuses_and_supersedes",
+    "menagerie/crawler/tests/test_slice_f_driver.py::test_linux_code_less_deferral_fails_visibly_without_failed_source",
     "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes",
     "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
     "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error",

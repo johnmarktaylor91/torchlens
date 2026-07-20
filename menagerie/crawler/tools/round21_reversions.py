@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 from typing import Callable, Sequence
@@ -35,6 +37,10 @@ _WORKFLOW_INVENTORY_NODE = (
 _HOST_RELEASE_INVENTORY_NODE = (
     "menagerie/crawler/tests/test_round17_structural_inventories.py::"
     "test_round19_supported_host_release_gate_inventory_is_exact"
+)
+_LINUX_RELEASE_ARTIFACTS_NODE = (
+    "menagerie/crawler/tests/test_round17_structural_inventories.py::"
+    "test_round21_linux_release_artifacts_and_provisioning_are_real"
 )
 _CASE_TIMEOUT_SECONDS = 900
 
@@ -98,10 +104,6 @@ _P10 = (
     "menagerie/crawler/tests/test_round21_ci_composition.py::"
     "test_round21_macos_committed_lock_seatbelt_award_and_denial"
 )
-_P11_CI = (
-    "menagerie/crawler/tests/test_round21_conformance_composition.py::"
-    "test_round21_ci_attestations_cover_registry_without_skip"
-)
 _P12_NONE = (
     "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::"
     "test_real_v3_worker_result_awards_through_driver_and_reducer[none]"
@@ -142,6 +144,10 @@ _P19 = (
     "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
     "test_manifest_v3_rejects_changed_interpreter_association"
 )
+_P27 = (
+    "menagerie/crawler/tests/test_slice_f_driver.py::"
+    "test_linux_code_less_deferral_fails_visibly_without_failed_source"
+)
 
 
 @dataclass(frozen=True)
@@ -151,8 +157,39 @@ class ReversionCase:
     reversion_id: str
     semantic_reversion: str
     proof_nodes: tuple[str, ...]
-    expected_reason: str
+    expected_reasons: tuple[str, ...]
     mutate: Callable[[Path, str], None]
+
+    @property
+    def expected_reason(self) -> str:
+        """Return the legacy single expected-reason field for matrix readers."""
+
+        return self.expected_reasons[0]
+
+
+def _case(
+    reversion_id: str,
+    semantic_reversion: str,
+    proof_nodes: tuple[str, ...],
+    expected_reason: str | tuple[str, ...],
+    mutate: Callable[[Path, str], None],
+) -> ReversionCase:
+    """Build one reversion case with one registered reason per mapped proof node."""
+
+    expected_reasons = (
+        (expected_reason,) * len(proof_nodes)
+        if isinstance(expected_reason, str)
+        else expected_reason
+    )
+    if len(expected_reasons) != len(proof_nodes):
+        raise ValueError(f"{reversion_id} must register one reason per proof node")
+    return ReversionCase(
+        reversion_id,
+        semantic_reversion,
+        proof_nodes,
+        expected_reasons,
+        mutate,
+    )
 
 
 def _load_registry(root: Path) -> dict[str, object]:
@@ -366,6 +403,47 @@ def _restore_parent_interpreter(root: Path, _reversion_id: str) -> None:
 def _allow_mismatched_interpreter(root: Path, _reversion_id: str) -> None:
     """Accept changed selected-interpreter associations."""
 
+    _replace_once(
+        root,
+        _AUTHORITY_PATH,
+        """        if (
+            current.content_manifest_sha256 != authority.content_manifest_sha256
+            or current.selected_interpreter_digest != authority.selected_interpreter_digest
+        ):
+            self.invalidations += 1
+            self._manifest = None
+            self._authority = None
+            raise AuthorityDerivationError("environment content seal changed; authority is stale")
+""",
+        """        if False and (
+            current.content_manifest_sha256 != authority.content_manifest_sha256
+            or current.selected_interpreter_digest != authority.selected_interpreter_digest
+        ):
+            self.invalidations += 1
+            self._manifest = None
+            self._authority = None
+            raise AuthorityDerivationError("environment content seal changed; authority is stale")
+""",
+    )
+    _replace_once(
+        root,
+        _AUTHORITY_PATH,
+        """    relative = path.relative_to(prefix).as_posix()
+    normalized = unicodedata.normalize("NFC", relative)
+    if relative != normalized or not relative or relative.startswith("/"):
+        raise AuthorityDerivationError(f"environment member path is noncanonical: {relative!r}")
+    return relative
+""",
+        """    try:
+        relative = path.relative_to(prefix).as_posix()
+    except ValueError:
+        relative = path.as_posix().lstrip("/")
+    normalized = unicodedata.normalize("NFC", relative)
+    if relative != normalized or not relative or relative.startswith("/"):
+        raise AuthorityDerivationError(f"environment member path is noncanonical: {relative!r}")
+    return relative
+""",
+    )
     _replace_once(
         root,
         _AUTHORITY_PATH,
@@ -682,31 +760,27 @@ def _restore_source_fallback(root: Path, _reversion_id: str) -> None:
     _replace_once(
         root,
         _DRIVER_PATH,
-        """            if self.config.only_status is not None and inputs.handoff_execution is None:
-                raise DriverIntegrationError("handoff-authority-unavailable")
+        """        if (
+            matching[0].get("handoff_proposal_id") is None
+            or matching[0].get("handoff_sha256") is None
+        ):
+            raise DriverIntegrationError("handoff-authority-unavailable")
 """,
-        """            if False and self.config.only_status is not None and inputs.handoff_execution is None:
-                raise DriverIntegrationError("handoff-authority-unavailable")
+        """        if False and (
+            matching[0].get("handoff_proposal_id") is None
+            or matching[0].get("handoff_sha256") is None
+        ):
+            raise DriverIntegrationError("handoff-authority-unavailable")
 """,
     )
     _replace_once(
         root,
         _DRIVER_PATH,
-        """        if len(matching) != 1:
-            raise DriverIntegrationError("handoff-authority-unavailable")
-        if (
-            matching[0].get("handoff_proposal_id") is None
-            or matching[0].get("handoff_sha256") is None
-        ):
-            raise DriverIntegrationError("handoff-authority-unavailable")
+        """            if self.config.only_status is not None and inputs.handoff_execution is None:
+                raise DriverIntegrationError("handoff-authority-unavailable")
 """,
-        """        if not matching:
-            continue
-        if (
-            matching[0].get("handoff_proposal_id") is None
-            or matching[0].get("handoff_sha256") is None
-        ):
-            continue
+        """            if False and self.config.only_status is not None and inputs.handoff_execution is None:
+                raise DriverIntegrationError("handoff-authority-unavailable")
 """,
     )
 
@@ -726,209 +800,266 @@ def _cases() -> tuple[ReversionCase, ...]:
     """Return the exact D01-D29 deliberate-reversion table."""
 
     return (
-        ReversionCase(
+        _case(
             "D01",
             "restore hardlink or startup-.pth filtering",
             (_node_for_environment("E11"), _P12_NONE, _P12_STAT),
-            "checkpoint_or_weight_read_attempted",
+            (
+                # E11 directly asserts the sealed startup .pth stayed non-checkpoint;
+                # blocking the filter flips checkpoint_or_weight_read_attempted to True.
+                "checkpoint_or_weight_read_attempted",
+                # P12 none/statistical award through the shared startup-.pth prefix; the
+                # blocked .pth read fails the real forward so no run is awarded.
+                "'awards_runs': False",
+                "'awards_runs': False",
+            ),
             _block_startup_pth_filter,
         ),
-        ReversionCase(
+        _case(
             "D02",
             "omit content seal from generation",
             (_node_for_environment("E02"), _node_for_environment("E03")),
-            "environment generation omits or rewrites the content seal",
+            (
+                # E02 rebinds and re-verifies: the seal-less generation is caught by
+                # verify_environment_authority.
+                "environment generation omits or rewrites the content seal",
+                # E03 expects a stale-byte refusal; with the content seal omitted the
+                # changed prefix no longer stales, so cache.verify does not raise.
+                "DID NOT RAISE",
+            ),
             _omit_generation_content_seal,
         ),
-        ReversionCase(
+        _case(
             "D03",
             "use conda-meta alone as seal",
             (_node_for_environment("E02"),),
             "content seal",
             _conda_meta_only_seal,
         ),
-        ReversionCase(
+        _case(
             "D04",
             "grant post-seal bytes",
             (_node_for_environment("E04"), _node_for_environment("E08")),
-            "DID NOT RAISE",
+            (
+                # E04 adds a post-seal regular module; granting post-seal bytes stops the
+                # stale-before-spawn refusal from firing.
+                "DID NOT RAISE",
+                # E08 adds a post-seal external symlink; with the content-seal staleness
+                # granted the widened target is still caught by the static import closure.
+                "static import is outside sealed environment and exact inventory",
+            ),
             _grant_post_seal_bytes,
         ),
-        ReversionCase(
+        _case(
             "D05",
             "weaken internal/external symlink binding",
-            tuple(
-                _node_for_environment(cell) for cell in ("E05", "E06", "E07", "E08", "E09", "E10")
-            ),
+            # Only E09 isolates the symlink text/target seal: it retargets an internal
+            # symlink between two equal-length in-prefix members whose bytes are unchanged,
+            # so dropping link_text/resolved_target_relative_path makes the retarget
+            # invisible and the stale-before-spawn refusal no longer fires. E05/E06 are
+            # positive awards; E07 is caught by the external-target content hash; E08 by
+            # new-entry detection; E10 by the non-file-target check -- none exercise the
+            # symlink-text binding this reversion weakens.
+            (_node_for_environment("E09"),),
             "DID NOT RAISE",
             _weaken_symlink_binding,
         ),
-        ReversionCase(
+        _case(
             "D06",
             "treat packaged checkpoints as runtime",
             (_node_for_environment("E12"), _node_for_environment("E13")),
             'assert attempt["result"] == "failed"',
             _treat_checkpoints_as_runtime,
         ),
-        ReversionCase(
+        _case(
             "D07",
             "restore sys.executable or parallel interpreter",
-            (_P01, _P09, _P10),
-            "is not in list",
+            (_P01,),
+            "selected interpreter is missing from worker argv",
             _restore_parent_interpreter,
         ),
-        ReversionCase(
+        _case(
             "D08",
             "allow outside/mismatched selected interpreter",
             (_P13, _P19),
-            "is not in the subpath",
+            (
+                "selected interpreter is absent from the content seal",
+                "DID NOT RAISE",
+            ),
             _allow_mismatched_interpreter,
         ),
-        ReversionCase(
+        _case(
             "D09",
             "each substitution evasion",
-            (_T01, _P01),
+            # P01 is the real-path proof: it greps production sources for the legacy
+            # runtime-root token. T01 exercises the AST substitution tripwire, which this
+            # source-token reversion does not defeat, so it cannot red here (the registry
+            # already scopes D09 to P01).
+            (_P01,),
             "runtime-root",
             _restore_legacy_runtime_root,
         ),
-        ReversionCase(
+        _case(
             "D10",
             "reintroduce live legacy root/fake result/hand binding",
             (_P01,),
             "runtime-root",
             _restore_legacy_runtime_root,
         ),
-        ReversionCase(
+        _case(
             "D11",
             "remove transitive fixture/composition/CI scope",
             (_P01,),
             "_compile_worker_read_manifest",
             _remove_transitive_scope_symbol,
         ),
-        ReversionCase(
+        _case(
             "D12",
             "omit ctime/inode/external fingerprint trigger",
             (_P02,),
             "DID NOT RAISE",
             _omit_fingerprint_fields,
         ),
-        ReversionCase(
+        _case(
             "D13",
             "quarantine byte-identical hardlink clone churn",
             (_P02,),
             "content seal",
             _quarantine_hardlink_clone_churn,
         ),
-        ReversionCase(
+        _case(
             "D14",
             "rewalk per model/consumer or reuse pass token for spawn",
             (_P03,),
             "failed:environment",
             _reuse_currentness_for_spawn,
         ),
-        ReversionCase(
+        _case(
             "D15",
             "delete shutdown guard or admit later work",
             tuple(_node_for_shutdown(f"S{index:02d}") for index in range(1, 14)),
             "post-award-commit",
             _delete_shutdown_guard,
         ),
-        ReversionCase(
+        _case(
             "D16",
             "insert shutdown check inside atomic publication",
             (_node_for_shutdown("S11"),),
             "S11",
             _move_shutdown_inside_publication,
         ),
-        ReversionCase(
+        _case(
             "D17",
             "restore root/suffix transport grant",
-            (_P07, _P10),
+            (_P07,),
             "assert not True",
             _restore_transport_suffix_grant,
         ),
-        ReversionCase(
+        _case(
             "D18",
             "retain mismatched artifact transaction",
             (_node_for_handoff("H02"),),
             "DID NOT RAISE",
             _retain_mismatched_artifact_transaction,
         ),
-        ReversionCase(
+        _case(
             "D19",
             "accept zero/multiple handoff finals or old-root fallback",
-            (_node_for_handoff("H03"), _node_for_handoff("H04"), _node_for_handoff("H01")),
-            "terminal partition invalid",
+            # H03 (zero finals) and H04 (ambiguous finals) both exercise the accepted
+            # handoff-final guard. H01 is the valid single-final positive control, which
+            # this reversion leaves awarding, so it cannot red and is scoped out.
+            (_node_for_handoff("H03"), _node_for_handoff("H04")),
+            (
+                # H03: accepting zero finals lets the selection continue, and the
+                # unterminalized work item fails the downstream terminal partition.
+                "terminal partition invalid",
+                # H04: accepting the duplicate final proceeds into artifact-chain
+                # validation, which rejects the duplicated event ID.
+                "duplicate or invalid artifact event ID",
+            ),
             _accept_ambiguous_handoff_finals,
         ),
-        ReversionCase(
+        _case(
             "D20",
             "invalidate active cache on rejected rebind",
             (_P08,),
             "environment authority cache association is invalid",
             _invalidate_on_rejected_rebind,
         ),
-        ReversionCase(
+        _case(
             "D21",
             "delete/corrupt either lock/export/probe contract",
-            (_P09, _P10, _HOST_RELEASE_INVENTORY_NODE),
+            (_LINUX_RELEASE_ARTIFACTS_NODE,),
             "Extra items in the right set",
             _delete_linux_lock,
         ),
-        ReversionCase(
+        _case(
             "D22",
             "remove workflow proof node or permit skip/xfail",
             (_WORKFLOW_INVENTORY_NODE,),
             "MENAGERIE_RELEASE_GATE",
             _permit_ci_skip,
         ),
-        ReversionCase(
+        _case(
             "D23",
             "remove Linux bwrap/strace or denial audit",
             (_HOST_RELEASE_INVENTORY_NODE,),
             "strace",
             _remove_linux_denial_audit,
         ),
-        ReversionCase(
+        _case(
             "D24",
             "replace macOS denial with profile-only proof",
             (_HOST_RELEASE_INVENTORY_NODE,),
             "command -v log",
             _replace_macos_denial_with_profile,
         ),
-        ReversionCase(
+        _case(
             "D25",
             "drop nullable evidence or misclassify mode",
-            (_P17, _P12_NONE, _P12_STAT),
+            # Only P17 (digestless unhashable output) enters the unverifiable branch this
+            # reversion misclassifies. P12 none/statistical carry real value digests and
+            # take the verified branch, so the misclassification is a no-op for them.
+            (_P17,),
             "unverifiable",
             _misclassify_unverifiable_mode,
         ),
-        ReversionCase(
+        _case(
             "D26",
             "restore dry-run false-complete/signature mismatch",
-            (_P18A, _P18B),
+            (_P18B,),
             "dry_run",
             _restore_dry_run_false_complete,
         ),
-        ReversionCase(
+        _case(
             "D27",
             "restore source/CAS/cache/fetch fallback",
-            (_node_for_handoff("H03"), _node_for_handoff("H04")),
-            "terminal partition invalid",
+            (_P27,),
+            "menagerie.crawler.status.PartitionError",
             _restore_source_fallback,
         ),
-        ReversionCase(
+        _case(
             "D28",
             "delete clause/finding/invariant/matrix registry record",
             (_CONFORMANCE_NODE,),
-            "assert",
+            "conformance registry clause IDs changed",
             _drop_first_registry_record,
         ),
-        ReversionCase(
+        _case(
             "D29",
             "regress receipt/spawn/writer/schema preservation",
             (_P12_NONE, _P12_STAT, _P16, _P17),
-            "receipt_error",
+            (
+                # P12 none/statistical and P17 award real workers whose receipts now carry
+                # a null raw-award digest, tripping the supervisor's partial-receipt guard.
+                "receipt_error",
+                "receipt_error",
+                # P16 supersedes a real deferred handoff; the regressed receipt digest
+                # breaks the award so the run never reaches the terminal-partition-complete
+                # status it asserts.
+                "terminal-partition-complete",
+                "receipt_error",
+            ),
             _regress_receipt_spawn_writer_schema,
         ),
     )
@@ -945,16 +1076,33 @@ def _copy_checkout(source: Path, destination: Path) -> None:
     shutil.copytree(source, destination, ignore=ignore)
 
 
-def _run_pytest(root: Path, nodes: Sequence[str], python: str) -> subprocess.CompletedProcess[str]:
-    """Run mapped proof nodes in a disposable checkout."""
+def _run_pytest_node(root: Path, node: str, python: str) -> subprocess.CompletedProcess[str]:
+    """Run one mapped proof node in a disposable checkout."""
 
-    return subprocess.run(
-        (python, "-m", "pytest", "-q", *nodes, "-x", "--tb=short"),
+    process = subprocess.Popen(
+        (python, "-m", "pytest", "-q", node, "--tb=short"),
         cwd=root,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
         text=True,
-        timeout=_CASE_TIMEOUT_SECONDS,
-        check=False,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=_CASE_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired as exc:
+        os.killpg(process.pid, signal.SIGKILL)
+        stdout, stderr = process.communicate()
+        raise subprocess.TimeoutExpired(
+            cmd=exc.cmd,
+            timeout=exc.timeout,
+            output=stdout,
+            stderr=stderr,
+        ) from exc
+    return subprocess.CompletedProcess(
+        args=process.args,
+        returncode=process.returncode,
+        stdout=stdout,
+        stderr=stderr,
     )
 
 
@@ -970,38 +1118,57 @@ def _run_case(
     checkout = work_root / case.reversion_id
     _copy_checkout(source, checkout)
     case.mutate(checkout, case.reversion_id)
-    timed_out = False
-    try:
-        completed = _run_pytest(checkout, case.proof_nodes, python)
-    except subprocess.TimeoutExpired as exc:
-        timed_out = True
-        stdout = exc.stdout if isinstance(exc.stdout, str) else ""
-        stderr = exc.stderr if isinstance(exc.stderr, str) else ""
-        completed = subprocess.CompletedProcess(
-            args=exc.cmd,
-            returncode=124,
-            stdout=stdout,
-            stderr=f"{stderr}\nTimeoutExpired after {_CASE_TIMEOUT_SECONDS}s",
+    node_results = []
+    for node, expected_reason in zip(case.proof_nodes, case.expected_reasons, strict=True):
+        timed_out = False
+        try:
+            completed = _run_pytest_node(checkout, node, python)
+        except subprocess.TimeoutExpired as exc:
+            timed_out = True
+            stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+            stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+            completed = subprocess.CompletedProcess(
+                args=exc.cmd,
+                returncode=124,
+                stdout=stdout,
+                stderr=f"{stderr}\nTimeoutExpired after {_CASE_TIMEOUT_SECONDS}s",
+            )
+        combined = completed.stdout + "\n" + completed.stderr
+        setup_failed = "ERROR at setup" in combined or "unmet-release-gate:" in combined
+        node_passed = (
+            completed.returncode != 0
+            and not timed_out
+            and not setup_failed
+            and expected_reason in combined
         )
-    combined = completed.stdout + "\n" + completed.stderr
-    setup_failed = "ERROR at setup" in combined or "unmet-release-gate:" in combined
-    passed = (
-        completed.returncode != 0
-        and not timed_out
-        and not setup_failed
-        and case.expected_reason in combined
-    )
+        node_results.append(
+            {
+                "proof_node": node,
+                "expected_reason": expected_reason,
+                "exit_code": completed.returncode,
+                "passed": node_passed,
+                "setup_failed": setup_failed,
+                "timed_out": timed_out,
+                "stdout_tail": completed.stdout[-2000:],
+                "stderr_tail": completed.stderr[-2000:],
+            }
+        )
+    passed = all(result["passed"] is True for result in node_results)
+    setup_failed = any(result["setup_failed"] is True for result in node_results)
+    timed_out = any(result["timed_out"] is True for result in node_results)
     return {
         "reversion_id": case.reversion_id,
         "semantic_reversion": case.semantic_reversion,
         "proof_nodes": list(case.proof_nodes),
         "expected_reason": case.expected_reason,
-        "exit_code": completed.returncode,
+        "expected_reasons": list(case.expected_reasons),
+        "exit_code": 1 if passed else 0,
         "passed": passed,
         "setup_failed": setup_failed,
         "timed_out": timed_out,
-        "stdout_tail": completed.stdout[-2000:],
-        "stderr_tail": completed.stderr[-2000:],
+        "node_results": node_results,
+        "stdout_tail": "\n".join(str(result["stdout_tail"]) for result in node_results)[-2000:],
+        "stderr_tail": "\n".join(str(result["stderr_tail"]) for result in node_results)[-2000:],
     }
 
 
@@ -1017,6 +1184,7 @@ def _write_matrix(path: Path) -> None:
                 "semantic_reversion": case.semantic_reversion,
                 "proof_nodes": list(case.proof_nodes),
                 "expected_reason": case.expected_reason,
+                "expected_reasons": list(case.expected_reasons),
             }
             for case in _cases()
         ],
@@ -1059,6 +1227,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ]
     passed = [str(result["reversion_id"]) for result in results if result["passed"] is True]
     failed = [str(result["reversion_id"]) for result in results if result["passed"] is not True]
+    setup_failed = [
+        str(result["reversion_id"]) for result in results if result["setup_failed"] is True
+    ]
+    timed_out = [str(result["reversion_id"]) for result in results if result["timed_out"] is True]
     payload = {
         "schema_version": "menagerie.crawler.round21-reversion-result.v1",
         "status": "passed" if not failed and set(passed) == set(requested) else "failed",
@@ -1066,6 +1238,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "passed_reversions": sorted(passed),
         "skipped_reversions": [],
         "failed_reversions": sorted(failed),
+        "setup_failed_reversions": sorted(setup_failed),
+        "timed_out_reversions": sorted(timed_out),
         "results": results,
     }
     args.attestation.parent.mkdir(parents=True, exist_ok=True)
