@@ -150,6 +150,9 @@ class BackwardPass:
         # gap `Trace`/`Op` already close for their own fields.
         coerce_container_typed_state(state, backward_pass_setstate_defaults)
         state.pop("call_context", None)
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
         self.__dict__.update(state)
 
     @property

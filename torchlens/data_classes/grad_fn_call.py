@@ -108,6 +108,9 @@ class GradFnCall:
         if "duration" in state and "_time_started" not in state and "_time_finished" not in state:
             state["_time_started"] = 0.0
             state["_time_finished"] = float(state.pop("duration"))
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
         self.__dict__.update(state)
         if self.ordinal is None:
             self.ordinal = self.call_index

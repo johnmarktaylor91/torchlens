@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from collections import OrderedDict, defaultdict
 import dataclasses
+import inspect
+import types
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Literal, Mapping
@@ -578,9 +580,17 @@ def _assign_rehydrated_field(value: Any, field_name: str, field_value: Any) -> N
         Rehydrated field value.
     """
 
-    internal_set = getattr(value, "_internal_set", None)
-    if callable(internal_set):
-        internal_set(field_name, field_value)
+    # r54 sec_3: resolve the ``_internal_set`` protocol setter off the CLASS, never
+    # off the (attacker-controllable) instance ``__dict__``. ``getattr_static``
+    # walks the class MRO without triggering descriptors, so a planted instance
+    # ``_internal_set`` key can never substitute for the real slotted-class method.
+    # Only a genuine class-owned plain method (the sole real one is
+    # ``Op._internal_set``) is bound and invoked; non-slotted classes have no
+    # ``_internal_set`` on the class and fall through to the frozen/``setattr``
+    # branch exactly as before.
+    internal_set = inspect.getattr_static(type(value), "_internal_set", None)
+    if isinstance(internal_set, types.FunctionType):
+        internal_set.__get__(value, type(value))(field_name, field_value)
     elif dataclasses.is_dataclass(value) and getattr(type(value), "__dataclass_params__").frozen:
         object.__setattr__(value, field_name, field_value)
     else:

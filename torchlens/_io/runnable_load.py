@@ -243,6 +243,17 @@ _MAX_RUNNABLE_TENSOR_RANK = 64
 _INT64_MAX = 2**63 - 1
 """Signed 64-bit ceiling: torch sizes/storage byte counts are int64 quantities."""
 
+_MAX_LITERAL_NESTING_DEPTH = 200
+"""Structural nesting ceiling for the recursive non-tensor literal grammar (r55 free_2).
+
+Independent belt to the bounded-JSON depth prescan: a hand-edited or
+depth-tolerant front end could hand ``_parse_literal`` a nesting bomb that the
+stdlib ``json`` boundary did not gate. Over-depth raises ``ValueError``, routed
+through the existing descriptor-parse refusal to an ANALYSIS-ONLY load rather than
+an uncaught ``RecursionError``. 200 sits far above any real literal-argument
+nesting and below the interpreter's default recursion crash depth.
+"""
+
 
 def _validate_call_arity(
     call_id: str,
@@ -1687,6 +1698,18 @@ def _parse_slot(value: Mapping[str, Any]) -> TensorSlotDescriptor:
     # the ``.run()`` random role-initializer's ``torch.empty(slot.shape)`` can never
     # be scaled by a structurally impossible manifest integer.
     _validate_slot_shape(slot_id, shape, rank, dtype)
+    # r55 FORK D: the tensor-slot ``device_type`` is attacker-controlled and feeds
+    # ``torch.device(...)`` at run-preparation (state alloc + output-slot preflight).
+    # Anchor it to the SAME closed torch device-type vocabulary the ambient/autocast
+    # device literals use, so a bogus/path-bearing device token is refused at PARSE
+    # (analysis-only), never reaching the run-prep device constructor.
+    device_type = _string(value, "device_type")
+    if device_type not in _DEVICE_TYPE_VOCABULARY:
+        raise DescriptorStructuralBoundError(
+            RunnableErrorCode.STATE_SHAPE_MISMATCH,
+            f"tensor_slots[{slot_id}].device_type",
+            f"device type {device_type!r} is outside the closed device vocabulary",
+        )
     return TensorSlotDescriptor(
         slot_id=slot_id,
         role=TensorSlotRole(_string(value, "role")),
@@ -1700,7 +1723,7 @@ def _parse_slot(value: Mapping[str, Any]) -> TensorSlotDescriptor:
         shape=shape,
         dtype=dtype,
         rank=rank,
-        device_type=_string(value, "device_type"),
+        device_type=device_type,
         device_index=None if device_index is None else _integer_item(device_index, "device_index"),
         mutable=_boolean(value, "mutable"),
         version_of=_optional_string(version_of, "version_of"),
@@ -1889,6 +1912,20 @@ def _validate_literal_atom_value(kind: "LiteralAtomKind", value: Any) -> None:
                 f"Runnable literal atom kind 'int' requires an int value, "
                 f"got {type(value).__name__}."
             )
+        # r55 CLASS 3 (free_1): close the literal/slot magnitude asymmetry. A slot
+        # shape is bounded to a signed-64-bit byte product at parse; a literal int
+        # (e.g. the ``n`` in a taken-path ``torch.arange(n)``/``zeros(n)``) carried
+        # NO magnitude bound, so a self-consistent descriptor could drive an
+        # allocation more extreme than any slot dimension is allowed to be. Gate it
+        # under the SAME int64 ceiling here; a genuinely-large-but-feasible literal
+        # is still bounded further by the run-prep output-slot allocation preflight
+        # and the per-call projection preflight, never over-refused at parse.
+        if abs(value) > _INT64_MAX:
+            raise DescriptorStructuralBoundError(
+                RunnableErrorCode.STATE_SHAPE_MISMATCH,
+                "literal_arguments",
+                f"literal int magnitude {value} exceeds the signed 64-bit ceiling",
+            )
     elif kind is LiteralAtomKind.FLOAT:
         if not isinstance(value, float):
             raise ValueError(
@@ -1903,9 +1940,13 @@ def _validate_literal_atom_value(kind: "LiteralAtomKind", value: Any) -> None:
             )
 
 
-def _parse_literal(value: Any) -> NonTensorLiteral:
+def _parse_literal(value: Any, *, _depth: int = 0) -> NonTensorLiteral:
     """Parse one recursively tagged non-tensor literal."""
 
+    if _depth > _MAX_LITERAL_NESTING_DEPTH:
+        raise ValueError(
+            f"Runnable literal nesting exceeds the maximum depth of {_MAX_LITERAL_NESTING_DEPTH}."
+        )
     mapping = _mapping_item(value, "literal")
     keys = set(mapping)
     if keys == {"kind", "value"}:
@@ -1922,21 +1963,23 @@ def _parse_literal(value: Any) -> NonTensorLiteral:
         return LiteralTorchSymbol(qualname=qualname)
     if keys == {"start", "stop", "step"}:
         return LiteralSlice(
-            start=_parse_literal_slice_component(mapping["start"], "start"),
-            stop=_parse_literal_slice_component(mapping["stop"], "stop"),
-            step=_parse_literal_slice_component(mapping["step"], "step"),
+            start=_parse_literal_slice_component(mapping["start"], "start", _depth=_depth + 1),
+            stop=_parse_literal_slice_component(mapping["stop"], "stop", _depth=_depth + 1),
+            step=_parse_literal_slice_component(mapping["step"], "step", _depth=_depth + 1),
         )
     if keys == {"kind", "items"}:
         return LiteralSequence(
             kind=LiteralSequenceKind(_string(mapping, "kind")),
-            items=tuple(_parse_literal(item) for item in _sequence(mapping, "items")),
+            items=tuple(
+                _parse_literal(item, _depth=_depth + 1) for item in _sequence(mapping, "items")
+            ),
         )
     if keys == {"entries"}:
         return LiteralMapping(
             entries=tuple(
                 LiteralMappingEntry(
-                    key=_parse_literal_key(item["key"]),
-                    value=_parse_literal(item["value"]),
+                    key=_parse_literal_key(item["key"], _depth=_depth + 1),
+                    value=_parse_literal(item["value"], _depth=_depth + 1),
                 )
                 for item in _mapping_sequence(mapping, "entries")
             )
@@ -1965,7 +2008,7 @@ def _validate_torch_device_literal_shape(qualname: str) -> None:
             raise ValueError(f"Malformed torch.device literal payload {qualname!r}: {exc}") from exc
 
 
-def _parse_literal_slice_component(value: Any, field_name: str) -> LiteralAtom:
+def _parse_literal_slice_component(value: Any, field_name: str, *, _depth: int = 0) -> LiteralAtom:
     """Parse one ``slice.start``/``.stop``/``.step`` tagged atom.
 
     A slice component is restricted to the ``NONE`` or ``INT`` atom kinds on the
@@ -1973,7 +2016,7 @@ def _parse_literal_slice_component(value: Any, field_name: str) -> LiteralAtom:
     else here rather than silently widening what a loaded bundle may claim.
     """
 
-    parsed = _parse_literal(value)
+    parsed = _parse_literal(value, _depth=_depth)
     if not isinstance(parsed, LiteralAtom) or parsed.kind not in (
         LiteralAtomKind.NONE,
         LiteralAtomKind.INT,
@@ -1984,17 +2027,23 @@ def _parse_literal_slice_component(value: Any, field_name: str) -> LiteralAtom:
     return parsed
 
 
-def _parse_literal_key(value: Any) -> LiteralAtom | LiteralTupleKey:
+def _parse_literal_key(value: Any, *, _depth: int = 0) -> LiteralAtom | LiteralTupleKey:
     """Parse one safe mapping-key literal."""
 
+    if _depth > _MAX_LITERAL_NESTING_DEPTH:
+        raise ValueError(
+            f"Runnable literal nesting exceeds the maximum depth of {_MAX_LITERAL_NESTING_DEPTH}."
+        )
     mapping = _mapping_item(value, "literal mapping key")
     if set(mapping) == {"kind", "value"}:
-        parsed = _parse_literal(mapping)
+        parsed = _parse_literal(mapping, _depth=_depth + 1)
         if isinstance(parsed, LiteralAtom):
             return parsed
     if set(mapping) == {"items"}:
         return LiteralTupleKey(
-            items=tuple(_parse_literal_key(item) for item in _sequence(mapping, "items"))
+            items=tuple(
+                _parse_literal_key(item, _depth=_depth + 1) for item in _sequence(mapping, "items")
+            )
         )
     raise ValueError("Runnable literal mapping key is not an atom or tuple key.")
 

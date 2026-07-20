@@ -58,6 +58,9 @@ class Accessor(Generic[T]):
     def __setstate__(self, state: dict[str, Any]) -> None:
         """Restore pickle state without reviving the owning-Trace weakref."""
 
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
         self.__dict__.update(state)
 
     def __getitem__(self, key: int | str) -> T:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from hashlib import sha256
 import math
@@ -277,6 +277,10 @@ def prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunna
     """
 
     descriptor = _require_descriptor(trace)
+    # r55 free_1: bound every recorded op-output allocation BEFORE the DAG runs, on
+    # every state source (staged/embedded/random-init), so a tampered self-consistent
+    # descriptor cannot drive an out-of-budget op allocation and OOM-kill the host.
+    _preflight_run_allocation((), _recorded_output_slots(descriptor))
     nonpersistent_buffers = _prepared_nonpersistent_buffers(trace, descriptor)
 
     def _staged(prepared: PreparedRunnableState) -> PreparedRunnableState:
@@ -799,18 +803,45 @@ def _allocation_budget_bytes(device: torch.device) -> int:
     return _STATIC_ALLOCATION_BUDGET_BYTES
 
 
-def _preflight_random_init_allocation(
-    representatives: list[TensorSlotDescriptor],
-) -> None:
-    """Refuse an infeasible random role-init byte total BEFORE any allocation (r53 free_1).
+_OP_OUTPUT_SLOT_ROLES = frozenset({TensorSlotRole.INTERMEDIATE, TensorSlotRole.OUTPUT})
+"""Slot roles whose tensors are ALLOCATED by an op during replay (r55 free_1).
 
-    Sums ``numel x itemsize`` per target device over exactly the representative
-    slots (one per alias group) that fall to ``torchlens_role_init_v2`` and
-    compares each device total against a never-under-estimating live budget.
-    A total above the budget could never have been allocated, so refusing it
-    typed (``run_capability_unavailable`` at detection stage
-    ``state_allocation_preflight``) can never over-trigger; it replaces the
-    raw allocator OOM/OOM-kill a hostile ``shape`` would otherwise cause.
+Parameters/buffers are declared state (covered by the summed state pass); model
+inputs are user-supplied; constants are embedded payloads. Only INTERMEDIATE and
+OUTPUT slots carry a recorded op-output shape the replay path allocates, so they
+are the recorded-output allocation bound.
+"""
+
+
+def _recorded_output_slots(descriptor: SparseRunDescriptor) -> tuple[TensorSlotDescriptor, ...]:
+    """Return the op-produced output slots whose replay allocation is size-driving."""
+
+    return tuple(slot for slot in descriptor.tensor_slots if slot.role in _OP_OUTPUT_SLOT_ROLES)
+
+
+def _preflight_run_allocation(
+    representatives: Sequence[TensorSlotDescriptor],
+    output_slots: Iterable[TensorSlotDescriptor] = (),
+) -> None:
+    """Refuse an infeasible run allocation BEFORE any op executes (r53 free_1 / r55 free_1).
+
+    Two per-device passes against the never-under-estimating live budget
+    (:func:`_allocation_budget_bytes`), so a refusal can only fire on a request
+    that could never have been satisfied on this host -- it replaces the raw
+    allocator OOM/OOM-kill a hostile descriptor integer would otherwise cause, and
+    never over-triggers a legitimate large-but-feasible model:
+
+    * ``representatives`` -- the random role-init state slots (one per alias group)
+      are SUMMED per device, because they are all staged at once
+      (``state_allocation_preflight``).
+    * ``output_slots`` -- each recorded op-output slot is compared INDIVIDUALLY,
+      because replay peak memory is one call's output, never the whole-graph sum;
+      this is the recorded-output allocation bound that catches a self-consistent
+      ``arange(10**12)``-scale artifact before the DAG allocates
+      (``op_allocation_preflight``).
+
+    W2's per-call ``FakeTensorMode`` projection preflight composes with this: it is
+    the primary op-agnostic projection, this is the run-prep fallback bound.
     """
 
     from .errors import RunCapabilityUnavailableError
@@ -839,6 +870,36 @@ def _preflight_random_init_allocation(
                 required_bytes=requested,
                 available_bytes=available,
             )
+
+    for slot in output_slots:
+        device = _slot_device(slot)
+        requested = math.prod(slot.shape) * _torch_dtype(slot.dtype).itemsize
+        available = _allocation_budget_bytes(device)
+        if requested > available:
+            raise RunCapabilityUnavailableError(
+                f"Recorded op-output slot {slot.slot_id!r} for device {str(device)!r} "
+                f"requires {requested} bytes, but only {available} bytes are available "
+                "on this host. The recorded output cannot be allocated here; the "
+                "descriptor may be tampered or the host is too small.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                detection_stage="op_allocation_preflight",
+                device=str(device),
+                required_bytes=requested,
+                available_bytes=available,
+            )
+
+
+def _preflight_random_init_allocation(
+    representatives: Sequence[TensorSlotDescriptor],
+) -> None:
+    """Backward-compatible spelling for the state-only preflight (r53 free_1).
+
+    Retained so existing callers keep the summed random role-init behavior;
+    :func:`_preflight_run_allocation` is the generalized entry that also bounds
+    recorded op-output slots.
+    """
+
+    _preflight_run_allocation(representatives)
 
 
 def _validate_alias_allocation_contract(members: list[TensorSlotDescriptor]) -> None:
