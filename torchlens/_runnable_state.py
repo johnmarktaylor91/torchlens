@@ -14,6 +14,7 @@ import torch
 
 from . import _state
 from .errors import StateBindingError
+from .utils._torch_symbols import torch_attr
 from .runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
     RUNNABLE_INITIALIZER_POLICY_VERSION,
@@ -905,7 +906,11 @@ def _torch_dtype(dtype_name: str) -> torch.dtype:
     """Resolve one recorded public torch dtype without evaluating artifact text."""
 
     name = dtype_name.removeprefix("torch.")
-    value = getattr(torch, name, None)
+    # r47 secD_1: resolve through the sanctioned ``torch_attr`` helper so an attacker slot-dtype
+    # (``"onnx"`` / ``"_dynamo"`` / ``"has_cuda"``) on the ``.run()`` random-init path reads
+    # ``torch.__dict__`` directly and NEVER fires ``torch.__getattr__`` (no lazy submodule import,
+    # no deprecated-attr shim, no raw ImportError) before the ``isinstance(torch.dtype)`` gate.
+    value = torch_attr(name)
     if not isinstance(value, torch.dtype):
         raise _binding_error(
             (

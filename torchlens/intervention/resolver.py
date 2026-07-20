@@ -39,6 +39,7 @@ from ..utils._callable_safety import (
     unsafe_callable_reason,
 )
 from ..utils._torch_compat import resolve_runnable_torch_alias
+from ..utils._torch_symbols import torch_attr
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -109,7 +110,9 @@ def _internal_torch_builtin_key(
     """
 
     internal = getattr(getattr(torch._C, "_VariableFunctionsClass", None), name, None)
-    public = getattr(torch, name, None)
+    # r47 secD_1: resolve the public alias through ``torch_attr`` so an attacker callable ``name``
+    # reads ``torch.__dict__`` directly and never fires the PEP-562 lazy ``torch.__getattr__``.
+    public = torch_attr(name)
     if internal is not func or getattr(public, "__module__", None) == "torch":
         return None
     return FunctionRegistryKey(

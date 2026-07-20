@@ -435,7 +435,16 @@ instance-state rules it encodes:
   markers. Trust follows the RESOLUTION AUTHORITY, never the resolved class's spoofable
   `__module__` attribute, so a non-torch tuple subclass with a forged `__module__` (or an
   alias-module pointing at a genuine structseq) is refused before its `__new__` runs.
-- `dataclass`/`hf_model_output` keep their r25/r27 type-level recompute. **`hf_model_output` trust
+- `dataclass`/`hf_model_output` keep their r25/r27 type-level recompute. **`dataclass` custom-init
+  authority (r47 secB_1).** The plain-`dataclass` lossy-reconstruction recompute now flags a
+  user-authored `__init__` the same way it flags `__post_init__`: because sparse reconstruction
+  intentionally does not invoke either, constructor-computed non-field state cannot be proven, so a
+  dataclass whose WINNING `__init__` is not the dataclasses-GENERATED one (detected by the generated
+  init's feature-detected `co_filename` marker) is unverifiable for runnable output reconstruction.
+  Generated field-mirroring initializers (incl. a dataclass that generates its own init over an evil
+  base) stay lossless. A custom `__init__` compiled in a `<string>`/exec context yet resolvable at the
+  spec's `type_module`/`type_qualname` reads as generated -- a narrow documented residual, fail-safe in
+  the realistic file-defined case. **`hf_model_output` trust
   authority (r42 secB_1).** The lossy-reconstruction recompute trusts an `hf_model_output` type's
   field-mirroring init ONLY by RESOLUTION AUTHORITY: the loaded type is identically re-resolvable
   (identity, not name) from the genuine `transformers` package via `spec.type_module` /
@@ -877,17 +886,26 @@ seed) reports `unverifiable` + `not_applicable`:
    hon1_1/corr2_2 cross-thread case), belted by a cheap thread-independent before/after state
    digest of any generator or bare BitGenerator the MODEL itself holds, swept over submodule
    attributes through standard Python container PROTOCOLS (not a fixed concrete container list;
-   r45 hon1_1): every `collections.abc.Mapping` contributes keys and values; every non-leaf
-   `collections.abc.Collection` contributes its elements (deque, OrderedDict, Counter, defaultdict,
-   ChainMap, UserList/UserDict, namedtuple, and any custom Sequence/Mapping); safe queue objects
+   r45 hon1_1): every `collections.abc.Mapping` contributes BOTH its keys/values AND, when the
+   mapping object is a custom (non-stdlib) inert holder, its own `__dict__`/`__slots__` values; every
+   non-leaf `collections.abc.Collection` likewise contributes BOTH its elements AND, when the
+   collection object is a custom (non-stdlib) inert holder, its own `__dict__`/`__slots__` values
+   (deque, OrderedDict, Counter, defaultdict, ChainMap, UserList/UserDict, namedtuple, and any custom
+   Sequence/Mapping, including a generator held as `self.rng` on a container SUBCLASS -- r47 hon1_1);
+   safe queue objects
    contribute their inspectable storage snapshot (`queue.Queue`/`LifoQueue`/`PriorityQueue` via a
    non-mutating read of the internal deque); inert custom holders contribute `__dict__` /
    `__slots__` values (`self.holder.rng`), never invoking a property or `__getattr__` (r42 corr2_1).
    Descent is gated on `collections.abc.Collection` (Sized), so a one-shot iterator / generator
-   attribute is NEVER consumed. A genuinely non-enumerable model-reachable container
+   attribute is NEVER consumed. An opaque queue with no non-mutating payload snapshot is SKIPPED only
+   when it is non-mutatingly PROVABLY EMPTY at inventory time (`empty()` is exactly `True`, else
+   `qsize()` is integer `0`; any exception / negative / disagreement fails closed -- r47 hon1_2). A
+   NON-EMPTY or unknown non-enumerable model-reachable container
    (`queue.SimpleQueue`, `multiprocessing.Queue`, any object exposing the queue protocol with no
    non-mutating snapshot) fails closed to INCOMPLETE (`inventory_opaque_container`) rather than
-   reading as no-consumption. Cycle-safe and unbounded for any realistic
+   reading as no-consumption -- a documented conservative over-trigger for a deterministic model
+   holding a non-empty opaque queue of non-RNG payloads, since a generator inside it drawn on a
+   pre-existing worker would otherwise be unwitnessed. Cycle-safe and unbounded for any realistic
    model -- never a process-wide `gc` scan and never treating unrelated worker threads as evidence;
    exhaustion of the defensive sweep cap downgrades capture completeness to INCOMPLETE
    (`inventory_budget_exhausted`) -- a truncated inventory never reads as no-consumption;
@@ -956,7 +974,10 @@ reachable from the model inventory (not a model attribute, nor inside any standa
 container -- Mapping / non-leaf Collection / a safe queue's inspectable buffer / an inert custom
 holder of one; r42 corr2_1 + r45 hon1_1 extended the sweep to descend by container protocol, so a
 model-held generator behind `self.holder.rng`, a `deque`, a `ChainMap`, or a `queue.Queue` is now
-witnessed on any thread), plus a bare one-shot iterator attribute which cannot be inspected without
+witnessed on any thread; r47 hon1_1 further descends a container SUBCLASS's own `__dict__`/`__slots__`,
+so `self.rng` on a `Sequence`/`Mapping`/`UserList`/`UserDict` subclass is witnessed, and only a
+NON-EMPTY OPAQUE queue's contents remain a conservative fail-closed residual, never a false negative),
+plus a bare one-shot iterator attribute which cannot be inspected without
 consuming it -- of the same class
 as the adversarial draw+`state`-restore a cooperative model does not exercise; (v) a
 held-reference module-builtin call on a PRE-EXISTING (non-hooked) thread -- the module-attr
@@ -987,19 +1008,37 @@ captured tensor, or that only reads/stringifies tensors it created independently
 records nothing and does not downgrade a deterministic artifact. Tensor helper work on a non-owner
 thread remains outside the ceiling ONLY when its operands are independent of captured storage.
 
-**Cross-thread captured-operand consumption (r45 hon2_1).** The ceiling additionally fires when a
-non-owner thread runs ANY torch op that CONSUMES a captured tensor as an operand -- not only a direct
-value / pointer / string / metadata escape of a captured object. Every Python-visible torch op flows
-through the global torch-function wrapper (a process-wide monkeypatch, unlike the thread-local aten
-census / dispatch mode), so the FIRST worker op consuming a captured operand permanently ceilings the
-artifact to `unverifiable` / `not_applicable`, regardless of derivation depth or the eventual escape
-spelling. The observer never logs the worker op into the owner trace. A worker that operates only on
-tensors it created independently of the capture consumes no captured operand and stays `verified`.
-This closes the worker-DERIVED escape sibling (a tensor freshly derived on the worker from a captured
-input, whose new storage the owner-thread census never registered). An inspection error inside the
-operand observer during an armed capture fails closed (ceiling), never silently passes. The observer
-is gated on a global belt-armed flag mirroring the forward window, so the disarmed steady state and
-every plain (non-runnable) trace pay only a single bool read.
+**Cross-thread captured-operand consumption (r45 hon2_1, r47 hon2_1).** The ceiling additionally
+fires when a non-owner thread runs ANY torch op that CONSUMES a captured tensor as an operand -- not
+only a direct value / pointer / string / metadata escape of a captured object. No single
+Python-visible net is universal, so coverage of the op surface is the UNION of process-wide observers:
+(1) the global torch-function wrapper (`torch` / `torch.Tensor` / `functional` / `linalg` / `fft` /
+`_VF` / `special` spellings); (2) a class-level observer on every `torch._ops` class that defines its
+own `__call__` (`OpOverloadPacket` / `OpOverload` / `TorchBindOpOverload` / `HigherOrderOperator`,
+feature-detected by a structural scan so the set self-updates across torch versions; installed for the
+armed window because a `TorchDispatchMode` / aten census is thread-local and cannot see a non-owner
+thread); and (3) the r43 Tensor host-escape method belt (`.item` / `.tolist` / `.numpy` / storage
+reads, which do not route through `torch._ops.__call__`). All observers call the SAME storage-identity
+captured-membership test and never log the worker op into the owner trace. The FIRST worker op
+consuming a captured operand on any surface permanently ceilings the artifact to `unverifiable` /
+`not_applicable`, regardless of derivation depth or the eventual escape spelling. A worker that
+operates only on tensors it created independently of the capture consumes no captured operand and
+stays `verified` (no over-trigger). This closes the worker-DERIVED escape sibling (a tensor freshly
+derived on the worker from a captured input, whose new storage the owner-thread census never
+registered). An inspection error inside the operand observer -- or an observer install / restore
+failure -- during an armed capture fails closed (INCOMPLETE / ceiling), never silently passes. Every
+observer is gated on a global belt-armed flag mirroring the forward window, so the disarmed steady
+state and every plain (non-runnable) trace pay only a single bool read; an eager owner forward hits the
+Python `torch._ops.*.__call__` path zero times (C++ dispatch), so the armed owner window adds ~no
+overhead. **Accepted residuals (unclosable / narrow):** (a) the undocumented, read-only,
+non-Python-patchable private-C free-function surface `torch._C._VariableFunctions.<op>` -- its public
+alias `torch.<op>` is the SAME object and IS wrapped, so only a worker calling the private spelling
+DIRECTLY on a captured tensor from a pre-existing thread slips (same class as the `.__call__()` /
+`partial()`-mediated C-call residual; C-level dispatch observation is only thread-local); (b) a
+`torch.ops.higher_order.*` HOP whose subclass OVERRIDES `__call__` and consumes a captured operand
+PURELY in C++ without dispatching any Python-level `OpOverload` / `OpOverloadPacket` call -- the
+overwhelmingly common inner-ATen dispatch IS observed on the worker thread, so only a
+fully-C++-internal consumption is residual.
 
 Owner-thread tensor escapes keep the ordinary precise witness ladder. Non-owner captured-tensor
 touches are not promoted to precise `verified` proofs, even if a label or state origin is visible,
@@ -1008,9 +1047,10 @@ because concurrent host interaction is outside the replay model.
 Op-logging is owner-thread-scoped: the global torch-function wrapper skips any thread other than the
 capture owner, so a non-owner thread running torch ops during a capture (a worker formatting
 `str(tensor)`, a DataLoader thread) is never recorded into the owner's Trace and never corrupts
-owner-op attribution. The mode-independent belt (tensor-method patches) AND the wrapper's non-owner
-operand check are the designated cross-thread observers and are independent of the owner op-logging
-path. Captured activation storage identity is liveness-verified
+owner-op attribution. The designated cross-thread observers -- independent of the owner op-logging
+path -- are the mode-independent tensor-method belt, the global torch-function wrapper's non-owner
+operand check, AND the `torch._ops` `__call__` class observer for direct `torch.ops.*` packet/overload
+spellings. Captured activation storage identity is liveness-verified
 (a freed-then-reused storage address never false-positives a benign own-tensor touch). The aten census
 remains owner-thread-scoped (a `TorchDispatchMode` is thread-local).
 

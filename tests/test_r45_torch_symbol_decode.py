@@ -31,27 +31,32 @@ from torchlens._io._torch_symbols import torch_attr
 
 _PKG_ROOT = Path(torchlens.__file__).resolve().parent
 
-# The load / decode / exec path the immunizer guards. A bare ``getattr(torch, <non-literal>)`` in
-# any of these files reintroduces the PEP-562 lazy-import / deprecated-replacement hazard.
-_GUARDED_GLOBS = [
-    "_io/*.py",
-    "_runnable_execution.py",
-    "validation/__init__.py",
-]
-
 
 def _guarded_files() -> list[Path]:
-    files: list[Path] = []
-    for pattern in _GUARDED_GLOBS:
-        files.extend(sorted(_PKG_ROOT.glob(pattern)))
-    assert files, "no guarded files discovered"
+    """r47 secD_1/secF_1: the immunizer now guards the ENTIRE ``torchlens/**/*.py`` package (zero
+    per-line exemptions), not just the r45 load/decode subset. The ``.run()`` random-init dtype
+    site (``_runnable_state.py:_torch_dtype``) lived at the package ROOT and was invisible to the
+    r45 ``_io/`` glob -- so its tripwire was vacuous there. Any bare ``getattr(torch, <var>)`` /
+    ``hasattr(torch, <var>)`` ANYWHERE in the package reintroduces the PEP-562 lazy-import /
+    deprecated-replacement hazard."""
+
+    files = sorted(_PKG_ROOT.rglob("*.py"))
+    assert files, "no package files discovered"
     return files
 
 
-def _bare_torch_getattr_calls(tree: ast.AST) -> list[ast.Call]:
-    """Return every ``getattr(torch, <non-literal>, ...)`` call where the target is the bare
-    top-level ``torch`` module (an ``ast.Name(id="torch")``) and the attribute is NOT a string
-    literal. Literal-name ``getattr(torch, "...")`` and non-top-level roots
+def _name_arg_is_literal_str(name_arg: ast.expr) -> bool:
+    """A fixed-name string literal carries no lazy hazard; an f-string / ``.format()`` name is
+    dynamic and MUST route through ``torch_attr`` (it fires ``torch.__getattr__`` just the same)."""
+
+    return isinstance(name_arg, ast.Constant) and isinstance(name_arg.value, str)
+
+
+def _flagged_torch_probe_calls(tree: ast.AST) -> list[ast.Call]:
+    """Return every ``getattr(torch, <non-literal>, ...)`` OR ``hasattr(torch, <non-literal>)``
+    call where the target is the bare top-level ``torch`` module (an ``ast.Name(id="torch")``) and
+    the attribute is NOT a string literal (an f-string ``ast.JoinedStr`` or a ``.format()`` call is
+    non-literal -> flagged). Literal-name ``getattr(torch, "...")`` and non-top-level roots
     (``getattr(torch._C, ...)`` / ``getattr(torch.backends, ...)`` -- ``ast.Attribute`` targets)
     are allowed."""
 
@@ -60,47 +65,51 @@ def _bare_torch_getattr_calls(tree: ast.AST) -> list[ast.Call]:
         if not isinstance(node, ast.Call):
             continue
         func = node.func
-        if not (isinstance(func, ast.Name) and func.id == "getattr"):
+        if not (isinstance(func, ast.Name) and func.id in ("getattr", "hasattr")):
             continue
         if len(node.args) < 2:
             continue
         target, name_arg = node.args[0], node.args[1]
         if not (isinstance(target, ast.Name) and target.id == "torch"):
             continue  # non-top-level root (torch._C / torch.backends / ...) -> allowed
-        if isinstance(name_arg, ast.Constant) and isinstance(name_arg.value, str):
+        if _name_arg_is_literal_str(name_arg):
             continue  # literal fixed-name module-layout constant -> allowed
         offenders.append(node)
     return offenders
 
 
-def test_no_bare_getattr_torch_on_guarded_path() -> None:
-    """AST immunizer: no bare ``getattr(torch, <non-literal>)`` survives on the load/decode/exec
-    path (non-vacuous: the walk visits at least one ``getattr`` call)."""
+def test_no_bare_getattr_torch_anywhere_in_package() -> None:
+    """AST immunizer: no bare ``getattr(torch, <non-literal>)`` / ``hasattr(torch, <non-literal>)``
+    survives ANYWHERE in ``torchlens/**/*.py`` (non-vacuous: >300 files, >=1 probe call visited)."""
 
-    total_getattr = 0
+    files = _guarded_files()
+    assert len(files) > 300, f"expected a whole-package scan, saw {len(files)} files (vacuous)"
+
+    total_probes = 0
     offenders: list[str] = []
-    for path in _guarded_files():
+    for path in files:
         tree = ast.parse(path.read_text(), filename=str(path))
         for node in ast.walk(tree):
             if (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Name)
-                and node.func.id == "getattr"
+                and node.func.id in ("getattr", "hasattr")
             ):
-                total_getattr += 1
-        for call in _bare_torch_getattr_calls(tree):
+                total_probes += 1
+        for call in _flagged_torch_probe_calls(tree):
             offenders.append(f"{path.relative_to(_PKG_ROOT)}:{call.lineno}")
 
-    assert total_getattr >= 1, "AST walk visited no getattr call (vacuous)"
+    assert total_probes >= 1, "AST walk visited no getattr/hasattr call (vacuous)"
     assert not offenders, (
-        "bare getattr(torch, <non-literal>) on the load/decode/exec path -- route through "
-        f"torch_attr(): {offenders}"
+        "bare getattr(torch, <non-literal>) / hasattr(torch, <non-literal>) in the package -- "
+        f"route through torch_attr(): {offenders}"
     )
 
 
-def test_literal_and_nontoplevel_getattr_not_flagged() -> None:
+def test_literal_and_nontoplevel_probes_not_flagged() -> None:
     """The AST predicate allows literal-name ``getattr(torch, "float32")`` and non-top-level
-    roots (``torch._C`` / ``torch.backends``), and flags the bare-variable form."""
+    roots (``torch._C`` / ``torch.backends``), and flags the bare-variable ``getattr`` / ``hasattr``
+    and f-string / ``.format()`` name forms."""
 
     src = textwrap.dedent(
         """
@@ -109,12 +118,15 @@ def test_literal_and_nontoplevel_getattr_not_flagged() -> None:
         b = getattr(torch._C, name, None)      # non-top-level root -> allowed
         c = getattr(torch.backends, name)      # non-top-level root -> allowed
         d = getattr(torch, name, None)         # bare non-literal -> FLAGGED
+        e = hasattr(torch, name)               # bare hasattr -> FLAGGED
+        f = getattr(torch, f"{name}", None)    # f-string name -> FLAGGED
+        g = getattr(torch, "d{}".format(name)) # .format() name -> FLAGGED
         """
     )
     tree = ast.parse(src)
-    offenders = _bare_torch_getattr_calls(tree)
-    assert len(offenders) == 1
-    assert offenders[0].lineno == 6  # the ``d = getattr(torch, name, None)`` line
+    offenders = _flagged_torch_probe_calls(tree)
+    flagged_lines = sorted(call.lineno for call in offenders)
+    assert flagged_lines == [6, 7, 8, 9], flagged_lines
 
 
 @pytest.mark.parametrize("name", ["float32", "int64", "bool", "float64", "complex64"])
@@ -206,6 +218,93 @@ def test_tampered_manifest_dtype_refuses_without_import(hazard: str, tmp_path: P
             deprecations = [str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)]
 
         assert outcome != "no_error", "tampered dtype was not rejected"
+        assert "torch.onnx" not in sys.modules, "torch.onnx was imported (lazy side effect)"
+        assert "torch._dynamo" not in sys.modules, "torch._dynamo was imported (lazy side effect)"
+        assert not any("deprecat" in d.lower() for d in deprecations), deprecations
+        print("REFUSED", outcome)
+        """
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", attack], capture_output=True, text=True, timeout=300
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "REFUSED" in proc.stdout, proc.stdout
+
+
+@pytest.mark.parametrize("hazard", ["onnx", "_dynamo", "has_cuda"])
+def test_tampered_run_slot_dtype_refuses_without_import(hazard: str, tmp_path: Path) -> None:
+    """r47 secD_1/secF_1 behavioral belt: the ``.run()`` random-init path resolves a tensor-slot
+    dtype via ``_runnable_state._torch_dtype`` (``_runnable_state.py:908``) -- a package-ROOT site
+    the r45 ``_io/`` glob missed. Tampering ``run.tensor_slots[*].dtype`` to a hazardous torch name
+    yields a typed refusal (parse-validated at load, defense-in-depth; the run-path belt is also
+    ``torch_attr``) with NO ``torch.onnx`` / ``torch._dynamo`` in ``sys.modules`` and NO deprecation
+    warning -- in a FRESH interpreter so the module table is pristine."""
+
+    bundle = tmp_path / "runnable.tlspec"
+    build = textwrap.dedent(
+        f"""
+        import torch, torch.nn as nn, torchlens as tl
+        from torchlens.options import CaptureOptions
+        m = nn.Linear(4, 4)
+        log = tl.trace(
+            m, torch.randn(2, 4),
+            capture=CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False),
+        )
+        log.save({str(bundle)!r}, level="runnable")  # include_weights=False -> random init at run
+        print("BUILT")
+        """
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", build], capture_output=True, text=True, timeout=300
+    )
+    assert proc.returncode == 0 and "BUILT" in proc.stdout, proc.stderr
+
+    manifest_path = bundle / "manifest.json"
+    if not manifest_path.exists():
+        pytest.skip("runnable bundle layout has no manifest.json to tamper")
+
+    attack = textwrap.dedent(
+        f"""
+        import json, sys, warnings
+
+        mpath = {str(manifest_path)!r}
+        data = json.loads(open(mpath).read())
+
+        def _tamper_slots(obj):
+            n = 0
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    if k in ("tensor_slots", "slots") and isinstance(v, list):
+                        for s in v:
+                            if isinstance(s, dict) and "dtype" in s:
+                                s["dtype"] = {hazard!r}
+                                n += 1
+                    else:
+                        n += _tamper_slots(v)
+            elif isinstance(obj, list):
+                for v in obj:
+                    n += _tamper_slots(v)
+            return n
+
+        tampered = _tamper_slots(data.get("run", data))
+        assert tampered >= 1, "no tensor slots found to tamper"
+        open(mpath, "w").write(json.dumps(data))
+
+        import torchlens as tl
+        import torch
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                loaded = tl.load({str(bundle)!r})
+                loaded.run(inputs=torch.randn(2, 4))
+                outcome = "no_error"
+            except Exception as exc:
+                outcome = type(exc).__name__
+            deprecations = [
+                str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)
+            ]
+
+        assert outcome != "no_error", "tampered slot dtype was not rejected"
         assert "torch.onnx" not in sys.modules, "torch.onnx was imported (lazy side effect)"
         assert "torch._dynamo" not in sys.modules, "torch._dynamo was imported (lazy side effect)"
         assert not any("deprecat" in d.lower() for d in deprecations), deprecations

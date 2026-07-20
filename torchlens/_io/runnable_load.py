@@ -1461,7 +1461,11 @@ def _parse_slot(value: Mapping[str, Any]) -> TensorSlotDescriptor:
             for item in _mapping_sequence(value, "use_sites")
         ),
         shape=tuple(_integer_item(item, "shape") for item in _sequence(value, "shape")),
-        dtype=_string(value, "dtype"),
+        # r47 secD_1/secF_1: the tensor-slot dtype is attacker-controlled. Parse-validate it against
+        # the live dtype table (closed vocabulary, like the ambient/autocast dtypes) so a hazardous
+        # ``"onnx"`` / ``"_dynamo"`` / ``"has_cuda"`` slot-dtype is refused at PARSE -- before the
+        # ``.run()`` random-initializer would resolve it -- via ``torch_attr`` (no lazy import).
+        dtype=_validated_dtype_literal("tensor_slots.dtype", _string(value, "dtype")),
         rank=_integer(value, "rank"),
         device_type=_string(value, "device_type"),
         device_index=None if device_index is None else _integer_item(device_index, "device_index"),
