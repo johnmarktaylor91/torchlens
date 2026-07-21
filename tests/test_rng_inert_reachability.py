@@ -943,3 +943,49 @@ def test_synthetic_globals_function_attribute_never_walks_its_namespace(
     assert snapshots == []
     assert monitor.result.uncertain is False
     assert monitor.result.uncertain_detail == ()
+
+
+def test_registered_module_slot_seed_executes_zero_user_code() -> None:
+    """r59 hon_1: seeding a REGISTERED module's ``__slots__`` slot values stays INERT --
+    hostile property / ``__getattr__`` / descriptor hooks on the model class never fire
+    while the slot-held generator IS found. The slot read goes through the slot member
+    descriptor (``klass.__dict__[slot].__get__``), never ``getattr``, so the r47/r55/r57
+    ambient walls (zero user code executed by the sweep) stay closed under the r59 seed."""
+
+    fired: list[str] = []
+
+    class _CountingDescriptor:
+        def __get__(self, instance: Any, owner: Any = None) -> Any:
+            fired.append("descriptor.__get__")
+            return None
+
+    gen = np.random.default_rng(59)
+
+    class _HostileSlotModel(nn.Module):
+        __slots__ = ("rng_slot",)
+        watched = _CountingDescriptor()
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self.rng_slot = gen
+
+        @property
+        def trap(self) -> Any:
+            fired.append("property")
+            return None
+
+        def __getattr__(self, name: str) -> Any:
+            fired.append(f"__getattr__:{name}")
+            return super().__getattr__(name)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.lin(x)
+
+    model = _HostileSlotModel()
+    fired.clear()  # construction is user code by definition; the claim is about the SWEEP
+    snapshots = _sweep(model)
+    assert any(holder is gen for holder, _digest in snapshots), (
+        "registered-module slot generator not swept"
+    )
+    assert fired == [], f"registered-module slot seed executed user code: {fired}"
