@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,7 +10,12 @@ from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from menagerie.identity import load_stable_ids
 
-from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
+from menagerie.crawler.identity import (
+    atomic_replace_bytes,
+    canonical_json_bytes,
+    hash_bytes,
+    stable_hash,
+)
 from menagerie.crawler.models import JsonObject
 
 
@@ -274,31 +278,6 @@ def _natural_key(row: Mapping[str, Any], source: str) -> tuple[str, str, str]:
     return (name, zoo, variant)
 
 
-def _atomic_write(path: Path, data: bytes) -> None:
-    """Atomically write and fsync one snapshot file.
-
-    Parameters
-    ----------
-    path:
-        Destination path.
-    data:
-        Exact bytes to persist.
-    """
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    with temporary.open("wb") as handle:
-        handle.write(data)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
-    descriptor = os.open(path.parent, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
-
-
 def _assigned_id(
     key: tuple[str, str, str], preserved_ids: Mapping[tuple[str, str, str], str]
 ) -> str:
@@ -465,9 +444,9 @@ def create_intake_snapshot(
         return IntakeSnapshot(snapshot_id, snapshot_sha256, snapshot_root, items, False)
 
     for name, data in source_bytes.items():
-        _atomic_write(snapshot_root / "sources" / name, data)
-    _atomic_write(snapshot_root / "items.jsonl", items_bytes)
-    _atomic_write(manifest_path, manifest_bytes)
+        atomic_replace_bytes(snapshot_root / "sources" / name, data)
+    atomic_replace_bytes(snapshot_root / "items.jsonl", items_bytes)
+    atomic_replace_bytes(manifest_path, manifest_bytes)
     return IntakeSnapshot(snapshot_id, snapshot_sha256, snapshot_root, items, True)
 
 

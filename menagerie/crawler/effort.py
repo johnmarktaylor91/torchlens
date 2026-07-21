@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Callable, Mapping, Optional
 
 from menagerie.crawler.constants import FailureStage
-from menagerie.crawler.identity import stable_hash, utc_now
+from menagerie.crawler.identity import is_sha256, stable_hash, utc_now
 from menagerie.crawler.models import JsonObject
 
 
@@ -359,7 +359,7 @@ class EffortTracker:
             On the second identical stage/fingerprint occurrence.
         """
 
-        if not _is_sha256(fingerprint):
+        if not is_sha256(fingerprint):
             raise ValueError("root-cause fingerprint must be sha256:<64 lowercase hex>")
         stage_name = _stage_name(stage)
         key = (stage_name, fingerprint)
@@ -442,24 +442,3 @@ class EffortTracker:
         if self._recorder is not None:
             self._recorder(record)
         return record
-
-
-def _is_sha256(value: str) -> bool:
-    """Return whether a value is a canonical prefixed SHA-256 digest.
-
-    Parameters
-    ----------
-    value:
-        Candidate digest.
-
-    Returns
-    -------
-    bool
-        Whether the syntax is canonical.
-    """
-
-    return (
-        len(value) == 71
-        and value.startswith("sha256:")
-        and all(character in "0123456789abcdef" for character in value[7:])
-    )

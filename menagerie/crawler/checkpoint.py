@@ -40,7 +40,12 @@ from menagerie.crawler.family_templates import (
     FamilyTemplateError,
     validate_size_variant_derivation,
 )
-from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
+from menagerie.crawler.identity import (
+    atomic_replace_bytes,
+    canonical_json_bytes,
+    hash_bytes,
+    stable_hash,
+)
 from menagerie.crawler.intake import IntakeError, load_intake_snapshot
 from menagerie.crawler.licenses import (
     AuthorizedArtifact,
@@ -2160,7 +2165,7 @@ def _publish_generated_metadata_inventory(
     ]
     manifest_path = canonical_root / "mirrors" / _GENERATED_METADATA_MANIFEST
     data = b"".join(canonical_json_bytes(payload) + b"\n" for payload in payloads)
-    _atomic_write_bytes(manifest_path, data)
+    atomic_replace_bytes(manifest_path, data)
     return tuple(dispositions)
 
 
@@ -2364,29 +2369,6 @@ def _embedded_excerpts(path: Path, content: bytes) -> tuple[Mapping[str, Any], .
     for value in values:
         visit(value)
     return tuple(found)
-
-
-def _atomic_write_bytes(path: Path, data: bytes) -> None:
-    """Atomically replace one generated canonical file and fsync its directory.
-
-    Parameters
-    ----------
-    path, data:
-        Destination and exact bytes.
-    """
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    with temporary.open("wb") as handle:
-        handle.write(data)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
-    descriptor = os.open(path.parent, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
 
 
 def _read_json_object(path: Path, label: str) -> JsonObject:

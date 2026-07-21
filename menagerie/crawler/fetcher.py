@@ -11,7 +11,7 @@ from typing import Callable, Optional, Union
 from urllib.parse import urlsplit
 
 from menagerie.crawler.constants import RetrievalStatus
-from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.identity import fsync_directory, hash_bytes, is_sha256, stable_hash
 
 FetchBytes = Callable[[str], bytes]
 
@@ -78,7 +78,7 @@ def cas_path(cas_root: Union[str, Path], content_sha256: str) -> Path:
         If the digest is not canonical.
     """
 
-    if not _is_sha256(content_sha256):
+    if not is_sha256(content_sha256):
         raise UnpinnedTargetError("expected_sha256 must be sha256:<64 lowercase hex>")
     digest = content_sha256.removeprefix("sha256:")
     return Path(cas_root) / "sha256" / digest[:2] / digest
@@ -154,7 +154,7 @@ def fetch_target(
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, destination)
-        _fsync_directory(destination.parent)
+        fsync_directory(destination.parent)
     finally:
         temporary.unlink(missing_ok=True)
     return _manifest(target, len(content), RetrievalStatus.FETCHED, destination)
@@ -187,26 +187,6 @@ def fetch_targets(
     return {"sources": manifests, "manifest_sha256": stable_hash(manifests)}
 
 
-def _is_sha256(value: str) -> bool:
-    """Return whether a value is a canonical prefixed SHA-256 digest.
-
-    Parameters
-    ----------
-    value:
-        Candidate digest.
-
-    Returns
-    -------
-    bool
-        True only for canonical lowercase syntax.
-    """
-
-    if not value.startswith("sha256:") or len(value) != 71:
-        return False
-    digest = value[7:]
-    return all(character in "0123456789abcdef" for character in digest)
-
-
 def _validate_target(target: FetchTarget, *, allow_injected_fetch: bool) -> None:
     """Validate an exact target before touching the CAS.
 
@@ -225,7 +205,7 @@ def _validate_target(target: FetchTarget, *, allow_injected_fetch: bool) -> None
 
     if not target.source_id.strip() or not target.revision.strip():
         raise UnpinnedTargetError("source_id and exact revision must be non-empty")
-    if not _is_sha256(target.expected_sha256):
+    if not is_sha256(target.expected_sha256):
         raise UnpinnedTargetError("expected_sha256 must be sha256:<64 lowercase hex>")
     parsed = urlsplit(target.url)
     allowed_schemes = {"https"} if not allow_injected_fetch else {"https", "http", "test"}
@@ -325,19 +305,3 @@ def _manifest(
         "cas_path": str(path),
     }
     return {**body, "manifest_sha256": stable_hash(body)}
-
-
-def _fsync_directory(path: Path) -> None:
-    """Synchronize a directory after publishing a CAS object.
-
-    Parameters
-    ----------
-    path:
-        Directory containing the new object.
-    """
-
-    descriptor = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)

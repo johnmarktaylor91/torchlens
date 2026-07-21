@@ -25,7 +25,7 @@ from menagerie.crawler.constants import (
     OperationalEventKind,
     OperationalEventStatus,
 )
-from menagerie.crawler.identity import canonical_json_bytes, stable_hash
+from menagerie.crawler.identity import canonical_json_bytes, fsync_directory, stable_hash
 from menagerie.crawler.models import AppendResult, JsonObject
 from menagerie.crawler.recordio import JsonlLedger
 
@@ -1011,7 +1011,7 @@ class WakeupManager:
             fired_at = str(payload["fired_at"])
             if bucket in projection.episodes[episode_id].fire_buckets:
                 path.unlink()
-                _fsync_directory(path.parent)
+                fsync_directory(path.parent)
                 consumed += 1
                 continue
             event = _episode_event(
@@ -1044,7 +1044,7 @@ class WakeupManager:
             record_operational_event(self.ledger, noop)
             self._record_health_if_needed(episode, context=context, created_at=created_at)
             path.unlink()
-            _fsync_directory(path.parent)
+            fsync_directory(path.parent)
             consumed += 1
         return consumed
 
@@ -1578,7 +1578,7 @@ def _remove_definition_projection(definition: RenderedWakeupDefinition) -> None:
     if definition.service_path is not None:
         definition.service_path.unlink(missing_ok=True)
     if definition.definition_path.parent.exists():
-        _fsync_directory(definition.definition_path.parent)
+        fsync_directory(definition.definition_path.parent)
 
 
 def _install_wakeup(definition: RenderedWakeupDefinition) -> None:
@@ -1793,19 +1793,9 @@ def _write_bytes_atomic(path: Path, content: bytes) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, path)
-        _fsync_directory(path.parent)
+        fsync_directory(path.parent)
     finally:
         temporary.unlink(missing_ok=True)
-
-
-def _fsync_directory(path: Path) -> None:
-    """Fsync a directory after atomic creation, replacement, or removal."""
-
-    descriptor = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
 
 
 def _xml_escape(value: str) -> str:

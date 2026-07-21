@@ -25,6 +25,7 @@ from menagerie.crawler.authority import completion_line_for_raw_award_receipt
 from menagerie.crawler.constants import RunMode
 from menagerie.crawler.frameworks import NativeForwardAdapter
 from menagerie.crawler.identity import (
+    atomic_replace_bytes,
     canonical_json_bytes,
     compute_recipe_revision,
     hash_bytes,
@@ -847,18 +848,7 @@ def _atomic_receipt(path: Path, payload: Mapping[str, Any]) -> dict[str, Any]:
     record = dict(payload)
     record["receipt_sha256"] = stable_hash(payload)
     data = canonical_json_bytes(record) + b"\n"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    with temporary.open("wb") as handle:
-        handle.write(data)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
-    descriptor = os.open(path.parent, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
+    atomic_replace_bytes(path, data)
     return record
 
 
@@ -991,18 +981,7 @@ def _atomic_worker_result(
     }
     payload["result_sha256"] = stable_hash(payload)
     data = canonical_json_bytes(payload) + b"\n"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    with temporary.open("wb") as handle:
-        handle.write(data)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
-    descriptor = os.open(path.parent, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
+    atomic_replace_bytes(path, data)
     return payload
 
 

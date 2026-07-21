@@ -39,7 +39,13 @@ from menagerie.crawler.constants import (
     STDIO_TAIL_MAX_CHARS,
     FailureStage,
 )
-from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash, utc_now
+from menagerie.crawler.identity import (
+    atomic_replace_bytes,
+    canonical_json_bytes,
+    hash_bytes,
+    stable_hash,
+    utc_now,
+)
 from menagerie.crawler.policy import (
     _PARENT_ALLOWED_READ_PATHS_ENV,
     _PARENT_STANDARD_INPUT_ASSET_ENV,
@@ -816,18 +822,7 @@ def _atomic_write_worker_lease(path: Path, lease: WorkerLease) -> None:
         Frozen metadata to persist.
     """
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    with temporary.open("wb") as handle:
-        handle.write(canonical_json_bytes(_worker_lease_mapping(lease)) + b"\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
-    descriptor = os.open(path.parent, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
+    atomic_replace_bytes(path, canonical_json_bytes(_worker_lease_mapping(lease)) + b"\n")
 
 
 def current_boot_id() -> str:

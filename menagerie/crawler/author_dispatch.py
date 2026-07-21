@@ -17,7 +17,7 @@ from menagerie.crawler.constants import (
     AUTHOR_RESULT_SCHEMA_VERSION,
     GATE_SCHEMA_VERSION_V3,
 )
-from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.identity import fsync_directory, hash_bytes, stable_hash
 from menagerie.crawler.models import JsonObject
 from menagerie.crawler.proposal import ProposalValidationReport, validate_author_proposal
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
@@ -467,7 +467,7 @@ def write_envelope_atomic(envelope: Mapping[str, Any], path: Union[str, Path]) -
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, destination)
-        _fsync_directory(destination.parent)
+        fsync_directory(destination.parent)
     finally:
         temporary.unlink(missing_ok=True)
     return destination
@@ -751,13 +751,3 @@ def _required_mapping(value: object, field: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise AuthorDispatchError(f"author {field} must be an object")
     return value
-
-
-def _fsync_directory(path: Path) -> None:
-    """Synchronize a directory after atomic envelope publication."""
-
-    descriptor = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)

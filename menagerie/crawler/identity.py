@@ -5,7 +5,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
@@ -25,6 +27,64 @@ def utc_now() -> str:
     """
 
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def is_sha256(value: str) -> bool:
+    """Return whether a value is a canonical prefixed SHA-256 digest.
+
+    Parameters
+    ----------
+    value:
+        Candidate digest.
+
+    Returns
+    -------
+    bool
+        Whether the digest uses lowercase ``sha256:<64 hex>`` syntax.
+    """
+
+    return (
+        len(value) == 71
+        and value.startswith(_HASH_PREFIX)
+        and all(character in "0123456789abcdef" for character in value[7:])
+    )
+
+
+def fsync_directory(path: Path) -> None:
+    """Synchronize a directory after changing one of its entries.
+
+    Parameters
+    ----------
+    path:
+        Directory to synchronize.
+    """
+
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def atomic_replace_bytes(path: Path, data: bytes) -> None:
+    """Replace a file with fsynced bytes and then fsync its parent directory.
+
+    Parameters
+    ----------
+    path:
+        Destination path.
+    data:
+        Exact bytes to persist.
+    """
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with temporary.open("wb") as handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
+    fsync_directory(path.parent)
 
 
 def canonical_json_bytes(value: Any) -> bytes:

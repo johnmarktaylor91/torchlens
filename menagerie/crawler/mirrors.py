@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Iterator, Mapping, Optional
 
 from menagerie.crawler.authority import MirrorObject
-from menagerie.crawler.identity import hash_bytes, utc_now
+from menagerie.crawler.identity import fsync_directory, hash_bytes, is_sha256, utc_now
 from menagerie.crawler.models import JsonObject
 
 
@@ -133,27 +133,6 @@ class ArtifactManifest:
             raise MirrorManifestError(f"invalid artifact manifest: {exc}") from exc
 
 
-def _is_sha256(value: str) -> bool:
-    """Return whether a digest uses canonical prefixed SHA-256 syntax.
-
-    Parameters
-    ----------
-    value:
-        Candidate digest.
-
-    Returns
-    -------
-    bool
-        Whether the digest is canonical.
-    """
-
-    return (
-        len(value) == 71
-        and value.startswith("sha256:")
-        and all(character in "0123456789abcdef" for character in value[7:])
-    )
-
-
 class MirrorStore:
     """Address and reverify three physically separate content stores."""
 
@@ -223,7 +202,7 @@ class MirrorStore:
             If the digest is malformed.
         """
 
-        if not _is_sha256(content_sha256):
+        if not is_sha256(content_sha256):
             raise MirrorManifestError("content hash must be sha256:<64 lowercase hex>")
         digest = content_sha256.removeprefix("sha256:")
         return self.root(mirror_class) / "sha256" / digest[:2] / digest
@@ -277,7 +256,7 @@ class MirrorStore:
                     handle.flush()
                     os.fsync(handle.fileno())
                 os.replace(temporary, destination)
-                self._fsync_directory(destination.parent)
+                fsync_directory(destination.parent)
             finally:
                 temporary.unlink(missing_ok=True)
         object_key = destination.relative_to(self.root(mirror_class)).as_posix()
@@ -489,19 +468,3 @@ class MirrorStore:
             raise MirrorManifestError(
                 f"{retention_class.value} is invalid for {mirror_class.value} mirror"
             )
-
-    @staticmethod
-    def _fsync_directory(path: Path) -> None:
-        """Synchronize a directory after an atomic object write.
-
-        Parameters
-        ----------
-        path:
-            Directory containing the new object.
-        """
-
-        descriptor = os.open(path, os.O_RDONLY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
