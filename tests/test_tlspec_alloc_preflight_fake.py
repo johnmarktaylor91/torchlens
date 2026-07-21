@@ -347,7 +347,9 @@ def test_preflight_fails_open_on_data_dependent_op() -> None:
 
 
 def test_preflight_skips_calls_without_numeric_literal() -> None:
-    """No non-bool numeric literal -> the projection is skipped entirely (perf gate)."""
+    """No size source AT ALL (no tensor operand AND no numeric literal, r61) -> the
+    projection is skipped; a tensor-operand-only call now projects (see the r61
+    immunizer file for the amplifier families the old has-literal-only skip gapped)."""
 
     _preflight_call_allocation(None, torch.zeros, [], {}, _stub_call())
 
