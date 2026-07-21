@@ -236,7 +236,6 @@ _SECRET_BYTE_MARKERS = (
 _CANONICAL_MANIFEST_NAMES = ("public-manifest.jsonl", "private-manifest.jsonl")
 _GENERATED_METADATA_MANIFEST = "generated-metadata-manifest.jsonl"
 _HASH_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
-_LOCK_HASH_PATTERN = re.compile(r"(?:#|sha256[=:])([0-9a-f]{64})(?:$|[&\s])")
 _DIAGNOSTIC_REDACTION_MARKER = "externally-controlled-text-v1"
 _WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V3 "
 _EXTERNALLY_CONTROLLED_RECORD_FIELDS = frozenset(
@@ -2415,35 +2414,6 @@ def _read_json_object(path: Path, label: str) -> JsonObject:
     return value
 
 
-def _resolve_reconstruction_reference(repo_root: Path, value: object, label: str) -> Path:
-    """Resolve one repository-relative reconstruction reference fail-closed.
-
-    Parameters
-    ----------
-    repo_root:
-        Resolved repository root.
-    value:
-        Required repository-relative string.
-    label:
-        Diagnostic field name.
-
-    Returns
-    -------
-    pathlib.Path
-        Resolved path contained by ``repo_root``.
-    """
-
-    if not isinstance(value, str) or not value:
-        raise ReconstructionValidationError(f"reconstruction {label} is missing")
-    relative = Path(value)
-    if relative.is_absolute():
-        raise ReconstructionValidationError(f"reconstruction {label} must be repository-relative")
-    resolved = (repo_root / relative).resolve()
-    if not resolved.is_relative_to(repo_root):
-        raise ReconstructionValidationError(f"reconstruction {label} escapes the repository")
-    return resolved
-
-
 def reconstruction_transaction_id(
     stable_id: str,
     proposal_sha256: str,
@@ -2471,68 +2441,6 @@ def reconstruction_transaction_id(
             "intake": intake_item_sha256,
         }
     )
-
-
-def _reconstruction_license_artifact(
-    canonical_root: Path, staged_path: Path
-) -> Optional[LicensedArtifact]:
-    """Return one unique committed mirror row for a reconstruction path.
-
-    Parameters
-    ----------
-    canonical_root:
-        Canonical crawler root containing both mirror manifests.
-    staged_path:
-        Repository-relative logical artifact path.
-
-    Returns
-    -------
-    LicensedArtifact | None
-        Unique parsed row, or ``None`` when absent.
-
-    Raises
-    ------
-    ReconstructionValidationError
-        If the public/private manifests repeat the logical path.
-    """
-
-    matches: list[LicensedArtifact] = []
-    for name in _CANONICAL_MANIFEST_NAMES:
-        path = canonical_root / "mirrors" / name
-        if not path.is_file():
-            continue
-        for row in scan_jsonl(path, validate=False):
-            if row.get("staged_path") != staged_path.as_posix():
-                continue
-            try:
-                matches.append(_licensed_artifact(row))
-            except CheckpointValidationError as exc:
-                raise ReconstructionValidationError(str(exc)) from exc
-    if len(matches) > 1:
-        raise ReconstructionValidationError(
-            "public/private manifests repeat a reconstruction artifact path"
-        )
-    return matches[0] if matches else None
-
-
-def _canonical_gate_rows(records_root: Path) -> tuple[JsonObject, ...]:
-    """Load all append-only canonical gate rows below a records root.
-
-    Parameters
-    ----------
-    records_root:
-        Canonical records directory.
-
-    Returns
-    -------
-    tuple[dict[str, Any], ...]
-        Gate rows in deterministic shard and ledger order.
-    """
-
-    rows: list[JsonObject] = []
-    for path in sorted((records_root / "gates").glob("*.jsonl")):
-        rows.extend(scan_jsonl(path))
-    return tuple(rows)
 
 
 def _reconstruction_has_canonical_anchor(

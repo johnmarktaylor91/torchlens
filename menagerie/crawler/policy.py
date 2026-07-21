@@ -88,26 +88,6 @@ _MODEL_DATA_SUFFIXES = frozenset(
         ".weights",
     }
 )
-_PACKAGE_TEXT_DATA_SUFFIXES = frozenset(
-    {
-        ".cfg",
-        ".conf",
-        ".crt",
-        ".csv",
-        ".html",
-        ".ini",
-        ".json",
-        ".md",
-        ".pem",
-        ".rst",
-        ".toml",
-        ".tsv",
-        ".txt",
-        ".xml",
-        ".yaml",
-        ".yml",
-    }
-)
 _PACKAGE_BINARY_DATA_FLOOR_BYTES = 1024**2
 _RUNTIME_METADATA_NAMES = frozenset(
     {

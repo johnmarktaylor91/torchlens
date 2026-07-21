@@ -11746,33 +11746,6 @@ def _write_json_atomic(path: Path, value: Mapping[str, Any]) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def _write_jsonl_atomic(path: Path, values: Sequence[Mapping[str, Any]]) -> None:
-    """Atomically fsync deterministic JSONL rows.
-
-    Parameters
-    ----------
-    path, values:
-        Destination and complete ordered row set.
-    """
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    data = b"".join(canonical_json_bytes(value) + b"\n" for value in values)
-    try:
-        with temporary.open("xb") as handle:
-            handle.write(data)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-        descriptor = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
 def _boot_id() -> str:
     """Return the kernel boot identity when available."""
 

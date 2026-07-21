@@ -70,11 +70,7 @@ from menagerie.crawler.family_templates import (
     validate_size_variant_derivation,
 )
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
-from menagerie.crawler.intake import (
-    IntakeError,
-    legacy_requires_fidelity_audit,
-    load_intake_snapshot,
-)
+from menagerie.crawler.intake import legacy_requires_fidelity_audit
 from menagerie.crawler.metadata import (
     MetadataValidationError,
     input_signature_matches_contract,
@@ -2582,80 +2578,6 @@ class CanonicalReducer:
                     f"completeness.{field} contradicts reducer-derived value {expected_value!r}"
                 )
 
-    def _terminal_gate_evidence_valid(self, model: Mapping[str, Any], gate_kind: str) -> bool:
-        """Return whether a rejected checker history proves one gate terminal.
-
-        Parameters
-        ----------
-        model:
-            Candidate failed terminal.
-        gate_kind:
-            ``metadata_batch`` or ``fidelity``.
-
-        Returns
-        -------
-        bool
-            True only for the exact rejected item after bounded cap exhaustion
-            or a repeated root cause.
-        """
-
-        stable_id = str(model.get("stable_id"))
-        block_name = "accuracy_gate" if gate_kind == "metadata_batch" else "fidelity"
-        gate_id = model.get(block_name, {}).get("gate_id")
-        found = self._gate_item(gate_id, stable_id)
-        if found is None:
-            return False
-        gate, item = found
-        if gate.get("gate_kind") != gate_kind:
-            return False
-        if gate_kind == "metadata_batch":
-            rejected = not (
-                item.get("verdict") == "accurate"
-                and item.get("integrity", {}).get("verdict") == "accurate"
-                and item.get("rung_check", {}).get("verdict") == "accurate"
-            )
-        else:
-            rejected = not (
-                item.get("fidelity", {}).get("verdict") in {"match", "minor-drift"}
-                and item.get("rung_check", {}).get("verdict") == "accurate"
-            )
-        status = model.get("status", {})
-        if not rejected or status.get("root_cause_fingerprint") != _gate_item_fingerprint(item):
-            return False
-        lineage = item.get("campaign_root_work_id")
-        rejected_fingerprints: list[str] = []
-        for candidate_gate in self._gates.records:
-            if candidate_gate.get("gate_kind") != gate_kind:
-                continue
-            matching = [
-                candidate
-                for candidate in candidate_gate.get("items", [])
-                if candidate.get("stable_id") == stable_id
-                and candidate.get("campaign_root_work_id") == lineage
-            ]
-            if len(matching) != 1:
-                continue
-            candidate = matching[0]
-            if gate_kind == "metadata_batch":
-                accepted = bool(
-                    candidate.get("verdict") == "accurate"
-                    and candidate.get("integrity", {}).get("verdict") == "accurate"
-                    and candidate.get("rung_check", {}).get("verdict") == "accurate"
-                )
-            else:
-                accepted = bool(
-                    candidate.get("fidelity", {}).get("verdict") in {"match", "minor-drift"}
-                    and candidate.get("rung_check", {}).get("verdict") == "accurate"
-                )
-            if not accepted:
-                rejected_fingerprints.append(_gate_item_fingerprint(candidate))
-            if candidate_gate.get("gate_id") == gate_id:
-                break
-        if not rejected_fingerprints:
-            return False
-        latest = rejected_fingerprints[-1]
-        return len(rejected_fingerprints) > 2 or latest in rejected_fingerprints[:-1]
-
     def _validate_execution(self, model: Mapping[str, Any]) -> None:
         """Enforce attempt/receipt and meaningful-mode rules for run awards.
 
@@ -3085,45 +3007,6 @@ def intake_variant_bindings_from_rows(
         ):
             bindings[stable_id] = (representative_id, str(row.get("variant", "")))
     return bindings
-
-
-def _canonical_intake_rows(ledgers: LedgerPaths) -> dict[str, JsonObject]:
-    """Load trusted intake rows committed beside production ledgers.
-
-    Parameters
-    ----------
-    ledgers:
-        Canonical records paths.
-
-    Returns
-    -------
-    dict[str, dict[str, Any]]
-        Stable-ID keyed immutable intake authority, empty outside production.
-    """
-
-    canonical_root = _production_canonical_root(ledgers)
-    if canonical_root is None:
-        return {}
-    rows: dict[str, JsonObject] = {}
-    for manifest in sorted((canonical_root / "records" / "intake").glob("*/manifest.json")):
-        try:
-            snapshot = load_intake_snapshot(manifest.parent)
-        except (OSError, KeyError, TypeError, ValueError, IntakeError) as exc:
-            raise ReductionError(
-                f"canonical intake snapshot is invalid: {manifest.parent}"
-            ) from exc
-        for item in snapshot.items:
-            value = item.to_dict()
-            previous = rows.get(item.stable_id)
-            if previous is not None and (
-                previous.get("family_representative_id") != value.get("family_representative_id")
-                or previous.get("variant") != value.get("variant")
-            ):
-                raise ReductionError(
-                    f"canonical intake family authority conflicts for {item.stable_id}"
-                )
-            rows[item.stable_id] = value
-    return rows
 
 
 def _replay_reducer(
