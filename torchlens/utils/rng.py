@@ -33,7 +33,14 @@ from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from contextlib import contextmanager
 from dataclasses import dataclass
-from types import BuiltinFunctionType, CodeType, FrameType, ModuleType, TracebackType
+from types import (
+    BuiltinFunctionType,
+    CodeType,
+    FrameType,
+    MethodWrapperType,
+    ModuleType,
+    TracebackType,
+)
 from typing import Any, Dict, List, TypeVar, cast
 
 import _random as _c_random_module
@@ -946,7 +953,6 @@ _ABC_IMPL_TYPE: type | None = _derive_abc_impl_type()
 _GC_EXPANSION_LEAF_TYPES: tuple[type, ...] = (
     ModuleType,
     CodeType,
-    BuiltinFunctionType,
     FrameType,
     np.ndarray,
     np.generic,
@@ -961,8 +967,6 @@ Each exclusion is JUSTIFIED, not stylistic -- everything else reachable is walke
   module global is the explicit documented residual (contract section 11).
 - ``CodeType``: code objects hold only compile-time constants (``co_consts``)
   -- a live generator cannot exist there.
-- ``BuiltinFunctionType``: a C function's only referents are its ``__self__``
-  module and shared runtime plumbing.
 - ``FrameType``: frames chain through ``f_back`` into the ENTIRE interpreter
   call stack (TorchLens's own frames included) -- shared, unbounded state.
 - ``np.ndarray`` / ``np.generic`` / ``torch.Tensor``: the r45 numeric-leaf
@@ -986,6 +990,19 @@ and handled by the r53 class-surface branch with its trusted-leaf gate), and
 stdlib wrapper instances such as ``functools._lru_cache_wrapper`` (r54 corr_4:
 the ``__wrapped__`` edge must be walked; boundedness is owned by the node cap,
 inertness by ``tp_traverse`` itself).
+
+``BuiltinFunctionType`` was REMOVED in r57 C6 (r56 hon_1): its old
+justification ("a C function's only referents are its ``__self__`` module")
+is FALSE for a *bound* C method, whose ``__self__`` is the RECEIVER instance
+-- ``gen.standard_normal.__self__`` IS the numpy ``Generator``, so blanket-
+leafing dropped a real inert edge ``gc.get_referents`` exposes (a model
+caching ``self.sample = self.rng.standard_normal`` read false VERIFIED).
+Bound C callables are now special-cased at the top of
+:meth:`host_nondeterminism_monitor._inert_gc_children`: exactly the
+``__self__`` receiver is enqueued, gated by the SAME shared-namespace /
+expansion-leaf walls as every other node, and the node never expands
+generically (a module-level C function -- module or absent ``__self__`` --
+contributes nothing).
 """
 
 _INVENTORY_NODE_CAP = 1_000_000
@@ -1528,8 +1545,32 @@ class host_nondeterminism_monitor:
         by the sweep's typed branches (a referent dict via the Mapping protocol, a
         referent class via the trusted-leaf-gated class-surface branch, a referent
         RNG via the digest).
+
+        r57 C6 (r56 hon_1): a BOUND C callable (``BuiltinFunctionType`` /
+        ``MethodWrapperType``) contributes exactly its ``__self__`` RECEIVER --
+        for ``gen.standard_normal`` / ``RandomState().rand`` /
+        ``random.Random(0).random`` the receiver IS the RNG state holder, and
+        ``gc.get_referents(bound_method)`` exposes it inertly (zero Python
+        executed). The receiver passes through the SAME walls as every other
+        node: a module-level C function (``math.sqrt`` / ``np.array`` -- module
+        ``__self__``; ``torch.relu`` / ``torch.zeros`` -- ``None``/absent
+        ``__self__``) stays a leaf, a shared-namespace or expansion-leaf
+        receiver stays walled (the r47/r56 ambient-escape closes are untouched),
+        and a class receiver (``int.from_bytes``) is enqueued into the
+        trusted-leaf-gated class branch. The node NEVER expands generically:
+        ``gc.get_referents(torch.relu)`` would enqueue its defining
+        ``torch._C`` type -- targeted receiver-enqueue beats blanket expansion.
         """
 
+        if isinstance(value, (BuiltinFunctionType, MethodWrapperType)):
+            receiver = getattr(value, "__self__", None)
+            if (
+                receiver is None
+                or id(receiver) in shared_namespace_ids
+                or isinstance(receiver, _GC_EXPANSION_LEAF_TYPES)
+            ):
+                return []
+            return [receiver]
         if isinstance(value, _GC_EXPANSION_LEAF_TYPES):
             return []
         children: list[Any] = []
@@ -1651,7 +1692,12 @@ class host_nondeterminism_monitor:
         AUTHORITATIVE ``gc.get_referents`` enumerator (:meth:`_inert_gc_children`)
         -- CPython ``tp_traverse``, pure C, zero Python executed -- minus the two
         documented exclusion families (loaded-module ``__dict__`` identities and
-        :data:`_GC_EXPANSION_LEAF_TYPES`). This SUBSUMES the r53 hand-maintained
+        :data:`_GC_EXPANSION_LEAF_TYPES`); a BOUND C callable contributes exactly
+        its ``__self__`` receiver through those same walls (r57 C6 -- a cached
+        ``self.sample = self.rng.standard_normal`` bound method, alone or behind
+        a ``partial`` / closure cell / ``staticmethod`` / ``classmethod`` / dict
+        / list, recovers the generator; ``math.sqrt``-style module functions
+        stay leafed). This SUBSUMES the r53 hand-maintained
         callable-interior vocabulary (closure cells, defaults, kwdefaults,
         ``partial``/``property``/``static``/``classmethod`` fields, bound-method
         ``__func__``/``__self__``, callable-instance ``__dict__``/``__slots__``)
@@ -1834,7 +1880,8 @@ class host_nondeterminism_monitor:
                     # vocabulary at this terminal position: ``__dict__``/``__slots__``
                     # values, closure cells, defaults, kwdefaults, ``__annotations__``,
                     # ``functools`` wrapper ``__wrapped__`` chains, bound-method
-                    # ``__func__``/``__self__``, and any future inert field are enqueued by
+                    # ``__func__``/``__self__`` (incl. a bound C method's ``__self__``
+                    # receiver -- r57 C6), and any future inert field are enqueued by
                     # construction into the same cycle-guarded, node-capped walk (a
                     # referent dict descends via the Mapping branch; a referent class via
                     # the trusted-leaf-gated class branch; a referent generator is

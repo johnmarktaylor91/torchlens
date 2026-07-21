@@ -13,6 +13,11 @@ field a type declares is reached by construction.
 Whole-class immunizers pinned here:
 - a generator hidden behind EACH inert reference kind is snapshotted, and a draw
   on a NON-HOOKED thread flips its digest (the thread-independent belt);
+- r57 C6 (r56 hon_1): a generator whose ONLY model edge is a BOUND C METHOD
+  (``self.sample = self.rng.standard_normal``) is recovered through the
+  ``__self__`` receiver -- alone or behind a ``partial`` / closure cell /
+  ``staticmethod`` / ``classmethod`` / dict / list value -- while module-level
+  C functions (``math.sqrt`` / ``np.array`` / ``torch.relu``) stay leafed;
 - ``gc.get_referents`` fires ZERO user code (hostile property/``__getattr__``/
   descriptor counters stay at 0 while the hidden generator IS found);
 - a ``@property``-COMPUTED generator stays unreached -- the documented residual
@@ -20,8 +25,9 @@ Whole-class immunizers pinned here:
 - a benign deterministic model stays un-ceilinged and the walk stays far under
   the node cap (no over-walk / over-ceiling -- the r51 anti-pattern guard);
 - the fallback's dropped edges are EXACTLY the documented exclusion families;
-- end-to-end: the r54 corr_2/corr_4 repro shapes (pre-existing worker thread
-  draw) report UNVERIFIABLE / NOT_APPLICABLE, never VERIFIED / ATTESTED.
+- end-to-end: the r54 corr_2/corr_4 and r56 hon_1 repro shapes (pre-existing
+  worker thread draw) report UNVERIFIABLE / NOT_APPLICABLE, never VERIFIED /
+  ATTESTED.
 """
 
 from __future__ import annotations
@@ -30,9 +36,13 @@ import collections
 import collections.abc as cabc
 import functools
 import gc
+import math
 import queue
+import random
 import shutil
+import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -162,6 +172,43 @@ def _behind_hostile_subclass_attr(gen: Any) -> Any:
     return hostile
 
 
+# --- r57 C6 (r56 hon_1): the bound-C-method blast radius. Every shape funnels down
+# to a leaf'd-pre-fix ``builtin_function_or_method`` whose ``__self__`` IS the RNG. ---
+
+
+def _behind_bound_c_method(gen: Any) -> Any:
+    return gen.standard_normal  # __self__ is the generator; the r56 hon_1 direct shape
+
+
+def _behind_bound_c_method_partial(gen: Any) -> Any:
+    return functools.partial(gen.random)  # partial.func -> bound C method -> __self__
+
+
+def _behind_bound_c_method_closure(gen: Any) -> Any:
+    draw = gen.random
+
+    def inner() -> Any:
+        return draw  # closure cell -> bound C method -> __self__
+
+    return inner
+
+
+def _behind_bound_c_method_staticmethod(gen: Any) -> Any:
+    return staticmethod(gen.random)  # __func__ -> bound C method -> __self__
+
+
+def _behind_bound_c_method_classmethod(gen: Any) -> Any:
+    return classmethod(gen.random)  # __func__ -> bound C method -> __self__
+
+
+def _behind_bound_c_method_dict_value(gen: Any) -> Any:
+    return {"draw": gen.random}  # Mapping value -> bound C method -> __self__
+
+
+def _behind_bound_c_method_list_value(gen: Any) -> Any:
+    return [gen.standard_normal]  # Collection element -> bound C method -> __self__
+
+
 _REFERENCE_KINDS: dict[str, Callable[[Any], Any]] = {
     "annotations": _behind_annotations,
     "lru_wrapped_defaults": _behind_lru_wrapped_defaults,
@@ -173,6 +220,13 @@ _REFERENCE_KINDS: dict[str, Callable[[Any], Any]] = {
     "bound_method_self": _behind_bound_method_self,
     "function_dict": _behind_function_dict,
     "hostile_subclass_attr": _behind_hostile_subclass_attr,
+    "bound_c_method": _behind_bound_c_method,
+    "bound_c_method_partial": _behind_bound_c_method_partial,
+    "bound_c_method_closure": _behind_bound_c_method_closure,
+    "bound_c_method_staticmethod": _behind_bound_c_method_staticmethod,
+    "bound_c_method_classmethod": _behind_bound_c_method_classmethod,
+    "bound_c_method_dict_value": _behind_bound_c_method_dict_value,
+    "bound_c_method_list_value": _behind_bound_c_method_list_value,
 }
 
 
@@ -275,7 +329,7 @@ def test_benign_plain_model_with_callables_not_ceilinged(monkeypatch: Any) -> No
                     for _ in range(20)
                 ]
             )
-            self.act = torch.relu  # builtin: expansion leaf
+            self.act = torch.relu  # builtin: ``__self__`` None -> receiver-less leaf (r57 C6)
             self.helper = _behind_defaults  # module function: __globals__ excluded
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -326,6 +380,60 @@ def test_gc_referent_enumeration_drops_only_documented_exclusions() -> None:
     # An expansion LEAF returns no children at all (never partially walked).
     assert host_nondeterminism_monitor._inert_gc_children(torch, shared_ids) == []
     assert host_nondeterminism_monitor._inert_gc_children(fn.__code__, shared_ids) == []
+
+
+def test_bound_c_method_receiver_predicate() -> None:
+    """r57 C6 mechanism pins: a bound C callable contributes EXACTLY its
+    ``__self__`` receiver, gated by the same r47/r56 walls as every other node,
+    and is NEVER generically expanded (no ``torch._C`` plumbing enqueued)."""
+
+    shared_ids = host_nondeterminism_monitor._shared_namespace_dict_ids()
+    gen = np.random.default_rng(11)
+    rs = np.random.RandomState(7)
+    pr = random.Random(3)
+    # the receiver IS the RNG state holder -- enqueued (the r56 hon_1 edge)
+    assert host_nondeterminism_monitor._inert_gc_children(gen.standard_normal, shared_ids) == [gen]
+    assert host_nondeterminism_monitor._inert_gc_children(gen.random, shared_ids) == [gen]
+    assert host_nondeterminism_monitor._inert_gc_children(rs.rand, shared_ids) == [rs]
+    assert host_nondeterminism_monitor._inert_gc_children(pr.random, shared_ids) == [pr]
+    # the method-wrapper spelling obeys the same receiver rule
+    assert host_nondeterminism_monitor._inert_gc_children(gen.__str__, shared_ids) == [gen]
+    # module-level C functions: module ``__self__`` (math.sqrt / np.array / time.time)
+    # or ``None``/absent ``__self__`` (torch.relu / torch.zeros) -> leafed, and never
+    # generically expanded (``gc.get_referents(torch.relu)`` exposes its defining
+    # ``torch._C`` type -- must contribute NOTHING)
+    for leafed in (math.sqrt, np.array, time.time, torch.relu, torch.zeros):
+        assert host_nondeterminism_monitor._inert_gc_children(leafed, shared_ids) == []
+    # a shared-namespace receiver (a loaded module's ``__dict__``) stays walled --
+    # the r47/r56 ambient-escape close is intact for receivers too
+    assert host_nondeterminism_monitor._inert_gc_children(sys.__dict__.get, shared_ids) == []
+    # expansion-leaf receivers (the r45 numeric-leaf posture) stay walled
+    assert host_nondeterminism_monitor._inert_gc_children(torch.randn(2).add, shared_ids) == []
+    assert host_nondeterminism_monitor._inert_gc_children(np.zeros(2).sum, shared_ids) == []
+
+
+def test_model_held_module_c_functions_zero_ceiling() -> None:
+    """Over-trigger pin (sweep level): a model holding module-level C functions,
+    walled-receiver bound methods, and the EXEMPT global-engine bound method
+    (``np.random.random``) sweeps ZERO generators with ZERO uncertainty."""
+
+    model = _HolderModel(
+        {
+            "sqrt": math.sqrt,
+            "factory": np.array,
+            "relu": torch.relu,
+            "zeros": torch.zeros,
+            "clock": time.time,
+            "global_draw": np.random.random,  # __self__ = identity-exempt mtrand._rand
+            "join": "-".join,
+            "tensor_add": torch.randn(3).add,
+            "ndarray_sum": np.zeros(3).sum,
+        }
+    )
+    monitor = _make_monitor(model)
+    assert monitor._sweep_model_generators() == []
+    assert monitor.result.uncertain is False
+    assert monitor.result.uncertain_detail == ()
 
 
 def test_opaque_queue_still_fail_closed_before_gc_fallback() -> None:
@@ -417,13 +525,39 @@ def _lru_model(worker: _PreexistingWorker) -> nn.Module:
     return _Model()
 
 
-@pytest.mark.parametrize("builder", [_annotations_model, _lru_model], ids=["corr_2", "corr_4"])
+def _bound_c_method_model(worker: _PreexistingWorker) -> nn.Module:
+    """The r56 hon_1 shape: the generator's ONLY model edge is a cached bound C
+    method (``self.sample = gen.random``), drawn on a pre-existing thread."""
+
+    gen = np.random.default_rng(123)  # sole live reference is the bound method below
+    draw = gen.random  # builtin_function_or_method; draw.__self__ IS gen
+
+    class _Model(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self.sample = draw  # only model->gen edge: a bound C method
+            self.worker = worker
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            value = self.worker.run(lambda: float(self.sample()))
+            hidden = self.lin(x)
+            return hidden * 2.0 if value < 0.5 else hidden * 3.0
+
+    return _Model()
+
+
+@pytest.mark.parametrize(
+    "builder",
+    [_annotations_model, _lru_model, _bound_c_method_model],
+    ids=["corr_2", "corr_4", "r56_hon_1_bound_c_method"],
+)
 def test_hidden_generator_preexisting_thread_draw_is_unverifiable(
     builder: Callable[[_PreexistingWorker], nn.Module], tmp_path: Path
 ) -> None:
-    """The r54 repro shapes end to end: the generator is inventoried, the
-    pre-existing-thread draw flips the digest, and the loaded run reports
-    UNVERIFIABLE / NOT_APPLICABLE -- never VERIFIED / ATTESTED."""
+    """The r54 corr_2/corr_4 and r56 hon_1 repro shapes end to end: the generator
+    is inventoried, the pre-existing-thread draw flips the digest, and the loaded
+    run reports UNVERIFIABLE / NOT_APPLICABLE -- never VERIFIED / ATTESTED."""
 
     worker = _PreexistingWorker()
     try:
@@ -449,6 +583,45 @@ def test_hidden_generator_preexisting_thread_draw_is_unverifiable(
         assert "host_rng" in report.nondeterministic_sources
     finally:
         worker.stop()
+
+
+def test_benign_model_with_c_callables_stays_verified(tmp_path: Path) -> None:
+    """Over-trigger pin (end to end, r57 C6): a DETERMINISTIC model that holds
+    module-level C functions, the exempt global-engine bound method, and
+    walled-receiver bound methods stays VERIFIED + ATTESTED -- the receiver
+    enqueue never ceilings a benign model."""
+
+    class _Benign(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self.act = torch.relu  # __self__ None -> leaf
+            self.sqrt = math.sqrt  # module __self__ -> leaf
+            self.factory = np.array  # module __self__ -> leaf
+            self.global_draw = np.random.random  # identity-exempt global receiver
+            self.joiner = "-".join  # str receiver: inert, no RNG
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.act(self.lin(x))
+
+    torch.manual_seed(0)
+    x = torch.randn(2, 4)
+    trace = tl.trace(
+        _Benign().eval(),
+        x.clone(),
+        capture=CaptureOptions(
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+            random_seed=1,
+        ),
+    )
+    path = tmp_path / "benign_c_callables.tlspec"
+    shutil.rmtree(path, ignore_errors=True)
+    trace.save(path, level="runnable", include_weights=True, include_activations=True)
+    report = tl.load(path).run(inputs=x.clone()).report
+    assert report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
 # --- r56 amb_1: sweep completeness independent of ambient process state -----------
