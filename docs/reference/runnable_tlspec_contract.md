@@ -1448,6 +1448,21 @@ tensor/non-tensor leaf vocabulary as tuples, mappings, and namedtuples; a tensor
 fully witnessable (`verified`, attestation-eligible), while a genuinely-opaque dataclass field still
 surfaces and fails the run closed.
 
+All capture- and runtime-side input-boundary walkers (the literal-leaf, metadata-read-site, and
+runtime leaf-path walks) share ONE normative container dispatch (`torchlens/_input_walk.py`, r65):
+the supported container-kind set -- tensor leaf, empty container, namedtuple, dataclass, mapping,
+sequence, opaque leaf -- is single-sourced, so a container kind cannot be descended by one walker
+and silently missed by another (r64: a metadata-site walk without dataclass descent recorded no
+witness for a metadata read on a dataclass tensor field, letting a same-value layout twin replay
+`verified`). Tensor-only dataclass inputs are therefore fully witnessable for BOTH literal and
+metadata-read facts. Two mapping-key path-component vocabularies are DECLARED in that module and
+nowhere else: the persisted literal vocabulary (grammar-gated; bool keys tagged type-distinct from
+equal-valued int keys) used by the literal walkers, and the raw-key vocabulary used by
+metadata-fact sites, whose bool/int conflation is shielded by the type-strict input-tree belt
+(`_type_strict_path`) and whose non-representable-key sites are independently ceilinged by the
+literal walk's opaque leaf. Key-vocabulary unification is a declared residual (R6), never silent
+drift; a private container branch inside any walker body is forbidden by a source-scan meta-test.
+
 ### Three-valued input alias topology
 
 Runtime input aliasing against the de-aliased capture is judged by ONE shared three-valued
