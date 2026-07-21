@@ -686,7 +686,8 @@ the parser bounds a literal integer's magnitude under the SAME signed-64-bit cei
 parser enforces, so a literal can never be more extreme than a slot dimension is allowed to be; an
 over-ceiling literal refuses at `descriptor_parse` (`state_shape_mismatch`) and degrades the load to
 analysis-only. The PRIMARY, op-agnostic layer (r55 free_1/sec_1; r57 allowlist deletion) runs
-immediately before each taken-path call carrying a numeric literal: the resolved callable is
+immediately before **every taken-path call carrying a numeric literal OR a tensor operand** (r61: a
+call with neither has no size source and is skipped): the resolved callable is
 projected under
 `FakeTensorMode(allow_non_fake_inputs=True)`, which computes the call's output shape/bytes WITHOUT
 allocating (fake tensors never allocate -- a `torch.zeros(10**12)` factory, which has no tensor
@@ -698,8 +699,20 @@ FAILS OPEN by design: a data-dependent op with no fake/meta implementation
 (`nonzero`/`unique` raise `DynamicOutputShapeException`), or an unavailable `FakeTensorMode`, does
 NOT refuse -- the run falls through to the recorded-output-slot bound and the parse-time literal
 gate -- so a legitimate data-dependent op is never over-refused (the r51 over-catch anti-pattern).
-The projection runs for **every taken-path call carrying a non-bool integer or finite-float literal**
-(float coverage closes `interpolate(scale_factor=...)`); "size-relevance" is decided structurally by
+Zero-numel amplifiers are NOT part of this fail-open residual: `mm`/`matmul`/`einsum` on
+`[N,0] @ [0,N]` are shape-driven (the output size follows from input shapes alone) and fully
+projectable, so they are bounded by the projection, not by the fallback.
+The projection runs for **every taken-path call carrying a size source: a non-bool integer or
+finite-float literal, or any tensor operand** (float coverage closes `interpolate(scale_factor=...)`;
+r61 closes the has-literal-only gate, whose premise -- no literal implies output sizes are bounded by
+live tensor shapes -- is false for shape amplifiers: `outer`/`kron`/broadcast-`mul`/`cartesian_prod`/
+`tensordot(dims=0)`/`einsum`/`diag`, including the zero-numel family `mm`/`matmul`/`einsum` on
+`[N,0] @ [0,N]` where numel is a product and a 0 dim hides arbitrarily large sibling dims, amplify
+small or empty inputs into out-of-budget outputs with no literal present -- and any numel/arity
+threshold above "has a tensor operand" gaps the same way). A call with neither a literal nor a tensor
+operand has no size source -- no fake/meta kernel can size an output tree from it -- and is the only
+skipped shape; every amplifier carries a tensor operand, so no amplifier is ever pre-filtered out.
+"Size-relevance" is decided structurally by
 the projection, not by an op-name family list (the r55 size-driving allowlist is deleted, closing the
 r56 `pad`/`constant_pad_nd`/`*_window`/`tril_indices`/`triu_indices`/`one_hot` gate-incompleteness
 class). **Pure views, input-returning ops, and in-place ops are excluded structurally**: an output
@@ -722,8 +735,8 @@ projection: the `FakeTensorMode` subclass counts fake tensor leaves produced by 
 passes `max(recorded_count * 8, 4096)` -- DURING fanout construction, before the whole fake OR real
 output tree materializes, so a huge N aborts at `ceiling + 1` fakes and can never self-DoS. A
 bind-time aggregate accountant (`max(sum recorded * 8, 4096)` over realized leaves) is the backstop
-for any projection-skipped path (a data-dependent op that fails open, or a call with no numeric
-literal). Both constants are load-bearing and must never be "simplified": the FLOOR carries honest
+for any projection-skipped path (a data-dependent op that fails open, or a call with no size source
+-- neither a tensor operand nor a numeric literal, r61). Both constants are load-bearing and must never be "simplified": the FLOOR carries honest
 LOW-arity DECOMPOSITIONS (a legit `interpolate`/`batch_norm`/`einsum` projects up to 55/28/12 fakes
 per 1 recorded output), and the MARGIN carries HIGH-arity headroom (a legit `unbind` recording 2048
 outputs needs a 16384 ceiling). The count sentinel BYPASSES the projection fail-open;
@@ -739,9 +752,18 @@ assumed away -- an attacker inflates the size literal while leaving the recorded
 small, and the clone OOM-kills the victim. r59 routes every TorchLens-owned op-output snapshot clone
 through a `guarded_clone` that compares `numel * itemsize` (no allocation) against the SAME per-device
 live budget and refuses typed at `clone_allocation_preflight` BEFORE the clone allocates and before
-any shape-mismatch check. It is provably non-regressive: an honest clone equals an honest recorded
-slot that already passed the run-prep bound, so a faithful run is never refused; only a tampered view
-(honest small slot, inflated size literal) is refused before materialization.
+any shape-mismatch check. r61 (corr_2) extends the same byte-guard core to **every TorchLens-owned
+replay/staging re-materialization clone**: the accepted runtime **input mirror clone** (a tampered
+input slot shape plus a runtime `expand` view materializes the logical extent at the mirror, with no
+prior byte bound), the **state staging clones** (user `load_state_dict` binder staging -- where the
+strict binder accepts an expanded view and materializes it with user/embedded state never entering
+the run-prep representative sum -- plus the embedded-state and non-persistent-buffer bind clones),
+and the run-time state clone are all routed through the one core and refuse typed at the same
+`clone_allocation_preflight` stage. The capture-side save-time snapshot is deliberately not routed:
+it clones the live model's own values, so no artifact-driven amplification exists there. The guard
+is provably non-regressive: an honest clone equals an honest recorded or declared slot that already
+passed the run-prep bound, so a faithful run -- including honest expanded-view user state -- is never
+refused; only a tampered view or oversized supplied value is refused before materialization.
 
 Allocation-classed projection/execution failures (r59 section 2.4). A projection failure that is
 itself an allocation failure -- `MemoryError`, `torch.OutOfMemoryError`, or a `RuntimeError` carrying

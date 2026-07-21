@@ -132,7 +132,15 @@ def run_loaded_sparse_trace(
             "on_divergence must be DivergencePolicy.RAISE or DivergencePolicy.RETURN_DIVERGED."
         ) from exc
     descriptor, readiness, callables = _require_loaded_sparse_provider(trace)
-    slot_values, input_checks, input_alias_unresolved = _bind_runtime_inputs(descriptor, inputs)
+    # r61 corr_2: ONE aggregate resource ceiling per transaction, constructed BEFORE
+    # any TorchLens-owned re-materialization clone runs (input mirror, run-time state
+    # clone, transaction snapshots) so every clone site shares one byte-guarded
+    # boundary. Construction only sums recorded counts, so building it pre-bind
+    # changes no accounting.
+    ceiling = RunResourceCeiling(descriptor)
+    slot_values, input_checks, input_alias_unresolved = _bind_runtime_inputs(
+        descriptor, inputs, ceiling
+    )
     _raise_first_divergence(input_checks, divergence_policy, fork=None)
     # I5: digests/fingerprints are attestation-only facts, computed strictly
     # AFTER admission (hard preconditions + contract enforcement) and only when
@@ -148,7 +156,7 @@ def run_loaded_sparse_trace(
         input_byte_digests = {}
         input_fingerprints = {}
     prepared_state = prepare_runnable_state(trace, seed=seed)
-    slot_values.update(_clone_state_values(descriptor, prepared_state.slot_values))
+    slot_values.update(_clone_state_values(descriptor, prepared_state.slot_values, ceiling))
     fork = trace._fork_trace(name=_run_fork_name(trace))
     try:
         return _execute_loaded_sparse_transaction(
@@ -160,6 +168,7 @@ def run_loaded_sparse_trace(
             readiness=readiness,
             callables=callables,
             slot_values=slot_values,
+            ceiling=ceiling,
             input_byte_digests=input_byte_digests,
             input_fingerprints=input_fingerprints,
             input_checks=input_checks,
@@ -308,6 +317,7 @@ def _execute_loaded_sparse_transaction(
     readiness: ReadinessReport,
     callables: Mapping[str, Callable[..., Any]],
     slot_values: dict[str, torch.Tensor],
+    ceiling: RunResourceCeiling,
     input_byte_digests: Mapping[str, str],
     input_fingerprints: Mapping[str, InputAttestationFingerprint],
     input_checks: tuple[ContractCheck, ...],
@@ -317,11 +327,12 @@ def _execute_loaded_sparse_transaction(
 ) -> RunResult:
     """Execute one sparse transaction whose caller owns rollback on escape."""
 
-    # r59: one aggregate resource ceiling per transaction -- bounds realized output
-    # count (per-call projection + bind backstop) and re-materialization clone bytes at
-    # every op-output snapshot site. The run-prep retention floor (prepare_runnable_state)
-    # already refused a guaranteed-OOM retained population before we got here.
-    ceiling = RunResourceCeiling(descriptor)
+    # r59/r61: the ONE aggregate resource ceiling for this transaction -- constructed
+    # by ``run_loaded_sparse_trace`` before input binding, threaded here -- bounds
+    # realized output count (per-call projection + bind backstop) and re-materialization
+    # clone bytes at every snapshot site. The run-prep retention floor
+    # (prepare_runnable_state) already refused a guaranteed-OOM retained population
+    # before we got here.
     # Escape-source witness slots must be digested at their production point (before
     # any later in-place op mutates the live tensor), matching the save-side digest.
     escape_witness_slot_ids = _tensor_derived_scalar_witness_slot_ids(descriptor)
@@ -1236,11 +1247,15 @@ def _input_literal_contract_checks(
 def _bind_runtime_inputs(
     descriptor: SparseRunDescriptor,
     inputs: Any,
+    ceiling: RunResourceCeiling,
 ) -> tuple[dict[str, torch.Tensor], tuple[ContractCheck, ...], bool]:
     """Bind and defensively clone public input leaves by persisted model sites.
 
     Returns the bound clone map, the ordered input contract checks, and the
-    ``input_alias_topology_unresolved`` ceiling flag (r35 decision D).
+    ``input_alias_topology_unresolved`` ceiling flag (r35 decision D). Accepted
+    leaves are mirrored through the transaction ``ceiling``'s byte guard (r61
+    corr_2): a tampered input slot shape plus a runtime expanded view refuses
+    typed at ``clone_allocation_preflight`` instead of dying in the allocator.
     """
 
     input_slots = tuple(
@@ -1457,11 +1472,15 @@ def _bind_runtime_inputs(
     for slot in input_slots:
         raw = raw_values.get(slot.slot_id)
         if isinstance(raw, torch.Tensor):
-            values[slot.slot_id] = _runtime_mirror_clone(raw)
+            values[slot.slot_id] = _runtime_mirror_clone(raw, ceiling, slot)
     return values, tuple(checks), input_alias_unresolved
 
 
-def _runtime_mirror_clone(raw: torch.Tensor) -> torch.Tensor:
+def _runtime_mirror_clone(
+    raw: torch.Tensor,
+    ceiling: RunResourceCeiling,
+    slot: TensorSlotDescriptor,
+) -> torch.Tensor:
     """Defensively clone one leaf while MIRRORING its runtime autograd metadata.
 
     r37 corr2-7 (R13): ``detach().clone()`` strips a leaf's ``requires_grad``, so
@@ -1473,18 +1492,22 @@ def _runtime_mirror_clone(raw: torch.Tensor) -> torch.Tensor:
     input change (attestation ``not_applicable``), never normalized away. This is
     the ONE second-clone helper -- every input-bind/state-clone/staging site routes
     through it or the staging helper's recorded-trainable rule.
+
+    r61 corr_2: the mirror routes through the transaction ceiling's byte guard --
+    the clone's ``numel()`` is the LOGICAL numel of an expanded runtime view, so a
+    tampered input slot (`[1]` -> huge) with a matching runtime ``expand`` refuses
+    typed at ``clone_allocation_preflight`` BEFORE the materializing clone, never
+    an allocator death. Honest inputs clone with ``requires_grad`` mirrored, so
+    attestation eligibility is unchanged.
     """
 
-    clone = raw.detach().clone()
-    if bool(raw.requires_grad) and not clone.requires_grad:
-        try:
-            clone.requires_grad_(True)
-        except RuntimeError:
-            # Non-differentiable dtype cannot require grad; the raw flag could not
-            # have been set either, so this is unreachable in practice -- degrade
-            # to the detached clone rather than aborting the bind.
-            pass
-    return clone
+    return ceiling.guarded_clone(
+        raw,
+        call_id=None,
+        slot_id=slot.slot_id,
+        affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
+        mirror_requires_grad=True,
+    )
 
 
 def _model_input_version_closure(descriptor: SparseRunDescriptor) -> set[str]:
@@ -1719,6 +1742,7 @@ def _input_alias_topology_checks(
 def _clone_state_values(
     descriptor: SparseRunDescriptor,
     values: Mapping[str, torch.Tensor],
+    ceiling: RunResourceCeiling,
 ) -> dict[str, torch.Tensor]:
     """Clone run-local state while preserving alias groups, device, and trainability.
 
@@ -1726,8 +1750,11 @@ def _clone_state_values(
     slot device, so it must not strip anything staging established -- ``clone()``
     keeps the device; alias groups keep one shared clone (identity-keyed); and the
     RECORDED per-slot ``trainable`` bit is restored on the clone (state semantics
-    come from the recorded binding, unlike runtime INPUTS whose mirror follows the
-    live leaf -- see ``_runtime_mirror_clone``).
+    come from the recorded binding, NOT ``mirror_requires_grad`` -- unlike runtime
+    INPUTS whose mirror follows the live leaf, see ``_runtime_mirror_clone``).
+    r61 corr_2: each identity's single clone routes through the transaction
+    ceiling's byte guard, so an oversized staged value refuses typed at
+    ``clone_allocation_preflight`` instead of dying in the allocator.
     """
 
     trainable_by_slot = {
@@ -1740,7 +1767,7 @@ def _clone_state_values(
     for slot_id, value in values.items():
         clone = clones_by_identity.get(id(value))
         if clone is None:
-            clone = value.detach().clone()
+            clone = ceiling.guarded_clone(value, call_id=None, slot_id=slot_id)
             if trainable_by_slot.get(slot_id, False) and not clone.requires_grad:
                 try:
                     clone.requires_grad_(True)
@@ -2651,8 +2678,8 @@ def _count_bounded_fake_tensor_mode_class() -> type[Any] | None:
 def _has_numeric_literal(value: Any, _depth: int = 0) -> bool:
     """Return whether a decoded argument tree carries a size-relevant numeric literal.
 
-    A call whose sizes come only from live tensor shapes (no numeric literal)
-    cannot be a *literal* allocation bomb, so it skips the projection. "Carries a
+    One of the two size sources ``_projection_required_by_arguments`` recognizes
+    (the other is a tensor operand -- ``_has_tensor_operand``, r61). "Carries a
     size-relevant literal" means the decoded tree holds any non-bool ``int`` or
     any *finite* ``float`` -- the float branch covers multiplier parameters such as
     ``F.interpolate(scale_factor=<float>)`` that an integer-only gate missed
@@ -2676,6 +2703,51 @@ def _has_numeric_literal(value: Any, _depth: int = 0) -> bool:
     if isinstance(value, Mapping):
         return any(_has_numeric_literal(item, _depth + 1) for item in value.values())
     return False
+
+
+def _has_tensor_operand(value: Any, _depth: int = 0) -> bool:
+    """True if a decoded argument tree contains a torch.Tensor (bounded, short-circuit).
+
+    isinstance-only -- NO property read (numel/shape) ever fires, so a subclass can
+    never route user code through the predicate. Mirrors ``_has_numeric_literal``'s
+    recursion over list/tuple/Mapping. Every shape amplifier (``outer``/``kron``/
+    broadcast-``mul``/``cartesian_prod``/``tensordot(dims=0)``/``einsum``/``diag`` --
+    and the zero-numel family ``mm``/``matmul``/``einsum`` on ``[N,0] @ [0,N]``,
+    where numel is a PRODUCT so a 0 dim hides arbitrarily large sibling dims)
+    carries a tensor operand, so no amplifier can be pre-filtered out: the r60
+    free_1 has-literal premise hole is closed structurally, not by an op list.
+    Over-depth returns True (fail-closed: project).
+    """
+
+    if _depth > _MAX_DECODE_NESTING_DEPTH:
+        return True
+    if isinstance(value, torch.Tensor):
+        return True
+    if isinstance(value, (list, tuple)):
+        return any(_has_tensor_operand(item, _depth + 1) for item in value)
+    if isinstance(value, Mapping):
+        return any(_has_tensor_operand(item, _depth + 1) for item in value.values())
+    return False
+
+
+def _projection_required_by_arguments(args: Sequence[Any], kwargs: Mapping[str, Any]) -> bool:
+    """Whether this replay call carries any size source (tensor operand or numeric literal).
+
+    The ONLY sound projection skip is "no size source at all" (r61): a call with
+    neither a tensor operand nor a numeric literal gives no fake/meta kernel
+    anything to size an output tree from, so it is provably allocation-trivial.
+    Any richer skip heuristic (has-literal-only, numel/arity thresholds) gaps on a
+    shape-amplifier family and re-opens the class.
+    """
+
+    arg_list = list(args)
+    kwarg_dict = dict(kwargs)
+    return (
+        _has_numeric_literal(arg_list)
+        or _has_numeric_literal(kwarg_dict)
+        or _has_tensor_operand(arg_list)
+        or _has_tensor_operand(kwarg_dict)
+    )
 
 
 def _tree_to_fake(mode: Any, value: Any) -> Any:
@@ -2782,13 +2854,19 @@ def _preflight_call_allocation(
     call: RunnableCallDescriptor,
     ceiling: RunResourceCeiling | None = None,
 ) -> None:
-    """Refuse a numeric-literal call by projected NEW bytes AND realized output COUNT.
+    """Refuse a size-source-carrying call by projected NEW bytes AND realized output COUNT.
 
     Runs the resolved callable under a count-instrumented
     ``FakeTensorMode(allow_non_fake_inputs=True)`` (ZERO allocation) for EVERY taken-path
-    call carrying a non-bool numeric literal (``_has_numeric_literal``) -- the r55 op-name
-    allowlist is deleted, so "size-relevance" is decided structurally by the projection,
-    not guessed. Two structural bounds fire before the real call:
+    call carrying a size source: a non-bool numeric literal (``_has_numeric_literal``) OR
+    a tensor operand (``_has_tensor_operand``, r61 -- the has-literal-only gate's premise,
+    "no literal implies bounded by live shapes", is FALSE for shape amplifiers such as
+    ``outer``/``kron``/broadcast-``mul``/``cartesian_prod``/``tensordot(dims=0)``/
+    ``einsum``/``diag`` and the zero-numel ``mm``/``matmul``/``einsum`` on ``[N,0]@[0,N]``).
+    The r55 op-name allowlist is deleted, so "size-relevance" is decided structurally by
+    the projection, not guessed; the ONLY skip is a call with NO size source at all
+    (``_projection_required_by_arguments``). Two structural bounds fire before the real
+    call:
 
     * output COUNT (r59 free_1): the count-bounded mode caps realized fake outputs at
       ``max(recorded * 8, 4096)`` DURING fanout construction and raises
@@ -2812,9 +2890,9 @@ def _preflight_call_allocation(
     stability but no longer gates the projection.
     """
 
-    del entry  # r57: no op-name gate -- the numeric-literal predicate + projection decide.
-    if not (_has_numeric_literal(list(args)) or _has_numeric_literal(dict(kwargs))):
-        return
+    del entry  # r57: no op-name gate; r61: no has-literal gate either -- any size source projects.
+    if not _projection_required_by_arguments(args, kwargs):
+        return  # provably trivial: no tensor operand and no numeric literal -> no size source
     mode_cls = _count_bounded_fake_tensor_mode_class()
     if mode_cls is None:
         return  # feature-detect fail-open -> run-prep recorded-output bound

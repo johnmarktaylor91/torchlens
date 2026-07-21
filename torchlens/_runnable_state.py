@@ -183,6 +183,10 @@ def load_trace_state_dict(trace: Any, sd: Mapping[str, Any]) -> None:
     ------
     StateBindingError
         If the Trace is not sparse-runnable or any strict slot contract fails.
+    RunCapabilityUnavailableError
+        If a staging clone's logical byte size exceeds the live device budget
+        (``clone_allocation_preflight``, r61 corr_2) -- refused BEFORE the clone
+        allocates, like the staging device failures this stage already types.
     """
 
     staged = _validate_state_mapping(trace, sd)
@@ -218,12 +222,16 @@ def bind_embedded_trace_state(trace: Any, sd: Mapping[str, Any]) -> None:
     ------
     StateBindingError
         If any embedded entry violates the ordinary strict state contract.
+    RunCapabilityUnavailableError
+        If a bind clone's byte size exceeds the live device budget
+        (``clone_allocation_preflight``, r61 corr_2 defense-in-depth: decoded
+        blobs are dense, so this bounds the transient doubling).
     """
 
     _validate_state_mapping(trace, sd)
     trace.__dict__["_runnable_embedded_state"] = MappingProxyType(
         {
-            name: value.detach().clone()
+            name: _byte_guarded_clone(value, state_dict_name=name)
             for name, value in sd.items()
             if isinstance(name, str) and isinstance(value, torch.Tensor)
         }
@@ -249,7 +257,7 @@ def bind_embedded_nonpersistent_buffers(trace: Any, buffers: Mapping[str, Any]) 
     descriptor = _require_descriptor(trace)
     validate_nonpersistent_buffer_mapping_for_descriptor(descriptor, buffers)
     trace.__dict__["_runnable_embedded_nonpersistent_buffers"] = {
-        name: value.detach().clone()
+        name: _byte_guarded_clone(value, state_dict_name=name)
         for name, value in buffers.items()
         if isinstance(name, str) and isinstance(value, torch.Tensor)
     }
@@ -536,7 +544,16 @@ def _validate_named_slot_mapping(
         if binding.state_dict_name in shared_by_name:
             value = shared_by_name[binding.state_dict_name]
         else:
-            value = values_by_name[binding.state_dict_name].detach().clone()
+            # r61 corr_2: the staging clone materializes the LOGICAL extent of a
+            # supplied value (the strict binder accepts an expanded view whose
+            # storage is tiny), and user/embedded state never enters the run-prep
+            # representative sum -- so this is the load-bearing byte bound on the
+            # state re-materialization chain.
+            value = _byte_guarded_clone(
+                values_by_name[binding.state_dict_name],
+                slot_id=slot.slot_id,
+                state_dict_name=binding.state_dict_name,
+            )
             shared_by_name[binding.state_dict_name] = value
         if group_key is not None:
             shared_by_alias[group_key] = value
@@ -830,6 +847,64 @@ single-output call.
 """
 
 
+def _byte_guarded_clone(
+    value: torch.Tensor,
+    *,
+    call_id: str | None = None,
+    slot_id: str | None = None,
+    affected_op_labels: Sequence[str] = (),
+    state_dict_name: str | None = None,
+) -> torch.Tensor:
+    """Byte-guard ONE TorchLens-owned re-materialization clone before it allocates.
+
+    THE single byte-guard core (r61 corr_2): ``numel * itemsize`` (pure integer math,
+    no allocation) is compared to the SAME never-under-estimating per-device budget
+    run-prep uses; a clone that could never fit is refused typed at
+    ``clone_allocation_preflight`` BEFORE the materializing ``.detach().clone()``. The
+    clone's ``numel()`` is the LOGICAL numel of an expanded view -- exactly what
+    ``.clone()`` materializes -- so a small-storage/huge-logical view is bounded here.
+    Every TorchLens-owned replay/staging re-materialization routes through this core:
+    op-output/attestation/witness/reconstruct snapshots (via
+    :meth:`RunResourceCeiling.guarded_clone`), the accepted runtime input mirror, the
+    binder staging clone (user ``load_state_dict``), the embedded-state and
+    non-persistent-buffer bind clones, and the run-time state clone. An honest clone
+    equals an honest recorded/declared slot that already passed the run-prep bound, so
+    a faithful run is never refused here. The capture-side save-time snapshot is
+    deliberately NOT routed: it clones the live model's own values, so no
+    artifact-driven amplification exists there.
+    """
+
+    requested = int(value.numel()) * int(value.element_size())
+    device = value.device
+    available = _allocation_budget_bytes(device)
+    if requested > available:
+        subject = (
+            f"state entry {state_dict_name!r}"
+            if state_dict_name is not None
+            else f"sparse call {call_id!r} output slot {slot_id!r}"
+        )
+        extra: dict[str, Any] = {}
+        if state_dict_name is not None:
+            extra["state_dict_name"] = state_dict_name
+        raise RunCapabilityUnavailableError(
+            f"Re-materializing {subject} requires a {requested}-byte clone on device "
+            f"{str(device)!r}, but only {available} bytes are available on this host. "
+            "A recorded view or supplied value whose logical size cannot fit (honest "
+            "small storage, inflated logical extent) cannot be materialized into an "
+            "out-of-budget clone; the descriptor or supplied state may be tampered.",
+            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+            detection_stage="clone_allocation_preflight",
+            call_id=call_id,
+            slot_id=slot_id,
+            device=str(device),
+            required_bytes=requested,
+            available_bytes=available,
+            affected_op_labels=tuple(affected_op_labels),
+            **extra,
+        )
+    return value.detach().clone()
+
+
 class RunResourceCeiling:
     """Aggregate replay resource admission for one loaded-sparse transaction (r59).
 
@@ -843,13 +918,15 @@ class RunResourceCeiling:
       ``FakeTensorMode`` in ``_preflight_call_allocation`` (refuses DURING fanout,
       before the full fake OR real tree exists, so a huge N cannot self-DoS the
       projection); :meth:`charge_realized_outputs` is the bind-time backstop for any
-      projection-skipped path (data-dependent fail-open, or no numeric literal).
-    * re-materialization BYTES -- every TorchLens-owned op-output snapshot clone is
-      byte-guarded against the live per-device budget BEFORE it allocates
-      (:meth:`guarded_clone` -> ``clone_allocation_preflight``). An honest clone equals
-      an honest recorded slot that already passed run-prep, so the guard is provably
-      non-regressive; a tampered huge view (honest small recorded slot, inflated size
-      literal) is refused before the clone materializes it.
+      projection-skipped path (data-dependent fail-open, or no size source -- r61).
+    * re-materialization BYTES -- every TorchLens-owned sparse tensor snapshot clone
+      (op-output snapshots, the accepted runtime input mirror, state staging and bind
+      clones, and the run-time state clone) is byte-guarded against the live per-device
+      budget BEFORE it allocates (:meth:`guarded_clone` / :func:`_byte_guarded_clone` ->
+      ``clone_allocation_preflight``). An honest clone equals an honest recorded slot
+      that already passed run-prep, so the guard is provably non-regressive; a tampered
+      huge view (honest small recorded slot, inflated size literal) is refused before
+      the clone materializes it.
 
     The third aggregate axis (whole-run RETAINED bytes) is a run-prep floor in
     :func:`_preflight_retention_floor`, co-located because it shares the same budget.
@@ -876,10 +953,10 @@ class RunResourceCeiling:
         """Accrue realized output leaves; refuse typed past the aggregate ceiling.
 
         The bind-time backstop for gate 1: a projection-skipped call (data-dependent
-        fail-open, or one carrying no numeric literal to project on) cannot smuggle an
-        unbounded realized-output tree past the front-line projection. Honest realized
-        equals recorded, so the aggregate margin is pure headroom and this never fires
-        on a faithful run.
+        fail-open, or one carrying no size source -- neither a tensor operand nor a
+        numeric literal, r61) cannot smuggle an unbounded realized-output tree past
+        the front-line projection. Honest realized equals recorded, so the aggregate
+        margin is pure headroom and this never fires on a faithful run.
         """
 
         self._realized_output_count += count
@@ -905,40 +982,40 @@ class RunResourceCeiling:
         call_id: str | None,
         slot_id: str | None,
         affected_op_labels: Sequence[str] = (),
+        mirror_requires_grad: bool = False,
     ) -> torch.Tensor:
-        """Byte-guard one op-output snapshot clone before it allocates (gate 3).
+        """Byte-guard one sparse tensor snapshot clone before it allocates (gate 3).
 
-        ``numel * itemsize`` (pure integer math, no allocation) is compared to the
-        SAME never-under-estimating per-device budget run-prep uses; a clone that
-        could never fit is refused typed at ``clone_allocation_preflight`` BEFORE the
-        materializing ``.clone()`` and before any shape-mismatch check. This closes the
-        view-exclusion / bind-clone composition (r58 free_2): the projection correctly
-        charges a view zero NEW bytes, and this bounds the framework's own
-        re-materialization of that view at every snapshot site. An honest clone equals
-        an honest recorded slot that already passed the run-prep bound, so a faithful
-        run is never refused here.
+        Delegates to :func:`_byte_guarded_clone` -- ``numel * itemsize`` (pure integer
+        math, no allocation) compared to the SAME never-under-estimating per-device
+        budget run-prep uses; a clone that could never fit is refused typed at
+        ``clone_allocation_preflight`` BEFORE the materializing ``.clone()`` and before
+        any shape-mismatch check. This closes the view-exclusion / bind-clone
+        composition (r58 free_2): the projection correctly charges a view zero NEW
+        bytes, and this bounds the framework's own re-materialization of that view at
+        every snapshot site -- op outputs, the accepted runtime input mirror, and the
+        run-time state clone (r61 corr_2). ``mirror_requires_grad=True`` restores the
+        source leaf's ``requires_grad`` on the clone where legal (the r37 corr2-7
+        runtime-mirror rule); state clones keep their recorded-``trainable`` rule at
+        the call site instead. An honest clone equals an honest recorded slot that
+        already passed the run-prep bound, so a faithful run is never refused here.
         """
 
-        requested = int(value.numel()) * int(value.element_size())
-        device = value.device
-        available = _allocation_budget_bytes(device)
-        if requested > available:
-            raise RunCapabilityUnavailableError(
-                f"Re-materializing sparse call {call_id!r} output slot {slot_id!r} "
-                f"requires a {requested}-byte clone on device {str(device)!r}, but only "
-                f"{available} bytes are available on this host. A recorded view whose "
-                "size literal was inflated (honest small slot) cannot be materialized "
-                "into an out-of-budget clone; the descriptor may be tampered.",
-                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-                detection_stage="clone_allocation_preflight",
-                call_id=call_id,
-                slot_id=slot_id,
-                device=str(device),
-                required_bytes=requested,
-                available_bytes=available,
-                affected_op_labels=tuple(affected_op_labels),
-            )
-        return value.detach().clone()
+        clone = _byte_guarded_clone(
+            value,
+            call_id=call_id,
+            slot_id=slot_id,
+            affected_op_labels=affected_op_labels,
+        )
+        if mirror_requires_grad and bool(value.requires_grad) and not clone.requires_grad:
+            try:
+                clone.requires_grad_(True)
+            except RuntimeError:
+                # Non-differentiable dtype cannot require grad; the source flag could
+                # not have been set either, so this is unreachable in practice --
+                # degrade to the detached clone rather than aborting the bind.
+                pass
+        return clone
 
 
 _OP_OUTPUT_SLOT_ROLES = frozenset({TensorSlotRole.INTERMEDIATE, TensorSlotRole.OUTPUT})
