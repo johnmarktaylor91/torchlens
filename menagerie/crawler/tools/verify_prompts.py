@@ -1,4 +1,4 @@
-"""Verify crawler prompt files against PLAN section 18 frozen blocks."""
+"""Verify crawler prompt files against PLAN-pinned literal SHA-256 values."""
 
 from __future__ import annotations
 
@@ -8,12 +8,9 @@ import sys
 from pathlib import Path
 from typing import Optional, Sequence
 
-from menagerie.crawler.identity import hash_bytes
+from menagerie.crawler.identity import hash_bytes, is_sha256
 
-_AUTHOR_HEADING = b"### 18.1 Claude crawler-author prompt"
-_CHECKER_HEADING = b"### 18.2 Codex accuracy and fidelity checker prompt"
-_TEXT_FENCE = b"```text\n"
-_CLOSE_FENCE = b"\n```"
+_HASH_ROW_PREFIX = "- `{prompt_name}`: `"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -41,26 +38,37 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _frozen_block(plan: bytes, heading: bytes) -> bytes:
-    """Extract one exact newline-terminated frozen text block.
+def _pinned_digest(plan: bytes, prompt_name: str) -> str:
+    """Extract and validate one literal prompt digest from the committed plan.
 
     Parameters
     ----------
     plan:
         Complete PLAN.md bytes.
-    heading:
-        Exact section heading preceding the frozen block.
+    prompt_name:
+        Exact prompt filename named by the digest row.
 
     Returns
     -------
-    bytes
-        Bytes between the text fence and closing fence, including final newline.
+    str
+        Canonical prefixed SHA-256 digest.
+
+    Raises
+    ------
+    ValueError
+        If the digest row is absent, malformed, or not ASCII.
     """
 
-    heading_at = plan.index(heading)
-    block_at = plan.index(_TEXT_FENCE, heading_at) + len(_TEXT_FENCE)
-    block_end = plan.index(_CLOSE_FENCE, block_at) + 1
-    return plan[block_at:block_end]
+    marker = _HASH_ROW_PREFIX.format(prompt_name=prompt_name).encode("ascii")
+    try:
+        digest_at = plan.index(marker) + len(marker)
+        digest_end = plan.index(b"`", digest_at)
+        digest = plan[digest_at:digest_end].decode("ascii")
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise ValueError(f"missing or malformed pinned prompt digest: {prompt_name}") from exc
+    if not is_sha256(digest):
+        raise ValueError(f"noncanonical pinned prompt digest: {prompt_name}")
+    return digest
 
 
 def verify_prompts(plan_path: Path, author_path: Path, checker_path: Path) -> dict[str, str]:
@@ -79,16 +87,16 @@ def verify_prompts(plan_path: Path, author_path: Path, checker_path: Path) -> di
     Raises
     ------
     ValueError
-        If either prompt differs from its frozen PLAN block.
+        If either prompt differs from its independently pinned PLAN digest.
     """
 
     plan = plan_path.read_bytes()
-    paths = ((author_path, _AUTHOR_HEADING), (checker_path, _CHECKER_HEADING))
+    paths = (author_path, checker_path)
     digests: dict[str, str] = {}
-    for path, heading in paths:
-        actual = path.read_bytes()
-        expected = _frozen_block(plan, heading)
-        digests[path.name] = hash_bytes(actual)
+    for path in paths:
+        actual = hash_bytes(path.read_bytes())
+        expected = _pinned_digest(plan, path.name)
+        digests[path.name] = actual
         if actual != expected:
             raise ValueError(f"prompt drift: {path}")
     return digests
