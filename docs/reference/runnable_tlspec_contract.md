@@ -1061,10 +1061,18 @@ seed) reports `unverifiable` + `not_applicable`:
    execute Python, exposing every inert reference field an object type declares (closure cells,
    `__defaults__`/`__kwdefaults__`, `__annotations__`, `functools` wrapper `__wrapped__` chains,
    `partial`/`property`/`staticmethod`/`classmethod` interiors, bound-method
-   `__func__`/`__self__`, function and callable-instance `__dict__`/`__slots__` surfaces) minus
+   `__func__`/`__self__` -- including a BOUND C METHOD's `__self__` receiver (r57 C6:
+   `gen.standard_normal.__self__` IS the generator, so a cached
+   `self.sample = self.rng.standard_normal`, alone or behind a `partial` / closure cell /
+   `staticmethod` / `classmethod` / dict / list value, recovers the RNG; a module-level C
+   function -- module or absent `__self__`, e.g. `math.sqrt` / `np.array` / `torch.relu` --
+   contributes nothing and is never generically expanded) -- and function and callable-instance
+   `__dict__`/`__slots__` surfaces) minus
    exactly two documented exclusion families: referents whose identity is a loaded module's
    `__dict__` (shared namespaces), and the justified expansion leaves (modules, code objects,
-   C builtin functions, frames, tensors, ndarrays). This enumerator is ROOTED at the model and
+   frames, tensors, ndarrays, the C `_abc_data` ABC-cache slot -- r56 amb_1); a bound C
+   callable's receiver passes through these SAME walls, so the r47/r56 ambient-escape
+   exclusions are unaffected. This enumerator is ROOTED at the model and
    feeds the same cycle-guarded, node-capped walk -- it is not a process-wide `gc.get_objects()`
    scan -- and a new inert hiding field is unreachable only if CPython itself cannot traverse it
    for garbage collection: reachability holds by construction, not by table maintenance. The
@@ -1158,7 +1166,8 @@ are never expanded). Every INERTLY-followable model-rooted reference edge IS
 walked by the model inventory (the r55 authoritative `gc.get_referents` enumeration in item 2
 above -- CPython `tp_traverse`, complete by construction), so descriptor-held, weakref-held,
 class-attribute, closure/default/kwdefault/annotation/partial/property-interior,
-`functools`-wrapper (`__wrapped__`), and callable-instance holders -- like the earlier
+`functools`-wrapper (`__wrapped__`), bound-C-method (`self.sample = self.rng.standard_normal`
+-- the `__self__` receiver, r57 C6), and callable-instance holders -- like the earlier
 container-protocol, container-subclass, and
 unregistered-`nn.Module` holders (r42/r45/r47/r51) -- are all witnessed on any thread; only a
 NON-EMPTY OPAQUE queue's contents remain a conservative fail-closed residual, never a false
