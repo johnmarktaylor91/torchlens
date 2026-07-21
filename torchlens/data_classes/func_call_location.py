@@ -484,4 +484,7 @@ class FuncCallLocation:
         """Restore pickle state without reviving frame references."""
         read_tlspec_version(state, cls_name=type(self).__name__)
         default_fill_state(state, defaults={"_frame_func_obj": None})
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
         self.__dict__.update(state)

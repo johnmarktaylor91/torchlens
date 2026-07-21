@@ -22,6 +22,7 @@ import torch
 from packaging.version import InvalidVersion, Version
 
 from . import TLSPEC_VERSION, TorchLensIOError
+from . import _json
 from .. import __version__ as TORCHLENS_VERSION
 
 LOGGER = logging.getLogger(__name__)
@@ -369,7 +370,7 @@ class Manifest:
         manifest_path = Path(path)
         try:
             with manifest_path.open("r", encoding="utf-8") as handle:
-                raw_data = json.load(handle)
+                raw_data = _json.load_bounded(handle)
         except (OSError, json.JSONDecodeError) as exc:
             raise TorchLensIOError(f"Failed to read manifest at {manifest_path}.") from exc
         if not isinstance(raw_data, dict):

@@ -8,6 +8,7 @@ from collections.abc import Collection
 from typing import Any
 
 from .._io import JaxPayloadLoadHint, PayloadLoadHints, TorchLensIOError, rehydrate_nested
+from .._io import _json
 from .._io.bundle import cleanup_tmp, load, save
 from .._trace_state import TraceState
 from ..intervention.save import save_intervention
@@ -132,7 +133,7 @@ def _read_json_object_if_present(path: Path) -> dict[str, Any] | None:
         return None
     try:
         with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
+            data = _json.load_bounded(handle)
     except (OSError, json.JSONDecodeError):
         return None
     if not isinstance(data, dict):

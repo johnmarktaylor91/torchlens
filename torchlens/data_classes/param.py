@@ -696,6 +696,9 @@ class Param:
             state["resolver_status"] = "resolved"
         state["param_memory"] = Bytes(state.get("param_memory", 0) or 0)
         state["_grad_memory"] = Bytes(state.get("_grad_memory", 0) or 0)
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
         self.__dict__.update(state)
 
 

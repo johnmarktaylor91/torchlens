@@ -28,6 +28,7 @@ from safetensors import SafetensorError
 from safetensors.torch import load_file, save_file
 
 from . import BlobRef, FieldPolicy, PayloadLoadHints, TLSPEC_VERSION, TorchLensIOError
+from . import _json
 from ._safe_unpickle import SafeBundleUnpickler
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, enforce_version_policy, sha256_of_file
@@ -2003,7 +2004,7 @@ def _load_unified_bundle_directory(
 
     try:
         with metadata_path.open("r", encoding="utf-8") as handle:
-            metadata = json.load(handle)
+            metadata = _json.load_bounded(handle)
     except (OSError, json.JSONDecodeError) as exc:
         raise TorchLensIOError(f"Failed to read bundle metadata from {metadata_path}.") from exc
     if not isinstance(metadata, dict):
@@ -2060,7 +2061,7 @@ def _read_manifest_object(path: Path) -> dict[str, Any]:
 
     try:
         with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
+            data = _json.load_bounded(handle)
     except (OSError, json.JSONDecodeError) as exc:
         raise TorchLensIOError(f"Failed to read manifest at {path}.") from exc
     if not isinstance(data, dict):

@@ -1237,6 +1237,9 @@ class ModuleCall:
         # gap `Trace`/`Op` already close for their own fields.
         coerce_container_typed_state(state, module_call_setstate_defaults)
         state["forward_duration"] = Duration(state.get("forward_duration") or 0.0)
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
         self.__dict__.update(state)
 
 
@@ -1960,6 +1963,9 @@ class Module:
         # not plain containers, so they are intentionally absent from
         # `_MODULE_CONTAINER_DEFAULTS`.
         coerce_container_typed_state(state, module_setstate_defaults)
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
         self.__dict__.update(state)
         if not isinstance(self.ops, ModuleCallAccessor):
             self.ops = ModuleCallAccessor(self.ops)

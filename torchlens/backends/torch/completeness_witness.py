@@ -2075,6 +2075,55 @@ def _operator_uninit_family_tail(func: Any) -> str | None:
     return None
 
 
+def _python_tensor_method_uninit_family_tail(
+    namespace: str | None, qualname: str | None, args: tuple[Any, ...] = ()
+) -> str | None:
+    """Return a PYTHON-``torch.Tensor``-method spelling's uninit family tail (r55 hon_1).
+
+    The dispatch-level origin ledger above keys the family off aten base names,
+    which is complete for every spelling that REDISPATCHES an aten family op --
+    including the legacy ``Tensor.new(sizes)``, whose size form redispatches
+    ``aten.empty.memory_format`` (probed), so LIVE capture tainting already
+    covers it transitively. This function is the DECLARED recognition of the
+    family over the Python-``torch.Tensor``-method surface -- the spellings the
+    load-side qualname classifier and the family-drift meta-test see (``new``
+    has NO aten spelling: ``hasattr(torch.ops.aten, "new")`` is ``False``).
+    It consults the single ``utils/rng.py`` table block (never re-derives):
+
+    - a plain factory/resize tail (``empty_like``, ``resize_``) matches by
+      qualname alone, exactly like the load-side classifier;
+    - a SIZE-GATED tail (``new``) additionally requires the size-argument form;
+      an UNDECIDABLE form (``uninit_new_call_is_size_form`` returning ``None``)
+      fails closed to recognized-as-family, mirroring the grow-gate posture.
+
+    The Python-Tensor-method drift meta-test
+    (``tests/test_tlspec_runnable_r53_uninit_alloc.py``) enumerates
+    ``torch.Tensor`` allocation-pattern methods against this recognition so a
+    FUTURE python-only uninit factory with no aten spelling is a FAILING test,
+    never a silent gap slipping both the aten drift test and this surface.
+    """
+
+    from ...utils.rng import (
+        qualname_is_uninit_growth_resize,
+        qualname_is_uninit_size_gated_alloc,
+        qualname_is_uninitialized_alloc,
+        uninit_new_call_is_size_form,
+    )
+
+    if not qualname:
+        return None
+    tail = qualname.rsplit(".", 1)[-1]
+    if qualname_is_uninitialized_alloc(namespace, qualname) or qualname_is_uninit_growth_resize(
+        namespace, qualname
+    ):
+        return tail
+    if qualname_is_uninit_size_gated_alloc(namespace, qualname):
+        if uninit_new_call_is_size_form(args) is False:
+            return None  # data-form ``new([values])``/``new(tensor)``: deterministic copy
+        return tail  # size form, or undecidable -> fail closed to tainted
+    return None
+
+
 def _operator_is_growth_resize(func: Any) -> bool:
     """Return whether a dispatcher overload is a resize spelling (grow-gated family)."""
 
