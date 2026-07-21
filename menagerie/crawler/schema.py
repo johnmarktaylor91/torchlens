@@ -45,6 +45,8 @@ SCHEMA_FILES = {
     OPERATIONAL_EVENT_SCHEMA_VERSION: "operational-event-v1.schema.json",
 }
 
+SCHEMA_RESOURCE_FILES = ("model-common.schema.json",)
+
 OWNERSHIP_ANNOTATED_SCHEMA_VERSIONS = frozenset(
     {
         MODEL_SCHEMA_VERSION_V3,
@@ -126,6 +128,39 @@ def load_schema(schema_version: str) -> dict[str, Any]:
 
 
 @lru_cache(maxsize=None)
+def _load_schema_resource(filename: str) -> dict[str, Any]:
+    """Load and cache one version-neutral bundled schema resource.
+
+    Parameters
+    ----------
+    filename:
+        Exact filename listed in ``SCHEMA_RESOURCE_FILES``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Parsed JSON Schema resource.
+
+    Raises
+    ------
+    KeyError
+        If the filename is not a registered shared resource.
+    SchemaError
+        If the bundled resource is invalid.
+    """
+
+    if filename not in SCHEMA_RESOURCE_FILES:
+        raise KeyError(f"unsupported crawler schema resource: {filename!r}")
+    path = SCHEMA_DIRECTORY / filename
+    with path.open(encoding="utf-8") as handle:
+        loaded = json.load(handle)
+    if not isinstance(loaded, dict):
+        raise SchemaError(f"schema resource root must be an object: {path}")
+    Draft202012Validator.check_schema(loaded)
+    return loaded
+
+
+@lru_cache(maxsize=None)
 def get_validator(schema_version: str) -> Draft202012Validator:
     """Return a cached strict validator for a crawler schema.
 
@@ -143,6 +178,9 @@ def get_validator(schema_version: str) -> Draft202012Validator:
     resources: list[tuple[str, Resource[Any]]] = []
     for supported_version in SCHEMA_FILES:
         schema = load_schema(supported_version)
+        resources.append((schema["$id"], Resource.from_contents(schema)))
+    for filename in SCHEMA_RESOURCE_FILES:
+        schema = _load_schema_resource(filename)
         resources.append((schema["$id"], Resource.from_contents(schema)))
     registry: Registry[Any] = Registry[Any]().with_resources(resources)
     return Draft202012Validator(
@@ -349,9 +387,22 @@ def _resolve_schema_reference(
             ),
             None,
         )
-        if schema_version is None:
-            raise SchemaOwnershipError(f"unsupported schema reference: {reference!r}")
-        target_root = load_schema(schema_version)
+        if schema_version is not None:
+            target_root = load_schema(schema_version)
+        else:
+            resource_filename = next(
+                (
+                    filename
+                    for filename in SCHEMA_RESOURCE_FILES
+                    if _load_schema_resource(filename).get("$id") == uri
+                    or filename == uri
+                    or str(_load_schema_resource(filename).get("$id", "")).endswith(f"/{uri}")
+                ),
+                None,
+            )
+            if resource_filename is None:
+                raise SchemaOwnershipError(f"unsupported schema reference: {reference!r}")
+            target_root = _load_schema_resource(resource_filename)
         fragment = fragment if separator else ""
     target: object = target_root
     if fragment:
