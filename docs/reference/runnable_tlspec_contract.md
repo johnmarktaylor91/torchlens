@@ -1113,7 +1113,10 @@ seed) reports `unverifiable` + `not_applicable`:
    `inventory_state_read_failed`. The model inventory walks
    every reference edge that can be followed WITHOUT executing user-defined code:
    instance `__dict__`/`__slots__` surfaces (never invoking a property or `__getattr__` --
-   r42 corr2_1), Mapping/Collection container protocols (every `collections.abc.Mapping`
+   r42 corr2_1; including PRIVATE `__slots__` entries resolved through CPython name mangling:
+   `__rng` -> `_Class__rng`, with trailing-dunder and all-underscore-class names not mangled and
+   the declaring MRO class as the mangling authority -- r61 corr_1), Mapping/Collection container
+   protocols (every `collections.abc.Mapping`
    contributes BOTH its keys/values AND, when the mapping object is a custom (non-stdlib) inert
    holder, its own `__dict__`/`__slots__` values; every non-leaf `collections.abc.Collection`
    likewise contributes BOTH its elements AND its own custom-subclass `__dict__`/`__slots__`
@@ -1138,10 +1141,16 @@ seed) reports `unverifiable` + `not_applicable`:
    contributes nothing and is never generically expanded) -- and function and callable-instance
    `__dict__`/`__slots__` surfaces) minus
    exactly two documented exclusion families: referents whose identity is a loaded module's
-   `__dict__` (shared namespaces), and the justified expansion leaves (modules, code objects,
-   frames, tensors, ndarrays, the C `_abc_data` ABC-cache slot -- r56 amb_1); a bound C
+   `__dict__` (shared namespaces), and the AMBIENT-BRIDGE leaves (modules, code objects,
+   frames, the C `_abc_data` ABC-cache slot -- r56 amb_1). Tensors, ndarrays, and numpy
+   scalars are NOT leaves (r61 hon_1): their numeric buffer / autograd / storage internals are
+   never walked (`gc.get_referents` is never invoked on them), but their Python instance
+   `__dict__`/`__slots__` surfaces are walked like every other holder's -- a generator stashed
+   on a parameter (`weight.rng = default_rng()`), a plain tensor attribute, or an
+   ndarray-SUBCLASS instance attribute is inventoried. A bound C
    callable's receiver passes through these SAME walls, so the r47/r56 ambient-escape
-   exclusions are unaffected. This enumerator is ROOTED at the model and
+   exclusions are unaffected (a numeric-payload receiver is enqueued and reduces to its
+   instance state on visit). This enumerator is ROOTED at the model and
    feeds the same cycle-guarded, node-capped walk -- it is not a process-wide `gc.get_objects()`
    scan -- and a new inert hiding field is unreachable only if CPython itself cannot traverse it
    for garbage collection: reachability holds by construction, not by table maintenance. The

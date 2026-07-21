@@ -7,11 +7,14 @@ r54 found generators hidden behind ``__annotations__`` (corr_2) and a
 inert reference fields the table simply did not list. The r55 close replaces the
 terminal fallback with ``gc.get_referents`` (CPython ``tp_traverse`` -- pure C,
 zero Python executed) minus three documented exclusion families (loaded-module
-``__dict__`` identities; ``_GC_EXPANSION_LEAF_TYPES``; a ``FunctionType`` node's
+``__dict__`` identities; ``_AMBIENT_BRIDGE_LEAF_TYPES``; a ``FunctionType`` node's
 own ``__globals__``/``__builtins__`` namespace edges, dropped by IDENTITY so a
 TorchLens-wrapped torch op or an ``exec``/fx-generated function never walks a
 namespace -- r57 C6 follow-up), so EVERY inert reference
-field a type declares is reached by construction.
+field a type declares is reached by construction. r61 hon_1: tensors / ndarrays /
+numpy scalars are NOT dropped -- a numeric-payload node is enqueued and, on its own
+visit, contributes exactly its instance ``__dict__``/``__slots__`` values (never its
+C buffer), so ``weight.rng = default_rng()`` is inventoried.
 
 Whole-class immunizers pinned here:
 - a generator hidden behind EACH inert reference kind is snapshotted, and a draw
@@ -60,7 +63,7 @@ from torchlens.options import CaptureOptions
 from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.utils import rng as rng_mod
 from torchlens.utils.rng import (
-    _GC_EXPANSION_LEAF_TYPES,
+    _AMBIENT_BRIDGE_LEAF_TYPES,
     _rng_exempt_instances,
     host_nondeterminism_monitor,
 )
@@ -348,8 +351,10 @@ def test_gc_referent_enumeration_drops_only_documented_exclusions() -> None:
     """Completeness assertion: for a function carrying EVERY inert holder field,
     the fallback enumerates all of them, and everything it DROPS belongs to one
     of the three documented exclusion families (shared module-``__dict__``
-    identity; ``_GC_EXPANSION_LEAF_TYPES``; the function's own
-    ``__globals__``/``__builtins__`` namespace edges by identity)."""
+    identity; ``_AMBIENT_BRIDGE_LEAF_TYPES``; the function's own
+    ``__globals__``/``__builtins__`` namespace edges by identity). r61 hon_1
+    STRENGTHENED this pin: tensors/ndarrays left the documented-drop set, so
+    the admissible exclusion families SHRANK."""
 
     gen = np.random.default_rng(0)
     cell_gen = np.random.default_rng(1)
@@ -385,7 +390,7 @@ def test_gc_referent_enumeration_drops_only_documented_exclusions() -> None:
     for ref in dropped:
         assert (
             id(ref) in shared_ids
-            or isinstance(ref, _GC_EXPANSION_LEAF_TYPES)
+            or isinstance(ref, _AMBIENT_BRIDGE_LEAF_TYPES)
             or id(ref) in fn_namespace_ids
         ), f"undocumented exclusion dropped an edge: {type(ref).__name__}"
     # An expansion LEAF returns no children at all (never partially walked).
@@ -479,20 +484,26 @@ def test_bound_c_method_receiver_predicate() -> None:
     # a shared-namespace receiver (a loaded module's ``__dict__``) stays walled --
     # the r47/r56 ambient-escape close is intact for receivers too
     assert host_nondeterminism_monitor._inert_gc_children(sys.__dict__.get, shared_ids) == []
-    # expansion-leaf receivers (the r45 numeric-leaf posture) stay walled. The
-    # tensor bound method is shape-dependent too: a builtin pre-capture (receiver
-    # rule -> []), a bound ``MethodType`` over the wrapped ``TensorBase.add``
-    # FunctionType post-capture -- the TENSOR receiver stays walled either way,
-    # and the only admissible child is the method's own ``__func__`` (whose
-    # namespace edges are in turn identity-dropped on its visit).
-    tensor_add = torch.randn(2).add
+    # r61 hon_1 (STRONGER posture): a NUMERIC-PAYLOAD receiver is ENQUEUED, not
+    # dropped -- its own visit walks instance ``__dict__``/``__slots__`` state
+    # only (never the C buffer), so ``weight.rng = default_rng()`` behind a
+    # cached bound method is inventoried. The tensor bound method is
+    # shape-dependent: a builtin pre-capture (receiver rule -> [tensor]), a
+    # bound ``MethodType`` over the wrapped ``TensorBase.add`` FunctionType
+    # post-capture (-> [__func__, tensor], the ``gc.get_referents`` order).
+    tensor = torch.randn(2)
+    tensor_add = tensor.add
     tensor_add_kids = host_nondeterminism_monitor._inert_gc_children(tensor_add, shared_ids)
     if isinstance(tensor_add, types.BuiltinFunctionType):
-        assert tensor_add_kids == []
+        assert tensor_add_kids == [tensor]
     else:
         assert isinstance(tensor_add, types.MethodType)
-        assert tensor_add_kids == [tensor_add.__func__]
-    assert host_nondeterminism_monitor._inert_gc_children(np.zeros(2).sum, shared_ids) == []
+        assert tensor_add_kids == [tensor_add.__func__, tensor]
+    # the enqueued tensor reduces to instance state on visit: empty here
+    assert host_nondeterminism_monitor._inert_gc_children(tensor, shared_ids) == []
+    arr = np.zeros(2)
+    assert host_nondeterminism_monitor._inert_gc_children(arr.sum, shared_ids) == [arr]
+    assert host_nondeterminism_monitor._inert_gc_children(arr, shared_ids) == []
 
 
 def test_model_held_module_c_functions_zero_ceiling() -> None:
@@ -772,15 +783,15 @@ def test_sweep_independent_of_ambient_abc_cache_state(monkeypatch: Any) -> None:
 
 
 def test_abc_impl_leaf_and_stdlib_class_gate() -> None:
-    """Mechanism pins for the two r56 amb_1 walls: ``_abc._abc_data`` is a
-    ``_GC_EXPANSION_LEAF_TYPES`` member expanded to NOTHING (the process-global ABC
+    """Mechanism pins for the two r56 amb_1 walls: ``_abc._abc_data`` is an
+    ``_AMBIENT_BRIDGE_LEAF_TYPES`` member expanded to NOTHING (the process-global ABC
     caches are never enqueued), and the class-surface gate leafs STDLIB classes
     structurally while user-module and ``__main__`` classes stay walked (r53
     class-attribute coverage intact)."""
 
     impl = cabc.Collection.__dict__.get("_abc_impl")
     if impl is not None and type(impl).__module__ == "_abc":  # CPython C _abc path
-        assert isinstance(impl, _GC_EXPANSION_LEAF_TYPES)
+        assert isinstance(impl, _AMBIENT_BRIDGE_LEAF_TYPES)
         shared_ids = host_nondeterminism_monitor._shared_namespace_dict_ids()
         assert host_nondeterminism_monitor._inert_gc_children(impl, shared_ids) == []
     # stdlib classes: trusted leaves (class-SIDE only; instance descent untouched)
