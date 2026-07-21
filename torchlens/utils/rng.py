@@ -888,6 +888,21 @@ _CUSTOM_HOLDER_SKIP_MODULES = frozenset(
 )
 """Top-level module names whose instances the custom-holder generator sweep skips (r42 corr2_1)."""
 
+_STDLIB_CLASS_LEAF_MODULES: frozenset[str] = frozenset(_sys_module.stdlib_module_names) - {
+    "__main__"
+}
+"""Stdlib top-level module names whose CLASSES the class-surface walk leafs (r56 amb_1).
+
+Structural (``sys.stdlib_module_names``), never a hand-maintained denylist -- closing the
+whole "stdlib class dict carries a process-global registry" family at once (``collections.abc``
+ABC ``_abc_impl`` caches were the proven member: r45 removed ``collections`` from the
+INSTANCE-side skip set so containers descend, which silently re-opened the CLASS-side walk of
+ABC dicts). Applies ONLY to :meth:`host_nondeterminism_monitor._is_trusted_leaf_class` -- the
+instance-side container/holder descent is untouched, so a ``deque`` / ``UserList`` /
+``UserDict`` subclass instance and its held generators stay fully reachable. ``__main__`` is
+carved out: model classes defined in scripts/notebooks keep r53 class-attribute coverage.
+"""
+
 _INVENTORY_LEAF_TYPES: tuple[type, ...] = (
     str,
     bytes,
@@ -911,6 +926,23 @@ a hard inventory leaf; it is descended via ``_is_recursable_custom_holder`` (its
 ``__dict__`` / ``__slots__``), reaching a generator behind an UNREGISTERED submodule.
 """
 
+
+def _derive_abc_impl_type() -> type | None:
+    """The C ``_abc._abc_data`` type carried by every ``ABCMeta`` class (r56 amb_1).
+
+    Derived from a live ABC rather than importing the private ``_abc`` module. ``None`` on
+    a runtime using the pure-Python ``_py_abc`` fallback (no CPython ``_abc_impl`` slot),
+    where this exclusion is inapplicable by construction.
+    """
+
+    probe = Collection.__dict__.get("_abc_impl")
+    if probe is not None and type(probe).__module__ == "_abc":
+        return type(probe)
+    return None
+
+
+_ABC_IMPL_TYPE: type | None = _derive_abc_impl_type()
+
 _GC_EXPANSION_LEAF_TYPES: tuple[type, ...] = (
     ModuleType,
     CodeType,
@@ -919,7 +951,7 @@ _GC_EXPANSION_LEAF_TYPES: tuple[type, ...] = (
     np.ndarray,
     np.generic,
     torch.Tensor,
-)
+) + ((_ABC_IMPL_TYPE,) if _ABC_IMPL_TYPE is not None else ())
 """Types the authoritative ``gc.get_referents`` fallback never expands (r55 C6).
 
 Each exclusion is JUSTIFIED, not stylistic -- everything else reachable is walked:
@@ -936,6 +968,17 @@ Each exclusion is JUSTIFIED, not stylistic -- everything else reachable is walke
 - ``np.ndarray`` / ``np.generic`` / ``torch.Tensor``: the r45 numeric-leaf
   posture (``_INVENTORY_LEAF_TYPES``) -- a tensor's traverse reaches autograd
   internals, and neither holds a Python-level RNG in supported usage.
+- ``_abc._abc_data`` (r56 amb_1): every ``ABCMeta`` class's ``_abc_impl`` slot.
+  Its ``tp_traverse`` exposes the ABC registry/cache/NEGATIVE-cache weakref sets
+  -- PROCESS-GLOBAL bookkeeping accumulating a weakref to every type ever
+  ``isinstance``-checked against that ABC. Expanding one bridges the rooted walk
+  out of the model subgraph into the ambient object graph (every cached class's
+  dict, then its attribute webs), making sweep completeness ambient-state-
+  dependent: under a large ambient graph the walk digested foreign generators
+  and exhausted the node cap BEFORE the model's own generator (the r55 full-run
+  regression on ``test_r47_generator_container_subclass``). The caches hold only
+  weakrefs to TYPES plus registered classes, so a model-held generator can never
+  live inside one -- excluding them loses zero legitimate coverage.
 
 Deliberately NOT excluded: ``torch.nn.Module`` (r51 hon1_1 -- an unregistered
 submodule must stay reachable), ``type`` objects (a referent class is enqueued
@@ -1412,11 +1455,21 @@ class host_nondeterminism_monitor:
         """Return whether the class-surface edge treats ``klass`` as a trusted leaf (r53 corr).
 
         ``object`` / ``type`` and any class whose OWN raw ``__module__`` roots in
-        :data:`_CUSTOM_HOLDER_SKIP_MODULES` (torch / numpy / stdlib runtime internals) are
-        leaves -- their class dicts are implementation noise, mirroring the instance-side
-        module gate. ``__module__`` is read from the RAW class dict via the base ``type``
-        getset (``type.__dict__["__dict__"]``), so a hostile metaclass property never fires.
-        An unreadable or non-string ``__module__`` fails toward WALKING the class -- the walk
+        :data:`_CUSTOM_HOLDER_SKIP_MODULES` (torch / numpy / stdlib runtime internals) OR in
+        :data:`_STDLIB_CLASS_LEAF_MODULES` (r56 amb_1: the WHOLE stdlib, structurally, not a
+        hand-maintained denylist) are leaves -- their class dicts are implementation noise,
+        mirroring the instance-side module gate. The r45 removal of ``collections`` from the
+        INSTANCE-side skip set (so ``deque`` / ``UserList`` contents descend) must not walk
+        stdlib CLASS dicts: ``collections.abc`` ABCs in a container subclass's MRO carry
+        ``_abc_impl`` whose caches are process-global registries (the ambient escape).
+        Instance-side descent never needed the stdlib class-dict surface; a generator
+        monkeypatched ONTO a stdlib class object is shared runtime state, the same
+        documented residual family as a shared module global. ``__main__`` is explicitly
+        NOT a leaf even though ``sys.stdlib_module_names`` lists it -- a model class defined
+        in a script/notebook must keep its r53 class-attribute coverage. ``__module__`` is
+        read from the RAW class dict via the base ``type`` getset
+        (``type.__dict__["__dict__"]``), so a hostile metaclass property never fires. An
+        unreadable or non-string ``__module__`` fails toward WALKING the class -- the walk
         is inert, so the unprovable case errs toward MORE coverage, never code execution.
         """
 
@@ -1429,7 +1482,8 @@ class host_nondeterminism_monitor:
             return False
         if not isinstance(module, str):
             return False
-        return module.split(".", 1)[0] in _CUSTOM_HOLDER_SKIP_MODULES
+        root = module.split(".", 1)[0]
+        return root in _CUSTOM_HOLDER_SKIP_MODULES or root in _STDLIB_CLASS_LEAF_MODULES
 
     @staticmethod
     def _shared_namespace_dict_ids() -> frozenset[int]:
