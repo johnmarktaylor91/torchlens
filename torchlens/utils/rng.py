@@ -33,7 +33,15 @@ from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from contextlib import contextmanager
 from dataclasses import dataclass
-from types import BuiltinFunctionType, CodeType, FrameType, ModuleType, TracebackType
+from types import (
+    BuiltinFunctionType,
+    CodeType,
+    FrameType,
+    FunctionType,
+    MethodWrapperType,
+    ModuleType,
+    TracebackType,
+)
 from typing import Any, Dict, List, TypeVar, cast
 
 import _random as _c_random_module
@@ -946,7 +954,6 @@ _ABC_IMPL_TYPE: type | None = _derive_abc_impl_type()
 _GC_EXPANSION_LEAF_TYPES: tuple[type, ...] = (
     ModuleType,
     CodeType,
-    BuiltinFunctionType,
     FrameType,
     np.ndarray,
     np.generic,
@@ -961,8 +968,6 @@ Each exclusion is JUSTIFIED, not stylistic -- everything else reachable is walke
   module global is the explicit documented residual (contract section 11).
 - ``CodeType``: code objects hold only compile-time constants (``co_consts``)
   -- a live generator cannot exist there.
-- ``BuiltinFunctionType``: a C function's only referents are its ``__self__``
-  module and shared runtime plumbing.
 - ``FrameType``: frames chain through ``f_back`` into the ENTIRE interpreter
   call stack (TorchLens's own frames included) -- shared, unbounded state.
 - ``np.ndarray`` / ``np.generic`` / ``torch.Tensor``: the r45 numeric-leaf
@@ -986,6 +991,30 @@ and handled by the r53 class-surface branch with its trusted-leaf gate), and
 stdlib wrapper instances such as ``functools._lru_cache_wrapper`` (r54 corr_4:
 the ``__wrapped__`` edge must be walked; boundedness is owned by the node cap,
 inertness by ``tp_traverse`` itself).
+
+``BuiltinFunctionType`` was REMOVED in r57 C6 (r56 hon_1): its old
+justification ("a C function's only referents are its ``__self__`` module")
+is FALSE for a *bound* C method, whose ``__self__`` is the RECEIVER instance
+-- ``gen.random.__self__`` IS the numpy ``Generator``, so blanket-
+leafing dropped a real inert edge ``gc.get_referents`` exposes (a model
+caching ``self.sample = self.rng.random`` read false VERIFIED).
+Bound C callables are now special-cased at the top of
+:meth:`host_nondeterminism_monitor._inert_gc_children`: exactly the
+``__self__`` receiver is enqueued, gated by the SAME shared-namespace /
+expansion-leaf walls as every other node, and the node never expands
+generically (a module-level C function -- module or absent ``__self__`` --
+contributes nothing).
+
+r57 C6 follow-up: ``FunctionType`` gets the matching callable-specific
+treatment in the same method -- authoritative traverse minus its
+``__globals__`` / ``__builtins__`` namespace edges dropped BY IDENTITY
+(registry-independent, so an ``exec``/``torch.fx``-generated function with a
+SYNTHETIC globals dict is walled too). After any capture, ``wrap_torch()``
+rebinds torch ops (``torch.relu`` / ``torch.zeros``) from builtins to
+``FunctionType`` wrappers, so without this branch a cached
+``self.act = torch.relu`` fell through to the generic fallback and enqueued
+function namespace/metadata edges -- the same ambient-escape class the r47/
+r56 walls close. Builtin-vs-wrapped op shape no longer changes the sweep.
 """
 
 _INVENTORY_NODE_CAP = 1_000_000
@@ -1495,6 +1524,12 @@ class host_nondeterminism_monitor:
         Excluding them by ``__dict__`` IDENTITY (never by name heuristics) makes
         "a generator held in a shared module global, drawn on a pre-existing
         non-hooked thread" the explicit documented residual of the inert sweep.
+
+        r57 C6 follow-up: this registry is NOT the only wall for a function's
+        namespace -- ``_inert_gc_children`` additionally drops a ``FunctionType``
+        node's own ``__globals__`` / ``__builtins__`` referents by ROLE, so an
+        ``exec``/``torch.fx``-generated function whose synthetic globals dict is
+        absent from ``sys.modules`` is walled all the same.
         """
 
         ids = set()
@@ -1521,15 +1556,92 @@ class host_nondeterminism_monitor:
         per-object enumerator feeding the existing cycle-guarded, node-capped
         model walk -- NOT a process-wide ``gc.get_objects()`` scan.
 
-        Dropped edges are exactly the two documented exclusion families: referents
+        Dropped edges are exactly the three documented exclusion families: referents
         whose identity is a loaded module's ``__dict__`` (shared namespaces --
-        ``shared_namespace_ids``) and instances of the justified
-        :data:`_GC_EXPANSION_LEAF_TYPES`. Everything else is enqueued and handled
+        ``shared_namespace_ids``), instances of the justified
+        :data:`_GC_EXPANSION_LEAF_TYPES`, and a ``FunctionType`` node's own
+        ``__globals__`` / ``__builtins__`` namespace edges (dropped by ROLE and
+        identity, registry-independent). Everything else is enqueued and handled
         by the sweep's typed branches (a referent dict via the Mapping protocol, a
         referent class via the trusted-leaf-gated class-surface branch, a referent
         RNG via the digest).
+
+        r57 C6 (r56 hon_1): a BOUND C callable (``BuiltinFunctionType`` /
+        ``MethodWrapperType``) contributes exactly its ``__self__`` RECEIVER --
+        for ``gen.random`` / ``RandomState().rand`` /
+        ``random.Random(0).random`` the receiver IS the RNG state holder, and
+        ``gc.get_referents(bound_method)`` exposes it inertly (zero Python
+        executed). The receiver passes through the SAME walls as every other
+        node: a module-level C function (``math.sqrt`` / ``np.array`` -- module
+        ``__self__``; ``torch.relu`` / ``torch.zeros`` -- ``None``/absent
+        ``__self__``) stays a leaf, a shared-namespace or expansion-leaf
+        receiver stays walled (the r47/r56 ambient-escape closes are untouched),
+        and a class receiver (``int.from_bytes``) is enqueued into the
+        trusted-leaf-gated class branch. The node NEVER expands generically:
+        ``gc.get_referents(torch.relu)`` would enqueue its defining
+        ``torch._C`` type -- targeted receiver-enqueue beats blanket expansion.
+
+        r57 C6 follow-up (callable-ambient-escape close): a ``FunctionType``
+        node -- a plain Python function, a lambda, a ``functools.wraps``-style
+        wrapper, or a TorchLens-wrapped torch op (after ANY capture in the
+        process, ``wrap_torch()`` rebinds ``torch.relu`` / ``torch.zeros`` from
+        ``BuiltinFunctionType`` to a ``FunctionType`` closure wrapper, so
+        ``self.act = torch.relu`` IS a FunctionType model attribute in
+        production) -- expands through the SAME authoritative traverse minus
+        its NAMESPACE edges dropped BY ROLE AND IDENTITY: ``__globals__`` and
+        ``__builtins__``. Registry membership (``shared_namespace_ids``) is NOT
+        relied on for these two edges, because an ``exec``/``torch.fx``/dynamo-
+        generated function carries a SYNTHETIC globals dict that is no loaded
+        module's ``__dict__`` -- pre-fix, one such attribute walked its entire
+        namespace (the r47/r56 ambient-escape class: under a large ambient
+        graph the node cap is exhausted BEFORE the model's own generator).
+        Every OTHER function edge stays enqueued, exactly like the generic
+        fallback: ``__defaults__`` / ``__kwdefaults__`` / ``__closure__`` /
+        ``__annotations__`` (r54 corr_2) / the function's own ``__dict__``
+        (``fn.stash = gen``) keep their pinned generator coverage, and the
+        ``__module__`` / ``__name__`` / ``__qualname__`` / ``__doc__`` metadata
+        referents are inert terminals (a ``str`` has no referents). Builtin-vs-
+        wrapped torch ops therefore contribute the same thing to the sweep:
+        nothing ambient. Non-function callables (bound Python methods,
+        ``functools.partial`` / ``staticmethod`` / ``classmethod`` /
+        ``lru_cache`` wrappers, ``OpOverload``-style callable instances,
+        user callable instances) NEED no namespace drop: their ``tp_traverse``
+        enumerates only per-instance interior fields (``__self__`` /
+        ``__func__`` / ``func``-``args``-``keywords`` / ``__wrapped__`` /
+        instance ``__dict__``), never a namespace dict -- any FUNCTION among
+        those children is caught by this branch on its own visit, and a
+        callable INSTANCE's ``__dict__`` (which can hold the model's generator)
+        must stay generically walked.
         """
 
+        if isinstance(value, (BuiltinFunctionType, MethodWrapperType)):
+            receiver = getattr(value, "__self__", None)
+            if (
+                receiver is None
+                or id(receiver) in shared_namespace_ids
+                or isinstance(receiver, _GC_EXPANSION_LEAF_TYPES)
+            ):
+                return []
+            return [receiver]
+        if isinstance(value, FunctionType):
+            # Namespace edges by ROLE (identity match), never by registry lookup:
+            # a synthetic (exec/fx/dynamo) globals dict is walled even though it
+            # is absent from ``shared_namespace_ids``. Both reads are C member
+            # accesses on the static ``FunctionType`` (no descriptor can fire).
+            namespace_edge_ids = {id(value.__globals__)}
+            function_builtins = getattr(value, "__builtins__", None)
+            if function_builtins is not None:
+                namespace_edge_ids.add(id(function_builtins))
+            function_children: list[Any] = []
+            for referent in _gc_module.get_referents(value):
+                if id(referent) in namespace_edge_ids:
+                    continue
+                if id(referent) in shared_namespace_ids:
+                    continue
+                if isinstance(referent, _GC_EXPANSION_LEAF_TYPES):
+                    continue
+                function_children.append(referent)
+            return function_children
         if isinstance(value, _GC_EXPANSION_LEAF_TYPES):
             return []
         children: list[Any] = []
@@ -1649,9 +1761,17 @@ class host_nondeterminism_monitor:
         CONTAINERS descend via the ordinary Mapping/Collection protocols);
         (3) r55 C6 (corr_2/corr_4): every OTHER node's reference edges through the
         AUTHORITATIVE ``gc.get_referents`` enumerator (:meth:`_inert_gc_children`)
-        -- CPython ``tp_traverse``, pure C, zero Python executed -- minus the two
-        documented exclusion families (loaded-module ``__dict__`` identities and
-        :data:`_GC_EXPANSION_LEAF_TYPES`). This SUBSUMES the r53 hand-maintained
+        -- CPython ``tp_traverse``, pure C, zero Python executed -- minus the three
+        documented exclusion families (loaded-module ``__dict__`` identities,
+        :data:`_GC_EXPANSION_LEAF_TYPES`, and a ``FunctionType`` node's own
+        ``__globals__`` / ``__builtins__`` namespace edges by identity -- so a
+        TorchLens-wrapped or ``exec``/fx-generated function never walks a
+        namespace); a BOUND C callable contributes exactly
+        its ``__self__`` receiver through those same walls (r57 C6 -- a cached
+        ``self.sample = self.rng.random`` bound method, alone or behind
+        a ``partial`` / closure cell / ``staticmethod`` / ``classmethod`` / dict
+        / list, recovers the generator; ``math.sqrt``-style module functions
+        stay leafed). This SUBSUMES the r53 hand-maintained
         callable-interior vocabulary (closure cells, defaults, kwdefaults,
         ``partial``/``property``/``static``/``classmethod`` fields, bound-method
         ``__func__``/``__self__``, callable-instance ``__dict__``/``__slots__``)
@@ -1829,12 +1949,15 @@ class host_nondeterminism_monitor:
                     # is neither a container, a weak reference, a class, a digestable RNG,
                     # nor a queue expands through ``gc.get_referents`` (CPython
                     # ``tp_traverse`` -- zero Python executed) minus the documented
-                    # shared-namespace/leaf exclusions. This replaces BOTH the r42
+                    # shared-namespace/leaf exclusions and, for a ``FunctionType`` node,
+                    # its identity-dropped ``__globals__``/``__builtins__`` namespace
+                    # edges (r57 C6 follow-up). This replaces BOTH the r42
                     # custom-holder recursion and the r53 hand-listed callable-interior
                     # vocabulary at this terminal position: ``__dict__``/``__slots__``
                     # values, closure cells, defaults, kwdefaults, ``__annotations__``,
                     # ``functools`` wrapper ``__wrapped__`` chains, bound-method
-                    # ``__func__``/``__self__``, and any future inert field are enqueued by
+                    # ``__func__``/``__self__`` (incl. a bound C method's ``__self__``
+                    # receiver -- r57 C6), and any future inert field are enqueued by
                     # construction into the same cycle-guarded, node-capped walk (a
                     # referent dict descends via the Mapping branch; a referent class via
                     # the trusted-leaf-gated class branch; a referent generator is

@@ -674,21 +674,30 @@ no longer drive an allocation bomb on the default `tl.load(path).run(inputs)` pa
 the parser bounds a literal integer's magnitude under the SAME signed-64-bit ceiling the slot-shape
 parser enforces, so a literal can never be more extreme than a slot dimension is allowed to be; an
 over-ceiling literal refuses at `descriptor_parse` (`state_shape_mismatch`) and degrades the load to
-analysis-only. The PRIMARY, op-agnostic layer (r55 free_1/sec_1) runs immediately before each
-size-driving taken-path call: the resolved callable is projected under
+analysis-only. The PRIMARY, op-agnostic layer (r55 free_1/sec_1; r57 allowlist deletion) runs
+immediately before each taken-path call carrying a numeric literal: the resolved callable is
+projected under
 `FakeTensorMode(allow_non_fake_inputs=True)`, which computes the call's output shape/bytes WITHOUT
 allocating (fake tensors never allocate -- a `torch.zeros(10**12)` factory, which has no tensor
 operand and so cannot be bounded by a per-argument `.to("meta")` pass, projects `4e12` bytes and is
-refused). A projected per-device total above the same live budget refuses typed at
+refused). A projected per-device NEW-allocation total above the same live budget refuses typed at
 `op_allocation_preflight` before the real call. This closes the literal-only tamper the
 recorded-output-slot bound cannot (an honest small output slot with an inflated size literal). It
 FAILS OPEN by design: a data-dependent op with no fake/meta implementation
 (`nonzero`/`unique` raise `DynamicOutputShapeException`), or an unavailable `FakeTensorMode`, does
 NOT refuse -- the run falls through to the recorded-output-slot bound and the parse-time literal
 gate -- so a legitimate data-dependent op is never over-refused (the r51 over-catch anti-pattern).
-The gate is restricted to MATERIALIZING size-driving ops carrying an integer literal; pure view ops
-(`expand`/`broadcast_to`/`as_strided`) allocate nothing and are deliberately excluded, their indirect
-blow-up caught by the downstream materializing op's recorded-output bound. The allocation invariant
+The projection runs for **every taken-path call carrying a non-bool integer or finite-float literal**
+(float coverage closes `interpolate(scale_factor=...)`); "size-relevance" is decided structurally by
+the projection, not by an op-name family list (the r55 size-driving allowlist is deleted, closing the
+r56 `pad`/`constant_pad_nd`/`*_window`/`tril_indices`/`triu_indices`/`one_hot` gate-incompleteness
+class). **Pure views, input-returning ops, and in-place ops are excluded structurally**: an output
+tensor whose fake `untyped_storage()` aliases a fake-input storage contributes zero new bytes, so
+only newly materialized tensors are charged -- by construction, not an op/view list. An unreadable
+output storage is charged (fail-closed: an unreadable materializer never masquerades as a view). A
+call whose numeric literal drives a coupled-shape validation (`fold` `output_size`) fails the
+projection open, but the real op raises its own consistency check before allocating -- caught as
+`runtime_signature_drift`, never an allocation bomb. The allocation invariant
 thus covers literal sizes, tensor slots, output slots, and staged state uniformly, before allocation:
 the fake-tensor projection is the primary per-call layer and the run-preparation output-slot bound is
 its fail-open fallback.
@@ -1061,10 +1070,18 @@ seed) reports `unverifiable` + `not_applicable`:
    execute Python, exposing every inert reference field an object type declares (closure cells,
    `__defaults__`/`__kwdefaults__`, `__annotations__`, `functools` wrapper `__wrapped__` chains,
    `partial`/`property`/`staticmethod`/`classmethod` interiors, bound-method
-   `__func__`/`__self__`, function and callable-instance `__dict__`/`__slots__` surfaces) minus
+   `__func__`/`__self__` -- including a BOUND C METHOD's `__self__` receiver (r57 C6:
+   `gen.standard_normal.__self__` IS the generator, so a cached
+   `self.sample = self.rng.standard_normal`, alone or behind a `partial` / closure cell /
+   `staticmethod` / `classmethod` / dict / list value, recovers the RNG; a module-level C
+   function -- module or absent `__self__`, e.g. `math.sqrt` / `np.array` / `torch.relu` --
+   contributes nothing and is never generically expanded) -- and function and callable-instance
+   `__dict__`/`__slots__` surfaces) minus
    exactly two documented exclusion families: referents whose identity is a loaded module's
    `__dict__` (shared namespaces), and the justified expansion leaves (modules, code objects,
-   C builtin functions, frames, tensors, ndarrays). This enumerator is ROOTED at the model and
+   frames, tensors, ndarrays, the C `_abc_data` ABC-cache slot -- r56 amb_1); a bound C
+   callable's receiver passes through these SAME walls, so the r47/r56 ambient-escape
+   exclusions are unaffected. This enumerator is ROOTED at the model and
    feeds the same cycle-guarded, node-capped walk -- it is not a process-wide `gc.get_objects()`
    scan -- and a new inert hiding field is unreachable only if CPython itself cannot traverse it
    for garbage collection: reachability holds by construction, not by table maintenance. The
@@ -1158,7 +1175,8 @@ are never expanded). Every INERTLY-followable model-rooted reference edge IS
 walked by the model inventory (the r55 authoritative `gc.get_referents` enumeration in item 2
 above -- CPython `tp_traverse`, complete by construction), so descriptor-held, weakref-held,
 class-attribute, closure/default/kwdefault/annotation/partial/property-interior,
-`functools`-wrapper (`__wrapped__`), and callable-instance holders -- like the earlier
+`functools`-wrapper (`__wrapped__`), bound-C-method (`self.sample = self.rng.standard_normal`
+-- the `__self__` receiver, r57 C6), and callable-instance holders -- like the earlier
 container-protocol, container-subclass, and
 unregistered-`nn.Module` holders (r42/r45/r47/r51) -- are all witnessed on any thread; only a
 NON-EMPTY OPAQUE queue's contents remain a conservative fail-closed residual, never a false
