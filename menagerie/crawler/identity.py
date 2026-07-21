@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Optional, Sequence
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
@@ -12,6 +13,18 @@ from menagerie.crawler.constants import STABLE_ID_DIGEST_CHARS
 from menagerie.crawler.models import IdentitySet, StalenessReport
 
 _HASH_PREFIX = "sha256:"
+
+
+def utc_now() -> str:
+    """Return the current RFC 3339 UTC timestamp.
+
+    Returns
+    -------
+    str
+        Current timestamp ending in ``Z``.
+    """
+
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def canonical_json_bytes(value: Any) -> bytes:

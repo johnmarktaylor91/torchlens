@@ -12,7 +12,6 @@ from __future__ import annotations
 import os
 from copy import deepcopy
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
@@ -36,7 +35,7 @@ from menagerie.crawler.constants import (
     AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
     AUTHOR_RESULT_SCHEMA_VERSION,
 )
-from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
+from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash, utc_now
 from menagerie.crawler.licenses import (
     LicenseDecision,
     RedistributionClass,
@@ -208,18 +207,6 @@ class PublishedArtifact:
     reconstruction_path: Path
     reconstruction_sha256: str
     event: JsonObject
-
-
-def _utc_now() -> str:
-    """Return an RFC 3339 UTC timestamp.
-
-    Returns
-    -------
-    str
-        Current timestamp ending in ``Z``.
-    """
-
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _dependency_json(vector: DependencyVector) -> JsonObject:
@@ -1576,7 +1563,7 @@ def stage_private_artifact(
         transaction_id=transaction_id,
         predecessor_event_id=None,
         event_kind=ArtifactEventKind.STAGED_PRIVATE,
-        created_at=created_at or _utc_now(),
+        created_at=created_at or utc_now(),
         stable_id=stable_id,
         work_id=work_id,
         context=context,
@@ -1932,7 +1919,7 @@ def append_artifact_authorization(
         transaction_id=staged.transaction_id,
         predecessor_event_id=staged.staged_event_id,
         event_kind=event_kind,
-        created_at=created_at or _utc_now(),
+        created_at=created_at or utc_now(),
         stable_id=authorization.stable_id,
         work_id=authorization.work_id,
         context=context,
@@ -2430,7 +2417,7 @@ def publish_authorized_artifact(
         transaction_id=staged.transaction_id,
         predecessor_event_id=str(authorization_event["artifact_event_id"]),
         event_kind=ArtifactEventKind.RECONSTRUCTION_COMMITTED,
-        created_at=created_at or _utc_now(),
+        created_at=created_at or utc_now(),
         stable_id=authorization.stable_id,
         work_id=authorization.work_id,
         context=context,
@@ -2454,7 +2441,7 @@ def publish_authorized_artifact(
         transaction_id=staged.transaction_id,
         predecessor_event_id=str(persisted_reconstruction["artifact_event_id"]),
         event_kind=final_kind,
-        created_at=created_at or _utc_now(),
+        created_at=created_at or utc_now(),
         stable_id=authorization.stable_id,
         work_id=authorization.work_id,
         context=context,

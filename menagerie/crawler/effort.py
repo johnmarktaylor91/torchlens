@@ -9,24 +9,11 @@ optional callback and leaves terminal-record creation to the reducer/driver.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Optional
 
 from menagerie.crawler.constants import FailureStage
-from menagerie.crawler.identity import stable_hash
+from menagerie.crawler.identity import stable_hash, utc_now
 from menagerie.crawler.models import JsonObject
-
-
-def _utc_now() -> str:
-    """Return the current RFC 3339 UTC timestamp.
-
-    Returns
-    -------
-    str
-        UTC timestamp ending in ``Z``.
-    """
-
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _stage_name(stage: str | FailureStage) -> str:
@@ -449,7 +436,7 @@ class EffortTracker:
             observed=observed,
             root_cause_fingerprint=fingerprint,
             grant_ids=tuple(grant.grant_id for grant in self._grants if grant.stage == stage),
-            occurred_at=_utc_now(),
+            occurred_at=utc_now(),
         )
         self._failures.append(record)
         if self._recorder is not None:

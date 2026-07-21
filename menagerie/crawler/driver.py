@@ -153,6 +153,7 @@ from menagerie.crawler.identity import (
     canonical_json_bytes,
     hash_bytes,
     stable_hash,
+    utc_now,
 )
 from menagerie.crawler.intake import (
     IntakeItem,
@@ -6368,12 +6369,6 @@ def _validated_requeue_grants(path: Path, intake_ids: frozenset[str]) -> tuple[J
         by_id[grant_id] = normalized
         validated.append(normalized)
     return tuple(validated)
-
-
-def utc_now() -> str:
-    """Return an RFC 3339 UTC timestamp."""
-
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _read_verified_worker_receipt(

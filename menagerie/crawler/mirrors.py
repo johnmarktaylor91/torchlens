@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import os
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Optional
 
 from menagerie.crawler.authority import MirrorObject
-from menagerie.crawler.identity import hash_bytes
+from menagerie.crawler.identity import hash_bytes, utc_now
 from menagerie.crawler.models import JsonObject
 
 
@@ -132,18 +131,6 @@ class ArtifactManifest:
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise MirrorManifestError(f"invalid artifact manifest: {exc}") from exc
-
-
-def _utc_now() -> str:
-    """Return the current RFC 3339 UTC timestamp.
-
-    Returns
-    -------
-    str
-        UTC timestamp ending in ``Z``.
-    """
-
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _is_sha256(value: str) -> bool:
@@ -302,7 +289,7 @@ class MirrorStore:
             retention_class=retention_class,
             mirror_class=mirror_class,
             object_key=object_key,
-            verified_at=verified_at or _utc_now(),
+            verified_at=verified_at or utc_now(),
         )
 
     def fetch(self, manifest: ArtifactManifest) -> bytes:

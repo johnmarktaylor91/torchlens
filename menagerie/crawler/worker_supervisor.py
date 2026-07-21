@@ -19,7 +19,7 @@ import time
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from functools import partial
 from pathlib import Path
 from typing import Any, BinaryIO, Callable, Iterator, Mapping, Optional, Sequence
@@ -39,7 +39,7 @@ from menagerie.crawler.constants import (
     STDIO_TAIL_MAX_CHARS,
     FailureStage,
 )
-from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
+from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash, utc_now
 from menagerie.crawler.policy import (
     _PARENT_ALLOWED_READ_PATHS_ENV,
     _PARENT_STANDARD_INPUT_ASSET_ENV,
@@ -678,18 +678,6 @@ class WorkerLeaseRecovery:
     detail: str
     lock_held: bool
     reaped: bool
-
-
-def _utc_now() -> str:
-    """Return a canonical RFC 3339 UTC timestamp.
-
-    Returns
-    -------
-    str
-        Current UTC timestamp with a ``Z`` suffix.
-    """
-
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _worker_lease_mapping(lease: WorkerLease) -> dict[str, Any]:
@@ -3314,7 +3302,7 @@ def run_isolated_subprocess(
         )
     usage_before = resource.getrusage(resource.RUSAGE_CHILDREN)
     started = time.monotonic()
-    started_at = _utc_now()
+    started_at = utc_now()
     timed_out = False
     rss_exceeded = False
     shutdown_requested = False
@@ -3508,7 +3496,7 @@ def run_isolated_subprocess(
         success_attestation_sha256=success_attestation_sha256,
         attested_receipt_sha256=attested_receipt_sha256,
         started_at=started_at,
-        finished_at=_utc_now(),
+        finished_at=utc_now(),
         shutdown_requested=shutdown_requested,
     )
 
@@ -3541,7 +3529,7 @@ def _sandbox_unavailable_observation(
     stderr = f"{status}\n".encode("utf-8")
     stdout_path.write_bytes(stdout)
     stderr_path.write_bytes(stderr)
-    timestamp = _utc_now()
+    timestamp = utc_now()
     return SupervisorObservation(
         argv=tuple(argv),
         cwd=str(working_directory),

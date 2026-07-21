@@ -7,7 +7,6 @@ import fcntl
 import json
 import os
 from copy import deepcopy
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, Union
 
@@ -21,7 +20,13 @@ from menagerie.crawler.constants import (
     MODEL_SCHEMA_VERSION_V3,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
 )
-from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, payload_hash, stable_hash
+from menagerie.crawler.identity import (
+    canonical_json_bytes,
+    hash_bytes,
+    payload_hash,
+    stable_hash,
+    utc_now,
+)
 from menagerie.crawler.models import AppendResult, JsonObject, TailRecoveryEvidence
 from menagerie.crawler.schema import SCHEMA_FILES, PayloadValidationError, validate_payload
 
@@ -63,18 +68,6 @@ class LedgerConflictError(LedgerError):
 
 class AttemptSlotResolutionError(LedgerError):
     """Raised when canonical history cannot satisfy one deterministic v3 slot."""
-
-
-def _utc_now() -> str:
-    """Return an RFC 3339 UTC timestamp.
-
-    Returns
-    -------
-    str
-        Current UTC timestamp ending in ``Z``.
-    """
-
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _fsync_directory(path: Path) -> None:
@@ -400,7 +393,7 @@ def recover_torn_tail(
     )
     recovery_path.parent.mkdir(parents=True, exist_ok=True)
     tail_digest = hash_bytes(tail)
-    recovered_at = _utc_now()
+    recovered_at = utc_now()
     evidence_record = {
         "ledger_path": str(ledger_path),
         "byte_offset": good_end,
