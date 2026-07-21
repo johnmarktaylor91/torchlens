@@ -553,6 +553,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
     diagnostics.extend(_preflight_output_contracts(trace, ops))
     diagnostics.extend(_preflight_state_alias_topology(trace, slot_drafts))
+    diagnostics.extend(_preflight_state_metadata(trace))
     # r35 corr2_3 note: the torchlens_role_init_v2 totality contract
     # (``initializer_contract_diagnostics``) is enforced typed at runtime when
     # random initialization is actually selected. It is deliberately NOT a
@@ -2913,6 +2914,60 @@ def _preflight_state_alias_topology(
                     ("left_state", left),
                     ("right_state", right),
                     ("relation", relation),
+                ),
+            )
+        )
+    return diagnostics
+
+
+def _preflight_state_metadata(trace: Any) -> list[RunnableDiagnostic]:
+    """Refuse a runnable save whose READ captured-state physical metadata is lossy (r63 C1).
+
+    Escape-GATED (JMT Option-A ruling): a captured param/buffer with a non-canonical PHYSICAL
+    form (non-default stride/contiguity, nonzero storage offset, conj/neg lazy bit) refuses at
+    save ONLY when the model actually READ that physical dim on the slot during the captured
+    forward (the r63-closed ``is_contiguous`` / ``stride`` / ``storage_offset`` / ``is_conj`` /
+    ``is_neg`` state-metadata read witnesses). Transport normalizes every such dim away (the
+    snapshot clone compacts offset and materializes conj/neg; safetensors re-lays stride), so a
+    READ non-canonical fact steers the recorded path yet cannot be reproduced by any staged or
+    fresh-oracle state -- the loaded replay would report a false ``verified``. An UNREAD
+    non-canonical slot (a channels-last conv weight, a transposed dense param) is provably
+    value-faithful under the oracle-1 default-copy pin and stays saveable + ``verified`` --
+    zero collateral is the point of the escape gate.
+
+    Fail-closed edges: a witnessed read whose slot has NO stamped pre-clone signature, an
+    unreadable signature dim, or an unknown read kind all refuse. Detection stage
+    ``producer_state_metadata``; code ``state_metadata_mismatch``.
+    """
+
+    from .._runnable_state import state_metadata_read_violations
+    from ..backends.torch.completeness_witness import host_escape_state_metadata_reads
+
+    reads = host_escape_state_metadata_reads(trace)
+    if not reads:
+        return []
+    signatures = trace.__dict__.get("_runnable_capture_state_signatures")
+    signature_map: Mapping[str, Any] = signatures if isinstance(signatures, Mapping) else {}
+    diagnostics: list[RunnableDiagnostic] = []
+    for name in sorted(reads):
+        violations = state_metadata_read_violations(signature_map.get(name), reads[name])
+        if not violations:
+            continue
+        diagnostics.append(
+            _diagnostic(
+                RunnableErrorCode.STATE_METADATA_MISMATCH,
+                f"The captured forward READ physical metadata of state tensor {name!r} "
+                f"that transport normalizes away (violations: {violations!r}); the "
+                "recorded taken path depends on a state form no staged or fresh-oracle "
+                "state can reproduce, so the runnable save is refused "
+                "(state_metadata_mismatch). Analysis save levels remain available; an "
+                "UNREAD non-canonical slot saves normally.",
+                detection_stage="producer_state_metadata",
+                details=(
+                    ("reason", "state_metadata_mismatch"),
+                    ("state_dict_name", name),
+                    ("read_kinds", ",".join(sorted(reads[name]))),
+                    ("violations", repr(violations)),
                 ),
             )
         )

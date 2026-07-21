@@ -1322,13 +1322,23 @@ def run_and_log_inputs_through_model(
             _vprint(self, f"Inputs: {len(input_tensors)} tensor(s) on {device_str}")
 
         if bool(getattr(self, "intervention_ready", False)):
-            from .._runnable_state import snapshot_capture_state, snapshot_state_alias_topology
+            from .._runnable_state import (
+                snapshot_capture_state,
+                snapshot_capture_state_signatures,
+                snapshot_state_alias_topology,
+            )
 
             # r37 corr2-4: the live bound-state alias topology (object identity,
             # storage overlap) must be captured BEFORE ``snapshot_capture_state``'s
             # clones erase it; the runnable producer refuses unsupported topologies
             # at save and reproduces identity groups from this record.
             self._runnable_state_alias_topology = snapshot_state_alias_topology(model)
+            # r63 C1: per-slot metadata signatures are stamped from the LIVE tensors
+            # PRE-clone -- the clone itself compacts ``storage_offset`` and
+            # materializes conj/neg, so a post-clone signature is blind to two of
+            # the four transport-lossy physical dims. Consumed by the escape-gated
+            # ``producer_state_metadata`` preflight.
+            self._runnable_capture_state_signatures = snapshot_capture_state_signatures(model)
             self._runnable_capture_state = snapshot_capture_state(model)
 
         # Turn on the logging toggle and run the forward pass.

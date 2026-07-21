@@ -24,6 +24,7 @@ from ._runnable_state import (
     _allocation_budget_bytes,
     prepare_runnable_state,
     runnable_tensor_byte_digest,
+    state_metadata_full_violations,
 )
 from .errors import (
     NumericAttestationError,
@@ -2198,6 +2199,26 @@ def _state_contract_checks(
                     ("slot_id", slot.slot_id),
                     ("expected_dtype", slot.dtype),
                     ("actual_dtype", str(value.dtype)),
+                ),
+            )
+        )
+        # r63 C1 in-transaction tripwire: the canonical staging clone is the sole state
+        # placement authority, so every staged runtime state tensor must still exhibit the
+        # full canonical metadata signature (admitted exact class, strided dense layout,
+        # unnamed, default stride, zero offset, no lazy conj/neg) before any recorded
+        # callable observes it -- a mismatch here is a broken/bypassed staging path or a
+        # post-bind mutation of staged state, refused typed rather than replayed.
+        metadata_violations = state_metadata_full_violations(value)
+        checks.append(
+            _contract_check(
+                f"state_metadata:{slot.slot_id}",
+                not metadata_violations,
+                RunnableErrorCode.STATE_METADATA_MISMATCH,
+                f"State slot {slot.slot_id!r} no longer carries the canonical staged "
+                f"metadata signature (violations: {metadata_violations!r}).",
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("violations", repr(metadata_violations)),
                 ),
             )
         )

@@ -150,12 +150,22 @@ class BufferWriteTracker:
         if model is None:
             return
         persistent_state_names = frozenset(model.state_dict())
+        # r63 C1: storage-pointer -> buffer address index, the buffer twin of
+        # ``_param_storage_addresses``. A registered-buffer STORAGE ALIAS (``self.b.data``,
+        # a derived view) carries no buffer meta, so a metadata read routed through it
+        # could not be attributed to its state slot without this index.
+        buffer_storage_addresses: dict[int, str] = {}
         for module_address, module in _iter_modules_with_addresses(model):
             for name, tensor in module.named_buffers(recurse=False):
                 if tensor is None or isinstance(tensor, nn.Parameter):
                     continue
                 address = f"{module_address}.{name}" if module_address else name
                 set_buffer_address(tensor, address)
+                try:
+                    with _state.pause_logging():
+                        buffer_storage_addresses[tensor.untyped_storage().data_ptr()] = address
+                except (RuntimeError, TypeError, NotImplementedError):
+                    pass
                 pre_forward_value = _copy_tensor_value(tensor)
                 self.trace._buffer_initial_values.setdefault(address, pre_forward_value)
                 persistence = self.trace.__dict__.setdefault("_buffer_persistence", {})
@@ -171,6 +181,7 @@ class BufferWriteTracker:
                     with _state.pause_logging():
                         expected_storage = _whole_storage_uint8(pre_forward_value).clone()
                 self.address_to_expected_storage_snapshot.setdefault(address, expected_storage)
+        self.trace.__dict__["_buffer_storage_addresses"] = buffer_storage_addresses
         self._refresh_param_index(model)
 
     def _refresh_param_index(self, model: nn.Module) -> None:

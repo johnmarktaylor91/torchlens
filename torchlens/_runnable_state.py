@@ -77,6 +77,261 @@ def snapshot_capture_state(model: object) -> Mapping[str, torch.Tensor] | None:
         return MappingProxyType({name: value.detach().clone() for name, value in state.items()})
 
 
+_ADMITTED_STATE_CLASS_CATEGORIES = frozenset({"tensor", "parameter"})
+"""Exact-type state admission (r63 C1): ``torch.Tensor`` and ``torch.nn.Parameter`` only.
+
+A ``__torch_function__``/property-overriding tensor SUBCLASS could lie about (or count) every
+metadata read below, so classification reads ``type()`` FIRST and performs ZERO tensor-metadata
+reads on an unadmitted class.
+"""
+
+_STATE_METADATA_BIND_SCOPE: tuple[tuple[str, Any], ...] = (
+    ("layout", "torch.strided"),
+    ("is_nested", False),
+    ("is_quantized", False),
+    ("has_named_dims", False),
+)
+"""LOAD-SURVIVING signature dims (r63 C1 bind gate) and their canonical values.
+
+Inclusion principle: a dim belongs here iff its source-side value SURVIVES oracle-1's default
+``load_state_dict(strict=True, assign=False)`` copy into a canonical destination -- either by
+steering the fresh oracle (named dims propagate into an unnamed destination) or by making the
+default copy RAISE (sparse/mkldnn layouts, nested, quantized sources into a dense destination).
+Physical dims (stride/contiguity/memory-format, storage_offset, conj/neg bits) are EXCLUDED
+here because default copy NORMALIZES them away: a channels-last or non-contiguous USER source
+into a canonical captured slot binds and runs exactly like PyTorch's own ``load_state_dict``.
+"""
+
+_STATE_METADATA_PHYSICAL_SCOPE: tuple[tuple[str, Any], ...] = (
+    ("is_rowmajor_contiguous", True),
+    ("stride_is_default", True),
+    ("storage_offset_is_zero", True),
+    ("is_conj", False),
+    ("is_neg", False),
+)
+"""Destination-owned PHYSICAL signature dims (r63 C1) and their canonical values.
+
+These are normalized by transport (the snapshot clone compacts ``storage_offset`` and
+materializes conj/neg; safetensors re-lays stride) and by the canonical staging clone, so a
+recorded path that READ one of them on captured state rests on an unwitnessable constructor
+assumption whenever the captured value was non-canonical. They are enforced ESCAPE-GATED at the
+producer (only when the dim was actually read on that slot) and unconditionally by the staged
+runtime tripwire (staging guarantees canonical form).
+"""
+
+_STATE_METADATA_READ_REQUIRED_DIMS: Mapping[str, tuple[str, Any]] = MappingProxyType(
+    {
+        "contiguous_default": ("is_rowmajor_contiguous", True),
+        "stride_exact": ("stride_is_default", True),
+        "storage_offset": ("storage_offset_is_zero", True),
+        "is_conj": ("is_conj", False),
+        "is_neg": ("is_neg", False),
+    }
+)
+"""Witnessed state-metadata READ kinds -> the signature dim each read exposes (r63 C1).
+
+``contiguous_default`` (a bare ``is_contiguous()``) is reproducible iff the captured slot was
+row-major contiguous; ``stride_exact`` (a ``stride()`` read, or ``is_contiguous`` probed with an
+explicit ``memory_format=``) pins the full stride tuple, reproducible iff the captured stride
+equals the canonical dense stride of the shape; the remaining kinds map one-to-one. An UNKNOWN
+future kind resolves to no entry and fails closed at the consumer.
+"""
+
+
+def _default_dense_stride(shape: tuple[int, ...]) -> tuple[int, ...]:
+    """Return torch's canonical row-major contiguous stride for ``shape``.
+
+    Matches ``torch.empty(shape).stride()`` including size-0/size-1 dims (running product of
+    ``max(size, 1)`` right-to-left), which is exactly the stride every canonical staging clone
+    and transport-decoded state tensor exhibits.
+    """
+
+    strides: list[int] = []
+    acc = 1
+    for size in reversed(shape):
+        strides.append(acc)
+        acc *= max(int(size), 1)
+    return tuple(reversed(strides))
+
+
+def _state_metadata_signature(value: Any) -> dict[str, Any]:
+    """Compute THE state-tensor metadata/layout signature (r63 C1 -- the ONE helper).
+
+    Every state-metadata comparison choke (bind gate, producer preflight, runtime tripwire)
+    consumes this signature; future physical dims are added ONLY here, never as scattered
+    per-attribute checks. Safety ordering is load-bearing:
+
+    * ``type()`` is read FIRST; an unadmitted class (tensor subclass, non-tensor) short-circuits
+      with ZERO tensor-metadata reads (a hostile ``__torch_function__`` subclass observes
+      nothing).
+    * A nested or non-strided value short-circuits the name/physical reads (several raise
+      there).
+    * Every metadata read is exception-guarded to ``None`` -- an unreadable dim is UNKNOWN and
+      every consumer treats it as non-canonical (fail closed), never as a pass.
+    """
+
+    signature: dict[str, Any] = {
+        "class_category": "non_tensor",
+        "layout": None,
+        "is_nested": None,
+        "is_quantized": None,
+        "has_named_dims": None,
+        "is_rowmajor_contiguous": None,
+        "stride_is_default": None,
+        "storage_offset_is_zero": None,
+        "is_conj": None,
+        "is_neg": None,
+    }
+    cls = type(value)
+    if cls is torch.nn.Parameter:
+        signature["class_category"] = "parameter"
+    elif cls is torch.Tensor:
+        signature["class_category"] = "tensor"
+    elif isinstance(value, torch.Tensor):
+        signature["class_category"] = f"subclass:{cls.__module__}.{cls.__qualname__}"
+        return signature
+    else:
+        return signature
+    try:
+        signature["is_nested"] = bool(value.is_nested)
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
+    try:
+        signature["layout"] = str(value.layout)
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
+    try:
+        signature["is_quantized"] = bool(value.is_quantized)
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
+    if signature["is_nested"] is not False or signature["layout"] != "torch.strided":
+        # Nested / non-strided / unreadable: name+physical reads may raise and could never
+        # be canonical anyway -- leave them UNKNOWN (fail closed at every consumer).
+        return signature
+    try:
+        signature["has_named_dims"] = bool(value.has_names())
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
+    try:
+        signature["is_rowmajor_contiguous"] = bool(value.is_contiguous())
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
+    try:
+        stride = tuple(int(v) for v in value.stride())
+        shape = tuple(int(v) for v in value.shape)
+        signature["stride_is_default"] = stride == _default_dense_stride(shape)
+    except (RuntimeError, TypeError, ValueError, AttributeError, NotImplementedError):
+        pass
+    try:
+        signature["storage_offset_is_zero"] = int(value.storage_offset()) == 0
+    except (RuntimeError, TypeError, ValueError, AttributeError, NotImplementedError):
+        pass
+    try:
+        signature["is_conj"] = bool(value.is_conj())
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
+    try:
+        signature["is_neg"] = bool(value.is_neg())
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
+    return signature
+
+
+def _signature_scope_violations(
+    signature: Mapping[str, Any],
+    scope: tuple[tuple[str, Any], ...],
+) -> list[tuple[str, Any, Any]]:
+    """Return ``(dim, expected, actual)`` rows where ``signature`` departs canonical ``scope``.
+
+    An unadmitted ``class_category`` is itself the single violation (no other dim of an
+    unadmitted class was read, so none can be trusted). ``None`` (unreadable) never equals a
+    canonical expectation: fail closed.
+    """
+
+    category = signature.get("class_category")
+    if category not in _ADMITTED_STATE_CLASS_CATEGORIES:
+        return [("class_category", "tensor|parameter", category)]
+    return [
+        (dim, expected, signature.get(dim))
+        for dim, expected in scope
+        if signature.get(dim) != expected
+    ]
+
+
+def state_metadata_bind_violations(value: Any) -> list[tuple[str, Any, Any]]:
+    """Return load-surviving-subset violations for one supplied/embedded state tensor."""
+
+    return _signature_scope_violations(_state_metadata_signature(value), _STATE_METADATA_BIND_SCOPE)
+
+
+def state_metadata_full_violations(value: Any) -> list[tuple[str, Any, Any]]:
+    """Return full-signature violations for one STAGED runtime state tensor (tripwire scope)."""
+
+    return _signature_scope_violations(
+        _state_metadata_signature(value),
+        _STATE_METADATA_BIND_SCOPE + _STATE_METADATA_PHYSICAL_SCOPE,
+    )
+
+
+def state_metadata_read_violations(
+    signature: Mapping[str, Any] | None,
+    read_kinds: Iterable[str],
+) -> list[tuple[str, str, Any]]:
+    """Return ``(read_kind, dim, actual)`` rows a witnessed metadata read cannot reproduce.
+
+    ``signature`` is the PRE-CLONE capture-time signature stamped for the slot; ``None`` (an
+    absent stamp) fails closed for every read kind, as does an unknown kind or an unreadable
+    dim -- a metadata read whose captured value cannot be PROVEN canonical can never settle
+    ``verified`` after transport normalization.
+    """
+
+    violations: list[tuple[str, str, Any]] = []
+    for kind in sorted(set(read_kinds)):
+        required = _STATE_METADATA_READ_REQUIRED_DIMS.get(kind)
+        if required is None:
+            violations.append((kind, "<unknown_read_kind>", None))
+            continue
+        dim, expected = required
+        actual = signature.get(dim) if isinstance(signature, Mapping) else None
+        if actual != expected:
+            violations.append((kind, dim, actual))
+    if isinstance(signature, Mapping):
+        category = signature.get("class_category")
+        if category not in _ADMITTED_STATE_CLASS_CATEGORIES:
+            violations.append(("<class_admission>", "class_category", category))
+    return violations
+
+
+def snapshot_capture_state_signatures(model: object) -> dict[str, dict[str, Any]] | None:
+    """Stamp per-slot state metadata signatures from the LIVE model tensors (r63 C1).
+
+    MUST run BEFORE :func:`snapshot_capture_state`'s clones: the clone itself normalizes
+    ``storage_offset`` and materializes conj/neg, so a post-clone signature is blind to two of
+    the four lossy physical dims. Walks named parameters AND named buffers
+    (``remove_duplicate=False``) so non-persistent buffers -- absent from ``state_dict()`` but
+    part of the declared state -- are covered under the same dotted addresses the escape ledger
+    records. Metadata reads only; no tensor values are retained.
+    """
+
+    named_parameters = getattr(model, "named_parameters", None)
+    named_buffers = getattr(model, "named_buffers", None)
+    if not callable(named_parameters) or not callable(named_buffers):
+        return None
+    try:
+        entries: list[tuple[str, Any]] = [
+            (str(name), value) for name, value in named_parameters(remove_duplicate=False)
+        ]
+        entries.extend((str(name), value) for name, value in named_buffers(remove_duplicate=False))
+    except Exception:
+        return None
+    with _state.pause_logging():
+        return {
+            name: _state_metadata_signature(value)
+            for name, value in entries
+            if isinstance(value, torch.Tensor)
+        }
+
+
 def snapshot_state_alias_topology(model: object) -> Mapping[str, Any] | None:
     """Capture the live bound-state alias topology BEFORE cloning erases it (r37 corr2-4).
 
@@ -231,7 +486,7 @@ def bind_embedded_trace_state(trace: Any, sd: Mapping[str, Any]) -> None:
     _validate_state_mapping(trace, sd)
     trace.__dict__["_runnable_embedded_state"] = MappingProxyType(
         {
-            name: _byte_guarded_clone(value, state_dict_name=name)
+            name: _staged_state_clone(value, state_dict_name=name)
             for name, value in sd.items()
             if isinstance(name, str) and isinstance(value, torch.Tensor)
         }
@@ -257,7 +512,7 @@ def bind_embedded_nonpersistent_buffers(trace: Any, buffers: Mapping[str, Any]) 
     descriptor = _require_descriptor(trace)
     validate_nonpersistent_buffer_mapping_for_descriptor(descriptor, buffers)
     trace.__dict__["_runnable_embedded_nonpersistent_buffers"] = {
-        name: _byte_guarded_clone(value, state_dict_name=name)
+        name: _staged_state_clone(value, state_dict_name=name)
         for name, value in buffers.items()
         if isinstance(name, str) and isinstance(value, torch.Tensor)
     }
@@ -523,6 +778,27 @@ def _validate_named_slot_mapping(
                 )
             )
             continue
+        # r63 C1 bind gate: exact-class admission + the LOAD-SURVIVING metadata subset,
+        # checked BEFORE any shape/dtype/alias read. A refused value never enters
+        # ``values_by_name``, so no later validation stage reads metadata on it (an
+        # unadmitted subclass observes zero reads; a nested value whose ``.shape``
+        # raises is refused typed here instead of crashing the shape check).
+        bind_violations = state_metadata_bind_violations(value)
+        if bind_violations:
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.STATE_METADATA_MISMATCH,
+                    f"State tensor {name!r} carries metadata that cannot bind to a "
+                    "canonical dense slot under default load_state_dict copy semantics "
+                    f"(violations: {bind_violations!r}).",
+                    detection_stage="state_tensor_contract",
+                    details=(
+                        ("state_dict_name", name),
+                        ("violations", repr(bind_violations)),
+                    ),
+                )
+            )
+            continue
         values_by_name[name] = value
         for slot in slots_by_name[name]:
             diagnostics.extend(_slot_contract_diagnostics(slot, value))
@@ -548,8 +824,9 @@ def _validate_named_slot_mapping(
             # supplied value (the strict binder accepts an expanded view whose
             # storage is tiny), and user/embedded state never enters the run-prep
             # representative sum -- so this is the load-bearing byte bound on the
-            # state re-materialization chain.
-            value = _byte_guarded_clone(
+            # state re-materialization chain. r63 C1: the clone stages through the
+            # canonical destination (default load_state_dict copy semantics).
+            value = _staged_state_clone(
                 values_by_name[binding.state_dict_name],
                 slot_id=slot.slot_id,
                 state_dict_name=binding.state_dict_name,
@@ -903,6 +1180,38 @@ def _byte_guarded_clone(
             **extra,
         )
     return value.detach().clone()
+
+
+def _staged_state_clone(
+    value: torch.Tensor,
+    *,
+    slot_id: str | None = None,
+    state_dict_name: str | None = None,
+) -> torch.Tensor:
+    """Stage ONE state tensor through the canonical destination (r63 C1 Part 3).
+
+    THE single state staging helper: every user ``load_state_dict``, embedded
+    ``state_dict_v1``, and non-persistent-buffer bind clone routes here (source tripwire:
+    no state-binding path may call bare :func:`_byte_guarded_clone` / ``.detach().clone()``
+    directly). It reproduces oracle-1's DEFAULT ``load_state_dict(strict=True,
+    assign=False)`` copy semantics: the staged allocation is always the canonical physical
+    form (row-major-contiguous default stride, zero storage offset, materialized conj/neg)
+    regardless of the source's physical form, exactly like a copy into a canonical fresh
+    destination. ``.detach().clone()`` already compacts the offset and materializes lazy
+    bits; stride is the one physical dim ``preserve_format`` keeps, so it is re-laid only
+    when non-canonical (an unreadable stride fails closed into the re-lay).
+    """
+
+    clone = _byte_guarded_clone(value, slot_id=slot_id, state_dict_name=state_dict_name)
+    try:
+        canonical = tuple(int(v) for v in clone.stride()) == _default_dense_stride(
+            tuple(int(v) for v in clone.shape)
+        )
+    except (RuntimeError, TypeError, ValueError, NotImplementedError):
+        canonical = False
+    if not canonical:
+        clone = clone.clone(memory_format=torch.contiguous_format)
+    return clone
 
 
 class RunResourceCeiling:
