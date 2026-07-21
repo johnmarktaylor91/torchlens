@@ -1137,7 +1137,11 @@ seed) reports `unverifiable` + `not_applicable`:
    instance `__dict__`/`__slots__` surfaces (never invoking a property or `__getattr__` --
    r42 corr2_1; including PRIVATE `__slots__` entries resolved through CPython name mangling:
    `__rng` -> `_Class__rng`, with trailing-dunder and all-underscore-class names not mangled and
-   the declaring MRO class as the mangling authority -- r61 corr_1), Mapping/Collection container
+   the declaring MRO class as the mangling authority -- r61 corr_1; the MANGLED private
+   descriptor is preferred over any raw class-dict key, and only an inert slot member
+   descriptor is ever read -- a post-hoc raw shadow entry, or any non-descriptor value planted
+   at either key, neither hides the real slot value nor gets its `__get__` invoked, r63),
+   Mapping/Collection container
    protocols (every `collections.abc.Mapping`
    contributes BOTH its keys/values AND, when the mapping object is a custom (non-stdlib) inert
    holder, its own `__dict__`/`__slots__` values; every non-leaf `collections.abc.Collection`
@@ -1167,7 +1171,11 @@ seed) reports `unverifiable` + `not_applicable`:
    frames, the C `_abc_data` ABC-cache slot -- r56 amb_1). Tensors, ndarrays, and numpy
    scalars are NOT leaves (r61 hon_1): their numeric buffer / autograd / storage internals are
    never walked (`gc.get_referents` is never invoked on them), but their Python instance
-   `__dict__`/`__slots__` surfaces are walked like every other holder's -- a generator stashed
+   `__dict__`/`__slots__` surfaces AND their user-defined class surface are walked like every
+   other holder's (r63: the node's class flows through the same trusted-leaf-gated class-MRO
+   branch, so a class-attribute generator on a user-defined Tensor / Parameter / ndarray
+   subclass is inventoried while trusted torch/numpy/stdlib implementation classes remain
+   leaves) -- a generator stashed
    on a parameter (`weight.rng = default_rng()`), a plain tensor attribute, or an
    ndarray-SUBCLASS instance attribute is inventoried. A bound C
    callable's receiver passes through these SAME walls, so the r47/r56 ambient-escape

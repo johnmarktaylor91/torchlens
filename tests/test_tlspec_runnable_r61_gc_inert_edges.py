@@ -35,6 +35,17 @@ Whole-class immunizers pinned here:
 - source tripwires: tensors/ndarrays appear in NO hard pre-instance-state skip;
   ``_custom_holder_children`` carries mangled-slot handling; ambient walls (module / code
   severed) stay intact.
+
+r63 completes the numeric-payload branch structurally (r62 findings):
+- raw-shadow HIGH (sol_angle2#1): a post-hoc raw class-dict entry at the UNMANGLED private
+  key (``M.__rng = shadow`` -- mangling is compile-time-only) must NOT beat the real
+  ``_M__rng`` member descriptor; ``_resolve_slot_member`` prefers the mangled key and
+  returns ONLY an inert ``MemberDescriptorType`` (a hostile ``__get__`` planted at either
+  key never fires; ``None`` -> slot skipped);
+- class-surface MED (fable_freeroam): a numeric-payload node contributes its CLASS edge
+  (``type(value)``) like every other holder branch, so a class-attribute generator on an
+  ``nn.Parameter`` / ndarray SUBCLASS is inventoried while stock torch/numpy classes stay
+  trusted leaves (no implementation-class expansion, no cap pressure).
 """
 
 from __future__ import annotations
@@ -47,6 +58,8 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+from types import MemberDescriptorType
 
 import numpy as np
 import pytest
@@ -390,19 +403,233 @@ def test_resolve_slot_member_mangling_matrix() -> None:
         )
 
 
+# --- r63 raw-shadow HIGH: mangled private descriptor beats any raw class-dict key ------------
+
+
+def test_raw_class_dict_shadow_does_not_beat_mangled_descriptor() -> None:
+    """r62 raw-shadow HIGH (sol_angle2#1): a post-hoc raw class-dict entry at the UNMANGLED
+    private key (``setattr(M, "__rng", shadow)`` -- mangling is a compile-time class-body
+    transform, so the shadow lands at the raw key while the real slot descriptor stays at
+    ``_M__rng``) must NOT hide the slot value, and a hostile descriptor planted at the raw
+    key must NEVER get its ``__get__`` invoked."""
+
+    hostile_get_calls = {"n": 0}
+
+    class _ShadowBoom:
+        def __get__(self, obj: Any, objtype: Any = None) -> Any:
+            hostile_get_calls["n"] += 1
+            return None
+
+    marker = object()
+
+    class _M63Shadow:
+        __slots__ = ("__rng",)
+
+        def __init__(self) -> None:
+            self.__rng = marker
+
+    instance = _M63Shadow()
+    for shadow in ("shadow", _ShadowBoom()):
+        setattr(_M63Shadow, "__rng", shadow)  # raw key: no compile-time mangling here
+        assert "__rng" in _M63Shadow.__dict__, "shadow key missing -- test shape broken"
+        assert "_M63Shadow__rng" in _M63Shadow.__dict__, "mangled key missing -- shape broken"
+        resolved = _resolve_slot_member(_M63Shadow, "__rng")
+        assert isinstance(resolved, MemberDescriptorType), (
+            "resolver returned a non-inert object (raw shadow beat the mangled descriptor)"
+        )
+        assert resolved is _M63Shadow.__dict__["_M63Shadow__rng"]
+        children = host_nondeterminism_monitor._custom_holder_children(instance)
+        assert any(child is marker for child in children), (
+            "raw shadow hid the mangled-slot value from _custom_holder_children"
+        )
+    assert hostile_get_calls["n"] == 0, "hostile shadow __get__ fired during resolution"
+
+
+@pytest.mark.parametrize("kind", sorted(_GEN_FACTORIES))
+def test_raw_shadow_on_slotted_module_generator_still_swept(kind: str) -> None:
+    """The r62 sol_angle2#1 repro shape: a raw ``M.__rng = "shadow"`` class attribute on a
+    slotted REGISTERED module must not drop the mangled-slot generator from the sweep (the
+    module is premarked, so the gc fallback can never recover a seed-loop miss)."""
+
+    gen = _GEN_FACTORIES[kind]()
+
+    class _ShadowedSlotTop(nn.Module):
+        __slots__ = ("__rng",)
+
+        def __init__(self, g: Any) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self.__rng = g
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.lin(x)
+
+    setattr(_ShadowedSlotTop, "__rng", "shadow")  # the raw class-dict shadow
+    model = _ShadowedSlotTop(gen)
+    snapshots = _sweep(model)
+    holders = {id(holder): digest for holder, digest in snapshots}
+    assert id(gen) in holders, f"{kind}: raw shadow dropped the mangled-slot generator"
+    worker = threading.Thread(target=lambda: _draw(gen))
+    worker.start()
+    worker.join()
+    after = host_nondeterminism_monitor._digest_rng_instance(gen)
+    assert after != holders[id(gen)], f"{kind}: shadowed-slot draw did not flip the digest"
+
+
+def test_resolve_slot_member_returns_only_inert_member_descriptor() -> None:
+    """The resolver's return type IS the safety contract: only a ``MemberDescriptorType``
+    (pure C field access) or ``None`` (slot skipped) -- a hostile non-descriptor that
+    REPLACED the real slot descriptor resolves to None with zero user code. Slot STORAGE
+    keys are mangled by ``type.__new__`` itself (probed), so ``type()``-built classes
+    resolve through the SAME mangled-first path as compiled ones, and the raw-key
+    fallback carries exactly the mangling no-op shapes (all-underscore class name)."""
+
+    hostile_get_calls = {"n": 0}
+
+    class _Boom:
+        def __get__(self, obj: Any, objtype: Any = None) -> Any:
+            hostile_get_calls["n"] += 1
+            return None
+
+    class _PlainSlot:
+        __slots__ = ("x",)
+
+    _PlainSlot.x = _Boom()  # replace the real member descriptor at the raw key
+    assert _resolve_slot_member(_PlainSlot, "x") is None
+    instance = _PlainSlot()
+    children = host_nondeterminism_monitor._custom_holder_children(instance)
+    assert children == []  # slot skipped: nothing read, nothing executed
+    assert hostile_get_calls["n"] == 0, "hostile replacement __get__ fired"
+
+    marker = object()
+    # type.__new__ mangles slot storage keys just like the compiler: the dynamic class
+    # stores its private slot descriptor at the MANGLED key and resolves through the
+    # mangled-first path.
+    dyn = type("_R63Dyn", (), {"__slots__": ("__rng",)})
+    assert "_R63Dyn__rng" in dyn.__dict__ and "__rng" not in dyn.__dict__
+    descriptor = _resolve_slot_member(dyn, "__rng")
+    assert isinstance(descriptor, MemberDescriptorType)
+    assert descriptor is dyn.__dict__["_R63Dyn__rng"]
+    dyn_instance = dyn()
+    descriptor.__set__(dyn_instance, marker)
+    dyn_children = host_nondeterminism_monitor._custom_holder_children(dyn_instance)
+    assert any(child is marker for child in dyn_children), (
+        "dynamically created class lost mangled-slot coverage (r63 regression)"
+    )
+    # the mangling NO-OP shape: an all-underscore class name stores the descriptor at
+    # the RAW key -- the typechecked raw-key fallback keeps it resolvable.
+    dyn_raw = type("___", (), {"__slots__": ("__rng",)})
+    assert "__rng" in dyn_raw.__dict__
+    raw_descriptor = _resolve_slot_member(dyn_raw, "__rng")
+    assert isinstance(raw_descriptor, MemberDescriptorType)
+    assert raw_descriptor is dyn_raw.__dict__["__rng"]
+
+
+# --- r63 class-surface MED: class-attribute generator on a payload SUBCLASS ------------------
+
+
+_CLASS_ATTR_PLACEMENTS = ("param_subclass", "ndarray_subclass")
+
+
+def _make_class_attr_payload_model(placement: str, gen: Any, worker: Any = None) -> nn.Module:
+    """Model whose generator lives ONLY as a CLASS attribute of a numeric-payload subclass.
+
+    The subclasses are created per-call so a test's generator never leaks into another
+    test through a shared module-level class object."""
+
+    class _R63ParamCls(nn.Parameter):
+        pass
+
+    class _R63ArrCls(np.ndarray):
+        pass
+
+    if placement == "param_subclass":
+        _R63ParamCls.shared_rng = gen
+    elif placement == "ndarray_subclass":
+        _R63ArrCls.shared_rng = gen
+    else:  # pragma: no cover - guard against a typo'd parametrization
+        raise ValueError(placement)
+
+    class _ClassAttrPayloadModel(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self._worker = worker
+            if placement == "param_subclass":
+                self.p = _R63ParamCls(torch.randn(3))
+            else:
+                self.arr = np.zeros(3).view(_R63ArrCls)
+
+        def _gen(self) -> Any:
+            holder = self.p if placement == "param_subclass" else self.arr
+            return type(holder).shared_rng
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            h = self.lin(x)
+            if self._worker is None:
+                return h
+            v = self._worker.run(lambda: _draw(self._gen()))
+            return h * 2.0 if v < 0.5 else h * 3.0
+
+    return _ClassAttrPayloadModel()
+
+
+@pytest.mark.parametrize("kind", sorted(_GEN_FACTORIES))
+@pytest.mark.parametrize("placement", _CLASS_ATTR_PLACEMENTS)
+def test_class_attr_generator_on_payload_subclass_is_swept_and_draw_flips_digest(
+    placement: str, kind: str
+) -> None:
+    """r62 class-surface MED (fable_freeroam): a generator held ONLY as a CLASS attribute of
+    an ``nn.Parameter`` / ndarray SUBCLASS is inventoried through the numeric-payload node's
+    new class-surface edge, and a non-hooked draw flips its digest."""
+
+    gen = _GEN_FACTORIES[kind]()
+    model = _make_class_attr_payload_model(placement, gen)
+    snapshots = _sweep(model)
+    holders = {id(holder): digest for holder, digest in snapshots}
+    assert id(gen) in holders, f"{placement}/{kind}: class-attr generator not inventoried"
+    worker = threading.Thread(target=lambda: _draw(gen))
+    worker.start()
+    worker.join()
+    after = host_nondeterminism_monitor._digest_rng_instance(gen)
+    assert after != holders[id(gen)], f"{placement}/{kind}: draw did not flip the digest"
+
+
+@pytest.mark.parametrize("placement", _CLASS_ATTR_PLACEMENTS)
+def test_class_attr_payload_subclass_preexisting_thread_draw_is_unverifiable(
+    placement: str, preexisting_worker: Any, tmp_path: Path
+) -> None:
+    """End-to-end for the r62 class-surface MED: an UNSEEDED class-attribute generator on a
+    payload subclass, drawn on a pre-existing non-hooked worker ->
+    ``model_attribute_generator`` -> UNVERIFIABLE + not ATTESTED (was false VERIFIED)."""
+
+    gen = np.random.default_rng()  # unseeded, constructed BEFORE the capture window
+    model = _make_class_attr_payload_model(placement, gen, preexisting_worker)
+    trace, result = _roundtrip(model, torch.randn(2, 4), tmp_path)
+    assert "model_attribute_generator" in getattr(trace, "_runnable_host_rng_channels", ()), (
+        f"{placement}: class-attr generator draw was not inventoried"
+    )
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
+
+
 # --- over-trigger pins ------------------------------------------------------------------------
 
 
 def test_benign_numeric_payload_surfaces_stay_verified(tmp_path: Path) -> None:
     """A deterministic model whose tensors / ndarray-subclass attrs hold NO generator sweeps
-    nothing, flags nothing, and stays VERIFIED + ATTESTED -- the instance-state walk must not
-    over-trigger on ordinary numeric payloads."""
+    nothing, flags nothing, and stays VERIFIED + ATTESTED -- neither the instance-state walk
+    nor the r63 class-surface edge may over-trigger on ordinary numeric payloads (stock
+    ``torch.Tensor`` / ``nn.Parameter`` / ``np.ndarray`` / ``np.float64`` classes are trusted
+    leaves: no implementation-class expansion, no cap pressure)."""
 
     class _Benign(nn.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.lin = nn.Linear(4, 4)
+            self.lin = nn.Linear(4, 4)  # stock nn.Parameter weights via nn.Linear
             self.stash_t = torch.zeros(3)  # plain tensor, empty instance __dict__
+            self.arr_plain = np.zeros(3)  # stock ndarray, no instance surface
+            self.scalar = np.float64(0.5)  # stock numpy scalar, class-only surface
             arr = np.zeros(3).view(_R61Array)
             arr.note = "calibration"  # non-RNG instance attribute
             self.arr = arr
@@ -435,9 +662,11 @@ def test_undrawn_numeric_payload_generator_stays_verified(tmp_path: Path) -> Non
 
 
 def test_numeric_payload_instance_walk_executes_zero_user_code() -> None:
-    """The numeric-payload instance-state walk fires NO property, NO ``__getattr__``, and NO
-    descriptor ``__get__`` on hostile tensor / ndarray SUBCLASSES -- while still finding the
-    generator hidden in their instance ``__dict__``."""
+    """The numeric-payload instance-state AND class-surface walks fire NO property, NO
+    ``__getattr__``, and NO descriptor ``__get__`` on hostile tensor / ndarray SUBCLASSES --
+    while still finding the generators hidden in their instance ``__dict__`` AND as their
+    CLASS attributes (r63: the class dict is read via raw mappingproxy values only, so the
+    hostile descriptor OBJECTS are enqueued without ever firing)."""
 
     counters = {"property": 0, "getattr": 0, "descriptor": 0}
 
@@ -446,8 +675,12 @@ def test_numeric_payload_instance_walk_executes_zero_user_code() -> None:
             counters["descriptor"] += 1
             return None
 
+    gen_cls_arr = np.random.default_rng(7)
+    gen_cls_tensor = np.random.default_rng(8)
+
     class _HostileArray(np.ndarray):
         boom = _BoomDescriptor()
+        class_rng = gen_cls_arr  # r63: witnessed via the class-surface edge
 
         @property
         def trap(self) -> Any:
@@ -460,6 +693,7 @@ def test_numeric_payload_instance_walk_executes_zero_user_code() -> None:
 
     class _HostileTensor(torch.Tensor):
         boom = _BoomDescriptor()
+        class_rng = gen_cls_tensor  # r63: witnessed via the class-surface edge
 
         @property
         def trap(self) -> Any:
@@ -491,6 +725,8 @@ def test_numeric_payload_instance_walk_executes_zero_user_code() -> None:
     holder_ids = {id(holder) for holder, _digest in snapshots}
     assert id(gen_arr) in holder_ids, "hostile ndarray-subclass generator not inventoried"
     assert id(gen_tensor) in holder_ids, "hostile tensor-subclass generator not inventoried"
+    assert id(gen_cls_arr) in holder_ids, "hostile ndarray-subclass CLASS-attr rng missed (r63)"
+    assert id(gen_cls_tensor) in holder_ids, "hostile tensor-subclass CLASS-attr rng missed (r63)"
     assert counters == {"property": 0, "getattr": 0, "descriptor": 0}, (
         f"inventory executed user code: {counters}"
     )
@@ -519,14 +755,24 @@ def test_source_tripwire_numeric_payloads_not_hard_leaves() -> None:
     assert "_resolve_slot_member" in src_holder, (
         "mangled-slot resolution missing from _custom_holder_children (r61 corr_1 regression)"
     )
-    # behavioral: a tensor node contributes EXACTLY its instance state, nothing else
+    # behavioral: a tensor node contributes EXACTLY its instance state plus its
+    # class-surface edge (r63) -- nothing else; stock classes are trusted leaves in
+    # the downstream class branch, so no implementation-class internals ever expand
     shared_ids = host_nondeterminism_monitor._shared_namespace_dict_ids()
     gen = np.random.default_rng(0)
     tensor = torch.zeros(2)
     tensor.rng = gen
-    assert host_nondeterminism_monitor._inert_gc_children(tensor, shared_ids) == [gen]
-    assert host_nondeterminism_monitor._inert_gc_children(torch.zeros(2), shared_ids) == []
-    assert host_nondeterminism_monitor._inert_gc_children(np.float64(1.0), shared_ids) == []
+    assert host_nondeterminism_monitor._inert_gc_children(tensor, shared_ids) == [gen, torch.Tensor]
+    assert host_nondeterminism_monitor._inert_gc_children(torch.zeros(2), shared_ids) == [
+        torch.Tensor
+    ]
+    assert host_nondeterminism_monitor._inert_gc_children(np.float64(1.0), shared_ids) == [
+        np.float64
+    ]
+    for stock_class in (torch.Tensor, nn.Parameter, np.ndarray, np.float64, np.generic):
+        assert host_nondeterminism_monitor._is_trusted_leaf_class(stock_class), (
+            f"{stock_class!r} must stay a trusted leaf (no implementation-class expansion)"
+        )
     # ambient walls unchanged: modules and code objects stay severed to []
     assert host_nondeterminism_monitor._inert_gc_children(torch, shared_ids) == []
     assert host_nondeterminism_monitor._inert_gc_children((lambda: None).__code__, shared_ids) == []
