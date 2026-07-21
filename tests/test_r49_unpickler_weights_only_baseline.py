@@ -137,7 +137,7 @@ def test_reduce_belt_denies_storage_ctor_bypassing_find_class() -> None:
 
     u = SafeBundleUnpickler(io.BytesIO(b""))
     u.stack = [torch.UntypedStorage, (16,)]  # type: ignore[attr-defined]
-    with pytest.raises(pickle.UnpicklingError, match="storage construction via REDUCE"):
+    with pytest.raises(pickle.UnpicklingError, match="via REDUCE"):
         u.load_reduce()
 
 
@@ -147,10 +147,10 @@ def test_newobj_belts_deny_storage_ctor_bypassing_find_class() -> None:
 
     u = SafeBundleUnpickler(io.BytesIO(b""))
     u.stack = [torch.UntypedStorage, (16,)]  # type: ignore[attr-defined]
-    with pytest.raises(pickle.UnpicklingError, match="storage construction via NEWOBJ"):
+    with pytest.raises(pickle.UnpicklingError, match="via NEWOBJ"):
         u.load_newobj()
     u.stack = [torch.UntypedStorage, (16,), {}]  # type: ignore[attr-defined]
-    with pytest.raises(pickle.UnpicklingError, match="storage construction via NEWOBJ_EX"):
+    with pytest.raises(pickle.UnpicklingError, match="via NEWOBJ_EX"):
         u.load_newobj_ex()
 
 
@@ -291,10 +291,15 @@ def test_admit_set_constructs_no_storage_strict_subset_of_baseline() -> None:
 def test_intentional_inert_resolution_set_still_admitted() -> None:
     """Documented intentional inert resolutions still work (the delta is storage-only)."""
 
-    # torch inert data TYPEs and reconstructors that legit metadata references.
+    # torch inert data TYPEs and reconstructors that legit metadata references. These
+    # RESOLVE (the type object is an inert reference); only their CONSTRUCTION on a
+    # REDUCE/NEWOBJ belt is denied (r63 -- see test_r63_construct_deny.py). Keeping
+    # ``torch.Tensor`` / ``torch.FloatTensor`` resolvable here is exactly the
+    # resolution-admitted half the construction-refused half must NOT mask.
     for module, name in (
         ("torch", "Size"),
         ("torch", "Tensor"),
+        ("torch", "FloatTensor"),
         ("torch.nn.parameter", "Parameter"),
         ("torch._utils", "_rebuild_tensor_v2"),
     ):
