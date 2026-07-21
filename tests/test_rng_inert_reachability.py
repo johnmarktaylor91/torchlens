@@ -26,6 +26,8 @@ Whole-class immunizers pinned here:
 
 from __future__ import annotations
 
+import collections
+import collections.abc as cabc
 import functools
 import gc
 import queue
@@ -447,3 +449,148 @@ def test_hidden_generator_preexisting_thread_draw_is_unverifiable(
         assert "host_rng" in report.nondeterministic_sources
     finally:
         worker.stop()
+
+
+# --- r56 amb_1: sweep completeness independent of ambient process state -----------
+
+
+class _AbcSequenceHolder(cabc.Sequence):  # type: ignore[type-arg]
+    """Container SUBCLASS holder: its MRO carries ``collections.abc`` ABCs, the
+    class surface that bridged into the process-global ABC caches pre-fix."""
+
+    def __init__(self, gen: Any) -> None:
+        self.rng = gen
+        self._items: list[Any] = []
+
+    def __getitem__(self, i: Any) -> Any:
+        return self._items[i]
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+
+def test_sweep_independent_of_ambient_abc_cache_state(monkeypatch: Any) -> None:
+    """r56 amb_1 regression pin: a large AMBIENT object graph reachable only through
+    the ``collections.abc`` ABC caches (``_abc_impl`` registry/cache/negative-cache
+    weakref sets, fattened by ``isinstance`` checks process-wide) must NOT perturb the
+    sweep: the model's own generator is found, NO ambient generator is digested, and
+    the walk stays far under a REDUCED node cap with zero uncertainty. Pre-fix, the
+    class-surface walk of the subclass's ABC MRO expanded ``_abc_impl`` -> cache
+    weakrefs -> every ambient class's dict: planted ambient generators were digested
+    and the cap was exhausted BEFORE the model's generator (the r55 full-suite
+    failure on ``test_r47_generator_container_subclass``)."""
+
+    monkeypatch.setattr(rng_mod, "_INVENTORY_NODE_CAP", 20_000)
+    planted: list[Any] = []
+    ambient_keep: list[Any] = []
+    for i in range(400):
+        attrs: dict[str, Any] = {
+            "payload": {"data": list(range(30)), "nested": {"x": [dict(a=1), {"y": (1, 2)}]}}
+        }
+        if i % 40 == 0:
+            ambient_gen = np.random.default_rng(9000 + i)
+            attrs["ambient_gen"] = ambient_gen
+            planted.append(ambient_gen)
+        cls = type(f"_R56Ambient{i}", (), attrs)
+        inst = cls()
+        # the isinstance checks any library (the sweep itself included) performs:
+        isinstance(inst, cabc.Mapping)
+        isinstance(inst, cabc.Sequence)
+        isinstance(inst, cabc.Collection)
+        isinstance(inst, cabc.Set)
+        ambient_keep.append(inst)
+
+    gen = np.random.default_rng(0)
+    monitor = _make_monitor(_HolderModel(_AbcSequenceHolder(gen)))
+    snapshots = monitor._sweep_model_generators()
+    holders = [holder for holder, _digest in snapshots]
+    assert any(holder is gen for holder in holders), "model-held generator missed"
+    planted_ids = {id(g) for g in planted}
+    assert not any(id(holder) in planted_ids for holder in holders), (
+        "sweep digested AMBIENT generators (escaped the model subgraph)"
+    )
+    assert len(snapshots) == 1
+    assert monitor.result.uncertain is False
+    assert monitor.result.uncertain_detail == ()
+    del ambient_keep  # kept alive through the sweep above
+
+
+def test_abc_impl_leaf_and_stdlib_class_gate() -> None:
+    """Mechanism pins for the two r56 amb_1 walls: ``_abc._abc_data`` is a
+    ``_GC_EXPANSION_LEAF_TYPES`` member expanded to NOTHING (the process-global ABC
+    caches are never enqueued), and the class-surface gate leafs STDLIB classes
+    structurally while user-module and ``__main__`` classes stay walked (r53
+    class-attribute coverage intact)."""
+
+    impl = cabc.Collection.__dict__.get("_abc_impl")
+    if impl is not None and type(impl).__module__ == "_abc":  # CPython C _abc path
+        assert isinstance(impl, _GC_EXPANSION_LEAF_TYPES)
+        shared_ids = host_nondeterminism_monitor._shared_namespace_dict_ids()
+        assert host_nondeterminism_monitor._inert_gc_children(impl, shared_ids) == []
+    # stdlib classes: trusted leaves (class-SIDE only; instance descent untouched)
+    assert host_nondeterminism_monitor._is_trusted_leaf_class(cabc.Sequence) is True
+    assert host_nondeterminism_monitor._is_trusted_leaf_class(collections.UserDict) is True
+    # user-module and __main__ classes: still walked (r53 coverage)
+    assert host_nondeterminism_monitor._is_trusted_leaf_class(_AbcSequenceHolder) is False
+    main_cls = type("_R56MainCls", (), {"__module__": "__main__"})
+    assert host_nondeterminism_monitor._is_trusted_leaf_class(main_cls) is False
+
+
+def test_ambient_graph_subclass_generator_draw_still_unverifiable(tmp_path: Path) -> None:
+    """r56 amb_1 end-to-end immunizer (false-VERIFIED belt): with a large ambient graph
+    reachable only through the ABC caches, a container-subclass-held generator drawn on
+    a PRE-EXISTING (non-hooked) worker thread is STILL inventoried and digest-witnessed
+    -> UNVERIFIABLE. A reopened ambient escape that silently missed the model's
+    generator (the r55 full-suite failure shape) would let this read VERIFIED."""
+
+    ambient_keep: list[Any] = []
+    for i in range(300):
+        cls = type(
+            f"_R56AmbientE2E{i}",
+            (),
+            {"payload": {"data": list(range(20)), "nested": {"x": [dict(a=1)]}}},
+        )
+        inst = cls()
+        isinstance(inst, cabc.Mapping)
+        isinstance(inst, cabc.Sequence)
+        isinstance(inst, cabc.Collection)
+        ambient_keep.append(inst)
+
+    worker = _PreexistingWorker()
+    try:
+        gen = np.random.default_rng(777)
+        holder = _AbcSequenceHolder(gen)
+
+        class _Model(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.lin = nn.Linear(4, 4)
+                self.holder = holder
+                self.worker = worker
+
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                value = self.worker.run(lambda: float(self.holder.rng.random()))
+                hidden = self.lin(x)
+                return hidden * 2.0 if value < 0.5 else hidden * 3.0
+
+        torch.manual_seed(0)
+        x = torch.randn(2, 4)
+        trace = tl.trace(
+            _Model().eval(),
+            x.clone(),
+            capture=CaptureOptions(
+                intervention_ready=True,
+                capture_container_structure=True,
+                cache=False,
+                random_seed=1,
+            ),
+        )
+        path = tmp_path / "ambient_subclass.tlspec"
+        shutil.rmtree(path, ignore_errors=True)
+        trace.save(path, level="runnable", include_weights=True, include_activations=True)
+        report = tl.load(path).run(inputs=x.clone(), on_divergence="return_diverged").report
+        assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+        assert "host_rng" in report.nondeterministic_sources
+    finally:
+        worker.stop()
+    del ambient_keep  # kept alive through capture + sweep above
