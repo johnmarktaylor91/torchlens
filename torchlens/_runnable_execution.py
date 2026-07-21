@@ -18,7 +18,9 @@ import torch
 from . import _state
 from ._io._torch_symbols import torch_attr
 from ._runnable_state import (
+    _OUTPUT_COUNT_FLOOR,
     PreparedRunnableState,
+    RunResourceCeiling,
     _allocation_budget_bytes,
     prepare_runnable_state,
     runnable_tensor_byte_digest,
@@ -315,6 +317,11 @@ def _execute_loaded_sparse_transaction(
 ) -> RunResult:
     """Execute one sparse transaction whose caller owns rollback on escape."""
 
+    # r59: one aggregate resource ceiling per transaction -- bounds realized output
+    # count (per-call projection + bind backstop) and re-materialization clone bytes at
+    # every op-output snapshot site. The run-prep retention floor (prepare_runnable_state)
+    # already refused a guaranteed-OOM retained population before we got here.
+    ceiling = RunResourceCeiling(descriptor)
     # Escape-source witness slots must be digested at their production point (before
     # any later in-place op mutates the live tensor), matching the save-side digest.
     escape_witness_slot_ids = _tensor_derived_scalar_witness_slot_ids(descriptor)
@@ -323,6 +330,7 @@ def _execute_loaded_sparse_transaction(
         fork,
         descriptor,
         slot_values,
+        ceiling=ceiling,
         witness_slot_ids=escape_witness_slot_ids,
         witness_source_snapshots=witness_source_snapshots,
     )
@@ -406,6 +414,7 @@ def _execute_loaded_sparse_transaction(
                             callables[call.call_id],
                             slot_values,
                             registry_entry=registry_by_id.get(call.registry_id),
+                            ceiling=ceiling,
                         )
                 except RuntimeSignatureDriftError:
                     # r39 corr2_4: under ``return_diverged`` an admitted-but-INEXECUTABLE
@@ -426,6 +435,7 @@ def _execute_loaded_sparse_transaction(
                         output,
                         slot_values,
                         fork,
+                        ceiling=ceiling,
                         before_versions=before_versions,
                         attestation_slot_ids=attestation_slot_ids,
                         attestation_slot_values=attestation_slot_values,
@@ -458,7 +468,9 @@ def _execute_loaded_sparse_transaction(
             "capture device summary is incomplete."
         )
 
-    output = _reconstruct_output(descriptor, slot_values, fork, call_outputs=call_outputs)
+    output = _reconstruct_output(
+        descriptor, slot_values, fork, ceiling=ceiling, call_outputs=call_outputs
+    )
     contract_checks.extend(
         _post_execution_contract_checks(
             descriptor,
@@ -2514,6 +2526,49 @@ def _call_execution_context_entered(context: Any) -> Any:
 # recorded-output bound is layer 2, and both fail OPEN on a projection that raises.
 
 
+class _ProjectionCountExceeded(Exception):
+    """Private sentinel: a projection realized more fake outputs than the ceiling (r59).
+
+    Raised from ``_CountBoundedFakeTensorMode.__torch_dispatch__`` DURING fanout
+    construction (before the full fake tree exists), so a huge output-count literal can
+    never self-DoS the projection. It is caught BEFORE ``_preflight_call_allocation``'s
+    generic ``except Exception`` fail-open and converted to a typed refusal -- an honest
+    op never realizes more than ``max(recorded * 8, 4096)`` outputs, so a breach is a
+    hard faithfulness divergence, not a missing fake implementation. Deliberately NOT a
+    ``RuntimeError`` subclass so it is caught by its own clause ahead of the
+    allocation-classed / fail-open handling.
+    """
+
+
+# Allocator-death signatures on a raw ``RuntimeError`` message (r59 section 2.4). A
+# projection or real call that dies of allocation cannot fail OPEN: the real op's
+# identical prelude would die the same way. These convert to a typed refusal.
+_ALLOCATOR_SIGNATURES = (
+    "std::bad_alloc",
+    "DefaultCPUAllocator",
+    "can't allocate memory",
+    "CUDA out of memory",
+    "CUDACachingAllocator",
+)
+
+
+def _is_allocator_death(exc: BaseException) -> bool:
+    """Return whether an exception is an allocation failure (fail-closed, not fail-open)."""
+
+    if isinstance(exc, MemoryError):
+        return True
+    oom = getattr(torch, "OutOfMemoryError", None)
+    if isinstance(oom, type) and isinstance(exc, oom):
+        return True
+    cuda_oom = getattr(torch.cuda, "OutOfMemoryError", None)
+    if isinstance(cuda_oom, type) and isinstance(exc, cuda_oom):
+        return True
+    if isinstance(exc, RuntimeError):
+        message = str(exc)
+        return any(sig in message for sig in _ALLOCATOR_SIGNATURES)
+    return False
+
+
 @lru_cache(maxsize=1)
 def _fake_tensor_mode_class() -> type[Any] | None:
     """Return torch's ``FakeTensorMode`` class if importable, else ``None``.
@@ -2529,6 +2584,68 @@ def _fake_tensor_mode_class() -> type[Any] | None:
     except Exception:  # pragma: no cover - FakeTensorMode ships on supported torch.
         return None
     return FakeTensorMode
+
+
+def _count_fake_tensor_leaves(tree: Any) -> int:
+    """Count tensor leaves in a projection output tree (bounded container kinds)."""
+
+    total = 0
+    stack: list[Any] = [tree]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, torch.Tensor):
+            total += 1
+        elif isinstance(node, (tuple, list)):
+            stack.extend(node)
+        elif isinstance(node, Mapping):
+            stack.extend(node.values())
+    return total
+
+
+@lru_cache(maxsize=1)
+def _count_bounded_fake_tensor_mode_class() -> type[Any] | None:
+    """Return a ``FakeTensorMode`` subclass that caps realized fake-output arity (r59).
+
+    The subclass counts fake tensor leaves produced by EACH ``__torch_dispatch__`` and
+    raises ``_ProjectionCountExceeded`` the instant the running total passes the per-call
+    ceiling -- DURING fanout construction, before the whole fake output tree materializes.
+    This kills the ``tensor_split(x, N)`` self-DoS (r58 free_1): projecting the real op to
+    "see" its size would itself build N fake objects; counting during construction aborts
+    at ``ceiling + 1`` fakes regardless of N. Data-dependent ops (``nonzero``/``unique``)
+    still raise their own ``DynamicOutputShapeException`` through ``super()`` untouched, so
+    the fail-open path is preserved. ``None`` when ``FakeTensorMode`` is unavailable.
+    """
+
+    base = _fake_tensor_mode_class()
+    if base is None:
+        return None
+
+    class _CountBoundedFakeTensorMode(base):  # type: ignore[valid-type,misc]
+        def __init__(self, *args: Any, ceiling: int = _OUTPUT_COUNT_FLOOR, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self._tl_ceiling = ceiling
+            self._tl_fake_count = 0
+            self._tl_baseline = 0
+
+        def _tl_set_baseline(self) -> None:
+            # Discount fakes created by input conversion so only projection OUTPUT
+            # tensors count against the ceiling (from_tensor is not contractually
+            # dispatch-silent across torch versions -- keep this cross-version defense).
+            self._tl_baseline = self._tl_fake_count
+
+        def __torch_dispatch__(
+            self, func: Any, types: Any, args: Any = (), kwargs: Any = None
+        ) -> Any:
+            out = super().__torch_dispatch__(func, types, args, kwargs)
+            self._tl_fake_count += _count_fake_tensor_leaves(out)
+            if self._tl_fake_count - self._tl_baseline > self._tl_ceiling:
+                raise _ProjectionCountExceeded(
+                    f"projection realized {self._tl_fake_count - self._tl_baseline} fake "
+                    f"outputs, exceeding ceiling {self._tl_ceiling}"
+                )
+            return out
+
+    return _CountBoundedFakeTensorMode
 
 
 def _has_numeric_literal(value: Any, _depth: int = 0) -> bool:
@@ -2663,21 +2780,34 @@ def _preflight_call_allocation(
     args: Sequence[Any],
     kwargs: Mapping[str, Any],
     call: RunnableCallDescriptor,
+    ceiling: RunResourceCeiling | None = None,
 ) -> None:
-    """Refuse a numeric-literal call whose projected NEW allocation exceeds the budget.
+    """Refuse a numeric-literal call by projected NEW bytes AND realized output COUNT.
 
-    Runs the resolved callable under ``FakeTensorMode(allow_non_fake_inputs=True)``
-    (ZERO allocation) for EVERY taken-path call carrying a non-bool numeric literal
-    (``_has_numeric_literal``) -- the r55 op-name allowlist is deleted, so
-    "size-relevance" is decided structurally by the projection, not guessed. It
-    compares each projected output-device's NEWLY-allocated total (pure views /
-    input-returning / in-place outputs, whose fake storage aliases a fake input,
-    contribute zero -- ``_new_allocation_bytes``) against the never-under-estimating
-    live budget, and refuses typed BEFORE the real call allocates. If the projection
-    RAISES -- a data-dependent op with no fake/meta impl (``nonzero``/``unique`` ->
-    ``DynamicOutputShapeException``, or ``fold`` with capture-invalid ``output_size``)
-    -- it FAILS OPEN to the run-prep recorded-output bound, so a legitimate such op
-    is never over-refused (the r51 over-catch anti-pattern). An unavailable
+    Runs the resolved callable under a count-instrumented
+    ``FakeTensorMode(allow_non_fake_inputs=True)`` (ZERO allocation) for EVERY taken-path
+    call carrying a non-bool numeric literal (``_has_numeric_literal``) -- the r55 op-name
+    allowlist is deleted, so "size-relevance" is decided structurally by the projection,
+    not guessed. Two structural bounds fire before the real call:
+
+    * output COUNT (r59 free_1): the count-bounded mode caps realized fake outputs at
+      ``max(recorded * 8, 4096)`` DURING fanout construction and raises
+      ``_ProjectionCountExceeded`` -- caught here BEFORE the generic fail-open and
+      converted to a typed ``op_output_count_preflight`` refusal, so a
+      ``tensor_split(x, N)`` count bomb can neither self-DoS the projection nor slip
+      through as a 0-byte fanout.
+    * NEW bytes: each projected output-device's NEWLY-allocated total (pure views /
+      input-returning / in-place outputs contribute zero -- ``_new_allocation_bytes``)
+      is compared against the never-under-estimating live budget and refused typed at
+      ``op_allocation_preflight``.
+
+    If the projection RAISES a NON-allocation error -- a data-dependent op with no
+    fake/meta impl (``nonzero``/``unique`` -> ``DynamicOutputShapeException``, or ``fold``
+    with capture-invalid ``output_size``) -- it FAILS OPEN to the run-prep bound, so a
+    legitimate such op is never over-refused (the r51 over-catch anti-pattern). But an
+    ALLOCATION-classed projection failure (``std::bad_alloc`` in the C++ prelude at
+    int-limit N) fails CLOSED typed (r59 section 2.4): the real op's identical prelude
+    would die too, so failing open just runs the death twice. An unavailable
     ``FakeTensorMode`` fails open identically. ``entry`` is retained for call-site
     stability but no longer gates the projection.
     """
@@ -2685,22 +2815,49 @@ def _preflight_call_allocation(
     del entry  # r57: no op-name gate -- the numeric-literal predicate + projection decide.
     if not (_has_numeric_literal(list(args)) or _has_numeric_literal(dict(kwargs))):
         return
-    mode_cls = _fake_tensor_mode_class()
+    mode_cls = _count_bounded_fake_tensor_mode_class()
     if mode_cls is None:
         return  # feature-detect fail-open -> run-prep recorded-output bound
+    count_ceiling = (
+        ceiling.per_call_output_count_ceiling(call)
+        if ceiling is not None
+        else max(len(getattr(call, "output_slot_ids", ()) or ()) * 8, _OUTPUT_COUNT_FLOOR)
+    )
     try:
-        with mode_cls(allow_non_fake_inputs=True) as mode:
+        with mode_cls(allow_non_fake_inputs=True, ceiling=count_ceiling) as mode:
             fake_args = _tree_to_fake(mode, list(args))
             fake_kwargs = _tree_to_fake(mode, dict(kwargs))
             input_storage_ids = _input_storage_ids(fake_args) | _input_storage_ids(fake_kwargs)
+            mode._tl_set_baseline()
             projected = func(*fake_args, **fake_kwargs)
-    except Exception:
-        # Data-dependent / no fake impl (nonzero/unique) OR any projection
-        # failure (e.g. ``fold`` with capture-invalid ``output_size``): FAIL OPEN.
-        # The recorded-output-slot bound (run-prep) and the parse-time
-        # literal-magnitude gate remain in force, and a genuinely inconsistent
-        # signature still raises ``RuntimeSignatureDriftError`` before allocating;
-        # a legitimate data-dependent op MUST still run.
+    except _ProjectionCountExceeded as exc:
+        # Count breach: a faithful replay never realizes more than the ceiling. Typed
+        # refusal, BEFORE the generic fail-open and before the full fake/real tree exists.
+        raise RunCapabilityUnavailableError(
+            f"Sparse call {call.call_id!r} projects more than {count_ceiling} output "
+            f"tensors ({exc}); the recorded output-count literal would drive an "
+            "unbounded fanout allocation. The descriptor may be tampered.",
+            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+            detection_stage="op_output_count_preflight",
+            call_id=call.call_id,
+            affected_op_labels=call.op_labels,
+            output_count_ceiling=count_ceiling,
+        ) from exc
+    except Exception as exc:
+        # r59 section 2.4: an ALLOCATION-classed projection failure (std::bad_alloc in
+        # the O(N) C++ prelude at int-limit N) fails CLOSED -- the real op's identical
+        # prelude dies too. Every OTHER failure (data-dependent nonzero/unique, fold
+        # output_size inconsistency) keeps today's FAIL OPEN so a legitimate op runs.
+        if _is_allocator_death(exc):
+            raise RunCapabilityUnavailableError(
+                f"Sparse call {call.call_id!r} could not be projected without an "
+                "allocation failure; the recorded literals drive an out-of-budget "
+                "allocation in the operator prelude. The descriptor may be tampered.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                detection_stage="op_allocation_preflight",
+                call_id=call.call_id,
+                affected_op_labels=call.op_labels,
+            ) from exc
         return
     for device, requested in _new_allocation_bytes(projected, input_storage_ids).items():
         available = _allocation_budget_bytes(device)
@@ -2726,6 +2883,7 @@ def _execute_sparse_call(
     slot_values: Mapping[str, torch.Tensor],
     *,
     registry_entry: CallableRegistryEntry | None = None,
+    ceiling: RunResourceCeiling | None = None,
 ) -> Any:
     """Construct and execute one sparse call from literal and tensor leaves."""
 
@@ -2754,10 +2912,29 @@ def _execute_sparse_call(
     # refusal here replaces the raw allocator OOM-kill a hostile literal would
     # otherwise cause; it never masks a genuine signature drift (the drift path
     # below still runs the real call for every non-refused request).
-    _preflight_call_allocation(registry_entry, func, args, kwargs, call)
+    _preflight_call_allocation(registry_entry, func, args, kwargs, call, ceiling)
     try:
         return func(*args, **kwargs)
+    except RunCapabilityUnavailableError:
+        # A typed capability refusal from a nested guard (e.g. a re-materialization
+        # clone inside a resolved callable) is already correct -- never re-cloak it as
+        # signature drift.
+        raise
     except Exception as exc:
+        # r59 section 2.4: an allocation-classed death from the REAL call is a capability
+        # fact, not signature drift -- re-type it typed at ``op_allocation_execution`` so a
+        # gate-4-passing run whose live+transient peak still overruns the host reports an
+        # allocation refusal, never a misleading ``runtime_signature_drift``.
+        if _is_allocator_death(exc):
+            raise RunCapabilityUnavailableError(
+                f"Sparse call {call.call_id!r} failed with an allocation error during "
+                "execution; its recorded shapes exhaust this host's memory. The "
+                "descriptor may be tampered or the host is too small.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                detection_stage="op_allocation_execution",
+                call_id=call.call_id,
+                affected_op_labels=call.op_labels,
+            ) from exc
         raise RuntimeSignatureDriftError(
             f"Resolved callable rejected sparse recipe for {call.call_id!r}: {exc}",
             code=RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value,
@@ -2771,6 +2948,7 @@ def _populate_source_slots(
     descriptor: SparseRunDescriptor,
     slot_values: Mapping[str, torch.Tensor],
     *,
+    ceiling: RunResourceCeiling,
     witness_slot_ids: frozenset[str] = frozenset(),
     witness_source_snapshots: dict[str, torch.Tensor] | None = None,
 ) -> None:
@@ -2788,13 +2966,26 @@ def _populate_source_slots(
         value = slot_values.get(slot.slot_id)
         op = _op_for_slot(fork, slot.slot_id)
         if value is not None and op is not None:
-            op._internal_set("out", value.detach().clone())
+            op._internal_set(
+                "out",
+                ceiling.guarded_clone(
+                    value,
+                    call_id=None,
+                    slot_id=slot.slot_id,
+                    affected_op_labels=(),
+                ),
+            )
         if (
             value is not None
             and witness_source_snapshots is not None
             and slot.slot_id in witness_slot_ids
         ):
-            witness_source_snapshots[slot.slot_id] = value.detach().clone()
+            witness_source_snapshots[slot.slot_id] = ceiling.guarded_clone(
+                value,
+                call_id=None,
+                slot_id=slot.slot_id,
+                affected_op_labels=(),
+            )
 
 
 def _write_argument(
@@ -2870,6 +3061,7 @@ def _bind_call_outputs(
     slot_values: dict[str, torch.Tensor],
     fork: Any,
     *,
+    ceiling: RunResourceCeiling,
     before_versions: Mapping[str, int],
     attestation_slot_ids: frozenset[str],
     attestation_slot_values: dict[str, torch.Tensor],
@@ -2883,6 +3075,10 @@ def _bind_call_outputs(
     output = _resolve_setter_output(call, output, slot_values)
     expected_paths = tuple(slots[slot_id].output_path or () for slot_id in call.output_slot_ids)
     actual_paths = _tensor_leaf_paths(output)
+    # r59 gate 2 (backstop): a projection-skipped call (data-dependent fail-open, or no
+    # numeric literal) cannot smuggle an unbounded realized-output tree past the
+    # front-line count projection. Honest realized == recorded, so this is pure headroom.
+    ceiling.charge_realized_outputs(call, len(actual_paths))
     expected_structure_paths = _canonicalize_structseq_output_paths(output, expected_paths)
     actual_structure_paths = _canonicalize_structseq_output_paths(output, actual_paths)
     output_type_matches = _recorded_structseq_output_type_matches(fork, call, output)
@@ -2945,16 +3141,37 @@ def _bind_call_outputs(
                 slot_values[version.slot_id] = value
                 produced_slot_ids.add(version.slot_id)
         for produced_slot_id in produced_slot_ids & attestation_slot_ids:
-            attestation_slot_values[produced_slot_id] = value.detach().clone()
+            # r59 gate 3: byte-guard every op-output snapshot before it allocates.
+            attestation_slot_values[produced_slot_id] = ceiling.guarded_clone(
+                value,
+                call_id=call.call_id,
+                slot_id=produced_slot_id,
+                affected_op_labels=call.op_labels,
+            )
         if witness_source_snapshots is not None:
             # Snapshot every escape-witness source slot at its production point so a
             # later in-place mutation of the live tensor cannot restale the digest
             # comparison (H3): the run-digest then matches the pre-mutation save-digest.
             for produced_slot_id in produced_slot_ids & witness_slot_ids:
-                witness_source_snapshots[produced_slot_id] = value.detach().clone()
+                witness_source_snapshots[produced_slot_id] = ceiling.guarded_clone(
+                    value,
+                    call_id=call.call_id,
+                    slot_id=produced_slot_id,
+                    affected_op_labels=call.op_labels,
+                )
         op = _op_for_label(fork, op_label)
         if op is not None:
-            op._internal_set("out", value.detach().clone())
+            # r59 gate 3: byte-guard the fork ``Op.out`` snapshot BEFORE it materializes a
+            # tampered view (r58 free_2) and before the shape-mismatch check below.
+            op._internal_set(
+                "out",
+                ceiling.guarded_clone(
+                    value,
+                    call_id=call.call_id,
+                    slot_id=slot_id,
+                    affected_op_labels=(op_label,),
+                ),
+            )
         shape_ok = tuple(value.shape) == slot.shape
         dtype_ok = str(value.dtype) == slot.dtype
         checks.append(
@@ -3137,6 +3354,7 @@ def _reconstruct_output(
     slot_values: Mapping[str, torch.Tensor],
     fork: Any,
     *,
+    ceiling: RunResourceCeiling,
     call_outputs: Mapping[str, Any],
 ) -> Any:
     """Reconstruct the model-output container and populate synthetic output Ops."""
@@ -3158,7 +3376,16 @@ def _reconstruct_output(
         slot_values_dict[slot.slot_id] = value
         op = _op_for_slot(fork, slot.slot_id)
         if op is not None:
-            op._internal_set("out", value.detach().clone())
+            # r59 gate 3: byte-guard the reconstructed model-output snapshot too.
+            op._internal_set(
+                "out",
+                ceiling.guarded_clone(
+                    value,
+                    call_id=None,
+                    slot_id=slot.slot_id,
+                    affected_op_labels=(),
+                ),
+            )
         values.append((slot.output_path or (), value))
     container_spec = _output_container_spec(fork)
     if container_spec is not None:

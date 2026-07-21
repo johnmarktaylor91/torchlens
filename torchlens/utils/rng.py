@@ -1732,7 +1732,10 @@ class host_nondeterminism_monitor:
         submodule held in a plain attribute / ``list`` / ``dict`` / nested container / custom
         holder) is descended through the same ``__dict__`` / ``__slots__`` protocol, so a numpy
         Generator behind an unregistered submodule is witnessed (registered ids are premarked so
-        there is no double-walk). The former
+        there is no double-walk; r59 hon_1: the registered seed loop routes through
+        :meth:`_custom_holder_children`, so a registered module's ``__slots__`` slot values are
+        seeded alongside its ``__dict__`` -- the former dict-only seed left a slot-held generator
+        unwitnessed on a pre-existing thread). The former
         ``budget = 2000`` early return truncated SILENTLY (a generator on a late
         submodule of any >~120-module model was missed -> false VERIFIED); the
         replacement :data:`_INVENTORY_NODE_CAP` is defensive only -- exhaustion flags
@@ -1797,17 +1800,32 @@ class host_nondeterminism_monitor:
             shared_namespace_ids = self._shared_namespace_dict_ids()
             pending: list[Any] = []
             for module in modules():
-                pending.extend(getattr(module, "__dict__", {}).values())
+                # r59 hon_1: seed BOTH the instance ``__dict__`` values AND the
+                # ``__slots__`` slot values of every REGISTERED module through
+                # ``_custom_holder_children`` (slot reads go through the slot member
+                # descriptor -- inert, no property / ``__getattr__`` / user code), the
+                # same protocol unregistered holders already get. The former
+                # ``__dict__``-only seed left a registered module's SLOT-held generator
+                # invisible: the r51 premark below (KEPT -- coverage-neutral dedup)
+                # skips a registered module when it is later reached as a walk node,
+                # and the ROOT module is never a walk node at all, so
+                # ``_custom_holder_children`` never ran for the ``model.modules()``
+                # set -> a pre-existing-thread draw from a slot generator was
+                # unwitnessed (false VERIFIED). Dropping the premark instead is
+                # DISQUALIFIED: it still misses the top module's slots and re-walks
+                # every registered submodule (~2.2x).
+                pending.extend(self._custom_holder_children(module))
                 # r53 corr_1 (class-surface edge): the registered module's CLASS is a holder
                 # surface too -- a class descriptor or a class-attribute generator on the
                 # user model class is invisible to the instance-``__dict__`` seed above.
                 pending.append(type(module))
             # r51 hon1_1: nn.Module is now a recursable holder (``_is_recursable_custom_holder``),
             # so a REGISTERED submodule reached during descent would be re-walked even though the
-            # top loop already seeded its ``__dict__``. Premark every registered module id so the
+            # top loop already seeded it. Premark every registered module id so the
             # ``id in seen_container_ids`` guards skip that re-walk -- a coverage-NEUTRAL dedup (a
-            # generator directly on a registered module is seeded and digested from its ``__dict__``
-            # before the module OBJECT is ever reached) that kills the ~2x double-walk. UNREGISTERED
+            # generator directly on a registered module is seeded and digested from its
+            # ``__dict__`` / ``__slots__`` values -- r59 hon_1 -- before the module OBJECT is ever
+            # reached) that kills the ~2x double-walk. UNREGISTERED
             # submodules are absent from ``modules()`` and stay un-premarked, so they ARE descended.
             seen_container_ids: set[int] = {id(module) for module in modules()}
             visited_nodes = 0

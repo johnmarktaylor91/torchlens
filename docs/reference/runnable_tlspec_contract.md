@@ -665,9 +665,20 @@ analysis-only with the diagnostic intact.
 
 The same host-infeasibility fact also fires at detection stage `op_allocation_preflight` (r55
 free_1): before the taken-path DAG executes, every recorded op-output slot (roles `intermediate`
-and `output`) is compared **per slot** -- never a whole-graph sum, so a long trace with many small
-outputs is never over-refused -- against the identical never-under-estimating live budget, and a
-single recorded output larger than the whole device budget is refused typed before it can allocate.
+and `output`) is compared **per slot** against the identical never-under-estimating live budget,
+and a single recorded output larger than the whole device budget is refused typed before it can
+allocate. It is compared ADDITIONALLY as a per-device **retention floor** (r59, detection stage
+`run_retention_preflight`): loaded-sparse replay retains a materialized clone of every taken-path
+op output (one `Op.out` clone per `(call, output_slot_id)` at bind, plus one reconstruct clone per
+model-`output` slot) for the life of the returned trace, so the SUM of recorded op-output bytes is
+a guaranteed lower bound on replay memory. A descriptor whose per-device floor exceeds the device
+budget could never complete on this host and is refused typed at `run_retention_preflight` before
+any call executes -- closing the accumulation seam (r58 free_1/free_2) where many honest,
+individually-feasible output slots together exhaust the host, each passing the per-slot bound and
+each clone passing its per-clone byte guard. A long trace with many small outputs is still never
+over-refused: the floor UNDER-counts true retention (it ignores live slot values, raw outputs, and
+attestation/witness snapshots) and the budget never under-estimates, so a refusal only ever names a
+guaranteed mid-replay allocator death.
 This closes the op-execution literal-argument seam the r53 state-slot / arity gates did not cover:
 an attacker who edits a taken-path size literal (`torch.arange(n)`/`zeros(n)`) to a huge value can
 no longer drive an allocation bomb on the default `tl.load(path).run(inputs)` path. Symmetrically,
@@ -701,6 +712,55 @@ projection open, but the real op raises its own consistency check before allocat
 thus covers literal sizes, tensor slots, output slots, and staged state uniformly, before allocation:
 the fake-tensor projection is the primary per-call layer and the run-preparation output-slot bound is
 its fail-open fallback.
+
+Output COUNT (r59 free_1). The per-op byte budget is structurally blind to how MANY output tensors
+a call produces: `torch.tensor_split(x, N)` returns N mostly-empty tensors (~0 bytes) off a single
+int literal, and PROJECTING it to "see" its size itself builds the N-tensor fake tree -- the defence
+executing the attack (linear-in-N CPU/memory before any refusal). r59 count-instruments the
+projection: the `FakeTensorMode` subclass counts fake tensor leaves produced by each
+`__torch_dispatch__` and refuses typed at `op_output_count_preflight` the instant the running total
+passes `max(recorded_count * 8, 4096)` -- DURING fanout construction, before the whole fake OR real
+output tree materializes, so a huge N aborts at `ceiling + 1` fakes and can never self-DoS. A
+bind-time aggregate accountant (`max(sum recorded * 8, 4096)` over realized leaves) is the backstop
+for any projection-skipped path (a data-dependent op that fails open, or a call with no numeric
+literal). Both constants are load-bearing and must never be "simplified": the FLOOR carries honest
+LOW-arity DECOMPOSITIONS (a legit `interpolate`/`batch_norm`/`einsum` projects up to 55/28/12 fakes
+per 1 recorded output), and the MARGIN carries HIGH-arity headroom (a legit `unbind` recording 2048
+outputs needs a 16384 ceiling). The count sentinel BYPASSES the projection fail-open;
+`DynamicOutputShapeException`-style data-dependent failures still fail open. The gate is op-agnostic
+-- it closes the arity-vs-bytes blindness as a CLASS, with no op-name list or arity-estimator
+registry (which would be the r55 size-driving allowlist reborn).
+
+Re-materialization BYTES (r59 free_2). A view whose logical numel exceeds its physical storage
+(`expand`/`broadcast_to`/`as_strided`) is correctly charged zero NEW bytes by the projection, but
+the framework's own bind-time snapshot clone (`value.detach().clone()` onto the fork `Op.out`, plus
+the attestation/witness/reconstruct snapshots) re-materializes exactly the allocation the exclusion
+assumed away -- an attacker inflates the size literal while leaving the recorded slot honest and
+small, and the clone OOM-kills the victim. r59 routes every TorchLens-owned op-output snapshot clone
+through a `guarded_clone` that compares `numel * itemsize` (no allocation) against the SAME per-device
+live budget and refuses typed at `clone_allocation_preflight` BEFORE the clone allocates and before
+any shape-mismatch check. It is provably non-regressive: an honest clone equals an honest recorded
+slot that already passed the run-prep bound, so a faithful run is never refused; only a tampered view
+(honest small slot, inflated size literal) is refused before materialization.
+
+Allocation-classed projection/execution failures (r59 section 2.4). A projection failure that is
+itself an allocation failure -- `MemoryError`, `torch.OutOfMemoryError`, or a `RuntimeError` carrying
+an allocator signature (`std::bad_alloc`/`DefaultCPUAllocator`/`can't allocate memory`/`CUDA out of
+memory`) -- fails CLOSED at `op_allocation_preflight` instead of failing open: a projection allocates
+strictly less than the real op, so a projection that cannot even fake-project is proof the real
+call's identical prelude dies too, and failing open just runs the death twice. Every OTHER projection
+failure keeps today's fail-open. Symmetrically, an allocation-classed exception from the REAL call
+raises `run_capability_unavailable` at detection stage `op_allocation_execution` (never a misleading
+`runtime_signature_drift`) -- an allocator death is a capability fact, not signature drift. Both are
+re-typings of already-failing paths; neither can refuse a completable run. Together these gates close
+the allocation-DoS class as a WHOLE -- output-count blindness (r58 free_1), the re-materialization /
+bind-clone seam (r58 free_2), and the honest-slot accumulation seam are all CLOSED, not patched
+op-by-op. Accepted r59 residual: a hostile output-count literal can still buy bounded typed-refusal
+LATENCY (seconds to tens of seconds at int64-limit magnitudes) inside a single C++ operator prelude
+that NO in-process gate -- step count or wall clock -- can preempt (the O(N) work completes in one C++
+frame before the first `__torch_dispatch__`); it cannot allocate past the gates and always terminates
+in a typed refusal, so cumulative-projected-bytes, projection-step, and wall-clock bounds are
+DIAGNOSTIC-ONLY and never hard refusals (a legit deep model or slow-CI host would otherwise false-refuse).
 
 `callable_moved_or_renamed` is a successful alias diagnostic. `runtime_signature_drift` rolls back
 but is compatibility failure, not path divergence. `semantic_drift` comes only from the independent
