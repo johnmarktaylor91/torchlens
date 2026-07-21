@@ -13,7 +13,7 @@ from typing import Any
 import torch
 
 from . import _state
-from .errors import StateBindingError
+from .errors import RunCapabilityUnavailableError, StateBindingError
 from .utils._torch_symbols import torch_attr
 from .runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
@@ -281,6 +281,12 @@ def prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunna
     # every state source (staged/embedded/random-init), so a tampered self-consistent
     # descriptor cannot drive an out-of-budget op allocation and OOM-kill the host.
     _preflight_run_allocation((), _recorded_output_slots(descriptor))
+    # r59: aggregate retention floor -- the SUM of guaranteed-retained op-output clone
+    # bytes per device provably exceeding the budget is a guaranteed mid-replay OOM the
+    # per-slot bound above cannot see (honest, individually-feasible slots that together
+    # exhaust the host). Refused typed here, before the DAG runs. Zero false refusals:
+    # the floor under-counts true retention and the budget never under-estimates.
+    _preflight_retention_floor(descriptor)
     nonpersistent_buffers = _prepared_nonpersistent_buffers(trace, descriptor)
 
     def _staged(prepared: PreparedRunnableState) -> PreparedRunnableState:
@@ -803,6 +809,138 @@ def _allocation_budget_bytes(device: torch.device) -> int:
     return _STATIC_ALLOCATION_BUDGET_BYTES
 
 
+_OUTPUT_COUNT_MARGIN = 8
+"""Realized-output headroom multiplier over the recorded count (r59).
+
+An honest replay produces EXACTLY the recorded number of output tensors per call, so
+realized == recorded and the margin is pure headroom. It is load-bearing only at HIGH
+recorded arity: a legit ``unbind`` recording 2048 outputs needs a 16384 ceiling. A
+smaller multiple would false-refuse a legitimate high-arity op; never drop it.
+"""
+
+_OUTPUT_COUNT_FLOOR = 4096
+"""Absolute realized-output floor (r59, LOAD-BEARING -- do not simplify to ``rec * MARGIN``).
+
+A legit LOW-arity op DECOMPOSES into many fake intermediates during projection -- measured
+up to 55 fakes per 1 recorded output (``interpolate`` = 55, ``batch_norm`` = 28,
+``einsum`` = 12, ``layer_norm`` = 11, ``addmm`` = 9). The floor carries those honest
+decompositions so the count gate never over-refuses them. It must NEVER be reduced to
+``recorded * MARGIN``: that would refuse ``interpolate``/``batch_norm``/... on a
+single-output call.
+"""
+
+
+class RunResourceCeiling:
+    """Aggregate replay resource admission for one loaded-sparse transaction (r59).
+
+    Bounds two axes the per-op byte budget (:func:`_allocation_budget_bytes`) is
+    structurally blind to, closing the allocation-DoS class as a WHOLE rather than
+    op-by-op (each prior round found a new op-shape seam the byte budget missed):
+
+    * output COUNT -- the number of output tensors a projection/bind may realize,
+      bounded per call and aggregately by ``max(recorded * 8, 4096)`` and refused
+      typed at ``op_output_count_preflight``. The front line is a count-instrumented
+      ``FakeTensorMode`` in ``_preflight_call_allocation`` (refuses DURING fanout,
+      before the full fake OR real tree exists, so a huge N cannot self-DoS the
+      projection); :meth:`charge_realized_outputs` is the bind-time backstop for any
+      projection-skipped path (data-dependent fail-open, or no numeric literal).
+    * re-materialization BYTES -- every TorchLens-owned op-output snapshot clone is
+      byte-guarded against the live per-device budget BEFORE it allocates
+      (:meth:`guarded_clone` -> ``clone_allocation_preflight``). An honest clone equals
+      an honest recorded slot that already passed run-prep, so the guard is provably
+      non-regressive; a tampered huge view (honest small recorded slot, inflated size
+      literal) is refused before the clone materializes it.
+
+    The third aggregate axis (whole-run RETAINED bytes) is a run-prep floor in
+    :func:`_preflight_retention_floor`, co-located because it shares the same budget.
+    """
+
+    __slots__ = ("_expected_output_count", "_realized_output_count")
+
+    def __init__(self, descriptor: SparseRunDescriptor) -> None:
+        self._expected_output_count = sum(len(call.output_slot_ids) for call in descriptor.calls)
+        self._realized_output_count = 0
+
+    def aggregate_output_count_ceiling(self) -> int:
+        """Aggregate realized-leaf ceiling ``max(sum recorded * MARGIN, FLOOR)``."""
+
+        return max(self._expected_output_count * _OUTPUT_COUNT_MARGIN, _OUTPUT_COUNT_FLOOR)
+
+    def per_call_output_count_ceiling(self, call: Any) -> int:
+        """Per-call realized-leaf ceiling ``max(recorded * MARGIN, FLOOR)``."""
+
+        recorded = len(getattr(call, "output_slot_ids", ()) or ())
+        return max(recorded * _OUTPUT_COUNT_MARGIN, _OUTPUT_COUNT_FLOOR)
+
+    def charge_realized_outputs(self, call: Any, count: int) -> None:
+        """Accrue realized output leaves; refuse typed past the aggregate ceiling.
+
+        The bind-time backstop for gate 1: a projection-skipped call (data-dependent
+        fail-open, or one carrying no numeric literal to project on) cannot smuggle an
+        unbounded realized-output tree past the front-line projection. Honest realized
+        equals recorded, so the aggregate margin is pure headroom and this never fires
+        on a faithful run.
+        """
+
+        self._realized_output_count += count
+        ceiling = self.aggregate_output_count_ceiling()
+        if self._realized_output_count > ceiling:
+            raise RunCapabilityUnavailableError(
+                f"Sparse replay realized {self._realized_output_count} output tensors, "
+                f"exceeding the aggregate ceiling {ceiling} (recorded "
+                f"{self._expected_output_count}). A tampered descriptor cannot drive an "
+                "unbounded output-count allocation on the default run path.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                detection_stage="op_output_count_preflight",
+                call_id=getattr(call, "call_id", None),
+                affected_op_labels=tuple(getattr(call, "op_labels", ())),
+                charged_output_count=self._realized_output_count,
+                output_count_ceiling=ceiling,
+            )
+
+    def guarded_clone(
+        self,
+        value: torch.Tensor,
+        *,
+        call_id: str | None,
+        slot_id: str | None,
+        affected_op_labels: Sequence[str] = (),
+    ) -> torch.Tensor:
+        """Byte-guard one op-output snapshot clone before it allocates (gate 3).
+
+        ``numel * itemsize`` (pure integer math, no allocation) is compared to the
+        SAME never-under-estimating per-device budget run-prep uses; a clone that
+        could never fit is refused typed at ``clone_allocation_preflight`` BEFORE the
+        materializing ``.clone()`` and before any shape-mismatch check. This closes the
+        view-exclusion / bind-clone composition (r58 free_2): the projection correctly
+        charges a view zero NEW bytes, and this bounds the framework's own
+        re-materialization of that view at every snapshot site. An honest clone equals
+        an honest recorded slot that already passed the run-prep bound, so a faithful
+        run is never refused here.
+        """
+
+        requested = int(value.numel()) * int(value.element_size())
+        device = value.device
+        available = _allocation_budget_bytes(device)
+        if requested > available:
+            raise RunCapabilityUnavailableError(
+                f"Re-materializing sparse call {call_id!r} output slot {slot_id!r} "
+                f"requires a {requested}-byte clone on device {str(device)!r}, but only "
+                f"{available} bytes are available on this host. A recorded view whose "
+                "size literal was inflated (honest small slot) cannot be materialized "
+                "into an out-of-budget clone; the descriptor may be tampered.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                detection_stage="clone_allocation_preflight",
+                call_id=call_id,
+                slot_id=slot_id,
+                device=str(device),
+                required_bytes=requested,
+                available_bytes=available,
+                affected_op_labels=tuple(affected_op_labels),
+            )
+        return value.detach().clone()
+
+
 _OP_OUTPUT_SLOT_ROLES = frozenset({TensorSlotRole.INTERMEDIATE, TensorSlotRole.OUTPUT})
 """Slot roles whose tensors are ALLOCATED by an op during replay (r55 free_1).
 
@@ -884,6 +1022,68 @@ def _preflight_run_allocation(
                 code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
                 detection_stage="op_allocation_preflight",
                 device=str(device),
+                required_bytes=requested,
+                available_bytes=available,
+            )
+
+
+def _preflight_retention_floor(descriptor: SparseRunDescriptor) -> None:
+    """Refuse a run whose GUARANTEED retained clone bytes provably exceed the budget (r59).
+
+    Loaded-sparse replay retains a materialized clone of every taken-path op output for
+    the life of the returned trace (one ``Op.out`` clone per ``(call, output_slot_id)``
+    at bind, plus one reconstruct clone per model-``output`` slot). The SUM of those
+    recorded op-output bytes is therefore a guaranteed LOWER BOUND on replay memory --
+    a floor. A descriptor whose per-device floor exceeds the never-under-estimating
+    live budget could never complete on this host: every honest per-op allocation may
+    pass the per-slot bound (:func:`_preflight_run_allocation`) and every clone may pass
+    its per-clone byte guard, yet their cumulative retention guarantees a mid-replay
+    allocator death (r58 free_1/free_2 accumulation seam: e.g. 40 honest 4 GB output
+    slots = 160 GB floor > a 105 GB host budget). This refuses that typed at
+    ``run_retention_preflight`` before any call executes.
+
+    The floor UNDER-counts true retention (it ignores live ``slot_values`` entries, raw
+    ``call_outputs``, attestation/witness snapshots) and the budget never under-estimates,
+    so ``floor > budget`` proves a guaranteed OOM -- a refusal can NEVER hit a completable
+    run (zero false refusals). A legit deep model whose cumulative retention is within
+    budget (a deep-adds chain of small outputs) is untouched.
+    """
+
+    slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
+    floor: dict[str, int] = defaultdict(int)
+    devices: dict[str, torch.device] = {}
+
+    def _charge(slot: TensorSlotDescriptor) -> None:
+        device = _slot_device(slot)
+        key = str(device)
+        devices[key] = device
+        floor[key] += math.prod(slot.shape) * _torch_dtype(slot.dtype).itemsize
+
+    # One retained ``Op.out`` clone per taken-path op label (bind, ``:2957``): alias/
+    # version slots are NOT in ``output_slot_ids`` so each producing op label charges
+    # exactly once, mirroring ``_bind_call_outputs``'s ``output_slot_ids`` zip.
+    for call in descriptor.calls:
+        for slot_id in call.output_slot_ids:
+            slot = slots.get(slot_id)
+            if slot is not None:
+                _charge(slot)
+    # One additional retained reconstruct clone per model-output slot (``:3161``).
+    for slot in descriptor.tensor_slots:
+        if slot.role is TensorSlotRole.OUTPUT:
+            _charge(slot)
+
+    for key, requested in sorted(floor.items()):
+        available = _allocation_budget_bytes(devices[key])
+        if requested > available:
+            raise RunCapabilityUnavailableError(
+                f"Loaded-sparse replay retains at least {requested} bytes of op-output "
+                f"clones on device {key!r} for the run's lifetime, but only {available} "
+                "bytes are available on this host. The cumulative retained state exceeds "
+                "the budget and the run is guaranteed to fail mid-replay; the descriptor "
+                "may be tampered or the host is too small.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                detection_stage="run_retention_preflight",
+                device=key,
                 required_bytes=requested,
                 available_bytes=available,
             )
