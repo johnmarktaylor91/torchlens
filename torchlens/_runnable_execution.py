@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence, Set as AbstractSet
+import math
 import sys
 from contextlib import contextmanager, nullcontext
 from functools import lru_cache
@@ -2483,65 +2484,34 @@ def _call_execution_context_entered(context: Any) -> Any:
             ctx.__exit__(None, None, None)
 
 
-# r55 C3 (free_1 HIGH / sec_1 MED): op-agnostic allocation-bomb preflight.
+# r55 C3 -> r57 C3 (free_1 HIGH / sec_1 MED / corr_2 HIGH): op-agnostic
+# allocation-bomb preflight, with the size-driving-op ALLOWLIST DELETED.
 #
 # The op-execution literal-argument path is the seam r53 free_1 missed: a hostile
-# ``.tlspec`` can edit one plaintext ``manifest.json`` integer so a taken-path call
-# (``torch.zeros(10**12)``/``arange(n)``/``x.expand(n)``) drives a multi-terabyte
-# allocation and OOM-kills the default ``tl.load(path).run(inputs)`` victim. The
-# recorded-output-slot bound (``_preflight_run_allocation`` at run-prep) catches the
-# *self-consistent* tamper (literal AND output slot both huge) but NOT the
-# literal-only tamper (output slot left honest/small), and per-arg ``.to("meta")``
-# never forces a *factory* op (no tensor operand) onto meta. ``FakeTensorMode``
-# closes the class op-agnostically: it projects the call's output shape/bytes
-# WITHOUT allocating (fake tensors never allocate -- factory ops included), so a
-# projected over-budget request is refused BEFORE the real allocator runs. It is
-# the primary layer; the run-prep recorded-output bound is layer 2.
-_SIZE_DRIVING_QUALNAME_TAILS: frozenset[str] = frozenset(
-    {
-        # Factory ops: the attacker owns ``numel`` outright through a literal
-        # (no tensor operand), the case per-arg ``.to("meta")`` cannot bound.
-        "zeros",
-        "ones",
-        "empty",
-        "full",
-        "randn",
-        "rand",
-        "randint",
-        "randperm",
-        "arange",
-        "range",
-        "eye",
-        "linspace",
-        "logspace",
-        "empty_strided",
-        "new_zeros",
-        "new_ones",
-        "new_empty",
-        "new_full",
-        "new_empty_strided",
-        # MATERIALIZING shape-expanding ops: a literal size/multiplier composes
-        # with live dims and actually allocates. Pure VIEW ops (``expand``,
-        # ``broadcast_to``, ``as_strided``, ``unfold``) are DELIBERATELY excluded:
-        # they allocate nothing (stride-0 / overlapping views), so projecting their
-        # logical numel would over-refuse a legitimate large view. Their INDIRECT
-        # bomb (a downstream op that materializes the view) carries no literal and
-        # is bounded by the run-prep recorded-output-slot preflight instead.
-        "repeat",
-        "tile",
-        "repeat_interleave",
-        "interpolate",
-    }
-)
-"""Size-driving call tails whose output bytes a literal argument can inflate.
-
-This is the cheap GATE that decides whether the (op-agnostic, ~100us)
-``FakeTensorMode`` projection runs for a call -- it is deliberately a superset
-heuristic over MATERIALIZING ops, never the authority. A tail the gate misses is
-still bounded by the run-prep recorded-output-slot preflight
-(``op_allocation_preflight``), so an incomplete gate is a cost optimization, never
-a security hole.
-"""
+# ``.tlspec`` can edit one plaintext ``manifest.json`` numeric literal so a
+# taken-path call (``torch.zeros(10**12)``/``F.pad(x, [10**12])``/
+# ``hann_window(10**11)``/``interpolate(scale_factor=1e12)``) drives a
+# multi-terabyte allocation and OOM-kills the default
+# ``tl.load(path).run(inputs)`` victim. The recorded-output-slot bound
+# (``_preflight_run_allocation`` at run-prep) catches the *self-consistent* tamper
+# (literal AND output slot both huge) but NOT the literal-only tamper (output slot
+# left honest/small), and per-arg ``.to("meta")`` never forces a *factory* op (no
+# tensor operand) onto meta.
+#
+# r55 gated the projection behind a hand-maintained ``_SIZE_DRIVING_QUALNAME_TAILS``
+# allowlist; that allowlist re-opened the class at every op it forgot (r56 found
+# ``pad``/``constant_pad_nd``/``fold``/``*_window``/``tril_indices``/``one_hot``
+# missing, plus a float ``interpolate(scale_factor=...)`` slipping the integer-only
+# sub-gate). The projection *mechanism* was ALREADY op-agnostic; only the GATE was
+# enumerated. r57 DELETES the allowlist entirely: ``FakeTensorMode`` projects the
+# output shape/bytes of EVERY taken-path call carrying a non-bool numeric literal
+# WITHOUT allocating (fake tensors never allocate -- factory ops included), and a
+# projected over-budget NEW allocation is refused BEFORE the real allocator runs.
+# "Size-relevance" is decided STRUCTURALLY by the projection, never guessed from an
+# op-name family list. Pure views / input-returning / in-place ops are excluded
+# structurally too (their fake output storage aliases a fake input storage, so they
+# contribute zero NEW bytes). It is the primary layer; the run-prep
+# recorded-output bound is layer 2, and both fail OPEN on a projection that raises.
 
 
 @lru_cache(maxsize=1)
@@ -2561,13 +2531,19 @@ def _fake_tensor_mode_class() -> type[Any] | None:
     return FakeTensorMode
 
 
-def _has_integer_literal(value: Any, _depth: int = 0) -> bool:
-    """Return whether a decoded argument tree carries a plain (non-bool) integer.
+def _has_numeric_literal(value: Any, _depth: int = 0) -> bool:
+    """Return whether a decoded argument tree carries a size-relevant numeric literal.
 
-    The second gate on the projection: a size-driving op whose sizes come only
-    from live tensor shapes (no literal) cannot be a literal allocation bomb, so
-    it skips the projection. Bounded recursion mirrors the literal-nesting
-    ceiling; ``bool`` is excluded (it is not a size argument).
+    A call whose sizes come only from live tensor shapes (no numeric literal)
+    cannot be a *literal* allocation bomb, so it skips the projection. "Carries a
+    size-relevant literal" means the decoded tree holds any non-bool ``int`` or
+    any *finite* ``float`` -- the float branch covers multiplier parameters such as
+    ``F.interpolate(scale_factor=<float>)`` that an integer-only gate missed
+    (r56 free_1). ``bool`` is excluded (never a size argument), and non-finite
+    float sentinels (``inf``/``nan``) are not size authorities and fall through to
+    the existing literal validation. Bounded recursion mirrors the literal-nesting
+    ceiling. Whether such a call is *actually* size-driving is then decided
+    structurally by the projection, never by an op-name family list.
     """
 
     if _depth > _MAX_DECODE_NESTING_DEPTH:
@@ -2576,34 +2552,13 @@ def _has_integer_literal(value: Any, _depth: int = 0) -> bool:
         return False
     if isinstance(value, int):
         return True
+    if isinstance(value, float):
+        return math.isfinite(value)
     if isinstance(value, (list, tuple)):
-        return any(_has_integer_literal(item, _depth + 1) for item in value)
+        return any(_has_numeric_literal(item, _depth + 1) for item in value)
     if isinstance(value, Mapping):
-        return any(_has_integer_literal(item, _depth + 1) for item in value.values())
+        return any(_has_numeric_literal(item, _depth + 1) for item in value.values())
     return False
-
-
-def _call_is_size_driving(
-    entry: CallableRegistryEntry | None, args: Sequence[Any], kwargs: Mapping[str, Any]
-) -> bool:
-    """Return whether a call is a literal-driven size candidate worth projecting."""
-
-    if entry is None:
-        return False
-    namespace = entry.key.namespace
-    qualname = entry.key.qualname
-    if not qualname:
-        return False
-    tail = qualname.rsplit(".", 1)[-1]
-    family = (
-        tail in _SIZE_DRIVING_QUALNAME_TAILS
-        or qualname_is_uninitialized_alloc(namespace, qualname)
-        or qualname_is_uninit_size_gated_alloc(namespace, qualname)
-        or qualname_is_uninit_growth_resize(namespace, qualname)
-    )
-    if not family:
-        return False
-    return _has_integer_literal(list(args)) or _has_integer_literal(dict(kwargs))
 
 
 def _tree_to_fake(mode: Any, value: Any) -> Any:
@@ -2623,14 +2578,72 @@ def _tree_to_fake(mode: Any, value: Any) -> Any:
     return value
 
 
-def _projected_output_bytes(projected: Any) -> dict[torch.device, int]:
-    """Sum projected tensor output bytes per device across an output tree."""
+def _fake_tensor_storage_id(value: torch.Tensor) -> int | None:
+    """Return a fake tensor's storage identity (``untyped_storage()._cdata``), or None.
+
+    The storage ``_cdata`` pointer identifies the underlying allocation. Two
+    tensors that share it alias the same storage (a view / in-place / input-return
+    output aliases its input). ``FakeTensorMode`` exposes readable fake storages;
+    an unreadable one returns ``None`` and is treated per-caller (input side: not
+    aliasable; output side: charged fail-closed).
+    """
+
+    try:
+        return int(value.untyped_storage()._cdata)
+    except Exception:
+        return None
+
+
+def _input_storage_ids(value: Any) -> frozenset[int]:
+    """Collect the fake-input storage identities across a fake argument tree.
+
+    Only readable storage ids participate: an input whose storage cannot be read
+    is simply absent from the set, so it can never make an output *look* like a
+    view (an unreadable output is charged regardless). Bounded to the same
+    container kinds the fake conversion produces.
+    """
+
+    ids: set[int] = set()
+    stack: list[Any] = [value]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, torch.Tensor):
+            sid = _fake_tensor_storage_id(node)
+            if sid is not None:
+                ids.add(sid)
+        elif isinstance(node, (tuple, list)):
+            stack.extend(node)
+        elif isinstance(node, Mapping):
+            stack.extend(node.values())
+    return frozenset(ids)
+
+
+def _new_allocation_bytes(
+    projected: Any, input_storage_ids: AbstractSet[int]
+) -> dict[torch.device, int]:
+    """Sum the NEWLY-allocated projected output bytes per device across an output tree.
+
+    An output tensor whose fake ``untyped_storage()._cdata`` aliases a fake-INPUT
+    storage allocates nothing -- it is a pure view, an input-returning op, or an
+    in-place op -- so it contributes ZERO new bytes and is skipped. This structural
+    storage-aliasing test replaces the r55 hardcoded view-name exclusion
+    (``expand``/``broadcast_to``/``as_strided``/``unfold``) with no op/view list,
+    and correctly charges only the NEW tensors of a mixed-output op (e.g.
+    ``split`` -> views of the input are skipped; a fresh concat is charged). An
+    output whose storage identity cannot be read is CHARGED (fail-closed: an
+    unreadable materializer must never masquerade as a view). ``_base`` is
+    deliberately NOT used: in-place / input-returning outputs have ``_base is
+    None`` yet still alias an input storage.
+    """
 
     totals: dict[torch.device, int] = {}
     stack: list[Any] = [projected]
     while stack:
         node = stack.pop()
         if isinstance(node, torch.Tensor):
+            sid = _fake_tensor_storage_id(node)
+            if sid is not None and sid in input_storage_ids:
+                continue  # aliases a fake input storage -> allocates nothing
             try:
                 nbytes = int(node.numel()) * int(node.element_size())
                 device = node.device
@@ -2651,20 +2664,26 @@ def _preflight_call_allocation(
     kwargs: Mapping[str, Any],
     call: RunnableCallDescriptor,
 ) -> None:
-    """Refuse a size-driving call whose projected output exceeds the live budget.
+    """Refuse a numeric-literal call whose projected NEW allocation exceeds the budget.
 
     Runs the resolved callable under ``FakeTensorMode(allow_non_fake_inputs=True)``
-    (ZERO allocation) and compares each projected output-device's total against the
-    never-under-estimating live budget. A projected over-budget request refuses
-    typed BEFORE the real call allocates. If the projection RAISES -- a
-    data-dependent op with no fake/meta impl (``nonzero``/``unique`` ->
-    ``DynamicOutputShapeException``) -- it FAILS OPEN to the run-prep
-    recorded-output bound, so a legitimate such op is never over-refused (the
-    r51 over-catch anti-pattern). An unavailable ``FakeTensorMode`` fails open
-    identically.
+    (ZERO allocation) for EVERY taken-path call carrying a non-bool numeric literal
+    (``_has_numeric_literal``) -- the r55 op-name allowlist is deleted, so
+    "size-relevance" is decided structurally by the projection, not guessed. It
+    compares each projected output-device's NEWLY-allocated total (pure views /
+    input-returning / in-place outputs, whose fake storage aliases a fake input,
+    contribute zero -- ``_new_allocation_bytes``) against the never-under-estimating
+    live budget, and refuses typed BEFORE the real call allocates. If the projection
+    RAISES -- a data-dependent op with no fake/meta impl (``nonzero``/``unique`` ->
+    ``DynamicOutputShapeException``, or ``fold`` with capture-invalid ``output_size``)
+    -- it FAILS OPEN to the run-prep recorded-output bound, so a legitimate such op
+    is never over-refused (the r51 over-catch anti-pattern). An unavailable
+    ``FakeTensorMode`` fails open identically. ``entry`` is retained for call-site
+    stability but no longer gates the projection.
     """
 
-    if not _call_is_size_driving(entry, args, kwargs):
+    del entry  # r57: no op-name gate -- the numeric-literal predicate + projection decide.
+    if not (_has_numeric_literal(list(args)) or _has_numeric_literal(dict(kwargs))):
         return
     mode_cls = _fake_tensor_mode_class()
     if mode_cls is None:
@@ -2673,14 +2692,17 @@ def _preflight_call_allocation(
         with mode_cls(allow_non_fake_inputs=True) as mode:
             fake_args = _tree_to_fake(mode, list(args))
             fake_kwargs = _tree_to_fake(mode, dict(kwargs))
+            input_storage_ids = _input_storage_ids(fake_args) | _input_storage_ids(fake_kwargs)
             projected = func(*fake_args, **fake_kwargs)
     except Exception:
         # Data-dependent / no fake impl (nonzero/unique) OR any projection
-        # failure: FAIL OPEN. The recorded-output-slot bound (run-prep) and the
-        # parse-time literal-magnitude gate remain in force; a legitimate
-        # data-dependent op MUST still run.
+        # failure (e.g. ``fold`` with capture-invalid ``output_size``): FAIL OPEN.
+        # The recorded-output-slot bound (run-prep) and the parse-time
+        # literal-magnitude gate remain in force, and a genuinely inconsistent
+        # signature still raises ``RuntimeSignatureDriftError`` before allocating;
+        # a legitimate data-dependent op MUST still run.
         return
-    for device, requested in _projected_output_bytes(projected).items():
+    for device, requested in _new_allocation_bytes(projected, input_storage_ids).items():
         available = _allocation_budget_bytes(device)
         if requested > available:
             raise RunCapabilityUnavailableError(

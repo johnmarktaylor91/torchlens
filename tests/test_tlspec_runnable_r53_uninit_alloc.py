@@ -592,11 +592,13 @@ def test_single_classifier_owns_qualname_derivation() -> None:
 
     r55 hon_1/C3: the scan additionally covers the size-gated ``Tensor.new``
     predicates (``qualname_is_uninit_size_gated_alloc``/
-    ``uninit_new_call_is_size_form``). Exactly ONE other reader is justified and
-    named: ``_call_is_size_driving`` (r55 C3) consults the SAME family predicates
-    only to decide whether to run the op-agnostic ``FakeTensorMode`` allocation
-    projection -- an allocation-preflight GATE returning a bool, never a taint
-    derivation. Any THIRD reader still trips this tripwire."""
+    ``uninit_new_call_is_size_form``). r57 C3 DELETED ``_call_is_size_driving``
+    (the allocation preflight now gates on a numeric-literal predicate + the
+    op-agnostic ``FakeTensorMode`` projection, consulting NONE of the uninit
+    family predicates), so this decouples back to a SINGLE justified reader --
+    ``_nondeterministic_value_sources`` (a strengthening-back). Any SECOND reader
+    re-derives uninit nondeterminism from the family predicates and trips this
+    tripwire (the r52 raise-vs-not_applicable inconsistency class)."""
 
     source = (
         Path(__file__).resolve().parents[1] / "torchlens" / "_runnable_execution.py"
@@ -616,7 +618,7 @@ def test_single_classifier_owns_qualname_derivation() -> None:
             if any(predicate in chunk for predicate in predicates)
         }
     )
-    assert users == ["_call_is_size_driving", "_nondeterministic_value_sources"], users
+    assert users == ["_nondeterministic_value_sources"], users
 
 
 class SeededRandModel(nn.Module):
