@@ -416,6 +416,19 @@ analysis output but must not write runnable capability. It rejects when:
     carry the root `ContainerSpec`, so a loaded run would reconstruct `None`. Unrepresentable
     means refuse at save with `missing_output_container_contract`, uniformly with every other
     output refusal.
+12. The captured forward READ physical state metadata that transport normalizes away (r63,
+    escape-gated): a witnessed `is_contiguous` / `stride` / `storage_offset` / `is_conj` /
+    `is_neg` read on a registered param/buffer whose PRE-clone capture signature was
+    non-canonical on the read dim refuses with `state_metadata_mismatch` (detection stage
+    `producer_state_metadata`, details `state_dict_name`/`read_kinds`/`violations`). The
+    refusal is gated on the READ, never on the form alone: an UNREAD non-canonical slot (a
+    channels-last conv weight, a transposed dense param, an offset or conj buffer no code
+    inspects) stays saveable and can settle `verified` -- its physical form is
+    destination-owned and value-invariant when unobserved (section 11, state-metadata
+    subsection). A witnessed read with no stamped signature, an unreadable signature dim, or
+    an unknown read kind refuses fail-closed. This is a producer-refusal rule, NOT a schema
+    fact: no recorded metadata field exists, no schema/version identifier changes, and the
+    capture-state blob families are byte-unchanged.
 
 The hard invariant is:
 
@@ -599,6 +612,7 @@ state_dtype_mismatch
 state_role_mismatch
 state_module_path_mismatch
 state_alias_conflict
+state_metadata_mismatch
 input_tree_mismatch
 input_shape_mismatch
 input_dtype_mismatch
@@ -635,7 +649,13 @@ enter/restore.
 
 `state_alias_topology_unsupported` (r37) is a SAVE-time producer refusal: two distinct live
 bound-state tensor objects overlap in touched bytes (or their relation is unprovable), which the
-v2 value-only state encoding cannot represent (section 5, rule 10). `context_field_invalid`
+v2 value-only state encoding cannot represent (section 5, rule 10). `state_metadata_mismatch`
+(r63) is ONE code with three enforcement sites: the SAVE-time escape-gated producer refusal for
+READ non-canonical captured-state physical metadata (section 5, rule 12, stage
+`producer_state_metadata`); the BIND-time refusal for supplied/embedded state violating the
+load-surviving metadata subset or exact-class admission (stage `state_tensor_contract`,
+atomically before any staging); and the in-transaction staged-state metadata tripwire
+(`state_metadata:<slot_id>`, stage `run_honesty_contract`). `context_field_invalid`
 (r37, INV-4) is the PARSE-time refusal for a persisted ambient/per-call execution-context VALUE
 outside its closed vocabulary -- device literals against the `type[:index]` grammar, dtype
 literals against the live dtype table, matmul precision against exactly
@@ -1137,7 +1157,11 @@ seed) reports `unverifiable` + `not_applicable`:
    instance `__dict__`/`__slots__` surfaces (never invoking a property or `__getattr__` --
    r42 corr2_1; including PRIVATE `__slots__` entries resolved through CPython name mangling:
    `__rng` -> `_Class__rng`, with trailing-dunder and all-underscore-class names not mangled and
-   the declaring MRO class as the mangling authority -- r61 corr_1), Mapping/Collection container
+   the declaring MRO class as the mangling authority -- r61 corr_1; the MANGLED private
+   descriptor is preferred over any raw class-dict key, and only an inert slot member
+   descriptor is ever read -- a post-hoc raw shadow entry, or any non-descriptor value planted
+   at either key, neither hides the real slot value nor gets its `__get__` invoked, r63),
+   Mapping/Collection container
    protocols (every `collections.abc.Mapping`
    contributes BOTH its keys/values AND, when the mapping object is a custom (non-stdlib) inert
    holder, its own `__dict__`/`__slots__` values; every non-leaf `collections.abc.Collection`
@@ -1167,7 +1191,11 @@ seed) reports `unverifiable` + `not_applicable`:
    frames, the C `_abc_data` ABC-cache slot -- r56 amb_1). Tensors, ndarrays, and numpy
    scalars are NOT leaves (r61 hon_1): their numeric buffer / autograd / storage internals are
    never walked (`gc.get_referents` is never invoked on them), but their Python instance
-   `__dict__`/`__slots__` surfaces are walked like every other holder's -- a generator stashed
+   `__dict__`/`__slots__` surfaces AND their user-defined class surface are walked like every
+   other holder's (r63: the node's class flows through the same trusted-leaf-gated class-MRO
+   branch, so a class-attribute generator on a user-defined Tensor / Parameter / ndarray
+   subclass is inventoried while trusted torch/numpy/stdlib implementation classes remain
+   leaves) -- a generator stashed
    on a parameter (`weight.rng = default_rng()`), a plain tensor attribute, or an
    ndarray-SUBCLASS instance attribute is inventoried. A bound C
    callable's receiver passes through these SAME walls, so the r47/r56 ambient-escape
@@ -1537,6 +1565,67 @@ runs its import-time pure-view detection under a fully neutral context -- disabl
 `torch.inference_mode(False)`, and `torch.enable_grad()` -- so the FIRST capture inside an ambient
 `torch.inference_mode()` no longer crashes on the probe's `_version` read; the neutralization is
 scoped to the probe and never leaks into the caller's ambient grad/inference state.
+
+#### State-tensor metadata and physical layout (r63)
+
+Oracle 1 is pinned to DEFAULT copy semantics: the fresh instance receives the declared state via
+`load_state_dict(strict=True, assign=False)`; `assign=True` and swap-parameter loads are out of
+scope. That pin partitions every state-tensor metadata dim into exactly two families:
+
+* **Source-carried (load-surviving) dims** -- `(class_category, layout, names, is_quantized,
+  is_nested)` -- either survive the default copy into a canonical destination and can steer the
+  fresh oracle (named dims propagate into an unnamed destination), or make the default load
+  RAISE (sparse/mkldnn layouts, quantized, nested sources into a dense slot). These are part of
+  the declared state surface and are gated UNCONDITIONALLY at bind: user `load_state_dict`,
+  embedded `state_dict_v1`, and non-persistent-buffer payloads all route through one strict
+  funnel that refuses a violating entry atomically -- `state_metadata_mismatch`, detection stage
+  `state_tensor_contract` -- BEFORE any staging is published. Admission is exact-class
+  (`torch.Tensor` / `torch.nn.Parameter` only): `type()` is read first, and an unadmitted tensor
+  subclass is refused with ZERO further metadata reads (a `__torch_function__` subclass observes
+  nothing).
+* **Destination-owned (physical) dims** -- stride/contiguity/memory-format, `storage_offset`,
+  and the conj/neg lazy dispatch bits -- are normalized away by the default copy: the fresh
+  oracle's value of such a fact comes from its own construction, outside the artifact's declared
+  surface, and TorchLens's transport normalizes them independently (the snapshot clone compacts
+  offset and materializes conj/neg; the embedded codec re-lays stride). They are therefore
+  EXCLUDED from the bind gate -- a channels-last, non-contiguous, or offset USER source into a
+  canonical captured slot binds and runs exactly as PyTorch's own `load_state_dict` accepts it --
+  and enforced ESCAPE-GATED at the producer instead (section 5, rule 12): a replay whose
+  recorded path did not depend on a destination-owned fact is faithful on values alone, so an
+  UNREAD non-canonical capture stays saveable and `verified`, while a recorded path STEERED by a
+  read of a non-canonical destination-owned fact rests on an unwitnessable constructor
+  assumption and refuses at save.
+
+The witness net behind the gate: `is_contiguous` / `stride` / `storage_offset` / `is_conj` /
+`is_neg` reads on registered state (the tensor itself, or any storage alias -- `.data`,
+`.detach()`, a derived view -- resolved through the forward-start param and buffer storage
+indexes) attribute a STATE ESCAPE exactly like a `self.threshold.item()` value read: the slot
+joins the state-escape names, is digest-witnessed by the `unbound_state_escape:<name>` fact
+(changed staged state reports `unverifiable`, capture-equivalent state stays `verified`), and
+additionally records its READ KIND for the producer gate. Read kinds map to signature dims
+one-to-one: a bare `is_contiguous()` requires the captured slot row-major contiguous; a
+`stride()` read (or `is_contiguous(memory_format=...)`) requires the exact default dense stride;
+`storage_offset` requires offset zero; `is_conj`/`is_neg` require the bit clear. All state
+metadata comparisons flow through ONE signature helper (`_state_metadata_signature`); future
+physical dims are added only there. Signatures are stamped from the LIVE tensors BEFORE the
+capture-state clone (the clone itself is a normalization site), and one in-transaction tripwire
+(`state_metadata:<slot_id>`) asserts every STAGED runtime state tensor still exhibits the full
+canonical signature -- staging is the sole placement authority and stages every source through
+the canonical destination form (default-copy semantics), so a mismatch there is a broken or
+bypassed staging path, refused typed before any recorded callable observes it.
+
+Explicitly NOT changed (r63 ruling): no schema or version identifier bump, no recorded
+metadata fact in the artifact, and no capture-state blob change -- the fix is entirely
+producer-refuse/escape-gate shaped, so pre-fix and post-fix artifacts parse identically.
+Documented residuals: (1) a pre-fix artifact produced from a read non-canonical capture is
+loader-side indistinguishable from a genuine canonical capture (its embedded state is already
+normalized); runnable `.tlspec` is unreleased, so no such artifact exists in practice. (2) an
+UNATTRIBUTED state metadata read (today: a `.names` tuple compare, which no accessor witnesses)
+ceilings at `unverifiable` through the existing incomplete-escape machinery -- honest, never a
+false `verified`. (3) a metadata read on an ACTIVATION whose physical layout PROPAGATED from
+non-canonical state (e.g. `(self.w * 2).is_contiguous()` under a channels-last `w`) is not
+attributed to the state slot -- value origins are not layout origins, and taint-attributing them
+would refuse honest channels-last models -- and is a documented residual of the escape gate.
 
 A third, pathological boundary is an autograd property read off an input-*derived view* rather than
 the input leaf. Direct-leaf autograd reads (`requires_grad`, gradient presence, `_version`,

@@ -194,6 +194,7 @@ class RunnableErrorCode(str, Enum):
     STATE_ROLE_MISMATCH = "state_role_mismatch"
     STATE_MODULE_PATH_MISMATCH = "state_module_path_mismatch"
     STATE_ALIAS_CONFLICT = "state_alias_conflict"
+    STATE_METADATA_MISMATCH = "state_metadata_mismatch"
     INPUT_TREE_MISMATCH = "input_tree_mismatch"
     INPUT_SHAPE_MISMATCH = "input_shape_mismatch"
     INPUT_DTYPE_MISMATCH = "input_dtype_mismatch"

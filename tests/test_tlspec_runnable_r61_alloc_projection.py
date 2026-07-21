@@ -518,6 +518,11 @@ def test_source_tripwires_gate_and_clone_routing() -> None:
         src = inspect.getsource(fn)
         assert ".detach().clone()" not in src, f"{fn.__name__} has a raw unguarded clone"
         assert "guarded_clone(" in src
+    # r63 C1 relocated the byte guard: state binding stages through ``_staged_state_clone``
+    # (which calls ``_byte_guarded_clone``), not a direct guard call or raw clone. The r61
+    # corr_2 guarantee is unchanged -- every state-binding clone is still byte-guarded -- it
+    # just lives in the one staging helper now (see
+    # test_r63_source_tripwire_state_binding_uses_staging_helper).
     for fn in (
         rstate._validate_named_slot_mapping,
         rstate.bind_embedded_trace_state,
@@ -525,5 +530,6 @@ def test_source_tripwires_gate_and_clone_routing() -> None:
     ):
         src = inspect.getsource(fn)
         assert ".detach().clone()" not in src, f"{fn.__name__} has a raw unguarded clone"
-        assert "_byte_guarded_clone(" in src
+        assert "_staged_state_clone(" in src, f"{fn.__name__} must route through the staging helper"
+    assert "_byte_guarded_clone(" in inspect.getsource(rstate._staged_state_clone)
     assert ".detach().clone()" in inspect.getsource(rstate.snapshot_capture_state)

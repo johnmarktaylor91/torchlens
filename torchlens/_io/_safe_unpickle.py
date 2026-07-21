@@ -79,9 +79,14 @@ Allowlist policy (fail-closed):
 If a future legitimate class is not yet covered, loading it fails closed with a
 clear error; we NEVER admit a code-exec gadget to make a load succeed.
 
-STRICT-SUBSET OF THE TORCH ``weights_only`` BASELINE (r49, secA_1). This unpickler's
-effective admit+execute surface is a documented STRICT SUBSET of torch's
-``_weights_only_unpickler._get_allowed_globals()`` baseline. Two layers enforce it:
+STRICT-SUBSET OF THE TORCH ``weights_only`` BASELINE (r49 storage, r63 tensor/ndarray).
+This unpickler's effective admit+CONSTRUCT surface is a documented STRICT SUBSET of
+torch's ``_weights_only_unpickler._get_allowed_globals()`` baseline. The invariant is
+about CONSTRUCTION, NOT resolution: the tensor / storage / ndarray TYPE OBJECTS stay
+RESOLVABLE at ``find_class`` (legit metadata references ``torch.Tensor`` /
+``torch.FloatTensor`` / ``torch.nn.Parameter`` / ``numpy.ndarray`` as inert dtype /
+module_type values -- resolving a global only references it), but their BARE
+CONSTRUCTION from pickle-supplied args is DENIED. Two layers enforce it:
 (1) torch STORAGE constructors are denied by IDENTITY at ``find_class``
 (``_is_torch_storage_type`` -- including ``torch.storage.{Typed,Untyped}Storage``,
 which torch's OWN baseline hands back as the real, constructable classes, and every
@@ -94,13 +99,20 @@ wrapped ``("torch.storage", "_load_from_bytes")`` path (a SEPARATE nested
 NEWOBJ_EX to baseline discipline: a BUILD may not apply a ``__setstate__`` /
 storage-rebind to a torch Tensor / Storage / Parameter (the ``find_class``-invisible
 ``Tensor.__setstate__`` / ``set_`` uninitialized-heap-tensor vector), and a
-REDUCE/NEWOBJ may not construct a storage even if a storage type reached the stack by
-some means other than ``find_class``. This is enforced by
-``tests/test_r49_unpickler_weights_only_baseline.py``; its anti-drift invariant is that
-the set of ``(module, name)`` for which this unpickler resolves a CONSTRUCTABLE
-storage-or-tensor object is EMPTY -- a CONSTRUCTOR-SEMANTICS assertion, NOT a
-string-subset of ``_get_allowed_globals()`` (which is too weak, since the baseline set
-itself lists the two real storage classes by name).
+REDUCE/NEWOBJ/NEWOBJ_EX may not CONSTRUCT any attacker-sized ALLOCATION type
+(``_is_alloc_constructor_type``: a torch storage, a ``torch.Tensor`` subclass or legacy
+``torch.<dtype>Tensor``, or a ``numpy.ndarray`` subclass) even if that type reached the
+stack by some means other than ``find_class`` -- ``torch.Tensor(N)`` /
+``torch.FloatTensor(N)`` / ``numpy.ndarray((N,))`` each allocate an attacker-sized,
+uninitialized-heap buffer at plain ``tl.load()`` time (r63 closes the r49 storage-only
+gap). This is enforced by ``tests/test_r49_unpickler_weights_only_baseline.py`` and
+``tests/test_r63_construct_deny.py``; the anti-drift invariant is that the set of
+admitted ``(module, name)`` for which this unpickler CONSTRUCTS (does NOT refuse on a
+REDUCE/NEWOBJ belt) a storage / tensor / ndarray object is EMPTY -- a
+CONSTRUCTOR-SEMANTICS assertion, NOT a string-subset of ``_get_allowed_globals()``
+(which is too weak, since the baseline set itself lists the two real storage classes and
+the tensor classes by name; those TYPES resolve inertly here, and only their
+construction is denied).
 """
 
 from __future__ import annotations
@@ -444,6 +456,89 @@ def _is_torch_storage_instance(obj: Any) -> bool:
         return isinstance(obj, _TORCH_STORAGE_BASE_CLASSES)
     except TypeError:  # pragma: no cover - defensive.
         return False
+
+
+# ALLOCATION-CONSTRUCTOR TYPE surface (r63, tensor/ndarray-construct regap). The r49
+# belt denies only STORAGE construction, but a torch storage is NOT the only
+# pickle-reachable attacker-sized allocator: a bare REDUCE/NEWOBJ of ``torch.Tensor(N)``
+# / ``torch.FloatTensor(N)`` / ``numpy.ndarray((N,))`` with an attacker-supplied size
+# allocates an attacker-sized, UNINITIALIZED-heap buffer at plain ``tl.load()`` time (no
+# trust, no ``.run()``) -- the same alloc-DoS + uninitialized-heap-read class the
+# storage deny closes, which the storage-only belt let through. The TYPE OBJECTS stay
+# RESOLVABLE at ``find_class`` (legit metadata references these types as inert dtype /
+# module_type values); ONLY their CONSTRUCTION on the three belts is refused.
+#
+# Legacy ``torch.<dtype>Tensor`` classes (``torch.FloatTensor``, the ``torch.cuda.*`` /
+# ``torch.sparse.*`` families) are ``tensortype``-metaclass instances whose MRO is
+# ``[FloatTensor, object]`` -- they are NOT ``torch.Tensor`` subclasses, so
+# ``issubclass(obj, torch.Tensor)`` MISSES them, yet ``torch.FloatTensor(5)`` still
+# allocates a 5-element uninitialized tensor. They are caught by identity membership over
+# ``torch._tensor_classes`` (surface-complete over the 38 current classes) plus an
+# ``isinstance``-of-metaclass belt so any future/variant ``tensortype`` class is caught
+# too. numpy is a torch dependency and is imported by the time this module loads
+# (``import torch`` above), so ``numpy.ndarray`` resolves in practice; the reference is
+# guarded so this early-imported security front door never hard-fails if numpy is absent
+# (the predicate then degrades to storage + tensor coverage). No ``np`` alias existed in
+# this module (numpy globals are admitted by STRING pair in ``_SAFE_EXPLICIT_GLOBALS``,
+# never by import), so a guarded reference is introduced here.
+try:
+    import numpy as _numpy
+
+    _NUMPY_NDARRAY_TYPE: type | None = _numpy.ndarray
+except Exception:  # pragma: no cover - numpy is a torch dependency in practice.
+    _NUMPY_NDARRAY_TYPE = None
+
+
+_TORCH_LEGACY_TENSOR_CLASSES: frozenset[type] = frozenset(
+    cls for cls in getattr(torch, "_tensor_classes", frozenset()) if isinstance(cls, type)
+)
+
+# The ``tensortype`` metaclass(es) that build the legacy tensor classes (``type(...)`` of
+# each), excluding plain ``type``. An ``isinstance`` belt over these catches any legacy /
+# future tensor class the identity set above does not enumerate.
+_TORCH_TENSORTYPE_METACLASSES: tuple[type, ...] = tuple(
+    {
+        metacls
+        for metacls in (type(cls) for cls in _TORCH_LEGACY_TENSOR_CLASSES)
+        if metacls is not type
+    }
+)
+
+
+def _is_alloc_constructor_type(obj: Any) -> bool:
+    """Return whether ``obj`` is a type whose bare construction allocates attacker-sized memory.
+
+    Superset of ``_is_torch_storage_type`` (r49) that ALSO catches the two other
+    pickle-reachable attacker-sized allocators (r63): a torch tensor type (a
+    ``torch.Tensor`` subclass such as ``Parameter``, OR a legacy ``tensortype``-metaclass
+    ``torch.<dtype>Tensor`` such as ``torch.FloatTensor``) and a ``numpy.ndarray``
+    subclass. REDUCE/NEWOBJ-constructing any of these with a pickle-supplied size
+    allocates an attacker-sized, UNINITIALIZED-heap buffer at plain ``tl.load()`` time.
+    The type OBJECTS stay RESOLVABLE at ``find_class`` (legit metadata references
+    ``torch.Tensor`` / ``numpy.ndarray`` as inert values); ONLY their CONSTRUCTION on the
+    three belts is refused. Never raises (a non-type ``obj`` returns ``False``).
+    """
+
+    if _is_torch_storage_type(obj):
+        return True
+    if not isinstance(obj, type):
+        return False
+    try:
+        if issubclass(obj, torch.Tensor):
+            return True
+    except TypeError:  # pragma: no cover - defensive; issubclass on odd metaclasses.
+        pass
+    if obj in _TORCH_LEGACY_TENSOR_CLASSES:
+        return True
+    if _TORCH_TENSORTYPE_METACLASSES and isinstance(obj, _TORCH_TENSORTYPE_METACLASSES):
+        return True
+    if _NUMPY_NDARRAY_TYPE is not None:
+        try:
+            if issubclass(obj, _NUMPY_NDARRAY_TYPE):
+                return True
+        except TypeError:  # pragma: no cover - defensive.
+            pass
+    return False
 
 
 @dataclass(frozen=True)
@@ -1499,11 +1594,18 @@ class SafeBundleUnpickler(pickle._Unpickler):
     #     ``find_class``.
     #   * REDUCE / NEWOBJ / NEWOBJ_EX CALL / ``__new__`` a callable or class on the
     #     stack. That object normally arrives via ``find_class`` (Layer 1 already denies
-    #     storage ctors there), but a defense-in-depth belt refuses constructing a
-    #     storage even if a storage type reached the stack by some other route (a prior
-    #     REDUCE result, a memoized object, ...).
+    #     storage ctors there), but a defense-in-depth belt refuses constructing any
+    #     attacker-sized ALLOCATION type -- a torch storage (r49), a ``torch.Tensor``
+    #     subclass or legacy ``torch.<dtype>Tensor``, or a ``numpy.ndarray`` subclass
+    #     (r63) -- even if that type reached the stack by some other route (a prior
+    #     REDUCE result, a memoized object, a resolved inert type reference, ...).
+    #     ``torch.Tensor(N)`` / ``torch.FloatTensor(N)`` / ``numpy.ndarray((N,))`` each
+    #     allocate an attacker-sized, uninitialized-heap buffer (``_is_alloc_constructor_type``).
     # Legit ``.tlspec`` metadata never BUILDs a torch tensor/storage/parameter and never
-    # constructs a storage in the outer stream, so these gates refuse nothing legit.
+    # bare-constructs a storage/tensor/ndarray in the outer stream (payloads travel as
+    # BlobRefs and reconstruct through the wrapped ``_rebuild_*`` / ``_frombuffer`` /
+    # ``_reconstruct`` helpers, which are FUNCTIONS, not alloc TYPES), so these gates
+    # refuse nothing legit.
 
     def load_build(self) -> None:
         """Refuse a BUILD (``__setstate__`` / storage-rebind) on a torch tensor/storage."""
@@ -1523,45 +1625,50 @@ class SafeBundleUnpickler(pickle._Unpickler):
         return _BASE_LOAD_BUILD(self)  # type: ignore[arg-type]
 
     def load_reduce(self) -> None:
-        """Refuse a REDUCE that would construct a torch storage (DoS / uninit heap)."""
+        """Refuse a REDUCE that would construct an alloc type (storage/tensor/ndarray)."""
 
         # Base ``load_reduce`` is ``args = stack.pop(); func = stack[-1]; ...`` -- so
         # before it runs, ``func`` is ``stack[-2]`` (``args`` is ``stack[-1]``).
         func = self.stack[-2]  # type: ignore[attr-defined]
-        if _is_torch_storage_type(func):
+        if _is_alloc_constructor_type(func):
             raise pickle.UnpicklingError(
-                "Blocked storage construction via REDUCE during bundle metadata "
-                f"unpickle: {getattr(func, '__module__', '')}."
-                f"{getattr(func, '__qualname__', func)!r} (constructing a torch storage "
-                "allocates raw memory -- an out-of-memory DoS and the source of an "
-                "uninitialized-heap tensor)."
+                "Blocked allocation-constructor (torch storage/tensor or numpy ndarray) "
+                "via REDUCE during bundle metadata unpickle: "
+                f"{getattr(func, '__module__', '')}."
+                f"{getattr(func, '__qualname__', func)!r} (constructing it from "
+                "pickle-supplied args allocates attacker-sized, uninitialized-heap "
+                "memory -- an out-of-memory DoS and the source of an uninitialized-heap "
+                "tensor; .tlspec payloads travel as BlobRefs and reconstruct through the "
+                "wrapped _rebuild/_frombuffer helpers, which are functions, not types)."
             )
         return _BASE_LOAD_REDUCE(self)  # type: ignore[arg-type]
 
     def load_newobj(self) -> None:
-        """Refuse a NEWOBJ (``cls.__new__``) that would allocate a torch storage."""
+        """Refuse a NEWOBJ (``cls.__new__``) that would allocate a storage/tensor/ndarray."""
 
         # Base ``load_newobj`` is ``args = stack.pop(); cls = stack.pop(); ...`` -- so
         # ``cls`` is ``stack[-2]`` (``args`` is ``stack[-1]``).
         cls = self.stack[-2]  # type: ignore[attr-defined]
-        if _is_torch_storage_type(cls):
+        if _is_alloc_constructor_type(cls):
             raise pickle.UnpicklingError(
-                "Blocked storage construction via NEWOBJ during bundle metadata "
-                f"unpickle: {getattr(cls, '__module__', '')}."
+                "Blocked allocation-constructor (torch storage/tensor or numpy ndarray) "
+                "via NEWOBJ during bundle metadata unpickle: "
+                f"{getattr(cls, '__module__', '')}."
                 f"{getattr(cls, '__qualname__', cls)!r}."
             )
         return _BASE_LOAD_NEWOBJ(self)  # type: ignore[arg-type]
 
     def load_newobj_ex(self) -> None:
-        """Refuse a NEWOBJ_EX (``cls.__new__``) that would allocate a torch storage."""
+        """Refuse a NEWOBJ_EX (``cls.__new__``) that would allocate a storage/tensor/ndarray."""
 
         # Base ``load_newobj_ex`` is ``kwargs = stack.pop(); args = stack.pop();
         # cls = stack.pop()`` -- so ``cls`` is ``stack[-3]``.
         cls = self.stack[-3]  # type: ignore[attr-defined]
-        if _is_torch_storage_type(cls):
+        if _is_alloc_constructor_type(cls):
             raise pickle.UnpicklingError(
-                "Blocked storage construction via NEWOBJ_EX during bundle metadata "
-                f"unpickle: {getattr(cls, '__module__', '')}."
+                "Blocked allocation-constructor (torch storage/tensor or numpy ndarray) "
+                "via NEWOBJ_EX during bundle metadata unpickle: "
+                f"{getattr(cls, '__module__', '')}."
                 f"{getattr(cls, '__qualname__', cls)!r}."
             )
         return _BASE_LOAD_NEWOBJ_EX(self)  # type: ignore[arg-type]

@@ -877,6 +877,79 @@ def _observe_input_metadata_read(trace: Any, source: torch.Tensor, name: str, va
                 _INPUT_METADATA_VIEW_READ.add(trace)
 
 
+def _state_derived_addresses(trace: Any, source: torch.Tensor) -> set[str]:
+    """Resolve ``source`` to the registered-state addresses whose storage it aliases (r63 C1).
+
+    Positive-attribution ladder, first hit wins: the buffer meta address stamped at forward
+    start (a DIRECT registered-buffer receiver; model inputs carry a label but never an
+    address, so an input can never resolve here); the forward-start param storage index
+    (``self.w`` and any ``.data`` / view / detach alias of it); the forward-start buffer
+    storage index (the ``.data`` / view alias twin for buffers). A miss returns empty --
+    an activation receiver records nothing (its geometry is recomputed by the replayed DAG).
+    """
+
+    address = get_buffer_address(source)
+    if address is not None:
+        return {str(address)}
+    addresses = _param_derived_addresses(trace, source)
+    if addresses:
+        return addresses
+    buffer_storage_addresses = getattr(trace, "_buffer_storage_addresses", None)
+    if buffer_storage_addresses:
+        ptr = _escape_storage_ptr(source)
+        if ptr is not None and ptr in buffer_storage_addresses:
+            return {str(buffer_storage_addresses[ptr])}
+    return set()
+
+
+def _observe_state_metadata_read(trace: Any, source: torch.Tensor, read_kind: str) -> None:
+    """Attribute one PHYSICAL-metadata read on registered state as a state escape (r63 C1).
+
+    Closes the four r62/r63 attribution gaps: ``is_contiguous`` / ``stride`` /
+    ``storage_offset`` / ``is_conj`` (+ the ``is_neg`` lazy-bit sibling) on a registered
+    param/buffer previously routed ONLY through the model-input observer, which ignores
+    state -- so a model branching on ``self.weight.is_contiguous()`` produced no witness and
+    the transport-normalized replay reported a false ``verified``. A resolved read now:
+
+    * joins ``_HOST_ESCAPE_STATE_SOURCE_NAMES`` -- the slot is digest-witnessed by PASS A
+      (``unbound_state_escape:<name>`` fact; changed staged state -> ``unverifiable``),
+      exactly like a ``self.threshold.item()`` value read; and
+    * records its READ KIND in the per-slot metadata ledger consumed by the escape-gated
+      producer preflight (a read dim that was non-canonical at capture refuses the save;
+      an unread non-canonical slot -- the channels-last population -- stays saveable).
+
+    A model-input leaf receiver is the input nets' domain and is skipped; an unresolvable
+    receiver (an activation) records nothing here.
+    """
+
+    sites = trace.__dict__.get("_runnable_input_tensor_sites")
+    if sites and id(source) in sites:
+        return
+    addresses = _state_derived_addresses(trace, source)
+    if not addresses:
+        return
+    state_names = _HOST_ESCAPE_STATE_SOURCE_NAMES.get(trace)
+    if state_names is None:
+        state_names = set()
+        _HOST_ESCAPE_STATE_SOURCE_NAMES[trace] = state_names
+    state_names |= addresses
+    reads = _HOST_ESCAPE_STATE_METADATA_READS.get(trace)
+    if reads is None:
+        reads = {}
+        _HOST_ESCAPE_STATE_METADATA_READS[trace] = reads
+    for address in addresses:
+        reads.setdefault(address, set()).add(read_kind)
+
+
+def host_escape_state_metadata_reads(trace: Any) -> dict[str, frozenset[str]]:
+    """Return the per-state-name PHYSICAL-metadata read kinds witnessed for one trace."""
+
+    reads = _HOST_ESCAPE_STATE_METADATA_READS.get(trace)
+    if not reads:
+        return {}
+    return {name: frozenset(kinds) for name, kinds in reads.items()}
+
+
 def _maybe_record_input_storage_geometry(trace: Any, source: torch.Tensor, storage: Any) -> None:
     """Witness raw storage GEOMETRY read off a model-input leaf or an alias (r29-C1 F4; r31 A).
 
@@ -922,6 +995,23 @@ the address here lets the runnable producer witness the escape's state slot (bou
 unbound) so a changed staged value -> UNVERIFIABLE while capture-equivalent state ->
 VERIFIED. bound-ness exempts a state slot from the UNBOUND-state net, never from the escape
 witness.
+"""
+
+_HOST_ESCAPE_STATE_METADATA_READS: "weakref.WeakKeyDictionary[Any, dict[str, set[str]]]" = (
+    weakref.WeakKeyDictionary()
+)
+"""Per-trace ledger of METADATA reads on registered state: state name -> read kinds (r63 C1).
+
+``self.weight.is_contiguous()`` / ``.stride()`` / ``.storage_offset()`` / ``.is_conj()`` /
+``.is_neg()`` on a registered param/buffer (or a storage alias of one) returns a host value
+derived from the slot's PHYSICAL form -- a fact the state byte digest is structurally blind to
+(a non-contiguous tensor digests to the same logical bytes as its contiguous copy) and one that
+transport NORMALIZES away (the snapshot clone compacts offset and materializes conj/neg;
+safetensors re-lays stride). Recording the read KIND per state name lets the runnable producer
+refuse the save exactly when a read dim was non-canonical at capture
+(``producer_state_metadata``), while an UNREAD non-canonical slot (a channels-last conv weight)
+stays saveable and ``verified``. Kept weak-keyed off the schema; read kinds are the
+``_STATE_METADATA_READ_REQUIRED_DIMS`` vocabulary in ``torchlens._runnable_state``.
 """
 
 _HOST_ESCAPE_UNATTRIBUTABLE_BOOL: "weakref.WeakSet[Any]" = weakref.WeakSet()
@@ -3570,6 +3660,20 @@ def _make_input_metadata_wrapper(
         if isinstance(self, torch.Tensor) and _state._active_trace is state.trace:
             if threading.get_ident() == state.owner_thread_id:
                 if _state._logging_enabled and not _internal_read_active():
+                    # r63 C1: a layout read on REGISTERED STATE (param/buffer or a storage
+                    # alias of one) attributes a state escape + a per-slot read-kind fact
+                    # BEFORE the input-scoped observation (receiver sets are disjoint; a
+                    # state receiver is invisible to the input nets). Recorded even when
+                    # the observed value later fails to normalize (fail closed).
+                    if name == "storage_offset":
+                        state_read_kind = "storage_offset"
+                    elif name == "is_contiguous" and not args and not kwargs:
+                        state_read_kind = "contiguous_default"
+                    else:
+                        # A full ``stride()`` read, or ``is_contiguous`` probed with an
+                        # explicit ``memory_format=`` -- both pin the exact stride tuple.
+                        state_read_kind = "stride_exact"
+                    _observe_state_metadata_read(state.trace, self, state_read_kind)
                     if name == "storage_offset":
                         try:
                             _observe_input_metadata_read(
@@ -3620,6 +3724,11 @@ def _make_input_metadata_bool_method(original: Any, state: _WitnessState, name: 
                     and _state._logging_enabled
                     and not _internal_read_active()
                 ):
+                    # r63 C1: the conj/neg lazy dispatch bits are PHYSICAL state facts
+                    # normalized by transport (the snapshot clone materializes them), so a
+                    # read on registered state attributes a state escape + read-kind fact.
+                    if name in ("is_conj", "is_neg"):
+                        _observe_state_metadata_read(state.trace, self, name)
                     try:
                         _observe_input_metadata_read(state.trace, self, name, bool(result))
                     except (RuntimeError, TypeError, ValueError):
