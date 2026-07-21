@@ -3817,6 +3817,12 @@ def _post_execution_contract_checks(
             # Unbound state escapes are compared by capture-digest in the dedicated
             # staleness check, not against runtime container structure.
             continue
+        if _is_state_metadata_fact_witness(witness):
+            # r65 F-1: declared capture-time state-metadata facts (requires_grad /
+            # grad_fn presence) are REPRODUCED by run preparation (the recorded bit is
+            # applied to the staged slot), not compared against runtime container
+            # structure.
+            continue
         if witness.site_label.startswith(_MODULE_TRAINING_MODE_SITE_PREFIX):
             # The declared per-module train/eval mode is a capture-time state fact anchoring
             # VERIFIED (see ``_mode_sensitive_op_unwitnessed``), not a runtime container
@@ -4325,6 +4331,9 @@ _UNBOUND_STATE_ESCAPE_SITE_PREFIX = "unbound_state_escape:"
 _UNBOUND_STATE_ESCAPE_FACT_KEY = "unbound_state_escape"
 """Discriminator key present in every unbound-state escape fact."""
 
+_STATE_METADATA_FACT_SITE_PREFIX = "state_metadata:"
+"""``site_label`` prefix marking a declared capture-time state-metadata fact (r65 F-1)."""
+
 
 def _is_unbound_state_escape_witness(witness: ControlWitness) -> bool:
     """Return whether a structure witness records an unbound state escape."""
@@ -4332,6 +4341,15 @@ def _is_unbound_state_escape_witness(witness: ControlWitness) -> bool:
     return (
         witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
         and witness.site_label.startswith(_UNBOUND_STATE_ESCAPE_SITE_PREFIX)
+    )
+
+
+def _is_state_metadata_fact_witness(witness: ControlWitness) -> bool:
+    """Return whether a structure witness records a declared state-metadata fact (r65)."""
+
+    return (
+        witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
+        and witness.site_label.startswith(_STATE_METADATA_FACT_SITE_PREFIX)
     )
 
 

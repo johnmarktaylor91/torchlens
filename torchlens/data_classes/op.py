@@ -869,7 +869,16 @@ def _dedup_saved_activation_out(
         setattr(trace, "_out_identity_cache", identity_cache)
 
     source_key = id(source_tensor)
-    source_version = tensor_version_or_none(source_tensor)
+    # r65: TorchLens's OWN dedup-bookkeeping ``_version`` read runs under the explicit
+    # internal-read marker so the r65 state-metadata property observer never mistakes it
+    # for a user ``._version`` read on a registered buffer/param receiver (unmarked it
+    # fires for every saved state source and would spuriously refuse any model whose
+    # consumed buffer was ever mutated in place before capture). Imported lazily:
+    # ``data_classes`` sits below the torch backend in the layering.
+    from ..backends.torch.completeness_witness import internal_scalar_read
+
+    with internal_scalar_read():
+        source_version = tensor_version_or_none(source_tensor)
     cached = identity_cache.get(source_key)
     if cached is not None:
         cached_source, cached_label, cached_out, cached_version = cached

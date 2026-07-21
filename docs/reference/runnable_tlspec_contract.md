@@ -417,18 +417,26 @@ analysis output but must not write runnable capability. It rejects when:
     means refuse at save with `missing_output_container_contract`, uniformly with every other
     output refusal.
 12. The captured forward READ physical state metadata that transport normalizes away (r63,
-    escape-gated): a witnessed `is_contiguous` / `stride` / `storage_offset` / `is_conj` /
-    `is_neg` read on a registered param/buffer whose PRE-clone capture signature was
+    escape-gated; r65 extends the net to the FULL input-accessor mirror): a witnessed read on
+    a registered param/buffer -- the r63 layout/conj/neg five, plus `is_shared` / `is_pinned`
+    / `is_inference` / `_is_view` / `_base` / `is_leaf` / `retains_grad` / `output_nr` /
+    `grad`-presence / `_version` / `storage_nbytes`, and the zero-copy view exports
+    (`numpy()` / `__array__` / `__dlpack__` / `__cuda_array_interface__` / `to_dlpack`),
+    which pin exact layout with no accessor call -- whose PRE-clone capture signature was
     non-canonical on the read dim refuses with `state_metadata_mismatch` (detection stage
     `producer_state_metadata`, details `state_dict_name`/`read_kinds`/`violations`). The
     refusal is gated on the READ, never on the form alone: an UNREAD non-canonical slot (a
     channels-last conv weight, a transposed dense param, an offset or conj buffer no code
+    inspects, a shared/pinned/inference/view-registered or larger-base-view slot no code
     inspects) stays saveable and can settle `verified` -- its physical form is
     destination-owned and value-invariant when unobserved (section 11, state-metadata
     subsection). A witnessed read with no stamped signature, an unreadable signature dim, or
-    an unknown read kind refuses fail-closed. This is a producer-refusal rule, NOT a schema
-    fact: no recorded metadata field exists, no schema/version identifier changes, and the
-    capture-state blob families are byte-unchanged.
+    an unknown read kind refuses fail-closed. `requires_grad` / `grad_fn`-presence reads are
+    NOT refusals: they record declared-state facts staging reproduces (section 11), refusing
+    only the irreproducible cases (`grad_fn` present; `requires_grad` True on a
+    non-differentiable slot). No schema/version identifier changes and the capture-state
+    blob families are byte-unchanged; the declared-fact witnesses are a v2
+    descriptor-vocabulary extension on the unreleased format.
 
 The hard invariant is:
 
@@ -650,12 +658,17 @@ enter/restore.
 `state_alias_topology_unsupported` (r37) is a SAVE-time producer refusal: two distinct live
 bound-state tensor objects overlap in touched bytes (or their relation is unprovable), which the
 v2 value-only state encoding cannot represent (section 5, rule 10). `state_metadata_mismatch`
-(r63) is ONE code with three enforcement sites: the SAVE-time escape-gated producer refusal for
-READ non-canonical captured-state physical metadata (section 5, rule 12, stage
-`producer_state_metadata`); the BIND-time refusal for supplied/embedded state violating the
-load-surviving metadata subset or exact-class admission (stage `state_tensor_contract`,
-atomically before any staging); and the in-transaction staged-state metadata tripwire
-(`state_metadata:<slot_id>`, stage `run_honesty_contract`). `context_field_invalid`
+(r63; r65) is ONE code with four enforcement sites: the SAVE-time escape-gated producer refusal
+for READ non-canonical captured-state physical metadata AND irreproducible declared facts
+(section 5, rule 12, stage `producer_state_metadata`); the BIND-time refusal for
+supplied/embedded state violating the load-surviving metadata subset or exact-class admission
+(stage `state_tensor_contract`, atomically before any staging); the in-transaction staged-state
+metadata tripwire (`state_metadata:<slot_id>`, stage `run_honesty_contract`); and the run-prep
+declared-fact application guard (a recorded `requires_grad` bit the staged slot cannot carry,
+stage `state_metadata_fact_staging` -- unreachable for producer-validated artifacts).
+`context_field_invalid` additionally covers a malformed persisted `state_metadata:<name>`
+declared-fact witness (closed two-name vocabulary, bool values, site/name agreement), refused
+at parse exactly like an invalid execution-context value. `context_field_invalid`
 (r37, INV-4) is the PARSE-time refusal for a persisted ambient/per-call execution-context VALUE
 outside its closed vocabulary -- device literals against the `type[:index]` grammar, dtype
 literals against the live dtype table, matmul precision against exactly
@@ -1626,7 +1639,7 @@ runs its import-time pure-view detection under a fully neutral context -- disabl
 `torch.inference_mode()` no longer crashes on the probe's `_version` read; the neutralization is
 scoped to the probe and never leaks into the caller's ambient grad/inference state.
 
-#### State-tensor metadata and physical layout (r63)
+#### State-tensor metadata and physical layout (r63; r65 full input-net parity)
 
 Oracle 1 is pinned to DEFAULT copy semantics: the fresh instance receives the declared state via
 `load_state_dict(strict=True, assign=False)`; `assign=True` and swap-parameter loads are out of
@@ -1656,36 +1669,103 @@ scope. That pin partitions every state-tensor metadata dim into exactly two fami
   read of a non-canonical destination-owned fact rests on an unwitnessable constructor
   assumption and refuses at save.
 
-The witness net behind the gate: `is_contiguous` / `stride` / `storage_offset` / `is_conj` /
-`is_neg` reads on registered state (the tensor itself, or any storage alias -- `.data`,
-`.detach()`, a derived view -- resolved through the forward-start param and buffer storage
-indexes) attribute a STATE ESCAPE exactly like a `self.threshold.item()` value read: the slot
-joins the state-escape names, is digest-witnessed by the `unbound_state_escape:<name>` fact
-(changed staged state reports `unverifiable`, capture-equivalent state stays `verified`), and
-additionally records its READ KIND for the producer gate. Read kinds map to signature dims
-one-to-one: a bare `is_contiguous()` requires the captured slot row-major contiguous; a
-`stride()` read (or `is_contiguous(memory_format=...)`) requires the exact default dense stride;
-`storage_offset` requires offset zero; `is_conj`/`is_neg` require the bit clear. All state
-metadata comparisons flow through ONE signature helper (`_state_metadata_signature`); future
-physical dims are added only there. Signatures are stamped from the LIVE tensors BEFORE the
-capture-state clone (the clone itself is a normalization site), and one in-transaction tripwire
-(`state_metadata:<slot_id>`) asserts every STAGED runtime state tensor still exhibits the full
-canonical signature -- staging is the sole placement authority and stages every source through
-the canonical destination form (default-copy semantics), so a mismatch there is a broken or
-bypassed staging path, refused typed before any recorded callable observes it.
+The witness net behind the gate is, as of r65, the FULL input-metadata accessor mirror: ONE
+authoritative table (`STATE_METADATA_MIRROR` in the completeness witness) whose keys are pinned
+by a parity test to the input net's accessor union (`is_contiguous`/`stride`/`storage_offset`
+layout methods, the seven bool metadata methods, the nine autograd/structural getset
+properties, and the `storage_nbytes` storage-geometry fact -- the exact 20-name io fact
+vocabulary), each with an EXPLICIT state disposition. Every wrapper's state branch dispatches
+through the table, so an accessor added to any input constant without a state disposition is a
+RED test, never a silently-unmirrored "Nth state read". Dispositions:
 
-Explicitly NOT changed (r63 ruling): no schema or version identifier bump, no recorded
-metadata fact in the artifact, and no capture-state blob change -- the fix is entirely
-producer-refuse/escape-gate shaped, so pre-fix and post-fix artifacts parse identically.
-Documented residuals: (1) a pre-fix artifact produced from a read non-canonical capture is
-loader-side indistinguishable from a genuine canonical capture (its embedded state is already
-normalized); runnable `.tlspec` is unreleased, so no such artifact exists in practice. (2) an
-UNATTRIBUTED state metadata read (today: a `.names` tuple compare, which no accessor witnesses)
-ceilings at `unverifiable` through the existing incomplete-escape machinery -- honest, never a
-false `verified`. (3) a metadata read on an ACTIVATION whose physical layout PROPAGATED from
-non-canonical state (e.g. `(self.w * 2).is_contiguous()` under a channels-last `w`) is not
-attributed to the state slot -- value origins are not layout origins, and taint-attributing them
-would refuse honest channels-last models -- and is a documented residual of the escape gate.
+* **Escape-gated read kinds** (the r63 machinery, now covering the full physical family): the
+  layout trio and conj/neg bits (r63, unchanged); `is_shared`/`is_pinned`/`is_inference`
+  (storage/creation placement, r65); `_is_view`/`_base` (view-ness, one shared dim);
+  `is_leaf`/`retains_grad`/`output_nr`/`grad`-presence (autograd structure); `_version` (the
+  in-place mutation counter -- converged r65 ruling: refuse-on-read of a transport-lost
+  version, i.e. a read refuses iff the captured pre-clone version was non-default, since every
+  staged clone reproduces version 0); and `storage_nbytes` (base-storage byte count, recorded
+  at storage-handle exposure -- closes the r64 F3 larger-base offset-0-contiguous view via the
+  `storage_nbytes_is_tight` dim). A resolved read joins the state-escape names (digest
+  witness) and records its READ KIND for the producer gate, exactly as r63.
+* **Zero-copy view exports** (closes r64 F2): `numpy()` / `__array__` / `__dlpack__` /
+  `__cuda_array_interface__` / `to_dlpack` off a state-derived receiver pin the receiver's
+  full layout with NO accessor call (ndarray `.strides`/`.flags`, DLPack strides + byte
+  offset), so the export records the `stride_exact` + `storage_offset` read kinds against the
+  slot (a view-of-state receiver attributes to the slot exactly as r63 -- view layout is a
+  pure function of slot layout and the replay re-derives it). `tolist()` copies and is
+  excluded. The existing value-escape digest recording is unchanged (belt + suspenders); raw
+  `data_ptr()` stays fail-closed.
+* **Declared-state facts** (`requires_grad`, `grad_fn` presence -- the locked r65 F-1 ruling):
+  the autograd trainable bit is DECLARED state, not a canonicality dim. A direct read records
+  a per-slot fact persisted as a `state_metadata:<state_dict_name>` SHAPE_STRUCTURE_FACT
+  witness (closed two-name vocabulary, parse-validated as a `context_field_invalid`-class
+  refusal on any malformation), and run preparation RE-APPLIES the recorded bit to the staged
+  slot -- the recorded bit always wins, including over a user-supplied `load_state_dict`
+  tensor carrying a different bit. No refusal and no ceiling for the ordinary population
+  (escape-gating the bit would refuse every frozen model, and TorchLens's own grad-capture
+  machinery runs the captured forward with param `requires_grad` temporarily enabled, so the
+  fact records the bit the forward ACTUALLY read); the ONLY fact refusals are the
+  irreproducible ones -- `grad_fn` presence True (no staged leaf carries a grad_fn) or
+  `requires_grad` True on a non-differentiable slot. The declared state model therefore
+  gains: "the capture-time per-slot autograd trainable bit, for slots whose bit the captured
+  forward READ" (precedent: used non-persistent buffers).
+* **Structural**: `is_coalesced` raises on dense strided state and sparse layouts are refused
+  at bind/save by the layout dim -- pass-through, nothing to record.
+
+Attribution families mirror the input net: the layout/placement/geometry accessors attribute
+by STORAGE IDENTITY (any `.data`/`.detach()`/derived-view alias resolves to its slot through
+the forward-start param and buffer storage indexes -- the alias's value is a pure function of
+the slot's storage and the replay re-derives views from the canonical staged slot); the
+autograd/structural family (`requires_grad`, `grad_fn`, `is_leaf`, `retains_grad`, `_base`,
+`_is_view`, `output_nr`, `grad`/`_grad`, `_version`) attributes DIRECT-receiver-only -- the
+registered `nn.Parameter` / buffer object itself -- because a view's autograd state is NOT a
+pure function of the slot's canonical form and TorchLens's own per-op bookkeeping reads
+`requires_grad`/`grad_fn`/`_version` on op-output views (the known direct-receiver bookkeeping
+reads are excluded at their source under the `internal_scalar_read` marker, pinned by a
+zero-reads no-over-trigger test).
+
+Read kinds map to signature dims one-to-one; all state metadata comparisons still flow through
+ONE signature helper (`_state_metadata_signature`), which r65 extends with the ten mirror dims
+(`is_shared`, `is_pinned`, `is_inference`, `is_view`, `is_leaf`, `retains_grad`,
+`output_nr_is_zero`, `grad_is_none`, `version_is_zero`, `storage_nbytes_is_tight` -- the last
+stamped PRE-CLONE, which is exactly why the F3 large-base view is catchable). Future physical
+dims are added only there. All ten join the destination-owned PHYSICAL scope: every one is
+staging-canonicalized (the staging clone materializes under `inference_mode(False)` and
+re-clones an inference-source materialization back to version 0, so binding or running inside
+a user `inference_mode` region never trips TorchLens's own staging output), keeping the
+unconditional in-transaction staged-state tripwire (`state_metadata:<slot_id>` check) sound;
+`is_pinned` is proven False without a read whenever the CUDA context is absent or
+uninitialized (pinned host memory cannot exist without it, and the probe itself would
+otherwise initialize the context as a capture side effect). Signatures are stamped from the
+LIVE tensors BEFORE the capture-state clone, as r63.
+
+Explicitly changed vs the r63 ruling: the artifact now MAY carry recorded state-metadata
+facts -- the `state_metadata:<name>` declared-fact witnesses supersede the r63 sentence "no
+recorded metadata fact in the artifact". This is a v2 descriptor-vocabulary extension on an
+unreleased format: NO schema or version identifier bump, no new witness kind (facts reuse
+SHAPE_STRUCTURE_FACT), no new error code (`state_metadata_mismatch` covers the fact refusals;
+malformed persisted facts refuse as `context_field_invalid`), and no capture-state blob
+change. Documented residuals: (1) a pre-fix artifact produced from a read non-canonical
+capture is loader-side indistinguishable from a genuine canonical capture (its embedded state
+is already normalized); runnable `.tlspec` is unreleased, so no such artifact exists in
+practice. (2) an UNATTRIBUTED state metadata read (today: a `.names` tuple compare, which no
+accessor witnesses) ceilings at `unverifiable` through the existing incomplete-escape
+machinery -- honest, never a false `verified`. (3) a metadata read on an ACTIVATION whose
+physical layout PROPAGATED from non-canonical state (e.g. `(self.w * 2).is_contiguous()`
+under a channels-last `w`) is not attributed to the state slot -- value origins are not
+layout origins, and taint-attributing them would refuse honest channels-last models -- and is
+a documented residual of the escape gate; the state twin of the input net's leaf-only rule
+puts alias/view reads of the AUTOGRAD family (`self.w.data.requires_grad`,
+`self.w.t().is_leaf`) in the same residual class, for the same framework-contamination and
+non-invariance reasons. (4) object-identity aliasing of a non-canonical state slot through an
+aliasing-polymorphic op, tested via pure Python identity (`y = self.w.contiguous(); y is
+self.w`), is a documented residual (locked r65 ruling): no accessor fires on ANY tensor, so
+the leak is unobservable by any Python-level net, and closing it would require refusing every
+aliasing-polymorphic consumption of non-canonical state -- breaking the r63 channels-last
+zero-collateral pledge for an exploit no realistic model performs. The `y._base is not None`
+spelling of the same probe is residual (3) territory; a direct metadata accessor on the slot
+or any storage alias is fully witnessed (r65).
 
 A third, pathological boundary is an autograd property read off an input-*derived view* rather than
 the input leaf. Direct-leaf autograd reads (`requires_grad`, gradient presence, `_version`,

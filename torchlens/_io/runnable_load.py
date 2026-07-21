@@ -155,6 +155,7 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
     witnesses = tuple(
         _parse_witness(item) for item in _mapping_sequence(value, "control_witnesses")
     )
+    _validate_state_metadata_fact_witnesses(witnesses)
     payload = _mapping(value, "payload_layers")
     compatibility = _mapping(value, "compatibility")
     preflight = _mapping(value, "preflight")
@@ -215,6 +216,63 @@ class ContextFieldInvalidError(ValueError):
         super().__init__(f"Persisted execution-context field {field!r} is invalid: {detail}")
         self.field = field
         self.detail = detail
+
+
+_STATE_METADATA_FACT_SITE_PREFIX = "state_metadata:"
+"""``site_label`` prefix of a persisted declared state-metadata fact witness (r65 F-1)."""
+
+_STATE_METADATA_FACT_ALLOWED_NAMES = frozenset({"requires_grad", "grad_fn"})
+"""CLOSED parse-side vocabulary of declared state-metadata fact names (r65 F-1).
+
+Mirrors ``torchlens._io.runnable._STATE_METADATA_FACT_NAMES``; any other name -- or a
+non-bool value, a malformed envelope, a site label disagreeing with the embedded state
+name -- refuses the descriptor at parse (``context_field_invalid``), before run
+preparation could apply an attacker-chosen bit to staged state.
+"""
+
+
+def _validate_state_metadata_fact_witnesses(witnesses: "Sequence[ControlWitness]") -> None:
+    """Validate every declared state-metadata fact witness at PARSE time (r65 F-1).
+
+    Fact names validate against the closed two-name vocabulary and values must be bools;
+    run preparation applies ``requires_grad`` facts to staged state, so a malformed fact is
+    refused HERE -- ``context_field_invalid``-class, analysis-only load -- never consumed.
+    """
+
+    from .._runnable_execution import _decode_literal  # lazy: layering, not a cycle at import
+
+    for witness in witnesses:
+        if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
+            continue
+        if not witness.site_label.startswith(_STATE_METADATA_FACT_SITE_PREFIX):
+            continue
+        field = "control_witnesses.state_metadata"
+        try:
+            decoded = _decode_literal(witness.observed_value)
+        except Exception as exc:
+            raise ContextFieldInvalidError(field, f"undecodable state-metadata fact: {exc}")
+        if not isinstance(decoded, Mapping) or decoded.get("state_metadata") is not True:
+            raise ContextFieldInvalidError(field, "malformed state-metadata fact envelope")
+        name = decoded.get("state")
+        if not isinstance(name, str) or not name:
+            raise ContextFieldInvalidError(field, "state-metadata fact names no state entry")
+        if witness.site_label != f"{_STATE_METADATA_FACT_SITE_PREFIX}{name}":
+            raise ContextFieldInvalidError(
+                field, "state-metadata fact site label disagrees with its state entry"
+            )
+        facts = decoded.get("facts")
+        if not isinstance(facts, Mapping) or not facts:
+            raise ContextFieldInvalidError(field, "state-metadata fact carries no facts")
+        for fact_name, fact_value in facts.items():
+            if str(fact_name) not in _STATE_METADATA_FACT_ALLOWED_NAMES:
+                raise ContextFieldInvalidError(
+                    field,
+                    f"state-metadata fact name {fact_name!r} is outside the closed vocabulary",
+                )
+            if not isinstance(fact_value, bool):
+                raise ContextFieldInvalidError(
+                    field, f"state-metadata fact {fact_name!r} carries a non-bool value"
+                )
 
 
 class DescriptorStructuralBoundError(ValueError):
