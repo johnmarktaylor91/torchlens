@@ -46,6 +46,7 @@ import warnings
 import weakref
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from types import MappingProxyType
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -928,6 +929,195 @@ def _observe_state_metadata_read(trace: Any, source: torch.Tensor, read_kind: st
     addresses = _state_derived_addresses(trace, source)
     if not addresses:
         return
+    _record_state_metadata_read(trace, addresses, read_kind)
+
+
+def host_escape_state_metadata_reads(trace: Any) -> dict[str, frozenset[str]]:
+    """Return the per-state-name PHYSICAL-metadata read kinds witnessed for one trace."""
+
+    reads = _HOST_ESCAPE_STATE_METADATA_READS.get(trace)
+    if not reads:
+        return {}
+    return {name: frozenset(kinds) for name, kinds in reads.items()}
+
+
+# --- r65 Cluster X: THE authoritative state-metadata accessor mirror ------------------------
+#
+# The input-metadata net's authority is the union of four frozen constants
+# (INPUT_METADATA_PREDICATE_FUNCS | INPUT_METADATA_BOOL_METHODS | INPUT_METADATA_PROPERTY_NAMES
+# | {"storage_nbytes"}), which equals the 20-name ``_INPUT_METADATA_FACT_NAMES`` vocabulary in
+# ``torchlens._io.runnable``. r63 mirrored only 5 of those 20 onto registered state, leaving an
+# "Nth unwitnessed state read" class open (r64 F2/F3). This table closes the CLASS: every input
+# accessor carries an EXPLICIT state disposition, and the wrappers dispatch through the table
+# instead of hardcoded name tuples, so a future accessor added to any input constant without a
+# state disposition is a RED parity test (T-X1), never a silent gap.
+
+_STATE_ROUTE_READ_KIND = "read_kind"
+"""Disposition: the read joins the escape-gated r63 machinery -- the slot is digest-witnessed
+(``_HOST_ESCAPE_STATE_SOURCE_NAMES``) and the read KIND enters the per-slot ledger consumed by
+the producer preflight, which refuses the save iff the read dim was non-canonical at capture."""
+
+_STATE_ROUTE_DECLARED_FACT = "declared_fact"
+"""Disposition: the read records a DECLARED-STATE FACT (r65 F-1 ruling) -- the observed bit is
+persisted as a ``state_metadata:<name>`` witness and staging REPRODUCES it (no escape-source
+join, no read-kind, no refusal except a fact staging provably cannot reproduce). Escape-gating
+``requires_grad`` would refuse every frozen model and is contamination-fragile against
+TorchLens's own per-op autograd bookkeeping; the fact route is immune BY CONSTRUCTION: a
+spurious internally-triggered fact records the true current bit, staging reproduces exactly
+that bit, and nothing ever refuses or diverges from it."""
+
+_STATE_ROUTE_STRUCTURAL = "structural"
+"""Disposition: provably covered by another gate; the wrapper records nothing for state."""
+
+STATE_METADATA_MIRROR: "Mapping[str, tuple[str, str]]" = MappingProxyType(
+    {
+        # -- layout trio (r63, unchanged; ``is_contiguous`` probed with an explicit
+        #    memory_format resolves to the ``stride`` row's kind at the wrapper) --
+        "is_contiguous": (_STATE_ROUTE_READ_KIND, "contiguous_default"),
+        "stride": (_STATE_ROUTE_READ_KIND, "stride_exact"),
+        "storage_offset": (_STATE_ROUTE_READ_KIND, "storage_offset"),
+        # -- lazy dispatch bits (r63, unchanged) --
+        "is_conj": (_STATE_ROUTE_READ_KIND, "is_conj"),
+        "is_neg": (_STATE_ROUTE_READ_KIND, "is_neg"),
+        # -- storage/creation placement bits (r65): value is a pure function of the slot's
+        #    storage, invariant across every view/alias, normalized by transport+staging --
+        "is_shared": (_STATE_ROUTE_READ_KIND, "is_shared"),
+        "is_pinned": (_STATE_ROUTE_READ_KIND, "is_pinned"),
+        "is_inference": (_STATE_ROUTE_READ_KIND, "is_inference"),
+        # -- base-storage geometry (r65; closes F3): recorded at storage-handle exposure --
+        "storage_nbytes": (_STATE_ROUTE_READ_KIND, "storage_nbytes"),
+        # -- autograd/structural family (r65): DIRECT-receiver-only attribution (see
+        #    ``_STATE_METADATA_DIRECT_ONLY_NAMES``); ``_base`` presence <=> is-view --
+        "_is_view": (_STATE_ROUTE_READ_KIND, "is_view"),
+        "_base": (_STATE_ROUTE_READ_KIND, "is_view"),
+        "is_leaf": (_STATE_ROUTE_READ_KIND, "is_leaf"),
+        "retains_grad": (_STATE_ROUTE_READ_KIND, "retains_grad"),
+        "output_nr": (_STATE_ROUTE_READ_KIND, "output_nr"),
+        "grad": (_STATE_ROUTE_READ_KIND, "grad_presence"),
+        "_grad": (_STATE_ROUTE_READ_KIND, "grad_presence"),
+        # -- in-place mutation counter (r65 converged ruling): refuse-on-read of a
+        #    transport-lost version -- the read kind maps to ``version_is_zero`` so a read of
+        #    a NON-default captured version refuses while a version-0 read stays saveable
+        #    (the staged clone reproduces version 0) --
+        "_version": (_STATE_ROUTE_READ_KIND, "_version"),
+        # -- declared-state facts (r65 F-1 ruling; grad_fn presence is the
+        #    contamination-immune twin) --
+        "requires_grad": (_STATE_ROUTE_DECLARED_FACT, "requires_grad"),
+        "grad_fn": (_STATE_ROUTE_DECLARED_FACT, "grad_fn"),
+        # -- sparse-only accessor: RAISES on dense strided state (pass-through, nothing to
+        #    record); sparse layouts are refused at bind/save by the layout signature dim --
+        "is_coalesced": (
+            _STATE_ROUTE_STRUCTURAL,
+            "sparse layout refused at bind/save; raises on dense strided state",
+        ),
+    }
+)
+"""ONE authoritative mirror: input-metadata accessor name -> (state route, detail).
+
+Keys are EXACTLY the input net's accessor union (pinned by the T-X1 parity test). ``detail``
+is the state read KIND for ``read_kind`` rows (the ``_STATE_METADATA_READ_REQUIRED_DIMS``
+vocabulary in ``torchlens._runnable_state``), the persisted fact name for ``declared_fact``
+rows (the closed ``_STATE_METADATA_FACT_NAMES`` vocabulary in ``torchlens._io.runnable``),
+and a documentation pointer for ``structural`` rows.
+"""
+
+_STATE_METADATA_DIRECT_ONLY_NAMES = frozenset(
+    {
+        "requires_grad",
+        "grad_fn",
+        "is_leaf",
+        "retains_grad",
+        "_base",
+        "_is_view",
+        "output_nr",
+        "grad",
+        "_grad",
+        "_version",
+    }
+)
+"""AUTOGRAD/structural accessors attributed ONLY on the DIRECT registered object (the
+``nn.Parameter`` / registered-buffer object itself), never through a storage alias or derived
+view (r65; the state twin of the input net's leaf-only rule).
+
+Two reasons, mirroring r31/r33: (1) CONTAMINATION -- TorchLens's own per-op bookkeeping reads
+``requires_grad`` / ``grad_fn`` / ``_version`` on op outputs (including param-storage-sharing
+view outputs like ``self.w[:]``) while logging is enabled; attributing a view's
+``grad_fn``-present read to its slot would refuse/ceiling ordinary models (a ``ViewBackward``
+on a param view is NOT a slot fact). The known DIRECT-receiver bookkeeping reads are excluded
+at their source under the ``internal_scalar_read`` marker (r65). (2) NON-INVARIANCE -- unlike
+the alias-safe family, a view's autograd state (``is_leaf`` False, fresh ``_version``, own
+``grad`` slot) is NOT a pure function of the slot's canonical form, so a slot-attributed alias
+read would be wrong regardless. An alias/view read of this family on state is the documented
+residual (contract residual: the state twin of the input-derived-view autograd residual)."""
+
+_STATE_METADATA_ALIAS_SAFE_STATE_NAMES = frozenset(
+    {"is_conj", "is_neg", "is_inference", "is_pinned", "is_shared"}
+)
+"""BOOL-method accessors attributed on state by STORAGE IDENTITY (``_state_derived_addresses``,
+r63 semantics): the value on ANY view/alias is a pure function of the slot's storage/creation
+placement (a view of a pinned/shared/inference tensor is itself pinned/shared/inference), and
+the replay re-derives every view from the canonical staged slot through the recorded DAG, so a
+slot-attributed alias read is provably reproducible iff the slot dim was canonical."""
+
+_STATE_METADATA_FACTS: "weakref.WeakKeyDictionary[Any, dict[str, dict[str, bool]]]" = (
+    weakref.WeakKeyDictionary()
+)
+"""Per-trace DECLARED-STATE fact ledger: state name -> {fact name -> observed bool} (r65 F-1).
+
+Populated by the property wrapper's state branch for ``requires_grad`` (bool value) and
+``grad_fn`` (presence bool) reads on DIRECT registered param/buffer receivers. These slots do
+NOT join ``_HOST_ESCAPE_STATE_SOURCE_NAMES`` -- a metadata read exposes no bytes; the digest
+join is the physical family's belt, not this one's. The runnable producer persists each entry
+as a ``state_metadata:<name>`` SHAPE_STRUCTURE_FACT witness and staging reproduces the
+recorded ``requires_grad`` bit (``grad_fn`` presence True refuses at save: no staged leaf can
+carry a grad_fn). Kept weak-keyed off the schema."""
+
+
+def _state_direct_address(trace: Any, source: torch.Tensor) -> "str | None":
+    """Resolve ``source`` to a state address ONLY when it IS the registered object (r65).
+
+    The DIRECT-receiver discriminator for the autograd/structural family
+    (``_STATE_METADATA_DIRECT_ONLY_NAMES``): a registered buffer carries the buffer meta
+    address stamped at forward start (a ``.data``/view alias carries none), and a registered
+    parameter is an exact-type ``nn.Parameter`` object (op outputs and ``.data``/``detach()``
+    aliases are plain ``Tensor``s -- torch ops never construct ``nn.Parameter`` results, so
+    exact-type + param-storage membership identifies the registered object; an op that
+    returns the parameter ITSELF, e.g. an already-contiguous ``w.contiguous()``, is the same
+    object and attributes correctly). A miss returns ``None`` -- the read is the documented
+    alias/view residual, never misattributed.
+    """
+
+    address = get_buffer_address(source)
+    if address is not None:
+        return str(address)
+    if type(source) is torch.nn.Parameter:
+        addresses = _param_derived_addresses(trace, source)
+        if len(addresses) == 1:
+            return next(iter(addresses))
+    return None
+
+
+def _observe_state_metadata_read_direct(trace: Any, source: torch.Tensor, read_kind: str) -> None:
+    """Attribute one DIRECT-receiver-only metadata read on registered state (r65).
+
+    The autograd/structural twin of :func:`_observe_state_metadata_read`: joins the same
+    escape-source and read-kind ledgers, but ONLY when the receiver is the registered object
+    itself (see :func:`_state_direct_address`). An alias/view receiver records nothing (the
+    documented residual); an input-leaf receiver is the input nets' domain and is skipped.
+    """
+
+    sites = trace.__dict__.get("_runnable_input_tensor_sites")
+    if sites and id(source) in sites:
+        return
+    address = _state_direct_address(trace, source)
+    if address is None:
+        return
+    _record_state_metadata_read(trace, {address}, read_kind)
+
+
+def _record_state_metadata_read(trace: Any, addresses: "set[str]", read_kind: str) -> None:
+    """Join resolved state addresses into the escape-source + read-kind ledgers (r63/r65)."""
+
     state_names = _HOST_ESCAPE_STATE_SOURCE_NAMES.get(trace)
     if state_names is None:
         state_names = set()
@@ -941,13 +1131,61 @@ def _observe_state_metadata_read(trace: Any, source: torch.Tensor, read_kind: st
         reads.setdefault(address, set()).add(read_kind)
 
 
-def host_escape_state_metadata_reads(trace: Any) -> dict[str, frozenset[str]]:
-    """Return the per-state-name PHYSICAL-metadata read kinds witnessed for one trace."""
+def _observe_state_metadata_fact(
+    trace: Any, source: torch.Tensor, fact_name: str, fact_value: bool
+) -> None:
+    """Record one DECLARED-STATE fact for a DIRECT registered param/buffer receiver (r65 F-1).
 
-    reads = _HOST_ESCAPE_STATE_METADATA_READS.get(trace)
-    if not reads:
+    ``requires_grad`` records its bool value; ``grad_fn`` records presence. The fact ledger is
+    separate from the escape machinery by design (see ``_STATE_METADATA_FACTS``): recording is
+    idempotent-by-value for a stable bit, a repeated read overwrites with the latest observed
+    value, and a spurious TorchLens-internal read (should one survive the source markers)
+    records the true current bit, which staging reproduces -- harmless by construction.
+    """
+
+    sites = trace.__dict__.get("_runnable_input_tensor_sites")
+    if sites and id(source) in sites:
+        return
+    address = _state_direct_address(trace, source)
+    if address is None:
+        return
+    facts = _STATE_METADATA_FACTS.get(trace)
+    if facts is None:
+        facts = {}
+        _STATE_METADATA_FACTS[trace] = facts
+    facts.setdefault(address, {})[fact_name] = bool(fact_value)
+
+
+def host_escape_state_metadata_facts(trace: Any) -> dict[str, dict[str, bool]]:
+    """Return the per-state-name DECLARED-STATE metadata facts witnessed for one trace."""
+
+    facts = _STATE_METADATA_FACTS.get(trace)
+    if not facts:
         return {}
-    return {name: frozenset(kinds) for name, kinds in reads.items()}
+    return {name: dict(values) for name, values in facts.items()}
+
+
+def _observe_state_property_read(trace: Any, source: torch.Tensor, name: str, value: Any) -> None:
+    """Dispatch one getset-PROPERTY read on a state receiver through the mirror (r65).
+
+    The property wrapper's state branch (the r64 gap: it had NONE): ``requires_grad`` /
+    ``grad_fn`` route to the declared-fact ledger; every other property routes to the
+    escape-gated read-kind ledger. All property names are autograd-family, so attribution is
+    DIRECT-receiver-only throughout; a non-state receiver records nothing.
+    """
+
+    route = STATE_METADATA_MIRROR.get(name)
+    if route is None:
+        return
+    route_kind, detail = route
+    if route_kind == _STATE_ROUTE_DECLARED_FACT:
+        if name in _INPUT_METADATA_PRESENCE_PROPERTY_NAMES:
+            fact_value = value is not None
+        else:
+            fact_value = bool(value)
+        _observe_state_metadata_fact(trace, source, detail, fact_value)
+    elif route_kind == _STATE_ROUTE_READ_KIND:
+        _observe_state_metadata_read_direct(trace, source, detail)
 
 
 def _maybe_record_input_storage_geometry(trace: Any, source: torch.Tensor, storage: Any) -> None:
@@ -3408,6 +3646,13 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
     # (``nbytes()`` / ``size()``) can steer control flow the shape+dtype contract does not pin
     # (r29-C1, F4). Record it against the model-input leaf here at exposure time.
     records_storage_geometry = name in {"untyped_storage", "storage"}
+    # r65 (closes r64 F2): a zero-copy VIEW export pins the receiver's full layout with no
+    # accessor call at all -- ``numpy()``/``__array__`` expose ndarray ``.strides``/``.flags``
+    # and DLPack capsules carry strides + byte offset. On a STATE-derived receiver that
+    # geometry is a pure function of the slot's physical form (a view-of-state receiver
+    # attributes to the slot exactly as r63), so the export records the exact-layout read
+    # kinds. ``tolist()`` COPIES (layout-safe) and is deliberately excluded.
+    records_state_view_geometry = name in {"numpy", "__array__", "__dlpack__"}
 
     def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
         result_holder: dict[str, Any] = {}
@@ -3416,10 +3661,27 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
                 if _state._logging_enabled:
                     if record_source:
                         _record_escape_source_tensor(state.trace, self, invisible=True)
+                    if records_state_view_geometry:
+                        _observe_state_metadata_read(
+                            state.trace, self, STATE_METADATA_MIRROR["stride"][1]
+                        )
+                        _observe_state_metadata_read(
+                            state.trace, self, STATE_METADATA_MIRROR["storage_offset"][1]
+                        )
                     if records_storage_geometry and not _internal_read_active():
                         storage = original(self, *args, **kwargs)
                         result_holder["value"] = storage
                         _maybe_record_input_storage_geometry(state.trace, self, storage)
+                        # r65: a storage handle exposed off a STATE-derived receiver pins
+                        # the slot's base-storage byte count (``.nbytes()``/``.size()`` are
+                        # one attribute away), a fact invariant across every view/alias of
+                        # the slot -- record the geometry read kind at exposure time,
+                        # mirroring the input-side belt above (closes the r64 F3
+                        # larger-base offset-0-contiguous class via the
+                        # ``storage_nbytes_is_tight`` signature dim).
+                        _observe_state_metadata_read(
+                            state.trace, self, STATE_METADATA_MIRROR["storage_nbytes"][1]
+                        )
                     # A raw ``data_ptr()`` pointer is unobservable; only a genuine USER call
                     # (internal marker inactive -- TorchLens's own bookkeeping ``data_ptr``
                     # reads run under it) fails closed so the tensor's subsequent value cannot
@@ -3606,6 +3868,18 @@ def _make_module_escape_wrapper(original: Any, state: _WitnessState) -> Any:
                     for value in (*args, *kwargs.values()):
                         if isinstance(value, torch.Tensor):
                             _record_escape_source_tensor(state.trace, value, invisible=True)
+                            # r65 (F2): ``to_dlpack`` exports a zero-copy capsule pinning
+                            # the operand's full layout (strides + byte offset), so a
+                            # state-derived operand records the exact-layout read kinds,
+                            # mirroring the ``__dlpack__`` method belt.
+                            _observe_state_metadata_read(
+                                state.trace, value, STATE_METADATA_MIRROR["stride"][1]
+                            )
+                            _observe_state_metadata_read(
+                                state.trace,
+                                value,
+                                STATE_METADATA_MIRROR["storage_offset"][1],
+                            )
             elif state.belt_armed:
                 for value in (*args, *kwargs.values()):
                     if isinstance(value, torch.Tensor):
@@ -3630,6 +3904,16 @@ def _make_invisible_escape_property(descriptor: Any, state: _WitnessState) -> pr
             if threading.get_ident() == state.owner_thread_id:
                 if _state._logging_enabled:
                     _record_escape_source_tensor(state.trace, self, invisible=True)
+                    # r65 (F2): the CUDA array interface dict carries an explicit
+                    # ``strides`` key + data pointer -- a zero-copy layout export exactly
+                    # like ``numpy()``/``__dlpack__`` -- so a state-derived receiver
+                    # records the exact-layout read kinds.
+                    _observe_state_metadata_read(
+                        state.trace, self, STATE_METADATA_MIRROR["stride"][1]
+                    )
+                    _observe_state_metadata_read(
+                        state.trace, self, STATE_METADATA_MIRROR["storage_offset"][1]
+                    )
             elif state.belt_armed:
                 _nonowner_escape_observe(state, self)
         return descriptor.__get__(self, torch.Tensor)
@@ -3660,19 +3944,17 @@ def _make_input_metadata_wrapper(
         if isinstance(self, torch.Tensor) and _state._active_trace is state.trace:
             if threading.get_ident() == state.owner_thread_id:
                 if _state._logging_enabled and not _internal_read_active():
-                    # r63 C1: a layout read on REGISTERED STATE (param/buffer or a storage
-                    # alias of one) attributes a state escape + a per-slot read-kind fact
-                    # BEFORE the input-scoped observation (receiver sets are disjoint; a
-                    # state receiver is invisible to the input nets). Recorded even when
-                    # the observed value later fails to normalize (fail closed).
-                    if name == "storage_offset":
-                        state_read_kind = "storage_offset"
-                    elif name == "is_contiguous" and not args and not kwargs:
-                        state_read_kind = "contiguous_default"
+                    # r63 C1 (r65: table-driven): a layout read on REGISTERED STATE (param/
+                    # buffer or a storage alias of one) attributes a state escape + a
+                    # per-slot read-kind fact BEFORE the input-scoped observation (receiver
+                    # sets are disjoint; a state receiver is invisible to the input nets).
+                    # Recorded even when the observed value later fails to normalize (fail
+                    # closed). ``is_contiguous`` probed with an explicit ``memory_format=``
+                    # pins the exact stride tuple, so it resolves to the ``stride`` row.
+                    if name == "is_contiguous" and (args or kwargs):
+                        state_read_kind = STATE_METADATA_MIRROR["stride"][1]
                     else:
-                        # A full ``stride()`` read, or ``is_contiguous`` probed with an
-                        # explicit ``memory_format=`` -- both pin the exact stride tuple.
-                        state_read_kind = "stride_exact"
+                        state_read_kind = STATE_METADATA_MIRROR[name][1]
                     _observe_state_metadata_read(state.trace, self, state_read_kind)
                     if name == "storage_offset":
                         try:
@@ -3724,11 +4006,21 @@ def _make_input_metadata_bool_method(original: Any, state: _WitnessState, name: 
                     and _state._logging_enabled
                     and not _internal_read_active()
                 ):
-                    # r63 C1: the conj/neg lazy dispatch bits are PHYSICAL state facts
-                    # normalized by transport (the snapshot clone materializes them), so a
-                    # read on registered state attributes a state escape + read-kind fact.
-                    if name in ("is_conj", "is_neg"):
-                        _observe_state_metadata_read(state.trace, self, name)
+                    # r63 C1 (r65: FULL mirror, table-driven -- the is_conj/is_neg-only
+                    # branch is gone): every bool metadata accessor is a PHYSICAL state
+                    # fact normalized by transport+staging, so a read on registered state
+                    # attributes a state escape + read-kind fact. The alias-safe subset
+                    # (conj/neg bits, storage/creation placement) attributes by STORAGE
+                    # IDENTITY (a view's value is a pure function of the slot's storage);
+                    # ``_is_view`` is autograd-family and attributes DIRECT-receiver-only;
+                    # ``is_coalesced`` is structural (raises on dense strided state, and
+                    # sparse layouts are refused at bind/save by the layout dim).
+                    state_route = STATE_METADATA_MIRROR.get(name)
+                    if state_route is not None and state_route[0] == _STATE_ROUTE_READ_KIND:
+                        if name in _STATE_METADATA_DIRECT_ONLY_NAMES:
+                            _observe_state_metadata_read_direct(state.trace, self, state_route[1])
+                        else:
+                            _observe_state_metadata_read(state.trace, self, state_route[1])
                     try:
                         _observe_input_metadata_read(state.trace, self, name, bool(result))
                     except (RuntimeError, TypeError, ValueError):
@@ -3763,6 +4055,13 @@ def _make_input_metadata_grad_property(
         if isinstance(self, torch.Tensor) and _state._active_trace is state.trace:
             if threading.get_ident() == state.owner_thread_id:
                 if _state._logging_enabled and not _internal_read_active():
+                    # r65 Cluster X: the STATE branch (the r64 gap -- this wrapper had
+                    # none, so ``self.w.requires_grad`` / ``self.b._version`` reads on
+                    # registered state recorded NOTHING). Dispatched through the
+                    # authoritative mirror BEFORE the input-scoped observation (receiver
+                    # sets are disjoint): ``requires_grad``/``grad_fn`` record a declared
+                    # fact staging reproduces; the rest record escape-gated read kinds.
+                    _observe_state_property_read(state.trace, self, name, value)
                     if records_presence:
                         fact: Any = value is not None
                     elif records_int:

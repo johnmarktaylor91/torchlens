@@ -15,6 +15,7 @@ from ...fastlog.exceptions import PredicateError
 from ...fastlog._halt import HaltSignal
 from ...ir.predicate import RetroactiveCaptureDecision
 from ._tl import get_tensor_meta, set_tensor_label
+from .completeness_witness import internal_scalar_read
 from ..._training_validation import TrainingModeConfigError
 from . import module_stack as _mstack
 from ...capture.predicates import _evaluate_halt, _evaluate_keep_op, _is_halt_only_capture
@@ -208,6 +209,11 @@ def log_source_tensor_exhaustive(
         extra_addr: either the buffer address or the input address
     """
     layer_type = source
+    # r65: TorchLens's OWN source-bookkeeping ``grad_fn`` read, hoisted under the explicit
+    # internal-read marker so the r65 state-metadata property observer never mistakes it for
+    # a user autograd read on a registered buffer/param receiver.
+    with internal_scalar_read():
+        _grad_fn_handle = t.grad_fn
     # Fetch counters and increment to be ready for next tensor to be logged
     self._layer_counter += 1
     self._raw_layer_type_counter[layer_type] += 1
@@ -346,8 +352,8 @@ def log_source_tensor_exhaustive(
         "is_inplace": False,
         "grad_fn_class_name": "none",
         "grad_fn_class_qualname": None,
-        "grad_fn_object_id": id(t.grad_fn) if t.grad_fn is not None else None,
-        "grad_fn_handle": t.grad_fn,
+        "grad_fn_object_id": id(_grad_fn_handle) if _grad_fn_handle is not None else None,
+        "grad_fn_handle": _grad_fn_handle,
         "grad_fn": None,
         "in_multi_output": False,
         "multi_output_index": None,

@@ -462,12 +462,17 @@ def _tensor_ref_from_fields(tensor: torch.Tensor, fields_dict: dict[str, Any]) -
         Backend-neutral tensor metadata and optional payload reference.
     """
 
+    # r65: TorchLens's OWN IR-bookkeeping ``requires_grad`` read runs under the explicit
+    # internal-read marker so the r65 state-metadata property observer never mistakes it
+    # for a user autograd read on a registered buffer/param receiver.
+    with internal_scalar_read():
+        _requires_grad = bool(tensor.requires_grad)
     return TensorRef(
         label_raw=fields_dict["_label_raw"],
         shape=fields_dict["shape"],
         dtype=str(fields_dict["dtype"]),
         device=str(tensor.device),
-        requires_grad=tensor.requires_grad,
+        requires_grad=_requires_grad,
         memory=fields_dict["activation_memory"],
         payload=fields_dict["out"],
         blob_ref=(
@@ -528,13 +533,20 @@ def _param_refs_from_fields(fields_dict: dict[str, Any]) -> tuple[ParamRef, ...]
             if param_meta is None or param_meta.param_address is None
             else param_meta.param_address
         )
+        # r65: TorchLens's OWN per-op parent-param ``requires_grad`` read runs under the
+        # explicit internal-read marker so the r65 state-metadata property observer never
+        # mistakes it for a user autograd read on the registered parameter (it fires for
+        # EVERY op with parent params -- unmarked it would spuriously fact-record every
+        # consumed slot of every model).
+        with internal_scalar_read():
+            trainable = bool(param.requires_grad)
         refs.append(
             ParamRef(
                 barcode=barcode,
                 address=param_address,
                 shape=tuple(param.shape),
                 dtype=str(param.dtype),
-                trainable=bool(param.requires_grad),
+                trainable=trainable,
                 module_address=None,
             )
         )
