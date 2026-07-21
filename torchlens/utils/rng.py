@@ -38,6 +38,7 @@ from types import (
     CodeType,
     FrameType,
     FunctionType,
+    MemberDescriptorType,
     MethodWrapperType,
     ModuleType,
     TracebackType,
@@ -1036,7 +1037,13 @@ internals are never walked (``gc.get_referents`` is never called on these types)
 the Python instance ``__dict__`` / ``__slots__`` surfaces ARE walked via
 :meth:`host_nondeterminism_monitor._custom_holder_children` -- the same inert
 protocol every other holder gets (slot member descriptors, never ``getattr``; zero
-user code). ``np.generic`` scalars carry neither surface and contribute nothing.
+user code) -- AND (r63) the node's class-surface edge is enqueued like every other
+holder branch's: ``type(value)`` flows through the trusted-leaf-gated class branch,
+so a class-attribute generator on a USER-defined Tensor / Parameter / ndarray
+subclass is inventoried while stock ``torch.Tensor`` / ``nn.Parameter`` /
+``np.ndarray`` / ``np.generic`` remain trusted leaves (no implementation-class
+expansion). ``np.generic`` scalars carry no instance surface and contribute only
+their (leafed) class.
 
 Distinct from :data:`_INVENTORY_LEAF_TYPES`, which means "do not element-iterate this
 buffer-like Collection" (a tensor still never explodes into per-element nodes) -- the
@@ -1045,7 +1052,7 @@ different edges.
 """
 
 
-def _resolve_slot_member(klass: type, slot_name: str) -> Any:
+def _resolve_slot_member(klass: type, slot_name: str) -> MemberDescriptorType | None:
     """Return ``klass``'s slot member descriptor, resolving CPython name mangling (r61 corr_1).
 
     A ``__slots__`` entry spelled ``"__rng"`` (two leading underscores, at most one
@@ -1059,19 +1066,37 @@ def _resolve_slot_member(klass: type, slot_name: str) -> Any:
     NOT mangled; leading underscores are stripped from the class name (``_F`` ->
     ``_F__rng``); an all-underscore class name mangles NOTHING; a single-underscore
     name (``_x``) is not mangled. The DECLARING class from the MRO is the mangling
-    authority (each MRO level mangles against its own name). Raw key wins when both
-    exist. The read stays inert -- a slot member descriptor ``__get__``, never a
-    property / ``__getattr__`` / user code.
+    authority (each MRO level mangles against its own name).
+
+    r63 (r62 raw-shadow HIGH): the MANGLED private descriptor is preferred BEFORE any
+    raw class-dict key. Name mangling is a compile-time class-body transform, so a
+    post-hoc raw entry (``M.__rng = shadow`` via module-level ``setattr``) lands at the
+    UNMANGLED key while the real slot descriptor stays at ``_M__rng`` -- the former
+    raw-key-first lookup let that shadow win and silently dropped the slot-held
+    generator (false VERIFIED). Every candidate key is TYPECHECKED: only an inert
+    ``types.MemberDescriptorType`` (the C slot descriptor, whose ``__get__`` is pure C
+    field access and executes no Python) is ever returned -- never an arbitrary
+    class-dict value whose ``__get__`` could invoke user code (a property or hostile
+    descriptor planted at either key). Returns ``None`` when neither key holds a
+    member descriptor; the caller skips the slot (nothing executed, nothing read).
+    Slot STORAGE keys are mangled by ``type.__new__`` itself (probed), so compiled and
+    ``type()``-built classes agree on the mangled key; the raw-key fallback covers
+    exactly the shapes mangling leaves untouched (non-private names, trailing-dunder
+    names, and an all-underscore class name, where the descriptor lives at the raw key).
     """
 
     class_dict = klass.__dict__
-    if slot_name in class_dict:
-        return class_dict.get(slot_name)
+    candidate_keys: list[str] = []
     if slot_name.startswith("__") and not slot_name.endswith("__"):
         stripped = klass.__name__.lstrip("_")
         if stripped:
-            return class_dict.get("_" + stripped + slot_name)
-    return class_dict.get(slot_name)
+            candidate_keys.append("_" + stripped + slot_name)
+    candidate_keys.append(slot_name)
+    for key in candidate_keys:
+        member = class_dict.get(key)
+        if isinstance(member, MemberDescriptorType):
+            return member
+    return None
 
 
 _INVENTORY_NODE_CAP = 1_000_000
@@ -1509,7 +1534,10 @@ class host_nondeterminism_monitor:
         PRIVATE slot (``__slots__ = ("__rng",)`` -- class-dict key ``_Class__rng`` via
         CPython name mangling) is read like any other; every caller (registered-module
         seed, Mapping/Collection dual-walk, weakref-subclass, numeric-payload branch)
-        inherits the fix at this single choke point.
+        inherits the fix at this single choke point. r63: the resolver prefers the
+        mangled private descriptor over any raw class-dict shadow and returns ONLY an
+        inert ``MemberDescriptorType`` (or ``None`` -- slot skipped), so a planted raw
+        shadow can neither hide the real slot value nor execute a hostile ``__get__``.
         """
 
         children: list[Any] = []
@@ -1558,8 +1586,14 @@ class host_nondeterminism_monitor:
         documented residual family as a shared module global. ``__main__`` is explicitly
         NOT a leaf even though ``sys.stdlib_module_names`` lists it -- a model class defined
         in a script/notebook must keep its r53 class-attribute coverage. ``__module__`` is
-        read from the RAW class dict via the base ``type`` getset
-        (``type.__dict__["__dict__"]``), so a hostile metaclass property never fires. An
+        read through the base ``type`` getset (``type.__dict__["__module__"].__get__``),
+        never ``getattr``, so a hostile metaclass property never fires (probed). The getset
+        is pure C on both class shapes: a HEAP class reads its ``tp_dict`` entry (identical
+        to the former raw-dict read), while a STATIC C extension type (``np.ndarray`` /
+        ``np.float64`` / ``builtin_function_or_method``) derives it from ``tp_name`` -- those
+        types store NO dict entry, so the former raw-dict read returned ``None`` and walked
+        every C extension implementation class; r63 requires the stock numeric-payload
+        classes leafed once the payload branch enqueues ``type(value)``. An
         unreadable or non-string ``__module__`` fails toward WALKING the class -- the walk
         is inert, so the unprovable case errs toward MORE coverage, never code execution.
         """
@@ -1567,8 +1601,7 @@ class host_nondeterminism_monitor:
         if klass is object or klass is type:
             return True
         try:
-            raw_dict = type.__dict__["__dict__"].__get__(klass)
-            module = raw_dict.get("__module__")
+            module = type.__dict__["__module__"].__get__(klass)
         except Exception:
             return False
         if not isinstance(module, str):
@@ -1630,9 +1663,13 @@ class host_nondeterminism_monitor:
         node (tensor / ndarray / numpy scalar) is NOT dropped -- as a referent it
         is enqueued like any other node, and on its own visit it contributes
         EXACTLY its Python instance ``__dict__`` / ``__slots__`` values via
-        :meth:`_custom_holder_children` (never ``gc.get_referents`` on the C
-        object, so the numeric buffer / autograd internals stay unwalked while
-        ``weight.rng = default_rng()`` is inventoried).
+        :meth:`_custom_holder_children` PLUS its class-surface edge
+        (``type(value)``, r63 -- routed through the trusted-leaf-gated class
+        branch so a class-attribute generator on a user-defined subclass is
+        inventoried while stock torch/numpy classes stay leaves); never
+        ``gc.get_referents`` on the C object, so the numeric buffer / autograd
+        internals stay unwalked while ``weight.rng = default_rng()`` is
+        inventoried.
 
         r57 C6 (r56 hon_1): a BOUND C callable (``BuiltinFunctionType`` /
         ``MethodWrapperType``) contributes exactly its ``__self__`` RECEIVER --
@@ -1718,7 +1755,17 @@ class host_nondeterminism_monitor:
             # r61 hon_1: never ``gc.get_referents`` on a tensor/ndarray (the C
             # buffer / autograd internals stay unwalked), but the Python instance
             # ``__dict__`` / ``__slots__`` surfaces are real inert holder state.
-            return host_nondeterminism_monitor._custom_holder_children(value)
+            # r63 (r62 class-surface MED): the node's CLASS surface flows too --
+            # ``type(value)`` is enqueued into the sweep's trusted-leaf-gated
+            # class branch (raw mappingproxy reads, per-class dedup), so a
+            # class-attribute generator on a USER-defined Tensor / Parameter /
+            # ndarray subclass is inventoried while stock torch/numpy
+            # implementation classes stay trusted leaves. This makes the branch
+            # structurally identical to every other holder branch: instance
+            # state via ``_custom_holder_children`` PLUS the class edge.
+            payload_children = host_nondeterminism_monitor._custom_holder_children(value)
+            payload_children.append(type(value))
+            return payload_children
         children: list[Any] = []
         for referent in _gc_module.get_referents(value):
             if id(referent) in shared_namespace_ids:

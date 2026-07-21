@@ -499,11 +499,13 @@ def test_bound_c_method_receiver_predicate() -> None:
     else:
         assert isinstance(tensor_add, types.MethodType)
         assert tensor_add_kids == [tensor_add.__func__, tensor]
-    # the enqueued tensor reduces to instance state on visit: empty here
-    assert host_nondeterminism_monitor._inert_gc_children(tensor, shared_ids) == []
+    # the enqueued tensor reduces to instance state PLUS its class-surface edge on
+    # visit (r63; empty instance state here, and the stock class is a trusted leaf
+    # in the downstream class branch -- never expanded)
+    assert host_nondeterminism_monitor._inert_gc_children(tensor, shared_ids) == [torch.Tensor]
     arr = np.zeros(2)
     assert host_nondeterminism_monitor._inert_gc_children(arr.sum, shared_ids) == [arr]
-    assert host_nondeterminism_monitor._inert_gc_children(arr, shared_ids) == []
+    assert host_nondeterminism_monitor._inert_gc_children(arr, shared_ids) == [np.ndarray]
 
 
 def test_model_held_module_c_functions_zero_ceiling() -> None:
