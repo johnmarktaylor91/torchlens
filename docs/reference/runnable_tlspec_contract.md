@@ -1125,11 +1125,18 @@ recorded-handler compatibility; (4) full execution-context restoration around th
 RNG bracket proving zero generator advance. This recovery is DEFERRED (not shipped); until it
 lands every in-forward caught raise ceilings at `unverifiable`.
 
-### Host nondeterminism channel vocabulary (r37, extended r39)
+### Host nondeterminism channel vocabulary (r37, extended r39/r65)
 
-The replayable engines are exactly the module-global Python `random` engine and the legacy global
-`numpy.random` singleton: their consumption is snapshot-detected, records the capture seed, and a
-matching-seed replay stays `verified`/`attested` while an off-seed or seedless run ceilings.
+The seed-replayable global engines are the module-global Python `random` engine, the legacy global
+`numpy.random` singleton, and the torch default engines -- with one deciding asymmetry (r65): the
+torch engine is additionally replay-RE-EXECUTED (the recorded tensor RNG ops run again under the
+run seed), while python/numpy host draws are only ever re-run by the conceptual fresh-call oracle.
+Python/numpy consumption is snapshot-detected, records the capture seed, and a matching-seed
+replay stays `verified`/`attested` while an off-seed or seedless run ceilings -- an in-forward
+python/numpy RESEED is self-reproducing on-seed and stays honest through the same snapshot
+compare. An in-forward HOST mutation of the torch engine, by contrast, desyncs every downstream
+DAG RNG op from both the capture and the oracle (replay never re-executes host code), so it
+ceilings permanently (item 7 below).
 
 Every OTHER host channel is monitored over a FROZEN, DATA-DRIVEN registry (r39: each row declares
 its family, matcher, observation strategy, and thread scope; the runtime classifiers are built
@@ -1246,7 +1253,45 @@ seed) reports `unverifiable` + `not_applicable`:
    and `datetime.date` SUBCLASSES; classification is based on receiver type/subclass identity at
    the Python-visible `c_call`, not exact base-class object id (r42 hon1_1). A subclass method that
    genuinely OVERRIDES the current-clock reader is not attributed to the base reader merely because
-   of its name.
+   of its name;
+7. the torch Python-level RNG API surface (r65): every public endpoint of `torch` /
+   `torch.random` / `torch.cuda(.random)` / `torch.mps` / `torch.xpu` RNG namespaces carries an
+   explicit disposition in a frozen closed vocabulary (`TORCH_RNG_SURFACE`), from which the
+   registry rows, the monitor patches, and the coverage meta-tests all derive -- a torch upgrade
+   that grows the surface (a new module endpoint OR a new `torch._C.Generator` method) is a
+   FAILING meta-test until classified, never a silent gap:
+   * `seed` / `seed_all` spellings = ENTROPY -> permanent ceiling (`host_rng_consumed=true`,
+     `capture_seed` discarded; `os.urandom` semantics);
+   * `manual_seed(_all)` / `set_rng_state(_all)` spellings = in-forward MUTATION -> permanent
+     ceiling (the replay-RE-EXECUTION asymmetry above; a python/numpy reseed does NOT ceiling);
+     `torch.random.fork_rng` ceilings transitively through its internal `set_rng_state` restore
+     (behaviorally pinned, no direct row);
+   * `initial_seed` spellings = REPLAYABLE READ -> consumed-flag only: the leaked scalar is fully
+     determined by the capture seed, so a run at the capture seed stays `verified` and any
+     other/absent seed ceilings -- `initial_seed`-class reads are VERIFIED only at the capture
+     seed (exactly the python-`random` branch semantics);
+   * `get_rng_state` spellings = NO monitor row BY RULING: value-use honesty of the returned
+     state TENSOR is carried by the tensor->host scalar-escape / witness-completeness belt
+     (branch-on-state-bytes -> `incomplete_scalar_escape`, never `verified`); store-only reads
+     are out of scope by design, which keeps `torch.utils.checkpoint(preserve_rng_state=True)`
+     round-tripping `verified`+`attested` (the pinned zero-collateral guard);
+   * method calls whose `c_call` receiver IS a process default generator
+     (`torch.default_generator`, populated `torch.cuda.default_generators` entries) classify by
+     method name under the same dispositions (`seed`->entropy, `manual_seed`/`set_state`/
+     `set_offset`/`graphsafe_set_state`->mutation, `initial_seed`->replayable read; the
+     `get_state` family deliberately inert) -- receiver-IDENTITY scoped, so a user-constructed
+     `torch.Generator` (deterministic construction, probed) mutates instance state only and
+     never marks; it can feed an op solely through the `generator=` kwarg, refused at save. An
+     in-window call of an UNCLASSIFIED default-generator method flags monitor uncertainty
+     (INCOMPLETE), never a silent miss.
+   The torch RNG APIs are Python functions, so their held-reference layer registers the
+   INNERMOST function's CODE identity (unwinding capture-wrapper `__wrapped__` chains) and
+   classifies `call` profile events -- a pre-window `from torch import manual_seed` /
+   `from torch.random import initial_seed` alias cannot bypass the module-attr patch.
+   TorchLens-OWNED seed/snapshot/restore brackets (`set_random_seed`,
+   `log_current_rng_states`, `set_rng_from_saved_states` -- pre-forward backend seeding,
+   per-op state logging, in-forward intervention replay) are suppressed at the monitor's
+   single mark choke point and are never model host nondeterminism.
 
 Every module-attr channel is ADDITIONALLY identity-registered at monitor install (r41): a held
 pre-window reference to the original builtin (the idiomatic `from time import time` /

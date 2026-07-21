@@ -1398,11 +1398,23 @@ def run_and_log_inputs_through_model(
                             _global_advanced = host_rng_advanced(
                                 _host_rng_before, snapshot_host_rng()
                             )
-                            self._runnable_host_rng_consumed = _global_advanced or bool(
-                                _rng_channels.channels
+                            # r65 CLUSTER Z stamping split: a torch RNG
+                            # ``replayable_read`` (the ``initial_seed`` family --
+                            # a host scalar fully determined by the capture seed)
+                            # sets CONSUMED without poisoning the capture seed, so
+                            # a run at the capture seed stays verified while any
+                            # other/absent seed ceilings; ceiling ``channels``
+                            # alone decide UNREPLAYABLE.
+                            self._runnable_host_rng_consumed = (
+                                _global_advanced
+                                or bool(_rng_channels.channels)
+                                or bool(_rng_channels.replayable_reads)
                             )
                             self._runnable_host_rng_unreplayable = bool(_rng_channels.channels)
                             self._runnable_host_rng_channels = tuple(sorted(_rng_channels.channels))
+                            self._runnable_host_rng_replayable_reads = tuple(
+                                sorted(_rng_channels.replayable_reads)
+                            )
                             self._runnable_rng_monitor_uncertain = bool(_rng_channels.uncertain)
                             # r39 CLASS A: name the offending threads / coverage failure so
                             # the INCOMPLETE ceiling's readiness diagnostic is actionable.
