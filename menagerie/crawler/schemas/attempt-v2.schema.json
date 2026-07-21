@@ -242,255 +242,40 @@
   ],
   "$defs": {
     "hash": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
+      "$ref": "attempt-common.schema.json#/$defs/hash"
     },
     "nullable_hash": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/hash"
-        },
-        {
-          "type": "null"
-        }
-      ]
+      "$ref": "attempt-common.schema.json#/$defs/nullable_hash"
     },
     "timestamp": {
-      "type": "string",
-      "format": "date-time",
-      "pattern": "Z$"
+      "$ref": "attempt-common.schema.json#/$defs/timestamp"
     },
     "nonempty_string": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "attempt-common.schema.json#/$defs/nonempty_string"
     },
     "nullable_string": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/nonempty_string"
-        },
-        {
-          "type": "null"
-        }
-      ]
+      "$ref": "attempt-common.schema.json#/$defs/nullable_string"
     },
     "redacted_text": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "redaction",
-        "content_sha256",
-        "local_path",
-        "diagnostic_key"
-      ],
-      "properties": {
-        "redaction": {
-          "const": "externally-controlled-text-v1",
-          "description": "Closed marker for externally controlled text removed from public records."
-        },
-        "content_sha256": {
-          "$ref": "#/$defs/hash",
-          "description": "Digest of the exact canonical JSON diagnostic value."
-        },
-        "local_path": {
-          "type": "string",
-          "pattern": "^\\.crawl-local/diagnostics/[A-Za-z0-9._/:-]+\\.json$",
-          "description": "Gitignored local diagnostic sidecar locator."
-        },
-        "diagnostic_key": {
-          "type": "string",
-          "pattern": "^\\$[A-Za-z0-9_.\\[\\]-]+$",
-          "description": "JSON-style key locating the exact value inside the sidecar."
-        },
-        "stream_sha256": {
-          "$ref": "#/$defs/hash",
-          "description": "Exact parent-observed stream digest when the value is a stdio tail."
-        }
-      }
+      "$ref": "attempt-common.schema.json#/$defs/redacted_text"
     },
     "string_array": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
+      "$ref": "attempt-common.schema.json#/$defs/string_array"
     },
     "stage": {
-      "enum": [
-        "intake",
-        "source",
-        "fetch",
-        "evidence",
-        "accuracy-gate",
-        "environment",
-        "import",
-        "constructor",
-        "input",
-        "forward",
-        "fidelity",
-        "resource",
-        "policy",
-        "runner"
-      ]
+      "$ref": "attempt-common.schema.json#/$defs/stage"
     },
     "reason_code": {
-      "enum": [
-        "schema-invalid",
-        "stable-id-conflict",
-        "duplicate-revision-conflict",
-        "migration-invariant",
-        "identity-unresolved",
-        "missing-mandatory-link",
-        "source-model-mismatch",
-        "higher-rung-unresolved",
-        "unreachable",
-        "revision-missing",
-        "hash-mismatch",
-        "access-denied",
-        "artifact-missing",
-        "locator-missing",
-        "excerpt-mismatch",
-        "insufficient-detail",
-        "coverage-incomplete",
-        "search-incomplete",
-        "inaccurate-cap-exhausted",
-        "cannot-verify-cap-exhausted",
-        "identity-mismatch",
-        "checker-contract-invalid",
-        "solve-failed",
-        "lock-missing",
-        "artifact-hash-mismatch",
-        "build-failed",
-        "probe-failed",
-        "resolved-export-mismatch",
-        "island-cap",
-        "below-minimum-island-size",
-        "module-missing",
-        "symbol-missing",
-        "abi-load-failed",
-        "import-exception",
-        "exception",
-        "requires-checkpoint",
-        "requires-weight-asset",
-        "invalid-model-object",
-        "contract-invalid",
-        "source-invalid-shape",
-        "generation-exception",
-        "semantic-constraint",
-        "mode-run",
-        "incomplete-receipt",
-        "invalid-output-signature",
-        "confirmation-mismatch",
-        "major-drift-cap-exhausted",
-        "slop-cap-exhausted",
-        "timeout",
-        "oom",
-        "disk-floor",
-        "scratch-cap",
-        "rss-cap",
-        "network-attempt",
-        "checkpoint-read",
-        "write-outside-scratch",
-        "credentials-exposed",
-        "torchlens-import",
-        "opaque-code",
-        "native-crash",
-        "signal",
-        "missing-receipt",
-        "protocol-violation",
-        "ledger-corruption",
-        "internal-error",
-        "sandbox-unavailable-v1",
-        "effort-cap-exhausted"
-      ]
+      "$ref": "attempt-common.schema.json#/$defs/reason_code"
     },
     "rung": {
-      "enum": [
-        "R1_LIBRARY",
-        "R2_VENDOR",
-        "R3_PORT",
-        "R4_REIMPLEMENT",
-        "R5_SKIP"
-      ]
+      "$ref": "attempt-common.schema.json#/$defs/rung"
     },
     "retries": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "stage_attempt",
-        "root_cause_repeat",
-        "author_round",
-        "gate_round"
-      ],
-      "properties": {
-        "stage_attempt": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Mandatory stage attempt."
-        },
-        "root_cause_repeat": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Mandatory root cause repeat."
-        },
-        "author_round": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Mandatory author round."
-        },
-        "gate_round": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Mandatory checker repair round."
-        }
-      }
+      "$ref": "attempt-common.schema.json#/$defs/retries"
     },
     "identities": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "source",
-        "evidence",
-        "recipe",
-        "environment",
-        "execution",
-        "runner",
-        "author_prompt",
-        "checker_prompt"
-      ],
-      "properties": {
-        "source": {
-          "$ref": "#/$defs/nullable_hash",
-          "description": "Mandatory source."
-        },
-        "evidence": {
-          "$ref": "#/$defs/nullable_hash",
-          "description": "Mandatory literal evidence and coverage record."
-        },
-        "recipe": {
-          "$ref": "#/$defs/nullable_hash",
-          "description": "Mandatory recipe."
-        },
-        "environment": {
-          "$ref": "#/$defs/nullable_hash",
-          "description": "Mandatory environment."
-        },
-        "execution": {
-          "$ref": "#/$defs/nullable_hash",
-          "description": "Mandatory execution identity and currentness state."
-        },
-        "runner": {
-          "$ref": "#/$defs/nullable_hash",
-          "description": "Mandatory runner."
-        },
-        "author_prompt": {
-          "$ref": "#/$defs/nullable_hash",
-          "description": "Mandatory author prompt."
-        },
-        "checker_prompt": {
-          "$ref": "#/$defs/nullable_hash",
-          "description": "Mandatory checker prompt."
-        }
-      }
+      "$ref": "attempt-common.schema.json#/$defs/identities"
     },
     "environment": {
       "oneOf": [
@@ -556,136 +341,13 @@
       }
     },
     "host": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "machine_id",
-        "os",
-        "os_build",
-        "architecture",
-        "cpu",
-        "ram_bytes",
-        "accelerator",
-        "accelerator_runtime"
-      ],
-      "properties": {
-        "machine_id": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory machine id."
-        },
-        "os": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory os."
-        },
-        "os_build": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory os build."
-        },
-        "architecture": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory architecture."
-        },
-        "cpu": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory cpu."
-        },
-        "ram_bytes": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Mandatory ram bytes."
-        },
-        "accelerator": {
-          "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory accelerator."
-        },
-        "accelerator_runtime": {
-          "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory accelerator runtime."
-        }
-      }
+      "$ref": "attempt-common.schema.json#/$defs/host"
     },
     "invocation": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "argv",
-        "cwd",
-        "safe_env",
-        "seed",
-        "device",
-        "mode",
-        "network_policy",
-        "timeout_seconds",
-        "rss_limit_bytes",
-        "scratch_limit_bytes"
-      ],
-      "properties": {
-        "argv": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "string"
-          },
-          "description": "Mandatory argv."
-        },
-        "cwd": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory cwd."
-        },
-        "safe_env": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "Mandatory safe env."
-        },
-        "seed": {
-          "type": "integer",
-          "description": "Mandatory seed."
-        },
-        "device": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory device."
-        },
-        "mode": {
-          "oneOf": [
-            {
-              "enum": [
-                "train",
-                "eval"
-              ]
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Mandatory mode."
-        },
-        "network_policy": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory network policy."
-        },
-        "timeout_seconds": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 1800,
-          "description": "Mandatory timeout seconds."
-        },
-        "rss_limit_bytes": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Mandatory rss limit bytes."
-        },
-        "scratch_limit_bytes": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Mandatory scratch limit bytes."
-        }
-      }
+      "$ref": "attempt-common.schema.json#/$defs/invocation"
     },
     "input_kind": {
-      "type": "string",
-      "pattern": "^(standard-[a-z0-9-]+|random-fallback)$"
+      "$ref": "attempt-common.schema.json#/$defs/input_kind"
     },
     "worker_receipt": {
       "type": "object",
@@ -739,11 +401,17 @@
           "description": "Worker-observed digest of the materialized standard input asset, or null when no standard asset was selected."
         },
         "constructor_seconds": {
-          "type": ["number", "null"],
+          "type": [
+            "number",
+            "null"
+          ],
           "description": "Worker-observed model-construction wall seconds, or null when the constructor did not complete."
         },
         "forward_seconds": {
-          "type": ["number", "null"],
+          "type": [
+            "number",
+            "null"
+          ],
           "description": "Worker-observed forward wall seconds for this mode, or null when the forward did not run."
         },
         "constructor_started": {
@@ -840,302 +508,16 @@
       }
     },
     "supervisor_observation": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "exit_code",
-        "signal",
-        "wall_seconds",
-        "cpu_seconds",
-        "peak_rss_bytes",
-        "stdout_sha256",
-        "stdout_bytes",
-        "stdout_tail",
-        "stderr_sha256",
-        "stderr_bytes",
-        "stderr_tail",
-        "full_log_local_path",
-        "full_log_retention"
-      ],
-      "properties": {
-        "exit_code": {
-          "oneOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Mandatory exit code."
-        },
-        "signal": {
-          "oneOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Mandatory signal."
-        },
-        "wall_seconds": {
-          "type": "number",
-          "minimum": 0,
-          "description": "Mandatory wall seconds."
-        },
-        "cpu_seconds": {
-          "type": "number",
-          "minimum": 0,
-          "description": "Mandatory cpu seconds."
-        },
-        "peak_rss_bytes": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Mandatory peak rss bytes."
-        },
-        "stdout_sha256": {
-          "$ref": "#/$defs/nullable_hash",
-          "description": "Mandatory stdout sha256."
-        },
-        "stdout_bytes": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Mandatory stdout bytes."
-        },
-        "stdout_tail": {
-          "oneOf": [
-            {
-              "type": "string",
-              "maxLength": 1500
-            },
-            {
-              "$ref": "#/$defs/redacted_text"
-            }
-          ],
-          "description": "Mandatory stdout tail."
-        },
-        "stdout_completion_line": {
-          "$ref": "#/$defs/nullable_string",
-          "description": "Parent-attested TorchLens-owned completion marker."
-        },
-        "stderr_sha256": {
-          "$ref": "#/$defs/nullable_hash",
-          "description": "Mandatory stderr sha256."
-        },
-        "stderr_bytes": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Mandatory stderr bytes."
-        },
-        "stderr_tail": {
-          "oneOf": [
-            {
-              "type": "string",
-              "maxLength": 1500
-            },
-            {
-              "$ref": "#/$defs/redacted_text"
-            }
-          ],
-          "description": "Mandatory stderr tail."
-        },
-        "full_log_local_path": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory full log local path."
-        },
-        "full_log_retention": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory full log retention."
-        }
-      }
+      "$ref": "attempt-common.schema.json#/$defs/supervisor_observation"
     },
     "policy_observation": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "network_attempted",
-        "socket_targets",
-        "checkpoint_or_weight_read_attempted",
-        "checkpoint_paths",
-        "write_outside_scratch_attempted",
-        "write_paths",
-        "credentials_present",
-        "torchlens_import_attempted",
-        "cache_read_attempted"
-      ],
-      "properties": {
-        "network_attempted": {
-          "type": "boolean",
-          "description": "Mandatory network attempted."
-        },
-        "socket_targets": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory socket targets."
-        },
-        "checkpoint_or_weight_read_attempted": {
-          "type": "boolean",
-          "description": "Mandatory checkpoint or weight read attempted."
-        },
-        "checkpoint_paths": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory checkpoint paths."
-        },
-        "write_outside_scratch_attempted": {
-          "type": "boolean",
-          "description": "Mandatory write outside scratch attempted."
-        },
-        "write_paths": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory write paths."
-        },
-        "credentials_present": {
-          "type": "boolean",
-          "description": "Mandatory credentials present."
-        },
-        "torchlens_import_attempted": {
-          "type": "boolean",
-          "description": "Mandatory torchlens import attempted."
-        },
-        "cache_read_attempted": {
-          "type": "boolean",
-          "description": "Mandatory cache read attempted."
-        }
-      }
+      "$ref": "attempt-common.schema.json#/$defs/policy_observation"
     },
     "error": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "stage",
-        "reason_code",
-        "exception_type",
-        "message",
-        "traceback",
-        "no_traceback_reason",
-        "native_crash",
-        "root_cause_fingerprint",
-        "details"
-      ],
-      "properties": {
-        "stage": {
-          "$ref": "#/$defs/stage",
-          "description": "Mandatory processing or failure stage."
-        },
-        "reason_code": {
-          "$ref": "#/$defs/reason_code",
-          "description": "Mandatory closed reason code when applicable."
-        },
-        "exception_type": {
-          "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory exception type."
-        },
-        "message": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "$ref": "#/$defs/redacted_text"
-            }
-          ],
-          "description": "Mandatory message."
-        },
-        "traceback": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/nullable_string"
-            },
-            {
-              "$ref": "#/$defs/redacted_text"
-            }
-          ],
-          "description": "Best-effort captured traceback."
-        },
-        "no_traceback_reason": {
-          "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory no traceback reason."
-        },
-        "native_crash": {
-          "type": "boolean",
-          "description": "Mandatory native crash."
-        },
-        "root_cause_fingerprint": {
-          "$ref": "#/$defs/hash",
-          "description": "Mandatory root cause fingerprint."
-        },
-        "details": {
-          "type": "object",
-          "description": "Mandatory structured event details."
-        }
-      },
-      "oneOf": [
-        {
-          "properties": {
-            "traceback": {
-              "oneOf": [
-                {
-                  "type": "string",
-                  "minLength": 1
-                },
-                {
-                  "$ref": "#/$defs/redacted_text"
-                }
-              ],
-              "description": "Best-effort captured traceback."
-            },
-            "no_traceback_reason": {
-              "type": "null",
-              "description": "Best-effort no traceback reason."
-            }
-          }
-        },
-        {
-          "properties": {
-            "traceback": {
-              "type": "null",
-              "description": "Best-effort captured traceback."
-            },
-            "no_traceback_reason": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Best-effort no traceback reason."
-            }
-          }
-        }
-      ]
+      "$ref": "attempt-common.schema.json#/$defs/error"
     },
     "defer_evidence": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "target_status",
-        "source_ids",
-        "probe_attempt_ids",
-        "explanation"
-      ],
-      "properties": {
-        "target_status": {
-          "enum": [
-            "deferred:needs-cuda",
-            "deferred:needs-x86"
-          ],
-          "description": "Mandatory target status."
-        },
-        "source_ids": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory source ids."
-        },
-        "probe_attempt_ids": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory probe attempt ids."
-        },
-        "explanation": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory explanation."
-        }
-      }
+      "$ref": "attempt-common.schema.json#/$defs/defer_evidence"
     }
   }
 }

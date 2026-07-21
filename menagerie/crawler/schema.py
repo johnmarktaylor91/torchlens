@@ -45,7 +45,10 @@ SCHEMA_FILES = {
     OPERATIONAL_EVENT_SCHEMA_VERSION: "operational-event-v1.schema.json",
 }
 
-SCHEMA_RESOURCE_FILES = ("model-common.schema.json",)
+SCHEMA_RESOURCE_FILES = (
+    "attempt-common.schema.json",
+    "model-common.schema.json",
+)
 
 OWNERSHIP_ANNOTATED_SCHEMA_VERSIONS = frozenset(
     {
