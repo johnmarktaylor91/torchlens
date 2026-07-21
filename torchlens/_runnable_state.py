@@ -1434,6 +1434,18 @@ def _staged_state_clone(
             canonical = False
         if not canonical:
             clone = clone.clone(memory_format=torch.contiguous_format)
+        # r65 staging hardening (b): a clone materialized FROM an inference-mode source
+        # carries ``_version == 1`` (torch counts the out-of-inference materialization as a
+        # mutation on the fresh destination), which would over-fire the new
+        # ``version_is_zero`` tripwire dim on TorchLens's own staging output. One extra
+        # clone of the now-ordinary tensor restores the canonical fresh counter; every
+        # ordinary source already stages at version 0 and never pays this.
+        try:
+            version = tensor_version_or_none(clone)
+        except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+            version = None
+        if version is None or int(version) != 0:
+            clone = clone.clone()
     return clone
 
 
