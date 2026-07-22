@@ -1009,6 +1009,20 @@ def _runtime_input_metadata_value(value: torch.Tensor, name: str) -> Any:
     return None
 
 
+def _fact_path_tuple_or_none(fact: Mapping[str, Any]) -> "tuple[Any, ...] | None":
+    """Belt twin of the parse-side path validator (r75 L1): ``None`` means fail closed.
+
+    Parse refuses a non-sequence fact ``path`` as ``context_field_invalid`` before any
+    execution-side consumer runs; this belt keeps the execution readers total anyway so a
+    malformed path can never crash ``tuple(...)`` into an untyped lane.
+    """
+
+    raw_path = fact.get("path", ()) or ()
+    if not isinstance(raw_path, (list, tuple)):
+        return None
+    return tuple(raw_path)
+
+
 def _input_metadata_contract_checks(
     descriptor: SparseRunDescriptor,
     inputs: Any,
@@ -1048,7 +1062,20 @@ def _input_metadata_contract_checks(
     for witness, fact in _model_input_metadata_facts(descriptor):
         raw_position = fact.get("position")
         position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
-        path = tuple(fact.get("path", ()) or ())
+        path = _fact_path_tuple_or_none(fact)
+        if path is None:
+            checks.append(
+                _contract_check(
+                    "input_metadata_path_malformed",
+                    False,
+                    RunnableErrorCode.CONTEXT_FIELD_INVALID,
+                    "A metadata envelope carries a non-sequence container path; the "
+                    "fact cannot be resolved against the runtime input tree.",
+                    affected_op_labels=(witness.site_label,),
+                    details=(("model_site_position", repr(position)),),
+                )
+            )
+            continue
         recorded_facts = fact.get("facts")
         if not isinstance(recorded_facts, Mapping):
             continue
@@ -1131,7 +1158,9 @@ def _input_derived_layout_stale(descriptor: SparseRunDescriptor, inputs: Any) ->
             return True
         raw_position = fact.get("position")
         position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
-        path = tuple(fact.get("path", ()) or ())
+        path = _fact_path_tuple_or_none(fact)
+        if path is None:
+            return True
         try:
             root = _input_site_value(inputs, position, positions)
             runtime_leaf = _value_at_path(root, path)
@@ -1386,7 +1415,20 @@ def _input_literal_contract_checks(
     for witness, fact in _model_input_literal_facts(descriptor):
         raw_position = fact.get("position")
         position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
-        path = tuple(fact.get("path", ()) or ())
+        path = _fact_path_tuple_or_none(fact)
+        if path is None:
+            checks.append(
+                _contract_check(
+                    "input_literal_path_malformed",
+                    False,
+                    RunnableErrorCode.CONTEXT_FIELD_INVALID,
+                    "A literal fact carries a non-sequence container path; the "
+                    "fact cannot be resolved against the runtime input tree.",
+                    affected_op_labels=(witness.site_label,),
+                    details=(("model_site_position", repr(position)),),
+                )
+            )
+            continue
         recorded = fact.get("value")
         if not bool(fact.get("encodable", False)):
             # Opaque capture-time leaf: not representable in the frozen literal

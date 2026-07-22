@@ -1617,7 +1617,14 @@ def _classify_arg_component(
         return ParentRef(label)
     if isinstance(value, torch.Tensor):
         if isinstance(value, torch.nn.Parameter):
-            return LiteralTensor(value)
+            # r75 F2: snapshot the model-prep barcode NOW (model provably alive) --
+            # session cleanup strips the weak registry meta before a deferred save,
+            # so the template itself must carry the capture-time identity.
+            param_meta = get_param_meta(value)
+            param_barcode = getattr(param_meta, "param_barcode", None)
+            return LiteralTensor(
+                value, param_barcode=str(param_barcode) if param_barcode is not None else None
+            )
         with pause_logging():
             return LiteralTensor(safe_copy(value))
     if _literal_value_supported(value):

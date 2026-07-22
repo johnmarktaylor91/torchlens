@@ -565,12 +565,14 @@ def _validate_required_witness_inventory(
         fact_family = witness_family_of(witness.site_label)
         if fact_family == "input_structure":
             fact = _decode_literal(witness.observed_value)
-            site_position = tuple(fact.get("position", ()))
+            site_position = _fact_path_tuple(
+                field, fact.get("position", ()), "structure fact position"
+            )
             expected: set[tuple[Any, ...]] = set()
             for node in fact.get("nodes", ()):
                 if not isinstance(node, Mapping):
                     continue
-                node_path = tuple(node.get("path", ()))
+                node_path = _fact_path_tuple(field, node.get("path", ()), "structure node path")
                 if node.get("kind") == "leaf":
                     expected.add(node_path)
                 elif node.get("kind") == "empty":
@@ -598,7 +600,7 @@ def _validate_required_witness_inventory(
                     f"literal fact position {site_position!r} is outside the required "
                     "input-site inventory",
                 )
-            path = tuple(fact.get("path", ()) or ())
+            path = _fact_path_tuple(field, fact.get("path", ()) or (), "literal fact path")
             claim = (site_position, path)
             if claim in literal_claims:
                 raise ContextFieldInvalidError(field, f"duplicate literal fact identity {claim!r}")
@@ -641,6 +643,26 @@ def _validate_required_witness_inventory(
                 field,
                 f"literal facts at site {site_position!r} have no structure fact to anchor",
             )
+
+
+def _fact_path_tuple(field: str, raw: Any, description: str) -> tuple[Any, ...]:
+    """Return a decoded fact's path/position components, refusing non-sequences typed (r75 L1).
+
+    An int-encoded (or otherwise non-sequence) ``path`` in a foreign artifact's
+    metadata/literal envelope crashed ``tuple(...)`` with a ``TypeError`` into the
+    generic parse catch-all (``run_capability_unavailable``) instead of the closed-
+    vocabulary ``context_field_invalid`` analysis-only lane its sibling ``position``
+    checks use. A string is refused too: iterating it would silently shred one
+    component into characters instead of refusing the malformed encoding.
+    """
+
+    if raw is None:
+        return ()
+    if not isinstance(raw, (list, tuple)):
+        raise ContextFieldInvalidError(
+            field, f"{description} {raw!r} is not a sequence of path components"
+        )
+    return tuple(raw)
 
 
 def _parse_input_boundary(value: Any) -> tuple[InputBoundarySite, ...]:
@@ -1065,7 +1087,7 @@ def validate_witness_obligations(
         fact_position: Any = (
             tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
         )
-        path = tuple(fact.get("path", ()) or ())
+        path = _fact_path_tuple(field, fact.get("path", ()) or (), "metadata envelope path")
         declared_reads = reads_by_site.get((fact_position, path))
         if declared_reads is None:
             raise ContextFieldInvalidError(
