@@ -293,10 +293,30 @@ carry instance state refuses at save even with an empty instance. Persisted exec
 time against closed vocabularies (`context_field_invalid`); the recorded default device is entered
 as a scoped `with torch.device(...)` context, never via `set_default_device`.
 
-Runnable descriptors are `sparse_recorded_taken_path_v2`: per-call `CallExecutionContext` and the
+Runnable descriptors are `sparse_recorded_taken_path_v2` (call recipe
+`non_tensor_args_tensor_slots_context_and_obligations_v3`): per-call `CallExecutionContext` and the
 capture-scoped `AmbientExecutionContext` are REQUIRED and EXPLICIT, restored at replay or refused
 typed; a legacy v1 artifact loads analysis-only with a typed readiness refusal (absent context is
 never defaulted).
+
+The witness-strip class is closed structurally (r71 A): `WITNESS_FAMILY_REGISTRY` v2
+(`witness_family_registry_v2`) covers EVERY verdict-steering witness family (the four direct
+control kinds + shape families + two claim-only families), each row naming its independent
+replay-structural anchor. Every replay item that steers a verdict is a typed obligation stamped
+on its OWNING replay record (`control_obligations`/`control_dependencies` on calls,
+`host_escape`/`inert_sink` on slots, `captured_requires_grad`/`captured_grad_fn`/
+`host_escape_disposition` on state bindings, the REQUIRED `input_boundary` record), discharged by
+an exact witness XOR a typed `WitnessCoverageGap`; `witness_completeness` is DERIVED from the gap
+ledger (redundant assertion, never authority) and the required-witness inventory is a redundant
+mirror. No record deletion can improve a verdict; the ONE out-of-scope boundary is coherent
+reauthoring -- byte-for-byte an honest capture of a weaker program, whose VERIFIED is TRUE against
+that program's oracle 1 -- a documented threat-model scope statement, not an open residual.
+Cluster C: instance-state inspection is fail-closed (`inspect_instance_state`; a
+property/descriptor-shadowed `__dict__` or a custom `__getattribute__`/`__getattr__` on a
+declared-schema container refuses `instance_state_uninspectable` without running the hook).
+Cluster B: slice/composite-literal components are classifier-first (a semantic scalar can never
+launder through a `slice` component). Cluster D: reserved input-path sentinels (the whole `\x00`
+namespace) are escaped by the key codec so a real dict key equal to a marker round-trips.
 
 The declared state model is the capture-time `state_dict` (named parameters plus persistent buffers)
 PLUS the capture-time values of used non-persistent buffers (the required
