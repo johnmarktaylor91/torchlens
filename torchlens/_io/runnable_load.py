@@ -307,10 +307,18 @@ def _validate_input_structure_witnesses(witnesses: "Sequence[ControlWitness]") -
                 raise ContextFieldInvalidError(field, f"malformed node path {node_path!r}")
             if len(node_path) == 0:
                 root_seen = True
-            if node.get("kind") not in _INPUT_STRUCTURE_NODE_KINDS:
-                raise ContextFieldInvalidError(field, f"unknown node kind {node.get('kind')!r}")
+            node_kind = node.get("kind")
+            if node_kind not in _INPUT_STRUCTURE_NODE_KINDS:
+                raise ContextFieldInvalidError(field, f"unknown node kind {node_kind!r}")
             type_ref = node.get("type")
-            if (
+            if node_kind in {"tensor", "leaf"}:
+                # Leaf-value semantics belong to the tensor/literal VALUE contracts; a
+                # type fact here would be a forged extra comparison surface.
+                if type_ref is not None:
+                    raise ContextFieldInvalidError(
+                        field, f"{node_kind} node must not carry a type ref"
+                    )
+            elif (
                 not isinstance(type_ref, (list, tuple))
                 or len(type_ref) != 2
                 or not all(isinstance(part, str) and part for part in type_ref)

@@ -390,7 +390,7 @@ def test_r67_structure_facts_are_required_and_parse_validated(tmp_path: Path) ->
             "input_structure": True,
             "position": ["arg", 0],
             "site_count": 2,
-            "nodes": [{"path": [], "kind": "tensor", "type": ["torch", "Tensor"]}],
+            "nodes": [{"path": [], "kind": "tensor"}],
         },
         # unknown node kind
         {
@@ -404,21 +404,43 @@ def test_r67_structure_facts_are_required_and_parse_validated(tmp_path: Path) ->
             "input_structure": True,
             "position": ["argx"],
             "site_count": 1,
-            "nodes": [{"path": [], "kind": "tensor", "type": ["torch", "Tensor"]}],
+            "nodes": [{"path": [], "kind": "tensor"}],
         },
         # missing root record
         {
             "input_structure": True,
             "position": ["arg", 0],
             "site_count": 1,
-            "nodes": [{"path": [0], "kind": "tensor", "type": ["torch", "Tensor"]}],
+            "nodes": [{"path": [0], "kind": "tensor"}],
         },
-        # malformed type ref
+        # malformed type ref on a container node
         {
             "input_structure": True,
             "position": ["arg", 0],
             "site_count": 1,
-            "nodes": [{"path": [], "kind": "tensor", "type": ["torch"]}],
+            "nodes": [{"path": [], "kind": "sequence", "type": ["builtins"]}],
+        },
+        # missing type ref on a container node
+        {
+            "input_structure": True,
+            "position": ["arg", 0],
+            "site_count": 1,
+            "nodes": [{"path": [], "kind": "mapping"}],
+        },
+        # forged type fact on a LEAF node (leaf-value semantics are the literal
+        # contract's domain; an extra structural comparison surface is refused)
+        {
+            "input_structure": True,
+            "position": ["arg", 0],
+            "site_count": 1,
+            "nodes": [{"path": [], "kind": "leaf", "type": ["numpy", "float64"]}],
+        },
+        # forged type fact on a TENSOR node
+        {
+            "input_structure": True,
+            "position": ["arg", 0],
+            "site_count": 1,
+            "nodes": [{"path": [], "kind": "tensor", "type": ["torch", "Tensor"]}],
         },
     ]
     for fact in bad_facts:
@@ -429,7 +451,7 @@ def test_r67_structure_facts_are_required_and_parse_validated(tmp_path: Path) ->
         "input_structure": True,
         "position": ["arg", 0],
         "site_count": 2,
-        "nodes": [{"path": [], "kind": "tensor", "type": ["torch", "Tensor"]}],
+        "nodes": [{"path": [], "kind": "tensor"}],
     }
     with pytest.raises(runnable_load.ContextFieldInvalidError):
         runnable_load._validate_input_structure_witnesses((_forged(good), _forged(good)))
@@ -460,8 +482,13 @@ def test_r67_snapshot_kind_matrix_is_closed() -> None:
         root = snapshot["nodes"][0]
         assert root["path"] == []
         assert root["kind"] == kind
-        module, qualname = root["type"]
-        assert module and qualname
+        if kind in {"tensor", "leaf"}:
+            # Leaf-value semantics belong to the tensor/literal VALUE contracts
+            # (numeric equality across float subclasses); no structural type fact.
+            assert "type" not in root, kind
+        else:
+            module, qualname = root["type"]
+            assert module and qualname
         assert not snapshot["refusals"], kind
     # Empty-kind rows include the dataclass row (free-F2).
     assert snapshot_input_boundary(_EmptyA())["nodes"][0]["kind"] == "empty"

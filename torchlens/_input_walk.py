@@ -344,14 +344,24 @@ def decode_mapping_key(component: "str | int") -> Any:
 
 
 def undeclared_instance_state(value: Any, kind: str) -> bool:
-    """Return whether a container INSTANCE carries state its declared schema drops (r67 C2).
+    """Return whether a container INSTANCE carries state its DECLARED schema drops (r67 C2).
 
-    A dataclass with a non-field ``__dict__`` attribute, a namedtuple subclass with
-    instance ``__dict__`` state, or a dict/list/tuple subclass carrying ``__dict__``
-    attributes would silently lose that state on replay reconstruction -- and it can
-    steer control flow the declared schema never witnesses (r66 R1: ``box.mode``).
-    Registered containers prove completeness through their explicit ``state_complete``
-    declaration instead (checked by the snapshot's registered branch).
+    Scope: kinds with a declared FIELD schema. A dataclass with a non-field ``__dict__``
+    attribute or a namedtuple subclass with instance ``__dict__`` state would silently
+    lose that state on replay reconstruction -- and it can steer control flow the
+    declared schema never witnesses (r66 R1: ``box.mode``). Registered containers prove
+    completeness through their explicit ``state_complete`` declaration instead (checked
+    by the snapshot's registered branch).
+
+    Mapping/sequence SUBCLASSES are deliberately NOT judged here (heavy-gate F7 ruling):
+    their witnessed schema is the protocol view (ordered keys/children) plus the EXACT
+    class identity the snapshot already records and compares, and a custom Mapping
+    legitimately keeps its backing store in ``__dict__`` (``self.data = {...}``) --
+    blanket-refusing it would reject every well-behaved custom Mapping input the
+    incumbent F7 contract admits. A hidden non-protocol attribute steering control flow
+    on such a subclass remains the documented pre-r67 residual (attribute reads are
+    invisible to every Python-level net), never a false structural pass: the class swap
+    itself still diverges through the exact-type node fact.
     """
 
     import dataclasses as _dc
@@ -364,7 +374,9 @@ def undeclared_instance_state(value: Any, kind: str) -> bool:
             if name not in field_names and attr_value is not None
         }
         return bool(extra)
-    if kind in {"namedtuple", "mapping", "sequence", "empty"}:
+    if kind == "namedtuple" or (
+        kind == "empty" and isinstance(value, tuple) and hasattr(value, "_fields")
+    ):
         extras = getattr(value, "__dict__", None)
         if not isinstance(extras, dict) or not extras:
             return False
@@ -400,7 +412,15 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
 
     def _descend(item: Any, path: tuple[Any, ...]) -> None:
         kind = classify_input_container(item)
-        node: dict[str, Any] = {"path": list(path), "kind": kind, "type": _type_ref(item)}
+        # r67 heavy-gate fix: only CONTAINER nodes carry the exact-class witness. A
+        # tensor leaf's identity is the admission gate's domain, and a scalar LEAF
+        # literal's semantics are the literal-witness VALUE contract (numeric equality
+        # across float subclasses: a captured ``np.float64(2.0)`` re-run with plain
+        # ``2.0`` must verify) -- an exact-type fact on leaves would structurally
+        # diverge value-equal inputs the value contract admits.
+        node: dict[str, Any] = {"path": list(path), "kind": kind}
+        if kind not in {"tensor", "leaf"}:
+            node["type"] = _type_ref(item)
         if kind == "tensor":
             nodes.append(node)
             return
