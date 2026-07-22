@@ -595,13 +595,28 @@ class BothDeferredRealAuthor(FakeAuthor):
         return _terminal_fake_author_result(rebound, platform=platform)
 
 
-class FakeChecker(CheckerLane):
-    """Return accurate synthetic gates or one configured quota signal."""
+@dataclass(frozen=True)
+class CheckerScript:
+    """Describe one synthetic checker deviation from accurate gates."""
 
-    def __init__(self, *, quota: bool = False) -> None:
-        """Configure whether metadata checking reports quota exhaustion."""
+    metadata_verdict: Optional[str] = None
+    selected_id: Optional[str] = None
+    required_repair: Optional[str] = None
+    field_repair: Optional[str] = None
+    mixed_tail: bool = False
+    lineage_repairs: bool = False
+    reject_fidelity: bool = False
+    metadata_error: Optional[str] = None
+
+
+class ScriptedChecker(CheckerLane):
+    """Return accurate synthetic gates with optional scripted deviations."""
+
+    def __init__(self, *, quota: bool = False, script: Optional[CheckerScript] = None) -> None:
+        """Configure quota exhaustion and synthetic checker deviations."""
 
         self.quota = quota
+        self.script = script or CheckerScript()
         self.metadata_calls = 0
         self.fidelity_calls = 0
 
@@ -611,6 +626,8 @@ class FakeChecker(CheckerLane):
         """Return one exhaustive accurate metadata gate."""
 
         del work_root
+        if self.script.metadata_error is not None:
+            raise RuntimeError(self.script.metadata_error)
         self.metadata_calls += 1
         if self.quota:
             return CheckerOutcome(
@@ -668,7 +685,45 @@ class FakeChecker(CheckerLane):
                 if key not in {"result_envelope_sha256", "payload_sha256", "ledger_seq"}
             }
         )
+        self._apply_metadata_script(gate, artifacts)
         return CheckerOutcome(gate=gate)
+
+    def _apply_metadata_script(
+        self, gate: dict[str, Any], artifacts: Sequence[AuthorArtifact]
+    ) -> None:
+        """Apply configured metadata findings after the synthetic envelope is bound."""
+
+        verdict = self.script.metadata_verdict
+        for item in gate["items"]:
+            selected = (
+                self.script.selected_id is None or item["stable_id"] == self.script.selected_id
+            )
+            if verdict is None or not selected:
+                continue
+            repair = self.script.required_repair or (
+                "correct the unsupported metadata claim"
+                if verdict == "inaccurate"
+                else "supply missing primary evidence"
+            )
+            field_repair = self.script.field_repair or (
+                "correct the claim" if verdict == "inaccurate" else "supply primary evidence"
+            )
+            item["verdict"] = verdict
+            item["required_repairs"] = [repair]
+            item["field_checks"][0]["verdict"] = verdict
+            item["field_checks"][0]["required_repair"] = field_repair
+        if self.script.mixed_tail and len(artifacts) > 1:
+            item = gate["items"][-1]
+            item["verdict"] = "inaccurate"
+            item["required_repairs"] = ["repair the final item"]
+            item["field_checks"][0]["verdict"] = "inaccurate"
+            item["field_checks"][0]["required_repair"] = "repair the final item"
+        if self.script.lineage_repairs:
+            for item in gate["items"]:
+                repair = f"repair-generation-{self.metadata_calls}"
+                item["required_repairs"] = [repair]
+                item["field_checks"][0]["reason"] = repair
+                item["field_checks"][0]["required_repair"] = repair
 
     def check_fidelity(
         self, artifact: AuthorArtifact, work_root: Path, config: DriverConfig
@@ -713,6 +768,10 @@ class FakeChecker(CheckerLane):
                 if key not in {"result_envelope_sha256", "payload_sha256", "ledger_seq"}
             }
         )
+        if self.script.reject_fidelity:
+            item["verdict"] = "inaccurate"
+            item["fidelity"]["verdict"] = "major-drift"
+            item["fidelity"]["contradictions"] = ["material topology mismatch"]
         return CheckerOutcome(gate=gate)
 
     def check_terminal(
@@ -788,24 +847,36 @@ class FakeChecker(CheckerLane):
         return CheckerOutcome(gate=gate)
 
 
-class FailingMetadataChecker(FakeChecker):
+class FakeChecker(ScriptedChecker):
+    """Retain the default synthetic checker spelling used across tests."""
+
+
+class FailingMetadataChecker(ScriptedChecker):
     """Raise a checker-contract error for every metadata batch."""
 
-    def check_metadata(
-        self, artifacts: Sequence[AuthorArtifact], work_root: Path, config: DriverConfig
-    ) -> CheckerOutcome:
-        """Simulate a checker process that returned no valid envelope."""
-
-        del artifacts, work_root, config
-        raise RuntimeError("synthetic invalid checker envelope")
-
-
-class FakeForward(ForwardLane):
-    """Return schema-valid attempts for every mode/cold invocation."""
-
     def __init__(self) -> None:
-        """Initialize per-model invocation counts."""
+        """Configure a checker process that returns no valid envelope."""
 
+        super().__init__(script=CheckerScript(metadata_error="synthetic invalid checker envelope"))
+
+
+@dataclass(frozen=True)
+class ForwardScript:
+    """Describe synthetic forward deviations from clean dual-mode attempts."""
+
+    parameter_counts: Optional[Mapping[str, int]] = None
+    failed_id: Optional[str] = None
+    expanded_id: Optional[str] = None
+    sandbox_unavailable: bool = False
+
+
+class ScriptedForward(ForwardLane):
+    """Return schema-valid attempts with optional scripted deviations."""
+
+    def __init__(self, script: Optional[ForwardScript] = None) -> None:
+        """Initialize per-model invocation counts and scripted deviations."""
+
+        self.script = script or ForwardScript()
         self.calls: dict[str, int] = {}
 
     def forward(
@@ -818,6 +889,8 @@ class FakeForward(ForwardLane):
         """Build clean train/eval attempts with complete model output signatures."""
 
         del work_root
+        if self.script.sandbox_unavailable:
+            raise SandboxUnavailableError("failed:sandbox-unavailable")
         stable_id = str(artifact.proposal["stable_id"])
         self.calls[stable_id] = self.calls.get(stable_id, 0) + 1
         execution_identity = _execution_identity(
@@ -895,60 +968,22 @@ class FakeForward(ForwardLane):
                 ]
                 rebind_attempt_raw_proof(attempt)
                 attempts.append(attempt)
+        self._apply_script(stable_id, attempts)
+        if self.script.expanded_id is not None and stable_id != self.script.expanded_id:
+            return [attempt for attempt in attempts if attempt["mode"] == "eval"]
         return attempts
 
+    def _apply_script(self, stable_id: str, attempts: list[dict[str, Any]]) -> None:
+        """Apply configured receipt values and failures to generated attempts."""
 
-class FamilyCountForward(FakeForward):
-    """Report stable-ID-specific constructed parameter counts for family variants."""
-
-    def __init__(self, counts: Mapping[str, int]) -> None:
-        """Store the real constructed counts returned by the synthetic worker."""
-
-        super().__init__()
-        self.counts = dict(counts)
-
-    def forward(
-        self,
-        artifact: AuthorArtifact,
-        environment: EnvironmentBinding,
-        cold_runs: int,
-        work_root: Path,
-    ) -> Sequence[Mapping[str, Any]]:
-        """Return clean attempts with model-specific observed parameter counts."""
-
-        attempts = list(super().forward(artifact, environment, cold_runs, work_root))
-        count = self.counts[str(artifact.proposal["stable_id"])]
-        for attempt in attempts:
-            attempt["worker_receipt"]["parameter_count_total"] = count
-            attempt["worker_receipt"]["parameter_count_trainable"] = count
-            rebind_attempt_raw_proof(attempt)
-        return attempts
-
-
-class OneModelForwardFailure(FakeForward):
-    """Return a real failed mode attempt for exactly one model."""
-
-    def __init__(self, failed_id: str) -> None:
-        """Store the one model whose forward must fail."""
-
-        super().__init__()
-        self.failed_id = failed_id
-
-    def forward(
-        self,
-        artifact: AuthorArtifact,
-        environment: EnvironmentBinding,
-        cold_runs: int,
-        work_root: Path,
-    ) -> Sequence[Mapping[str, Any]]:
-        """Return complete attempts, changing one mode to a schema-valid failure."""
-
-        attempts = [
-            dict(value) for value in super().forward(artifact, environment, cold_runs, work_root)
-        ]
-        stable_id = str(artifact.proposal["stable_id"])
-        if stable_id != self.failed_id:
-            return attempts
+        if self.script.parameter_counts is not None:
+            count = self.script.parameter_counts[stable_id]
+            for attempt in attempts:
+                attempt["worker_receipt"]["parameter_count_total"] = count
+                attempt["worker_receipt"]["parameter_count_trainable"] = count
+                rebind_attempt_raw_proof(attempt)
+        if stable_id != self.script.failed_id:
+            return
         failed = attempts[0]
         failed["result"] = "failed"
         failed["worker_receipt"] = dict(failed["worker_receipt"])
@@ -979,7 +1014,10 @@ class OneModelForwardFailure(FakeForward):
             "reason_code": "mode-run",
             "diagnostic_sha256": None,
         }
-        return attempts
+
+
+class FakeForward(ScriptedForward):
+    """Retain the default synthetic forward spelling used across tests."""
 
 
 class EvalOnlyAuthor(FakeAuthor):
@@ -1067,127 +1105,22 @@ class ReverseModeAuthor(FakeAuthor):
         return _rebind_fake_author_result(artifact)
 
 
-class OneModelModeExpansion(FakeForward):
-    """Expand runtime modes only for one model and honor eval-only for later rows."""
-
-    def __init__(self, expanded_id: str) -> None:
-        """Store the sole model whose runtime discovery expands its recipe."""
-
-        super().__init__()
-        self.expanded_id = expanded_id
-
-    def forward(
-        self,
-        artifact: AuthorArtifact,
-        environment: EnvironmentBinding,
-        cold_runs: int,
-        work_root: Path,
-    ) -> Sequence[Mapping[str, Any]]:
-        """Return train/eval for one model and eval only for every other model."""
-
-        attempts = list(super().forward(artifact, environment, cold_runs, work_root))
-        if artifact.proposal["stable_id"] == self.expanded_id:
-            return attempts
-        return [attempt for attempt in attempts if attempt["mode"] == "eval"]
-
-
-class InaccurateChecker(FakeChecker):
+class InaccurateChecker(ScriptedChecker):
     """Return the same inaccurate root cause until the driver terminalizes it."""
 
-    def check_metadata(
-        self, artifacts: Sequence[AuthorArtifact], work_root: Path, config: DriverConfig
-    ) -> CheckerOutcome:
-        """Return one complete inaccurate metadata gate for every requested item."""
+    def __init__(self) -> None:
+        """Configure complete inaccurate metadata gates."""
 
-        outcome = super().check_metadata(artifacts, work_root, config)
-        assert outcome.gate is not None
-        for item in outcome.gate["items"]:
-            item["verdict"] = "inaccurate"
-            item["required_repairs"] = ["correct the unsupported metadata claim"]
-            item["field_checks"][0]["verdict"] = "inaccurate"
-            item["field_checks"][0]["required_repair"] = "correct the claim"
-        return outcome
+        super().__init__(script=CheckerScript(metadata_verdict="inaccurate"))
 
 
-class CannotVerifyChecker(FakeChecker):
+class CannotVerifyChecker(ScriptedChecker):
     """Return one repeated cannot-verify metadata finding per item."""
 
-    def check_metadata(
-        self, artifacts: Sequence[AuthorArtifact], work_root: Path, config: DriverConfig
-    ) -> CheckerOutcome:
-        """Return a complete cannot-verify metadata gate."""
+    def __init__(self) -> None:
+        """Configure complete cannot-verify metadata gates."""
 
-        outcome = super().check_metadata(artifacts, work_root, config)
-        assert outcome.gate is not None
-        for item in outcome.gate["items"]:
-            item["verdict"] = "cannot-verify"
-            item["required_repairs"] = ["supply missing primary evidence"]
-            item["field_checks"][0]["verdict"] = "cannot-verify"
-            item["field_checks"][0]["required_repair"] = "supply primary evidence"
-        return outcome
-
-
-class MixedTailChecker(FakeChecker):
-    """Accept all but one initial item, then accept the final repaired tail."""
-
-    def check_metadata(
-        self, artifacts: Sequence[AuthorArtifact], work_root: Path, config: DriverConfig
-    ) -> CheckerOutcome:
-        """Create a mixed first generation and an accurate one-item tail."""
-
-        outcome = super().check_metadata(artifacts, work_root, config)
-        assert outcome.gate is not None
-        if len(artifacts) > 1:
-            item = outcome.gate["items"][-1]
-            item["verdict"] = "inaccurate"
-            item["required_repairs"] = ["repair the final item"]
-            item["field_checks"][0]["verdict"] = "inaccurate"
-            item["field_checks"][0]["required_repair"] = "repair the final item"
-        return outcome
-
-
-class OneModelInitialInaccurateChecker(FakeChecker):
-    """Reject one selected model only in the initial metadata generation."""
-
-    def __init__(self, failed_id: str) -> None:
-        """Store the model that must enter author repair."""
-
-        super().__init__()
-        self.failed_id = failed_id
-
-    def check_metadata(
-        self, artifacts: Sequence[AuthorArtifact], work_root: Path, config: DriverConfig
-    ) -> CheckerOutcome:
-        """Reject the selected model and accept every other gate item."""
-
-        outcome = super().check_metadata(artifacts, work_root, config)
-        assert outcome.gate is not None
-        for item in outcome.gate["items"]:
-            if item["stable_id"] != self.failed_id:
-                continue
-            item["verdict"] = "inaccurate"
-            item["required_repairs"] = ["repair selected model"]
-            item["field_checks"][0]["verdict"] = "inaccurate"
-            item["field_checks"][0]["required_repair"] = "repair selected model"
-        return outcome
-
-
-class LineageInaccurateChecker(InaccurateChecker):
-    """Return distinct rejected root causes until the full repair cap is reached."""
-
-    def check_metadata(
-        self, artifacts: Sequence[AuthorArtifact], work_root: Path, config: DriverConfig
-    ) -> CheckerOutcome:
-        """Vary the finding while retaining each item's durable campaign lineage."""
-
-        outcome = super().check_metadata(artifacts, work_root, config)
-        assert outcome.gate is not None
-        for item in outcome.gate["items"]:
-            repair = f"repair-generation-{self.metadata_calls}"
-            item["required_repairs"] = [repair]
-            item["field_checks"][0]["reason"] = repair
-            item["field_checks"][0]["required_repair"] = repair
-        return outcome
+        super().__init__(script=CheckerScript(metadata_verdict="cannot-verify"))
 
 
 class RepairingIdentityAuthor(FakeAuthor):
@@ -1263,23 +1196,6 @@ class ChangedInputAuthor(FakeAuthor):
         return _rebind_fake_author_result(artifact)
 
 
-class RejectingFidelityChecker(FakeChecker):
-    """Return accurate metadata and a material-drift fidelity rejection."""
-
-    def check_fidelity(
-        self, artifact: AuthorArtifact, work_root: Path, config: DriverConfig
-    ) -> CheckerOutcome:
-        """Return a complete major-drift fidelity gate."""
-
-        outcome = super().check_fidelity(artifact, work_root, config)
-        assert outcome.gate is not None
-        item = outcome.gate["items"][0]
-        item["verdict"] = "inaccurate"
-        item["fidelity"]["verdict"] = "major-drift"
-        item["fidelity"]["contradictions"] = ["material topology mismatch"]
-        return outcome
-
-
 class FailingNotifier(Notifier):
     """Record attempted messages while reporting delivery failure."""
 
@@ -1335,22 +1251,6 @@ class FailingEnvironments(FakeEnvironments):
 
         del intent, use
         raise EnvironmentProbeError("synthetic environment probe failure")
-
-
-class SandboxUnavailableForward(FakeForward):
-    """Raise the supervisor's typed fail-closed sandbox signal."""
-
-    def forward(
-        self,
-        artifact: AuthorArtifact,
-        environment: EnvironmentBinding,
-        cold_runs: int,
-        work_root: Path,
-    ) -> Sequence[Mapping[str, Any]]:
-        """Refuse execution because no required OS sandbox exists."""
-
-        del artifact, environment, cold_runs, work_root
-        raise SandboxUnavailableError("failed:sandbox-unavailable")
 
 
 class FakeNotifier(Notifier):
@@ -2554,7 +2454,7 @@ def test_family_representative_once_templates_variants_that_still_run(tmp_path: 
     author = FakeAuthor()
     checker = FakeChecker()
     counts = {representative_id: 10, variant_ids[0]: 20, variant_ids[1]: 30}
-    forward = FamilyCountForward(counts)
+    forward = ScriptedForward(ForwardScript(parameter_counts=counts))
 
     result = _driver(
         tmp_path,
@@ -2629,7 +2529,7 @@ def test_family_variant_reconstruction_rewrite_cannot_replace_gated_derivation(
         snapshot,
         author=FakeAuthor(),
         checker=FakeChecker(),
-        forward=FamilyCountForward(counts),
+        forward=ScriptedForward(ForwardScript(parameter_counts=counts)),
     )
     assert driver.run().status == "complete"
     stable_id = variant_ids[0]
@@ -3074,10 +2974,10 @@ def test_final_metadata_tail_drains_after_mixed_verdict_and_restart(tmp_path: Pa
         _driver(
             tmp_path,
             snapshot,
-            checker=MixedTailChecker(),
+            checker=ScriptedChecker(script=CheckerScript(mixed_tail=True)),
             boundary=kill_after_mixed_gate,
         ).run()
-    resumed_checker = MixedTailChecker()
+    resumed_checker = ScriptedChecker(script=CheckerScript(mixed_tail=True))
     result = _driver(tmp_path, snapshot, checker=resumed_checker).run()
     assert result.status == "complete"
     assert resumed_checker.metadata_calls == 1
@@ -3193,7 +3093,7 @@ def test_runtime_mode_expansion_is_model_local_and_restart_stable(tmp_path: Path
     expanded_id = snapshot.items[0].stable_id
     author = DetectedModeRepairAuthor()
     checker = FakeChecker()
-    forward = OneModelModeExpansion(expanded_id)
+    forward = ScriptedForward(ForwardScript(expanded_id=expanded_id))
     first = _driver(
         tmp_path,
         snapshot,
@@ -3233,7 +3133,7 @@ def test_runtime_mode_expansion_terminalizes_only_after_repair_cap(tmp_path: Pat
         tmp_path,
         snapshot,
         author=author,
-        forward=OneModelModeExpansion(stable_id),
+        forward=ScriptedForward(ForwardScript(expanded_id=stable_id)),
         run_repair_max=2,
     ).run()
     model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[-1]
@@ -3577,7 +3477,7 @@ def test_failed_forward_terminalizes_and_campaign_continues(tmp_path: Path) -> N
     result = _driver(
         tmp_path,
         snapshot,
-        forward=OneModelForwardFailure(failed_id),
+        forward=ScriptedForward(ForwardScript(failed_id=failed_id)),
     ).run()
     # An evidenced failed:forward outcome is terminal; it leaves no campaign work pending.
     assert result.status == "complete"
@@ -3731,7 +3631,14 @@ def test_repair_author_failure_terminalizes_and_continues(tmp_path: Path) -> Non
                 failed_call=2,
             )
         ),
-        checker=OneModelInitialInaccurateChecker(failed_id),
+        checker=ScriptedChecker(
+            script=CheckerScript(
+                metadata_verdict="inaccurate",
+                selected_id=failed_id,
+                required_repair="repair selected model",
+                field_repair="repair selected model",
+            )
+        ),
     ).run()
 
     assert result.status == "complete"
@@ -4328,7 +4235,11 @@ def test_sandbox_unavailable_has_honest_terminal_and_null_environment(tmp_path: 
     """A fail-closed sandbox refusal is not mislabeled or given fabricated env hashes."""
 
     snapshot = _snapshot(tmp_path)
-    result = _driver(tmp_path, snapshot, forward=SandboxUnavailableForward()).run()
+    result = _driver(
+        tmp_path,
+        snapshot,
+        forward=ScriptedForward(ForwardScript(sandbox_unavailable=True)),
+    ).run()
     # An evidenced sandbox refusal is terminal; it leaves no campaign work pending.
     assert result.status == "complete"
     paths = _paths(tmp_path, snapshot)
@@ -4712,7 +4623,9 @@ def test_inaccurate_metadata_gate_repairs_are_bounded(tmp_path: Path) -> None:
     """Changed proposal identities still exhaust two repairs into human review."""
 
     snapshot = _snapshot(tmp_path)
-    checker = LineageInaccurateChecker()
+    checker = ScriptedChecker(
+        script=CheckerScript(metadata_verdict="inaccurate", lineage_repairs=True)
+    )
     result = _driver(
         tmp_path,
         snapshot,
@@ -4753,7 +4666,7 @@ def test_fidelity_rejection_terminalizes_without_aborting(tmp_path: Path) -> Non
 
     snapshot = _snapshot(tmp_path)
     author = FidelityAuthor()
-    checker = RejectingFidelityChecker()
+    checker = ScriptedChecker(script=CheckerScript(reject_fidelity=True))
     result = _driver(
         tmp_path,
         snapshot,
