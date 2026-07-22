@@ -2577,7 +2577,10 @@ def _readiness_report(
         capability=descriptor.capability,
         resolver_records=records,
         state_sources_available=tuple(state_sources),
-        witness_completeness=descriptor.witness_completeness,
+        # r71 A3: readiness republishes the parser-DERIVED completeness floor (equal
+        # to the persisted summary by the parse-time equality check), never a raw
+        # summary read (source-scan tripwire).
+        witness_completeness=derived_witness_completeness(descriptor.coverage_gaps),
         diagnostics=diagnostics,
     )
 

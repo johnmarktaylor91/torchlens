@@ -830,50 +830,64 @@ def recorded_state_metadata_facts(descriptor: SparseRunDescriptor) -> dict[str, 
 def _apply_state_metadata_facts(
     descriptor: SparseRunDescriptor, prepared: PreparedRunnableState
 ) -> PreparedRunnableState:
-    """Reproduce the recorded per-slot ``requires_grad`` bit on staged state (r65 F-1).
+    """Reproduce the TOTALIZED per-slot ``requires_grad`` bit on staged state (r71 E1).
 
-    The declared state model includes the capture-time autograd trainable bit for every slot
-    whose bit the captured forward READ; ``state_dict()`` detaches, so the bit is
-    transport-lost and must be re-applied to the staged clone. The recorded bit ALWAYS wins:
-    user-supplied ``load_state_dict`` tensors carrying a different ``requires_grad`` still
-    stage the recorded value, and slots without a recorded fact keep the detached default
-    (read-gated -- zero overhead for models that never read the bit). ``grad_fn`` presence
-    needs no application: True refuses at save (no staged leaf can carry a grad_fn) and False
-    is what every staged clone already exhibits.
+    r71 totalizes the r65 F-1 declared fact over the whole declared state-name
+    universe: EVERY staged slot receives its capture-time autograd trainable bit from
+    the OWNER-RECORD ``StateSlotBinding.captured_requires_grad`` (``state_dict()``
+    detaches, so the bit is transport-lost). The recorded bit ALWAYS wins:
+    user-supplied ``load_state_dict`` tensors carrying a different ``requires_grad``
+    still stage the recorded value -- capture truth, strictly more oracle-1-faithful
+    than the detached default and aligned with the LOCKED r65 F-1 declared-fact
+    ruling. ``grad_fn`` presence needs no application: True refuses at save AND parse
+    (no staged leaf can carry a grad_fn) and False is what every staged clone already
+    exhibits.
+
+    The r69 staging belt is re-pointed at the PARSE-DERIVED required set (r71): the
+    witness-derived facts must equal the binding-derived facts EXACTLY -- impossible
+    to violate post-parse; a descriptor that somehow reached staging with a deficit
+    fails closed typed instead of silently omitting a declared bit (the
+    free-F1-secondary strip lane).
     """
 
     facts = recorded_state_metadata_facts(descriptor)
-    # r69 A belt: the applied (state, fact) identities must equal the parse-validated
-    # required inventory EXACTLY. Impossible to violate post-parse; a descriptor that
-    # somehow reached staging with a deficit fails closed typed instead of silently
-    # omitting a declared bit (the free-F1-secondary strip lane).
-    applied_identities = sorted(
-        f"{name}::{fact_name}" for name, fact_map in facts.items() for fact_name in fact_map
-    )
-    inventory_row = next(
-        (
-            row
-            for row in descriptor.required_witness_inventory.families
-            if row.family == "state_metadata"
-        ),
-        None,
-    )
-    required_identities = sorted(inventory_row.members) if inventory_row is not None else None
-    if required_identities is None or applied_identities != required_identities:
+    # r71: the PARSE-DERIVED required set comes from the OWNING state bindings
+    # (never the inventory mirror or the witness stream): one (name, fact) pair per
+    # declared state name x the closed two-fact vocabulary.
+    binding_facts: dict[str, dict[str, bool]] = {}
+    for slot in descriptor.tensor_slots:
+        binding = slot.state_binding
+        if binding is not None:
+            binding_facts.setdefault(
+                binding.state_dict_name,
+                {
+                    "grad_fn": bool(binding.captured_grad_fn),
+                    "requires_grad": bool(binding.captured_requires_grad),
+                },
+            )
+    if facts != binding_facts:
+        applied_identities = sorted(
+            f"{name}::{fact_name}" for name, fact_map in facts.items() for fact_name in fact_map
+        )
+        required_identities = sorted(
+            f"{name}::{fact_name}"
+            for name, fact_map in binding_facts.items()
+            for fact_name in fact_map
+        )
         raise _binding_error(
             (
                 _diagnostic(
                     RunnableErrorCode.CONTEXT_FIELD_INVALID,
-                    "Declared state-metadata facts do not equal the parse-validated "
-                    f"required inventory (applied {applied_identities[:8]!r}, required "
-                    f"{required_identities[:8] if required_identities else None!r}); "
-                    "staging refuses rather than silently omitting a declared bit.",
+                    "Declared state-metadata facts do not equal the parse-derived "
+                    f"required set (witnessed {applied_identities[:8]!r}, required "
+                    f"{required_identities[:8]!r}); staging refuses rather than "
+                    "silently omitting a declared bit.",
                     detection_stage="state_metadata_fact_staging",
                     details=(("reason", "state_metadata_inventory_mismatch"),),
                 ),
             )
         )
-    if not facts:
+    if not binding_facts:
         return prepared
     name_by_slot: dict[str, str] = {}
     for slot in descriptor.tensor_slots:
@@ -881,7 +895,7 @@ def _apply_state_metadata_facts(
             name_by_slot[slot.slot_id] = slot.state_binding.state_dict_name
     for slot_id, value in prepared.slot_values.items():
         name = name_by_slot.get(slot_id)
-        recorded = facts.get(name, {}).get("requires_grad") if name is not None else None
+        recorded = binding_facts.get(name, {}).get("requires_grad") if name is not None else None
         if recorded is None or bool(value.requires_grad) == recorded:
             continue
         try:

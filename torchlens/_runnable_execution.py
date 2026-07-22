@@ -94,6 +94,9 @@ from .runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
     WitnessCompleteness,
+    WitnessGapKind,
+    derived_witness_completeness,
+    is_mode_sensitive_qualname,
     mark_trace_path_status,
 )
 
@@ -134,6 +137,18 @@ def run_loaded_sparse_trace(
             "on_divergence must be DivergencePolicy.RAISE or DivergencePolicy.RETURN_DIVERGED."
         ) from exc
     descriptor, readiness, callables = _require_loaded_sparse_provider(trace)
+    # r71 A4 defense-in-depth: run preparation RE-ASSERTS the parser-derived
+    # completeness floor before anything executes. Parse already refused a summary
+    # differing from the floor; a descriptor that somehow reaches execution with the
+    # contradiction fails typed here (never a silently trusted summary).
+    if descriptor.witness_completeness is not derived_witness_completeness(
+        descriptor.coverage_gaps
+    ):
+        raise RunPreconditionError(
+            "Persisted witness_completeness does not equal the parser-derived "
+            "completeness floor; the descriptor is internally contradictory.",
+            code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
+        )
     # r61 corr_2: ONE aggregate resource ceiling per transaction, constructed BEFORE
     # any TorchLens-owned re-materialization clone runs (input mirror, run-time state
     # clone, transaction snapshots) so every clone site shares one byte-guarded
@@ -998,6 +1013,25 @@ def _input_metadata_contract_checks(
     """
 
     checks: list[ContractCheck] = []
+    # r71 A2 belt: the totalized envelope domain is the boundary record's tensor-site
+    # set (one envelope per bound tensor leaf, empty read sets explicit). Parse
+    # enforces the equality; a deficit that somehow reached execution fails closed.
+    boundary_site_count = sum(len(site.tensor_sites) for site in descriptor.input_boundary)
+    envelope_count = sum(1 for _witness, _fact in _model_input_metadata_facts(descriptor))
+    if envelope_count != boundary_site_count:
+        checks.append(
+            _contract_check(
+                "input_metadata_envelope_totality",
+                False,
+                RunnableErrorCode.CONTEXT_FIELD_INVALID,
+                "Metadata envelope count does not equal the input-boundary tensor "
+                "site count; the totalized envelope domain is incomplete.",
+                details=(
+                    ("boundary_tensor_sites", str(boundary_site_count)),
+                    ("envelopes", str(envelope_count)),
+                ),
+            )
+        )
     for witness, fact in _model_input_metadata_facts(descriptor):
         raw_position = fact.get("position")
         position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
@@ -1040,16 +1074,27 @@ def _input_metadata_contract_checks(
 
 
 def _inventory_site_positions(descriptor: SparseRunDescriptor) -> set[Any]:
-    """Decode the parse-validated required input-site set from the inventory (r69 A).
+    """Decode the required input-site set from the REQUIRED boundary record (r71 A2).
 
-    THE run-side site authority: the descriptor-native ``RequiredWitnessInventory``
-    was exact-set-validated at parse, so runtime site selection never re-derives
-    arity from surviving witnesses (the secA-F1 self-referential lane). A malformed
-    member here (impossible post-parse) fails closed typed.
+    THE run-side site authority is the witness-free ``input_boundary`` record --
+    replay-consumed structure, exact-validated at parse against the MODEL_INPUT slot
+    bindings and dense positional roots. The required-witness inventory is a
+    redundant mirror; a disagreement here (impossible post-parse) fails closed typed
+    (belt against parser regressions), and runtime site selection never re-derives
+    arity from surviving witnesses (the secA-F1 self-referential lane).
     """
 
     from torchlens.runnable import decode_input_site_position
 
+    try:
+        positions = {
+            decode_input_site_position(site.position) for site in descriptor.input_boundary
+        }
+    except ValueError as exc:
+        raise RunPreconditionError(
+            f"Malformed input-boundary site position: {exc}",
+            code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
+        ) from exc
     row = next(
         (
             family
@@ -1058,18 +1103,19 @@ def _inventory_site_positions(descriptor: SparseRunDescriptor) -> set[Any]:
         ),
         None,
     )
-    if row is None:
+    mirror: set[Any] | None = None
+    if row is not None:
+        try:
+            mirror = {decode_input_site_position(member) for member in row.members}
+        except ValueError:
+            mirror = None
+    if mirror != positions:
         raise RunPreconditionError(
-            "Sparse descriptor carries no input_structure inventory row.",
+            "Input-boundary site record disagrees with the inventory mirror; the "
+            "descriptor is internally contradictory.",
             code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
         )
-    try:
-        return {decode_input_site_position(member) for member in row.members}
-    except ValueError as exc:
-        raise RunPreconditionError(
-            f"Malformed required input-site inventory member: {exc}",
-            code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
-        ) from exc
+    return positions
 
 
 def _model_input_arity_positions(descriptor: SparseRunDescriptor) -> set[Any]:
@@ -3795,28 +3841,55 @@ def _call_witness_checks(
     call: RunnableCallDescriptor,
     slot_values: Mapping[str, torch.Tensor],
 ) -> tuple[ContractCheck, ...]:
-    """Compare scalar-bool and loop witnesses immediately after their call."""
+    """Compare scalar-bool and loop witnesses immediately after their call.
+
+    r71 A2: the call's OWNER-RECORD ``control_obligations`` are the required check
+    domain (replay-consumed structure, never the witness stream). Every obligation
+    demands its exact same-kind witness; a missing witness whose obligation carries
+    no typed predicate gap fails closed as a check (belt behind the parse-time
+    discharge equality). Surviving witnesses without an obligation cannot exist
+    post-parse.
+    """
 
     checks: list[ContractCheck] = []
-    for witness in sorted(descriptor.control_witnesses, key=lambda item: item.order):
-        if witness.call_id != call.call_id or witness.kind not in {
-            ControlWitnessKind.SCALAR_BOOL,
-            ControlWitnessKind.LOOP_PREDICATE,
-        }:
+    witnesses_by_identity = {
+        (witness.call_id, witness.kind, witness.site_label): witness
+        for witness in descriptor.control_witnesses
+        if witness.kind in {ControlWitnessKind.SCALAR_BOOL, ControlWitnessKind.LOOP_PREDICATE}
+    }
+    gap_members = {
+        gap.source_member
+        for gap in descriptor.coverage_gaps
+        if gap.gap_kind
+        in {WitnessGapKind.UNOBSERVED_PREDICATE, WitnessGapKind.UNCLASSIFIED_TERMINAL_BOOL}
+    }
+    for obligation in call.control_obligations:
+        witness = witnesses_by_identity.get((call.call_id, obligation.kind, obligation.site_label))
+        code = (
+            RunnableErrorCode.LOOP_PREDICATE_DIVERGENCE
+            if obligation.kind is ControlWitnessKind.LOOP_PREDICATE
+            else RunnableErrorCode.SCALAR_BOOL_DIVERGENCE
+        )
+        if witness is None:
+            if obligation.output_slot_id in gap_members:
+                # Gap-discharged obligation: the derived completeness floor already
+                # ceilings this run at UNVERIFIABLE; there is no witness to compare.
+                continue
+            checks.append(
+                _contract_check(
+                    f"control_obligation:{call.call_id}:{obligation.site_label}",
+                    False,
+                    RunnableErrorCode.CONTEXT_FIELD_INVALID,
+                    "Control obligation has no discharging witness or typed gap.",
+                    affected_op_labels=(obligation.site_label,),
+                )
+            )
             continue
-        values = [
-            slot_values[slot_id] for slot_id in call.output_slot_ids if slot_id in slot_values
-        ]
+        scalar = slot_values.get(obligation.output_slot_id)
         expected = bool(_decode_literal(witness.observed_value))
-        scalar = values[0] if values else None
         actual: bool | None = None
         if isinstance(scalar, torch.Tensor) and scalar.numel() == 1:
             actual = bool(scalar.item())
-        code = (
-            RunnableErrorCode.LOOP_PREDICATE_DIVERGENCE
-            if witness.kind is ControlWitnessKind.LOOP_PREDICATE
-            else RunnableErrorCode.SCALAR_BOOL_DIVERGENCE
-        )
         checks.append(
             _contract_check(
                 f"control_witness:{witness.witness_id}",
@@ -3926,6 +3999,29 @@ def _post_execution_contract_checks(
                     affected_op_labels=(witness.site_label,),
                 )
             )
+    # r71 A2 belt: every owner-record arm-entry dependency edge must own its witness
+    # (parse enforces the equality; a descriptor that somehow reaches execution with
+    # an unwitnessed edge fails closed as a check, never a silently skipped arm).
+    from .runnable import control_dependency_site_label
+
+    arm_witness_labels = {
+        witness.site_label
+        for witness in descriptor.control_witnesses
+        if witness.kind is ControlWitnessKind.CONDITIONAL_ARM_ENTRY
+    }
+    for call in descriptor.calls:
+        for edge in call.control_dependencies:
+            edge_label = control_dependency_site_label(edge)
+            if edge_label not in arm_witness_labels:
+                checks.append(
+                    _contract_check(
+                        f"control_dependency:{edge_label}",
+                        False,
+                        RunnableErrorCode.CONTEXT_FIELD_INVALID,
+                        "Arm-entry control dependency has no discharging witness.",
+                        affected_op_labels=(edge_label,),
+                    )
+                )
     return tuple(checks)
 
 
@@ -4497,6 +4593,19 @@ def _tensor_derived_scalar_stale(
     """
 
     snapshots = witness_source_snapshots or {}
+    # r71 A2: the OWNER-RECORD obligations (``TensorSlotDescriptor.host_escape``) are
+    # the required staleness domain -- replay-consumed structure, never the witness
+    # stream. An obligated slot with no surviving witness cannot be re-confirmed:
+    # stale (fail closed). A gap-discharged obligation also reads stale here, which
+    # coincides with the UNVERIFIABLE floor its gap already guarantees.
+    witnessed_slot_ids = {
+        witness.site_label
+        for witness in descriptor.control_witnesses
+        if witness.kind is ControlWitnessKind.TENSOR_DERIVED_SCALAR_LITERAL
+    }
+    for slot in descriptor.tensor_slots:
+        if slot.host_escape and slot.slot_id not in witnessed_slot_ids:
+            return True
     for witness in descriptor.control_witnesses:
         if witness.kind is not ControlWitnessKind.TENSOR_DERIVED_SCALAR_LITERAL:
             continue
@@ -4582,6 +4691,26 @@ def _unbound_state_escape_stale(
         binding = slot.state_binding
         if binding is not None:
             name_to_slot_id.setdefault(binding.state_dict_name, slot.slot_id)
+    # r71 A2: the OWNER-RECORD dispositions (``StateSlotBinding.host_escape_disposition
+    # == "escaped"``) are the required staleness domain. An escaped-claimed slot with
+    # no surviving witness cannot re-confirm its capture digest: stale (fail closed);
+    # a gap-discharged claim coincides with its guaranteed UNVERIFIABLE floor.
+    witnessed_members: set[tuple[str, str]] = set()
+    for witness in descriptor.control_witnesses:
+        if not _is_unbound_state_escape_witness(witness):
+            continue
+        fact = _decode_literal(witness.observed_value)
+        if isinstance(fact, Mapping):
+            name = fact.get("state_dict_name")
+            slot_id = fact.get("slot_id")
+            if isinstance(name, str) and isinstance(slot_id, str):
+                witnessed_members.add((name, slot_id))
+    for slot in descriptor.tensor_slots:
+        binding = slot.state_binding
+        if binding is None or binding.host_escape_disposition != "escaped":
+            continue
+        if (binding.state_dict_name, slot.slot_id) not in witnessed_members:
+            return True
     for witness in descriptor.control_witnesses:
         if not _is_unbound_state_escape_witness(witness):
             continue
@@ -4622,7 +4751,11 @@ def _path_faithfulness(
     failed = next((check for check in checks if not check.passed), None)
     if failed is not None:
         return PathFaithfulness.DIVERGED, failed.diagnostic
-    if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
+    # r71 A3: the VERIFIED gate consults ONLY the parser-derived completeness FLOOR
+    # (re-derived here from the typed gap ledger by the ONE derivation function).
+    # The persisted summary is a redundant assertion checked equal at parse; reading
+    # it for a verdict is forbidden (source-scan tripwire).
+    if derived_witness_completeness(descriptor.coverage_gaps) is not WitnessCompleteness.COMPLETE:
         return PathFaithfulness.UNVERIFIABLE, None
     if input_alias_unresolved:
         # r35 decision D: the three-valued alias engine could prove neither
@@ -5565,22 +5698,14 @@ _MODULE_TRAINING_MODE_SITE_PREFIX = "module_training_mode:"
 
 
 def _is_mode_sensitive_qualname(qualname: str | None) -> bool:
-    """Return whether a qualname is a train/eval mode-sensitive op (BatchNorm family).
+    """Delegate to the ONE shared mode-sensitivity classifier (r71 A).
 
-    BatchNorm / InstanceNorm produce numerically different results in eval (running
-    statistics) vs train (batch statistics) mode. The recorded aten op bakes in the
-    captured mode, so the replay reproduces it -- but only the DECLARED mode proves which
-    result VERIFIED corresponds to. Dropout is intentionally excluded here: its train arm
-    is already RNG-tainted (``not_applicable``) and its eval arm is identity, so it never
-    creates a mode-driven false VERIFIED.
+    Single-sourced in ``torchlens.runnable.is_mode_sensitive_qualname`` so the
+    parse-time ``module_training_mode`` domain derivation and this runtime belt can
+    never disagree on which ops are train/eval mode-sensitive.
     """
 
-    if not qualname:
-        return False
-    tail = qualname.rsplit(".", 1)[-1]
-    if tail.endswith("_"):
-        tail = tail[:-1]
-    return "batch_norm" in tail or tail.endswith("instance_norm")
+    return is_mode_sensitive_qualname(qualname)
 
 
 def _descriptor_has_mode_sensitive_op(descriptor: SparseRunDescriptor) -> bool:
