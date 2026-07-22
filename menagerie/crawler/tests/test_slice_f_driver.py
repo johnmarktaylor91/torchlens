@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import sys
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
@@ -325,13 +325,26 @@ def _terminal_fake_author_result(
     return replace(artifact, author_result=recommendation)
 
 
-class FakeAuthor(AuthorLane):
-    """Return complete synthetic proposals without a live author session."""
+@dataclass(frozen=True)
+class AuthorScript:
+    """Typed deviations applied around the canonical synthetic author result."""
 
-    def __init__(self) -> None:
-        """Initialize per-model invocation counts."""
+    failed_id: Optional[str] = None
+    failure_message: str = "synthetic author command failure"
+    failed_call: Optional[int] = None
+    invalid_modes_id: Optional[str] = None
+    terminal_outcomes: tuple[tuple[str, str], ...] = ()
 
+
+class ScriptedAuthor(AuthorLane):
+    """Return canonical synthetic proposals with explicit scripted deviations."""
+
+    def __init__(self, script: AuthorScript = AuthorScript()) -> None:
+        """Initialize per-model invocation counts and the immutable script."""
+
+        self.script = script
         self.calls: dict[str, int] = {}
+        self._script_index = 0
 
     def author(
         self,
@@ -342,7 +355,13 @@ class FakeAuthor(AuthorLane):
     ) -> AuthorArtifact:
         """Return one accepted two-mode proposal."""
 
-        self.calls[item.stable_id] = self.calls.get(item.stable_id, 0) + 1
+        next_call = self.calls.get(item.stable_id, 0) + 1
+        if item.stable_id == self.script.failed_id and self.script.failed_call in {
+            None,
+            next_call,
+        }:
+            raise RuntimeError(self.script.failure_message)
+        self.calls[item.stable_id] = next_call
         proposal = make_author_proposal(item.stable_id)
         proposal["work_id"] = item.active_work_id
         proposal["campaign_id"] = (
@@ -457,67 +476,34 @@ class FakeAuthor(AuthorLane):
             output_path=result_path,
         )
         result = validate_author_result(result_path, envelope, cas_root=source_path.parent)
-        return AuthorArtifact(result, source_manifest, model_dir)
-
-
-class OneModelAuthorFailure(FakeAuthor):
-    """Raise from the author lane for exactly one model."""
-
-    def __init__(self, failed_id: str, message: str = "synthetic author command failure") -> None:
-        """Store the model-local author failure identity."""
-
-        super().__init__()
-        self.failed_id = failed_id
-        self.message = message
-
-    def author(
-        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
-    ) -> AuthorArtifact:
-        """Raise for one item and author every later item normally."""
-
-        if item.stable_id == self.failed_id:
-            raise RuntimeError(self.message)
-        return super().author(item, work_root, config, context)
-
-
-class OneModelModeNormalizationFailure(FakeAuthor):
-    """Return a malformed mode declaration for exactly one model."""
-
-    def __init__(self, failed_id: str) -> None:
-        """Store the model whose post-author normalization must fail."""
-
-        super().__init__()
-        self.failed_id = failed_id
-
-    def author(
-        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
-    ) -> AuthorArtifact:
-        """Corrupt one mode declaration after producing an otherwise complete artifact."""
-
-        artifact = super().author(item, work_root, config, context)
-        if item.stable_id == self.failed_id:
+        artifact = AuthorArtifact(result, source_manifest, model_dir)
+        if item.stable_id == self.script.invalid_modes_id:
             artifact.proposal["proposed_facts"]["modes"]["meaningful_modes"] = ["invalid"]
-            return _rebind_fake_author_result(artifact)
+            artifact = _rebind_fake_author_result(artifact)
+        if self.script.terminal_outcomes:
+            outcome_kind, outcome = self.script.terminal_outcomes[
+                min(self._script_index, len(self.script.terminal_outcomes) - 1)
+            ]
+            self._script_index += 1
+            if outcome_kind == "platform":
+                return _terminal_fake_author_result(artifact, platform=outcome)
+            if outcome_kind == "status":
+                return _terminal_fake_author_result(artifact, status_code=outcome)
+            raise AssertionError(f"unknown author script outcome: {outcome_kind!r}")
         return artifact
 
 
-class OneModelRepairFailure(FakeAuthor):
-    """Raise only when one model enters its first bounded repair generation."""
+class FakeAuthor(ScriptedAuthor):
+    """Compatibility name for the canonical unscripted synthetic author."""
 
-    def __init__(self, failed_id: str) -> None:
-        """Store the model whose second author invocation fails."""
 
-        super().__init__()
-        self.failed_id = failed_id
-
-    def author(
-        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
-    ) -> AuthorArtifact:
-        """Fail the selected model's repair while authoring every other generation."""
-
-        if item.stable_id == self.failed_id and self.calls.get(item.stable_id) == 1:
-            raise RuntimeError("synthetic repair author failure")
-        return super().author(item, work_root, config, context)
+_TERMINAL_OUTCOME_SCRIPT = AuthorScript(
+    terminal_outcomes=(
+        ("platform", "cuda"),
+        ("status", "skipped:no-description"),
+    )
+)
+_BOTH_DEFERRED_SCRIPT = AuthorScript(terminal_outcomes=(("platform", "cuda"), ("platform", "x86")))
 
 
 class DisabledAuthor(AuthorLane):
@@ -536,40 +522,6 @@ class DisabledAuthor(AuthorLane):
         del item, work_root, config, context
         self.calls += 1
         raise AssertionError("author lane must remain disabled")
-
-
-class TerminalOutcomeAuthor(FakeAuthor):
-    """Return one evidenced deferral and one epistemic skip recommendation."""
-
-    def __init__(self) -> None:
-        """Initialize deterministic outcome order."""
-
-        super().__init__()
-        self._index = 0
-
-    def author(
-        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
-    ) -> AuthorArtifact:
-        """Return a driver-consumable terminal outcome artifact."""
-
-        artifact = super().author(item, work_root, config, context)
-        self._index += 1
-        if self._index == 1:
-            return _terminal_fake_author_result(artifact, platform="cuda")
-        return _terminal_fake_author_result(artifact, status_code="skipped:no-description")
-
-
-class BothDeferredAuthor(FakeAuthor):
-    """Return one of each closed platform deferral for a two-model fixture."""
-
-    def author(
-        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
-    ) -> AuthorArtifact:
-        """Return positive source evidence for the stable-ID-selected deferral."""
-
-        artifact = super().author(item, work_root, config, context)
-        platform = "cuda" if len(self.calls) == 1 else "x86"
-        return _terminal_fake_author_result(artifact, platform=platform)
 
 
 _HANDOFF_ADAPTER = """from __future__ import annotations
@@ -2770,7 +2722,7 @@ def test_family_variant_fails_closed_when_representative_has_no_authority(
     """A failed representative cannot silently turn trusted variants into ordinary models."""
 
     snapshot, representative_id, variant_ids = _family_snapshot(tmp_path)
-    author = OneModelAuthorFailure(representative_id)
+    author = ScriptedAuthor(AuthorScript(failed_id=representative_id))
     checker = FakeChecker()
     with pytest.raises(
         DriverIntegrationError,
@@ -3419,7 +3371,9 @@ def test_driver_failure_diagnostics_are_sidecar_only_and_checkpoint_safe(
     driver = _driver(
         tmp_path,
         snapshot,
-        author=OneModelAuthorFailure(snapshot.items[0].stable_id, restricted),
+        author=ScriptedAuthor(
+            AuthorScript(failed_id=snapshot.items[0].stable_id, failure_message=restricted)
+        ),
     )
     assert driver.run().status == "terminal-partition-complete"
     paths = _paths(tmp_path, snapshot)
@@ -3665,7 +3619,7 @@ def test_author_failure_without_source_is_honest_and_later_models_continue(
     result = _driver(
         tmp_path,
         snapshot,
-        author=OneModelAuthorFailure(failed_id),
+        author=ScriptedAuthor(AuthorScript(failed_id=failed_id)),
     ).run()
     assert result.status == "terminal-partition-complete"
     models = {
@@ -3708,7 +3662,7 @@ def test_author_failure_retains_exact_intake_discovery_url(tmp_path: Path) -> No
     result = _driver(
         tmp_path,
         snapshot,
-        author=OneModelAuthorFailure(failed_id),
+        author=ScriptedAuthor(AuthorScript(failed_id=failed_id)),
     ).run()
 
     assert result.status == "complete"
@@ -3747,7 +3701,7 @@ def test_mode_normalization_failure_terminalizes_and_continues(tmp_path: Path) -
     result = _driver(
         tmp_path,
         snapshot,
-        author=OneModelModeNormalizationFailure(failed_id),
+        author=ScriptedAuthor(AuthorScript(invalid_modes_id=failed_id)),
     ).run()
 
     assert result.status == "terminal-partition-complete"
@@ -3770,7 +3724,13 @@ def test_repair_author_failure_terminalizes_and_continues(tmp_path: Path) -> Non
     result = _driver(
         tmp_path,
         snapshot,
-        author=OneModelRepairFailure(failed_id),
+        author=ScriptedAuthor(
+            AuthorScript(
+                failed_id=failed_id,
+                failure_message="synthetic repair author failure",
+                failed_call=2,
+            )
+        ),
         checker=OneModelInitialInaccurateChecker(failed_id),
     ).run()
 
@@ -4289,7 +4249,7 @@ def test_private_deferral_avoids_public_promotion(tmp_path: Path) -> None:
     """A valid private disposition remains private while entering its terminal lane."""
 
     snapshot = _snapshot(tmp_path, count=1)
-    result = _driver(tmp_path, snapshot, author=TerminalOutcomeAuthor()).run()
+    result = _driver(tmp_path, snapshot, author=ScriptedAuthor(_TERMINAL_OUTCOME_SCRIPT)).run()
 
     assert result.status == "complete"
     paths = _paths(tmp_path, snapshot)
@@ -4387,7 +4347,7 @@ def test_skip_and_evidenced_deferral_use_driver_terminalization(tmp_path: Path) 
     """Ruled skip/deferral outcomes enter distinct terminal partition buckets."""
 
     snapshot = _snapshot(tmp_path, count=2)
-    result = _driver(tmp_path, snapshot, author=TerminalOutcomeAuthor()).run()
+    result = _driver(tmp_path, snapshot, author=ScriptedAuthor(_TERMINAL_OUTCOME_SCRIPT)).run()
     # Ruled skips and evidenced deferrals are final outcomes, not pending campaign work.
     assert result.status == "complete"
     paths = _paths(tmp_path, snapshot)
@@ -4415,7 +4375,7 @@ def test_cached_terminal_artifacts_follow_same_terminal_branch_on_resume(tmp_pat
     """Cached deferral/R5 artifacts never re-enter checker or execution maps."""
 
     snapshot = _snapshot(tmp_path, count=2)
-    author = TerminalOutcomeAuthor()
+    author = ScriptedAuthor(_TERMINAL_OUTCOME_SCRIPT)
     first = _driver(tmp_path, snapshot, author=author).run()
     # Cached clean terminal outcomes remain complete because replay creates no pending work.
     assert first.status == "complete"
@@ -4659,7 +4619,10 @@ def test_linux_code_less_deferral_fails_visibly_without_failed_source(
     source_root = tmp_path / "legacy-source"
     source_root.mkdir()
     snapshot = _snapshot(source_root, count=1)
-    assert _driver(source_root, snapshot, author=BothDeferredAuthor()).run().status == "complete"
+    assert (
+        _driver(source_root, snapshot, author=ScriptedAuthor(_BOTH_DEFERRED_SCRIPT)).run().status
+        == "complete"
+    )
     source_paths = _paths(source_root, snapshot)
     clone_root = tmp_path / "legacy-clean-clone"
     clone_snapshot, paths = _copy_clean_clone_handoff_authority(source_paths, snapshot, clone_root)
