@@ -111,10 +111,15 @@ _STATE_METADATA_PHYSICAL_SCOPE: tuple[tuple[str, Any], ...] = (
     ("is_conj", False),
     ("is_neg", False),
     # r65 Cluster X: the full input-net-parity dims. Every one is transport/staging-
-    # normalized -- the canonical staging clone produces a fresh, unshared, unpinned,
-    # non-inference, non-view, leaf, grad-free, version-0, tightly-allocated tensor --
-    # so the UNCONDITIONAL staged-runtime tripwire stays sound (pinned by the staging
-    # canonicality self-check test).
+    # normalized -- the canonical staging clone produces a fresh, non-inference,
+    # non-view, leaf, grad-free, version-0, tightly-allocated tensor -- so the
+    # UNCONDITIONAL staged-runtime tripwire stays sound (pinned by the staging
+    # canonicality self-check tests, CPU and CUDA). ``is_shared``/``is_pinned`` are
+    # HOST-memory transport-placement bits (shared-memory backing, page-locking):
+    # canonical False means "no such backing", which the signature helper proves BY
+    # DEVICE off CPU -- raw ``is_shared()`` is a device CONSTANT True on CUDA (not a
+    # user sharing signal), so a device-blind raw read here would false-fire the
+    # tripwire on every CUDA slot device (r65 regap).
     ("is_shared", False),
     ("is_pinned", False),
     ("is_inference", False),
@@ -287,7 +292,18 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
     # -- r65 Cluster X dims (each exception-guarded to None: unreadable == UNKNOWN, and
     # every consumer treats UNKNOWN as non-canonical -- fail closed, never a pass) --
     try:
-        signature["is_shared"] = bool(value.is_shared())
+        # ``is_shared()`` is a DEVICE CONSTANT off CPU (always True for CUDA -- device
+        # memory is inherently "shared" in torch's sense, NOT a user-chosen transport
+        # signal), so a fresh staging clone on a non-CPU slot device REPRODUCES it
+        # rather than normalizing it away: any captured read of the constant replays
+        # identically, and no canonical-False invariant exists to assert. The dim
+        # therefore records the CPU shared-memory TRANSPORT bit only (the
+        # ``share_memory_()`` backing a staging clone genuinely drops), proven False
+        # by device off CPU -- mirroring the ``is_pinned`` device guard below.
+        if value.device.type != "cpu":
+            signature["is_shared"] = False
+        else:
+            signature["is_shared"] = bool(value.is_shared())
     except (RuntimeError, TypeError, AttributeError, NotImplementedError):
         pass
     try:

@@ -242,6 +242,71 @@ def test_r65_staging_inside_inference_mode_stays_canonical(tmp_path: Path) -> No
         assert state_metadata_full_violations(value) == [], name
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA staged slots require CUDA")
+def test_r65_cuda_staged_state_satisfies_full_signature(tmp_path: Path) -> None:
+    """Staged slots on a NON-CPU (CUDA) slot device exhibit ZERO full-signature violations.
+
+    The r65 X regap immunizer: canonicality must be DEVICE-DERIVED -- what a fresh staging
+    clone on the SLOT device actually produces. ``is_shared()`` is a device constant True on
+    CUDA (not a user sharing signal), so a device-blind canonical-False pin false-fired the
+    unconditional staged-runtime tripwire on every CUDA slot device (false
+    ``PathDivergenceError`` on honest replays). Pins both staging paths -- embedded capture
+    state AND a CPU user state dict staged to the CUDA slot device -- plus the end-to-end
+    VERIFIED settle, so any future device-blind canonicality dim goes RED here, not only in
+    the r36 regression suite.
+    """
+
+    class Plain(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.w = nn.Parameter(torch.ones(2, 3))
+            self.register_buffer("b", torch.arange(3.0))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return x + self.w.sum() + self.b
+
+    x = torch.randn(3, device="cuda")
+    path = _save(_trace(Plain().cuda(), x), tmp_path / "cuda.tlspec")
+    loaded = tl.load(path)
+    prepared = prepare_runnable_state(loaded)
+    assert prepared.slot_values
+    for slot_id, value in prepared.slot_values.items():
+        assert value.device.type == "cuda", slot_id
+        assert state_metadata_full_violations(value) == [], slot_id
+    result = loaded.run(inputs=x.clone())
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    # A CPU user state dict staged ACROSS devices to the CUDA slot stays canonical too.
+    rebound = tl.load(path)
+    rebound.load_state_dict({"w": torch.ones(2, 3), "b": torch.arange(3.0)})
+    prepared_rebound = prepare_runnable_state(rebound)
+    for slot_id, value in prepared_rebound.slot_values.items():
+        assert value.device.type == "cuda", slot_id
+        assert state_metadata_full_violations(value) == [], slot_id
+    rerun = rebound.run(inputs=x.clone())
+    assert rerun.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA state read")
+def test_r65_cuda_is_shared_read_stays_verified(tmp_path: Path) -> None:
+    """A CUDA ``is_shared()`` state read saves and settles VERIFIED -- no read-divergence.
+
+    On CUDA both the captured slot and the staged clone report the device constant True, so
+    the read is reproduced exactly by staging: refusing it would be pure over-refusal, and
+    the escape-gated producer check must see the slot as canonical BY DEVICE. The CPU twin
+    (``share_memory_()`` backing read then staged-unshared) still refuses -- pinned by
+    ``test_r65_read_noncanonical_state_refuses_at_save[is_shared]`` above.
+    """
+
+    model = _BufferReadModel(torch.arange(3.0), "is_shared").cuda()
+    assert model.b.is_shared()  # the device constant, not user-chosen sharing
+    x = torch.randn(3, device="cuda")
+    trace = _trace(model, x)
+    assert "is_shared" in host_escape_state_metadata_reads(trace).get("b", frozenset())
+    loaded = tl.load(_save(trace, tmp_path / "cuda_shared_read.tlspec"))
+    result = loaded.run(inputs=x.clone())
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
 # ======================================================================================
 # T-X4 -- behavioral matrix: read + non-canonical -> refuse; canonical read -> VERIFIED;
 #         non-canonical UNREAD -> VERIFIED (the per-dim Option-A zero-collateral pin)
