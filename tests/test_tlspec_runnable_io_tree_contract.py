@@ -393,6 +393,43 @@ def test_numpy_scalar_control_input_diverges_like_python_int(tmp_path: Path) -> 
 
 
 # ---------------------------------------------------------------------------
+# r69 E -- nested string inputs SAVE (scrub DROP-order fix; hon1-F5)
+# ---------------------------------------------------------------------------
+
+
+class _NestedStrBranch(nn.Module):
+    """Branch on a nested dict string value (fully witnessed literal leaf)."""
+
+    def forward(self, x: torch.Tensor, cfg: dict) -> torch.Tensor:
+        if cfg["mode"] == "fast":
+            return x * 2.0
+        return x + 100.0
+
+
+@pytest.mark.smoke
+def test_r69_nested_string_input_saves_loads_and_verifies(tmp_path: Path) -> None:
+    """hon1-F5: a non-top-level str leaf is fully witnessed and must SAVE.
+
+    Pre-r69, the Trace raw-value special case ran before the sparse effective DROP,
+    the small-value policy retained the sibling tensor at ``raw_input.0``, and the
+    (unchanged) sparse-core payload assertion crashed the save with an untyped
+    AssertionError. The string was never the problem -- the DROP order was.
+    """
+
+    model = _NestedStrBranch()
+    x = torch.tensor([1.0, 2.0, 3.0])
+    path = _save_runnable(model, [x, {"mode": "fast"}], tmp_path / "nested_str.tlspec")
+
+    identical = tl.load(path).run(inputs=[x.clone(), {"mode": "fast"}])
+    assert identical.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert torch.equal(identical.output, x * 2.0)
+
+    # Changed string diverges through the existing literal contract.
+    with pytest.raises(PathDivergenceError):
+        tl.load(path).run(inputs=[x.clone(), {"mode": "slow"}])
+
+
+# ---------------------------------------------------------------------------
 # F7 -- out= operations mutate and alias their explicit output tensor
 # ---------------------------------------------------------------------------
 

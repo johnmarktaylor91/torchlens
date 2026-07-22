@@ -482,8 +482,21 @@ def _scrub_field(
     blob_specs: list[BlobSpec],
     blob_counter: list[int],
 ) -> Any:
-    """Scrub one object field according to its effective field policy."""
+    """Scrub one object field according to its effective field policy.
 
+    r69 E: an effective ``DROP``/``WEAKREF_STRIP`` wins BEFORE every field-specific
+    serializer. The sparse-runnable effective policy lists ``raw_input``/``raw_output``
+    in its DROP set, so a runnable save always scrubs both to ``None`` -- including
+    when the ordinary ``save_raw_input``/``save_raw_output`` policy is ``True`` or
+    ``"small"``. Pre-r69 the Trace raw-value special case ran first and the generic
+    small-value policy retained a nested tensor inside the sparse core, firing the
+    (unchanged) ``assert_sparse_core_has_no_tensor_payload`` tripwire on a fully
+    witnessed nested-string capture (r68 hon1-F5). Ordinary analysis saves are
+    unaffected: their effective raw-field policy is never ``DROP`` here.
+    """
+
+    if policy in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}:
+        return None
     if isinstance(owner, Trace) and field_name in {"raw_input", "raw_output"}:
         return _scrub_raw_value_for_save(
             owner,
@@ -494,8 +507,6 @@ def _scrub_field(
             blob_specs,
             blob_counter,
         )
-    if policy in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}:
-        return None
     if policy == FieldPolicy.STRINGIFY:
         return _stringify_value(field_value)
     if policy == FieldPolicy.BLOB:
