@@ -156,6 +156,7 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
         _parse_witness(item) for item in _mapping_sequence(value, "control_witnesses")
     )
     _validate_state_metadata_fact_witnesses(witnesses)
+    _validate_input_structure_witnesses(witnesses)
     payload = _mapping(value, "payload_layers")
     compatibility = _mapping(value, "compatibility")
     preflight = _mapping(value, "preflight")
@@ -229,6 +230,94 @@ non-bool value, a malformed envelope, a site label disagreeing with the embedded
 name -- refuses the descriptor at parse (``context_field_invalid``), before run
 preparation could apply an attacker-chosen bit to staged state.
 """
+
+
+_INPUT_STRUCTURE_SITE_PREFIX = "input_structure:"
+"""``site_label`` prefix of a persisted input-boundary structure fact (r67 C2)."""
+
+_INPUT_STRUCTURE_NODE_KINDS = frozenset(
+    {"tensor", "empty", "namedtuple", "dataclass", "mapping", "sequence", "registered", "leaf"}
+)
+"""Closed node-kind vocabulary accepted from a persisted input-structure fact."""
+
+
+def _validate_input_structure_witnesses(witnesses: "Sequence[ControlWitness]") -> None:
+    """Validate the REQUIRED input-boundary structure facts at PARSE time (r67 C2).
+
+    The complete structure block is required and parse-validated inside existing v2:
+    missing, duplicate, malformed, stripped, or internally inconsistent site/node/key
+    facts make readiness unavailable through the existing ``context_field_invalid``
+    typed path -- absence may never mean the old weaker semantics. Consistency proved
+    here: every fact declares the SAME ``site_count``; positions are unique and
+    well-formed; the fact count equals the declared count (a stripped per-site fact
+    fails set equality); every node record carries a closed-vocabulary kind, an exact
+    two-string type ref, and a ``str | int`` component path.
+    """
+
+    from .._runnable_execution import _decode_literal  # lazy: layering, not a cycle at import
+
+    field = "control_witnesses.input_structure"
+    facts: list[Mapping[str, Any]] = []
+    for witness in witnesses:
+        if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
+            continue
+        if not witness.site_label.startswith(_INPUT_STRUCTURE_SITE_PREFIX):
+            continue
+        try:
+            decoded = _decode_literal(witness.observed_value)
+        except Exception as exc:
+            raise ContextFieldInvalidError(field, f"undecodable input-structure fact: {exc}")
+        if not isinstance(decoded, Mapping) or decoded.get("input_structure") is not True:
+            raise ContextFieldInvalidError(field, "malformed input-structure fact envelope")
+        facts.append(decoded)
+    if not facts:
+        return
+    declared_counts = {int(fact.get("site_count", -1)) for fact in facts}
+    if len(declared_counts) != 1 or next(iter(declared_counts)) != len(facts):
+        raise ContextFieldInvalidError(
+            field,
+            "input-structure site set is incomplete or inconsistent "
+            f"(declared {sorted(declared_counts)}, present {len(facts)})",
+        )
+    positions: set[tuple[Any, ...]] = set()
+    for fact in facts:
+        position = fact.get("position")
+        if (
+            not isinstance(position, (list, tuple))
+            or len(position) != 2
+            or position[0] not in {"arg", "kwarg"}
+            or not isinstance(position[1], (str, int))
+        ):
+            raise ContextFieldInvalidError(field, f"malformed site position {position!r}")
+        position_key = tuple(position)
+        if position_key in positions:
+            raise ContextFieldInvalidError(field, f"duplicate site position {position!r}")
+        positions.add(position_key)
+        nodes = fact.get("nodes")
+        if not isinstance(nodes, (list, tuple)) or not nodes:
+            raise ContextFieldInvalidError(field, f"site {position!r} has no node records")
+        root_seen = False
+        for node in nodes:
+            if not isinstance(node, Mapping):
+                raise ContextFieldInvalidError(field, "malformed input-structure node record")
+            node_path = node.get("path")
+            if not isinstance(node_path, (list, tuple)) or any(
+                not isinstance(component, (str, int)) for component in node_path
+            ):
+                raise ContextFieldInvalidError(field, f"malformed node path {node_path!r}")
+            if len(node_path) == 0:
+                root_seen = True
+            if node.get("kind") not in _INPUT_STRUCTURE_NODE_KINDS:
+                raise ContextFieldInvalidError(field, f"unknown node kind {node.get('kind')!r}")
+            type_ref = node.get("type")
+            if (
+                not isinstance(type_ref, (list, tuple))
+                or len(type_ref) != 2
+                or not all(isinstance(part, str) and part for part in type_ref)
+            ):
+                raise ContextFieldInvalidError(field, f"malformed node type ref {type_ref!r}")
+        if not root_seen:
+            raise ContextFieldInvalidError(field, f"site {position!r} lacks a root node record")
 
 
 def _validate_state_metadata_fact_witnesses(witnesses: "Sequence[ControlWitness]") -> None:

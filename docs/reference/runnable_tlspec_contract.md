@@ -413,7 +413,34 @@ analysis output but must not write runnable capability. It rejects when:
 3. A tensor use lacks stable slot ID, role/path, shape/dtype/rank/placement, producer/version relation,
    or required input/state/output binding.
 4. An input/output container is missing, opaque, unreconstructable, or lacks complete
-   `ContainerRecord`/`ModelSite` paths.
+   `ContainerRecord`/`ModelSite` paths. r67 C2: the runnable producer additionally requires a
+   POSITIVE per-site input-boundary structure proof from the ONE snapshot spine
+   (`torchlens._input_walk.snapshot_input_boundary`): one traversal per normalized model-input
+   site records the complete site set/arity and EVERY node -- including empty nodes and the
+   zero-field-dataclass empty kind -- with its container kind, exact `(module, qualname)`
+   class (no import required or performed to compare it), declared child schema (namedtuple/
+   dataclass fields, ordered type-strict-codec mapping keys, sequence/registered arity),
+   registered-container aux, and the instance-state proof. The per-gap disposition matrix is
+   fixed: exact class identity (including builtin subclasses), empty-dataclass nodes, and
+   non-`str`/`int` GRAMMAR-encodable mapping keys (bool/float/None/safe tuple -- encoded by
+   ONE canonical codec that keeps `True != 1` and `1.0 != 1` type-distinct while preserving
+   the persisted `str | int` path shape, retiring the dual raw/tagged vocabulary) are
+   WITNESSED and verified at bind (`input_tree_mismatch` divergence on drift, with tensor
+   descendants under grammar keys entering the tensor-leaf accounting and binding as
+   first-class leaves); opaque/non-grammar keys and undeclared per-instance container state
+   (non-field dataclass `__dict__`, namedtuple/subclass instance attributes) REFUSE at
+   runnable save through the EXISTING `missing_input_container_contract` (no new enum), with
+   the SYMMETRIC bind-side check refusing runtime-added undeclared state; REGISTERED
+   containers are SUPPORTED behind their existing declarations and typed fences (registration
+   must exist in the loading process -- TorchLens imports nothing to obtain a hook; capture
+   and bind both invoke `flatten` and descend indexed children; exact class, child schema,
+   and safely encoded aux persist and compare; path resolution re-flattens instead of
+   indexing; missing/throwing/nonconforming registration, unsafe aux, schema drift, or an
+   unmet `state_complete` declaration fails typed). The complete structure block is REQUIRED
+   and parse-validated inside existing v2 (no v3): missing, duplicate, malformed, stripped,
+   or internally inconsistent site/node/key facts make readiness unavailable through the
+   typed `context_field_invalid` path -- absence never means the old weaker semantics.
+   Structure facts are keyed by model-site position, never recovered through tensor bindings.
 5. State lacks canonical module path/name/role/shape/dtype/persistence/trainability/coherent aliases.
 6. A tensor constant is neither input nor state and has no allowed value-free initializer.
 7. A control site lacks completeness classification or a witness required by that classification.

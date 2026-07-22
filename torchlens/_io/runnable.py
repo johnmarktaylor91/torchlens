@@ -452,6 +452,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     literal_witnesses, saw_opaque_leaf = _input_literal_witnesses(trace, start_order=len(witnesses))
     witnesses.extend(literal_witnesses)
     witnesses.extend(_input_metadata_witnesses(trace, start_order=len(witnesses)))
+    witnesses.extend(_input_structure_witnesses(trace, start_order=len(witnesses)))
     witnesses.extend(_module_training_mode_witnesses(trace, start_order=len(witnesses)))
     witnesses.extend(_state_metadata_fact_witnesses(trace, start_order=len(witnesses)))
     escape_witnesses, escape_incomplete = _escape_witnesses(
@@ -555,6 +556,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     diagnostics.extend(_preflight_output_contracts(trace, ops))
     diagnostics.extend(_preflight_state_alias_topology(trace, slot_drafts))
     diagnostics.extend(_preflight_state_metadata(trace))
+    diagnostics.extend(_preflight_input_structure(trace))
     # r35 corr2_3 note: the torchlens_role_init_v2 totality contract
     # (``initializer_contract_diagnostics``) is enforced typed at runtime when
     # random initialization is actually selected. It is deliberately NOT a
@@ -1929,12 +1931,29 @@ def _input_binding_for_op(
                 position = _normalize_model_site_position(site.position)
                 if position is None:
                     break
+                try:
+                    container_path = _normalize_container_path(occurrence.path)
+                except ValueError:
+                    # r67 C2: a non-grammar mapping key on the binding path refuses
+                    # TYPED (the positive structure proof also refuses the site),
+                    # never a raw ValueError escaping the producer.
+                    diagnostics.append(
+                        _diagnostic(
+                            RunnableErrorCode.MISSING_INPUT_CONTAINER_CONTRACT,
+                            "Model input binding path carries a non-grammar mapping "
+                            "key; the runnable save is refused "
+                            "(missing_input_container_contract).",
+                            affected_ops=(str(op.label),),
+                            detection_stage="producer_input_binding",
+                        )
+                    )
+                    return None
                 return InputSlotBinding(
                     io_role="model_input",
                     model_ref=site.model_ref,
                     model_site_position=position,
                     container_record_id=int(record.ordinal),
-                    container_path=_normalize_container_path(occurrence.path),
+                    container_path=container_path,
                 )
 
     io_role = str(getattr(op, "io_role", ""))
@@ -2615,6 +2634,95 @@ def _container_structure_witnesses(trace: Any, *, start_order: int) -> list[Cont
                 )
             )
     return witnesses
+
+
+INPUT_STRUCTURE_SITE_PREFIX = "input_structure:"
+"""``site_label`` prefix of a persisted per-site input-boundary structure fact (r67 C2)."""
+
+INPUT_STRUCTURE_FACT_KEY = "input_structure"
+"""Discriminator key present in every input-boundary structure fact."""
+
+
+def _input_structure_witnesses(trace: Any, *, start_order: int) -> list[ControlWitness]:
+    """Persist the per-site input-boundary snapshots as REQUIRED structure facts (r67 C2).
+
+    Each fact carries the site position, the COMPLETE site count (top-level arity), and
+    the full per-node record list from the snapshot spine -- kind, exact class, child
+    schema, ordered codec keys, registered aux. The executor re-derives the runtime
+    snapshot with the SAME spine function and diverges on any mismatch, closing the r66
+    nested-kind/class-identity/empty-dataclass/hidden-state classes at every depth.
+    """
+
+    snapshots = trace.__dict__.get("_runnable_input_structure")
+    if not isinstance(snapshots, tuple):
+        return []
+    witnesses: list[ControlWitness] = []
+    for snapshot in snapshots:
+        fact = {
+            INPUT_STRUCTURE_FACT_KEY: True,
+            "position": list(snapshot.get("position", [])),
+            "site_count": len(snapshots),
+            "nodes": snapshot.get("nodes", []),
+        }
+        try:
+            observed = _encode_literal(fact)
+        except _UnsupportedLiteralError:
+            # An unencodable node fact cannot be witnessed: the preflight refusal below
+            # (positive proof) owns the failure; never emit a partial fact.
+            continue
+        order = start_order + len(witnesses)
+        witnesses.append(
+            ControlWitness(
+                witness_id=f"witness:{order + 1}",
+                kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+                order=order,
+                call_id=None,
+                site_label=f"{INPUT_STRUCTURE_SITE_PREFIX}{snapshot.get('position')!r}",
+                observed_value=observed,
+            )
+        )
+    return witnesses
+
+
+def _preflight_input_structure(trace: Any) -> list[RunnableDiagnostic]:
+    """Require a POSITIVE structure proof for every input site before payload writing.
+
+    r67 C2 disposition matrix: a site whose snapshot carries a refusal -- opaque
+    (non-grammar) mapping key, undeclared dataclass/namedtuple/subclass instance state,
+    throwing/nonconforming/state-incomplete container registration, unsafe registered
+    aux -- refuses the runnable save through the EXISTING
+    ``missing_input_container_contract`` (no new enum). An absent snapshot on an
+    intervention-ready capture refuses the same way: absence of proof is never proof.
+    """
+
+    snapshots = trace.__dict__.get("_runnable_input_structure")
+    diagnostics: list[RunnableDiagnostic] = []
+    if not isinstance(snapshots, tuple):
+        diagnostics.append(
+            _diagnostic(
+                RunnableErrorCode.MISSING_INPUT_CONTAINER_CONTRACT,
+                "Model-input boundary structure snapshot is missing; the runnable save "
+                "requires a positive per-site structure proof.",
+                detection_stage="producer_input_structure",
+            )
+        )
+        return diagnostics
+    for snapshot in snapshots:
+        for refusal in snapshot.get("refusals", ()):
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.MISSING_INPUT_CONTAINER_CONTRACT,
+                    "Model input site "
+                    f"{snapshot.get('position')!r} has no complete container contract at "
+                    f"path {tuple(refusal.get('path', ()))!r}: {refusal.get('reason')!r}. "
+                    "Opaque mapping keys, undeclared per-instance container state, and "
+                    "unproven container registrations cannot be replayed faithfully, so "
+                    "the runnable save is refused (missing_input_container_contract); "
+                    "analysis save levels remain available.",
+                    detection_stage="producer_input_structure",
+                )
+            )
+    return diagnostics
 
 
 MODEL_INPUT_LITERAL_SITE_PREFIX = "model_input_literal:"
@@ -3497,11 +3605,20 @@ values.
 
 
 def input_path_key_component(key: Any) -> Any:
-    """Return a type-strict non-tensor path component for one mapping key (r29-C2, F6)."""
+    """Return the canonical type-strict path component for one mapping key (r67 C2).
 
-    if isinstance(key, bool):
-        return (BOOL_KEY_PATH_TAG, bool(key))
-    return key
+    Delegates to the ONE codec (``torchlens._input_walk.encode_mapping_key``): ``str``/
+    ``int`` keys stay raw, bool/float/None/safe-tuple keys encode into tagged STRING
+    components (``True != 1`` and ``1.0 != 1`` stay type-distinct), retiring the r29
+    tuple-tag spelling and the dual raw/tagged vocabulary (residual R6 closed).
+    """
+
+    from torchlens._input_walk import encode_mapping_key
+
+    try:
+        return encode_mapping_key(key)
+    except ValueError as exc:
+        raise _UnsupportedLiteralError(str(exc)) from exc
 
 
 def empty_container_kind(value: Any) -> str | None:
@@ -3509,11 +3626,17 @@ def empty_container_kind(value: Any) -> str | None:
 
     ``None`` for non-containers and for NON-empty containers (whose leaves are witnessed
     ordinarily). Namedtuples are treated as sequences by field arity; an empty namedtuple has
-    no fields.
+    no fields. r67 C2 (free-F2/hon1-F2c): a ZERO-FIELD dataclass is an EMPTY container by
+    KIND -- without the row it emitted nothing at all, so the argument vanished from the
+    input contract and a run against a different-arity model falsely VERIFIED.
     """
+
+    import dataclasses as _dataclasses
 
     if isinstance(value, tuple) and hasattr(value, "_fields"):
         return "namedtuple" if len(value._fields) == 0 else None
+    if _dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return "dataclass" if len(_dataclasses.fields(value)) == 0 else None
     if isinstance(value, Mapping):
         return "mapping" if len(value) == 0 else None
     if isinstance(value, (list, tuple)):
@@ -3706,14 +3829,24 @@ def _safe_normalize_container_path(path: Iterable[Any]) -> tuple[str | int, ...]
 def _normalize_container_path(path: Iterable[Any]) -> tuple[str | int, ...]:
     """Convert cooked container path components to frozen string/int paths."""
 
+    from torchlens._input_walk import encode_mapping_key
+
     normalized: list[str | int] = []
     for component in path:
         if isinstance(component, TupleIndex):
             normalized.append(component.index)
         elif isinstance(component, (DictKey, HFKey)):
-            if not isinstance(component.key, (str, int)):
-                raise ValueError("Runnable container paths require string or integer keys.")
-            normalized.append(component.key)
+            # r67 C2 (hon1-F1): mapping keys normalize through the ONE type-strict codec,
+            # so grammar keys (bool/float/None/safe tuple) become first-class str|int
+            # path components -- a tensor child under ``{2.5: x}`` enters the leaf-path
+            # accounting instead of silently vanishing. A non-grammar key still raises
+            # (the caller's refusal/skip semantics are unchanged).
+            try:
+                normalized.append(encode_mapping_key(component.key))
+            except ValueError as exc:
+                raise ValueError(
+                    "Runnable container paths require grammar-encodable mapping keys."
+                ) from exc
         elif isinstance(component, (NamedField, DataclassField)):
             normalized.append(component.name)
         elif isinstance(component, (str, int)):

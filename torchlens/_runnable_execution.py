@@ -3793,6 +3793,10 @@ def _call_witness_checks(
     return tuple(checks)
 
 
+_INPUT_STRUCTURE_SITE_PREFIX = "input_structure:"
+"""``site_label`` prefix of a persisted input-boundary structure fact (r67 C2)."""
+
+
 def _post_execution_contract_checks(
     descriptor: SparseRunDescriptor,
     *,
@@ -3843,6 +3847,17 @@ def _post_execution_contract_checks(
             continue
         if witness.kind is ControlWitnessKind.CONDITIONAL_ARM_ENTRY:
             checks.append(_conditional_arm_check(witness, fork))
+        elif witness.site_label.startswith(_INPUT_STRUCTURE_SITE_PREFIX):
+            # r67 C2: per-site input-boundary structure facts compare against a runtime
+            # snapshot built by the SAME spine function -- kind, exact class, child
+            # schema, ordered codec keys, arity, and the symmetric instance-state proof.
+            checks.append(
+                _input_structure_witness_check(
+                    witness,
+                    inputs=inputs,
+                    all_positions=_input_structure_positions(descriptor),
+                )
+            )
         elif witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT:
             checks.append(
                 _structure_witness_check(
@@ -3893,6 +3908,75 @@ def _conditional_arm_check(witness: ControlWitness, fork: Any) -> ContractCheck:
         f"Conditional arm witness {witness.witness_id!r} did not enter its recorded edge.",
         affected_op_labels=affected or (witness.site_label,),
         details=(("recorded_edge", edge_text), ("order", str(witness.order))),
+    )
+
+
+def _input_structure_positions(descriptor: SparseRunDescriptor) -> "set[Any]":
+    """Collect every persisted input-structure site position (site-selection context)."""
+
+    positions: set[Any] = set()
+    for witness in descriptor.control_witnesses:
+        if not witness.site_label.startswith(_INPUT_STRUCTURE_SITE_PREFIX):
+            continue
+        try:
+            fact = _decode_literal(witness.observed_value)
+        except Exception:
+            continue
+        position = fact.get("position") if isinstance(fact, Mapping) else None
+        if isinstance(position, list) and len(position) == 2:
+            positions.add(tuple(position))
+    return positions
+
+
+def _input_structure_witness_check(
+    witness: ControlWitness, *, inputs: Any, all_positions: "set[Any]"
+) -> ContractCheck:
+    """Compare one persisted input-boundary structure fact with the runtime site (r67 C2).
+
+    The runtime snapshot comes from the SAME spine function that produced the persisted
+    fact, so capture and runtime can never diverge in vocabulary. Any node mismatch --
+    kind swap at any depth (hon1-F2a), exact-class swap (free-F3/hon1-F2b), empty-
+    dataclass arity (free-F2/hon1-F2c), ordered-key or grammar-key drift (hon1-F1),
+    registered schema drift (corr1-3) -- fails the check (``input_tree_mismatch``
+    class), as does RUNTIME-ADDED undeclared instance state (the symmetric bind-side
+    proof: a runtime snapshot refusal can never pass).
+    """
+
+    from torchlens._input_walk import snapshot_input_boundary
+
+    expected = _decode_literal(witness.observed_value)
+    position_raw = expected.get("position")
+    position = tuple(position_raw) if isinstance(position_raw, list) else position_raw
+    try:
+        runtime_value = _input_site_value(inputs, position, all_positions or {position})
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return _contract_check(
+            f"control_witness:{witness.witness_id}",
+            False,
+            RunnableErrorCode.INPUT_TREE_MISMATCH,
+            f"Model input site {position!r} is missing from the runtime inputs.",
+            affected_op_labels=(witness.site_label,),
+            details=(("position", repr(position)),),
+        )
+    runtime_snapshot = snapshot_input_boundary(runtime_value)
+    expected_nodes = expected.get("nodes", [])
+    actual_nodes = runtime_snapshot.get("nodes", [])
+    refusals = runtime_snapshot.get("refusals", [])
+    passed = expected_nodes == actual_nodes and not refusals
+    return _contract_check(
+        f"control_witness:{witness.witness_id}",
+        passed,
+        RunnableErrorCode.INPUT_TREE_MISMATCH,
+        f"Runtime input structure at site {position!r} differs from the captured "
+        "boundary snapshot (container kind, exact class, child schema, mapping keys, "
+        "or undeclared instance state).",
+        affected_op_labels=(witness.site_label,),
+        details=(
+            ("position", repr(position)),
+            ("expected_nodes", repr(expected_nodes)[:2000]),
+            ("actual_nodes", repr(actual_nodes)[:2000]),
+            ("runtime_refusals", repr(refusals)),
+        ),
     )
 
 
@@ -3978,6 +4062,33 @@ def _raw_runtime_output(
     return reconstructed_output
 
 
+def _registered_flatten_children(value):
+    """Return a registered container's flatten children, else ``None`` (r67 C2, corr1-3)."""
+
+    from torchlens.ir.container import get_registered_container
+
+    if isinstance(value, (torch.Tensor, Mapping, list, tuple, str, bytes)) or value is None:
+        return None
+    registration = get_registered_container(type(value))
+    if registration is None:
+        return None
+    try:
+        return list(registration.flatten(value)[0])
+    except Exception:
+        return None
+
+
+def _codec_component(key):
+    """Encode one runtime mapping key through the canonical codec, or ``None`` (r67 C2)."""
+
+    from torchlens._input_walk import encode_mapping_key
+
+    try:
+        return encode_mapping_key(key)
+    except ValueError:
+        return None
+
+
 def _tensor_leaf_paths(
     value: Any, path: tuple[str | int, ...] = ()
 ) -> tuple[tuple[str | int, ...], ...]:
@@ -3985,8 +4096,14 @@ def _tensor_leaf_paths(
 
     if isinstance(value, torch.Tensor):
         return (path,)
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+    registered_children = _registered_flatten_children(value)
+    if registered_children is not None:
         paths: list[tuple[str | int, ...]] = []
+        for index, child in enumerate(registered_children):
+            paths.extend(_tensor_leaf_paths(child, (*path, index)))
+        return tuple(paths)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        paths = []
         for field in dataclasses.fields(value):
             paths.extend(_tensor_leaf_paths(getattr(value, field.name), (*path, field.name)))
         return tuple(paths)
@@ -3998,9 +4115,14 @@ def _tensor_leaf_paths(
         return tuple(paths)
     if isinstance(value, Mapping):
         paths = []
+        # r67 C2 (hon1-F1): mapping keys route through the ONE type-strict codec so a
+        # tensor child under a grammar key (2.5 / None / bool / safe tuple) enters the
+        # leaf accounting; a non-grammar key is skipped here (its subtree is already
+        # opaque-ceilinged / save-refused by the structure spine).
         for key, child in value.items():
-            if isinstance(key, (str, int)):
-                paths.extend(_tensor_leaf_paths(child, (*path, key)))
+            component = _codec_component(key)
+            if component is not None:
+                paths.extend(_tensor_leaf_paths(child, (*path, component)))
         return tuple(paths)
     if isinstance(value, (list, tuple)):
         paths = []
@@ -4138,8 +4260,14 @@ def _container_leaf_paths(
 
     if isinstance(value, torch.Tensor):
         return (path,)
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+    registered_children = _registered_flatten_children(value)
+    if registered_children is not None:
         paths: list[tuple[str | int, ...]] = []
+        for index, child in enumerate(registered_children):
+            paths.extend(_container_leaf_paths(child, (*path, index)))
+        return tuple(paths)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        paths = []
         for field in dataclasses.fields(value):
             paths.extend(_container_leaf_paths(getattr(value, field.name), (*path, field.name)))
         return tuple(paths)
@@ -4151,9 +4279,12 @@ def _container_leaf_paths(
         return tuple(paths)
     if isinstance(value, Mapping):
         paths = []
+        # r67 C2 (hon1-F1): same ONE type-strict key codec as the capture-side path
+        # normalization -- lockstep by construction.
         for key, child in value.items():
-            if isinstance(key, (str, int)):
-                paths.extend(_container_leaf_paths(child, (*path, key)))
+            component = _codec_component(key)
+            if component is not None:
+                paths.extend(_container_leaf_paths(child, (*path, component)))
         return tuple(paths)
     if isinstance(value, (list, tuple)):
         paths = []
@@ -4180,6 +4311,11 @@ def _container_kind(value: Any) -> str:
         return "list"
     if isinstance(value, Mapping):
         return "dict"
+    # r67 C2 (corr1-3): a registered container reports the SAME vocabulary name the
+    # capture-side ContainerSpec records, so the legacy structure witness compares
+    # kind-for-kind instead of class-name-vs-"registered" false-diverging.
+    if _registered_flatten_children(value) is not None:
+        return "registered"
     return type(value).__name__
 
 
@@ -5938,11 +6074,13 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
     the bool key (kept distinct from the equal-valued int key).
     """
 
+    from torchlens._input_walk import _KEY_CODEC_TAG, decode_mapping_key
     from torchlens._io.runnable import (
         BOOL_KEY_PATH_TAG,
         EMPTY_CONTAINER_PATH_MARKER,
         empty_container_kind,
     )
+    from torchlens.ir.container import get_registered_container
 
     current = value
     for component in path:
@@ -5960,8 +6098,36 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
                 raise KeyError(component[1])
             current = current[bool(component[1])]
             continue
+        # r67 C2 (corr1-3): a registered container resolves indexed components by
+        # RE-FLATTENING through its registration -- never ``obj[index]`` (the type may
+        # not support indexing at all). A missing/throwing registration raises typed
+        # KeyError (bind-side fence), never an AttributeError crash.
+        if not isinstance(current, (Mapping, list, tuple)) and not isinstance(component, str):
+            registration = get_registered_container(type(current))
+            if registration is not None:
+                try:
+                    children = list(registration.flatten(current)[0])
+                except Exception as exc:
+                    raise KeyError(f"registered flatten failed: {exc!r}") from exc
+                if not isinstance(component, int) or not (0 <= component < len(children)):
+                    raise KeyError(component)
+                current = children[component]
+                continue
         if isinstance(current, Mapping):
-            current = current[component]
+            # r67 C2: decode the ONE type-strict key codec at mapping nodes only
+            # (bool/float/None/safe-tuple keys ride str components; ``True`` stays
+            # distinct from ``1`` end to end -- a codec lookup matches by exact TYPE,
+            # never bool/int/float hash conflation).
+            if isinstance(component, str) and component.startswith(_KEY_CODEC_TAG):
+                decoded = decode_mapping_key(component)
+                for candidate in current.keys():
+                    if type(candidate) is type(decoded) and candidate == decoded:
+                        current = current[candidate]
+                        break
+                else:
+                    raise KeyError(component)
+            else:
+                current = current[component]
         elif isinstance(component, int):
             current = current[component]
         else:

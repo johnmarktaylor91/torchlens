@@ -45,7 +45,6 @@ from torchlens._input_walk import (
     tagged_mapping_key_component,
 )
 from torchlens._io.runnable import (
-    BOOL_KEY_PATH_TAG,
     EMPTY_CONTAINER_PATH_MARKER,
     _UnsupportedLiteralError,
 )
@@ -61,7 +60,7 @@ from torchlens.capture.trace import (
     _record_runnable_input_literal_leaves,
     _record_runnable_input_tensor_sites,
 )
-from torchlens.errors import PathDivergenceError
+from torchlens.errors import RunnablePreflightError, PathDivergenceError
 from torchlens.options import CaptureOptions
 from torchlens.runnable import (
     DivergencePolicy,
@@ -201,6 +200,23 @@ def test_walker_bodies_have_no_private_container_dispatch(walker_name: str) -> N
 
 
 @pytest.mark.smoke
+class _RegisteredProbe:
+    """r67 C2: registered-container probe for the closed kind vocabulary."""
+
+    def __init__(self, t):
+        self.t = t
+
+
+from torchlens.ir.container import register_container as _register_container  # noqa: E402
+
+_register_container(
+    _RegisteredProbe,
+    lambda box: ([box.t], None),
+    lambda aux, children: _RegisteredProbe(children[0]),
+    state_complete=True,
+)
+
+
 def test_container_kind_vocabulary_is_closed_and_classified() -> None:
     """The normative dispatch classifies one probe per kind; the vocabulary is closed."""
 
@@ -211,6 +227,7 @@ def test_container_kind_vocabulary_is_closed_and_classified() -> None:
         "dataclass": _ProbeBox(t=torch.zeros(1), s=5),
         "mapping": {"k": 1},
         "sequence": [1],
+        "registered": _RegisteredProbe(torch.zeros(1)),
         "leaf": object(),
     }
     for kind, value in probes.items():
@@ -289,32 +306,44 @@ def test_empty_container_and_opaque_leaf_parity() -> None:
 
 @pytest.mark.smoke
 def test_dual_mapping_key_vocabulary_declared_and_pinned() -> None:
-    """R6 pin: the two mapping-key vocabularies behave exactly as declared.
+    """r67 C2: residual R6 CLOSED -- ONE type-strict canonical key codec everywhere.
 
-    TAGGED (persisted literal, W1/W3): grammar-gated, bool keys type-distinct.
-    RAW (metadata fact sites, W2): every key accepted verbatim; bool/int conflation is
-    shielded by the r33 ``_type_strict_path`` symmetric input-tree belt.
+    Every walker family (persisted literal W1/W3, metadata fact sites W2, binding-path
+    normalization, runtime resolution) speaks ``encode_mapping_key``: grammar keys
+    (str/int raw; bool/float/None/safe-tuple as tagged STRING components) round-trip
+    through ``decode_mapping_key`` with ``True != 1`` and ``1.0 != 1`` type-distinct.
+    A non-grammar key raises (W1/W3 route the subtree opaque; W2 keeps the raw key as
+    an in-memory-only attribution component).
     """
 
-    assert tagged_mapping_key_component(True) == (BOOL_KEY_PATH_TAG, True)
-    assert tagged_mapping_key_component(False) == (BOOL_KEY_PATH_TAG, False)
-    assert tagged_mapping_key_component(1) == 1
-    assert tagged_mapping_key_component("k") == "k"
+    from torchlens._input_walk import decode_mapping_key, encode_mapping_key
+
+    for key in (True, False, 1, 0, "k", 2.5, 1.0, None, ("a", 1), (True, 2.5), -7):
+        component = encode_mapping_key(key)
+        assert isinstance(component, (str, int)), key
+        decoded = decode_mapping_key(component)
+        assert type(decoded) is type(key) and decoded == key, key
+    # Type-strictness: equal-hashing twins encode to DISTINCT components.
+    assert len({encode_mapping_key(k) for k in (True, 1, 1.0)}) == 3
+    # Codec-colliding strings are escaped, never conflated with an encoding.
+    tagged = encode_mapping_key(True)
+    assert isinstance(tagged, str)
+    assert encode_mapping_key(tagged) != tagged
+    assert decode_mapping_key(encode_mapping_key(tagged)) == tagged
     with pytest.raises(_UnsupportedLiteralError):
         tagged_mapping_key_component(_Key.K)
     with pytest.raises(_UnsupportedLiteralError):
         tagged_mapping_key_component(object())
     with pytest.raises(_UnsupportedLiteralError):
         tagged_mapping_key_component(b"kk")
-
-    assert raw_mapping_key_component(True) is True
-    assert raw_mapping_key_component(1) == 1
-    assert raw_mapping_key_component(_Key.K) is _Key.K
+    assert tagged_mapping_key_component(True) == encode_mapping_key(True)
+    assert raw_mapping_key_component(True) == encode_mapping_key(True)
+    assert raw_mapping_key_component(_Key.K) is _Key.K  # in-memory attribution fallback
     assert raw_mapping_key_component(b"kk") == b"kk"
 
-    # Observable split: W1 persists the tagged bool-key path; W2 indexes the raw key.
-    assert _w1_paths({True: 5}) == {((BOOL_KEY_PATH_TAG, True),)}
-    assert _w2_paths({True: torch.zeros(1)}) == {(True,)}
+    # Observable unification: W1 and W2 persist the SAME codec component.
+    assert _w1_paths({True: 5}) == {(encode_mapping_key(True),)}
+    assert _w2_paths({True: torch.zeros(1)}) == {(encode_mapping_key(True),)}
 
 
 @pytest.mark.smoke
@@ -517,11 +546,18 @@ def test_w4_w5_w6_round_trip_parity_on_torture_container() -> None:
 
     root, tensors = _torture_root()
 
-    # W2 (shared dispatch, raw keys) indexes exactly the physical tensor leaves.
-    w2 = _w2_paths(root)
-    assert w2 == set(tensors)
+    # W2 (shared dispatch, ONE codec) indexes exactly the physical tensor leaves,
+    # with grammar keys encoded through the canonical type-strict components.
+    from torchlens._input_walk import encode_mapping_key
 
-    # W4 mirrors W2 on this container (its (str, int) key filter admits bool as int).
+    w2 = _w2_paths(root)
+    expected = {
+        tuple(encode_mapping_key(part) if isinstance(part, bool) else part for part in path)
+        for path in tensors
+    }
+    assert w2 == expected
+
+    # W4 mirrors W2 on this container (same codec components).
     w4 = set(_tensor_leaf_paths(root))
     assert w4 == w2
 
@@ -588,9 +624,10 @@ def test_opaque_key_subtree_is_never_silently_witnessable(tmp_path: Path) -> Non
     assert set(_tensor_leaf_paths(consumed)) == set()  # W4's (str, int) key filter
     assert _w1_paths(consumed) == {("d",)}  # one opaque leaf at the mapping's path
 
-    # Prong A: a consumed tensor under a non-representable key fails closed at SAVE
-    # (the binding-path producer refuses non-(str, int) keys) -- no artifact exists
-    # that could ever replay it as VERIFIED.
+    # Prong A (r67 C2 disposition matrix): a consumed tensor under a non-grammar key
+    # refuses TYPED at runnable save through the positive structure proof (the existing
+    # missing_input_container_contract) -- no artifact exists that could ever replay it
+    # as VERIFIED.
     trace = tl.trace(
         _EnumKeyedModel(),
         consumed,
@@ -600,15 +637,16 @@ def test_opaque_key_subtree_is_never_silently_witnessable(tmp_path: Path) -> Non
             cache=False,
         ),
     )
-    with pytest.raises(ValueError, match="string or integer keys"):
+    with pytest.raises(RunnablePreflightError) as excinfo:
         trace.save(tmp_path / "enum_key.tlspec", level="runnable", include_activations=True)
+    assert "missing_input_container_contract" in str(excinfo.value.fields.get("diagnostics"))
+    assert "opaque_mapping_key" in str(excinfo.value.fields.get("diagnostics"))
 
-    # Prong B: an opaque-keyed NON-tensor sibling (bytes key -- outside the literal
-    # grammar but safely picklable) saves, and the opaque literal leaf then CEILINGS
-    # the run on the ORIGINAL input: UNVERIFIABLE, never VERIFIED, never ATTESTED.
+    # Prong B (r67 C2): an opaque-keyed NON-tensor sibling refuses at save the SAME
+    # typed way -- the r66 downgrade lane (save-then-UNVERIFIABLE) is retired for the
+    # uniform refusal the agreed disposition matrix ratified.
     sibling = _OpaqueKeyBox({"k": tensor, b"kk": 5})
     assert _w1_paths(sibling) == {("d",)}
-    path = tmp_path / "bytes_key.tlspec"
     trace = tl.trace(
         _StrKeyedModel(),
         sibling,
@@ -618,11 +656,6 @@ def test_opaque_key_subtree_is_never_silently_witnessable(tmp_path: Path) -> Non
             cache=False,
         ),
     )
-    trace.save(path, level="runnable", include_activations=True)
-    result = tl.load(path).run(
-        inputs=_OpaqueKeyBox({"k": tensor, b"kk": 5}),
-        on_divergence=DivergencePolicy.RETURN_DIVERGED,
-    )
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert result.report.poisoned
+    with pytest.raises(RunnablePreflightError) as excinfo:
+        trace.save(tmp_path / "bytes_key.tlspec", level="runnable", include_activations=True)
+    assert "missing_input_container_contract" in str(excinfo.value.fields.get("diagnostics"))
