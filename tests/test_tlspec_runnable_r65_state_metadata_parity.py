@@ -1047,3 +1047,160 @@ def test_r67_meta_destination_has_no_oracle_copy() -> None:
     assert entries
     for name, dest in entries:
         assert dest.is_meta, name  # the copy was a no-op: no oracle value landed
+
+
+# ======================================================================================
+# r69 A -- state-metadata facts are inventory-indexed by exact (state, fact) identity
+# (free-F1-secondary: a stripped declared fact silently omitted its staged bit)
+# ======================================================================================
+
+
+class _GradReadBranch(nn.Module):
+    """Branch on a state requires_grad read (records one declared state fact)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(3, 3)
+
+    def forward(self, t: torch.Tensor) -> torch.Tensor:
+        if self.lin.weight.requires_grad:
+            return self.lin(t)
+        return t + 100.0
+
+
+def _r69_save(tmp_path: Path, name: str) -> Path:
+    trace = tl.trace(
+        _GradReadBranch(),
+        torch.randn(3),
+        capture=_CAPTURE,
+    )
+    path = tmp_path / name
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace.save(path, level="runnable", include_weights=True)
+    return path
+
+
+def _r69_mutate(path: Path, fn) -> None:
+    import json
+
+    manifest_path = path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    fn(manifest["run"])
+    manifest_path.write_text(json.dumps(manifest))
+
+
+def _r69_assert_refused(path: Path) -> None:
+    from torchlens.runnable import ReadinessStatus
+
+    loaded = tl.load(path)
+    readiness = loaded.__dict__.get("_runnable_readiness")
+    assert readiness is not None
+    assert readiness.status is ReadinessStatus.UNAVAILABLE
+    assert "context_field_invalid" in {d.code.value for d in readiness.diagnostics}
+    with pytest.raises(Exception):
+        loaded.run(inputs=torch.randn(3))
+
+
+def test_r69_state_fact_strip_with_intact_inventory_refuses(tmp_path: Path) -> None:
+    """Stripping a read-gated state fact whose identity the inventory declares refuses."""
+
+    path = _r69_save(tmp_path, "strip_fact.tlspec")
+
+    def _strip(run: dict) -> None:
+        before = len(run["control_witnesses"])
+        run["control_witnesses"] = [
+            w
+            for w in run["control_witnesses"]
+            if not str(w.get("site_label", "")).startswith("state_metadata:")
+        ]
+        assert len(run["control_witnesses"]) < before
+
+    _r69_mutate(path, _strip)
+    _r69_assert_refused(path)
+
+
+def test_r69_state_inventory_member_strip_with_intact_fact_refuses(tmp_path: Path) -> None:
+    """Shrinking the state inventory while the fact survives breaks exact equality."""
+
+    path = _r69_save(tmp_path, "strip_member.tlspec")
+
+    def _shrink(run: dict) -> None:
+        row = next(
+            row
+            for row in run["required_witness_inventory"]["families"]
+            if row["family"] == "state_metadata"
+        )
+        assert row["members"], "state fact should have been read-gated-emitted"
+        row["members"] = []
+
+    _r69_mutate(path, _shrink)
+    _r69_assert_refused(path)
+
+
+def test_r69_forged_extra_state_fact_refuses(tmp_path: Path) -> None:
+    """A forged state fact absent from the inventory refuses (no silent extra bit)."""
+
+    path = _r69_save(tmp_path, "forge_fact.tlspec")
+
+    def _forge(run: dict) -> None:
+        import copy
+
+        template = next(
+            w
+            for w in run["control_witnesses"]
+            if str(w.get("site_label", "")).startswith("state_metadata:")
+        )
+        forged = copy.deepcopy(template)
+        forged["witness_id"] = "witness:9999"
+        forged["order"] = 9999
+        forged["site_label"] = "state_metadata:lin.bias"
+        value = forged["observed_value"]
+        # Rewrite the embedded state name to match the forged site label.
+        for entry in value["entries"]:
+            if entry["key"].get("value") == "state":
+                entry["value"]["value"] = "lin.bias"
+        run["control_witnesses"] = list(run["control_witnesses"]) + [forged]
+
+    _r69_mutate(path, _forge)
+    _r69_assert_refused(path)
+
+
+def test_r69_read_gated_emission_and_locked_staging_semantics_unchanged(
+    tmp_path: Path,
+) -> None:
+    """No-read models emit no state facts + an EXPLICIT empty inventory set; the
+    locked r65 F-1 application semantics (recorded requires_grad wins) still hold."""
+
+    class _NoRead(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(3, 3)
+
+        def forward(self, t: torch.Tensor) -> torch.Tensor:
+            return self.lin(t)
+
+    trace = tl.trace(
+        _NoRead(),
+        torch.randn(3),
+        capture=_CAPTURE,
+    )
+    path = tmp_path / "noread.tlspec"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace.save(path, level="runnable", include_weights=True)
+    descriptor = tl.load(path).__dict__["_runnable_descriptor"]
+    row = next(
+        row
+        for row in descriptor.required_witness_inventory.families
+        if row.family == "state_metadata"
+    )
+    assert row.members == ()  # explicit empty set, never absence-means-default
+    assert recorded_state_metadata_facts(descriptor) == {}
+    # Locked F-1: a read-gated capture still stages the recorded bit.
+    read_path = _r69_save(tmp_path, "readgated.tlspec")
+    loaded = tl.load(read_path)
+    facts = recorded_state_metadata_facts(loaded.__dict__["_runnable_descriptor"])
+    assert facts.get("lin.weight", {}).get("requires_grad") is True
+    result = loaded.run(inputs=torch.randn(3))
+    assert result.report.path_faithfulness.value == "verified"

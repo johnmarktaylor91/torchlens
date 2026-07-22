@@ -47,6 +47,89 @@ LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS: Final[frozenset[str]] = frozenset(
 )
 """Known legacy capability strings: analysis-only load, typed run refusal."""
 
+WITNESS_FAMILY_REGISTRY_VERSION: Final = "witness_family_registry_v1"
+"""Closed registry/version discriminator persisted in every required-witness inventory.
+
+A parser only accepts an inventory authored against ITS OWN closed registry; any other
+discriminator refuses at parse (``context_field_invalid``), so a future registry change
+is an explicit schema decision, never a silent vocabulary drift.
+"""
+
+WITNESS_FAMILY_REGISTRY: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "input_structure": "inventory_indexed",
+        "model_input_literal": "independent_ceiling",
+        "model_input_metadata": "inventory_indexed",
+        "module_training_mode": "inventory_indexed",
+        "state_metadata": "inventory_indexed",
+        "container": "inventory_indexed",
+        "unbound_state_escape": "inventory_indexed",
+    }
+)
+"""THE closed replay-critical witness-family registry (r69 A).
+
+Maps every ``SHAPE_STRUCTURE_FACT`` site-label family (prefix ``<family>:``) the
+producer may emit to its presence disposition:
+
+* ``inventory_indexed`` -- the exact member-identity set is persisted in the required
+  descriptor-native :class:`RequiredWitnessInventory` and the parser requires EXACT
+  family+member equality with the present facts (stripping any member, duplicating one,
+  or forging an extra refuses ``context_field_invalid``). Member-ID vocabulary per
+  family: ``input_structure`` uses canonical root site positions (``arg:<i>`` /
+  ``kwarg:<name>``); ``state_metadata`` uses ``<state_dict_name>::<fact_name>`` pairs
+  (read-gated facts stay read-gated -- the inventory declares exactly which reads
+  happened, including the explicit empty set); every other indexed family uses its
+  exact witness ``site_label``.
+* ``independent_ceiling`` -- presence is proven by an independent structural
+  cross-anchor instead of inventory membership: every ``model_input_literal`` fact
+  path must be a structure-snapshot leaf/empty node and every structure leaf/empty
+  node must own a literal fact (bidirectional set equality per site), so per-leaf
+  literal stripping cannot hide behind site-level coverage.
+
+Both the producer and the parser author their required sets from this ONE registry;
+an emitted ``SHAPE_STRUCTURE_FACT`` family outside it refuses at parse, and the
+producer-emission meta-test fails when a new replay-critical prefix/builder ships
+without a registry row. ``always_required`` (a family that must be non-empty in every
+artifact) is reserved vocabulary: no current family qualifies, because every family's
+membership is capture-dependent.
+"""
+
+
+def encode_input_site_position(position: Any) -> str:
+    """Encode one normalized root model-input site position as a canonical member ID.
+
+    ``("arg", 0) -> "arg:0"`` / ``("kwarg", name) -> "kwarg:<name>"``. Raises
+    ``ValueError`` for anything outside the two-element root-position grammar.
+    """
+
+    if (
+        isinstance(position, (list, tuple))
+        and len(position) == 2
+        and position[0] in {"arg", "kwarg"}
+        and isinstance(position[1], (str, int))
+        and not isinstance(position[1], bool)
+    ):
+        kind, key = position
+        if kind == "arg" and not isinstance(key, int):
+            raise ValueError(f"Positional site index must be an int, got {key!r}.")
+        if kind == "kwarg" and not isinstance(key, str):
+            raise ValueError(f"Keyword site name must be a str, got {key!r}.")
+        return f"{kind}:{key}"
+    raise ValueError(f"Model-input site position {position!r} is outside the root grammar.")
+
+
+def decode_input_site_position(member: str) -> "tuple[str, str | int]":
+    """Decode one canonical site member ID back to its ``(kind, key)`` position."""
+
+    kind, separator, key = member.partition(":")
+    if not separator or kind not in {"arg", "kwarg"}:
+        raise ValueError(f"Malformed input-site member ID {member!r}.")
+    if kind == "arg":
+        if not key.isdigit():
+            raise ValueError(f"Malformed positional-site member ID {member!r}.")
+        return ("arg", int(key))
+    return ("kwarg", key)
+
 
 class TensorSlotRole(str, Enum):
     """Semantic roles available to tensor slots in the sparse core."""
@@ -529,6 +612,36 @@ class ControlWitness:
 
 
 @dataclass(frozen=True, slots=True)
+class RequiredWitnessFamily:
+    """One required-witness inventory row: family, disposition, exact member IDs (r69 A)."""
+
+    family: str
+    disposition: str
+    members: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RequiredWitnessInventory:
+    """REQUIRED descriptor-native presence ledger for replay-critical witness families.
+
+    Structurally OUTSIDE ``control_witnesses`` -- the stream being validated can never
+    declare its own required membership -- and authored by both producer and parser
+    from the ONE closed :data:`WITNESS_FAMILY_REGISTRY`. Carries one row per
+    registered family (explicit empty member sets included) plus the closed
+    registry/version discriminator; the parser requires EXACT family and member
+    coverage and refuses any deficit, surplus, duplicate, unknown family, or
+    malformed row as ``context_field_invalid`` (analysis load survives, readiness is
+    unavailable, execution cannot attach). This is a presence ledger, never a
+    replacement for the facts themselves: ``site_count`` values inside facts become
+    redundant consistency checks, never required-set authority, and absence of a
+    family/member can never restore weaker semantics.
+    """
+
+    registry_version: str
+    families: tuple[RequiredWitnessFamily, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class PayloadLayerDescriptor:
     """Presence and schema declaration for one optional payload layer."""
 
@@ -667,6 +780,7 @@ class SparseRunDescriptor:
     calls: tuple[RunnableCallDescriptor, ...]
     tensor_slots: tuple[TensorSlotDescriptor, ...]
     control_witnesses: tuple[ControlWitness, ...]
+    required_witness_inventory: RequiredWitnessInventory
     witness_completeness: WitnessCompleteness
     rng_profile: RunnableRngProfile
     ambient_context: AmbientExecutionContext

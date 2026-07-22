@@ -1039,6 +1039,39 @@ def _input_metadata_contract_checks(
     return tuple(checks)
 
 
+def _inventory_site_positions(descriptor: SparseRunDescriptor) -> set[Any]:
+    """Decode the parse-validated required input-site set from the inventory (r69 A).
+
+    THE run-side site authority: the descriptor-native ``RequiredWitnessInventory``
+    was exact-set-validated at parse, so runtime site selection never re-derives
+    arity from surviving witnesses (the secA-F1 self-referential lane). A malformed
+    member here (impossible post-parse) fails closed typed.
+    """
+
+    from torchlens.runnable import decode_input_site_position
+
+    row = next(
+        (
+            family
+            for family in descriptor.required_witness_inventory.families
+            if family.family == "input_structure"
+        ),
+        None,
+    )
+    if row is None:
+        raise RunPreconditionError(
+            "Sparse descriptor carries no input_structure inventory row.",
+            code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
+        )
+    try:
+        return {decode_input_site_position(member) for member in row.members}
+    except ValueError as exc:
+        raise RunPreconditionError(
+            f"Malformed required input-site inventory member: {exc}",
+            code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
+        ) from exc
+
+
 def _model_input_arity_positions(descriptor: SparseRunDescriptor) -> set[Any]:
     """Return every distinct model-input site position, tensor and non-tensor.
 
@@ -1048,6 +1081,10 @@ def _model_input_arity_positions(descriptor: SparseRunDescriptor) -> set[Any]:
     whole runtime argument list as one tensor. Including witnessed non-tensor
     leaf positions makes the shortcut fire only for a genuinely single-argument
     model, so a mixed ``[tensor, python_arg]`` call binds each site correctly.
+
+    r69 A: the parse-validated required inventory is the site AUTHORITY (union
+    belt below); a descriptor whose slot/literal-derived positions escape the
+    inventory set fails closed typed instead of silently widening arity.
     """
 
     positions = {
@@ -1061,7 +1098,17 @@ def _model_input_arity_positions(descriptor: SparseRunDescriptor) -> set[Any]:
             positions.add(tuple(position))
         elif position is not None:
             positions.add(position)
-    return positions
+    inventory_positions = _inventory_site_positions(descriptor)
+    stray = {
+        position for position in positions if isinstance(position, tuple) and len(position) == 2
+    } - inventory_positions
+    if stray:
+        raise RunPreconditionError(
+            f"Descriptor input positions {sorted(stray, key=repr)!r} escape the "
+            "parse-validated required-witness inventory.",
+            code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
+        )
+    return positions | inventory_positions
 
 
 def _runtime_top_level_positions(inputs: Any, positions: set[Any]) -> set[Any] | None:
@@ -3907,9 +3954,17 @@ def _conditional_arm_check(witness: ControlWitness, fork: Any) -> ContractCheck:
 
 
 def _input_structure_positions(descriptor: SparseRunDescriptor) -> "set[Any]":
-    """Collect every persisted input-structure site position (site-selection context)."""
+    """Return the required input-site set for structure-check site selection (r69 A).
 
-    positions: set[Any] = set()
+    Consumes the parse-validated descriptor-native inventory -- NEVER the surviving
+    ``input_structure`` witnesses (the r68 secA-F1 lane re-derived positions from the
+    stream being validated, so a stripped family restored weaker semantics). A belt
+    cross-checks the surviving facts against the inventory and fails closed typed on
+    any deficit that somehow reached execution.
+    """
+
+    inventory_positions = _inventory_site_positions(descriptor)
+    witness_positions: set[Any] = set()
     for witness in descriptor.control_witnesses:
         if not witness.site_label.startswith(_INPUT_STRUCTURE_SITE_PREFIX):
             continue
@@ -3919,8 +3974,15 @@ def _input_structure_positions(descriptor: SparseRunDescriptor) -> "set[Any]":
             continue
         position = fact.get("position") if isinstance(fact, Mapping) else None
         if isinstance(position, list) and len(position) == 2:
-            positions.add(tuple(position))
-    return positions
+            witness_positions.add(tuple(position))
+    if witness_positions != inventory_positions:
+        raise RunPreconditionError(
+            "Surviving input-structure facts do not equal the parse-validated "
+            f"required inventory (facts {sorted(witness_positions, key=repr)!r}, "
+            f"required {sorted(inventory_positions, key=repr)!r}).",
+            code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
+        )
+    return inventory_positions
 
 
 def _input_structure_witness_check(

@@ -60,12 +60,17 @@ from ..runnable import (
     PayloadLayerDescriptor,
     PayloadLayersDescriptor,
     ProducerPreflight,
+    RequiredWitnessFamily,
+    RequiredWitnessInventory,
     RunnableCallDescriptor,
     RunnableCompatibility,
     RunnableDiagnostic,
     RunnableErrorCode,
     RunnableRngProfile,
     SparseRunDescriptor,
+    WITNESS_FAMILY_REGISTRY,
+    WITNESS_FAMILY_REGISTRY_VERSION,
+    encode_input_site_position,
     SlotByteDigest,
     StateByteDigest,
     StateSlotBinding,
@@ -625,6 +630,9 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         calls=tuple(calls),
         tensor_slots=tuple(draft.freeze() for draft in slot_drafts.values()),
         control_witnesses=tuple(witnesses),
+        # r69 A: the REQUIRED presence ledger, authored from the SAME final witness
+        # list the descriptor persists (one draft result -- emission cannot drift).
+        required_witness_inventory=_build_required_witness_inventory(witnesses),
         witness_completeness=completeness,
         rng_profile=_build_rng_profile(trace),
         ambient_context=ambient_context,
@@ -2694,6 +2702,92 @@ def _input_structure_witnesses(trace: Any, *, start_order: int) -> list[ControlW
             )
         )
     return witnesses
+
+
+def witness_family_of(site_label: str) -> "str | None":
+    """Resolve one ``SHAPE_STRUCTURE_FACT`` site label to its registered family.
+
+    Returns the ``WITNESS_FAMILY_REGISTRY`` family whose ``<family>:`` prefix matches,
+    or ``None`` for an unregistered label (the parser refuses such a witness; the
+    producer-emission meta-test fails when a new builder ships without a registry row).
+    """
+
+    for family in WITNESS_FAMILY_REGISTRY:
+        if site_label.startswith(f"{family}:"):
+            return family
+    return None
+
+
+def required_witness_family_members(
+    witnesses: "Sequence[ControlWitness]",
+) -> "dict[str, list[str]]":
+    """Derive per-family member IDs from the emitted witness stream (r69 A).
+
+    THE single member-ID authority: the producer builds the persisted
+    ``RequiredWitnessInventory`` rows from this function over its final emitted
+    witness list (facts and inventory come from ONE draft result), and the parser
+    re-derives the present member sets with the SAME function to require exact
+    equality. Member vocabulary per family follows ``WITNESS_FAMILY_REGISTRY``:
+    ``input_structure`` -> canonical root site positions; ``state_metadata`` ->
+    ``<state>::<fact_name>`` identities; ``model_input_literal`` -> none
+    (independent bidirectional structure-leaf cross-anchor); every other family ->
+    its exact witness ``site_label``. Lists are returned UNSORTED and with
+    duplicates preserved so the parser can refuse duplicate member identities.
+
+    Raises ``ValueError`` for a malformed family envelope (undecodable fact,
+    missing/malformed position or state entry) -- the parser converts it into the
+    typed ``context_field_invalid`` refusal.
+    """
+
+    from .._runnable_execution import _decode_literal
+
+    members: dict[str, list[str]] = {family: [] for family in WITNESS_FAMILY_REGISTRY}
+    for witness in witnesses:
+        if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
+            continue
+        family = witness_family_of(witness.site_label)
+        if family is None:
+            continue  # parser-side closure refuses unknown families before this point
+        if family == "model_input_literal":
+            continue  # independent_ceiling: anchored to structure leaves, not indexed
+        if family == "input_structure":
+            fact = _decode_literal(witness.observed_value)
+            if not isinstance(fact, Mapping):
+                raise ValueError("undecodable input-structure fact envelope")
+            members[family].append(encode_input_site_position(fact.get("position")))
+            continue
+        if family == "state_metadata":
+            fact = _decode_literal(witness.observed_value)
+            if not isinstance(fact, Mapping):
+                raise ValueError("undecodable state-metadata fact envelope")
+            state = fact.get("state")
+            facts = fact.get("facts")
+            if not isinstance(state, str) or not isinstance(facts, Mapping):
+                raise ValueError("malformed state-metadata fact envelope")
+            for fact_name in sorted(str(name) for name in facts):
+                members[family].append(f"{state}::{fact_name}")
+            continue
+        members[family].append(witness.site_label)
+    return members
+
+
+def _build_required_witness_inventory(
+    witnesses: "Sequence[ControlWitness]",
+) -> RequiredWitnessInventory:
+    """Author the REQUIRED presence ledger from the final emitted witness list (r69 A)."""
+
+    members = required_witness_family_members(witnesses)
+    return RequiredWitnessInventory(
+        registry_version=WITNESS_FAMILY_REGISTRY_VERSION,
+        families=tuple(
+            RequiredWitnessFamily(
+                family=family,
+                disposition=disposition,
+                members=tuple(sorted(members[family])),
+            )
+            for family, disposition in WITNESS_FAMILY_REGISTRY.items()
+        ),
+    )
 
 
 def _preflight_input_structure(trace: Any) -> list[RunnableDiagnostic]:

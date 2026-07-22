@@ -345,6 +345,9 @@ def _validate_sparse_run_descriptor(
         # v2 requires the EXPLICIT capture-scoped ambient execution context; a
         # legacy v1 descriptor predates it and stays analysis-only at readiness.
         required.add("ambient_context")
+        # r69 A: v2 requires the descriptor-native required-witness presence
+        # ledger (exact family/member coverage validated by the typed parser).
+        required.add("required_witness_inventory")
     if set(value) != required:
         missing = sorted(required - set(value))
         extra = sorted(set(value) - required)

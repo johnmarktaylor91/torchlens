@@ -713,3 +713,356 @@ def test_r67_consumer_source_scan() -> None:
     assert "snapshot_input_boundary" in inspect.getsource(
         _runnable_execution._input_structure_witness_check
     )
+
+
+# ======================================================================================
+# r69 A -- RequiredWitnessInventory: descriptor-native presence proof, generated from
+# WITNESS_FAMILY_REGISTRY (secA-F1/free-F1 witness-strip class + literal cross-anchor)
+# ======================================================================================
+
+
+import json as _json  # noqa: E402
+import os as _os  # noqa: E402
+
+from torchlens.runnable import (  # noqa: E402
+    WITNESS_FAMILY_REGISTRY,
+    WITNESS_FAMILY_REGISTRY_VERSION,
+    ReadinessStatus,
+    decode_input_site_position,
+    encode_input_site_position,
+)
+
+
+class _KindBranch(nn.Module):
+    """Branch on nested container KIND -- only the structure fact distinguishes."""
+
+    def forward(self, d):
+        inner = d["a"]
+        if isinstance(inner, list):
+            return inner[0] + 100.0
+        return inner[0] * 2.0
+
+
+class _LitBranch(nn.Module):
+    def forward(self, t, flag):
+        if flag == 1:
+            return t * 2.0
+        return t + 100.0
+
+
+class _RichFamilies(nn.Module):
+    """One canonical capture emitting literal + metadata + state + structure facts."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(3, 3)
+
+    def forward(self, t, flag):
+        if self.lin.weight.requires_grad and t.is_contiguous() and flag == 1:
+            return self.lin(t)
+        return t + 100.0
+
+
+def _mutate_manifest(path: Path, fn) -> None:
+    manifest_path = _os.path.join(path, "manifest.json")
+    manifest = _json.load(open(manifest_path))
+    fn(manifest["run"])
+    _json.dump(manifest, open(manifest_path, "w"))
+
+
+def _assert_context_field_invalid(path: Path, run_inputs) -> None:
+    """Analysis load survives; readiness UNAVAILABLE with context_field_invalid; no run."""
+
+    loaded = tl.load(path)
+    readiness = loaded.__dict__.get("_runnable_readiness")
+    assert readiness is not None
+    assert readiness.status is ReadinessStatus.UNAVAILABLE
+    codes = {diagnostic.code.value for diagnostic in readiness.diagnostics}
+    assert "context_field_invalid" in codes, codes
+    with pytest.raises(Exception):
+        loaded.run(inputs=run_inputs)
+
+
+def test_r69_site_position_member_codec_round_trips() -> None:
+    for position in (("arg", 0), ("arg", 12), ("kwarg", "flag"), ("kwarg", "a:b")):
+        member = encode_input_site_position(position)
+        assert decode_input_site_position(member) == position
+    with pytest.raises(ValueError):
+        encode_input_site_position(("arg", "x"))
+    with pytest.raises(ValueError):
+        encode_input_site_position(("weird", 0))
+    with pytest.raises(ValueError):
+        decode_input_site_position("arg:notanint")
+
+
+@pytest.mark.smoke
+def test_r69_inventory_is_authored_for_every_registry_family(tmp_path: Path) -> None:
+    """Every artifact persists one row per registered family, empty sets explicit."""
+
+    x = torch.randn(3)
+    path = _save(_trace(_RichFamilies(), [x, 1]), tmp_path / "families.tlspec")
+    descriptor = tl.load(path).__dict__["_runnable_descriptor"]
+    inventory = descriptor.required_witness_inventory
+    assert inventory.registry_version == WITNESS_FAMILY_REGISTRY_VERSION
+    rows = {row.family: row for row in inventory.families}
+    assert set(rows) == set(WITNESS_FAMILY_REGISTRY)
+    for family, row in rows.items():
+        assert row.disposition == WITNESS_FAMILY_REGISTRY[family]
+    assert rows["input_structure"].members == ("arg:0", "arg:1")
+    # Anchored family carries no inventory members (its proof is the cross-anchor).
+    assert rows["model_input_literal"].members == ()
+    # Read-gated state facts are indexed by exact (state, fact) identity.
+    assert any("::requires_grad" in member for member in rows["state_metadata"].members)
+
+
+def _strip_family(run: dict, family: str, count: int | None = None) -> int:
+    kept, removed = [], 0
+    for witness in run["control_witnesses"]:
+        label = str(witness.get("site_label", ""))
+        if label.startswith(f"{family}:") and (count is None or removed < count):
+            removed += 1
+            continue
+        kept.append(witness)
+    run["control_witnesses"] = kept
+    return removed
+
+
+def test_r69_registry_generated_strip_matrix_refuses(tmp_path: Path) -> None:
+    """For every family PRESENT in a canonical artifact: drop-all, drop-one, and
+    duplicate mutations parse-refuse ``context_field_invalid`` (analysis-only)."""
+
+    x = torch.randn(3)
+    source = _save(_trace(_RichFamilies(), [x, 1]), tmp_path / "matrix_src.tlspec")
+    manifest = _json.load(open(_os.path.join(source, "manifest.json")))
+    present_families = sorted(
+        {
+            str(w.get("site_label", "")).split(":", 1)[0]
+            for w in manifest["run"]["control_witnesses"]
+            if any(
+                str(w.get("site_label", "")).startswith(f"{family}:")
+                for family in WITNESS_FAMILY_REGISTRY
+            )
+        }
+    )
+    assert {"input_structure", "model_input_literal", "state_metadata"} <= set(present_families), (
+        present_families
+    )
+    import shutil as _shutil
+
+    run_inputs = [x.clone(), 1]
+    case = 0
+    for family in present_families:
+        for mutation in ("drop_all", "drop_one", "duplicate"):
+            case += 1
+            path = tmp_path / f"matrix_{case}.tlspec"
+            _shutil.copytree(source, path)
+
+            def _apply(run: dict, family: str = family, mutation: str = mutation) -> None:
+                if mutation == "drop_all":
+                    assert _strip_family(run, family) > 0
+                elif mutation == "drop_one":
+                    assert _strip_family(run, family, count=1) == 1
+                else:
+                    twin = next(
+                        dict(w)
+                        for w in run["control_witnesses"]
+                        if str(w.get("site_label", "")).startswith(f"{family}:")
+                    )
+                    twin["witness_id"] = "witness:9999"
+                    twin["order"] = 9999
+                    run["control_witnesses"] = list(run["control_witnesses"]) + [twin]
+
+            _mutate_manifest(path, _apply)
+            _assert_context_field_invalid(path, run_inputs)
+
+
+def test_r69_forged_inventory_mutations_refuse(tmp_path: Path) -> None:
+    """Inventory-side forgeries: shrunk members, extra members, unknown/missing/dup
+    family rows, wrong discriminator, wrong disposition -- all refuse typed."""
+
+    x = torch.randn(3)
+    source = _save(_trace(_RichFamilies(), [x, 1]), tmp_path / "forge_src.tlspec")
+    import shutil as _shutil
+
+    def _case(name: str, fn) -> None:
+        path = tmp_path / f"forge_{name}.tlspec"
+        _shutil.copytree(source, path)
+        _mutate_manifest(path, fn)
+        _assert_context_field_invalid(path, [x.clone(), 1])
+
+    def _row(run: dict, family: str) -> dict:
+        return next(
+            row for row in run["required_witness_inventory"]["families"] if row["family"] == family
+        )
+
+    # Shrunk site member set (facts intact) -- exact member equality refuses.
+    _case("shrunk_sites", lambda run: _row(run, "input_structure")["members"].pop())
+    # Extra forged member (no matching fact).
+    _case(
+        "extra_member",
+        lambda run: _row(run, "input_structure")["members"].append("arg:7"),
+    )
+
+    # Shrunk inventory AND stripped facts together: slot bindings still prove sites.
+    def _shrink_both(run: dict) -> None:
+        _strip_family(run, "input_structure")
+        _row(run, "input_structure")["members"] = []
+
+    _case("shrunk_both", _shrink_both)
+
+    # Unknown family row.
+    def _unknown_row(run: dict) -> None:
+        run["required_witness_inventory"]["families"].append(
+            {"family": "wormhole", "disposition": "inventory_indexed", "members": []}
+        )
+
+    _case("unknown_family", _unknown_row)
+    # Missing family row.
+    _case(
+        "missing_family",
+        lambda run: run["required_witness_inventory"]["families"].pop(),
+    )
+    # Duplicate family row.
+    _case(
+        "dup_family",
+        lambda run: run["required_witness_inventory"]["families"].append(
+            dict(run["required_witness_inventory"]["families"][0])
+        ),
+    )
+
+    # Wrong registry discriminator.
+    def _wrong_version(run: dict) -> None:
+        run["required_witness_inventory"]["registry_version"] = "witness_family_registry_v0"
+
+    _case("wrong_version", _wrong_version)
+
+    # Disposition disagreeing with the closed registry.
+    def _wrong_disposition(run: dict) -> None:
+        _row(run, "input_structure")["disposition"] = "independent_ceiling"
+
+    _case("wrong_disposition", _wrong_disposition)
+
+    # Members on the anchored literal family.
+    def _anchored_members(run: dict) -> None:
+        _row(run, "model_input_literal")["members"] = ["forged"]
+
+    _case("anchored_members", _anchored_members)
+
+    # Forged site_count on a surviving fact (redundant consistency, never authority).
+    def _forged_count(run: dict) -> None:
+        for witness in run["control_witnesses"]:
+            label = str(witness.get("site_label", ""))
+            if label.startswith("input_structure:"):
+                for entry in witness["observed_value"]["entries"]:
+                    key = entry["key"]
+                    if isinstance(key, dict) and key.get("value") == "site_count":
+                        entry["value"]["value"] = 7
+                return
+
+    _case("forged_count", _forged_count)
+
+
+@pytest.mark.smoke
+def test_r69_secA_f1_structure_strip_no_longer_restores_weak_semantics(
+    tmp_path: Path,
+) -> None:
+    """secA-F1 E2E: stripping input_structure facts + kind swap used to VERIFY."""
+
+    x = torch.randn(3)
+    path = _save(_trace(_KindBranch(), {"a": [x.clone()]}), tmp_path / "seca.tlspec")
+    _mutate_manifest(path, lambda run: _strip_family(run, "input_structure"))
+    _assert_context_field_invalid(path, {"a": (x.clone(),)})
+
+
+def test_r69_literal_fact_strip_breaks_the_cross_anchor(tmp_path: Path) -> None:
+    """Fable ADD-1: per-leaf literal stripping cannot hide behind site coverage."""
+
+    x = torch.randn(3)
+    path = _save(_trace(_LitBranch(), [x.clone(), 1]), tmp_path / "anchor.tlspec")
+    _mutate_manifest(path, lambda run: _strip_family(run, "model_input_literal", count=1))
+    _assert_context_field_invalid(path, [x.clone(), 1])
+
+
+def test_r69_unregistered_family_fact_refuses(tmp_path: Path) -> None:
+    """A SHAPE_STRUCTURE_FACT outside the closed registry can never ride silently."""
+
+    x = torch.randn(3)
+    path = _save(_trace(_LitBranch(), [x.clone(), 1]), tmp_path / "closure.tlspec")
+
+    def _forge(run: dict) -> None:
+        twin = dict(run["control_witnesses"][-1])
+        twin["site_label"] = "brand_new_family:site"
+        twin["witness_id"] = "witness:9999"
+        twin["order"] = 9999
+        twin["kind"] = "shape_structure_fact"
+        run["control_witnesses"] = list(run["control_witnesses"]) + [twin]
+
+    _mutate_manifest(path, _forge)
+    _assert_context_field_invalid(path, [x.clone(), 1])
+
+
+@pytest.mark.smoke
+def test_r69_positive_family_matrix_round_trips(tmp_path: Path) -> None:
+    """Positive cases: tensor-only, scalar-only, tensor-free empty root, mixed
+    args/kwargs, no state reads, read-gated state reads -- all save+load+run."""
+
+    x = torch.randn(3)
+
+    class _TensorOnly(nn.Module):
+        def forward(self, t):
+            return t * 2.0
+
+    class _EmptyRoot(nn.Module):
+        def forward(self, t, marker):
+            return t * 2.0
+
+    class _MixedKw(nn.Module):
+        def forward(self, t, *, add: bool):
+            return t + 1.0 if add else t * 10.0
+
+    cases = [
+        (_TensorOnly(), x.clone(), x.clone(), "tensor_only"),
+        (_LitBranch(), [x.clone(), 1], [x.clone(), 1], "scalar"),
+        (_EmptyRoot(), (x.clone(), ()), (x.clone(), ()), "empty_root"),
+        (_RichFamilies(), [x.clone(), 1], [x.clone(), 1], "state_reads"),
+    ]
+    for model, capture_inputs, run_inputs, name in cases:
+        path = _save(_trace(model, capture_inputs), tmp_path / f"pos_{name}.tlspec")
+        result = tl.load(path).run(inputs=run_inputs)
+        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED, name
+    # Mixed positional + keyword sites.
+    trace = tl.trace(_MixedKw(), [x.clone()], input_kwargs={"add": True}, capture=_CAPTURE)
+    path = _save(trace, tmp_path / "pos_mixed.tlspec")
+    result = tl.load(path).run(inputs={"args": [x.clone()], "kwargs": {"add": True}})
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+@pytest.mark.smoke
+def test_r69_emission_meta_test_every_prefix_is_registered(tmp_path: Path) -> None:
+    """A future replay-critical family cannot ship without a registry row.
+
+    (1) Every SHAPE_STRUCTURE_FACT emitted by a canonical multi-family artifact
+    carries a registered prefix; (2) the number of SHAPE_STRUCTURE_FACT emitter
+    sites in the producer source equals the registry size, so ADDING an emitter
+    without a registry row fails here on arrival.
+    """
+
+    import inspect
+
+    from torchlens._io import runnable as io_runnable
+    from torchlens.runnable import ControlWitnessKind
+
+    x = torch.randn(3)
+    path = _save(_trace(_RichFamilies(), [x, 1]), tmp_path / "emit.tlspec")
+    descriptor = tl.load(path).__dict__["_runnable_descriptor"]
+    for witness in descriptor.control_witnesses:
+        if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
+            continue
+        assert io_runnable.witness_family_of(witness.site_label) is not None, witness.site_label
+    source = inspect.getsource(io_runnable)
+    emitter_count = source.count("kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT")
+    assert emitter_count == len(WITNESS_FAMILY_REGISTRY), (
+        f"{emitter_count} SHAPE_STRUCTURE_FACT emitters vs "
+        f"{len(WITNESS_FAMILY_REGISTRY)} registered families -- register the new "
+        "family (with a presence disposition) in WITNESS_FAMILY_REGISTRY"
+    )
