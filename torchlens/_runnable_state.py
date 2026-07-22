@@ -14,7 +14,6 @@ import torch
 
 from . import _state
 from .errors import RunCapabilityUnavailableError, StateBindingError
-from .utils._torch_compat import tensor_version_or_none
 from .utils._torch_symbols import torch_attr
 from .runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
@@ -112,7 +111,7 @@ _STATE_METADATA_PHYSICAL_SCOPE: tuple[tuple[str, Any], ...] = (
     ("is_neg", False),
     # r65 Cluster X: the full input-net-parity dims. Every one is transport/staging-
     # normalized -- the canonical staging clone produces a fresh, non-inference,
-    # non-view, leaf, grad-free, version-0, tightly-allocated tensor -- so the
+    # non-view, leaf, grad-free, tightly-allocated tensor -- so the
     # UNCONDITIONAL staged-runtime tripwire stays sound (pinned by the staging
     # canonicality self-check tests, CPU and CUDA). ``is_shared``/``is_pinned`` are
     # HOST-memory transport-placement bits (shared-memory backing, page-locking):
@@ -128,7 +127,6 @@ _STATE_METADATA_PHYSICAL_SCOPE: tuple[tuple[str, Any], ...] = (
     ("retains_grad", False),
     ("output_nr_is_zero", True),
     ("grad_is_none", True),
-    ("version_is_zero", True),
     ("storage_nbytes_is_tight", True),
 )
 """Destination-owned PHYSICAL signature dims (r63 C1; r65 full mirror) and their canonicals.
@@ -161,10 +159,6 @@ _STATE_METADATA_READ_REQUIRED_DIMS: Mapping[str, tuple[str, Any]] = MappingProxy
         "retains_grad": ("retains_grad", False),
         "output_nr": ("output_nr_is_zero", True),
         "grad_presence": ("grad_is_none", True),
-        # Converged r65 ruling: a ``._version`` read refuses iff the captured pre-clone
-        # version was NON-default -- the counter is transport-lost (every staged clone is
-        # version 0), so only a version-0 capture can honestly reproduce the read.
-        "_version": ("version_is_zero", True),
         # r64 F3: ``untyped_storage().nbytes()`` off a state receiver pins the BASE storage
         # byte count; reproducible iff the captured storage was exactly
         # ``numel * element_size`` (a larger-base offset-0-contiguous view is NOT).
@@ -179,7 +173,81 @@ explicit ``memory_format=``, or a zero-copy view export -- ``numpy()`` / ``__arr
 ``__dlpack__`` / ``__cuda_array_interface__`` / ``to_dlpack``, which pin the exact layout with
 no accessor call) pins the full stride tuple, reproducible iff the captured stride equals the
 canonical dense stride of the shape; the remaining kinds map one-to-one onto their dims. An
-UNKNOWN future kind resolves to no entry and fails closed at the consumer.
+UNKNOWN future kind resolves to no entry and fails closed at the consumer. ``_version`` is
+deliberately ABSENT: it is a ``refuse_on_any_read`` policy row (r67 C4), never a canonical dim.
+"""
+
+
+ORACLE_POLICY_ORACLE_CANONICAL = "oracle_canonical"
+"""Policy: the read exposes a dim whose value on the ORACLE-1 destination (fresh instance +
+default ``load_state_dict(strict=True, assign=False)`` copy) is a provable device/layout
+observation predicate; the producer refuses the save iff the captured pre-clone value departs
+that canonical (the escape gate), and the staged runtime tripwire enforces it unconditionally."""
+
+ORACLE_POLICY_DECLARED_REPRODUCED = "declared_reproduced"
+"""Policy: the read records a DECLARED-STATE FACT staging REPRODUCES (r65 F-1 ``requires_grad``
+/ ``grad_fn`` presence) -- never a canonicality dim, never an escape-gated refusal except a
+fact staging provably cannot reproduce."""
+
+ORACLE_POLICY_STRUCTURALLY_COVERED = "structurally_covered"
+"""Policy: provably covered by another gate (e.g. ``is_coalesced`` raises on the dense strided
+state the layout dim already pins); nothing is recorded."""
+
+ORACLE_POLICY_REFUSE_ON_ANY_READ = "refuse_on_any_read"
+"""Policy: NO artifact-independent canonical value exists on the oracle-1 destination, so ANY
+attributed read refuses the runnable save (``state_metadata_mismatch``). r67 C4: ``_version``
+is the charter member -- oracle-1's default copy increments constructor-owned counters
+(``0 -> 1`` for plain slots, ``1 -> 2`` for initialized modules), so no static expected scalar
+is honest and no engineered staging form may manufacture one."""
+
+_ORACLE_POLICY_CLASSES = frozenset(
+    {
+        ORACLE_POLICY_ORACLE_CANONICAL,
+        ORACLE_POLICY_DECLARED_REPRODUCED,
+        ORACLE_POLICY_STRUCTURALLY_COVERED,
+        ORACLE_POLICY_REFUSE_ON_ANY_READ,
+    }
+)
+"""The CLOSED oracle-policy vocabulary: every state-metadata row is exactly one of these."""
+
+STATE_METADATA_ORACLE_POLICY: Mapping[str, str] = MappingProxyType(
+    {
+        # -- escape-gated read kinds whose canonical is the oracle-1 post-copy observation --
+        "contiguous_default": ORACLE_POLICY_ORACLE_CANONICAL,
+        "stride_exact": ORACLE_POLICY_ORACLE_CANONICAL,
+        "storage_offset": ORACLE_POLICY_ORACLE_CANONICAL,
+        "is_conj": ORACLE_POLICY_ORACLE_CANONICAL,
+        "is_neg": ORACLE_POLICY_ORACLE_CANONICAL,
+        "is_shared": ORACLE_POLICY_ORACLE_CANONICAL,
+        "is_pinned": ORACLE_POLICY_ORACLE_CANONICAL,
+        "is_inference": ORACLE_POLICY_ORACLE_CANONICAL,
+        "is_view": ORACLE_POLICY_ORACLE_CANONICAL,
+        "is_leaf": ORACLE_POLICY_ORACLE_CANONICAL,
+        "retains_grad": ORACLE_POLICY_ORACLE_CANONICAL,
+        "output_nr": ORACLE_POLICY_ORACLE_CANONICAL,
+        "grad_presence": ORACLE_POLICY_ORACLE_CANONICAL,
+        "storage_nbytes": ORACLE_POLICY_ORACLE_CANONICAL,
+        # -- constructor-history-dependent counter: refuse EVERY attributed read (r67 C4) --
+        "_version": ORACLE_POLICY_REFUSE_ON_ANY_READ,
+        # -- declared-state facts (r65 F-1) --
+        "requires_grad": ORACLE_POLICY_DECLARED_REPRODUCED,
+        "grad_fn": ORACLE_POLICY_DECLARED_REPRODUCED,
+        # -- structural rows --
+        "is_coalesced": ORACLE_POLICY_STRUCTURALLY_COVERED,
+    }
+)
+"""THE authoritative oracle-policy classification for state-metadata rows (r67 C4).
+
+Keys are the state read-KIND vocabulary (escape-gated rows), the declared fact names, and the
+structural accessor names -- one row per state-metadata surface member. Producer checks
+(:func:`state_metadata_read_violations`), signatures, staging tripwires, and diagnostics
+consume the SAME rows: an ``oracle_canonical`` row resolves through
+``_STATE_METADATA_READ_REQUIRED_DIMS`` to its signature dim; a ``refuse_on_any_read`` row
+refuses regardless of any signature; ``declared_reproduced`` rows ride the fact ledger;
+``structurally_covered`` rows record nothing. The oracle-1 parity matrix
+(tests/test_tlspec_runnable_r65_state_metadata_parity.py) machine-checks that every
+``oracle_canonical`` dim equals what oracle-1's default copy into a fresh instance actually
+produces, and that no static expected scalar exists without an oracle probe recipe.
 """
 
 
@@ -234,7 +302,6 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
         "retains_grad": None,
         "output_nr_is_zero": None,
         "grad_is_none": None,
-        "version_is_zero": None,
         "storage_nbytes_is_tight": None,
     }
     cls = type(value)
@@ -353,12 +420,6 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
     except (RuntimeError, TypeError, AttributeError, NotImplementedError):
         pass
     try:
-        version = tensor_version_or_none(value)
-        if version is not None:
-            signature["version_is_zero"] = int(version) == 0
-    except (RuntimeError, TypeError, ValueError, AttributeError, NotImplementedError):
-        pass
-    try:
         # Stamped PRE-CLONE (``snapshot_capture_state_signatures`` runs before the
         # normalizing snapshot clone), which is exactly why the r64 F3 large-base view is
         # catchable: offset 0, contiguous, default stride, yet base storage larger than
@@ -421,6 +482,13 @@ def state_metadata_read_violations(
 
     violations: list[tuple[str, str, Any]] = []
     for kind in sorted(set(read_kinds)):
+        # r67 C4: a ``refuse_on_any_read`` policy row refuses REGARDLESS of the captured
+        # signature -- no artifact-independent oracle-1 canonical exists for the dim, so no
+        # captured value can make the read reproducible (``_version``: oracle-1's default
+        # copy perturbs constructor-owned counters, 0 -> 1 plain / 1 -> 2 initialized).
+        if STATE_METADATA_ORACLE_POLICY.get(kind) == ORACLE_POLICY_REFUSE_ON_ANY_READ:
+            violations.append((kind, "<refuse_on_any_read>", None))
+            continue
         required = _STATE_METADATA_READ_REQUIRED_DIMS.get(kind)
         if required is None:
             violations.append((kind, "<unknown_read_kind>", None))
@@ -1450,18 +1518,10 @@ def _staged_state_clone(
             canonical = False
         if not canonical:
             clone = clone.clone(memory_format=torch.contiguous_format)
-        # r65 staging hardening (b): a clone materialized FROM an inference-mode source
-        # carries ``_version == 1`` (torch counts the out-of-inference materialization as a
-        # mutation on the fresh destination), which would over-fire the new
-        # ``version_is_zero`` tripwire dim on TorchLens's own staging output. One extra
-        # clone of the now-ordinary tensor restores the canonical fresh counter; every
-        # ordinary source already stages at version 0 and never pays this.
-        try:
-            version = tensor_version_or_none(clone)
-        except (RuntimeError, TypeError, AttributeError, NotImplementedError):
-            version = None
-        if version is None or int(version) != 0:
-            clone = clone.clone()
+        # r67 C4: the r65 "staging hardening (b)" extra clone that engineered ``_version == 0``
+        # is REMOVED with the ``version_is_zero`` dim itself: ``_version`` is a
+        # ``refuse_on_any_read`` policy row (oracle-1's default copy leaves 1 or 2, never a
+        # stable scalar), so no staged form needs to -- or may -- manufacture a version value.
     return clone
 
 

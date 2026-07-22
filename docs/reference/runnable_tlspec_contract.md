@@ -1682,12 +1682,11 @@ RED test, never a silently-unmirrored "Nth state read". Dispositions:
   layout trio and conj/neg bits (r63, unchanged); `is_shared`/`is_pinned`/`is_inference`
   (storage/creation placement, r65); `_is_view`/`_base` (view-ness, one shared dim);
   `is_leaf`/`retains_grad`/`output_nr`/`grad`-presence (autograd structure); `_version` (the
-  in-place mutation counter -- converged r65 ruling: refuse-on-read of a transport-lost
-  version, i.e. a read refuses iff the captured pre-clone version was non-default, since every
-  staged clone reproduces version 0); and `storage_nbytes` (base-storage byte count, recorded
-  at storage-handle exposure -- closes the r64 F3 larger-base offset-0-contiguous view via the
-  `storage_nbytes_is_tight` dim). A resolved read joins the state-escape names (digest
-  witness) and records its READ KIND for the producer gate, exactly as r63.
+  in-place mutation counter -- r67 C4 ruling: `refuse_on_any_read`, see the oracle-policy
+  table below); and `storage_nbytes` (base-storage byte count, gated on the ACTUAL
+  `.nbytes()`/`.size()` accessor call -- closes the r64 F3 larger-base offset-0-contiguous
+  view via the `storage_nbytes_is_tight` dim). A resolved read joins the state-escape names
+  (digest witness) and records its READ KIND for the producer gate, exactly as r63.
 * **Zero-copy view exports** (closes r64 F2): `numpy()` / `__array__` / `__dlpack__` /
   `__cuda_array_interface__` / `to_dlpack` off a state-derived receiver pin the receiver's
   full layout with NO accessor call (ndarray `.strides`/`.flags`, DLPack strides + byte
@@ -1725,20 +1724,48 @@ pure function of the slot's canonical form and TorchLens's own per-op bookkeepin
 reads are excluded at their source under the `internal_scalar_read` marker, pinned by a
 zero-reads no-over-trigger test).
 
-Read kinds map to signature dims one-to-one; all state metadata comparisons still flow through
-ONE signature helper (`_state_metadata_signature`), which r65 extends with the ten mirror dims
-(`is_shared`, `is_pinned`, `is_inference`, `is_view`, `is_leaf`, `retains_grad`,
-`output_nr_is_zero`, `grad_is_none`, `version_is_zero`, `storage_nbytes_is_tight` -- the last
+Every state-metadata row carries exactly one disposition from the CLOSED four-class
+oracle-policy vocabulary (`STATE_METADATA_ORACLE_POLICY` in `torchlens._runnable_state`,
+r67 C4), and producer checks, signatures, staging tripwires, and diagnostics consume the SAME
+rows:
+
+* `oracle_canonical` -- the dim's canonical value is the device/layout observation predicate
+  that Oracle 1's default `load_state_dict(strict=True, assign=False)` copy into a fresh
+  instance actually produces; a machine-checked Oracle-1 post-copy parity matrix proves every
+  such row against real oracle destinations (plain zero-version slots, initialized
+  Linear/BatchNorm slots, tied/alias groups, larger-base views, shared-memory state,
+  persistent buffers, and the staging-clone reproduction of non-persistent buffers, across
+  the supported device set), and NO static expected scalar may exist without an oracle probe
+  recipe in that matrix.
+* `declared_reproduced` -- `requires_grad` / `grad_fn` presence: declared-state facts staging
+  REPRODUCES (the locked r65 F-1 ruling, unchanged).
+* `structurally_covered` -- provably covered by another gate (`is_coalesced` raises on the
+  dense strided state the layout dim already pins).
+* `refuse_on_any_read` -- NO artifact-independent oracle-1 canonical exists, so ANY
+  attributed read refuses the runnable save (`state_metadata_mismatch` at
+  `producer_state_metadata`). `_version` is the charter member: oracle-1's default copy
+  increments constructor-owned counters (`0 -> 1` for plain slots, `1 -> 2` for initialized
+  modules), so the former `version_is_zero` canonical described a TorchLens-engineered
+  staging clone -- an observed value the contract's own oracle can never read. Every
+  version-zero staging guarantee is deleted: `version_is_zero` is removed from the canonical
+  table and the staged physical scope, and staging no longer performs the extra clone whose
+  sole purpose was manufacturing version zero. `_version` is NOT declared state (replay
+  cannot reconstruct a fresh constructor's pre-load counter); UNREAD version counters remain
+  irrelevant and allowed (both construction histories save and run when unread), and the
+  separate relative before/after mutation counters used by the in-transaction runtime checks
+  are unaffected.
+
+Read kinds of `oracle_canonical` rows map to signature dims one-to-one; all state metadata
+comparisons still flow through ONE signature helper (`_state_metadata_signature`), with the
+r65 mirror dims (`is_shared`, `is_pinned`, `is_inference`, `is_view`, `is_leaf`,
+`retains_grad`, `output_nr_is_zero`, `grad_is_none`, `storage_nbytes_is_tight` -- the last
 stamped PRE-CLONE, which is exactly why the F3 large-base view is catchable). Future physical
-dims are added only there. All ten join the destination-owned PHYSICAL scope: every one is
-staging-canonicalized (the staging clone materializes under `inference_mode(False)` and
-re-clones an inference-source materialization back to version 0, so binding or running inside
-a user `inference_mode` region never trips TorchLens's own staging output), keeping the
-unconditional in-transaction staged-state tripwire (`state_metadata:<slot_id>` check) sound;
-`is_pinned` is proven False without a read whenever the CUDA context is absent or
-uninitialized (pinned host memory cannot exist without it, and the probe itself would
-otherwise initialize the context as a capture side effect). Signatures are stamped from the
-LIVE tensors BEFORE the capture-state clone, as r63.
+dims are added only there. All of them join the destination-owned PHYSICAL scope: every one is
+staging-canonicalized (the staging clone materializes under a neutral non-inference context,
+so binding or running inside a user `inference_mode` region never trips TorchLens's own
+staging output), keeping the unconditional in-transaction staged-state tripwire
+(`state_metadata:<slot_id>` check) sound. Signatures are stamped from the LIVE tensors BEFORE
+the capture-state clone, as r63.
 
 Explicitly changed vs the r63 ruling: the artifact now MAY carry recorded state-metadata
 facts -- the `state_metadata:<name>` declared-fact witnesses supersede the r63 sentence "no

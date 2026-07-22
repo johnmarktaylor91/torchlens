@@ -995,10 +995,11 @@ STATE_METADATA_MIRROR: "Mapping[str, tuple[str, str]]" = MappingProxyType(
         "output_nr": (_STATE_ROUTE_READ_KIND, "output_nr"),
         "grad": (_STATE_ROUTE_READ_KIND, "grad_presence"),
         "_grad": (_STATE_ROUTE_READ_KIND, "grad_presence"),
-        # -- in-place mutation counter (r65 converged ruling): refuse-on-read of a
-        #    transport-lost version -- the read kind maps to ``version_is_zero`` so a read of
-        #    a NON-default captured version refuses while a version-0 read stays saveable
-        #    (the staged clone reproduces version 0) --
+        # -- in-place mutation counter (r67 C4 ruling): the read kind is a
+        #    ``refuse_on_any_read`` oracle-policy row -- oracle-1's default
+        #    ``load_state_dict`` copy perturbs constructor-owned counters (0 -> 1 plain,
+        #    1 -> 2 initialized), so NO captured version is reproducible and EVERY
+        #    attributed ``_version`` read refuses the runnable save --
         "_version": (_STATE_ROUTE_READ_KIND, "_version"),
         # -- declared-state facts (r65 F-1 ruling; grad_fn presence is the
         #    contamination-immune twin) --
