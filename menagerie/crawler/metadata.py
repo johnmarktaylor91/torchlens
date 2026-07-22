@@ -66,8 +66,9 @@ if _MODEL_EXTERNAL_FIELDS != _AUTHOR_EXTERNAL_FIELDS:
 
 MANDATORY_EXTERNAL_FIELDS = _MODEL_EXTERNAL_FIELDS
 
-# This is the frozen demarcation from PLAN.md. These names are mechanically derivable
-# only below the ``observed`` root; an authored leaf with the same name remains gated.
+# PLAN.md section 2 locked invariant 6 defines the external-versus-TorchLens-derived
+# demarcation represented by this frozenset. These names are mechanically derivable only
+# below the ``observed`` root; an authored leaf with the same name remains gated.
 TORCHLENS_DERIVABLE_FIELDS = frozenset(
     {
         "parameter_count_total",

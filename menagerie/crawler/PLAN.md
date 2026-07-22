@@ -19,6 +19,11 @@ storage boundaries, environments, execution, procedures, prompt identities, and 
 behavior is authoritative in `menagerie/crawler/`, executable schemas in `schemas/`, and tests in
 `tests/`. Historical rollout narrative and copied generated representations are intentionally omitted.
 
+`runs` does not claim checkpoint accuracy, training viability, backward support, TorchLens
+traceability, graph validity, or numerical equivalence to a pretrained model. This crawler must not
+import TorchLens, trace, render, or validate a trace. Static and runtime tripwires enforce that
+boundary.
+
 ## 2. Locked invariants
 
 The implementation must preserve all of the following.
@@ -72,15 +77,16 @@ The implementation must preserve all of the following.
 ## 5. Versioned schemas
 
 All canonical JSON Schemas set `additionalProperties: false`, define every enum, and require RFC 3339 UTC
-timestamps and `sha256:<64 lowercase hex>` hashes. The field lists below are normative; the JSON Schema
-files are the executable expression of them.
+timestamps and `sha256:<64 lowercase hex>` hashes. The executable JSON files under `schemas/` are the
+sole schema definitions; section 5.1 provides the generated schema reference procedure.
 
 ### 5.0 Round-14 interface freeze and schema ownership
 
 The current contract discriminators are `attempt.v3`, `model.v3`, `author-proposal.v3`,
-`author-result.v4`, `gate.v3`, `artifact-event.v1`, and `operational-event.v1`. Sections 5.1--5.3 retain
-the v2 shapes because those rows remain readable immutable history; they are not current authority.
-The executable v3 files add the closed raw receipt/parent attestation, mandatory dependency and artifact/
+`author-result.v4`, `gate.v3`, `artifact-event.v1`, and `operational-event.v1`. Historical v2 rows remain
+readable immutable history, but they are not current authority. The executable JSON files under
+`schemas/` are the sole schema definitions, with the generated reference procedure in section 5.1. The
+executable v3 files add the closed raw receipt/parent attestation, mandatory dependency and artifact/
 family authority, discriminated author recommendation, and terminal-disposition gate shapes.
 
 Every normalized collection-item leaf in author, attempt, model, and gate v3 has exactly one schema-owned
@@ -520,6 +526,76 @@ may earn `runs` during Codex backlog. Such a row remains `completeness.accuracy_
 excluded from crawl-complete/release views. For R3/R4, fidelity is part of the architecture execution bar,
 so a checker outage leaves a visible `forward-observed-but-blocked` workflow state rather than a false run
 award.
+
+## 13. Resumable single-writer driver and effort caps
+
+### 13.1 Scheduler phases (`LP-13.1`)
+
+```text
+INTAKE -> SOURCE_TEMPLATE or AUTHOR_COMPLETE_MODEL -> VALIDATE_PROPOSAL
+       -> CODEX_GATE -> ACCEPT_AUTHORED_FACTS -> ENV_PLAN -> RUN
+       -> optional RUN_REPAIR + RE-GATE -> REDUCE -> TERMINAL
+```
+
+The queue is a rebuildable SQLite view over intake and append-only ledgers. `cursor.json` may accelerate
+restart but is never authoritative. SIGTERM finishes or kills the one in-flight worker, appends its honest
+observation, checkpoints, and exits. SIGKILL loses at most the uncommitted in-flight result; on restart its
+work identity is still unsatisfied. No batch return code creates individual model facts.
+
+An OS `flock` on `.crawl-local/locks/driver.lock` is acquired before any mutable operation. The lock file
+records PID, process start time, boot ID, run ID, target, and command. A wakeup that finds a live owner exits
+successfully after appending/printing an idempotent `wake-noop-already-running` event. Stale PID metadata is
+not enough to break a live kernel lock.
+
+Before worker spawn the driver also acquires `.crawl-local/locks/worker.lock` in the fixed order
+`driver.lock -> canonical ledgers -> worker.lock`, appends `worker-lease-opened`, and fsyncs a
+`WorkerLease`. The trusted bootstrap fills child PID/start-token/PGID and transfers the open lock
+description to the child before model import. The child-held kernel lock, not PID metadata, excludes
+replacement execution. Startup reconciles held/free leases against boot ID, PID start token, process
+group, raw receipt, and the bounded deadline; it never guesses a PID or promotes an unattested receipt.
+
+### 13.2 Default effort caps (`LP-13.2`)
+
+- mechanical execution: two recipe/input attempts per env generation;
+- complete Claude author campaign: one rich initial session plus at most two narrow repair sessions,
+  30 tool calls, 20 controlled fetches, and 30 minutes per session;
+- proposal contract correction: one short correction;
+- Codex: initial check plus two author/check repair rounds;
+- source search: the fixed checklist plus one recorded justified extension;
+- run repair: two authored recipe/input revisions, each re-gated when bytes change;
+- fidelity repair: two rounds; metadata regeneration: two rounds;
+- normal forward: 300 seconds; declared override: at most 1,800 seconds;
+- environment medic: two attempts; designated arm64 heavy-build: two attempts; and
+- identical root-cause fingerprint: stop on the second occurrence.
+
+Cap exhaustion is `failed:<actual-stage>` with `reason_code=effort-cap-exhausted`, not a skip or convenience
+defer. Only `tools/requeue --reason ... --grant ...` creates an explicit new work generation; it records the
+grant and preserves history.
+
+### 13.3 Human review checkpoint and progress notifications (`LP-13.3`)
+
+The single-writer driver owns two terminal-count notification policies. `review_checkpoint_at` defaults
+to `1000`; `0` or `null` disables it. When the terminal partition count first reaches that value, the
+driver writes a runtime check-in report containing the funnel, fidelity-verdict distribution, accepted
+sample, and concerning patterns; appends one `checkpoint-review` operational event; notifies JMT; sets
+its disposable state to `paused:review-checkpoint`; tears down the active environment; and stops. This is
+a blocking, one-shot checkpoint. `crawler resume --after-review`, or an already recorded
+`review-signoff` event, appends/consumes the sign-off and allows the campaign to continue without
+blocking again at the same checkpoint.
+
+`progress_milestones` defaults to `[2000, 3000, 5000, 10000, 15000, 20000]` and may be empty. Crossing a
+configured value appends exactly one `progress-notification` event with the completed count and funnel,
+notifies JMT, and continues immediately. Persisted operational events make review and milestone attempts
+idempotent across resume.
+
+Both policies use `notify_command`. Its default resolves `send-to-jmt.sh` from `PATH`,
+`~/scripts`, or `~/bin`, and otherwise uses log-only delivery. Notification text is a single plain-ASCII
+summary line. A missing or failing notifier is recorded in the driver log and never crashes, pauses, or
+blocks campaign progress.
+
+External notification delivery is explicitly **at-least-once**. Each notification carries a durable
+idempotency key that recipients may use for deduplication; no process claims exactly-once delivery across
+a crash between external delivery and the canonical delivery event.
 
 ## 17. Setup, run, resume, teardown, and transfer procedures
 
