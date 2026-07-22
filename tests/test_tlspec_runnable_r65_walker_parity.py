@@ -568,9 +568,15 @@ def test_w4_w5_w6_round_trip_parity_on_torture_container() -> None:
     assert _container_kind(root.m) == "dict"
     assert _container_kind(root.m["k"]) == "list"
 
-    # W5 resolves EVERY indexed site back to the IDENTICAL tensor object.
+    # W5 resolves EVERY indexed site back to the IDENTICAL tensor object -- through
+    # the SAME canonical token vocabulary W2/W4 persist (r69 D: mapping lookup binds
+    # by exact encoded token for every key; a raw bool component is not a persisted
+    # spelling and must not resolve via Python hash equality).
     for leaf_path, tensor in tensors.items():
-        assert _value_at_path(root, leaf_path) is tensor
+        canonical = tuple(
+            encode_mapping_key(part) if isinstance(part, bool) else part for part in leaf_path
+        )
+        assert _value_at_path(root, canonical) is tensor
 
     # W1/W3 stay in lockstep on the same root (literal fact family).
     expected_literals = {

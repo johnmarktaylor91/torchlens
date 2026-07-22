@@ -1150,23 +1150,35 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
     ``+0.0`` and a ``nan`` equal to a ``nan`` with the same bits.
     """
 
-    recorded = _normalize_numpy_scalar(recorded)
-    runtime = _normalize_numpy_scalar(runtime)
+    from torchlens._input_walk import classify_scalar
+
+    recorded_kind, recorded_norm = classify_scalar(recorded)
+    runtime_kind, runtime_norm = classify_scalar(runtime)
+    # r69 B: a semantic-typed scalar (enum member, builtin/np-scalar subclass) never
+    # collapses into the builtin atom families -- type identity is application
+    # semantics, so a same-value cross-class replacement DIVERGES in both directions
+    # (a semantic capture cannot exist in a saved artifact: producer refuses typed).
+    if recorded_kind == "semantic" or runtime_kind == "semantic":
+        return False
+    # RATIFIED stock-wrapper VALUE lane: exact stock NumPy numeric/bool wrappers
+    # normalize to their builtin atoms (``np.float64(2.0) <-> 2.0`` verifies).
+    if recorded_kind == "numpy":
+        recorded = recorded_norm
+    if runtime_kind == "numpy":
+        runtime = runtime_norm
     if isinstance(recorded, bool) or isinstance(runtime, bool):
         return isinstance(recorded, bool) and isinstance(runtime, bool) and recorded == runtime
-    # Float family (incl. numeric float subclasses such as ``numpy.float64``),
-    # excluding bool handled above. ``int`` stays distinct from ``float`` (``2``
-    # vs ``2.0`` must diverge), but ``numpy.float64(2.0)`` compares equal to the
-    # plain ``float`` the literal grammar round-trips to. Compare by IEEE-754 bit
-    # pattern of the float VALUE so the r4 signed-zero/NaN honesty is preserved.
+    # Float family (exact builtins after wrapper normalization). ``int`` stays
+    # distinct from ``float`` (``2`` vs ``2.0`` must diverge). Compare by IEEE-754
+    # bit pattern of the float VALUE so the r4 signed-zero/NaN honesty is preserved.
     rec_is_float = isinstance(recorded, float)
     run_is_float = isinstance(runtime, float)
     if rec_is_float or run_is_float:
         if not (rec_is_float and run_is_float):
             return False
         return struct.pack(">d", float(recorded)) == struct.pack(">d", float(runtime))
-    # Integer family (incl. numeric int subclasses), excluding bool. ``int`` vs a
-    # non-int type diverges; two integers compare by value.
+    # Integer family, excluding bool. ``int`` vs a non-int type diverges; two
+    # integers compare by value.
     rec_is_int = isinstance(recorded, int)
     run_is_int = isinstance(runtime, int)
     if rec_is_int or run_is_int:
@@ -1176,23 +1188,6 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
     if type(recorded) is not type(runtime):
         return False
     return bool(recorded == runtime)
-
-
-def _normalize_numpy_scalar(value: Any) -> Any:
-    """Convert one NumPy scalar to its Python equivalent for literal comparison.
-
-    Parameters
-    ----------
-    value:
-        Captured or runtime literal leaf.
-
-    Returns
-    -------
-    Any
-        ``value.item()`` for NumPy scalars, otherwise the original value.
-    """
-
-    return value.item() if isinstance(value, np.generic) else value
 
 
 def _input_literal_contract_checks(
@@ -6067,16 +6062,18 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
     ``getattr`` (untrusted-bundle path strings could otherwise walk descriptor / dunder
     chains).
 
-    Two synthetic component forms (r29-C2) are decoded: a terminal
+    One synthetic component form (r29-C2) is decoded: a terminal
     ``EMPTY_CONTAINER_PATH_MARKER`` resolves to the KIND string of the empty container at
     the parent path (so a runtime empty container of a different kind, or a non-empty/scalar
-    value, diverges); a ``(BOOL_KEY_PATH_TAG, bool)`` tuple component indexes a mapping with
-    the bool key (kept distinct from the equal-valued int key).
+    value, diverges). Mapping lookups bind by CANONICAL ENCODED TOKEN for every key
+    (r69 D): each runtime candidate is encoded through the one
+    ``encode_mapping_key`` authority and compared by exact token type/value -- the
+    r29 ``(BOOL_KEY_PATH_TAG, bool)`` tuple spelling is retired (no producer emits
+    it; a decoded-value lookup lane would reopen hash-equality conflation).
     """
 
-    from torchlens._input_walk import _KEY_CODEC_TAG, decode_mapping_key
+    from torchlens._input_walk import encode_mapping_key
     from torchlens._io.runnable import (
-        BOOL_KEY_PATH_TAG,
         EMPTY_CONTAINER_PATH_MARKER,
         empty_container_kind,
     )
@@ -6089,15 +6086,6 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
             if kind is None:
                 raise KeyError(EMPTY_CONTAINER_PATH_MARKER)
             return kind
-        if (
-            isinstance(component, (tuple, list))
-            and len(component) == 2
-            and (component[0] == BOOL_KEY_PATH_TAG)
-        ):
-            if not isinstance(current, Mapping):
-                raise KeyError(component[1])
-            current = current[bool(component[1])]
-            continue
         # r67 C2 (corr1-3): a registered container resolves indexed components by
         # RE-FLATTENING through its registration -- never ``obj[index]`` (the type may
         # not support indexing at all). A missing/throwing registration raises typed
@@ -6114,20 +6102,31 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
                 current = children[component]
                 continue
         if isinstance(current, Mapping):
-            # r67 C2: decode the ONE type-strict key codec at mapping nodes only
-            # (bool/float/None/safe-tuple keys ride str components; ``True`` stays
-            # distinct from ``1`` end to end -- a codec lookup matches by exact TYPE,
-            # never bool/int/float hash conflation).
-            if isinstance(component, str) and component.startswith(_KEY_CODEC_TAG):
-                decoded = decode_mapping_key(component)
-                for candidate in current.keys():
-                    if type(candidate) is type(decoded) and candidate == decoded:
-                        current = current[candidate]
-                        break
-                else:
-                    raise KeyError(component)
-            else:
-                current = current[component]
+            # r69 D: ONE canonical key identity end to end -- EVERY mapping lookup
+            # (including raw-looking str/int components) encodes each runtime
+            # candidate through the same ``encode_mapping_key`` authority and
+            # compares exact canonical token type/value. A persisted component is
+            # never decoded for a runtime value-equality scan (NaN could not bind
+            # itself and Python hash/equality conflated bool/int/float twins).
+            # Candidates the grammar refuses are skipped (they can never have been
+            # recorded); multiple token matches fail closed as
+            # ``ambiguous_mapping_key``.
+            matches = []
+            for candidate in current.keys():
+                try:
+                    token = encode_mapping_key(candidate)
+                except ValueError:
+                    continue
+                if type(token) is type(component) and token == component:
+                    matches.append(candidate)
+            if not matches:
+                raise KeyError(component)
+            if len(matches) > 1:
+                raise KeyError(
+                    f"ambiguous_mapping_key: {len(matches)} runtime keys encode to "
+                    f"the canonical token {component!r}"
+                )
+            current = current[matches[0]]
         elif isinstance(component, int):
             current = current[component]
         else:

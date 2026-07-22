@@ -694,11 +694,23 @@ def _normalize_numpy_scalars(value: Any) -> Any:
     Returns
     -------
     Any
-        Equivalent metadata with no ``numpy.generic`` leaves.
+        Equivalent metadata whose stock transparent NumPy wrapper leaves are
+        replaced by their exact builtin atoms (r69 B: semantic ``np.generic``
+        subclasses are deliberately NOT laundered -- the classifier-aware
+        encoders refuse them typed downstream).
     """
 
     if isinstance(value, np.generic):
-        return _normalize_numpy_scalars(value.item())
+        # r69 B: only the RATIFIED stock transparent wrapper lane normalizes
+        # (classifier-gated); a semantic np.generic SUBCLASS must NOT be laundered
+        # to its base value here -- it stays intact so the downstream classifier-
+        # aware encoders/refusals see the semantic type.
+        from torchlens._input_walk import classify_scalar
+
+        scalar_kind, scalar_payload = classify_scalar(value)
+        if scalar_kind == "numpy":
+            return scalar_payload
+        return value
     if isinstance(value, LiteralValue):
         return replace(value, value=_normalize_numpy_scalars(value.value))
     if isinstance(value, CapturedArgTemplate):
@@ -3484,15 +3496,34 @@ def _tensor_container_skeleton(component: Any) -> NonTensorLiteral:
 
 
 def _encode_literal(value: Any) -> NonTensorLiteral:
-    """Encode a Python value using only the frozen safe literal grammar."""
+    """Encode a Python value using only the frozen safe literal grammar.
 
+    r69 B: scalar admission is CLASSIFIER-FIRST (``torchlens._input_walk.
+    classify_scalar``), before any ``isinstance`` numeric/string normalization, so
+    no call-recipe or fact-envelope path can launder a semantic-typed scalar (enum
+    member, builtin/np-scalar subclass) into a plain atom -- such a value raises
+    ``_UnsupportedLiteralError`` (typed refusal / opaque routing at the caller).
+    Stock NumPy numeric/bool wrappers normalize through the RATIFIED transparent
+    value lane (``.item()``); exact builtin atoms encode as before.
+    """
+
+    from torchlens._input_walk import classify_scalar
+
+    scalar_kind, scalar_payload = classify_scalar(value)
+    if scalar_kind == "semantic":
+        value_type = f"{type(value).__module__}.{type(value).__qualname__}"
+        raise _UnsupportedLiteralError(
+            f"Value of type {value_type} carries semantic type identity (enum or "
+            "scalar subclass) and is outside the frozen non-tensor literal grammar."
+        )
+    if scalar_kind == "numpy":
+        # Ratified stock-wrapper VALUE transparency: encode the exact builtin atom.
+        value = scalar_payload
     if value is None:
         return LiteralAtom(LiteralAtomKind.NONE, None)
     if isinstance(value, bool):
         return LiteralAtom(LiteralAtomKind.BOOL, value)
     if isinstance(value, int):
-        # Normalize integer subclasses (e.g. ``IntEnum``) to a plain ``int`` so
-        # the stored literal round-trips through JSON / the safe unpickler.
         return LiteralAtom(LiteralAtomKind.INT, int(value))
     if isinstance(value, float):
         # Finiteness is a pure host check on a Python float; use ``math.isfinite`` rather
@@ -3503,9 +3534,6 @@ def _encode_literal(value: Any) -> NonTensorLiteral:
         # ``dict[float, int]`` branch) to UNVERIFIABLE on the unchanged input.
         if not math.isfinite(value):
             return LiteralAtom(LiteralAtomKind.NONFINITE_FLOAT, _nonfinite_float_payload(value))
-        # Normalize float subclasses (e.g. ``numpy.float64``) to a plain
-        # ``float`` so the recorded literal round-trips to a grammar-native value
-        # the safe metadata unpickler admits and value-equality can verify.
         return LiteralAtom(LiteralAtomKind.FLOAT, float(value))
     if isinstance(value, str):
         return LiteralAtom(LiteralAtomKind.STR, value)

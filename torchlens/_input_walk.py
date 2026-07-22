@@ -65,6 +65,7 @@ from typing import Any, Callable
 __all__ = [
     "INPUT_CONTAINER_KINDS",
     "classify_input_container",
+    "classify_scalar",
     "instance_state_names",
     "raw_mapping_key_component",
     "tagged_mapping_key_component",
@@ -272,29 +273,159 @@ sets and ordered-key facts).
 """
 
 
-def encode_mapping_key(key: Any) -> "str | int":
-    """Encode one grammar mapping key into the canonical type-strict component (r67 C2).
+def _stock_numpy_scalar_types() -> "frozenset[type]":
+    """Every CONCRETE stock NumPy scalar class, enumerated programmatically (r69 B).
 
-    ``str`` keys pass through unless they collide with the codec prefix (then escaped);
-    ``int`` keys pass through as ints; ``bool`` / ``float`` / ``None`` / recursively safe
-    tuples encode into tagged strings (floats via ``float.hex`` -- exact round-trip,
-    ``1.0`` distinct from ``1``). A non-grammar key raises ``ValueError`` (the caller
-    refuses or routes the subtree opaque -- never a silent drop).
+    Identity-based membership from ``np.typecodes['All']`` -- never a name/module
+    string check, so a user subclass can never enter the set regardless of spoofed
+    ``__module__``/``__qualname__``.
     """
 
+    global _STOCK_NP_SCALAR_CACHE
+    if _STOCK_NP_SCALAR_CACHE is None:
+        try:
+            import numpy as np
+        except ImportError:  # pragma: no cover - numpy is a hard torchlens dependency
+            _STOCK_NP_SCALAR_CACHE = (frozenset(), frozenset())
+        else:
+            all_types: set[type] = set()
+            transparent: set[type] = set()
+            for code in np.typecodes["All"]:
+                try:
+                    dtype = np.dtype(code)
+                except TypeError:  # pragma: no cover - stale typecode entry
+                    continue
+                all_types.add(dtype.type)
+                # Transparent VALUE wrappers: numeric/bool kinds whose ``.item()``
+                # round-trips exactly (itemsize <= 8 excludes lossy longdouble).
+                if dtype.kind in "biuf" and dtype.itemsize <= 8:
+                    transparent.add(dtype.type)
+            _STOCK_NP_SCALAR_CACHE = (frozenset(all_types), frozenset(transparent))
+    return _STOCK_NP_SCALAR_CACHE[0]
+
+
+def _stock_numpy_transparent_scalar_types() -> "frozenset[type]":
+    """Exact stock NumPy numeric/bool wrapper classes admitted as VALUE-transparent."""
+
+    _stock_numpy_scalar_types()
+    assert _STOCK_NP_SCALAR_CACHE is not None
+    return _STOCK_NP_SCALAR_CACHE[1]
+
+
+_STOCK_NP_SCALAR_CACHE: "tuple[frozenset[type], frozenset[type]] | None" = None
+
+
+def classify_scalar(value: Any) -> "tuple[str, Any]":
+    """THE closed input-boundary scalar type-class lattice (r69 B/D).
+
+    Every scalar type dispatch on the model-input boundary -- snapshot leaf
+    disposition, literal encoding (``_encode_literal``), runtime literal comparison
+    (``_literal_leaf_equal``), and mapping-key encoding (``encode_mapping_key``) --
+    consumes this ONE classifier, so a scalar can never be classified two different
+    ways by two different code paths (the r68 B/D conflation root). Classification
+    order is load-bearing:
+
+    1. ``("semantic", None)`` -- ``enum.Enum`` FIRST (``IntEnum`` / ``IntFlag`` /
+       ``StrEnum`` / float-Enum / plain ``Enum``), before any numeric family, then
+       (after the exact/stock checks below) every other ``int``/``float``/``str``
+       subclass and every non-stock ``np.generic`` subclass. Type identity is
+       application semantics (``isinstance``/``is Mode.FAST`` steering); such a
+       VALUE refuses runnable save typed and such a runtime value diverges -- it
+       never collapses into the builtin atom lane.
+    2. ``("plain", value)`` -- ``type(value)`` is EXACTLY ``bool``/``int``/``float``/
+       ``str`` (exact ``type() is``, never ``isinstance``).
+    3. ``("singleton", value)`` -- ``None`` / ``Ellipsis`` (their existing grammar).
+    4. ``("numpy", value.item())`` -- ``type(value)`` is EXACTLY a stock NumPy
+       numeric/bool wrapper class (programmatic identity set; broad
+       ``isinstance(value, np.generic)`` is forbidden for this admission) AND
+       ``.item()`` lands on an exact builtin numeric/bool atom. The RATIFIED
+       transparent-wrapper VALUE lane: ``np.float64(2.0) <-> 2.0`` verifies.
+       A stock wrapper whose ``.item()`` is not an exact builtin numeric/bool
+       falls to ``semantic`` (fail closed, platform ``longdouble`` edges).
+    5. ``("opaque", None)`` -- everything else (bytes, complex, Decimal, datetime64,
+       arbitrary objects, containers): the existing opaque/outside-grammar lane.
+    """
+
+    import enum as _enum
+
+    if isinstance(value, _enum.Enum):
+        return ("semantic", None)
+    value_type = type(value)
+    if value_type in (bool, int, float, str):
+        return ("plain", value)
+    if value is None or value is Ellipsis:
+        return ("singleton", value)
+    if value_type in _stock_numpy_transparent_scalar_types():
+        try:
+            item = value.item()
+        except Exception:  # pragma: no cover - stock wrappers implement item()
+            return ("semantic", None)
+        if type(item) in (bool, int, float):
+            return ("numpy", item)
+        return ("semantic", None)
+    if isinstance(value, (int, float, str)):
+        # A builtin-scalar-family subclass outside the exact/stock sets (custom
+        # int/float/str subclasses, np.str_, subclasses of np.float64, ...).
+        return ("semantic", None)
+    try:
+        import numpy as np
+    except ImportError:  # pragma: no cover - numpy is a hard torchlens dependency
+        return ("opaque", None)
+    if isinstance(value, np.generic) and value_type not in _stock_numpy_scalar_types():
+        # A non-stock np.generic subclass is user semantics, never a wrapper.
+        return ("semantic", None)
+    return ("opaque", None)
+
+
+def encode_mapping_key(key: Any) -> "str | int":
+    """Encode one grammar mapping key into the canonical type-strict component (r69 D).
+
+    THE sole mapping-key identity authority: snapshot ordered-key facts, literal
+    leaf paths, tensor binding paths, and runtime lookup all speak this token
+    vocabulary, and runtime binding compares canonical tokens -- never decoded
+    values. Admission is classifier-gated (exact builtin ``str``/``int``/``bool``/
+    ``float``/``None`` and EXACT tuples whose members recursively satisfy the
+    grammar); enums, NumPy scalar wrappers, builtin-scalar subclasses, and tuple
+    subclasses raise ``ValueError`` and refuse typed at save (``opaque_mapping_key``)
+    -- a key is never admitted and then advertised-then-failed later.
+
+    Token codec: ``str`` keys pass through unless they collide with the codec prefix
+    (then escaped); ``int`` keys pass through as ints; ``bool``/``None`` use tagged
+    strings; finite floats use exact ``float.hex()`` (``-0.0`` distinct from
+    ``+0.0``); a NaN key encodes its binary64 BIT PATTERN
+    (``f:nan:<16 hex digits>``) so distinct NaN payloads stay distinct and an
+    identical NaN key can bind itself. The codec is injective over every admitted
+    mapping node (duplicate-token nodes refuse at save as ``ambiguous_mapping_key``).
+    """
+
+    kind, _payload = classify_scalar(key)
+    if kind == "semantic":
+        raise ValueError(
+            f"Mapping key {key!r} carries semantic type identity (enum or scalar "
+            "subclass) and is outside the input-boundary key grammar."
+        )
+    if kind == "numpy":
+        raise ValueError(
+            f"Mapping key {key!r} is a NumPy scalar wrapper; key identity is "
+            "structural, so wrapper keys are outside the input-boundary key grammar."
+        )
     if isinstance(key, bool):
         return f"{_KEY_CODEC_TAG}b:{'1' if key else '0'}"
-    if isinstance(key, int):
+    if type(key) is int:
         return key
-    if isinstance(key, str):
+    if type(key) is str:
         if key.startswith(_KEY_CODEC_TAG):
             return f"{_KEY_CODEC_TAG}s:{key[len(_KEY_CODEC_TAG) :]}"
         return key
     if key is None:
         return f"{_KEY_CODEC_TAG}n:"
-    if isinstance(key, float):
+    if type(key) is float:
+        if key != key:  # NaN: float.hex() collapses every payload to "nan"
+            import struct as _struct
+
+            return f"{_KEY_CODEC_TAG}f:nan:{_struct.pack('>d', key).hex()}"
         return f"{_KEY_CODEC_TAG}f:{key.hex()}"
-    if isinstance(key, tuple):
+    if type(key) is tuple:
         parts = []
         for item in key:
             encoded = encode_mapping_key(item)
@@ -305,7 +436,12 @@ def encode_mapping_key(key: Any) -> "str | int":
 
 
 def decode_mapping_key(component: "str | int") -> Any:
-    """Decode one canonical component back to its mapping key (mapping nodes only)."""
+    """Decode one canonical component back to its mapping key (mapping nodes only).
+
+    Retained for legitimate output-dict reconstruction and diagnostics; RUNTIME
+    INPUT BINDING never decodes -- ``_value_at_path`` encodes each runtime candidate
+    and compares exact canonical tokens (r69 D).
+    """
 
     if isinstance(component, int) or not component.startswith(_KEY_CODEC_TAG):
         return component
@@ -318,6 +454,10 @@ def decode_mapping_key(component: "str | int") -> Any:
     if tag == "n":
         return None
     if tag == "f":
+        if payload.startswith("nan:"):
+            import struct as _struct
+
+            return _struct.unpack(">d", bytes.fromhex(payload[len("nan:") :]))[0]
         return float.fromhex(payload)
     if tag == "t":
         items = []
@@ -534,6 +674,15 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
                     refusals.append({"path": list(path), "reason": "opaque_mapping_key"})
                     encodable = False
                     break
+            if encodable and len(set(keys)) != len(keys):
+                # r69 D: two distinct key objects encoding to ONE canonical token
+                # (e.g. multiple same-bit NaN objects -- hash-equal, eq-False, so
+                # separate dict slots) make key identity ambiguous: ordered-key
+                # facts self-collide and token binding would be first-match-wins.
+                # Refuse typed at save; the symmetric runtime snapshot refusal
+                # fails the structure check on a runtime-ambiguous mapping.
+                refusals.append({"path": list(path), "reason": "ambiguous_mapping_key"})
+                encodable = False
             node["keys"] = keys if encodable else []
             nodes.append(node)
             if encodable:
@@ -546,7 +695,16 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
             for index, child in enumerate(item):
                 _descend(child, (*path, index))
             return
-        nodes.append(node)  # literal leaf: value witnessed by the literal walker
+        # Literal leaf: the VALUE is witnessed by the literal walker, but the scalar
+        # TYPE-CLASS disposition is decided here by the ONE classifier (r69 B). A
+        # semantic-typed scalar (enum member, builtin/np-scalar subclass) steers host
+        # control flow through type identity that no persisted value fact can carry,
+        # so it refuses the runnable save typed (``semantic_scalar_type``); the SAME
+        # refusal fires in the runtime snapshot, so an admitted builtin/stock-numpy
+        # capture replayed with a same-value semantic type diverges structurally.
+        if classify_scalar(item)[0] == "semantic":
+            refusals.append({"path": list(path), "reason": "semantic_scalar_type"})
+        nodes.append(node)
 
     def _safe_aux(aux: Any) -> Any:
         if aux is None or isinstance(aux, (bool, int, float, str)):
