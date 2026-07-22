@@ -3017,15 +3017,22 @@ def _preflight_state_metadata(trace: Any) -> list[RunnableDiagnostic]:
     from .._runnable_state import state_metadata_read_violations
     from ..backends.torch.completeness_witness import (
         host_escape_state_metadata_facts,
+        host_escape_state_metadata_observations,
         host_escape_state_metadata_reads,
     )
 
     diagnostics: list[RunnableDiagnostic] = []
     reads = host_escape_state_metadata_reads(trace)
+    # r67 C3: the ACTUAL values returned by placement accessor calls (``is_shared`` /
+    # ``is_pinned``) -- the observed-value kinds validate the user's one real return
+    # against the device-defined staged canonical, never a speculative signature stamp.
+    observations = host_escape_state_metadata_observations(trace)
     signatures = trace.__dict__.get("_runnable_capture_state_signatures")
     signature_map: Mapping[str, Any] = signatures if isinstance(signatures, Mapping) else {}
     for name in sorted(reads):
-        violations = state_metadata_read_violations(signature_map.get(name), reads[name])
+        violations = state_metadata_read_violations(
+            signature_map.get(name), reads[name], observations.get(name)
+        )
         if not violations:
             continue
         diagnostics.append(

@@ -42,6 +42,7 @@ from torchlens._io import runnable_load
 from torchlens._runnable_state import (
     _ORACLE_POLICY_CLASSES,
     _STATE_METADATA_BIND_SCOPE,
+    _STATE_METADATA_OBSERVED_PLACEMENT_KINDS,
     _STATE_METADATA_PHYSICAL_SCOPE,
     _STATE_METADATA_READ_REQUIRED_DIMS,
     ORACLE_POLICY_DECLARED_REPRODUCED,
@@ -50,6 +51,7 @@ from torchlens._runnable_state import (
     ORACLE_POLICY_STRUCTURALLY_COVERED,
     STATE_METADATA_ORACLE_POLICY,
     _state_metadata_signature,
+    _state_placement_canonical,
     prepare_runnable_state,
     recorded_state_metadata_facts,
     state_metadata_full_violations,
@@ -151,6 +153,14 @@ def test_r65_every_mirror_row_chains_into_enforcement() -> None:
                 ], name
                 continue
             assert policy == ORACLE_POLICY_ORACLE_CANONICAL, name
+            if detail in _STATE_METADATA_OBSERVED_PLACEMENT_KINDS:
+                # r67 C3: observed-value rows terminate in the observation predicate,
+                # not a signature dim -- a missing/unknown observation refuses.
+                assert detail not in _STATE_METADATA_READ_REQUIRED_DIMS, name
+                assert state_metadata_read_violations(
+                    _state_metadata_signature(torch.zeros(2)), [detail], {}
+                ) == [(detail, "<observed_placement>", None)], name
+                continue
             assert detail in _STATE_METADATA_READ_REQUIRED_DIMS, name
         elif route == _STATE_ROUTE_DECLARED_FACT:
             assert detail in io_runnable._STATE_METADATA_FACT_NAMES, name
@@ -917,9 +927,14 @@ def test_r67_oracle_policy_table_is_closed_and_total() -> None:
     assert set(STATE_METADATA_ORACLE_POLICY) == expected_keys
     for kind, policy in STATE_METADATA_ORACLE_POLICY.items():
         if policy == ORACLE_POLICY_ORACLE_CANONICAL:
-            assert kind in _STATE_METADATA_READ_REQUIRED_DIMS, kind
+            # An oracle_canonical row terminates in EXACTLY one validation mechanism:
+            # a signature dim (pre-clone stamp) or an observed-value placement predicate.
+            assert (kind in _STATE_METADATA_READ_REQUIRED_DIMS) != (
+                kind in _STATE_METADATA_OBSERVED_PLACEMENT_KINDS
+            ), kind
         else:
             assert kind not in _STATE_METADATA_READ_REQUIRED_DIMS, kind
+            assert kind not in _STATE_METADATA_OBSERVED_PLACEMENT_KINDS, kind
     assert STATE_METADATA_ORACLE_POLICY["_version"] == ORACLE_POLICY_REFUSE_ON_ANY_READ
     assert STATE_METADATA_ORACLE_POLICY["requires_grad"] == ORACLE_POLICY_DECLARED_REPRODUCED
     assert STATE_METADATA_ORACLE_POLICY["grad_fn"] == ORACLE_POLICY_DECLARED_REPRODUCED
@@ -955,6 +970,14 @@ def test_r67_oracle1_post_copy_parity_matrix(device: str) -> None:
             for dim, expected in scope:
                 assert signature[dim] == expected, (variant_name, name, dim, signature[dim])
                 observed_dims.add(dim)
+            # r67 C3: the observed-value placement rows -- the REAL accessor reads on the
+            # oracle destination must equal the device-defined predicate the producer
+            # applies to user observations.
+            for kind in sorted(_STATE_METADATA_OBSERVED_PLACEMENT_KINDS):
+                canonical = _state_placement_canonical(kind, signature["device_type"])
+                assert canonical is not None, (variant_name, name, kind)
+                assert bool(getattr(dest, kind)()) == canonical, (variant_name, name, kind)
+                observed_dims.add(kind)
     # Non-persistent buffers never ride oracle-1's copy; their reproduction mechanism is
     # the staging clone, which must satisfy the same rows.
     staged = _staged_state_clone(
@@ -963,10 +986,16 @@ def test_r67_oracle1_post_copy_parity_matrix(device: str) -> None:
     staged_signature = _state_metadata_signature(staged)
     for dim, expected in scope:
         assert staged_signature[dim] == expected, ("staged_nonpersistent", dim)
+    for kind in sorted(_STATE_METADATA_OBSERVED_PLACEMENT_KINDS):
+        canonical = _state_placement_canonical(kind, staged_signature["device_type"])
+        assert bool(getattr(staged, kind)()) == canonical, ("staged_nonpersistent", kind)
     # No canonical dim without an oracle probe observation (the anti-static-scalar pin).
-    assert observed_dims == scope_dims
+    assert observed_dims == scope_dims | _STATE_METADATA_OBSERVED_PLACEMENT_KINDS
     for kind, policy in STATE_METADATA_ORACLE_POLICY.items():
         if policy == ORACLE_POLICY_ORACLE_CANONICAL:
+            if kind in _STATE_METADATA_OBSERVED_PLACEMENT_KINDS:
+                assert kind in observed_dims
+                continue
             dim, _expected = _STATE_METADATA_READ_REQUIRED_DIMS[kind]
             assert dim in observed_dims, kind
 

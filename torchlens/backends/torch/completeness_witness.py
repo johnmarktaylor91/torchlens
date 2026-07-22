@@ -243,6 +243,11 @@ class _DispatchEvent:
     exception_type: str | None = None
     contained_view: bool = False
     """``aten.as_strided`` whose result byte span is contained in its operand's (r37)."""
+    metadata_witnessed: bool = False
+    """r67 C3: a host-returning metadata dispatch (``aten.is_pinned``) whose receiver was
+    positively attributed and recorded by the placement metadata net -- discharged as
+    witnessed (the observed-value ledger / input fact owns it); an UNATTRIBUTED receiver
+    keeps the incomplete fact (fail closed)."""
 
 
 @dataclass
@@ -269,6 +274,15 @@ class _WitnessState:
     writeback_watch: list[tuple[torch.Tensor, int | None, torch.Tensor]] = field(
         default_factory=list
     )
+    # r67 C3: capture-scoped WEAK storage-origin map -- storage handle object ->
+    # ("input", site) | ("state", frozenset[str]) | ("other", None). Populated by the
+    # pre-index (known state/input storages) and by every bridge return; consulted by the
+    # storage accessor wrappers so a handle acquired ANYWHERE this forward attributes its
+    # actual reads. ``None`` until the wrappers arm.
+    storage_origins: "weakref.WeakKeyDictionary[Any, tuple[str, Any]] | None" = None
+    # r67 C3: lazy ptr -> full state-name-set index (params + buffers, alias groups merged)
+    # backing the origin resolver's pointer fallback. Built once per forward on first use.
+    storage_state_ptr_names: "dict[int, frozenset[str]] | None" = None
 
 
 HOST_ESCAPE_OPERATORS = frozenset(
@@ -396,25 +410,30 @@ UNVERIFIABLE. ``.tolist()`` copies into Python lists (writes never reach the sou
 ``.numpy().sum()`` leaves the bytes unchanged and stays honestly VERIFIED.
 """
 
-STORAGE_BRIDGE_ESCAPE_FUNCS = frozenset({"untyped_storage", "storage", "data_ptr"})
+STORAGE_BRIDGE_ESCAPE_FUNCS = frozenset(
+    {"untyped_storage", "storage", "_typed_storage", "data_ptr"}
+)
 """Census-invisible tensor methods that hand the host a ZERO-COPY handle onto the source
 tensor's raw storage, through which a host WRITE can mutate the tensor's bytes with no aten
 dispatch, no version bump, and no escape record (r14-H3).
 
-``tensor.untyped_storage()`` / ``tensor.storage()`` return a Storage object aliasing the
+``tensor.untyped_storage()`` / ``tensor.storage()`` / ``tensor._typed_storage()`` (r67 C3:
+the private spelling ``storage()`` itself delegates to) return a Storage object aliasing the
 tensor's memory (``s.fill_(0)`` / ``s[0] = 99`` mutate the source), and ``tensor.data_ptr()``
 hands out the raw data pointer that ``ctypes`` / a foreign kernel writes through directly. Like
 ``.numpy()`` / ``.data`` these bypass the dispatcher entirely, so a write-back leaves the sparse
 replay recomputing the pre-write value and would falsely VERIFY. They are therefore bracketed with
 the SAME before/after byte snapshot as the mutable numpy alias (see ``_observe_invisible_host_escapes``
 -> ``_check_writeback_watch``): a source whose WHOLE-STORAGE bytes changed after exposure -> opaque
-host write-back -> UNVERIFIABLE. ``untyped_storage()`` / ``storage()`` are WATCH-ONLY -- they are
-NOT recorded as value-escape sources, because a read-only storage identity / contiguity check
-exposes NO scalar value and must stay VERIFIED (no over-trigger); a read-only exposure leaves the
-bytes unchanged and stays honestly VERIFIED. ``data_ptr()`` is the exception (r15-H1): it hands out
-a RAW pointer that a foreign READ (baking a stale literal) or a post-snapshot WRITE can use with no
-observable trace at all, so a genuine user ``data_ptr()`` call fails closed to UNVERIFIABLE (see
-``_HOST_ESCAPE_RAW_POINTER``), never relying on the byte watch alone.
+host write-back -> UNVERIFIABLE. Storage ACQUISITION is ORIGIN+WATCH-ONLY (r67 C3/C6): the
+bridge registers the returned handle in the capture-scoped storage-origin map and keeps the
+byte watch, but records NO read kind and NO geometry fact -- a discarded handle is not an
+observation; the ACTUAL accessor call on the handle (``.nbytes()`` / ``.is_shared()`` / ...)
+is what records, through ``STORAGE_METADATA_ACCESSOR_DISPOSITIONS``. ``data_ptr()`` is the
+exception (r15-H1): it hands out a RAW pointer that a foreign READ (baking a stale literal) or
+a post-snapshot WRITE can use with no observable trace at all, so a genuine user ``data_ptr()``
+call fails closed to UNVERIFIABLE (see ``_HOST_ESCAPE_RAW_POINTER``), never relying on the byte
+watch alone.
 """
 
 INVISIBLE_HOST_ESCAPE_PROPERTIES = frozenset({"__cuda_array_interface__"})
@@ -979,12 +998,18 @@ STATE_METADATA_MIRROR: "Mapping[str, tuple[str, str]]" = MappingProxyType(
         # -- lazy dispatch bits (r63, unchanged) --
         "is_conj": (_STATE_ROUTE_READ_KIND, "is_conj"),
         "is_neg": (_STATE_ROUTE_READ_KIND, "is_neg"),
-        # -- storage/creation placement bits (r65): value is a pure function of the slot's
-        #    storage, invariant across every view/alias, normalized by transport+staging --
+        # -- storage/creation placement bits (r65; r67 C3 observed-value rows): value is a
+        #    pure function of the slot's storage, invariant across every view/alias. The
+        #    wrappers additionally carry the ACTUAL accessor return into the observation
+        #    ledger (``_record_state_metadata_observation``) -- the producer validates the
+        #    user's one real read against the device-defined staged predicate, never a
+        #    speculative signature stamp --
         "is_shared": (_STATE_ROUTE_READ_KIND, "is_shared"),
         "is_pinned": (_STATE_ROUTE_READ_KIND, "is_pinned"),
         "is_inference": (_STATE_ROUTE_READ_KIND, "is_inference"),
-        # -- base-storage geometry (r65; closes F3): recorded at storage-handle exposure --
+        # -- base-storage geometry (r65 F3; r67 C6): recorded at the ACTUAL
+        #    ``.nbytes()``/``.size()``/``__len__`` accessor call on the storage handle,
+        #    never at handle acquisition (corr1-4) --
         "storage_nbytes": (_STATE_ROUTE_READ_KIND, "storage_nbytes"),
         # -- autograd/structural family (r65): DIRECT-receiver-only attribution (see
         #    ``_STATE_METADATA_DIRECT_ONLY_NAMES``); ``_base`` presence <=> is-view --
@@ -1093,8 +1118,11 @@ def _state_direct_address(trace: Any, source: torch.Tensor) -> "str | None":
         return str(address)
     if type(source) is torch.nn.Parameter:
         addresses = _param_derived_addresses(trace, source)
-        if len(addresses) == 1:
-            return next(iter(addresses))
+        if addresses:
+            # r67 C6: the former ``len(addresses) == 1`` restriction silently DROPPED a
+            # tied parameter's direct read. Any resolved membership attributes; the
+            # recording layer fans out to the complete r37 alias group.
+            return next(iter(sorted(addresses)))
     return None
 
 
@@ -1116,9 +1144,36 @@ def _observe_state_metadata_read_direct(trace: Any, source: torch.Tensor, read_k
     _record_state_metadata_read(trace, {address}, read_kind)
 
 
-def _record_state_metadata_read(trace: Any, addresses: "set[str]", read_kind: str) -> None:
-    """Join resolved state addresses into the escape-source + read-kind ledgers (r63/r65)."""
+def _expand_state_alias_addresses(trace: Any, addresses: "set[str]") -> "set[str]":
+    """Fan resolved state addresses out to their COMPLETE r37 alias groups (r67 C6).
 
+    A direct read on ONE canonical name of a tied parameter / double-registered buffer is a
+    read of the shared allocation: every name in the identity-tied alias group carries the
+    fact. The r37 topology snapshot (``groups``: name -> group id) is the authority; a trace
+    without one keeps the resolved set unchanged (fail-safe: no expansion, the resolved
+    address still records).
+    """
+
+    if not addresses:
+        return addresses
+    topology = getattr(trace, "_runnable_state_alias_topology", None)
+    groups = topology.get("groups") if isinstance(topology, Mapping) else None
+    if not isinstance(groups, Mapping) or not groups:
+        return addresses
+    group_ids = {groups[name] for name in addresses if name in groups}
+    if not group_ids:
+        return addresses
+    return addresses | {str(name) for name, group_id in groups.items() if group_id in group_ids}
+
+
+def _record_state_metadata_read(trace: Any, addresses: "set[str]", read_kind: str) -> None:
+    """Join resolved state addresses into the escape-source + read-kind ledgers (r63/r65).
+
+    r67 C6: fans out to the complete alias group -- a tied-parameter direct read marks
+    every canonical name sharing the allocation.
+    """
+
+    addresses = _expand_state_alias_addresses(trace, addresses)
     state_names = _HOST_ESCAPE_STATE_SOURCE_NAMES.get(trace)
     if state_names is None:
         state_names = set()
@@ -1130,6 +1185,107 @@ def _record_state_metadata_read(trace: Any, addresses: "set[str]", read_kind: st
         _HOST_ESCAPE_STATE_METADATA_READS[trace] = reads
     for address in addresses:
         reads.setdefault(address, set()).add(read_kind)
+
+
+_HOST_ESCAPE_STATE_METADATA_OBSERVATIONS: "weakref.WeakKeyDictionary[Any, dict[str, dict[str, bool | None]]]" = weakref.WeakKeyDictionary()
+"""Per-trace ledger of the ACTUAL values returned by placement accessor calls on state (r67 C3).
+
+``is_pinned`` / ``is_shared`` are OBSERVED-VALUE read kinds: the honest producer predicate is
+"the user's one actual accessor return equals the device-defined staged/oracle value", never a
+speculative TorchLens re-read and never an accelerator-initialization inference. The wrapper
+calls the original ONCE, then records ``{state name -> {read kind -> observed bool}}`` here;
+an accessor that RAISED records ``None`` (unknown -> refuse), and two disagreeing observations
+of the same kind collapse to ``None`` (mid-forward placement change -> refuse). Kept weak-keyed
+off the schema like its read-kind sibling.
+"""
+
+
+def _record_state_metadata_observation(
+    trace: Any, addresses: "set[str]", read_kind: str, observed: "bool | None"
+) -> None:
+    """Record one placement accessor's ACTUAL return against its state alias group (r67 C3)."""
+
+    _record_state_metadata_read(trace, addresses, read_kind)
+    addresses = _expand_state_alias_addresses(trace, addresses)
+    observations = _HOST_ESCAPE_STATE_METADATA_OBSERVATIONS.get(trace)
+    if observations is None:
+        observations = {}
+        _HOST_ESCAPE_STATE_METADATA_OBSERVATIONS[trace] = observations
+    for address in addresses:
+        slot = observations.setdefault(address, {})
+        if read_kind in slot and slot[read_kind] != observed:
+            slot[read_kind] = None  # disagreeing observations: unknown, fail closed
+        else:
+            slot[read_kind] = observed
+
+
+def host_escape_state_metadata_observations(trace: Any) -> dict[str, dict[str, "bool | None"]]:
+    """Return the per-state-name OBSERVED placement accessor returns for one trace (r67 C3)."""
+
+    observations = _HOST_ESCAPE_STATE_METADATA_OBSERVATIONS.get(trace)
+    if not observations:
+        return {}
+    return {name: dict(values) for name, values in observations.items()}
+
+
+_STATE_METADATA_PLACEMENT_OBSERVED_NAMES = frozenset({"is_shared", "is_pinned"})
+"""Accessor names whose STATE reads are OBSERVED-VALUE read kinds (r67 C3): the producer
+predicate compares the user's one actual return against the device-defined staged/oracle
+value -- never a TorchLens speculative re-read, never an accelerator-initialization
+inference (free-F4: the CUDA-init proof-by-absence stamped canonical False on genuinely
+pinned XPU/MPS/externally-registered memory)."""
+
+
+def _observe_state_placement_read(
+    trace: Any, source: torch.Tensor, name: str, observed: "bool | None"
+) -> None:
+    """Attribute one placement accessor's ACTUAL return on a state receiver (r67 C3).
+
+    Same storage-identity attribution family as :func:`_observe_state_metadata_read`
+    (placement is a pure function of the slot's storage), with the observed value carried
+    into the observation ledger. ``None`` means the accessor raised or was arg-directed:
+    unknown, the producer refuses. Input-leaf receivers are the input nets' domain;
+    unrelated receivers record nothing.
+    """
+
+    sites = trace.__dict__.get("_runnable_input_tensor_sites")
+    if sites and id(source) in sites:
+        return
+    addresses = _state_derived_addresses(trace, source)
+    if not addresses:
+        return
+    _record_state_metadata_observation(trace, addresses, STATE_METADATA_MIRROR[name][1], observed)
+
+
+def _placement_read_witnessed(trace: Any, source: torch.Tensor) -> bool:
+    """Return whether a placement accessor's receiver is positively attributed (r67 C3).
+
+    True for a model-input leaf (fact recorded / alias-safe path), an input storage alias
+    (fact recorded, or derived-view fail-closed downgrade -- both honest), or a resolved
+    state receiver (observation recorded). False for an unrelated/unattributable receiver:
+    the census ledger fact then stands and the capture stays fail-closed.
+    """
+
+    sites = trace.__dict__.get("_runnable_input_tensor_sites") or {}
+    if id(source) in sites:
+        return True
+    if _state_derived_addresses(trace, source):
+        return True
+    kind, _site, _leaf_conj_neg = _classify_input_storage_alias(trace, source)
+    return kind is not None
+
+
+def _discharge_placement_dispatch(state: "_WitnessState", base_operator: str) -> None:
+    """Mark the most recent matching host-return census event as metadata-witnessed."""
+
+    for event in reversed(state.events):
+        if (
+            event.outcome == "returned_host_or_none"
+            and not event.metadata_witnessed
+            and (event.operator == base_operator or event.operator.startswith(base_operator + "."))
+        ):
+            event.metadata_witnessed = True
+            return
 
 
 def _observe_state_metadata_fact(
@@ -1154,7 +1310,10 @@ def _observe_state_metadata_fact(
     if facts is None:
         facts = {}
         _STATE_METADATA_FACTS[trace] = facts
-    facts.setdefault(address, {})[fact_name] = bool(fact_value)
+    # r67 C6: a tied slot's declared fact belongs to every canonical name sharing the
+    # allocation (one allocation, one autograd bit).
+    for name in _expand_state_alias_addresses(trace, {address}):
+        facts.setdefault(name, {})[fact_name] = bool(fact_value)
 
 
 def host_escape_state_metadata_facts(trace: Any) -> dict[str, dict[str, bool]]:
@@ -1189,34 +1348,163 @@ def _observe_state_property_read(trace: Any, source: torch.Tensor, name: str, va
         _observe_state_metadata_read_direct(trace, source, detail)
 
 
-def _maybe_record_input_storage_geometry(trace: Any, source: torch.Tensor, storage: Any) -> None:
-    """Witness raw storage GEOMETRY read off a model-input leaf or an alias (r29-C1 F4; r31 A).
+def _tensor_receiver_origin(trace: Any, source: torch.Tensor) -> "tuple[str, Any]":
+    """Classify a storage-bridge RECEIVER tensor as input-site / state-group / other (r67 C3).
 
-    ``x.untyped_storage().nbytes()`` / ``.size()`` return the input's BASE storage byte count,
-    which the shape+dtype input contract does NOT pin: a same-shape input that is a slice of a
-    larger buffer has a larger storage than a freshly-allocated contiguous twin, so a branch on
-    storage geometry would silently replay the captured arm -- a false VERIFIED. The byte count
-    is the base storage's, INVARIANT across every view/alias of the same input leaf, so it is
-    recorded against the leaf site for ANY input-storage-aliasing receiver -- the leaf itself,
-    a ``.data`` / ``.detach()`` alias (r31 hole A: ``x.data.untyped_storage().nbytes()``), or a
-    derived view (``x[k:].untyped_storage().nbytes()``) -- and re-checked against the RAW runtime
-    leaf. For a normal contiguous input the byte count is exactly ``numel * element_size``
-    (already shape+dtype pinned), so recording it can only ever DIVERGE on a genuinely different
-    underlying buffer -- no over-trigger for ordinary inputs or read-only identity checks.
+    Storage-level facts (byte count, sharing, pinning) are pure functions of the BASE storage,
+    invariant across every view/alias, so ANY input-storage-aliasing receiver (the leaf, a
+    ``.data``/``.detach()`` alias, a derived view) attributes to the leaf site, and any
+    state-storage-aliasing receiver attributes to the COMPLETE r37 alias group. An unrelated
+    receiver (a genuine activation) is ``("other", None)`` -- its storage geometry is
+    re-derived by the replayed DAG, so reads on it record nothing.
     """
 
     sites = trace.__dict__.get("_runnable_input_tensor_sites")
-    if not sites:
-        return
-    site = sites.get(id(source))
-    if site is None:
+    if sites:
+        site = sites.get(id(source))
+        if site is not None:
+            return ("input", site)
         kind, aliased_site, _leaf_conj_neg = _classify_input_storage_alias(trace, source)
-        if kind is None:
-            return
-        site = aliased_site
-    try:
-        nbytes = int(storage.nbytes())
-    except (RuntimeError, AttributeError, TypeError, ValueError):
+        if kind is not None:
+            return ("input", aliased_site)
+    addresses = _state_derived_addresses(trace, source)
+    if addresses:
+        return ("state", frozenset(_expand_state_alias_addresses(trace, addresses)))
+    return ("other", None)
+
+
+def _register_storage_handle_origin(
+    state: "_WitnessState", storage: Any, origin: "tuple[str, Any]"
+) -> None:
+    """Register one storage handle (and a typed handle's untyped backing) in the origin map."""
+
+    origins = state.storage_origins
+    if origins is None or storage is None:
+        return
+    for handle in (storage, getattr(storage, "_untyped_storage", None)):
+        if handle is None:
+            continue
+        try:
+            if origins.get(handle) is None:
+                origins[handle] = origin
+        except TypeError:
+            # Unhashable/unweakrefable exotic handle: the pointer fallback still resolves
+            # it, and an unresolvable accessor fails closed -- never silently unrecorded.
+            continue
+
+
+def _register_storage_origin(state: "_WitnessState", source: torch.Tensor, storage: Any) -> None:
+    """Attribute one bridge-returned storage handle at ACQUISITION time (r67 C3/C6).
+
+    Acquisition records ORIGIN (+ the caller's existing writeback watch) ONLY -- no read
+    kind, no geometry fact, no input fact: a discarded handle is not an observation
+    (corr1-4). The actual accessor call on the handle records through
+    ``STORAGE_METADATA_ACCESSOR_DISPOSITIONS``.
+    """
+
+    with _state.pause_logging(), internal_scalar_read():
+        _register_storage_handle_origin(
+            state, storage, _tensor_receiver_origin(state.trace, source)
+        )
+
+
+def _lazy_storage_state_ptr_names(state: "_WitnessState") -> "dict[int, frozenset[str]]":
+    """Build (once per forward) the ptr -> full state-name-set fallback index (r67 C3).
+
+    Covers handles acquired BEFORE the accessor wrappers armed (a pre-forward
+    ``model.w.untyped_storage()`` held by the caller): live registered param/buffer storage
+    pointers are stable for the forward's duration (the model holds them), so pointer
+    identity is a sound attribution key here; a miss falls through to the input pointer
+    index and then fails closed as unattributable.
+    """
+
+    cached = state.storage_state_ptr_names
+    if cached is not None:
+        return cached
+    trace = state.trace
+    merged: dict[int, set[str]] = {}
+    for attribute in ("_param_storage_addresses", "_buffer_storage_addresses"):
+        table = getattr(trace, attribute, None)
+        if isinstance(table, dict):
+            for ptr, address in table.items():
+                try:
+                    merged.setdefault(int(ptr), set()).add(str(address))
+                except (TypeError, ValueError):
+                    continue
+    index = {
+        ptr: frozenset(_expand_state_alias_addresses(trace, names)) for ptr, names in merged.items()
+    }
+    state.storage_state_ptr_names = index
+    return index
+
+
+def _resolve_storage_origin(state: "_WitnessState", storage: Any) -> "tuple[str, Any] | None":
+    """Resolve a storage RECEIVER to its origin, or ``None`` when unattributable (r67 C3).
+
+    Ladder: the capture-scoped weak origin map (the handle itself, then a typed handle's
+    untyped backing), then the pointer fallback (state index, input index). ``None`` means
+    an owner-thread accessor on a storage TorchLens cannot attribute -- the caller MUST
+    fail closed (observer uncertainty), never record nothing.
+    """
+
+    origins = state.storage_origins
+    if origins is not None:
+        for handle in (storage, getattr(storage, "_untyped_storage", None)):
+            if handle is None:
+                continue
+            try:
+                origin = origins.get(handle)
+            except TypeError:
+                origin = None
+            if origin is not None:
+                return origin
+    with _state.pause_logging(), internal_scalar_read():
+        try:
+            backing = (
+                storage
+                if isinstance(storage, torch.UntypedStorage)
+                else getattr(storage, "_untyped_storage", None)
+            )
+            ptr = int(_ORIG_UNTYPED_STORAGE_DATA_PTR(backing)) if backing is not None else None
+        except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+            ptr = None
+        if not ptr:
+            return None
+        names = _lazy_storage_state_ptr_names(state).get(ptr)
+        if names:
+            return ("state", names)
+        input_sites = _RUNNABLE_INPUT_STORAGE_SITES.get(state.trace)
+        if input_sites:
+            candidates = input_sites.get(ptr)
+            if candidates:
+                return ("input", candidates[0][0])
+    return None
+
+
+def _record_input_storage_nbytes(trace: Any, site: Any, storage: Any) -> None:
+    """Record the BASE-storage byte-count fact for a resolved input site at ACTUAL read time.
+
+    ``x.untyped_storage().nbytes()`` / ``.size()`` / ``len(...)`` return the input's BASE
+    storage byte count, which the shape+dtype input contract does NOT pin (r29-C1 F4): a
+    same-shape input that is a slice of a larger buffer differs from a freshly-allocated
+    contiguous twin. The recorded fact is ALWAYS the base untyped byte count (a typed
+    handle's element count is derived from the same base), re-checked against the RAW
+    runtime leaf. An unreadable base count fails closed (opaque ceiling), never records a
+    wrong literal.
+    """
+
+    with _state.pause_logging(), internal_scalar_read():
+        try:
+            backing = (
+                storage
+                if isinstance(storage, torch.UntypedStorage)
+                else getattr(storage, "_untyped_storage", None)
+            )
+            nbytes = int(_ORIG_UNTYPED_STORAGE_NBYTES(backing)) if backing is not None else None
+        except (RuntimeError, TypeError, AttributeError, NotImplementedError, ValueError):
+            nbytes = None
+    if nbytes is None:
+        _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE.add(trace)
         return
     _record_input_metadata_read_at_site(trace, site, "storage_nbytes", nbytes)
 
@@ -1589,6 +1877,10 @@ it); a freed-then-reused address has only dead weakrefs and never matches. Meta/
 # originals must be snapshotted here.
 _ORIG_TENSORBASE_UNTYPED_STORAGE = torch._C.TensorBase.untyped_storage
 _ORIG_UNTYPED_STORAGE_DATA_PTR = torch.UntypedStorage.data_ptr
+# r67 C3: the true-original byte-count accessor, for TorchLens's OWN base-geometry reads
+# (origin resolution, input nbytes fact) -- bypasses the per-forward storage accessor
+# wrappers so internal resolution never recurses into observation.
+_ORIG_UNTYPED_STORAGE_NBYTES = torch.UntypedStorage.nbytes
 
 
 def _raw_storage_ptr_no_observe(tensor: Any) -> int | None:
@@ -3306,6 +3598,12 @@ def _finalize_runnable_ledger(state: _WitnessState) -> None:
                 continue
             if event.state_view_accessor:
                 continue
+            if event.metadata_witnessed and not event.mutates:
+                # r67 C3: witnessed exactly by the placement metadata net -- the wrapper
+                # recorded the receiver's observed value (state observation ledger) or
+                # input fact, so the producer gate owns the honesty decision. An
+                # unattributed receiver never sets the flag and stays an incomplete fact.
+                continue
             facts.append(
                 {
                     "kind": "opaque_side_effect" if event.mutates else "unmodeled_host_return",
@@ -3643,10 +3941,13 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
     # a genuine user call fails closed to UNVERIFIABLE. ``untyped_storage()`` / ``storage()`` keep
     # the watch-only write-back treatment (their value reads are already UNVERIFIABLE).
     is_raw_pointer = name == "data_ptr"
-    # ``untyped_storage()`` / ``storage()`` expose the input's BASE storage; its byte GEOMETRY
-    # (``nbytes()`` / ``size()``) can steer control flow the shape+dtype contract does not pin
-    # (r29-C1, F4). Record it against the model-input leaf here at exposure time.
-    records_storage_geometry = name in {"untyped_storage", "storage"}
+    # r67 C3/C6: storage ACQUISITION registers the returned handle's ORIGIN (input site /
+    # full state alias group / other) in the capture-scoped weak origin map -- and NOTHING
+    # else. The former exposure-time geometry stamp ("``.nbytes()`` is one attribute away")
+    # violated actual-read gating (corr1-4: a discarded handle on a larger-base slot false-
+    # refused the save); the real accessor call on the handle now records through
+    # ``STORAGE_METADATA_ACCESSOR_DISPOSITIONS``.
+    registers_storage_origin = name in {"untyped_storage", "storage", "_typed_storage"}
     # r65 (closes r64 F2): a zero-copy VIEW export pins the receiver's full layout with no
     # accessor call at all -- ``numpy()``/``__array__`` expose ndarray ``.strides``/``.flags``
     # and DLPack capsules carry strides + byte offset. On a STATE-derived receiver that
@@ -3669,20 +3970,10 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
                         _observe_state_metadata_read(
                             state.trace, self, STATE_METADATA_MIRROR["storage_offset"][1]
                         )
-                    if records_storage_geometry and not _internal_read_active():
+                    if registers_storage_origin and not _internal_read_active():
                         storage = original(self, *args, **kwargs)
                         result_holder["value"] = storage
-                        _maybe_record_input_storage_geometry(state.trace, self, storage)
-                        # r65: a storage handle exposed off a STATE-derived receiver pins
-                        # the slot's base-storage byte count (``.nbytes()``/``.size()`` are
-                        # one attribute away), a fact invariant across every view/alias of
-                        # the slot -- record the geometry read kind at exposure time,
-                        # mirroring the input-side belt above (closes the r64 F3
-                        # larger-base offset-0-contiguous class via the
-                        # ``storage_nbytes_is_tight`` signature dim).
-                        _observe_state_metadata_read(
-                            state.trace, self, STATE_METADATA_MIRROR["storage_nbytes"][1]
-                        )
+                        _register_storage_origin(state, self, storage)
                     # A raw ``data_ptr()`` pointer is unobservable; only a genuine USER call
                     # (internal marker inactive -- TorchLens's own bookkeeping ``data_ptr``
                     # reads run under it) fails closed so the tensor's subsequent value cannot
@@ -3709,6 +4000,323 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
         return original(self, *args, **kwargs)
 
     return wrapper
+
+
+# --- r67 C3/C6: THE atomic storage-accessor disposition table -------------------------------
+#
+# corr1-4 root cause: handle ACQUISITION stamped ``storage_nbytes`` ("one attribute away"),
+# while equivalent reads through the handle (``is_shared()``/``is_pinned()``/``nbytes()`` on
+# the storage OBJECT) were unwitnessed. One table now covers the public receiver surface of
+# BOTH ``UntypedStorage`` and ``TypedStorage``: acquisition records origin/watch only, and the
+# ACTUAL accessor call records the real result -- the ledger claims exactly the observations
+# that occurred, no more (no discarded-handle over-trigger) and no less (no storage-spelling
+# escape). A reflection immunizer makes a NEW public storage member RED until classified.
+
+_STORAGE_ACCESSOR_NBYTES = "storage_nbytes_read"
+"""Disposition: the ACTUAL byte/element-count accessor call records the base-geometry fact
+(input-site ``storage_nbytes`` fact / state ``storage_nbytes`` read kind)."""
+
+_STORAGE_ACCESSOR_PLACEMENT = "placement_read"
+"""Disposition: ``is_shared``/``is_pinned`` -- records the SAME observed-value read kinds as
+the Tensor spelling, attributed via the origin map to the input site or full state alias
+group."""
+
+_STORAGE_ACCESSOR_RAW_POINTER = "raw_pointer"
+"""Disposition: hands out the raw address (``data_ptr``/``_cdata``) -- the existing r15/r16
+fail-closed belt."""
+
+_STORAGE_ACCESSOR_MUTATOR = "captured_mutator"
+"""Disposition: mutates the storage bytes/backing in place -- a captured-slot receiver joins
+the host-mutation/writeback ceiling."""
+
+_STORAGE_ACCESSOR_VALUE_READ = "value_read"
+"""Disposition: copies/exposes the storage's VALUES to the host (indexing, iteration,
+``tolist``, dtype/device conversions) -- a state receiver joins the digest witness; an input
+receiver fails closed (base-storage bytes outside the view window are not re-bound)."""
+
+_STORAGE_ACCESSOR_FAIL_CLOSED = "fail_closed_read"
+"""Disposition: a placement-adjacent fact with NO staged reproduction recipe
+(``filename``/``resizable``) -- a captured receiver fails closed (opaque ceiling)."""
+
+_STORAGE_ACCESSOR_ORIGIN_BRIDGE = "origin_bridge"
+"""Disposition: returns another handle onto the SAME bytes (``TypedStorage.untyped()``) --
+registers the returned handle's origin; records nothing itself."""
+
+_STORAGE_ACCESSOR_INERT = "inert"
+"""Disposition: slot-contract-covered or value-free metadata (device/dtype/element size) --
+provably reproducible from the recorded slot contract; nothing to record."""
+
+_STORAGE_ACCESSOR_CONTAMINATED_PROPERTY = "contaminated_property_residual"
+"""Disposition: a PROPERTY row TorchLens's own output/stack introspection getattr-walks on
+every storage object it encounters mid-forward (measured: ``filename`` and ``_cdata`` fire
+from ``_walk_output_tensors_with_paths`` / ``_search_stack_for_vars_of_type`` on an ordinary
+``self.b.storage()`` call). A wrapper cannot distinguish that framework walk from a user
+read (the LOCKED allowlist-by-construction principle forbids a spoofable stack-filename
+discriminator), so wrapping would permanently ceiling every model that merely acquires a
+storage handle. Exactly like the r31/r65 leaf-only autograd rows, these two properties are
+the NAMED documented residual of the storage surface -- classified, never silently omitted."""
+
+_STORAGE_ACCESSOR_STRUCTURAL = "structural"
+"""Disposition: constructors / class-level factories producing UNRELATED storages, or
+accessors covered by another gate -- nothing to record."""
+
+_STORAGE_WRAPPED_DISPOSITIONS = frozenset(
+    {
+        _STORAGE_ACCESSOR_NBYTES,
+        _STORAGE_ACCESSOR_PLACEMENT,
+        _STORAGE_ACCESSOR_MUTATOR,
+        _STORAGE_ACCESSOR_VALUE_READ,
+        _STORAGE_ACCESSOR_FAIL_CLOSED,
+        _STORAGE_ACCESSOR_ORIGIN_BRIDGE,
+        _STORAGE_ACCESSOR_RAW_POINTER,
+    }
+)
+"""Dispositions installed as per-forward wrappers (``data_ptr`` keeps its dedicated legacy
+wrapper; ``inert``/``structural`` rows are classification-only)."""
+
+
+def _storage_disposition_rows(class_name: str) -> "dict[str, tuple[str, str]]":
+    """Build one class's accessor->(disposition, why) rows (shared core + per-class extras)."""
+
+    rows: dict[str, tuple[str, str]] = {}
+    conversions = (
+        "bfloat16",
+        "bool",
+        "byte",
+        "char",
+        "clone",
+        "complex_double",
+        "complex_float",
+        "cpu",
+        "cuda",
+        "double",
+        "float",
+        "float8_e4m3fn",
+        "float8_e4m3fnuz",
+        "float8_e5m2",
+        "float8_e5m2fnuz",
+        "half",
+        "hpu",
+        "int",
+        "long",
+        "pin_memory",
+        "short",
+        "to",
+        "tolist",
+        "type",
+    )
+    for name in conversions:
+        rows[name] = (
+            _STORAGE_ACCESSOR_VALUE_READ,
+            "bytes leave tracking as a host-side copy/converted storage",
+        )
+    for name in ("copy_", "fill_", "resize_", "share_memory_", "__setitem__"):
+        rows[name] = (_STORAGE_ACCESSOR_MUTATOR, "in-place byte/backing mutation")
+    for name in ("nbytes", "size", "__len__"):
+        rows[name] = (_STORAGE_ACCESSOR_NBYTES, "actual base-geometry read")
+    rows["is_shared"] = (_STORAGE_ACCESSOR_PLACEMENT, "observed-value read, tensor-spelling parity")
+    rows["is_pinned"] = (_STORAGE_ACCESSOR_PLACEMENT, "observed-value read, tensor-spelling parity")
+    rows["data_ptr"] = (_STORAGE_ACCESSOR_RAW_POINTER, "raw pointer; dedicated legacy wrapper")
+    rows["_cdata"] = (
+        _STORAGE_ACCESSOR_CONTAMINATED_PROPERTY,
+        "raw cdata address property; TL introspection getattr-walks it (named residual)",
+    )
+    rows["filename"] = (
+        _STORAGE_ACCESSOR_CONTAMINATED_PROPERTY,
+        "file backing fact; TL introspection getattr-walks it (named residual)",
+    )
+    rows["resizable"] = (
+        _STORAGE_ACCESSOR_FAIL_CLOSED,
+        "backing resizability is not staged-reproducible",
+    )
+    rows["untyped"] = (_STORAGE_ACCESSOR_ORIGIN_BRIDGE, "another handle onto the same bytes")
+    for name in ("__getitem__", "__iter__"):
+        rows[name] = (_STORAGE_ACCESSOR_VALUE_READ, "element/byte value exposure")
+    for name in ("device", "element_size", "get_device", "is_cuda", "is_hpu"):
+        rows[name] = (_STORAGE_ACCESSOR_INERT, "slot contract pins device/dtype")
+    rows["is_sparse"] = (
+        _STORAGE_ACCESSOR_INERT,
+        "False constant on strided; sparse refused at bind/save",
+    )
+    for name in ("from_buffer", "from_file"):
+        rows[name] = (_STORAGE_ACCESSOR_STRUCTURAL, "constructs an unrelated new storage")
+    if class_name == "UntypedStorage":
+        rows["byteswap"] = (_STORAGE_ACCESSOR_MUTATOR, "in-place byte mutation")
+        rows["mps"] = (_STORAGE_ACCESSOR_VALUE_READ, "device-converted copy")
+        rows["new"] = (_STORAGE_ACCESSOR_STRUCTURAL, "constructs an unrelated new storage")
+        rows["is_sparse_csr"] = (
+            _STORAGE_ACCESSOR_INERT,
+            "False constant on strided; sparse refused at bind/save",
+        )
+    if class_name == "TypedStorage":
+        rows["pickle_storage_type"] = (
+            _STORAGE_ACCESSOR_INERT,
+            "dtype-derived legacy type name; slot contract pins dtype",
+        )
+    return rows
+
+
+STORAGE_METADATA_ACCESSOR_DISPOSITIONS: "Mapping[str, Mapping[str, tuple[str, str]]]" = (
+    MappingProxyType(
+        {
+            "UntypedStorage": MappingProxyType(_storage_disposition_rows("UntypedStorage")),
+            "TypedStorage": MappingProxyType(_storage_disposition_rows("TypedStorage")),
+        }
+    )
+)
+"""ONE authoritative disposition per public storage accessor, per class (r67 C3/C6).
+
+Keys cover the public (non-underscore) ``dir()`` surface of each class on the declared torch
+floor->ceiling, plus the NAMED private/dunder rows (``_cdata``, ``__len__``, ``__getitem__``,
+``__setitem__``, ``__iter__``). The reflection immunizer asserts every public member has a
+row, so a new torch storage accessor is RED until classified -- never a silent gap. Rows
+absent on a given torch build (feature-gated members) are skipped at install.
+"""
+
+
+def _nonowner_storage_observe(state: "_WitnessState", storage: Any) -> None:
+    """Ceiling the capture when a NON-owner thread touches a CAPTURED storage handle (r67)."""
+
+    try:
+        backing = (
+            storage
+            if isinstance(storage, torch.UntypedStorage)
+            else getattr(storage, "_untyped_storage", None)
+        )
+        ptr = _ORIG_UNTYPED_STORAGE_DATA_PTR(backing) if backing is not None else None
+    except (RuntimeError, TypeError, NotImplementedError, AttributeError):
+        ptr = None
+    if isinstance(ptr, int) and ptr and _nonowner_ptr_is_captured(state, ptr):
+        _HOST_ESCAPE_CROSS_THREAD_CAPTURED.add(state.trace)
+
+
+def _record_state_value_escape(trace: Any, addresses: "set[str]") -> None:
+    """Join a storage-spelling VALUE read into the state digest witness (r67 C3)."""
+
+    addresses = _expand_state_alias_addresses(trace, addresses)
+    state_names = _HOST_ESCAPE_STATE_SOURCE_NAMES.get(trace)
+    if state_names is None:
+        state_names = set()
+        _HOST_ESCAPE_STATE_SOURCE_NAMES[trace] = state_names
+    state_names |= addresses
+
+
+def _attribute_storage_placement(
+    state: "_WitnessState",
+    storage: Any,
+    name: str,
+    observed: "bool | None",
+    had_args: bool,
+) -> None:
+    """Attribute one storage-handle placement accessor call, tensor-spelling-identically."""
+
+    origin = _resolve_storage_origin(state, storage)
+    if origin is None:
+        _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE.add(state.trace)
+        return
+    origin_kind, payload = origin
+    if origin_kind == "state":
+        read_kind = STATE_METADATA_MIRROR[name][1]
+        _record_state_metadata_observation(state.trace, set(payload), read_kind, observed)
+    elif origin_kind == "input":
+        if observed is not None and not had_args:
+            _record_input_metadata_read_at_site(state.trace, payload, name, observed)
+        else:
+            # An arg-directed or raising placement query off an input is not re-checkable
+            # against the raw runtime leaf: fail closed (same downgrade as a derived-view
+            # metadata read).
+            _INPUT_METADATA_VIEW_READ.add(state.trace)
+
+
+def _make_storage_metadata_wrapper(
+    original: Any, state: "_WitnessState", name: str, disposition: str
+) -> Any:
+    """Wrap one storage-class accessor: call through ONCE, then record the real result."""
+
+    def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        if _state._active_trace is not state.trace:
+            return original(self, *args, **kwargs)
+        if threading.get_ident() != state.owner_thread_id:
+            if state.belt_armed:
+                _nonowner_storage_observe(state, self)
+            return original(self, *args, **kwargs)
+        if not _state._logging_enabled or _internal_read_active():
+            return original(self, *args, **kwargs)
+        # The original runs PAUSED + marked: several storage accessors delegate through
+        # tensor machinery (``UntypedStorage.is_pinned`` builds a scratch tensor and calls
+        # ``Tensor.is_pinned(device)``), and that torch-internal delegation must neither be
+        # captured as phantom graph ops nor double-recorded by the tensor-spelling
+        # wrappers -- THIS wrapper records the single user-visible observation.
+        if disposition == _STORAGE_ACCESSOR_PLACEMENT:
+            had_args = bool(args or kwargs)
+            try:
+                with _state.pause_logging(), internal_scalar_read():
+                    result = original(self, *args, **kwargs)
+            except Exception:
+                # The exception itself is control-flow signal; observed=None refuses.
+                _attribute_storage_placement(state, self, name, None, had_args)
+                raise
+            observed = None if had_args else bool(result)
+            _attribute_storage_placement(state, self, name, observed, had_args)
+            return result
+        with _state.pause_logging(), internal_scalar_read():
+            result = original(self, *args, **kwargs)
+        origin = _resolve_storage_origin(state, self)
+        if origin is None:
+            # Unattributable owner-thread storage access: fail closed (observer
+            # uncertainty), never silently record nothing.
+            _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE.add(state.trace)
+            return result
+        origin_kind, payload = origin
+        if disposition == _STORAGE_ACCESSOR_ORIGIN_BRIDGE:
+            _register_storage_handle_origin(state, result, origin)
+            return result
+        if origin_kind == "other":
+            return result
+        if disposition == _STORAGE_ACCESSOR_NBYTES:
+            if origin_kind == "input":
+                _record_input_storage_nbytes(state.trace, payload, self)
+            else:
+                _record_state_metadata_read(
+                    state.trace, set(payload), STATE_METADATA_MIRROR["storage_nbytes"][1]
+                )
+        elif disposition == _STORAGE_ACCESSOR_MUTATOR:
+            _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
+        elif disposition == _STORAGE_ACCESSOR_VALUE_READ:
+            if name == "type" and not args and not kwargs:
+                return result  # no-arg type(): a class-name string; dtype/device slot-pinned
+            if origin_kind == "state":
+                _record_state_value_escape(state.trace, set(payload))
+            else:
+                _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE.add(state.trace)
+        elif disposition == _STORAGE_ACCESSOR_FAIL_CLOSED:
+            _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE.add(state.trace)
+        return result
+
+    return wrapper
+
+
+def _make_storage_property_wrapper(
+    descriptor: Any, state: "_WitnessState", name: str, disposition: str
+) -> property:
+    """Wrap a storage-class PROPERTY row (``filename`` / ``_cdata``) read-through."""
+
+    def getter(self: Any) -> Any:
+        value = descriptor.__get__(self, type(self))
+        if _state._active_trace is state.trace:
+            if threading.get_ident() == state.owner_thread_id:
+                if _state._logging_enabled and not _internal_read_active():
+                    if disposition == _STORAGE_ACCESSOR_RAW_POINTER:
+                        _HOST_ESCAPE_RAW_POINTER.add(state.trace)
+                    else:
+                        origin = _resolve_storage_origin(state, self)
+                        if origin is None or origin[0] in ("input", "state"):
+                            _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE.add(state.trace)
+            elif state.belt_armed:
+                _nonowner_storage_observe(state, self)
+        return value
+
+    return property(getter)
 
 
 def _make_storage_raw_pointer_wrapper(original: Any, state: _WitnessState) -> Any:
@@ -3997,10 +4605,32 @@ def _make_input_metadata_bool_method(original: Any, state: _WitnessState, name: 
     recording.
     """
 
+    is_placement = name in _STATE_METADATA_PLACEMENT_OBSERVED_NAMES
+
     def wrapper(self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
-        result = original(self, *args, **kwargs)
+        def _owner_observing() -> bool:
+            return (
+                isinstance(self, torch.Tensor)
+                and _state._active_trace is state.trace
+                and threading.get_ident() == state.owner_thread_id
+                and _state._logging_enabled
+                and not _internal_read_active()
+            )
+
+        try:
+            result = original(self, *args, **kwargs)
+        except Exception:
+            # r67 C3: a RAISING placement accessor on a state receiver is control-flow
+            # signal with no reproducible observed value -- record unknown (refuse).
+            if is_placement and _owner_observing():
+                _observe_state_placement_read(state.trace, self, name, None)
+            raise
         if isinstance(self, torch.Tensor) and _state._active_trace is state.trace:
             if threading.get_ident() == state.owner_thread_id:
+                if is_placement and (args or kwargs) and _owner_observing():
+                    # Arg-directed placement query (``is_pinned(device=...)``): the return
+                    # is not the slot's default-device placement -- unknown, refuse.
+                    _observe_state_placement_read(state.trace, self, name, None)
                 if (
                     not args
                     and not kwargs
@@ -4016,8 +4646,18 @@ def _make_input_metadata_bool_method(original: Any, state: _WitnessState, name: 
                     # ``_is_view`` is autograd-family and attributes DIRECT-receiver-only;
                     # ``is_coalesced`` is structural (raises on dense strided state, and
                     # sparse layouts are refused at bind/save by the layout dim).
+                    # r67 C3: ``is_shared``/``is_pinned`` carry the ACTUAL returned value
+                    # into the observation ledger (observed-value read kinds).
                     state_route = STATE_METADATA_MIRROR.get(name)
-                    if state_route is not None and state_route[0] == _STATE_ROUTE_READ_KIND:
+                    if is_placement:
+                        _observe_state_placement_read(state.trace, self, name, bool(result))
+                        # r67 C3: an attributed placement dispatch (``aten.is_pinned``) is
+                        # witnessed by the observation/fact ledgers -- discharge its census
+                        # event so an ATTRIBUTED read no longer ceilings as an unmodeled
+                        # host return; an unattributed receiver keeps the fact.
+                        if _placement_read_witnessed(state.trace, self):
+                            _discharge_placement_dispatch(state, f"aten.{name}")
+                    elif state_route is not None and state_route[0] == _STATE_ROUTE_READ_KIND:
                         if name in _STATE_METADATA_DIRECT_ONLY_NAMES:
                             _observe_state_metadata_read_direct(state.trace, self, state_route[1])
                         else:
@@ -4176,6 +4816,40 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
         except (TypeError, AttributeError):
             continue
         storage_originals.append((storage_cls, storage_original))
+    # r67 C3/C6: arm the capture-scoped storage-origin map and install the actual-read
+    # accessor wrappers over BOTH storage classes' public surfaces, table-driven from
+    # ``STORAGE_METADATA_ACCESSOR_DISPOSITIONS``. Fail CLOSED: an install failure on a
+    # wrap-required row downgrades the capture to INCOMPLETE (a silent skip would be a
+    # silent storage-spelling witness gap). Feature-absent members on this torch are
+    # skipped (classified absent, not failed).
+    state.storage_origins = weakref.WeakKeyDictionary()
+    storage_member_restore: list[tuple[Any, str, bool, Any]] = []
+    for storage_cls in _STORAGE_RAW_POINTER_TARGETS():
+        rows = STORAGE_METADATA_ACCESSOR_DISPOSITIONS.get(storage_cls.__name__, {})
+        for member, (disposition, _why) in sorted(rows.items()):
+            if disposition not in _STORAGE_WRAPPED_DISPOSITIONS or member == "data_ptr":
+                continue
+            descriptor = inspect.getattr_static(storage_cls, member, None)
+            if descriptor is None:
+                continue  # feature-absent on this torch build
+            shadowed = member in storage_cls.__dict__
+            class_attr = getattr(storage_cls, member, None)
+            if callable(class_attr):
+                replacement: Any = _make_storage_metadata_wrapper(
+                    class_attr, state, member, disposition
+                )
+                restore_value: Any = class_attr
+            elif hasattr(descriptor, "__get__"):
+                replacement = _make_storage_property_wrapper(descriptor, state, member, disposition)
+                restore_value = descriptor
+            else:
+                continue
+            try:
+                setattr(storage_cls, member, replacement)
+            except (TypeError, AttributeError):
+                _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
+                continue
+            storage_member_restore.append((storage_cls, member, shadowed, restore_value))
     property_originals: dict[str, Any] = {}
     for name in INVISIBLE_HOST_ESCAPE_PROPERTIES:
         descriptor = type(torch.Tensor).__dict__.get(name) or torch.Tensor.__dict__.get(name)
@@ -4324,6 +4998,19 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
                 setattr(storage_cls, "data_ptr", storage_original)
             except (TypeError, AttributeError):
                 pass
+        # r67 C3: restore the storage accessor wrappers shadow-aware (delete a shadow that
+        # was not originally in the class ``__dict__``) and disarm the origin map. A restore
+        # failure fails closed -- a leaked wrapper would misobserve later forwards.
+        for storage_cls, member, was_shadowed, restore_value in storage_member_restore:
+            try:
+                if was_shadowed:
+                    setattr(storage_cls, member, restore_value)
+                else:
+                    delattr(storage_cls, member)
+            except (TypeError, AttributeError):
+                _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
+        state.storage_origins = None
+        state.storage_state_ptr_names = None
         for name, descriptor in property_originals.items():
             try:
                 setattr(torch.Tensor, name, descriptor)

@@ -417,23 +417,28 @@ analysis output but must not write runnable capability. It rejects when:
     means refuse at save with `missing_output_container_contract`, uniformly with every other
     output refusal.
 12. The captured forward READ physical state metadata that transport normalizes away (r63,
-    escape-gated; r65 extends the net to the FULL input-accessor mirror): a witnessed read on
-    a registered param/buffer -- the r63 layout/conj/neg five, plus `is_shared` / `is_pinned`
-    / `is_inference` / `_is_view` / `_base` / `is_leaf` / `retains_grad` / `output_nr` /
-    `grad`-presence / `_version` / `storage_nbytes`, and the zero-copy view exports
-    (`numpy()` / `__array__` / `__dlpack__` / `__cuda_array_interface__` / `to_dlpack`),
-    which pin exact layout with no accessor call -- whose PRE-clone capture signature was
-    non-canonical on the read dim refuses with `state_metadata_mismatch` (detection stage
-    `producer_state_metadata`, details `state_dict_name`/`read_kinds`/`violations`). The
-    refusal is gated on the READ, never on the form alone: an UNREAD non-canonical slot (a
-    channels-last conv weight, a transposed dense param, an offset or conj buffer no code
-    inspects, a shared/pinned/inference/view-registered or larger-base-view slot no code
-    inspects) stays saveable and can settle `verified` -- its physical form is
-    destination-owned and value-invariant when unobserved (section 11, state-metadata
-    subsection). A witnessed read with no stamped signature, an unreadable signature dim, or
-    an unknown read kind refuses fail-closed. `requires_grad` / `grad_fn`-presence reads are
-    NOT refusals: they record declared-state facts staging reproduces (section 11), refusing
-    only the irreproducible cases (`grad_fn` present; `requires_grad` True on a
+    escape-gated; r65 extends the net to the FULL input-accessor mirror; r67 C3/C6 gates
+    every fact on the ACTUAL accessor call): a witnessed read on a registered param/buffer
+    -- the r63 layout/conj/neg five, plus `is_shared` / `is_pinned` / `is_inference` /
+    `_is_view` / `_base` / `is_leaf` / `retains_grad` / `output_nr` / `grad`-presence /
+    `_version` / `storage_nbytes`, and the zero-copy view exports (`numpy()` / `__array__`
+    / `__dlpack__` / `__cuda_array_interface__` / `to_dlpack`), which pin exact layout with
+    no accessor call -- that cannot be reproduced by staging refuses with
+    `state_metadata_mismatch` (detection stage `producer_state_metadata`, details
+    `state_dict_name`/`read_kinds`/`violations`). Signature-dim rows compare the PRE-clone
+    capture signature; the observed-value placement rows (`is_shared` / `is_pinned`)
+    compare the user's ONE actual accessor return against the device-defined
+    staged/oracle predicate. The refusal is gated on the READ, never on the form alone: an
+    UNREAD non-canonical slot (a channels-last conv weight, a transposed dense param, an
+    offset or conj buffer no code inspects, a shared/pinned/inference/view-registered or
+    larger-base-view slot no code inspects -- including a DISCARDED storage handle whose
+    geometry accessor was never called) stays saveable and can settle `verified` -- its
+    physical form is destination-owned and value-invariant when unobserved (section 11,
+    state-metadata subsection). A witnessed read with no stamped signature, an unreadable
+    signature dim, an unknown read kind, or a missing/unknown/arg-directed placement
+    observation refuses fail-closed. `requires_grad` / `grad_fn`-presence reads are
+    NOT refusals: they record declared-state facts staging reproduces (section 11),
+    refusing only the irreproducible cases (`grad_fn` present; `requires_grad` True on a
     non-differentiable slot). No schema/version identifier changes and the capture-state
     blob families are byte-unchanged; the declared-fact witnesses are a v2
     descriptor-vocabulary extension on the unreleased format.
@@ -1679,14 +1684,31 @@ through the table, so an accessor added to any input constant without a state di
 RED test, never a silently-unmirrored "Nth state read". Dispositions:
 
 * **Escape-gated read kinds** (the r63 machinery, now covering the full physical family): the
-  layout trio and conj/neg bits (r63, unchanged); `is_shared`/`is_pinned`/`is_inference`
-  (storage/creation placement, r65); `_is_view`/`_base` (view-ness, one shared dim);
-  `is_leaf`/`retains_grad`/`output_nr`/`grad`-presence (autograd structure); `_version` (the
-  in-place mutation counter -- r67 C4 ruling: `refuse_on_any_read`, see the oracle-policy
-  table below); and `storage_nbytes` (base-storage byte count, gated on the ACTUAL
-  `.nbytes()`/`.size()` accessor call -- closes the r64 F3 larger-base offset-0-contiguous
-  view via the `storage_nbytes_is_tight` dim). A resolved read joins the state-escape names
-  (digest witness) and records its READ KIND for the producer gate, exactly as r63.
+  layout trio and conj/neg bits (r63, unchanged); `is_inference` (creation placement, r65);
+  `_is_view`/`_base` (view-ness, one shared dim);
+  `is_leaf`/`retains_grad`/`output_nr`/`grad`-presence (autograd structure -- `grad`-presence
+  is ALWAYS the actual `.grad` read under local warning suppression, r67 C6: torch permits
+  assigning `.grad` on a non-leaf, so no structural "cannot carry a grad" inference may stamp
+  the fact); `_version` (the in-place mutation counter -- r67 C4 ruling: `refuse_on_any_read`,
+  see the oracle-policy table below); and `storage_nbytes` (base-storage byte count, gated on
+  the ACTUAL `.nbytes()`/`.size()`/`__len__` accessor call -- closes the r64 F3 larger-base
+  offset-0-contiguous view via the `storage_nbytes_is_tight` dim, with zero discarded-handle
+  over-trigger). A resolved read joins the state-escape names (digest witness) and records
+  its READ KIND for the producer gate, exactly as r63.
+* **Observed-value placement reads** (`is_shared` / `is_pinned`, r67 C3): the recorded fact
+  is the ACTUAL value returned by the user's ONE accessor call, carried in a per-slot
+  observation ledger next to the read kind. TorchLens never infers the value from
+  accelerator initialization (the r65 CUDA-init proof-by-absence stamped canonical False on
+  genuinely pinned XPU/MPS/externally-registered memory) and never performs a speculative
+  pre-forward or save-time second read merely to build the producer signature. Producer
+  validation applies the device-defined staged/oracle predicate to the observation: on the
+  normalized CPU state path, observed `is_pinned` True refuses and observed False is
+  reproduced by the ordinary staged allocation; `is_shared` observed True refuses on CPU
+  (staging drops the `share_memory_()` backing) while the off-CPU device constant True is
+  reproduced by a staged clone on the slot device. Exceptions, arg-directed queries
+  (`is_pinned(device=...)`), disagreeing repeat observations, and unknown attribution all
+  record `None` and refuse. The staged runtime tripwire keeps enforcing both dims with real
+  run-time reads on TorchLens's OWN staged clones.
 * **Zero-copy view exports** (closes r64 F2): `numpy()` / `__array__` / `__dlpack__` /
   `__cuda_array_interface__` / `to_dlpack` off a state-derived receiver pin the receiver's
   full layout with NO accessor call (ndarray `.strides`/`.flags`, DLPack strides + byte
@@ -1722,7 +1744,54 @@ registered `nn.Parameter` / buffer object itself -- because a view's autograd st
 pure function of the slot's canonical form and TorchLens's own per-op bookkeeping reads
 `requires_grad`/`grad_fn`/`_version` on op-output views (the known direct-receiver bookkeeping
 reads are excluded at their source under the `internal_scalar_read` marker, pinned by a
-zero-reads no-over-trigger test).
+zero-reads no-over-trigger test). Every resolved state read, declared fact, and observation
+fans out to the COMPLETE r37 alias group (r67 C6): a direct read on one canonical name of a
+tied parameter / double-registered buffer marks every name sharing the allocation -- the
+former single-address restriction that silently dropped a tied twin is removed.
+
+**Tensor and storage-handle spellings are ONE metadata surface** (r67 C3/C6, corr1-4 +
+r66b-R3). Storage ACQUISITION (`untyped_storage()` / `storage()` / `_typed_storage()`)
+records ORIGIN and the existing writeback watch ONLY -- no read kind, no geometry fact: a
+discarded handle is not an observation (the former exposure-time `storage_nbytes` stamp
+false-refused larger-base slots whose geometry was never read). A capture-scoped WEAK origin
+map attributes every handle to its input site and/or entire state alias group -- registered
+at each bridge return (a typed handle also registers its backing untyped storage), with a
+pointer fallback covering handles acquired before the wrappers armed. The ACTUAL accessor
+call on the handle records the real result through ONE authoritative per-class table,
+`STORAGE_METADATA_ACCESSOR_DISPOSITIONS`, covering the public receiver surface of BOTH
+`UntypedStorage` and `TypedStorage` (a reflection immunizer makes a new public storage member
+RED until classified -- never omission):
+
+* `nbytes` / `size` / `__len__` -> the `storage_nbytes` fact/read kind (always the BASE
+  untyped byte count, for typed and untyped spellings alike);
+* `is_shared` / `is_pinned` -> exactly the same observed-value read kinds as the Tensor
+  spellings, attributed via the origin map;
+* `data_ptr` -> the existing raw-pointer fail-closed belt;
+* mutators (`copy_`, `fill_`, `resize_`, `share_memory_`, `byteswap`, `__setitem__`) on a
+  captured-slot storage -> the host-mutation/writeback ceiling;
+* value reads and dtype/device conversions (`__getitem__`, `__iter__`, `tolist`, `float()`,
+  `to()`, `cpu()`, `pin_memory()`, ...) -> a state receiver joins the digest witness; an
+  input receiver fails closed (base-storage bytes outside the view window are not re-bound);
+* `device` / `element_size` / `get_device` / dtype-name helpers -> inert (slot-contract
+  covered); constructors (`from_buffer` / `from_file` / `new`) -> structural;
+  `TypedStorage.untyped()` -> an origin bridge (registers the returned handle);
+* `resizable()` -> fail-closed on a captured receiver (no staged reproduction recipe).
+
+An UNATTRIBUTABLE owner-thread storage accessor fails closed (observer uncertainty -- the
+opaque ceiling), never silently records nothing. Wrappers call through ONCE (the original
+runs paused+marked, so torch's own delegation -- `UntypedStorage.is_pinned` builds a scratch
+tensor and calls `Tensor.is_pinned(device)` -- is neither captured as phantom ops nor
+double-recorded), restore class attributes identity-exactly, and preserve the r43
+owner/non-owner rules (a non-owner touch of a captured storage handle ceilings via storage
+identity). Typed-to-untyped delegation may double-report idempotently. Named residual:
+`filename` and `_cdata` are PROPERTIES that TorchLens's own output/stack introspection
+getattr-walks on every storage object it encounters mid-forward, indistinguishably from a
+user read (and the locked allowlist-by-construction principle forbids a stack-filename
+discriminator), so those two rows are classified `contaminated_property_residual` --
+documented, never silently omitted -- exactly like the r31/r65 leaf-only autograd residuals.
+Documented residual (locked r67): on pre-guard-era supported torch, the user's OWN
+`is_pinned()` call may lazily initialize an accelerator; TorchLens still records that one
+actual return and adds no compatibility branch and no speculative second read.
 
 Every state-metadata row carries exactly one disposition from the CLOSED four-class
 oracle-policy vocabulary (`STATE_METADATA_ORACLE_POLICY` in `torchlens._runnable_state`,
@@ -1755,17 +1824,21 @@ rows:
   separate relative before/after mutation counters used by the in-transaction runtime checks
   are unaffected.
 
-Read kinds of `oracle_canonical` rows map to signature dims one-to-one; all state metadata
-comparisons still flow through ONE signature helper (`_state_metadata_signature`), with the
-r65 mirror dims (`is_shared`, `is_pinned`, `is_inference`, `is_view`, `is_leaf`,
-`retains_grad`, `output_nr_is_zero`, `grad_is_none`, `storage_nbytes_is_tight` -- the last
-stamped PRE-CLONE, which is exactly why the F3 large-base view is catchable). Future physical
-dims are added only there. All of them join the destination-owned PHYSICAL scope: every one is
-staging-canonicalized (the staging clone materializes under a neutral non-inference context,
-so binding or running inside a user `inference_mode` region never trips TorchLens's own
-staging output), keeping the unconditional in-transaction staged-state tripwire
-(`state_metadata:<slot_id>` check) sound. Signatures are stamped from the LIVE tensors BEFORE
-the capture-state clone, as r63.
+Read kinds of signature-backed `oracle_canonical` rows map to signature dims one-to-one; all
+state metadata comparisons still flow through ONE signature helper
+(`_state_metadata_signature`), with the r65 mirror dims (`is_inference`, `is_view`,
+`is_leaf`, `retains_grad`, `output_nr_is_zero`, `grad_is_none`, `storage_nbytes_is_tight` --
+the last stamped PRE-CLONE, which is exactly why the F3 large-base view is catchable; the
+helper also stamps the inert `device_type` context the placement predicate consumes).
+`is_shared`/`is_pinned` are deliberately NOT signature dims (r67 C3: their authority is the
+observation ledger; the pre-forward stamp was itself the forbidden speculative read). Future
+physical dims are added only there. All signature dims join the destination-owned PHYSICAL
+scope: every one is staging-canonicalized (the staging clone materializes under a neutral
+non-inference context, so binding or running inside a user `inference_mode` region never
+trips TorchLens's own staging output), keeping the unconditional in-transaction staged-state
+tripwire (`state_metadata:<slot_id>` check) sound -- the tripwire additionally verifies the
+two placement dims with real run-time reads on the staged clones. Signatures are stamped from
+the LIVE tensors BEFORE the capture-state clone, as r63.
 
 Explicitly changed vs the r63 ruling: the artifact now MAY carry recorded state-metadata
 facts -- the `state_metadata:<name>` declared-fact witnesses supersede the r63 sentence "no
