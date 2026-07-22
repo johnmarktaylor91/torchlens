@@ -652,11 +652,20 @@ Scope / documented residuals (future intermediate-metadata escape kinds route HE
   are allocator/ambient facts, not input-propagated ones; extending coverage to a new
   input-propagated metadata kind means adding its accessor family to this same
   ancestry-attributed net, not a new mechanism.
-* An UNLABELED receiver (a tensor TorchLens never logged: a pre-capture module attribute, or
-  an escape-laundered round trip like ``torch.from_numpy(y.numpy())`` whose ancestry breaks at
-  the internal-source boundary) records nothing -- hidden Python state and escape laundering
-  are outside the declared state model (contract section 11); the ``.numpy()`` escape itself
-  is digest-witnessed separately.
+* An UNLABELED receiver NEVER records nothing (r75 F1 -- the r73 fail-open here reopened the
+  escape one ``.data`` away from the fixed spelling). It resolves through the dispatch-origin
+  ledger's leaf origins, then live captured-storage identity, and otherwise FAILS CLOSED
+  (``_INPUT_METADATA_VIEW_READ`` -> completeness downgrade -> UNVERIFIABLE), mirroring the
+  sibling ``_HOST_ESCAPE_UNATTRIBUTABLE_*`` nets for the same receiver class. The same
+  ancestry-integrity rule covers TRANSITIVE laundering: a labeled receiver whose parent chain
+  passes through an op with ``unattributed_tensor_args`` (``(x * 2).data[0]``,
+  ``(y.data * 1.0)``, ``torch.cat([y1, y.data])``) is re-resolved or fails closed -- an
+  ancestry-orphaned empty ``input_ancestors`` is never mistaken for state-rooted. A hidden
+  pre-capture attribute tensor (no label, no ledger entry, no captured storage) therefore
+  ceilings honestly instead of silently verifying; an escape-laundered round trip through a
+  LOGGED boundary op (``torch.from_numpy(y.numpy())``) remains the documented record-nothing
+  residual -- its ancestry is genuinely internal-rooted and the ``.numpy()`` escape itself is
+  digest-witnessed separately.
 * STATE-rooted intermediates (``(self.w * 2).is_contiguous()``) have NO input ancestor and
   record nothing here: the state-layout twin stays contract residual (3) -- state strides are
   canonicalized at save, so no runtime comparison basis exists (unlike the input side, where
@@ -958,38 +967,61 @@ def _observe_input_derived_layout_read(trace: Any, source: torch.Tensor) -> None
 
     Called only from the layout-trio fall-through of :func:`_observe_input_metadata_read`
     (receiver already proven NOT an input leaf, storage alias, or ``_base``-linked view).
-    Resolution is pure bookkeeping -- a label attribute read plus live-index lookups, no
-    tensor method calls -- so it can never recurse back into the metadata patches:
+    Resolution is bookkeeping only -- label/ledger/live-index lookups plus a wrapper-free
+    storage-pointer read under the internal marker -- so it can never recurse back into the
+    metadata patches.
 
-    * Resolve the receiver's raw label (falling back to its ``_base`` for an unlogged view
-      of a logged activation). No label -> no record: an unlogged tensor is pre-capture
-      hidden state or an escape-laundered value, both outside the declared state model
-      (see ``INPUT_DERIVED_LAYOUT_FACT_NAME`` scope notes).
-    * Read the logged event's ``input_ancestors``. Empty (state-rooted / internal-source
-      receivers) -> no record: residual (3)'s state side stays untouched.
-    * Record :data:`INPUT_DERIVED_LAYOUT_FACT_NAME` -- carrying the rooting LEAF's
-      capture-time stride tuple -- on each ancestor input's boundary site. An ancestor
-      whose label is missing from the capture-layout map (its geometry read failed at
-      capture start) cannot pin a comparison basis, so the fact is recorded on EVERY
-      mapped site instead (fail closed: the ceiling then keys on any input layout change).
+    COVERAGE NOTE (r75 F1, LOCKED): any unlabeled-or-unresolvable-receiver layout consumer
+    in this fall-through MUST FAIL CLOSED -- a silent no-record here is exactly the r74
+    ``.data``-alias false-VERIFIED reopening. The r73 version fail-OPENED on three rungs
+    (label ``None``, event ``None``, empty ``input_ancestors``); each now either resolves
+    POSITIVELY or downgrades completeness through ``_INPUT_METADATA_VIEW_READ`` (the same
+    presence-only weak set the sibling escape nets use for this receiver class).
+
+    Resolution ladder (:func:`_resolve_layout_rooting_labels`), then per rooting label:
+
+    * ANCESTRY-INTEGRITY check (:func:`_layout_ancestry_tainted`): the rooting event's
+      transitive parent chain must contain NO op with ``unattributed_tensor_args`` -- an
+      unattributed tensor arg (a ``.data``-style unlabeled alias consumed by a logged op)
+      is precisely where traced ancestry BREAKS, so recorded ``input_ancestors`` are a
+      lower bound, not the truth. A tainted labeled receiver is re-resolved through the
+      dispatch-origin ledger's LEAF origins (value-DAG-true through the break); an
+      unresolvable taint fails closed.
+    * Non-empty resolved input ancestry -> record :data:`INPUT_DERIVED_LAYOUT_FACT_NAME`
+      -- carrying the rooting LEAF's capture-time stride tuple -- on each ancestor input's
+      boundary site. An ancestor missing from the capture-layout map cannot pin a
+      comparison basis, so the fact is recorded on EVERY mapped site instead (fail closed:
+      the ceiling then keys on any input layout change).
+    * Empty resolved input ancestry with a CLEAN chain (or positive state/literal-only
+      ledger origins) -> genuinely state/internal-rooted: record nothing (contract
+      residual (3)'s STATE side stays untouched). Empty because ancestry ORPHANED is
+      unreachable here -- orphaned receivers are re-resolved or fail closed above.
     """
 
     layouts = trace.__dict__.get("_runnable_input_label_layouts")
-    if not layouts:
-        return
-    label = get_tensor_label(source)
-    if label is None:
-        base = _input_base_tensor(source)
-        label = get_tensor_label(base) if base is not None else None
-    if label is None:
-        return
     capture_events = getattr(trace, "capture_events", None)
     live_index = getattr(capture_events, "live_index", None)
-    event = live_index.by_raw_label.get(label) if live_index is not None else None
-    if event is None:
+    by_raw_label = getattr(live_index, "by_raw_label", None)
+    if not layouts or by_raw_label is None:
+        # Inputs exist (the object-identity map gated the caller) but no layout basis /
+        # live index is available to attribute against: fail closed, never silent.
+        _INPUT_METADATA_VIEW_READ.add(trace)
         return
-    ancestors = getattr(event, "input_ancestors", None)
+    rooting_labels = _resolve_layout_rooting_labels(trace, by_raw_label, source)
+    if rooting_labels is None:
+        _INPUT_METADATA_VIEW_READ.add(trace)
+        return
+    ancestors: set[str] = set()
+    for rooting_label in rooting_labels:
+        event = by_raw_label.get(rooting_label)
+        if event is None or _layout_ancestry_tainted(trace, by_raw_label, rooting_label):
+            _INPUT_METADATA_VIEW_READ.add(trace)
+            return
+        ancestors.update(getattr(event, "input_ancestors", None) or ())
     if not ancestors:
+        # Every rooting event is chain-clean with no input ancestry: positively
+        # state/internal-rooted (residual (3)) or a literal-only deterministic chain
+        # whose layout replays identically. Record nothing.
         return
     if all(ancestor in layouts for ancestor in ancestors):
         targets = [layouts[ancestor] for ancestor in ancestors]
@@ -999,6 +1031,124 @@ def _observe_input_derived_layout_read(trace: Any, source: torch.Tensor) -> None
         _record_input_metadata_read_at_site(
             trace, site, INPUT_DERIVED_LAYOUT_FACT_NAME, tuple(int(v) for v in leaf_stride)
         )
+
+
+def _resolve_layout_rooting_labels(
+    trace: Any, by_raw_label: "Mapping[str, Any]", source: torch.Tensor
+) -> "set[str] | None":
+    """Resolve a layout-read receiver to the raw labels its VALUE roots through (r75 F1).
+
+    Ladder, first positive resolution wins; ``None`` means the caller MUST fail closed:
+
+    * OWN LABEL (or the ``_base`` fallback for an unlogged view of a logged activation),
+      accepted only when its traced ancestry is INTACT (:func:`_layout_ancestry_tainted`).
+    * DISPATCH-ORIGIN LEDGER leaf origins (r37 mechanism A): an unlabeled ``.data``-style
+      alias -- or a labeled receiver whose traced ancestry broke at one -- carries a
+      positive record of the terminal leaves its value derives from. ``rng`` / ``uninit``
+      taints fail closed (layout attribution through nondeterminism would launder it);
+      ``unknown`` falls through to the storage rung. A pure ``state:``/empty leaf set
+      resolves to ZERO labels -- a positive state-rooted/literal-only signal the caller
+      maps to "record nothing" (residual (3)), never a silent fail-open.
+    * STORAGE IDENTITY (r31 leaf / r63 state precedent): the receiver's true-original
+      storage pointer matched against live captured producer tensors
+      (``_CAPTURED_STORAGE_PTRS``) -- an alias mechanism the dispatch interpose never saw
+      still resolves to the logged activation whose bytes it shares.
+    """
+
+    label = get_tensor_label(source)
+    if label is None:
+        base = _input_base_tensor(source)
+        label = get_tensor_label(base) if base is not None else None
+    if label is not None and not _layout_ancestry_tainted(trace, by_raw_label, label):
+        return {label}
+    with _state.pause_logging(), internal_scalar_read():
+        leaf_origins = _operand_leaf_origins(trace, source)
+    if _ORIGIN_RNG in leaf_origins or _ORIGIN_UNINIT in leaf_origins:
+        return None
+    if _ORIGIN_UNKNOWN not in leaf_origins:
+        return {
+            origin[len(_ORIGIN_LABEL_PREFIX) :]
+            for origin in leaf_origins
+            if origin.startswith(_ORIGIN_LABEL_PREFIX)
+        }
+    if label is None:
+        return _layout_storage_rooting_labels(trace, source)
+    return None
+
+
+def _layout_storage_rooting_labels(trace: Any, source: torch.Tensor) -> "set[str] | None":
+    """Resolve an unlabeled receiver to live captured producers by STORAGE IDENTITY (r75 F1).
+
+    Liveness-verified exactly like the r43 cross-thread belt: a pointer matches only while
+    a captured producing tensor is still alive AND still occupies that address, so a freed-
+    then-reused allocation can never misattribute. Pointer reads use the wrapper-free
+    true-original accessors under the internal marker (no observer recursion). ``None`` --
+    no live labeled producer shares the receiver's storage -- means the caller fails closed.
+    """
+
+    captured = _CAPTURED_STORAGE_PTRS.get(trace)
+    if not captured:
+        return None
+    with _state.pause_logging(), internal_scalar_read():
+        ptr = _raw_storage_ptr_no_observe(source)
+    if ptr is None:
+        return None
+    labels: set[str] = set()
+    for producer_ref in captured.get(ptr, ()):
+        producer = producer_ref()
+        if producer is None or _raw_storage_ptr_no_observe(producer) != ptr:
+            continue
+        producer_label = get_tensor_label(producer)
+        if isinstance(producer_label, str):
+            labels.add(producer_label)
+    return labels or None
+
+
+_LAYOUT_ANCESTRY_CLEAN: "weakref.WeakKeyDictionary[Any, set[str]]" = weakref.WeakKeyDictionary()
+"""Per-trace memo of raw labels whose ENTIRE traced ancestry is attribution-intact (r75 F1).
+
+A label enters only after a full parent-chain walk found no op with
+``unattributed_tensor_args`` (and no unresolvable parent label), so repeated layout reads
+on deep chains stay O(1). Taint is never cached: it fails the read closed immediately and
+is rare by construction. Weak-keyed off the schema; dropped with the Trace."""
+
+
+def _layout_ancestry_tainted(trace: Any, by_raw_label: "Mapping[str, Any]", label: str) -> bool:
+    """Return whether a logged event's transitive traced ancestry is BROKEN (r75 F1).
+
+    ``OpEvent.input_ancestors`` unions only LABELED parents, so an op that consumed an
+    unlabeled tensor arg (``unattributed_tensor_args`` non-empty -- the ``.data`` alias, a
+    laundered raw-dispatch product) truncates ancestry SILENTLY: everything downstream
+    inherits the truncated set. Any such op anywhere in the parent DAG -- including the
+    event itself, an orphaned parentless root (``(y.data * 1.0)``), or a MIXED op with both
+    labeled parents and an unattributed arg (``torch.cat([y1, y.data])``) -- makes the
+    recorded ``input_ancestors`` a lower bound, so a layout consumer must not trust them.
+    An unresolvable parent label also counts as tainted (fail closed on observer
+    uncertainty). Pure event-field bookkeeping: no tensor method calls, no recursion into
+    the metadata patches.
+    """
+
+    clean = _LAYOUT_ANCESTRY_CLEAN.get(trace)
+    if clean is None:
+        clean = set()
+        _LAYOUT_ANCESTRY_CLEAN[trace] = clean
+    if label in clean:
+        return False
+    stack = [label]
+    visited: set[str] = set()
+    while stack:
+        current = stack.pop()
+        if current in visited or current in clean:
+            continue
+        visited.add(current)
+        event = by_raw_label.get(current)
+        if event is None:
+            return True
+        if getattr(event, "unattributed_tensor_args", None):
+            return True
+        stack.extend(edge.parent_label_raw for edge in (getattr(event, "parents", None) or ()))
+    clean.update(visited)
+    return False
 
 
 def _state_derived_addresses(trace: Any, source: torch.Tensor) -> set[str]:

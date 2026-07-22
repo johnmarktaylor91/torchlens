@@ -323,7 +323,17 @@ structure, re-derives, and requires exact discharge.
   derived read flipped), and never triggered by a same-stride input (honest
   channels_last-on-channels_last runs stay `verified`). Strip coherence is inherited from the
   envelope: deleting the envelope breaks totality, deleting only the fact breaks the
-  envelope/`metadata_reads` fact-name equality.
+  envelope/`metadata_reads` fact-name equality. r75 makes the attribution FAIL-CLOSED BY
+  CONSTRUCTION over the whole receiver class (the r73 spelling-only net fail-opened on
+  unlabeled receivers -- `.data` destroys both the label and `_base`, and LAUNDERS ancestry
+  transitively through every downstream op): a receiver resolves through its own label ONLY
+  when its traced parent chain carries no `unattributed_tensor_args` break, else through the
+  dispatch-origin ledger's leaf origins, else live captured-storage identity, else the
+  `_INPUT_METADATA_VIEW_READ` completeness downgrade (`unverifiable`) -- never a silent
+  no-record. An ancestry-orphaned empty `input_ancestors` is re-resolved or fails closed;
+  only a POSITIVELY state-rooted / literal-only chain records nothing (residual (3) stays
+  STATE-side only). Any future unlabeled-receiver layout consumer MUST fail closed the same
+  way.
 * `state_metadata` -- **totalized BOTH facts** over the declared state-name universe:
   `captured_requires_grad` (staging applies it -- capture truth wins, the LOCKED r65 F-1
   ruling) and `grad_fn` presence (True refuses at save AND parse). The staging belt is pointed
@@ -1429,7 +1439,9 @@ all, so "every leaf is a param" proves nothing). Pure param-derived host reads (
 `w * 2`) recover `verified` ONLY through positive origin resolution; `.data`-of-input escapes
 attribute to the input slot and keep the ORIGINAL input `verified` while any changed input
 restales the witness. Raw seeded-RNG products taint their origins and can never launder
-attribution.
+attribution. As of r75 the input-derived LAYOUT consumer (`derived_layout_read`) obeys the
+same single-exit rule -- it was the one unlabeled-receiver consumer that exited fail-OPEN
+(the r74 F1 finding).
 
 **Dual observer routes and disabled-mode coverage (r39 hon2_1).** Every known tensor->host VALUE
 exit has TWO independent routes to the ONE escape-source ledger: the aten dispatch census (primary)
@@ -2258,7 +2270,14 @@ F1 false `verified`) is CLOSED as of r73, because the input's layout -- unlike c
 state -- is supplied fresh at run time and IS comparable: the read is attributed by traced
 value ancestry (`OpEvent.input_ancestors`) as a `derived_layout_read` fact on the rooting
 input site(s), and a runtime input whose strides differ from capture ceilings the run
-`unverifiable` (see the `model_input_metadata` family entry). The direct-leaf spelling keeps
+`unverifiable` (see the `model_input_metadata` family entry). r75 closes the r74-confirmed
+reopening of that closure through UNLABELED receivers: the `.data` alias of an input-derived
+intermediate (label-less, `_base`-less, and ancestry-laundering for everything downstream --
+`(x * 2).data.is_contiguous(...)`, `y.data.stride()`, `(x * 2).data[0]`, `(y.data * 1.0)`)
+now resolves through the ancestry-integrity check + dispatch-origin-ledger leaf origins +
+live captured-storage identity, and otherwise FAILS CLOSED to `unverifiable` -- the layout
+consumer follows the same single-exit positive ladder as escape-source attribution, never a
+silent no-record. The direct-leaf spelling keeps
 its stricter r27/r31 witnessed-fact semantics (`diverged`). (4) object-identity aliasing of a non-canonical state slot through an
 aliasing-polymorphic op, tested via pure Python identity (`y = self.w.contiguous(); y is
 self.w`), is a documented residual (locked r65 ruling): no accessor fires on ANY tensor, so
