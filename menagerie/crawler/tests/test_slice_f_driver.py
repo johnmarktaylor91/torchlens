@@ -1723,7 +1723,7 @@ def test_env_observation_binding_changes_award_closure_and_execution_identity(
         """Mutate one loaded parent-side installed-package observation binding."""
 
         value = original_read_bytes(path)
-        if path.name != "driver.py":
+        if path.name != "driver_admission.py":
             return value
         old = b"    package_bytes = _installed_package_manifest_bytes(prefix, strict=strict)\n"
         new = (

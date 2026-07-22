@@ -20,6 +20,7 @@ _WORKFLOW_PATH = Path(".github/workflows/tests.yml")
 _LINUX_LOCK_PATH = Path("menagerie/crawler/envs/locks/round19-linux-64.lock")
 _AUTHORITY_PATH = Path("menagerie/crawler/authority.py")
 _DRIVER_PATH = Path("menagerie/crawler/driver.py")
+_DRIVER_ADMISSION_PATH = Path("menagerie/crawler/driver_admission.py")
 _DRIVER_RECEIPTS_PATH = Path("menagerie/crawler/driver_receipts.py")
 _POLICY_PATH = Path("menagerie/crawler/policy.py")
 _SUPERVISOR_PATH = Path("menagerie/crawler/worker_supervisor.py")
@@ -395,7 +396,7 @@ def _restore_parent_interpreter(root: Path, _reversion_id: str) -> None:
 
     _replace_once(
         root,
-        _DRIVER_PATH,
+        _DRIVER_ADMISSION_PATH,
         "        interpreter = authority.selected_interpreter\n",
         "        interpreter = Path(sys.executable)\n",
     )
@@ -621,7 +622,7 @@ def _accept_ambiguous_handoff_finals(root: Path, _reversion_id: str) -> None:
 
     _replace_once(
         root,
-        _DRIVER_PATH,
+        _DRIVER_ADMISSION_PATH,
         """        if len(matching) != 1:
             raise DriverIntegrationError("handoff-authority-unavailable")
         if (
@@ -760,7 +761,7 @@ def _restore_source_fallback(root: Path, _reversion_id: str) -> None:
 
     _replace_once(
         root,
-        _DRIVER_PATH,
+        _DRIVER_ADMISSION_PATH,
         """        if (
             matching[0].get("handoff_proposal_id") is None
             or matching[0].get("handoff_sha256") is None
@@ -776,7 +777,7 @@ def _restore_source_fallback(root: Path, _reversion_id: str) -> None:
     )
     _replace_once(
         root,
-        _DRIVER_PATH,
+        _DRIVER_ADMISSION_PATH,
         """            if self.config.only_status is not None and inputs.handoff_execution is None:
                 raise DriverIntegrationError("handoff-authority-unavailable")
 """,

@@ -17,6 +17,7 @@ import pytest
 import menagerie.crawler.artifact_transactions as artifact_module
 import menagerie.crawler.authority as authority_module
 import menagerie.crawler.driver as driver_module
+import menagerie.crawler.driver_admission as driver_admission_module
 import menagerie.crawler.env_lifecycle as lifecycle_module
 import menagerie.crawler.worker_supervisor as supervisor_module
 from menagerie.crawler.constants import ATTEMPT_SCHEMA_VERSION_V3
@@ -56,12 +57,12 @@ _DEAD_SYMBOLS = {
 _DEAD_OPTIONS = {"--scheduled-wake"}
 _SENSITIVE_EDGE_COUNTS = Counter(
     {
-        ("CrawlerDriver._ensure_authors", "dependencies.author.author"): 1,
+        ("AdmissionEnvironmentMixin._ensure_authors", "dependencies.author.author"): 1,
         ("CrawlerDriver._repair_author", "dependencies.author.author"): 1,
         ("CrawlerDriver._repair_author_for_detected_modes", "dependencies.author.author"): 1,
-        ("CrawlerDriver._ensure_gates", "dependencies.checker.check_metadata"): 2,
-        ("CrawlerDriver._ensure_gates", "dependencies.checker.check_fidelity"): 1,
-        ("CrawlerDriver._run_environment_work", "dependencies.environments.run"): 1,
+        ("AdmissionEnvironmentMixin._ensure_gates", "dependencies.checker.check_metadata"): 2,
+        ("AdmissionEnvironmentMixin._ensure_gates", "dependencies.checker.check_fidelity"): 1,
+        ("AdmissionEnvironmentMixin._run_environment_work", "dependencies.environments.run"): 1,
         ("SupervisedForwardLane.forward", "open_worker_lease"): 1,
         ("SupervisedForwardLane.forward", "supervise_worker"): 1,
         ("CrawlerDriver._forward_and_reduce", "dependencies.forward.forward"): 2,
@@ -443,7 +444,9 @@ def test_round21_verification_tree_walk_inventory_is_closed() -> None:
         },
         "driver.py": {
             "CrawlerDriver._forward_and_reduce",
-            "CrawlerDriver._run_environment_work",
+        },
+        "driver_admission.py": {
+            "AdmissionEnvironmentMixin._run_environment_work",
         },
         "driver_receipts.py": {
             "SupervisedForwardLane.forward",
@@ -460,6 +463,7 @@ def test_round21_verification_tree_walk_inventory_is_closed() -> None:
     modules = {
         "authority.py": authority_module,
         "driver.py": driver_module,
+        "driver_admission.py": driver_admission_module,
         "driver_receipts.py": __import__(
             "menagerie.crawler.driver_receipts", fromlist=["driver_receipts"]
         ),
@@ -1311,10 +1315,15 @@ def test_admission_boundary_inventory_is_closed() -> None:
     """All authority-bearing admissions must remain classified and guarded."""
 
     source = _source(driver_module)
+    admission_source = _source(driver_admission_module)
     receipt_source = _source(
         __import__("menagerie.crawler.driver_receipts", fromlist=["driver_receipts"])
     )
-    observed_edges = _sensitive_edge_inventory(source) + _sensitive_edge_inventory(receipt_source)
+    observed_edges = (
+        _sensitive_edge_inventory(source)
+        + _sensitive_edge_inventory(admission_source)
+        + _sensitive_edge_inventory(receipt_source)
+    )
     assert observed_edges == _SENSITIVE_EDGE_COUNTS
     assert driver_module._SHUTDOWN_ADMISSION_REGISTRY == {  # noqa: SLF001
         "author": "guard:author-admission",
@@ -1346,7 +1355,9 @@ def test_admission_boundary_inventory_is_closed() -> None:
         "    self.dependencies.author.author(None, None, None, None)\n"
     )
     assert (
-        _sensitive_edge_inventory(mutated) + _sensitive_edge_inventory(receipt_source)
+        _sensitive_edge_inventory(mutated)
+        + _sensitive_edge_inventory(admission_source)
+        + _sensitive_edge_inventory(receipt_source)
         != _SENSITIVE_EDGE_COUNTS
     )
 
@@ -1450,6 +1461,7 @@ def test_attempt_schema_consumers_and_producers_have_exact_parity() -> None:
         for filename in (
             "authority.py",
             "driver.py",
+            "driver_admission.py",
             "driver_models.py",
             "driver_receipts.py",
             "worker.py",
@@ -1542,15 +1554,15 @@ def test_executable_and_artifact_authority_have_one_final_projection() -> None:
         authority_module.compile_execution_read_manifest_v2
     )
 
-    driver_source = _source(driver_module)
-    tree, parents, names = _tree_context(driver_source)
+    admission_source = _source(driver_admission_module)
+    tree, parents, names = _tree_context(admission_source)
     resolver_callers = Counter(
         _enclosing_definition(node, parents, names)
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
         and _attribute_name(node.func).endswith("resolve_final_artifact_transaction")
     )
-    assert resolver_callers == Counter({"CrawlerDriver._rehydrate_final_authority": 1})
+    assert resolver_callers == Counter({"AdmissionEnvironmentMixin._rehydrate_final_authority": 1})
     reconstruction = inspect.getsource(driver_module.CrawlerDriver._rehydrate_final_authority)
     assert (
         reconstruction.index("validate_artifact_checkpoint(")
