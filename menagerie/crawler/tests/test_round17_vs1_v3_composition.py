@@ -11,6 +11,7 @@ from typing import Any, Mapping
 import pytest
 
 import menagerie.crawler.driver as driver_module
+import menagerie.crawler.driver_receipts as driver_receipts_module
 from menagerie.crawler.authority import derive_mode_summary
 from menagerie.crawler.driver import SupervisedForwardLane
 from menagerie.crawler.identity import hash_bytes, stable_hash
@@ -371,10 +372,10 @@ def test_real_unhashable_output_awards_runs_with_unverifiable_modes(
 def test_driver_has_no_direct_supervised_worker_receipt_reads() -> None:
     """Every driver semantic consumer must use the central typed projection."""
 
-    tree = ast.parse(Path(driver_module.__file__).read_text(encoding="utf-8"))
     direct_reads = [
         node
-        for node in ast.walk(tree)
+        for module in (driver_module, driver_receipts_module)
+        for node in ast.walk(ast.parse(Path(module.__file__).read_text(encoding="utf-8")))
         if isinstance(node, ast.Attribute) and node.attr == "worker_receipt"
     ]
     assert direct_reads == []
@@ -388,10 +389,10 @@ def test_live_protocol_comparisons_stay_in_worker_supervisor() -> None:
         "menagerie.crawler.worker-receipt.v1",
         "menagerie.crawler.raw-award-receipt.v3",
     }
-    tree = ast.parse(Path(driver_module.__file__).read_text(encoding="utf-8"))
     compared_literals = {
         value.value
-        for node in ast.walk(tree)
+        for module in (driver_module, driver_receipts_module)
+        for node in ast.walk(ast.parse(Path(module.__file__).read_text(encoding="utf-8")))
         if isinstance(node, ast.Compare)
         for value in (node.left, *node.comparators)
         if isinstance(value, ast.Constant) and isinstance(value.value, str)

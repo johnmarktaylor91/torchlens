@@ -444,6 +444,8 @@ def test_round21_verification_tree_walk_inventory_is_closed() -> None:
         "driver.py": {
             "CrawlerDriver._forward_and_reduce",
             "CrawlerDriver._run_environment_work",
+        },
+        "driver_receipts.py": {
             "SupervisedForwardLane.forward",
             "_collect_worker_executable_closure",
             "_compile_worker_read_manifest",
@@ -458,6 +460,9 @@ def test_round21_verification_tree_walk_inventory_is_closed() -> None:
     modules = {
         "authority.py": authority_module,
         "driver.py": driver_module,
+        "driver_receipts.py": __import__(
+            "menagerie.crawler.driver_receipts", fromlist=["driver_receipts"]
+        ),
         "policy.py": __import__("menagerie.crawler.policy", fromlist=["policy"]),
         "worker_supervisor.py": supervisor_module,
     }
@@ -1207,7 +1212,7 @@ def _schema_parity_errors(schema: Mapping[str, Any], sources: Mapping[str, str])
         "authority.py:derive_terminal_proof": {"capability_observation", "claim", "supported"},
         "worker.py:_mode_receipt": {"output_value_sha256"},
         "worker.py:_raw_award_receipt": {"output_value_sha256"},
-        "driver.py:_attempts_from_supervised": {
+        "driver_receipts.py:_attempts_from_supervised": {
             "capability_observation",
             "output_value_sha256",
         },
@@ -1306,7 +1311,11 @@ def test_admission_boundary_inventory_is_closed() -> None:
     """All authority-bearing admissions must remain classified and guarded."""
 
     source = _source(driver_module)
-    assert _sensitive_edge_inventory(source) == _SENSITIVE_EDGE_COUNTS
+    receipt_source = _source(
+        __import__("menagerie.crawler.driver_receipts", fromlist=["driver_receipts"])
+    )
+    observed_edges = _sensitive_edge_inventory(source) + _sensitive_edge_inventory(receipt_source)
+    assert observed_edges == _SENSITIVE_EDGE_COUNTS
     assert driver_module._SHUTDOWN_ADMISSION_REGISTRY == {  # noqa: SLF001
         "author": "guard:author-admission",
         "checker": "guard:checker-admission",
@@ -1336,7 +1345,10 @@ def test_admission_boundary_inventory_is_closed() -> None:
         f"{source}\n\ndef rogue_admission(self):\n"
         "    self.dependencies.author.author(None, None, None, None)\n"
     )
-    assert _sensitive_edge_inventory(mutated) != _SENSITIVE_EDGE_COUNTS
+    assert (
+        _sensitive_edge_inventory(mutated) + _sensitive_edge_inventory(receipt_source)
+        != _SENSITIVE_EDGE_COUNTS
+    )
 
 
 def test_public_writer_inventory_is_authorization_bearing() -> None:
@@ -1435,7 +1447,13 @@ def test_attempt_schema_consumers_and_producers_have_exact_parity() -> None:
     schema = load_schema(ATTEMPT_SCHEMA_VERSION_V3)
     sources = {
         filename: (_CRAWLER_ROOT / filename).read_text(encoding="utf-8")
-        for filename in ("authority.py", "driver.py", "driver_models.py", "worker.py")
+        for filename in (
+            "authority.py",
+            "driver.py",
+            "driver_models.py",
+            "driver_receipts.py",
+            "worker.py",
+        )
     }
     assert _schema_parity_errors(schema, sources) == ()
     ownership = {leaf.path: leaf.owner for leaf in owned_schema_leaves(ATTEMPT_SCHEMA_VERSION_V3)}

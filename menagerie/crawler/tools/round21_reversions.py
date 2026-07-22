@@ -20,6 +20,7 @@ _WORKFLOW_PATH = Path(".github/workflows/tests.yml")
 _LINUX_LOCK_PATH = Path("menagerie/crawler/envs/locks/round19-linux-64.lock")
 _AUTHORITY_PATH = Path("menagerie/crawler/authority.py")
 _DRIVER_PATH = Path("menagerie/crawler/driver.py")
+_DRIVER_RECEIPTS_PATH = Path("menagerie/crawler/driver_receipts.py")
 _POLICY_PATH = Path("menagerie/crawler/policy.py")
 _SUPERVISOR_PATH = Path("menagerie/crawler/worker_supervisor.py")
 _CLI_PATH = Path("menagerie/crawler/cli.py")
@@ -496,7 +497,7 @@ def _remove_transitive_scope_symbol(root: Path, _reversion_id: str) -> None:
 
     _replace_once(
         root,
-        _DRIVER_PATH,
+        _DRIVER_RECEIPTS_PATH,
         "def _compile_worker_read_manifest(",
         "def _compile_worker_read_manifest_removed(",
     )
