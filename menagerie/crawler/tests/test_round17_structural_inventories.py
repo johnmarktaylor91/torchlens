@@ -1211,7 +1211,7 @@ def _schema_parity_errors(schema: Mapping[str, Any], sources: Mapping[str, str])
             "capability_observation",
             "output_value_sha256",
         },
-        "driver.py:_driver_failure_attempt": {
+        "driver_models.py:_driver_failure_attempt": {
             "capability_observation",
             "output_value_sha256",
         },
@@ -1435,7 +1435,7 @@ def test_attempt_schema_consumers_and_producers_have_exact_parity() -> None:
     schema = load_schema(ATTEMPT_SCHEMA_VERSION_V3)
     sources = {
         filename: (_CRAWLER_ROOT / filename).read_text(encoding="utf-8")
-        for filename in ("authority.py", "driver.py", "worker.py")
+        for filename in ("authority.py", "driver.py", "driver_models.py", "worker.py")
     }
     assert _schema_parity_errors(schema, sources) == ()
     ownership = {leaf.path: leaf.owner for leaf in owned_schema_leaves(ATTEMPT_SCHEMA_VERSION_V3)}
