@@ -24,13 +24,25 @@ Frozen dispositions (r65 PLAN_AGREED, both labs converged):
 The meta-tests are the anti-edge: a torch upgrade that grows the RNG surface (a new
 module endpoint or a new ``torch._C.Generator`` method) is a RED test until it is given
 an explicit disposition -- the r39 "one more name" doctrine, now covering torch itself.
+
+r67 C1 (r66 free-F1 / corr1-1 / hon1-F5 / hon1-F6) extends the doctrine with RETURN
+CLOSURE over ALL Generator receivers: every public ``torch.Generator`` method carries a
+:class:`GeneratorMethodRow` whose per-receiver-class dispositions are machine-checked to
+be closed under the method's return family (a host scalar can never leave the classifier
+unwitnessed on ANY receiver; Generator returns are structural only because they re-enter
+the same classifier), the default identity set is a dynamically re-resolved routing
+cache, and the module-discovery meta-test owns NO module list of its own (it swept
+``torch.mtia`` and ``torch.xpu.random`` into the surface -- the shared production/test
+blind spot r66 hon1-F6 flagged).
 """
 
 from __future__ import annotations
 
 import shutil
+import sys
 import types
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -45,7 +57,12 @@ from torchlens.runnable import (
     WitnessCompleteness,
 )
 from torchlens.utils.rng import (
-    _DEFAULT_GENERATOR_METHOD_DISPOSITIONS,
+    _DEFAULT_GENERATOR_HOLDER_MODULES,
+    _TORCH_RNG_DEVICE_SPEC,
+    _TORCH_RNG_MODULE_SPECS,
+    GENERATOR_METHOD_DISPOSITIONS,
+    GENERATOR_METHOD_TABLE,
+    GENERATOR_RETURN_FAMILIES,
     HOST_NONDETERMINISM_REGISTRY,
     TORCH_RNG_DISPOSITIONS,
     TORCH_RNG_SURFACE,
@@ -58,15 +75,15 @@ from torchlens.utils.rng import (
 
 _MONITORED_DISPOSITIONS = frozenset({"entropy", "mutation", "replayable_read"})
 
-# The torch RNG surface modules the enumeration sweeps (feature-detected; an absent
-# module on an older torch simply contributes nothing).
-_SURFACE_MODULE_PATHS = (
-    "torch",
-    "torch.random",
-    "torch.cuda",
-    "torch.cuda.random",
-    "torch.mps",
-    "torch.xpu",
+# Generator-table dispositions that land in the permanent-ceiling ``channels`` set.
+_CEILING_DISPOSITIONS = frozenset({"entropy", "mutation", "instance_read"})
+
+# Generator methods that may raise a capability error on unsupported engines (CPU
+# philox offset / graph-safe state). The c_call classifier marks AT ENTRY, so the
+# capability raise never under-marks; the live return-family check skips them when
+# the scratch engine cannot execute them.
+_CAPABILITY_GATED_METHODS = frozenset(
+    {"get_offset", "set_offset", "graphsafe_get_state", "graphsafe_set_state"}
 )
 
 # Pre-window held references (module import time), the r41 held-ref spelling.
@@ -74,14 +91,18 @@ _HELD_MANUAL_SEED = torch.manual_seed
 _HELD_INITIAL_SEED = torch.initial_seed
 
 
-def _rng_surface_names(module: types.ModuleType) -> set[str]:
+def _rng_surface_names(module: types.ModuleType) -> dict[str, Any]:
     """Enumerate the RNG-relevant public names of one torch surface module."""
 
-    names = set()
+    names: dict[str, Any] = {}
     for name in dir(module):
         if name.startswith("_"):
             continue
-        if isinstance(getattr(module, name, None), types.ModuleType):
+        try:
+            value = getattr(module, name, None)
+        except Exception:
+            continue
+        if isinstance(value, types.ModuleType):
             continue
         lowered = name.lower()
         if (
@@ -89,8 +110,33 @@ def _rng_surface_names(module: types.ModuleType) -> set[str]:
             or "rng" in lowered
             or name in ("Generator", "default_generator", "default_generators")
         ):
-            names.add(name)
+            names[name] = value
     return names
+
+
+def _discover_rng_bearing_modules() -> dict[str, dict[str, Any]]:
+    """Independent, no-test-owned-list discovery of loaded RNG-bearing torch modules.
+
+    Sweeps ``sys.modules`` for every already-loaded PUBLIC-path torch module (no
+    imports, so no surface is created by the test itself) and returns each module's
+    RNG-relevant public endpoints. This is the r67 anti-blind-spot: r66 hon1-F6 found
+    that production AND its meta-test shared one hand-maintained module list that
+    omitted ``torch.mtia`` -- this sweep owns no list, so a torch upgrade or import
+    graph change that loads one more RNG-bearing module goes RED here.
+    """
+
+    found: dict[str, dict[str, Any]] = {}
+    for module_name, module in sorted(list(sys.modules.items())):
+        if not isinstance(module, types.ModuleType):
+            continue
+        if module_name != "torch" and not module_name.startswith("torch."):
+            continue
+        if any(segment.startswith("_") for segment in module_name.split(".")):
+            continue
+        endpoints = _rng_surface_names(module)
+        if endpoints:
+            found[module_name] = endpoints
+    return found
 
 
 @pytest.fixture()
@@ -118,25 +164,110 @@ def _torch_rng_state_guard():
 
 @pytest.mark.smoke
 def test_torch_rng_surface_enumeration_complete() -> None:
-    """Every present torch RNG endpoint has an explicit frozen disposition.
+    """Every discovered torch RNG endpoint has an explicit frozen disposition.
 
-    A torch upgrade that adds an RNG endpoint to any surface module is a RED test until
-    the endpoint is classified in ``TORCH_RNG_SURFACE`` -- never a silent false
-    VERIFIED.
+    r67: the sweep is the INDEPENDENT no-list module discovery -- a torch upgrade (or
+    an import-graph change) that loads one more RNG-bearing public torch module or
+    endpoint is a RED test until classified in ``TORCH_RNG_SURFACE``, never a silent
+    false VERIFIED. Coverage is granted by exactly three rules: (a) an explicit table
+    row for the spelling; (b) object IDENTITY with an already-classified row's object
+    (re-export aliases -- receiver-identity classification and the held-code layer are
+    spelling-independent, and only identity-bearing objects qualify: callables,
+    classes, Generator instances -- never interned data like the empty
+    ``default_generators`` tuple); (c) a non-torch-owned class/function/typing form
+    that merely shares an RNG-ish name (``from typing import Generator``). Anything
+    else fails.
     """
 
     table_targets = {row.target for row in TORCH_RNG_SURFACE}
-    for module_path in _SURFACE_MODULE_PATHS:
-        module = _torch_rng_holder_module(module_path)
-        if module is None:
-            continue
-        for name in _rng_surface_names(module):
-            assert f"{module_path}.{name}" in table_targets, (
-                f"torch RNG endpoint {module_path}.{name} has NO frozen disposition; "
-                "classify it in TORCH_RNG_SURFACE (rng.py) before shipping"
+    covered_object_ids: set[int] = set()
+    for row in TORCH_RNG_SURFACE:
+        module_path, _, attr_name = row.target.rpartition(".")
+        holder = _torch_rng_holder_module(module_path)
+        if holder is not None and hasattr(holder, attr_name):
+            covered_object_ids.add(id(getattr(holder, attr_name)))
+
+    discovered = _discover_rng_bearing_modules()
+    # Sanity: the sweep itself must be alive (an empty sweep would vacuously pass).
+    assert {"torch", "torch.random", "torch.cuda"} <= set(discovered)
+
+    for module_path, endpoints in discovered.items():
+        for name, value in endpoints.items():
+            target = f"{module_path}.{name}"
+            if target in table_targets:
+                continue  # (a) explicit row for this spelling
+            if (callable(value) or isinstance(value, (type, torch.Generator))) and id(
+                value
+            ) in covered_object_ids:
+                continue  # (b) identity alias of a classified object
+            if (
+                isinstance(value, (type, types.FunctionType, types.BuiltinFunctionType))
+                or type(value).__module__ == "typing"
+            ):
+                owner = getattr(value, "__module__", None)
+                if isinstance(owner, str) and owner.split(".")[0] != "torch":
+                    continue  # (c) non-torch-owned name collision
+            raise AssertionError(
+                f"torch RNG endpoint {target} has NO frozen disposition; classify it "
+                "in TORCH_RNG_SURFACE / _TORCH_RNG_MODULE_SPECS (rng.py) before "
+                "shipping"
             )
     for row in TORCH_RNG_SURFACE:
         assert row.disposition in TORCH_RNG_DISPOSITIONS, row
+
+
+@pytest.mark.smoke
+def test_mtia_and_xpu_random_surfaces_classified() -> None:
+    """r66 hon1-F6 named pin: the mtia / xpu.random module specs actually resolve.
+
+    Feature-detected: a torch build without the module skips. On torch 2.8 the mtia
+    surface is ``get_rng_state``/``set_rng_state``; any upgrade that grows it lights
+    up through the same ``hasattr`` detection plus the discovery sweep above.
+    """
+
+    targets = {row.target for row in TORCH_RNG_SURFACE}
+    spec_paths = {path for path, _spec in _TORCH_RNG_MODULE_SPECS}
+    assert {"torch.mtia", "torch.xpu.random"} <= spec_paths
+    for module_path in ("torch.mtia", "torch.xpu", "torch.xpu.random"):
+        module = _torch_rng_holder_module(module_path)
+        if module is None:
+            continue
+        for name in ("seed", "manual_seed", "set_rng_state", "get_rng_state"):
+            if hasattr(module, name):
+                assert f"{module_path}.{name}" in targets, f"{module_path}.{name}"
+
+
+@pytest.mark.smoke
+def test_mtia_mutation_spelling_marks_fail_closed() -> None:
+    """The mtia mutation patch marks at entry even when the deviceless call raises."""
+
+    mtia = _torch_rng_holder_module("torch.mtia")
+    if mtia is None or not hasattr(mtia, "set_rng_state"):
+        pytest.skip("torch.mtia RNG surface not present on this torch")
+    state = torch.get_rng_state()
+    with host_nondeterminism_monitor(None) as result:
+        try:
+            mtia.set_rng_state(state)
+        except Exception:
+            pass
+    assert "torch.mtia.set_rng_state" in result.channels
+
+
+@pytest.mark.smoke
+def test_default_generator_resolver_covers_every_device_spec_module() -> None:
+    """The dynamic-membership resolver spans exactly the device-spec base modules.
+
+    A future device namespace added to ``_TORCH_RNG_MODULE_SPECS`` with the device
+    spec but missing from the resolver's holder list is a RED test (its default
+    generators would silently classify as private receivers).
+    """
+
+    device_bases = {
+        path.removesuffix(".random")
+        for path, spec in _TORCH_RNG_MODULE_SPECS
+        if spec is _TORCH_RNG_DEVICE_SPEC
+    }
+    assert device_bases == set(_DEFAULT_GENERATOR_HOLDER_MODULES)
 
 
 @pytest.mark.smoke
@@ -157,9 +288,9 @@ def test_torch_rng_monitored_rows_match_registry() -> None:
     receiver_rows = [
         row
         for row in HOST_NONDETERMINISM_REGISTRY
-        if row.target == "torch.default_generator" and row.strategy == "receiver_profile"
+        if row.target == "torch.Generator" and row.strategy == "receiver_profile"
     ]
-    assert len(receiver_rows) == 1, "default-generator receiver_profile row missing"
+    assert len(receiver_rows) == 1, "all-receiver Generator receiver_profile row missing"
 
 
 @pytest.mark.smoke
@@ -205,29 +336,123 @@ def test_torch_rng_monitor_installs_and_restores_every_patch() -> None:
 
 
 @pytest.mark.smoke
-def test_default_generator_method_vocabulary_complete() -> None:
-    """Every public ``torch._C.Generator`` method carries an explicit classification.
+def test_generator_method_table_return_closure() -> None:
+    """r67 C1 immunizer: one row per public Generator name, closed under its return.
 
-    A torch upgrade that adds a Generator method is a RED test until classified; an
-    in-window call of an unclassified method additionally flags monitor uncertainty
-    (INCOMPLETE) rather than silently missing.
+    r66 corr1-1's lesson verbatim: "the enumeration test proves every method has a
+    row, but not that a row's disposition is semantically closed under its return
+    value." This test checks BOTH: a torch upgrade that adds a public Generator name
+    is RED until it has exactly one row, and every row's per-receiver-class
+    dispositions must be closed under its declared return family --
+
+    * ``host_scalar``: a marking disposition in BOTH columns (a bare Python int can
+      never leave the classifier unwitnessed on ANY receiver); ``replayable_read`` is
+      legal ONLY in the proven-default column, the non-default column must ceiling;
+    * ``state_tensor``: structural columns must carry the named r39 escape-belt proof;
+    * ``generator`` / ``self_generator``: structural columns must carry the named
+      classifier-closure proof (the returned Generator re-enters this classifier);
+    * ``device_attr``: inert both columns, and genuinely non-callable.
     """
 
     generator_type = type(torch.default_generator)
-    public_methods = {
-        name
-        for name in dir(generator_type)
-        if not name.startswith("_") and callable(getattr(generator_type, name, None))
-    }
-    unclassified = public_methods - set(_DEFAULT_GENERATOR_METHOD_DISPOSITIONS)
-    assert not unclassified, (
-        f"torch Generator methods without a frozen disposition: {sorted(unclassified)}"
+    assert generator_type is torch.Generator
+    public_names = {name for name in dir(generator_type) if not name.startswith("_")}
+    table_methods = [row.method for row in GENERATOR_METHOD_TABLE]
+    assert len(table_methods) == len(set(table_methods)), "duplicate Generator rows"
+    assert set(table_methods) == public_names, (
+        "GENERATOR_METHOD_TABLE out of sync with the public torch.Generator surface: "
+        f"missing rows {sorted(public_names - set(table_methods))}, orphan rows "
+        f"{sorted(set(table_methods) - public_names)}"
     )
-    for name, disposition in _DEFAULT_GENERATOR_METHOD_DISPOSITIONS.items():
-        assert disposition in (None, "entropy", "mutation", "replayable_read"), (
-            name,
-            disposition,
-        )
+    for row in GENERATOR_METHOD_TABLE:
+        assert row.return_family in GENERATOR_RETURN_FAMILIES, row
+        for disposition in (row.default_disposition, row.nondefault_disposition):
+            assert disposition is None or disposition in GENERATOR_METHOD_DISPOSITIONS, row
+        if row.return_family == "host_scalar":
+            assert row.default_disposition is not None, (
+                f"{row.method}: host-scalar return unwitnessed on default receivers"
+            )
+            assert row.nondefault_disposition in _CEILING_DISPOSITIONS, (
+                f"{row.method}: host-scalar return must CEILING on non-default "
+                "receivers (instance history is untracked; replayable is "
+                "default-column-only)"
+            )
+        elif row.return_family == "state_tensor":
+            if row.default_disposition is None or row.nondefault_disposition is None:
+                assert "r39" in row.note, (
+                    f"{row.method}: structural state-tensor column without a named "
+                    "escape-belt proof"
+                )
+        elif row.return_family in ("generator", "self_generator"):
+            if row.default_disposition is None or row.nondefault_disposition is None:
+                assert "classifier" in row.note, (
+                    f"{row.method}: structural Generator-return column without a "
+                    "named classifier-closure proof"
+                )
+        else:  # device_attr
+            assert row.default_disposition is None and row.nondefault_disposition is None
+            assert not callable(getattr(generator_type, row.method, None)), row
+
+
+@pytest.mark.smoke
+def test_generator_method_table_live_return_families() -> None:
+    """Each row's declared return family matches the LIVE return on a scratch engine.
+
+    Capability-gated methods (CPU philox offset / graph-safe state) may raise on the
+    scratch engine; anything else raising, or returning outside its declared family,
+    is a RED test -- the closure argument is only sound if the families are real.
+    """
+
+    def _args_for(scratch: torch.Generator, method: str) -> tuple[Any, ...]:
+        if method == "manual_seed":
+            return (1234,)
+        if method == "set_state":
+            return (scratch.get_state(),)
+        if method == "set_offset":
+            return (0,)
+        if method == "graphsafe_set_state":
+            return (scratch.clone_state(),)
+        return ()
+
+    for row in GENERATOR_METHOD_TABLE:
+        if row.return_family == "device_attr":
+            assert isinstance(torch.Generator().device, torch.device)
+            continue
+        scratch = torch.Generator()
+        try:
+            result = getattr(scratch, row.method)(*_args_for(scratch, row.method))
+        except (RuntimeError, NotImplementedError):
+            assert row.method in _CAPABILITY_GATED_METHODS, (
+                f"{row.method}: unexpected capability raise on a scratch generator"
+            )
+            continue
+        if row.return_family == "host_scalar":
+            assert isinstance(result, int) and not isinstance(result, bool), row
+        elif row.return_family == "state_tensor":
+            assert isinstance(result, torch.Tensor), row
+        elif row.return_family == "self_generator":
+            assert result is scratch, row
+        else:  # generator
+            assert isinstance(result, torch.Generator) and result is not scratch, row
+
+
+@pytest.mark.smoke
+def test_unknown_generator_method_flags_uncertainty() -> None:
+    """A future unclassified Generator method is monitor UNCERTAINTY, never a miss."""
+
+    class _FakeBoundMethod:
+        __name__ = "future_scalar_method"
+
+        def __init__(self, receiver: torch.Generator) -> None:
+            self.__self__ = receiver
+
+    monitor = host_nondeterminism_monitor(None)
+    with monitor as result:
+        monitor._classify_c_call(None, _FakeBoundMethod(torch.Generator()))
+    assert result.uncertain
+    assert any(
+        "generator_method:future_scalar_method" in detail for detail in result.uncertain_detail
+    )
 
 
 # ======================================================================================
@@ -281,14 +506,121 @@ def test_monitor_default_generator_receiver_classified(_torch_rng_state_guard) -
     assert not result2.channels
     assert "torch.default_generator.initial_seed" in result2.replayable_reads
 
-    # A USER-constructed local generator mutates instance state only (it can feed an op
-    # solely through the refused-at-save generator= kwarg): identity scoping means it
-    # never marks.
+    # Preservation pin (r67 table, non-default column): a USER-constructed local
+    # generator's MUTATIONS touch instance state only -- inert, no over-trigger. Its
+    # SCALAR READS are ceiled by the same table (see the r67 receiver-matrix tests).
     local_generator = torch.Generator()
     with host_nondeterminism_monitor(None) as result3:
         local_generator.manual_seed(7)
+        local_generator.set_state(local_generator.get_state())
     assert not result3.channels
     assert not result3.replayable_reads
+    assert not result3.uncertain
+
+
+# ======================================================================================
+# r67 C1 -- all-receiver Generator matrix (r66 free-F1 / corr1-1 / hon1-F5)
+# ======================================================================================
+
+
+@pytest.mark.smoke
+def test_private_generator_seed_is_ceiled_every_receiver_spelling() -> None:
+    """r66 free-F1: ``Generator().seed()`` draws OS entropy -- witnessed on EVERY
+    receiver class (temporary, pre-window held, subclass)."""
+
+    with host_nondeterminism_monitor(None) as result:
+        torch.Generator().seed()
+    assert "torch.Generator.seed" in result.channels
+
+    held = torch.Generator()
+    with host_nondeterminism_monitor(None) as result2:
+        held.seed()
+    assert "torch.Generator.seed" in result2.channels
+
+    class _SubGenerator(torch.Generator):
+        pass
+
+    with host_nondeterminism_monitor(None) as result3:
+        _SubGenerator().seed()
+    assert "torch.Generator.seed" in result3.channels, (
+        "inherited C method on a Generator SUBCLASS receiver escaped the classifier"
+    )
+
+
+@pytest.mark.smoke
+def test_private_generator_initial_seed_is_ceiled_not_replayable() -> None:
+    """Non-default ``initial_seed()`` is instance history: ceiling, never replayable."""
+
+    generator = torch.Generator()
+    generator.manual_seed(5)
+    with host_nondeterminism_monitor(None) as result:
+        generator.initial_seed()
+    assert "torch.Generator.initial_seed" in result.channels
+    assert not result.replayable_reads
+
+
+@pytest.mark.smoke
+def test_clone_state_return_closure_ceils_the_second_read() -> None:
+    """r66 corr1-1: ``default.clone_state().initial_seed()`` cannot escape.
+
+    ``clone_state`` itself is structural (marks nothing); the RETURNED clone re-enters
+    the all-receiver classifier, so its scalar read lands on the non-default ceiling
+    -- the accepted, documented over-ceiling for a clone of a seeded default.
+    """
+
+    with host_nondeterminism_monitor(None) as result:
+        clone = torch.default_generator.clone_state()
+    assert not result.channels
+    assert not result.replayable_reads
+    assert not result.uncertain
+
+    with host_nondeterminism_monitor(None) as result2:
+        clone.initial_seed()
+    assert "torch.Generator.initial_seed" in result2.channels
+    assert not result2.replayable_reads
+
+
+@pytest.mark.smoke
+def test_get_offset_marks_fail_closed_at_entry() -> None:
+    """r66 hon1-F5: ``get_offset`` ceilings on every receiver; the classifier marks at
+    c_call entry, so even the CPU capability raise never under-marks."""
+
+    generator = torch.Generator()
+    with host_nondeterminism_monitor(None) as result:
+        try:
+            generator.get_offset()
+        except RuntimeError:
+            pass
+    assert "torch.Generator.get_offset" in result.channels
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA default generator")
+def test_cuda_default_get_offset_is_ceiled(_torch_rng_state_guard) -> None:
+    """r66 hon1-F5 device path: a successful default-receiver offset read ceilings."""
+
+    torch.cuda.init()
+    device_generator = torch.cuda.default_generators[0]
+    with host_nondeterminism_monitor(None) as result:
+        offset = device_generator.get_offset()
+    assert isinstance(offset, int)
+    assert "torch.default_generator.get_offset" in result.channels
+    assert not result.replayable_reads
+
+
+@pytest.mark.smoke
+def test_device_default_populated_mid_window_selects_default_column(monkeypatch) -> None:
+    """Dynamic membership: a device default that appears MID-WINDOW (lazy device
+    init) still classifies with the default-receiver column on a routing-cache miss."""
+
+    xpu = _torch_rng_holder_module("torch.xpu")
+    if xpu is None:
+        pytest.skip("torch.xpu module not loaded on this torch")
+    generator = torch.Generator()
+    with host_nondeterminism_monitor(None) as result:
+        monkeypatch.setattr(xpu, "default_generators", (generator,), raising=False)
+        generator.initial_seed()
+    assert "torch.default_generator.initial_seed" in result.replayable_reads
+    assert not result.channels
 
 
 @pytest.mark.smoke
@@ -431,6 +763,41 @@ class _Deterministic(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Return a deterministic affine transform."""
         return x * 3 + 1
+
+
+class _PrivateGenSeedBranch(nn.Module):
+    """r66 free-F1 verbatim: branch on a TEMPORARY private generator's OS entropy."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Pick a tensor op from a user-constructed generator's entropy scalar."""
+        if torch.Generator().seed() % 2 == 0:
+            return x + 10
+        return x * 10
+
+
+class _HeldGenSeedBranch(nn.Module):
+    """r66 free-F1 held spelling: the model HOLDS the private generator."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.gen = torch.Generator()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Pick a tensor op from the held generator's entropy scalar."""
+        if self.gen.seed() % 2 == 0:
+            return x + 10
+        return x * 10
+
+
+class _CloneStateSeedBranch(nn.Module):
+    """r66 corr1-1 verbatim: leak the default seed through an unheld local clone."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Branch on the returned clone's initial_seed scalar."""
+        clone = torch.default_generator.clone_state()
+        if clone.initial_seed() % 2 == 0:
+            return x + 10
+        return x * 10
 
 
 def _capture(model: nn.Module, x: torch.Tensor, *, seed: int) -> tl.Trace:
@@ -589,6 +956,79 @@ def test_checkpoint_model_stays_verified_attested(tmp_path: Path) -> None:
     )
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
+
+
+# ======================================================================================
+# r67 C1 -- capture/save/load/run regressions for the r66 escapes
+# ======================================================================================
+
+
+@pytest.mark.parametrize("model_cls", [_PrivateGenSeedBranch, _HeldGenSeedBranch])
+def test_r67_private_generator_seed_ceilings_every_run(model_cls: type, tmp_path: Path) -> None:
+    """r66 free-F1 (CRITICAL): both private-generator seed spellings ceiling.
+
+    Before r67 these captured with ZERO channels and replayed
+    VERIFIED+ATTESTED while a fresh oracle flipped the branch ~50% of the time.
+    """
+
+    trace = _capture(model_cls(), torch.tensor([2.0]), seed=1)
+    profile = build_sparse_run_descriptor(trace).rng_profile
+    assert profile.host_rng_consumed is True
+    assert profile.capture_seed is None
+    assert any("torch.Generator.seed" in name for name in trace._runnable_host_rng_channels)
+    result = _roundtrip_run(
+        model_cls(), torch.tensor([2.0]), capture_seed=1, run_seed=1, tmp=tmp_path
+    )
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+@pytest.mark.parametrize("run_seed", [1, 2])
+def test_r67_clone_state_initial_seed_ceilings_every_run(run_seed: int, tmp_path: Path) -> None:
+    """r66 corr1-1 (HIGH): the clone's second read ceilings every run.
+
+    ``run_seed=2`` is the original false-VERIFIED construction; ``run_seed=1`` pins
+    the documented conservative over-ceiling (clone lineage is untracked, so even the
+    capture-seed run is UNVERIFIABLE by design -- fail-closed first).
+    """
+
+    trace = _capture(_CloneStateSeedBranch(), torch.tensor([2.0]), seed=1)
+    assert "torch.Generator.initial_seed" in trace._runnable_host_rng_channels
+    profile = build_sparse_run_descriptor(trace).rng_profile
+    assert profile.host_rng_consumed is True
+    assert profile.capture_seed is None
+    result = _roundtrip_run(
+        _CloneStateSeedBranch(),
+        torch.tensor([2.0]),
+        capture_seed=1,
+        run_seed=run_seed,
+        tmp=tmp_path,
+    )
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA default generator")
+def test_r67_cuda_default_get_offset_ceilings_every_run(
+    _torch_rng_state_guard, tmp_path: Path
+) -> None:
+    """r66 hon1-F5 (device-gated): a default-receiver offset branch ceilings."""
+
+    class _OffsetBranch(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Branch on the philox consumption offset of the CUDA default engine."""
+            if torch.cuda.default_generators[0].get_offset() == 0:
+                return x + 10
+            return x * 10
+
+    torch.cuda.init()
+    trace = _capture(_OffsetBranch(), torch.tensor([2.0]), seed=1)
+    assert "torch.default_generator.get_offset" in trace._runnable_host_rng_channels
+    result = _roundtrip_run(
+        _OffsetBranch(), torch.tensor([2.0]), capture_seed=1, run_seed=1, tmp=tmp_path
+    )
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
 # ======================================================================================

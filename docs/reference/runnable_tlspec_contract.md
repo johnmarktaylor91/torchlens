@@ -1317,12 +1317,16 @@ seed) reports `unverifiable` + `not_applicable`:
    the Python-visible `c_call`, not exact base-class object id (r42 hon1_1). A subclass method that
    genuinely OVERRIDES the current-clock reader is not attributed to the base reader merely because
    of its name;
-7. the torch Python-level RNG API surface (r65): every public endpoint of `torch` /
-   `torch.random` / `torch.cuda(.random)` / `torch.mps` / `torch.xpu` RNG namespaces carries an
-   explicit disposition in a frozen closed vocabulary (`TORCH_RNG_SURFACE`), from which the
-   registry rows, the monitor patches, and the coverage meta-tests all derive -- a torch upgrade
-   that grows the surface (a new module endpoint OR a new `torch._C.Generator` method) is a
-   FAILING meta-test until classified, never a silent gap:
+7. the torch Python-level RNG API surface (r65, extended r67): every public endpoint of the
+   `torch` / `torch.random` / `torch.cuda(.random)` / `torch.mps` / `torch.mtia` /
+   `torch.xpu(.random)` RNG namespaces carries an explicit disposition in a frozen closed
+   vocabulary (`TORCH_RNG_SURFACE`), from which the registry rows, the monitor patches, and the
+   coverage meta-tests all derive -- a torch upgrade that grows the surface (a new module
+   endpoint OR a new `torch._C.Generator` method) is a FAILING meta-test until classified, never
+   a silent gap. The module inventory itself is checked by an INDEPENDENT no-list discovery
+   meta-test that sweeps every already-loaded public torch module for RNG-bearing endpoints
+   (r67; production and its meta-test can no longer share a hand-maintained module blind spot,
+   the r66 `torch.mtia` gap class):
    * `seed` / `seed_all` spellings = ENTROPY -> permanent ceiling (`host_rng_consumed=true`,
      `capture_seed` discarded; `os.urandom` semantics);
    * `manual_seed(_all)` / `set_rng_state(_all)` spellings = in-forward MUTATION -> permanent
@@ -1338,15 +1342,33 @@ seed) reports `unverifiable` + `not_applicable`:
      (branch-on-state-bytes -> `incomplete_scalar_escape`, never `verified`); store-only reads
      are out of scope by design, which keeps `torch.utils.checkpoint(preserve_rng_state=True)`
      round-tripping `verified`+`attested` (the pinned zero-collateral guard);
-   * method calls whose `c_call` receiver IS a process default generator
-     (`torch.default_generator`, populated `torch.cuda.default_generators` entries) classify by
-     method name under the same dispositions (`seed`->entropy, `manual_seed`/`set_state`/
-     `set_offset`/`graphsafe_set_state`->mutation, `initial_seed`->replayable read; the
-     `get_state` family deliberately inert) -- receiver-IDENTITY scoped, so a user-constructed
-     `torch.Generator` (deterministic construction, probed) mutates instance state only and
-     never marks; it can feed an op solely through the `generator=` kwarg, refused at save. An
-     in-window call of an UNCLASSIFIED default-generator method flags monitor uncertainty
-     (INCOMPLETE), never a silent miss.
+   * method calls whose `c_call` receiver is ANY `torch.Generator` (r67 C1) -- process/device
+     defaults, user-constructed, model-held, RETURNED clones, and subclasses (an inherited C
+     method's `c_call` receiver is the subclass instance) -- dispatch through ONE authoritative
+     method table (`GENERATOR_METHOD_TABLE`) whose rows carry a return family plus separate
+     default-receiver and non-default-receiver dispositions, machine-checked to be CLOSED UNDER
+     THE RETURN VALUE: a host-scalar return is witnessed on EVERY receiver class, so user
+     Generators are NOT harmless -- `seed()` returns fresh OS entropy as a Python int on any
+     receiver (entropy ceiling everywhere); `initial_seed()` is a replayable read only on a
+     proven process/device default and ceilings on every other receiver (instance/clone history
+     is untracked); `get_offset()` ceilings every receiver (engine-history philox scalar no belt
+     sees; the classifier marks at `c_call` entry, so a CPU capability raise still marks
+     fail-closed); `clone_state()`/`graphsafe_get_state()` are structural ONLY because the
+     returned Generator re-enters this same all-receiver classifier (its later scalar reads
+     land on their own rows); non-default mutations (`manual_seed`/`set_state`/`set_offset`/
+     `graphsafe_set_state`) stay inert instance state (the pinned private-`manual_seed`
+     no-over-trigger), while the same methods on a default receiver are host mutations; the
+     `get_state` family keeps its r39 tensor-belt exemption exactly (a row would over-ceiling
+     `torch.utils.checkpoint(preserve_rng_state=True)`, pinned). Default-receiver membership is
+     a dynamically re-resolved ROUTING CACHE, never an install-time honesty boundary: on a
+     receiver miss the classifier re-resolves the currently populated
+     `torch.{cuda,xpu,mtia}.default_generators` (no imports, no device initialization), so a
+     device default populated mid-forward still selects the default column. An in-window call
+     of an UNCLASSIFIED public method on ANY Generator receiver flags monitor uncertainty
+     (INCOMPLETE), never a silent miss. Accepted, documented over-ceiling: a private Generator
+     cloned from a seeded process default and then queried with `initial_seed()` is replayable
+     in principle but conservatively ceilings, because clone lineage is not tracked
+     (fail-closed first; refine only on a demonstrated real-workload over-trigger).
    The torch RNG APIs are Python functions, so their held-reference layer registers the
    INNERMOST function's CODE identity (unwinding capture-wrapper `__wrapped__` chains) and
    classifies `call` profile events -- a pre-window `from torch import manual_seed` /
