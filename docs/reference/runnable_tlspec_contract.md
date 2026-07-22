@@ -333,7 +333,11 @@ structure, re-derives, and requires exact discharge.
   no-record. An ancestry-orphaned empty `input_ancestors` is re-resolved or fails closed;
   only a POSITIVELY state-rooted / literal-only chain records nothing (residual (3) stays
   STATE-side only). Any future unlabeled-receiver layout consumer MUST fail closed the same
-  way.
+  way. Malformed fact encodings stay in the typed lane (r75 L1): a metadata/literal/structure
+  fact whose `path`/`position` is not a sequence (int-encoded, or a string that would shred
+  into per-character components) refuses `context_field_invalid` at parse -- analysis-only
+  with the diagnostic intact, never the generic catch-all -- and the execution-side readers
+  keep a fail-closed belt for the same shape.
 * `state_metadata` -- **totalized BOTH facts** over the declared state-name universe:
   `captured_requires_grad` (staging applies it -- capture truth wins, the LOCKED r65 F-1
   ruling) and `grad_fn` presence (True refuses at save AND parse). The staging belt is pointed
