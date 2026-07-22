@@ -2022,58 +2022,30 @@ def _input_tree_contract_checks(
 def _runtime_nontensor_leaf_paths(root: Any) -> set[tuple[str | int, ...]]:
     """Enumerate runtime non-tensor input leaf paths, mirroring the capture walk.
 
-    Reproduces the capture-side ``_record_runnable_input_literal_leaves`` traversal so
-    the runtime non-tensor leaf-path SET aligns with the recorded fact set: tensor
-    leaves are skipped, namedtuples descend by field name, mappings descend under
-    grammar-encodable keys (a non-encodable key collapses its whole subtree to one
-    opaque leaf at the parent path, exactly as capture does), and lists/tuples descend
-    by index. Every other value is a scalar leaf recorded at its path.
+    Routes through the shared boundary traversal (``torchlens._input_walk``, r65
+    Cluster Y) with the SAME tagged-key literal vocabulary as the capture-side
+    ``_record_runnable_input_literal_leaves``, so the runtime non-tensor leaf-path SET
+    aligns with the recorded fact set BY CONSTRUCTION: tensor leaves are skipped,
+    namedtuples and dataclasses descend by field name (r42 corr1_2: a tensor-only
+    dataclass input's runtime set matches the recorded empty set exactly), mappings
+    descend under grammar-encodable keys (a non-encodable key collapses its whole
+    subtree to one opaque leaf at the parent path, exactly as capture does),
+    lists/tuples descend by index, empty containers surface as synthetic marker
+    paths, and every other value is a scalar leaf recorded at its path.
     """
 
-    from torchlens._io.runnable import (
-        EMPTY_CONTAINER_PATH_MARKER,
-        _UnsupportedLiteralError,
-        _encode_literal_key,
-        empty_container_kind,
-        input_path_key_component,
-    )
+    from torchlens._input_walk import tagged_mapping_key_component, walk_input_boundary
+    from torchlens._io.runnable import EMPTY_CONTAINER_PATH_MARKER
 
     paths: set[tuple[str | int, ...]] = set()
-
-    def _walk(value: Any, path: tuple[str | int, ...]) -> None:
-        """Descend one runtime boundary value, collecting every non-tensor leaf path."""
-
-        if isinstance(value, torch.Tensor):
-            return
-        if empty_container_kind(value) is not None:
-            paths.add((*path, EMPTY_CONTAINER_PATH_MARKER))
-            return
-        if isinstance(value, tuple) and hasattr(value, "_fields"):
-            for name in value._fields:
-                _walk(getattr(value, name), (*path, str(name)))
-            return
-        # r42 corr1_2: mirror the capture-side dataclass descent so a tensor-only dataclass
-        # input's runtime non-tensor leaf-path SET matches the recorded (empty) set exactly.
-        if dataclasses.is_dataclass(value) and not isinstance(value, type):
-            for field in dataclasses.fields(value):
-                _walk(getattr(value, field.name), (*path, field.name))
-            return
-        if isinstance(value, Mapping):
-            for key, child in value.items():
-                try:
-                    _encode_literal_key(key)
-                except _UnsupportedLiteralError:
-                    paths.add(path)
-                    continue
-                _walk(child, (*path, input_path_key_component(key)))
-            return
-        if isinstance(value, (list, tuple)):
-            for index, child in enumerate(value):
-                _walk(child, (*path, index))
-            return
-        paths.add(path)
-
-    _walk(root, ())
+    walk_input_boundary(
+        root,
+        (),
+        key_component=tagged_mapping_key_component,
+        on_leaf=lambda _value, path: paths.add(path),
+        on_empty_container=lambda _kind, path: paths.add((*path, EMPTY_CONTAINER_PATH_MARKER)),
+        on_opaque_key_subtree=lambda _child, path: paths.add(path),
+    )
     return paths
 
 
@@ -3845,6 +3817,12 @@ def _post_execution_contract_checks(
             # Unbound state escapes are compared by capture-digest in the dedicated
             # staleness check, not against runtime container structure.
             continue
+        if _is_state_metadata_fact_witness(witness):
+            # r65 F-1: declared capture-time state-metadata facts (requires_grad /
+            # grad_fn presence) are REPRODUCED by run preparation (the recorded bit is
+            # applied to the staged slot), not compared against runtime container
+            # structure.
+            continue
         if witness.site_label.startswith(_MODULE_TRAINING_MODE_SITE_PREFIX):
             # The declared per-module train/eval mode is a capture-time state fact anchoring
             # VERIFIED (see ``_mode_sensitive_op_unwitnessed``), not a runtime container
@@ -4353,6 +4331,9 @@ _UNBOUND_STATE_ESCAPE_SITE_PREFIX = "unbound_state_escape:"
 _UNBOUND_STATE_ESCAPE_FACT_KEY = "unbound_state_escape"
 """Discriminator key present in every unbound-state escape fact."""
 
+_STATE_METADATA_FACT_SITE_PREFIX = "state_metadata:"
+"""``site_label`` prefix marking a declared capture-time state-metadata fact (r65 F-1)."""
+
 
 def _is_unbound_state_escape_witness(witness: ControlWitness) -> bool:
     """Return whether a structure witness records an unbound state escape."""
@@ -4360,6 +4341,15 @@ def _is_unbound_state_escape_witness(witness: ControlWitness) -> bool:
     return (
         witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
         and witness.site_label.startswith(_UNBOUND_STATE_ESCAPE_SITE_PREFIX)
+    )
+
+
+def _is_state_metadata_fact_witness(witness: ControlWitness) -> bool:
+    """Return whether a structure witness records a declared state-metadata fact (r65)."""
+
+    return (
+        witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
+        and witness.site_label.startswith(_STATE_METADATA_FACT_SITE_PREFIX)
     )
 
 

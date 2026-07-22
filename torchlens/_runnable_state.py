@@ -14,10 +14,12 @@ import torch
 
 from . import _state
 from .errors import RunCapabilityUnavailableError, StateBindingError
+from .utils._torch_compat import tensor_version_or_none
 from .utils._torch_symbols import torch_attr
 from .runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
     RUNNABLE_INITIALIZER_POLICY_VERSION,
+    ControlWitnessKind,
     InitializerPolicy,
     RunnableDiagnostic,
     RunnableErrorCode,
@@ -108,15 +110,38 @@ _STATE_METADATA_PHYSICAL_SCOPE: tuple[tuple[str, Any], ...] = (
     ("storage_offset_is_zero", True),
     ("is_conj", False),
     ("is_neg", False),
+    # r65 Cluster X: the full input-net-parity dims. Every one is transport/staging-
+    # normalized -- the canonical staging clone produces a fresh, non-inference,
+    # non-view, leaf, grad-free, version-0, tightly-allocated tensor -- so the
+    # UNCONDITIONAL staged-runtime tripwire stays sound (pinned by the staging
+    # canonicality self-check tests, CPU and CUDA). ``is_shared``/``is_pinned`` are
+    # HOST-memory transport-placement bits (shared-memory backing, page-locking):
+    # canonical False means "no such backing", which the signature helper proves BY
+    # DEVICE off CPU -- raw ``is_shared()`` is a device CONSTANT True on CUDA (not a
+    # user sharing signal), so a device-blind raw read here would false-fire the
+    # tripwire on every CUDA slot device (r65 regap).
+    ("is_shared", False),
+    ("is_pinned", False),
+    ("is_inference", False),
+    ("is_view", False),
+    ("is_leaf", True),
+    ("retains_grad", False),
+    ("output_nr_is_zero", True),
+    ("grad_is_none", True),
+    ("version_is_zero", True),
+    ("storage_nbytes_is_tight", True),
 )
-"""Destination-owned PHYSICAL signature dims (r63 C1) and their canonical values.
+"""Destination-owned PHYSICAL signature dims (r63 C1; r65 full mirror) and their canonicals.
 
-These are normalized by transport (the snapshot clone compacts ``storage_offset`` and
-materializes conj/neg; safetensors re-lays stride) and by the canonical staging clone, so a
+These are normalized by transport (the snapshot clone compacts ``storage_offset``,
+materializes conj/neg, drops sharing/pinning/inference-ness/view-ness/autograd state, and
+allocates tight storage; safetensors re-lays stride) and by the canonical staging clone, so a
 recorded path that READ one of them on captured state rests on an unwitnessable constructor
 assumption whenever the captured value was non-canonical. They are enforced ESCAPE-GATED at the
 producer (only when the dim was actually read on that slot) and unconditionally by the staged
-runtime tripwire (staging guarantees canonical form).
+runtime tripwire (staging guarantees canonical form). ``requires_grad`` (+ ``grad_fn``
+presence) is deliberately ABSENT: it is a DECLARED-STATE FACT (r65 F-1 ruling) staging
+REPRODUCES, never a canonicality dim -- escape-gating it would refuse every frozen model.
 """
 
 _STATE_METADATA_READ_REQUIRED_DIMS: Mapping[str, tuple[str, Any]] = MappingProxyType(
@@ -126,15 +151,35 @@ _STATE_METADATA_READ_REQUIRED_DIMS: Mapping[str, tuple[str, Any]] = MappingProxy
         "storage_offset": ("storage_offset_is_zero", True),
         "is_conj": ("is_conj", False),
         "is_neg": ("is_neg", False),
+        # r65 Cluster X rows (kinds emitted by the STATE_METADATA_MIRROR dispatch in
+        # ``torchlens.backends.torch.completeness_witness``):
+        "is_shared": ("is_shared", False),
+        "is_pinned": ("is_pinned", False),
+        "is_inference": ("is_inference", False),
+        "is_view": ("is_view", False),
+        "is_leaf": ("is_leaf", True),
+        "retains_grad": ("retains_grad", False),
+        "output_nr": ("output_nr_is_zero", True),
+        "grad_presence": ("grad_is_none", True),
+        # Converged r65 ruling: a ``._version`` read refuses iff the captured pre-clone
+        # version was NON-default -- the counter is transport-lost (every staged clone is
+        # version 0), so only a version-0 capture can honestly reproduce the read.
+        "_version": ("version_is_zero", True),
+        # r64 F3: ``untyped_storage().nbytes()`` off a state receiver pins the BASE storage
+        # byte count; reproducible iff the captured storage was exactly
+        # ``numel * element_size`` (a larger-base offset-0-contiguous view is NOT).
+        "storage_nbytes": ("storage_nbytes_is_tight", True),
     }
 )
-"""Witnessed state-metadata READ kinds -> the signature dim each read exposes (r63 C1).
+"""Witnessed state-metadata READ kinds -> the signature dim each read exposes (r63 C1, r65 X).
 
 ``contiguous_default`` (a bare ``is_contiguous()``) is reproducible iff the captured slot was
-row-major contiguous; ``stride_exact`` (a ``stride()`` read, or ``is_contiguous`` probed with an
-explicit ``memory_format=``) pins the full stride tuple, reproducible iff the captured stride
-equals the canonical dense stride of the shape; the remaining kinds map one-to-one. An UNKNOWN
-future kind resolves to no entry and fails closed at the consumer.
+row-major contiguous; ``stride_exact`` (a ``stride()`` read, ``is_contiguous`` probed with an
+explicit ``memory_format=``, or a zero-copy view export -- ``numpy()`` / ``__array__`` /
+``__dlpack__`` / ``__cuda_array_interface__`` / ``to_dlpack``, which pin the exact layout with
+no accessor call) pins the full stride tuple, reproducible iff the captured stride equals the
+canonical dense stride of the shape; the remaining kinds map one-to-one onto their dims. An
+UNKNOWN future kind resolves to no entry and fails closed at the consumer.
 """
 
 
@@ -181,6 +226,16 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
         "storage_offset_is_zero": None,
         "is_conj": None,
         "is_neg": None,
+        "is_shared": None,
+        "is_pinned": None,
+        "is_inference": None,
+        "is_view": None,
+        "is_leaf": None,
+        "retains_grad": None,
+        "output_nr_is_zero": None,
+        "grad_is_none": None,
+        "version_is_zero": None,
+        "storage_nbytes_is_tight": None,
     }
     cls = type(value)
     if cls is torch.nn.Parameter:
@@ -233,6 +288,85 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
     try:
         signature["is_neg"] = bool(value.is_neg())
     except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
+    # -- r65 Cluster X dims (each exception-guarded to None: unreadable == UNKNOWN, and
+    # every consumer treats UNKNOWN as non-canonical -- fail closed, never a pass) --
+    try:
+        # ``is_shared()`` is a DEVICE CONSTANT off CPU (always True for CUDA -- device
+        # memory is inherently "shared" in torch's sense, NOT a user-chosen transport
+        # signal), so a fresh staging clone on a non-CPU slot device REPRODUCES it
+        # rather than normalizing it away: any captured read of the constant replays
+        # identically, and no canonical-False invariant exists to assert. The dim
+        # therefore records the CPU shared-memory TRANSPORT bit only (the
+        # ``share_memory_()`` backing a staging clone genuinely drops), proven False
+        # by device off CPU -- mirroring the ``is_pinned`` device guard below.
+        if value.device.type != "cpu":
+            signature["is_shared"] = False
+        else:
+            signature["is_shared"] = bool(value.is_shared())
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
+    try:
+        # ``is_pinned()`` routes through the accelerator hooks and can LAZILY INITIALIZE
+        # the CUDA context (a heavyweight capture-time side effect this signature stamp
+        # must never trigger). Pinned host memory cannot exist in a process whose CUDA
+        # context was never initialized (page-locking goes through the CUDA allocator),
+        # so the dim is proven False without the read whenever CUDA is absent or
+        # uninitialized; only an already-initialized context performs the real read.
+        if value.device.type != "cpu":
+            signature["is_pinned"] = False
+        elif torch.cuda.is_available() and torch.cuda.is_initialized():
+            signature["is_pinned"] = bool(value.is_pinned())
+        else:
+            signature["is_pinned"] = False
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
+    try:
+        signature["is_inference"] = bool(value.is_inference())
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
+    try:
+        signature["is_view"] = bool(value._is_view())
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
+    try:
+        is_leaf = bool(value.is_leaf)
+        signature["is_leaf"] = is_leaf
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        is_leaf = None
+    try:
+        retains_grad = bool(value.retains_grad)
+        signature["retains_grad"] = retains_grad
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        retains_grad = None
+    try:
+        signature["output_nr_is_zero"] = int(value.output_nr) == 0
+    except (RuntimeError, TypeError, ValueError, AttributeError, NotImplementedError):
+        pass
+    try:
+        if is_leaf or retains_grad:
+            signature["grad_is_none"] = value.grad is None
+        elif is_leaf is not None and retains_grad is not None:
+            # A non-leaf without retains_grad structurally carries no ``.grad``
+            # (reading it would only emit torch's non-leaf warning).
+            signature["grad_is_none"] = True
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
+    try:
+        version = tensor_version_or_none(value)
+        if version is not None:
+            signature["version_is_zero"] = int(version) == 0
+    except (RuntimeError, TypeError, ValueError, AttributeError, NotImplementedError):
+        pass
+    try:
+        # Stamped PRE-CLONE (``snapshot_capture_state_signatures`` runs before the
+        # normalizing snapshot clone), which is exactly why the r64 F3 large-base view is
+        # catchable: offset 0, contiguous, default stride, yet base storage larger than
+        # ``numel * element_size``.
+        signature["storage_nbytes_is_tight"] = int(value.untyped_storage().nbytes()) == int(
+            value.numel()
+        ) * int(value.element_size())
+    except (RuntimeError, TypeError, ValueError, AttributeError, NotImplementedError):
         pass
     return signature
 
@@ -518,6 +652,102 @@ def bind_embedded_nonpersistent_buffers(trace: Any, buffers: Mapping[str, Any]) 
     }
 
 
+_STATE_METADATA_FACT_SITE_PREFIX = "state_metadata:"
+"""``site_label`` prefix of a persisted DECLARED-STATE metadata fact witness (r65 F-1)."""
+
+_STATE_METADATA_FACT_KEY = "state_metadata"
+"""Discriminator key present in every declared state-metadata fact."""
+
+
+def recorded_state_metadata_facts(descriptor: SparseRunDescriptor) -> dict[str, dict[str, bool]]:
+    """Decode the per-state-name DECLARED metadata facts persisted in a descriptor (r65 F-1).
+
+    Returns ``{state_dict_name: {fact_name: bool}}`` for every well-formed
+    ``state_metadata:<name>`` SHAPE_STRUCTURE_FACT witness. Malformed entries are refused at
+    PARSE time (closed fact-name vocabulary, ``context_field_invalid``), so a descriptor that
+    reaches run preparation carries only validated facts; anything unexpected here decodes to
+    nothing (fail closed into "no fact", which stages the detached default).
+    """
+
+    from ._runnable_execution import _decode_literal
+
+    facts: dict[str, dict[str, bool]] = {}
+    for witness in descriptor.control_witnesses:
+        if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
+            continue
+        if not witness.site_label.startswith(_STATE_METADATA_FACT_SITE_PREFIX):
+            continue
+        try:
+            decoded = _decode_literal(witness.observed_value)
+        except Exception:
+            continue
+        if not isinstance(decoded, Mapping) or decoded.get(_STATE_METADATA_FACT_KEY) is not True:
+            continue
+        name = decoded.get("state")
+        fact_map = decoded.get("facts")
+        if not isinstance(name, str) or not isinstance(fact_map, Mapping):
+            continue
+        facts[name] = {
+            str(fact): bool(fact_value)
+            for fact, fact_value in fact_map.items()
+            if isinstance(fact_value, bool)
+        }
+    return facts
+
+
+def _apply_state_metadata_facts(
+    descriptor: SparseRunDescriptor, prepared: PreparedRunnableState
+) -> PreparedRunnableState:
+    """Reproduce the recorded per-slot ``requires_grad`` bit on staged state (r65 F-1).
+
+    The declared state model includes the capture-time autograd trainable bit for every slot
+    whose bit the captured forward READ; ``state_dict()`` detaches, so the bit is
+    transport-lost and must be re-applied to the staged clone. The recorded bit ALWAYS wins:
+    user-supplied ``load_state_dict`` tensors carrying a different ``requires_grad`` still
+    stage the recorded value, and slots without a recorded fact keep the detached default
+    (read-gated -- zero overhead for models that never read the bit). ``grad_fn`` presence
+    needs no application: True refuses at save (no staged leaf can carry a grad_fn) and False
+    is what every staged clone already exhibits.
+    """
+
+    facts = recorded_state_metadata_facts(descriptor)
+    if not facts:
+        return prepared
+    name_by_slot: dict[str, str] = {}
+    for slot in descriptor.tensor_slots:
+        if slot.state_binding is not None:
+            name_by_slot[slot.slot_id] = slot.state_binding.state_dict_name
+    for slot_id, value in prepared.slot_values.items():
+        name = name_by_slot.get(slot_id)
+        recorded = facts.get(name, {}).get("requires_grad") if name is not None else None
+        if recorded is None or bool(value.requires_grad) == recorded:
+            continue
+        try:
+            value.requires_grad_(recorded)
+        except RuntimeError as exc:
+            # Unreachable for producer-validated artifacts (a ``requires_grad=True`` fact on
+            # a non-differentiable slot refuses at save); a tampered artifact fails typed
+            # here rather than running with an unreproduced declared fact.
+            raise _binding_error(
+                (
+                    _diagnostic(
+                        RunnableErrorCode.STATE_METADATA_MISMATCH,
+                        f"Recorded state-metadata fact requires_grad={recorded!r} for state "
+                        f"{name!r} cannot be applied to the staged slot {slot_id!r}: {exc}. "
+                        "The declared capture-time trainable bit cannot be reproduced, so "
+                        "the run is refused (state_metadata_mismatch).",
+                        detection_stage="state_metadata_fact_staging",
+                        details=(
+                            ("reason", "state_metadata_mismatch"),
+                            ("state_dict_name", str(name)),
+                            ("slot_id", slot_id),
+                        ),
+                    ),
+                )
+            ) from exc
+    return prepared
+
+
 def prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunnableState:
     """Resolve and allocate all parameter/buffer slots without executing the DAG.
 
@@ -553,10 +783,14 @@ def prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunna
     nonpersistent_buffers = _prepared_nonpersistent_buffers(trace, descriptor)
 
     def _staged(prepared: PreparedRunnableState) -> PreparedRunnableState:
-        return replace(
+        staged = replace(
             prepared,
             slot_values=stage_state_to_slot_devices(descriptor, prepared.slot_values),
         )
+        # r65 F-1: reproduce the recorded per-slot ``requires_grad`` bit AFTER device
+        # staging, on every state source (user-staged, embedded, random-init) -- the
+        # recorded declared fact always wins over the source tensor's transport-lost bit.
+        return _apply_state_metadata_facts(descriptor, staged)
 
     user_state = trace.__dict__.get("_runnable_staged_user_state")
     if isinstance(user_state, Mapping):
@@ -1202,15 +1436,32 @@ def _staged_state_clone(
     when non-canonical (an unreadable stride fails closed into the re-lay).
     """
 
-    clone = _byte_guarded_clone(value, slot_id=slot_id, state_dict_name=state_dict_name)
-    try:
-        canonical = tuple(int(v) for v in clone.stride()) == _default_dense_stride(
-            tuple(int(v) for v in clone.shape)
-        )
-    except (RuntimeError, TypeError, ValueError, NotImplementedError):
-        canonical = False
-    if not canonical:
-        clone = clone.clone(memory_format=torch.contiguous_format)
+    # r65 staging hardening (a): materialize under ``torch.inference_mode(False)`` so a user
+    # calling ``tl.load(...).run()`` (or binding state) INSIDE an inference_mode region cannot
+    # mint inference-mode staged clones and trip the ``is_inference`` runtime tripwire dim on
+    # TorchLens's own staging output.
+    with torch.inference_mode(False):
+        clone = _byte_guarded_clone(value, slot_id=slot_id, state_dict_name=state_dict_name)
+        try:
+            canonical = tuple(int(v) for v in clone.stride()) == _default_dense_stride(
+                tuple(int(v) for v in clone.shape)
+            )
+        except (RuntimeError, TypeError, ValueError, NotImplementedError):
+            canonical = False
+        if not canonical:
+            clone = clone.clone(memory_format=torch.contiguous_format)
+        # r65 staging hardening (b): a clone materialized FROM an inference-mode source
+        # carries ``_version == 1`` (torch counts the out-of-inference materialization as a
+        # mutation on the fresh destination), which would over-fire the new
+        # ``version_is_zero`` tripwire dim on TorchLens's own staging output. One extra
+        # clone of the now-ordinary tensor restores the canonical fresh counter; every
+        # ordinary source already stages at version 0 and never pays this.
+        try:
+            version = tensor_version_or_none(clone)
+        except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+            version = None
+        if version is None or int(version) != 0:
+            clone = clone.clone()
     return clone
 
 

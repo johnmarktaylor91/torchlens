@@ -453,6 +453,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     witnesses.extend(literal_witnesses)
     witnesses.extend(_input_metadata_witnesses(trace, start_order=len(witnesses)))
     witnesses.extend(_module_training_mode_witnesses(trace, start_order=len(witnesses)))
+    witnesses.extend(_state_metadata_fact_witnesses(trace, start_order=len(witnesses)))
     escape_witnesses, escape_incomplete = _escape_witnesses(
         trace, ops, calls, slot_drafts, start_order=len(witnesses)
     )
@@ -2668,6 +2669,79 @@ def _module_training_mode_witnesses(
     ]
 
 
+STATE_METADATA_FACT_SITE_PREFIX = "state_metadata:"
+"""``site_label`` prefix marking a DECLARED capture-time state-metadata fact (r65 F-1)."""
+
+STATE_METADATA_FACT_KEY = "state_metadata"
+"""Discriminator key present in every declared state-metadata fact."""
+
+_STATE_METADATA_FACT_NAMES = frozenset({"requires_grad", "grad_fn"})
+"""CLOSED vocabulary of persistable declared state-metadata fact names (r65 F-1).
+
+``requires_grad`` persists its capture-time bool (staging reproduces it via
+``requires_grad_``); ``grad_fn`` persists PRESENCE (True refuses at save -- no staged leaf
+can carry a grad_fn). Parse-side validation rejects any other name or a non-bool value as a
+``context_field_invalid``-class refusal; extending this vocabulary is an explicit schema
+decision, never an incidental producer change.
+"""
+
+
+def _state_metadata_fact_witnesses(
+    trace: Any,
+    *,
+    start_order: int,
+) -> list[ControlWitness]:
+    """Witness capture-time DECLARED state-metadata facts per state slot (r65 F-1).
+
+    A forward that reads ``self.w.requires_grad`` (or branches on ``self.w.grad_fn``)
+    steers Python control flow on a bit that ``state_dict()`` transport DETACHES away, so
+    without a declared fact an autograd-branching frozen model would replay against a staged
+    slot whose bit silently differs from capture. Each observed (state, fact, value) --
+    recorded by the completeness-witness property patch ONLY when such a read actually
+    happened on the DIRECT registered object -- becomes a ``SHAPE_STRUCTURE_FACT`` witness
+    whose recorded bit run preparation re-applies to the staged slot (the declared-state
+    model gains the capture-time trainable bit for exactly the slots that READ it). A model
+    that never reads state autograd metadata records no facts and emits no witnesses: zero
+    over-trigger and zero artifact growth by construction.
+    """
+
+    from ..backends.torch.completeness_witness import host_escape_state_metadata_facts
+
+    facts_by_state = host_escape_state_metadata_facts(trace)
+    if not facts_by_state:
+        return []
+    witnesses: list[ControlWitness] = []
+    for name in sorted(facts_by_state):
+        recorded = {
+            str(fact): bool(fact_value)
+            for fact, fact_value in sorted(facts_by_state[name].items())
+            if str(fact) in _STATE_METADATA_FACT_NAMES
+        }
+        if not recorded:
+            continue
+        fact = {
+            STATE_METADATA_FACT_KEY: True,
+            "state": str(name),
+            "facts": recorded,
+        }
+        try:
+            observed = _encode_literal(fact)
+        except _UnsupportedLiteralError:  # pragma: no cover - bool/str facts always encode
+            continue
+        order = start_order + len(witnesses)
+        witnesses.append(
+            ControlWitness(
+                witness_id=f"witness:{order + 1}",
+                kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+                order=order,
+                call_id=None,
+                site_label=f"{STATE_METADATA_FACT_SITE_PREFIX}{name}",
+                observed_value=observed,
+            )
+        )
+    return witnesses
+
+
 MODEL_INPUT_METADATA_SITE_PREFIX = "model_input_metadata:"
 """``site_label`` prefix marking a witnessed model-input metadata-predicate read."""
 
@@ -2941,14 +3015,15 @@ def _preflight_state_metadata(trace: Any) -> list[RunnableDiagnostic]:
     """
 
     from .._runnable_state import state_metadata_read_violations
-    from ..backends.torch.completeness_witness import host_escape_state_metadata_reads
+    from ..backends.torch.completeness_witness import (
+        host_escape_state_metadata_facts,
+        host_escape_state_metadata_reads,
+    )
 
+    diagnostics: list[RunnableDiagnostic] = []
     reads = host_escape_state_metadata_reads(trace)
-    if not reads:
-        return []
     signatures = trace.__dict__.get("_runnable_capture_state_signatures")
     signature_map: Mapping[str, Any] = signatures if isinstance(signatures, Mapping) else {}
-    diagnostics: list[RunnableDiagnostic] = []
     for name in sorted(reads):
         violations = state_metadata_read_violations(signature_map.get(name), reads[name])
         if not violations:
@@ -2968,6 +3043,46 @@ def _preflight_state_metadata(trace: Any) -> list[RunnableDiagnostic]:
                     ("state_dict_name", name),
                     ("read_kinds", ",".join(sorted(reads[name]))),
                     ("violations", repr(violations)),
+                ),
+            )
+        )
+    # r65 F-1: a DECLARED state-metadata fact refuses ONLY when staging provably cannot
+    # reproduce it -- ``grad_fn`` presence True (no staged leaf can carry a grad_fn; the
+    # exotic non-leaf-state capture), or ``requires_grad`` True on a slot whose captured
+    # dtype cannot require grad (or whose capture value is unavailable to prove it can).
+    # The ordinary population (frozen OR trainable models reading ``requires_grad`` on
+    # float state) records facts staging reproduces exactly -- no refusal, no ceiling.
+    facts_by_state = host_escape_state_metadata_facts(trace)
+    capture_state = trace.__dict__.get("_runnable_capture_state")
+    capture_map: Mapping[str, Any] = capture_state if isinstance(capture_state, Mapping) else {}
+    for name in sorted(facts_by_state):
+        slot_facts = facts_by_state[name]
+        problems: list[str] = []
+        if slot_facts.get("grad_fn"):
+            problems.append("grad_fn_present")
+        if slot_facts.get("requires_grad"):
+            captured = capture_map.get(name)
+            differentiable = isinstance(captured, torch.Tensor) and (
+                captured.is_floating_point() or captured.is_complex()
+            )
+            if not differentiable:
+                problems.append("requires_grad_unreproducible_dtype")
+        if not problems:
+            continue
+        diagnostics.append(
+            _diagnostic(
+                RunnableErrorCode.STATE_METADATA_MISMATCH,
+                f"The captured forward READ declared autograd metadata of state tensor "
+                f"{name!r} that no staged state can reproduce ({', '.join(problems)}): a "
+                "staged slot is always a grad_fn-free leaf, and a non-differentiable slot "
+                "cannot carry requires_grad=True. The runnable save is refused "
+                "(state_metadata_mismatch); analysis save levels remain available.",
+                detection_stage="producer_state_metadata",
+                details=(
+                    ("reason", "state_metadata_mismatch"),
+                    ("state_dict_name", name),
+                    ("facts", repr(dict(sorted(slot_facts.items())))),
+                    ("problems", ",".join(problems)),
                 ),
             )
         )

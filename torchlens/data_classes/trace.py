@@ -1300,6 +1300,7 @@ class Trace(
         "_buffer_storage_addresses": FieldPolicy.DROP,
         "_runnable_host_rng_unreplayable": FieldPolicy.DROP,
         "_runnable_host_rng_channels": FieldPolicy.DROP,
+        "_runnable_host_rng_replayable_reads": FieldPolicy.DROP,
         "_runnable_rng_monitor_uncertain": FieldPolicy.DROP,
         "_runnable_rng_monitor_uncertain_detail": FieldPolicy.DROP,
         "_runnable_output_losslessness": FieldPolicy.DROP,

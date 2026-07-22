@@ -838,80 +838,49 @@ def _record_runnable_input_literal_leaves(
     if not bool(getattr(trace, "intervention_ready", False)):
         return
 
-    import dataclasses as _dataclasses
-    from collections.abc import Mapping as _Mapping
-
-    import torch as _torch
-
-    from torchlens._io.runnable import (
-        EMPTY_CONTAINER_PATH_MARKER,
-        _UnsupportedLiteralError,
-        _encode_literal_key,
-        empty_container_kind,
-        input_path_key_component,
-    )
+    from torchlens._input_walk import tagged_mapping_key_component, walk_input_boundary
+    from torchlens._io.runnable import EMPTY_CONTAINER_PATH_MARKER
 
     leaves: list[tuple[object, tuple[str | int, ...], Any]] = []
 
-    def _walk(position: object, value: Any, path: tuple[str | int, ...]) -> None:
-        """Descend one boundary value, recording every non-tensor leaf.
+    def _walk_site(position: object, value: Any) -> None:
+        """Record one boundary site's non-tensor leaves through the shared traversal.
 
-        A mapping child is descended under *every* key type. When a key is
-        representable in the frozen literal grammar (``bool``/``int``/``float``/
-        ``str``/``None`` or a safe scalar tuple) the encodable key becomes the
-        container-path component so a changed leaf beneath it can be witnessed
-        and diverged upon. When a key is *not* representable (enum, object,
-        non-finite float, ...) no leaf below it can be re-derived at run time, so
-        the whole child subtree is recorded as one OPAQUE marker leaf. That
-        downgrades witness coverage to UNVERIFIABLE rather than silently dropping
-        the subtree -- a silently skipped leaf under an exotic key is the
-        false-VERIFIED money bug this walker exists to prevent.
-
-        An EMPTY container adds no child leaf, so it is witnessed by a synthetic
-        marker leaf carrying its KIND at ``(*path, EMPTY_CONTAINER_PATH_MARKER)``
-        so an added/removed/kind-changed empty container (which can steer
-        ``'flag' in d`` / ``if not lst`` control flow) diverges instead of
-        silently replaying the recorded path. A BOOL mapping key is tagged so it
-        stays distinct from the equal-valued int key in the leaf-path set.
+        Container dispatch is single-sourced in ``torchlens._input_walk`` (r65
+        Cluster Y): this walker only declares WHAT it records. A mapping child under
+        a literal-grammar key is recorded at its tagged path (bool keys stay distinct
+        from equal-valued int keys in the leaf-path set); a child under a
+        NON-representable key (enum, object, bytes, ...) cannot be
+        re-derived at run time, so the whole subtree is recorded as one OPAQUE marker
+        leaf -- downgrading witness coverage to UNVERIFIABLE rather than silently
+        dropping it (a silently skipped leaf under an exotic key is the false-VERIFIED
+        money bug this walker exists to prevent). An EMPTY container adds no child
+        leaf, so it is witnessed by a synthetic marker leaf carrying its KIND at
+        ``(*path, EMPTY_CONTAINER_PATH_MARKER)`` so an added/removed/kind-changed
+        empty container (which can steer ``'flag' in d`` / ``if not lst`` control
+        flow) diverges instead of silently replaying the recorded path. r42 corr1_2:
+        dataclass containers descend by DECLARED FIELD with the same leaf vocabulary,
+        so a tensor-only dataclass input records ZERO opaque leaves (stays fully
+        witnessable -> VERIFIED) while a genuinely-opaque field still surfaces.
         """
 
-        if isinstance(value, _torch.Tensor):
-            return
-        kind = empty_container_kind(value)
-        if kind is not None:
-            leaves.append((position, (*path, EMPTY_CONTAINER_PATH_MARKER), kind))
-            return
-        if isinstance(value, tuple) and hasattr(value, "_fields"):
-            for name in value._fields:
-                _walk(position, getattr(value, name), (*path, str(name)))
-            return
-        # r42 corr1_2: a dataclass container descends by DECLARED FIELD, using the same
-        # tensor/non-tensor leaf vocabulary as tuples/mappings/namedtuples, so a tensor-only
-        # dataclass input records ZERO opaque leaves (stays fully witnessable -> VERIFIED); a
-        # genuinely-opaque field still surfaces as an opaque leaf (no weakening).
-        if _dataclasses.is_dataclass(value) and not isinstance(value, type):
-            for _field in _dataclasses.fields(value):
-                _walk(position, getattr(value, _field.name), (*path, _field.name))
-            return
-        if isinstance(value, _Mapping):
-            for key, child in value.items():
-                try:
-                    _encode_literal_key(key)
-                except _UnsupportedLiteralError:
-                    leaves.append((position, path, _OPAQUE_INPUT_LEAF))
-                    continue
-                _walk(position, child, (*path, input_path_key_component(key)))
-            return
-        if isinstance(value, (list, tuple)):
-            for index, child in enumerate(value):
-                _walk(position, child, (*path, index))
-            return
-        leaves.append((position, path, value))
+        walk_input_boundary(
+            value,
+            (),
+            key_component=tagged_mapping_key_component,
+            on_leaf=lambda leaf, p: leaves.append((position, p, leaf)),
+            on_empty_container=lambda kind, p: leaves.append(
+                (position, (*p, EMPTY_CONTAINER_PATH_MARKER), kind)
+            ),
+            on_opaque_key_subtree=lambda _child, p: leaves.append(
+                (position, p, _OPAQUE_INPUT_LEAF)
+            ),
+        )
 
     for index, arg in enumerate(input_args):
-        _walk(("arg", index), arg, ())
+        _walk_site(("arg", index), arg)
     for key, value in input_kwargs.items():
-        _walk(("kwarg", key), value, ())
+        _walk_site(("kwarg", key), value)
 
     if leaves:
         trace.__dict__["_runnable_input_nontensor_leaves"] = tuple(leaves)
@@ -949,9 +918,7 @@ def _record_runnable_input_tensor_sites(
     if not bool(getattr(trace, "intervention_ready", False)):
         return
 
-    from collections.abc import Mapping as _Mapping
-
-    import torch as _torch
+    from torchlens._input_walk import raw_mapping_key_component, walk_input_boundary
 
     sites: dict[int, tuple[object, tuple[str | int, ...]]] = {}
     # (tensor, site) leaves so the completeness witness can additionally index model-input
@@ -959,38 +926,38 @@ def _record_runnable_input_tensor_sites(
     # alias shares the leaf's storage but is a distinct object the id map above misses.
     tensor_leaves: list[tuple[Any, tuple[object, tuple[str | int, ...]]]] = []
 
-    def _walk(position: object, value: Any, path: tuple[str | int, ...]) -> None:
-        """Descend one boundary value, indexing every tensor leaf by identity.
+    def _walk_site(position: object, value: Any) -> None:
+        """Index one boundary site's tensor leaves by identity through the shared traversal.
 
-        Mapping children are indexed under EVERY key type: a fact site whose path
-        carries a non-representable key simply fails literal encoding at witness time
-        and is dropped, and the literal-leaf walker independently records such a
-        subtree as an OPAQUE leaf that downgrades the run to UNVERIFIABLE -- so a
-        dropped metadata fact under an exotic key can never yield a false VERIFIED.
+        Container dispatch is single-sourced in ``torchlens._input_walk`` (r65
+        Cluster Y), so this walker descends EXACTLY the container set the literal
+        walker descends -- including dataclasses (the r64 Finding-1 false-VERIFIED: a
+        missing dataclass branch here recorded no metadata witness for
+        ``box.x.is_contiguous()`` on a dataclass input field, so a same-value
+        non-contiguous twin replayed the captured branch as VERIFIED). Mapping
+        children are indexed under EVERY key with the RAW key component (the declared
+        dual vocabulary, residual R6): a fact site whose path carries a
+        non-representable key simply fails literal encoding at witness time and is
+        dropped, and the literal-leaf walker independently records such a subtree as
+        an OPAQUE leaf that downgrades the run to UNVERIFIABLE -- so a dropped
+        metadata fact under an exotic key can never yield a false VERIFIED.
         """
 
-        if isinstance(value, _torch.Tensor):
+        def _index_tensor(tensor: Any, path: tuple[Any, ...]) -> None:
+            """Record one tensor leaf's identity-keyed site."""
+
             site = (position, path)
-            sites[id(value)] = site
-            tensor_leaves.append((value, site))
-            return
-        if isinstance(value, tuple) and hasattr(value, "_fields"):
-            for name in value._fields:
-                _walk(position, getattr(value, name), (*path, str(name)))
-            return
-        if isinstance(value, _Mapping):
-            for key, child in value.items():
-                _walk(position, child, (*path, key))
-            return
-        if isinstance(value, (list, tuple)):
-            for index, child in enumerate(value):
-                _walk(position, child, (*path, index))
-            return
+            sites[id(tensor)] = site
+            tensor_leaves.append((tensor, site))
+
+        walk_input_boundary(
+            value, (), key_component=raw_mapping_key_component, on_tensor=_index_tensor
+        )
 
     for index, arg in enumerate(input_args):
-        _walk(("arg", index), arg, ())
+        _walk_site(("arg", index), arg)
     for key, value in input_kwargs.items():
-        _walk(("kwarg", key), value, ())
+        _walk_site(("kwarg", key), value)
 
     if sites:
         trace.__dict__["_runnable_input_tensor_sites"] = sites
@@ -1398,11 +1365,23 @@ def run_and_log_inputs_through_model(
                             _global_advanced = host_rng_advanced(
                                 _host_rng_before, snapshot_host_rng()
                             )
-                            self._runnable_host_rng_consumed = _global_advanced or bool(
-                                _rng_channels.channels
+                            # r65 CLUSTER Z stamping split: a torch RNG
+                            # ``replayable_read`` (the ``initial_seed`` family --
+                            # a host scalar fully determined by the capture seed)
+                            # sets CONSUMED without poisoning the capture seed, so
+                            # a run at the capture seed stays verified while any
+                            # other/absent seed ceilings; ceiling ``channels``
+                            # alone decide UNREPLAYABLE.
+                            self._runnable_host_rng_consumed = (
+                                _global_advanced
+                                or bool(_rng_channels.channels)
+                                or bool(_rng_channels.replayable_reads)
                             )
                             self._runnable_host_rng_unreplayable = bool(_rng_channels.channels)
                             self._runnable_host_rng_channels = tuple(sorted(_rng_channels.channels))
+                            self._runnable_host_rng_replayable_reads = tuple(
+                                sorted(_rng_channels.replayable_reads)
+                            )
                             self._runnable_rng_monitor_uncertain = bool(_rng_channels.uncertain)
                             # r39 CLASS A: name the offending threads / coverage failure so
                             # the INCOMPLETE ceiling's readiness diagnostic is actionable.

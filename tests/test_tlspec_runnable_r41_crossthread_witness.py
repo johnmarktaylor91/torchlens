@@ -78,7 +78,9 @@ from torchlens.runnable import (
 )
 from torchlens.utils.rng import (
     HOST_NONDETERMINISM_REGISTRY,
+    TORCH_RNG_SURFACE,
     _call_site_argcount,
+    _torch_rng_holder_module,
     host_nondeterminism_monitor,
 )
 
@@ -264,6 +266,82 @@ _HELD_REF_RECIPES: dict[str, _HeldRecipe] = {
     ),
 }
 
+
+def _torch_rng_target_getter(target: str) -> Callable[[], Any]:
+    """Pre-window resolver for one torch RNG surface spelling."""
+
+    def get() -> Any:
+        module_path, _, attr_name = target.rpartition(".")
+        module = _torch_rng_holder_module(module_path)
+        if module is None:
+            raise AttributeError(target)
+        return getattr(module, attr_name)
+
+    return get
+
+
+def _invoke_torch_rng_target(target: str, held: Any) -> None:
+    """Invoke a held torch RNG endpoint best-effort (deviceless hosts included).
+
+    Both witness layers mark AT ENTRY -- the module-attr wrapper before delegation and
+    the held-code ``call`` event when the function body is entered -- so a device
+    endpoint that raises on an unavailable device has already been witnessed; failures
+    are swallowed. ``set_rng_state`` spellings feed their matching ``get_rng_state``
+    value when it resolves (the get family carries no row, so the arg prep is inert).
+    """
+
+    name = target.rpartition(".")[2]
+    args: tuple[Any, ...] = ()
+    if name.startswith("set_rng_state"):
+        state: Any = None
+        try:
+            get_spelling = target.replace("set_rng_state", "get_rng_state")
+            module_path, _, attr_name = get_spelling.rpartition(".")
+            module = _torch_rng_holder_module(module_path)
+            if module is not None:
+                state = getattr(module, attr_name)()
+        except Exception:
+            state = None
+        args = (state,)
+    elif name.startswith("manual_seed"):
+        args = (1234,)
+    try:
+        held(*args)
+    except Exception:
+        pass
+
+
+def _build_torch_rng_held_recipes() -> dict[str, _HeldRecipe]:
+    """r65 CLUSTER Z: derive held-ref recipes for every monitored torch RNG row.
+
+    Aliased spellings share ONE Python function object (``torch.manual_seed`` IS
+    ``torch.random.manual_seed``), so the held-code layer's first-registered canonical
+    channel -- or a transitive default-generator receiver channel the module APIs
+    delegate through -- is an acceptable mark for any spelling of the same suffix.
+    """
+
+    recipes: dict[str, _HeldRecipe] = {}
+    monitored = [
+        row
+        for row in TORCH_RNG_SURFACE
+        if row.disposition in ("entropy", "mutation", "replayable_read")
+    ]
+    for row in monitored:
+        suffix = row.target.rpartition(".")[2]
+        acceptable = frozenset(
+            {r.target for r in monitored if r.target.rpartition(".")[2] == suffix}
+            | {f"torch.default_generator.{suffix}"}
+        )
+        recipes[row.target] = _HeldRecipe(
+            _torch_rng_target_getter(row.target),
+            lambda f, _t=row.target: _invoke_torch_rng_target(_t, f),
+            acceptable,
+        )
+    return recipes
+
+
+_HELD_REF_RECIPES.update(_build_torch_rng_held_recipes())
+
 _HELD_REF_TARGETS: tuple[str, ...] = tuple(
     row.target
     for row in HOST_NONDETERMINISM_REGISTRY
@@ -278,7 +356,10 @@ def test_held_ref_registry_channel_marks(target: str) -> None:
 
     The parametrization is derived from the LIVE registry: a future ``module_patch``
     row without a probe recipe here fails loudly, and a row whose held-ref identity
-    registration is dropped fails behaviorally (no channel marked).
+    registration is dropped fails behaviorally (no channel marked). r65: torch RNG
+    ``replayable_read`` rows mark the non-ceiling ``replayable_reads`` set, so the
+    assertion checks the union; the probe brackets global torch RNG state because the
+    entropy/mutation recipes genuinely reseed it.
     """
 
     recipe = _HELD_REF_RECIPES.get(target)
@@ -290,11 +371,21 @@ def test_held_ref_registry_channel_marks(target: str) -> None:
         held = recipe.get()
     except AttributeError:
         pytest.skip(f"{target} unavailable on this platform")
-    with host_nondeterminism_monitor(None) as result:
-        recipe.invoke(held)
-    assert recipe.channels & result.channels, (
-        f"held reference to {target!r} left channels {sorted(result.channels)!r}"
+    torch_state = torch.get_rng_state()
+    cuda_states = (
+        torch.cuda.get_rng_state_all()
+        if torch.cuda.is_available() and torch.cuda.is_initialized()
+        else None
     )
+    try:
+        with host_nondeterminism_monitor(None) as result:
+            recipe.invoke(held)
+    finally:
+        torch.set_rng_state(torch_state)
+        if cuda_states is not None:
+            torch.cuda.set_rng_state_all(cuda_states)
+    marked = result.channels | result.replayable_reads
+    assert recipe.channels & marked, f"held reference to {target!r} left marks {sorted(marked)!r}"
 
 
 # ======================================================================================
