@@ -624,6 +624,44 @@ _INPUT_METADATA_LAYOUT_NAMES = frozenset({"is_contiguous", "stride", "storage_of
 ``x.stride()``), so a derived-view read fails closed (cannot be re-derived from the runtime
 leaf); a ``.data`` / ``.detach()`` storage-alias (identical geometry) records the leaf fact."""
 
+INPUT_DERIVED_LAYOUT_FACT_NAME = "derived_layout_read"
+"""Synthetic ``model_input_metadata`` fact name for an INPUT-DERIVED activation layout read
+(r73 F1).
+
+A layout-trio read (``is_contiguous`` / ``stride`` / ``storage_offset``) whose receiver is a
+genuinely NEW activation (fresh storage -- not the input leaf, not a storage alias, not a
+``_base``-linked view) previously recorded NOTHING: elementwise/conv ops PROPAGATE the input's
+memory format, so ``(x * 2).is_contiguous(memory_format=torch.channels_last)`` steers a branch
+on the runtime input's layout while the input contract pins only shape+dtype -- a
+channels_last twin of the capture input replayed the captured arm as a false VERIFIED
+(confirmed r72 hon1 F1). The traced value DAG makes the rooting attributable: the receiver's
+``OpEvent.input_ancestors`` names exactly the model-input ops its VALUE derives from, so the
+observer records this fact -- carrying the ROOTING LEAF's capture-time stride tuple -- on each
+ancestor input site. At run time the executor compares the RAW runtime leaf's strides against
+the recorded tuple and, on ANY difference, ceilings the run UNVERIFIABLE (never DIVERGED: a
+changed input layout does not PROVE the intermediate's layout differs -- e.g. a ``reshape``
+between input and read can canonicalize it -- so the honest verdict is "cannot verify", per
+the r35 three-state rule). A same-stride runtime input compares equal and stays VERIFIED, so
+honest channels_last-on-channels_last models are untouched (zero collateral). The mirrored
+consumer constants live in ``torchlens._io.runnable._INPUT_METADATA_FACT_NAMES`` and
+``torchlens._runnable_execution._INPUT_DERIVED_LAYOUT_FACT_NAME``.
+
+Scope / documented residuals (future intermediate-metadata escape kinds route HERE):
+
+* LAYOUT trio only. Non-layout bool accessors on a fresh activation (``(x * 2).is_pinned()``)
+  are allocator/ambient facts, not input-propagated ones; extending coverage to a new
+  input-propagated metadata kind means adding its accessor family to this same
+  ancestry-attributed net, not a new mechanism.
+* An UNLABELED receiver (a tensor TorchLens never logged: a pre-capture module attribute, or
+  an escape-laundered round trip like ``torch.from_numpy(y.numpy())`` whose ancestry breaks at
+  the internal-source boundary) records nothing -- hidden Python state and escape laundering
+  are outside the declared state model (contract section 11); the ``.numpy()`` escape itself
+  is digest-witnessed separately.
+* STATE-rooted intermediates (``(self.w * 2).is_contiguous()``) have NO input ancestor and
+  record nothing here: the state-layout twin stays contract residual (3) -- state strides are
+  canonicalized at save, so no runtime comparison basis exists (unlike the input side, where
+  the runtime leaf supplies the layout fresh)."""
+
 _INPUT_METADATA_ALIAS_SAFE_NAMES = _INPUT_METADATA_LAYOUT_NAMES | frozenset(
     {"is_conj", "is_neg", "is_inference", "is_pinned", "is_shared", "is_coalesced"}
 )
@@ -716,6 +754,12 @@ def record_runnable_input_storage_sites(
     # nets keep the run honest), never proves disjointness, so identity keying is
     # sound without the absolute-interval engine.
     storage_sites: dict[int, list[Any]] = {}
+    # r73 F1: LABEL-keyed capture-layout map for the input-DERIVED activation layout
+    # net. Input source tensors are logged (and labeled) BEFORE this indexer runs, so
+    # each leaf's raw label resolves an ``OpEvent.input_ancestors`` member back to its
+    # boundary site plus the leaf's capture-time stride tuple -- the layout basis a
+    # derived-intermediate layout read depends on.
+    label_layouts: dict[str, tuple[Any, tuple[int, ...]]] = {}
     # ``pause_logging`` suppresses OP CAPTURE (``storage_offset`` / ``untyped_storage`` are
     # torch-function-wrapped and would otherwise be logged as spurious ops, shifting call ids);
     # ``internal_scalar_read`` marks the reads internal for the escape census / metadata patches.
@@ -736,8 +780,13 @@ def record_runnable_input_storage_sites(
             except (RuntimeError, AttributeError, TypeError, ValueError, NotImplementedError):
                 continue
             storage_sites.setdefault(ptr, []).append((site, *geometry, *conj_neg))
+            label = get_tensor_label(tensor)
+            if isinstance(label, str):
+                label_layouts[label] = (site, geometry[1])
     if storage_sites:
         _RUNNABLE_INPUT_STORAGE_SITES[trace] = storage_sites
+    if label_layouts:
+        trace.__dict__["_runnable_input_label_layouts"] = label_layouts
 
 
 def _classify_input_storage_alias(
@@ -895,6 +944,61 @@ def _observe_input_metadata_read(trace: Any, source: torch.Tensor, name: str, va
             base = _input_base_tensor(source)
             if base is not None and id(base) in sites:
                 _INPUT_METADATA_VIEW_READ.add(trace)
+            elif name in _INPUT_METADATA_LAYOUT_NAMES:
+                # r73 F1: a layout read on a genuinely NEW activation (fresh storage,
+                # no input alias/view linkage). Memory format PROPAGATES through
+                # elementwise ops, so if the receiver's value DAG roots at a model
+                # input, the read steers on the runtime input's layout -- attribute
+                # by traced ancestry (see ``INPUT_DERIVED_LAYOUT_FACT_NAME``).
+                _observe_input_derived_layout_read(trace, source)
+
+
+def _observe_input_derived_layout_read(trace: Any, source: torch.Tensor) -> None:
+    """Attribute a layout read on an INPUT-DERIVED activation to its rooting input(s) (r73 F1).
+
+    Called only from the layout-trio fall-through of :func:`_observe_input_metadata_read`
+    (receiver already proven NOT an input leaf, storage alias, or ``_base``-linked view).
+    Resolution is pure bookkeeping -- a label attribute read plus live-index lookups, no
+    tensor method calls -- so it can never recurse back into the metadata patches:
+
+    * Resolve the receiver's raw label (falling back to its ``_base`` for an unlogged view
+      of a logged activation). No label -> no record: an unlogged tensor is pre-capture
+      hidden state or an escape-laundered value, both outside the declared state model
+      (see ``INPUT_DERIVED_LAYOUT_FACT_NAME`` scope notes).
+    * Read the logged event's ``input_ancestors``. Empty (state-rooted / internal-source
+      receivers) -> no record: residual (3)'s state side stays untouched.
+    * Record :data:`INPUT_DERIVED_LAYOUT_FACT_NAME` -- carrying the rooting LEAF's
+      capture-time stride tuple -- on each ancestor input's boundary site. An ancestor
+      whose label is missing from the capture-layout map (its geometry read failed at
+      capture start) cannot pin a comparison basis, so the fact is recorded on EVERY
+      mapped site instead (fail closed: the ceiling then keys on any input layout change).
+    """
+
+    layouts = trace.__dict__.get("_runnable_input_label_layouts")
+    if not layouts:
+        return
+    label = get_tensor_label(source)
+    if label is None:
+        base = _input_base_tensor(source)
+        label = get_tensor_label(base) if base is not None else None
+    if label is None:
+        return
+    capture_events = getattr(trace, "capture_events", None)
+    live_index = getattr(capture_events, "live_index", None)
+    event = live_index.by_raw_label.get(label) if live_index is not None else None
+    if event is None:
+        return
+    ancestors = getattr(event, "input_ancestors", None)
+    if not ancestors:
+        return
+    if all(ancestor in layouts for ancestor in ancestors):
+        targets = [layouts[ancestor] for ancestor in ancestors]
+    else:
+        targets = list(layouts.values())
+    for site, leaf_stride in targets:
+        _record_input_metadata_read_at_site(
+            trace, site, INPUT_DERIVED_LAYOUT_FACT_NAME, tuple(int(v) for v in leaf_stride)
+        )
 
 
 def _state_derived_addresses(trace: Any, source: torch.Tensor) -> set[str]:
@@ -964,8 +1068,11 @@ def host_escape_state_metadata_reads(trace: Any) -> dict[str, frozenset[str]]:
 #
 # The input-metadata net's authority is the union of four frozen constants
 # (INPUT_METADATA_PREDICATE_FUNCS | INPUT_METADATA_BOOL_METHODS | INPUT_METADATA_PROPERTY_NAMES
-# | {"storage_nbytes"}), which equals the 20-name ``_INPUT_METADATA_FACT_NAMES`` vocabulary in
-# ``torchlens._io.runnable``. r63 mirrored only 5 of those 20 onto registered state, leaving an
+# | {"storage_nbytes"}), which equals the 20 ACCESSOR names of the ``_INPUT_METADATA_FACT_NAMES``
+# vocabulary in ``torchlens._io.runnable`` (r73 adds the vocabulary's one SYNTHETIC,
+# ancestry-attributed fact -- ``derived_layout_read`` -- which owes no mirror row; see
+# ``_INPUT_METADATA_SYNTHETIC_FACT_NAMES`` there). r63 mirrored only 5 of those 20 onto
+# registered state, leaving an
 # "Nth unwitnessed state read" class open (r64 F2/F3). This table closes the CLASS: every input
 # accessor carries an EXPLICIT state disposition, and the wrappers dispatch through the table
 # instead of hardcoded name tuples, so a future accessor added to any input constant without a

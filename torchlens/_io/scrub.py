@@ -391,6 +391,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_runnable_input_structure",
         "_runnable_input_tensor_sites",
         "_runnable_input_metadata_reads",
+        "_runnable_input_label_layouts",
         "_runnable_output_losslessness",
         "_runnable_capture_ambient",
         "_runnable_module_training_modes",

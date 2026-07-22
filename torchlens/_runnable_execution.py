@@ -514,6 +514,9 @@ def _execute_loaded_sparse_transaction(
         descriptor, slot_values, witness_source_snapshots
     )
     unbound_state_escape_stale = _unbound_state_escape_stale(descriptor, slot_values)
+    # r73 F1: compared against the RAW user input tree (pre-clone leaves; the run
+    # executed on defensive clones, so runtime strides are unchanged here).
+    input_derived_layout_stale = _input_derived_layout_stale(descriptor, inputs)
     # r53 hon_2: ONE load-side classifier settles declared nondeterministic value
     # sources; the branch ceiling, the attestation gate, and the report signal
     # all consult it (the r52 raise-vs-not_applicable inconsistency is
@@ -547,6 +550,7 @@ def _execute_loaded_sparse_transaction(
         mode_sensitive_op_unwitnessed=mode_sensitive_op_unwitnessed,
         input_alias_unresolved=input_alias_unresolved,
         nondeterministic_control_source=nondeterministic_control_source,
+        input_derived_layout_stale=input_derived_layout_stale,
     )
     eligibility_verdict = provisional_verdict
     inherited_status = fork.__dict__.get("_runnable_path_faithfulness")
@@ -913,6 +917,15 @@ _MODEL_INPUT_METADATA_SITE_PREFIX = "model_input_metadata:"
 _MODEL_INPUT_METADATA_FACT_KEY = "model_input_metadata"
 """Discriminator key present in every model-input metadata-predicate fact."""
 
+_INPUT_DERIVED_LAYOUT_FACT_NAME = "derived_layout_read"
+"""Synthetic envelope fact: a layout-trio read on an activation whose value DAG roots at the
+owning input site (r73 F1). Carries the leaf's capture-time stride tuple. Consumed by
+:func:`_input_derived_layout_stale` as a run-time UNVERIFIABLE ceiling -- NEVER compared in
+:func:`_input_metadata_contract_checks`: a changed input layout does not PROVE the derived
+intermediate's layout differs (a ``reshape`` in between can canonicalize it), so the honest
+verdict is "cannot verify", not an observed DIVERGED contradiction (r35 three-state rule).
+Producer mirror: ``torchlens.backends.torch.completeness_witness.INPUT_DERIVED_LAYOUT_FACT_NAME``."""
+
 
 def _model_input_metadata_facts(
     descriptor: SparseRunDescriptor,
@@ -1047,6 +1060,12 @@ def _input_metadata_contract_checks(
             runtime_leaf = None
             resolved = False
         for name in sorted(recorded_facts):
+            if str(name) == _INPUT_DERIVED_LAYOUT_FACT_NAME:
+                # r73 F1: the derived-layout fact is a run-time UNVERIFIABLE ceiling
+                # (``_input_derived_layout_stale``), never a DIVERGED compare -- a
+                # changed input layout does not prove the derived intermediate's
+                # layout differs, so it must not fail a contract check here.
+                continue
             recorded_value = recorded_facts[name]
             runtime_value = (
                 _runtime_input_metadata_value(runtime_leaf, str(name)) if resolved else None
@@ -1071,6 +1090,62 @@ def _input_metadata_contract_checks(
                 )
             )
     return tuple(checks)
+
+
+def _input_derived_layout_stale(descriptor: SparseRunDescriptor, inputs: Any) -> bool:
+    """Return whether an input-derived layout escape's rooting input changed layout (r73 F1).
+
+    The capture-time forward read a layout predicate (``is_contiguous`` / ``stride`` /
+    ``storage_offset``) on an ACTIVATION whose value DAG roots at a model input; memory
+    format propagates through elementwise ops, so the recorded taken path may depend on
+    that input's layout -- which the input contract does NOT pin (shape+dtype+device+
+    strided only). The envelope fact carries the rooting leaf's capture-time stride
+    tuple; this check compares it against the RAW runtime leaf's strides (shape equality
+    is already contract-enforced, so the tuples are commensurable; ``storage_offset``
+    never propagates to a fresh-storage intermediate, and input VIEWS are the r31
+    view-read gap's domain, so strides are the complete comparison basis).
+
+    Equal strides -> ``False``: a same-layout runtime input reproduces every propagated
+    layout bit, so an honest channels_last-on-channels_last model stays VERIFIED (zero
+    collateral). Any difference -- or an unresolvable leaf, an unreadable runtime
+    stride, or a malformed recorded tuple (foreign-authored artifact) -- returns
+    ``True`` and the run ceilings UNVERIFIABLE, never a false VERIFIED and never an
+    over-claimed DIVERGED (the derived layout is not proven different, merely
+    unverifiable). Captures that never read intermediate layout carry no such fact and
+    can never trigger here.
+    """
+
+    positions = _model_input_arity_positions(descriptor)
+    for _witness, fact in _model_input_metadata_facts(descriptor):
+        recorded_facts = fact.get("facts")
+        if not isinstance(recorded_facts, Mapping):
+            continue
+        if _INPUT_DERIVED_LAYOUT_FACT_NAME not in recorded_facts:
+            continue
+        recorded = recorded_facts[_INPUT_DERIVED_LAYOUT_FACT_NAME]
+        if not isinstance(recorded, Sequence) or isinstance(recorded, (str, bytes)):
+            return True
+        try:
+            recorded_stride = [int(v) for v in recorded]
+        except (TypeError, ValueError):
+            return True
+        raw_position = fact.get("position")
+        position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
+        path = tuple(fact.get("path", ()) or ())
+        try:
+            root = _input_site_value(inputs, position, positions)
+            runtime_leaf = _value_at_path(root, path)
+        except (KeyError, IndexError, TypeError, AttributeError):
+            return True
+        if not isinstance(runtime_leaf, torch.Tensor):
+            return True
+        try:
+            runtime_stride = [int(v) for v in runtime_leaf.stride()]
+        except (RuntimeError, TypeError, ValueError, NotImplementedError):
+            return True
+        if runtime_stride != recorded_stride:
+            return True
+    return False
 
 
 def _inventory_site_positions(descriptor: SparseRunDescriptor) -> set[Any]:
@@ -4757,6 +4832,7 @@ def _path_faithfulness(
     mode_sensitive_op_unwitnessed: bool = False,
     input_alias_unresolved: bool = False,
     nondeterministic_control_source: bool = False,
+    input_derived_layout_stale: bool = False,
 ) -> tuple[PathFaithfulness, RunnableDiagnostic | None]:
     """Classify exact three-state path faithfulness after all honesty checks."""
 
@@ -4819,6 +4895,17 @@ def _path_faithfulness(
         # module truth-test or ``.item()`` comparison) was staged with a value that
         # differs from capture; the untraced branch/literal may be stale, so the
         # honest ceiling is UNVERIFIABLE, never a silently wrong VERIFIED.
+        return PathFaithfulness.UNVERIFIABLE, None
+    if input_derived_layout_stale:
+        # r73 F1: the capture read a layout predicate on an activation ROOTED at a
+        # model input, and this run's input carries different strides than capture
+        # (channels_last twin, transposed-then-copied layout, ...). Memory format
+        # propagates through elementwise ops, so the recorded taken path may not be
+        # the one a fresh model takes on this input -- but a different input layout
+        # does not PROVE the derived read flipped (an intervening reshape can
+        # canonicalize it), so the honest ceiling is UNVERIFIABLE, never DIVERGED
+        # by assumption and never a false VERIFIED. Same-stride inputs never reach
+        # here: honest channels_last-on-channels_last models stay VERIFIED.
         return PathFaithfulness.UNVERIFIABLE, None
     return PathFaithfulness.VERIFIED, None
 
