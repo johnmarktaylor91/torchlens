@@ -60,12 +60,17 @@ from ..runnable import (
     PayloadLayerDescriptor,
     PayloadLayersDescriptor,
     ProducerPreflight,
+    RequiredWitnessFamily,
+    RequiredWitnessInventory,
     RunnableCallDescriptor,
     RunnableCompatibility,
     RunnableDiagnostic,
     RunnableErrorCode,
     RunnableRngProfile,
     SparseRunDescriptor,
+    WITNESS_FAMILY_REGISTRY,
+    WITNESS_FAMILY_REGISTRY_VERSION,
+    encode_input_site_position,
     SlotByteDigest,
     StateByteDigest,
     StateSlotBinding,
@@ -625,6 +630,9 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         calls=tuple(calls),
         tensor_slots=tuple(draft.freeze() for draft in slot_drafts.values()),
         control_witnesses=tuple(witnesses),
+        # r69 A: the REQUIRED presence ledger, authored from the SAME final witness
+        # list the descriptor persists (one draft result -- emission cannot drift).
+        required_witness_inventory=_build_required_witness_inventory(witnesses),
         witness_completeness=completeness,
         rng_profile=_build_rng_profile(trace),
         ambient_context=ambient_context,
@@ -694,11 +702,23 @@ def _normalize_numpy_scalars(value: Any) -> Any:
     Returns
     -------
     Any
-        Equivalent metadata with no ``numpy.generic`` leaves.
+        Equivalent metadata whose stock transparent NumPy wrapper leaves are
+        replaced by their exact builtin atoms (r69 B: semantic ``np.generic``
+        subclasses are deliberately NOT laundered -- the classifier-aware
+        encoders refuse them typed downstream).
     """
 
     if isinstance(value, np.generic):
-        return _normalize_numpy_scalars(value.item())
+        # r69 B: only the RATIFIED stock transparent wrapper lane normalizes
+        # (classifier-gated); a semantic np.generic SUBCLASS must NOT be laundered
+        # to its base value here -- it stays intact so the downstream classifier-
+        # aware encoders/refusals see the semantic type.
+        from torchlens._input_walk import classify_scalar
+
+        scalar_kind, scalar_payload = classify_scalar(value)
+        if scalar_kind == "numpy":
+            return scalar_payload
+        return value
     if isinstance(value, LiteralValue):
         return replace(value, value=_normalize_numpy_scalars(value.value))
     if isinstance(value, CapturedArgTemplate):
@@ -2684,6 +2704,108 @@ def _input_structure_witnesses(trace: Any, *, start_order: int) -> list[ControlW
     return witnesses
 
 
+def witness_family_of(site_label: str) -> "str | None":
+    """Resolve one ``SHAPE_STRUCTURE_FACT`` site label to its registered family.
+
+    Returns the ``WITNESS_FAMILY_REGISTRY`` family whose ``<family>:`` prefix matches,
+    or ``None`` for an unregistered label (the parser refuses such a witness; the
+    producer-emission meta-test fails when a new builder ships without a registry row).
+    """
+
+    for family in WITNESS_FAMILY_REGISTRY:
+        if site_label.startswith(f"{family}:"):
+            return family
+    return None
+
+
+def required_witness_family_members(
+    witnesses: "Sequence[ControlWitness]",
+) -> "dict[str, list[str]]":
+    """Derive per-family member IDs from the emitted witness stream (r69 A).
+
+    THE single member-ID authority: the producer builds the persisted
+    ``RequiredWitnessInventory`` rows from this function over its final emitted
+    witness list (facts and inventory come from ONE draft result), and the parser
+    re-derives the present member sets with the SAME function to require exact
+    equality. Member vocabulary per family follows ``WITNESS_FAMILY_REGISTRY``:
+    ``input_structure`` -> canonical root site positions; ``state_metadata`` ->
+    ``<state>::<fact_name>`` identities; ``model_input_literal`` -> none
+    (independent bidirectional structure-leaf cross-anchor); ``unbound_state_escape``
+    -> ``<state_dict_name>::<slot_id>`` (the producer legitimately emits ONE witness
+    per qualifying SLOT under a name-keyed site label, so a state name owning
+    multiple slots yields several same-label facts whose true identity is the
+    per-fact ``slot_id`` -- r15 buffer-numpy-writeback shape); every other family ->
+    its exact witness ``site_label``. Lists are returned UNSORTED and with
+    duplicates preserved so the parser can refuse duplicate member identities.
+
+    Raises ``ValueError`` for a malformed family envelope (undecodable fact,
+    missing/malformed position or state entry) -- the parser converts it into the
+    typed ``context_field_invalid`` refusal.
+    """
+
+    from .._runnable_execution import _decode_literal
+
+    members: dict[str, list[str]] = {family: [] for family in WITNESS_FAMILY_REGISTRY}
+    for witness in witnesses:
+        if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
+            continue
+        family = witness_family_of(witness.site_label)
+        if family is None:
+            continue  # parser-side closure refuses unknown families before this point
+        if family == "model_input_literal":
+            continue  # independent_ceiling: anchored to structure leaves, not indexed
+        if family == "input_structure":
+            fact = _decode_literal(witness.observed_value)
+            if not isinstance(fact, Mapping):
+                raise ValueError("undecodable input-structure fact envelope")
+            members[family].append(encode_input_site_position(fact.get("position")))
+            continue
+        if family == "state_metadata":
+            fact = _decode_literal(witness.observed_value)
+            if not isinstance(fact, Mapping):
+                raise ValueError("undecodable state-metadata fact envelope")
+            state = fact.get("state")
+            facts = fact.get("facts")
+            if not isinstance(state, str) or not isinstance(facts, Mapping):
+                raise ValueError("malformed state-metadata fact envelope")
+            for fact_name in sorted(str(name) for name in facts):
+                members[family].append(f"{state}::{fact_name}")
+            continue
+        if family == "unbound_state_escape":
+            fact = _decode_literal(witness.observed_value)
+            if not isinstance(fact, Mapping):
+                raise ValueError("undecodable unbound-state-escape fact envelope")
+            state_name = fact.get("state_dict_name")
+            slot_id = fact.get("slot_id")
+            if not isinstance(state_name, str) or not isinstance(slot_id, str):
+                raise ValueError("malformed unbound-state-escape fact envelope")
+            if witness.site_label != f"{UNBOUND_STATE_ESCAPE_SITE_PREFIX}{state_name}":
+                raise ValueError("unbound-state-escape site label disagrees with its state entry")
+            members[family].append(f"{state_name}::{slot_id}")
+            continue
+        members[family].append(witness.site_label)
+    return members
+
+
+def _build_required_witness_inventory(
+    witnesses: "Sequence[ControlWitness]",
+) -> RequiredWitnessInventory:
+    """Author the REQUIRED presence ledger from the final emitted witness list (r69 A)."""
+
+    members = required_witness_family_members(witnesses)
+    return RequiredWitnessInventory(
+        registry_version=WITNESS_FAMILY_REGISTRY_VERSION,
+        families=tuple(
+            RequiredWitnessFamily(
+                family=family,
+                disposition=disposition,
+                members=tuple(sorted(members[family])),
+            )
+            for family, disposition in WITNESS_FAMILY_REGISTRY.items()
+        ),
+    )
+
+
 def _preflight_input_structure(trace: Any) -> list[RunnableDiagnostic]:
     """Require a POSITIVE structure proof for every input site before payload writing.
 
@@ -3484,15 +3606,34 @@ def _tensor_container_skeleton(component: Any) -> NonTensorLiteral:
 
 
 def _encode_literal(value: Any) -> NonTensorLiteral:
-    """Encode a Python value using only the frozen safe literal grammar."""
+    """Encode a Python value using only the frozen safe literal grammar.
 
+    r69 B: scalar admission is CLASSIFIER-FIRST (``torchlens._input_walk.
+    classify_scalar``), before any ``isinstance`` numeric/string normalization, so
+    no call-recipe or fact-envelope path can launder a semantic-typed scalar (enum
+    member, builtin/np-scalar subclass) into a plain atom -- such a value raises
+    ``_UnsupportedLiteralError`` (typed refusal / opaque routing at the caller).
+    Stock NumPy numeric/bool wrappers normalize through the RATIFIED transparent
+    value lane (``.item()``); exact builtin atoms encode as before.
+    """
+
+    from torchlens._input_walk import classify_scalar
+
+    scalar_kind, scalar_payload = classify_scalar(value)
+    if scalar_kind == "semantic":
+        value_type = f"{type(value).__module__}.{type(value).__qualname__}"
+        raise _UnsupportedLiteralError(
+            f"Value of type {value_type} carries semantic type identity (enum or "
+            "scalar subclass) and is outside the frozen non-tensor literal grammar."
+        )
+    if scalar_kind == "numpy":
+        # Ratified stock-wrapper VALUE transparency: encode the exact builtin atom.
+        value = scalar_payload
     if value is None:
         return LiteralAtom(LiteralAtomKind.NONE, None)
     if isinstance(value, bool):
         return LiteralAtom(LiteralAtomKind.BOOL, value)
     if isinstance(value, int):
-        # Normalize integer subclasses (e.g. ``IntEnum``) to a plain ``int`` so
-        # the stored literal round-trips through JSON / the safe unpickler.
         return LiteralAtom(LiteralAtomKind.INT, int(value))
     if isinstance(value, float):
         # Finiteness is a pure host check on a Python float; use ``math.isfinite`` rather
@@ -3503,9 +3644,6 @@ def _encode_literal(value: Any) -> NonTensorLiteral:
         # ``dict[float, int]`` branch) to UNVERIFIABLE on the unchanged input.
         if not math.isfinite(value):
             return LiteralAtom(LiteralAtomKind.NONFINITE_FLOAT, _nonfinite_float_payload(value))
-        # Normalize float subclasses (e.g. ``numpy.float64``) to a plain
-        # ``float`` so the recorded literal round-trips to a grammar-native value
-        # the safe metadata unpickler admits and value-equality can verify.
         return LiteralAtom(LiteralAtomKind.FLOAT, float(value))
     if isinstance(value, str):
         return LiteralAtom(LiteralAtomKind.STR, value)

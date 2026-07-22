@@ -97,8 +97,38 @@ key of `x[:, 3:]`), a bare `Ellipsis` (`x[..., 0]`), and a bare `None` newaxis i
 are inert value types with no callables or imports, so they round-trip exactly through the
 `LiteralSlice` node and the `none`/`ellipsis` `LiteralAtom` kinds -- including inside the tuple key
 `__getitem__` produces for multi-axis indexing (`LiteralSequence` of kind `tuple`). Bytes, complex
-values, sets, arbitrary enums/objects, tensors, callables, classes, import references, pickles, and
+values, sets, arbitrary objects, tensors, callables, classes, import references, pickles, and
 opaque reprs are outside the grammar and fail preflight with `unsupported_literal`.
+
+Scalar admission is decided by ONE closed type-class classifier (r69 B,
+`torchlens._input_walk.classify_scalar`), consumed by snapshotting, literal encoding, runtime
+literal comparison, and mapping-key encoding -- classification order is load-bearing and
+CLASSIFIER-FIRST at `_encode_literal`, so no recipe path can launder a semantic type:
+
+- **Exact builtin atoms** (`type(v) is bool/int/float/str`, plus the `None`/`Ellipsis`
+  singletons and the slice grammar) encode and compare under the existing pinned value rules
+  (bool strict -- `True != 1`; int/float family separation; floats by IEEE-754 bit pattern, so
+  `-0.0 != +0.0` and same-bit NaN values compare equal; non-finite float VALUE leaves stay
+  outside the comparable subset and ceiling the run `unverifiable`).
+- **Stock NumPy numeric/bool wrappers** (exact membership in a programmatically enumerated
+  identity set; broad `isinstance(v, np.generic)` is forbidden as the admission test) are
+  VALUE-transparent: they normalize through `.item()` and compare by the ratified value rule
+  (`np.float64(2.0) <-> 2.0` verifies). A stock wrapper whose `.item()` is not an exact builtin
+  numeric/bool atom falls to the semantic class (fail closed).
+- **Semantic-typed scalars** -- every `enum.Enum` member (checked FIRST, before any numeric
+  family: `IntEnum`, `IntFlag`, `StrEnum`, float-Enum, plain `Enum`) and every other
+  `int`/`float`/`str` or non-stock NumPy scalar subclass -- carry application semantics in
+  their TYPE identity that no persisted value fact can witness. A semantic-typed scalar VALUE
+  leaf at any depth refuses the runnable save typed (`missing_input_container_contract`, reason
+  `semantic_scalar_type`); no import-bearing type recipe is persisted. Symmetrically, an
+  admitted builtin/stock-wrapper capture replayed with a same-value semantic type DIVERGES
+  (both admitted lanes, both directions); a semantic runtime value can never verify or attest.
+- Everything else keeps the existing opaque/outside-grammar disposition.
+
+No runnable-save input-boundary path may fail untyped: every producer-preflight refusal
+reachable from a model-input composition raises a typed `RunnableErrorCode` disposition, never
+a bare `AssertionError` or untyped IO error (r69 belt, machine-checked by the leaf-type x
+position save sweep).
 
 `LiteralTorchSymbol.qualname` is resolved only through an explicit non-callable allowlist. It never
 authorizes `importlib`, arbitrary attribute walking, custom modules, or a callable fallback. It
@@ -167,6 +197,7 @@ fields.
 | `calls` | tuple of `RunnableCallDescriptor` |
 | `tensor_slots` | tuple of `TensorSlotDescriptor` |
 | `control_witnesses` | tuple of `ControlWitness` |
+| `required_witness_inventory` | `RequiredWitnessInventory` (REQUIRED, r69 A; see below) |
 | `witness_completeness` | `WitnessCompleteness` |
 | `rng_profile` | `RunnableRngProfile` |
 | `ambient_context` | `AmbientExecutionContext` (REQUIRED, explicit) |
@@ -193,6 +224,53 @@ erases (a storage offset, non-dense slicing) leaves execution physically identic
 such a run honestly stays eligible with the byte-exact tripwire still armed. Schemas are respectively `state_dict_v1`,
 `runnable_nonpersistent_buffer_v1`, and `selected_activation_v2`. Any payload bytes/references
 live outside the sparse core.
+
+### Required-witness inventory (r69 A)
+
+`RequiredWitnessInventory` is the REQUIRED descriptor-native presence ledger for
+replay-critical witness families. It is structurally OUTSIDE `control_witnesses` -- the stream
+being validated can never declare its own required membership -- and is authored by both the
+producer and the parser from the ONE closed `WITNESS_FAMILY_REGISTRY`
+(`torchlens/runnable.py`), which gives every replay-critical `SHAPE_STRUCTURE_FACT` family
+(`input_structure`, `model_input_literal`, `model_input_metadata`, `module_training_mode`,
+`state_metadata`, `container`, `unbound_state_escape`) one explicit presence disposition. The
+record carries the closed registry discriminator (`witness_family_registry_v1`) plus one row
+per registered family -- `family`, `disposition`, and the EXACT sorted member-identity set,
+explicit empty sets included. Member vocabulary: `input_structure` uses canonical normalized
+root model-input site positions (`arg:<i>` / `kwarg:<name>`); `state_metadata` uses the exact
+read-gated `(state_dict_name, fact_name)` identities (`<state>::<fact>`) -- state facts stay
+read-gated, and the ledger declares exactly which reads happened, so an empty read set is
+represented explicitly rather than inferred from absence; every other `inventory_indexed`
+family uses its exact witness `site_label`. The producer builds facts and inventory member IDs
+from ONE draft result (the final emitted witness list), so emission cannot drift.
+
+Parse order is: slots and witness syntax, then the inventory, then the independently derived
+and cross-family sets, then exact family/member equality. The parser requires the inventory
+family set to equal the closed registry exactly and the present facts of every
+`inventory_indexed` family to equal the row's member set exactly. A missing family or member,
+an extra or duplicate family row or member, a duplicate present-fact identity, an unknown
+family (in the inventory OR on an emitted `SHAPE_STRUCTURE_FACT` site label), an unknown
+registry discriminator, a disposition disagreeing with the registry, a malformed row, a forged
+or shrunk inventory, or a forged `site_count` refuses at parse with `context_field_invalid`:
+the load stays available for analysis, readiness is `unavailable`, and execution cannot
+attach. A v2 manifest missing the `required_witness_inventory` FIELD altogether fails manifest
+validation outright (the same disposition as a missing `ambient_context`). Independent
+cross-checks anchor the ledger to the rest of the descriptor: every tensor `MODEL_INPUT`
+binding position, every literal-fact position, and every metadata-fact position must sit
+inside the inventory site set; positional roots are dense; structure-fact positions equal the
+site set; and `site_count` values inside facts are redundant consistency checks only -- NEVER
+required-set authority (the r68 secA-F1 lane derived both cardinality and membership from the
+stream being validated, so stripping a family silently restored weaker semantics; absence
+never means weaker semantics now).
+
+`model_input_literal` is the one `independent_ceiling` family: its presence proof is the
+BIDIRECTIONAL literal-leaf <-> structure-leaf cross-anchor rather than inventory membership.
+Every `input_structure` leaf node (and every empty-container node, through its synthetic
+marker path) must own exactly one literal fact at the same `(site, path)`, and every literal
+fact's `(site, path)` must be a structure leaf/empty node -- set equality in both directions,
+so per-leaf literal stripping cannot hide behind site-level coverage. Runtime site selection
+consumes the parse-validated inventory sites (never the surviving facts) with typed
+fail-closed belts on the execution and state-staging sides.
 
 ### Execution-context records
 
@@ -421,16 +499,45 @@ analysis output but must not write runnable capability. It rejects when:
    class (no import required or performed to compare it), declared child schema (namedtuple/
    dataclass fields, ordered type-strict-codec mapping keys, sequence/registered arity),
    registered-container aux, and the instance-state proof. The per-gap disposition matrix is
-   fixed: exact class identity (including builtin subclasses), empty-dataclass nodes, and
-   non-`str`/`int` GRAMMAR-encodable mapping keys (bool/float/None/safe tuple -- encoded by
-   ONE canonical codec that keeps `True != 1` and `1.0 != 1` type-distinct while preserving
-   the persisted `str | int` path shape, retiring the dual raw/tagged vocabulary) are
-   WITNESSED and verified at bind (`input_tree_mismatch` divergence on drift, with tensor
-   descendants under grammar keys entering the tensor-leaf accounting and binding as
-   first-class leaves); opaque/non-grammar keys and undeclared per-instance container state
-   (non-field dataclass `__dict__`, namedtuple/subclass instance attributes) REFUSE at
-   runnable save through the EXISTING `missing_input_container_contract` (no new enum), with
-   the SYMMETRIC bind-side check refusing runtime-added undeclared state; REGISTERED
+   fixed: exact class identity, empty-dataclass nodes, and GRAMMAR mapping keys are WITNESSED
+   and verified at bind (`input_tree_mismatch` divergence on drift, with tensor descendants
+   under grammar keys entering the tensor-leaf accounting and binding as first-class leaves).
+   The mapping-key grammar admits ONLY exact builtin `str`, `int`, `bool`, `float`, `None`,
+   and exact tuples whose members recursively satisfy the grammar (r69 D). ONE classifier-
+   backed `encode_mapping_key` authority is the sole key identity end to end: snapshot
+   ordered-key facts, literal leaf paths, tensor binding paths, and RUNTIME LOOKUP all speak
+   its canonical token vocabulary (`True != 1` and `1.0 != 1` stay type-distinct; the
+   persisted path shape stays `str | int`). Enums and NumPy/custom scalar-subclass keys are
+   checked BEFORE the builtin branches and refuse typed at save (`opaque_mapping_key`), as do
+   tuple subclasses and non-grammar components -- a key is never admitted and then
+   advertised-then-failed later (the r68 numpy-key unloadable-artifact lane is closed
+   upstream; `ContainerSpec.keys` raw retention is harmless for runnable inputs because every
+   admitted input key is recursively composed of metadata-safe builtin atoms by
+   construction). Finite float keys use exact `float.hex()` spelling (`-0.0` distinct from
+   `+0.0`); a NaN key token carries its binary64 BIT PATTERN, so an identical NaN key binds
+   itself and distinct NaN payloads stay distinct. Tokens are injective over every admitted
+   mapping node: a node whose distinct key objects encode to one token (multiple same-bit NaN
+   objects) refuses typed at save with reason `ambiguous_mapping_key`, and multiple runtime
+   token matches fail closed through the same typed disposition. Runtime binding encodes each
+   runtime candidate key with the SAME authority and compares exact canonical token
+   type/value -- it NEVER decodes a persisted component for a runtime value-equality scan
+   (Python hash/equality conflated bool/int/float twins and `nan != nan` false-DIVERGED the
+   identical captured input), and it requires exactly one match. Opaque/non-grammar keys,
+   semantic-typed scalar VALUE leaves (section 2, reason `semantic_scalar_type`), and
+   undeclared per-instance container state REFUSE at runnable save through the EXISTING
+   `missing_input_container_contract` (no new enum), with the SYMMETRIC bind-side check
+   refusing runtime-added undeclared state. Undeclared instance state is judged by ONE inert
+   enumerator (r69 C): every `__dict__` key regardless of value UNION every SET slot across
+   all classes in `type(value).__mro__` (string `__slots__` normalized, `__dict__`/
+   `__weakref__` pseudo-slots ignored, private names mangled against the declaring class,
+   only genuine member descriptors read directly -- no property or user
+   `__getattr__`/`__getattribute__` can execute), minus the declared dataclass fields or
+   namedtuple `_fields`. PRESENCE is semantic: a slot or attribute set to `None`, `False`,
+   zero, or an empty container counts (there is no value carve-out -- `hasattr` presence
+   steers control flow); an unset slot is absent. Ordinary and `kind == "empty"` dataclass/
+   namedtuple lanes route through the same enumerator. Well-behaved Mapping/sequence
+   subclasses stay judged by protocol view + exact class only (the custom-`Mapping` hidden
+   non-protocol-state residual, section 11). REGISTERED
    containers are SUPPORTED behind their existing declarations and typed fences (registration
    must exist in the loading process -- TorchLens imports nothing to obtain a hook; capture
    and bind both invoke `flatten` and descend indexed children; exact class, child schema,
@@ -494,6 +601,16 @@ The hard invariant is:
 > executable callables, and import instructions. Tensor payloads live only in the declared
 > external blob families: the optional `state_dict_v1` and `selected_activation_v2` families,
 > and the REQUIRED `runnable_nonpersistent_buffer_v1` family.
+
+Sparse raw-value rule (r69 E): a runnable save scrubs the Trace `raw_input`/`raw_output`
+diagnostic fields to `None` under the sparse effective `DROP` policy BEFORE any field-specific
+raw-value serialization runs -- including when the ordinary `save_raw_input`/`save_raw_output`
+policy is `True` or `"small"` and for nested tensor/string containers. An effective
+`DROP`/`WEAKREF_STRIP` always wins over a field-specific serializer, so the diagnostic
+raw-value policy can never re-introduce a tensor into the value-free sparse core (a fully
+witnessed non-top-level string input saves, loads, and verifies). Ordinary analysis saves keep
+their bounded raw-value behavior, and `assert_sparse_core_has_no_tensor_payload` stays the
+unchanged final tripwire on genuine strays.
 
 Forbidden sparse-core content includes op outputs/transformed outputs, inputs, activations,
 gradients, child tensor versions, tensor args/templates, parameters, buffers, `state_dict`, state
@@ -1592,6 +1709,10 @@ metadata-fact sites, whose bool/int conflation is shielded by the type-strict in
 (`_type_strict_path`) and whose non-representable-key sites are independently ceilinged by the
 literal walk's opaque leaf. Key-vocabulary unification is a declared residual (R6), never silent
 drift; a private container branch inside any walker body is forbidden by a source-scan meta-test.
+Runtime mapping lookup binds EVERY persisted key component -- raw-looking `str`/`int` components
+included -- by encoding each runtime candidate through the one `encode_mapping_key` authority
+and comparing exact canonical tokens (r69 D, section 5 rule 4); no decoded-value equality lane
+exists, which a source meta-test pins.
 
 ### Three-valued input alias topology
 
@@ -1645,6 +1766,35 @@ allocator) -- attestation is same-environment by contract; CUDA stream identity 
 serially replayed DAG); and autotuner cache state (subsumed by the `cudnn.benchmark` positive
 ineligibility marking). Where one of these residuals changes bytes, the byte-exact attestation
 tripwire fails loud (`numeric_attestation_failed`), never falsely `attested`.
+
+### Input-boundary behavioral residuals (r69 -- exactly two)
+
+The r69 input-contract closure leaves EXACTLY TWO documented behavioral residuals on the
+model-input boundary. No third input-boundary residual exists; a new one requires its own
+contract amendment.
+
+1. **Custom-`Mapping` hidden non-protocol state.** A well-behaved custom `Mapping` subclass is
+   admitted through its protocol view (ordered keys/children) plus exact class identity. It can
+   legitimately keep its backing store in instance state (`self.data = {...}`), so the r69
+   instance-state enumerator deliberately does NOT judge Mapping/sequence subclasses -- hidden
+   NON-protocol instance state on such a subclass (an extra attribute, a custom `__missing__`
+   behavior) can steer host control flow unwitnessed while the class swap itself still diverges
+   through the exact-type node fact. Attribute reads are invisible to every Python-level net;
+   broadening declared-schema enumeration to arbitrary Mappings would refuse every well-behaved
+   custom Mapping the incumbent contract admits.
+2. **Plain-builtin versus stock-transparent-NumPy-wrapper TYPE steering.** Host control flow
+   may be steered by the plain-builtin vs stock NumPy-wrapper identity of a SAME-VALUE scalar
+   input leaf (`isinstance(v, np.floating)` / `type(v) is float` across the
+   `np.float64(2.0) <-> 2.0` boundary): the replay reports `verified` while a fresh live run
+   takes the other arm. This residual is FORCED by the ratified stock-NumPy value-equality pin
+   (section 2): the pinned-GREEN requirement and the desired-RED case are the same artifact-
+   observable pair, so no persistable static fact can distinguish them, a ceiling would break
+   the pin (which demands `verified`), and `type`/`isinstance`/identity reads have no complete
+   interception point. Scoped TIGHTLY: the stock wrapper carries no user semantics; enum and
+   custom scalar-subclass identity ARE closed (typed save refusal + runtime divergence in both
+   directions, section 2) -- only the stock-transparent wrapper lane is residual. Both capture
+   directions are pinned by an executable expected-residual test beside the value-equality
+   GREEN pin, so neither side can be silently claimed closed.
 
 ### Declared state model boundary
 
@@ -2038,6 +2188,26 @@ Glossary of v2 vocabulary introduced by this amendment (canonical here per the l
   refuse instances carrying extra state.
 - `stage_state_to_slot_devices` (r37) -- the single atomic run-preparation staging authority for
   recorded slot devices (section 11, declared state model).
+- **value-semantic scalar** (r69) -- a scalar admitted to the literal VALUE lane and compared by
+  value: an exact builtin `bool`/`int`/`float`/`str` atom, or a stock NumPy numeric/bool wrapper
+  normalized through `.item()` under the ratified transparency rule (`np.float64(2.0) <-> 2.0`
+  verifies). Classified by the one closed `classify_scalar` lattice (section 2).
+- **semantic-typed scalar** (r69) -- a scalar whose TYPE identity is application semantics: any
+  `enum.Enum` member or any `int`/`float`/`str`/non-stock-NumPy scalar subclass. Refuses runnable
+  save typed as `semantic_scalar_type` (through `missing_input_container_contract`); a same-value
+  semantic runtime replacement for an admitted capture diverges in both directions. Never
+  persisted as a type recipe.
+- **canonical mapping-key token** (r69) -- the `str | int` component produced by the ONE
+  `encode_mapping_key` authority for an admitted mapping key (exact builtin
+  `str`/`int`/`bool`/`float`/`None` and exact recursively-safe tuples; finite floats by
+  `float.hex()`, NaN by binary64 bit pattern). Snapshot ordered-key facts, literal paths, tensor
+  bindings, and runtime lookup share this vocabulary; runtime binding compares tokens exactly and
+  never decoded values; duplicate tokens within one node refuse as `ambiguous_mapping_key`.
+- **required-witness inventory** (r69) -- the REQUIRED descriptor-native presence ledger
+  (`RequiredWitnessInventory`): one row per `WITNESS_FAMILY_REGISTRY` family with disposition and
+  exact member identities (explicit empty sets), validated at parse for exact family+member
+  coverage with `context_field_invalid` refusals; `model_input_literal` presence is proven by the
+  bidirectional literal-leaf <-> structure-leaf cross-anchor instead (section 4).
 
 ## 13. Resolver compatibility release gate
 

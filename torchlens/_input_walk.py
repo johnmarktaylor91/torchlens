@@ -65,6 +65,8 @@ from typing import Any, Callable
 __all__ = [
     "INPUT_CONTAINER_KINDS",
     "classify_input_container",
+    "classify_scalar",
+    "instance_state_names",
     "raw_mapping_key_component",
     "tagged_mapping_key_component",
     "walk_input_boundary",
@@ -271,29 +273,159 @@ sets and ordered-key facts).
 """
 
 
-def encode_mapping_key(key: Any) -> "str | int":
-    """Encode one grammar mapping key into the canonical type-strict component (r67 C2).
+def _stock_numpy_scalar_types() -> "frozenset[type]":
+    """Every CONCRETE stock NumPy scalar class, enumerated programmatically (r69 B).
 
-    ``str`` keys pass through unless they collide with the codec prefix (then escaped);
-    ``int`` keys pass through as ints; ``bool`` / ``float`` / ``None`` / recursively safe
-    tuples encode into tagged strings (floats via ``float.hex`` -- exact round-trip,
-    ``1.0`` distinct from ``1``). A non-grammar key raises ``ValueError`` (the caller
-    refuses or routes the subtree opaque -- never a silent drop).
+    Identity-based membership from ``np.typecodes['All']`` -- never a name/module
+    string check, so a user subclass can never enter the set regardless of spoofed
+    ``__module__``/``__qualname__``.
     """
 
+    global _STOCK_NP_SCALAR_CACHE
+    if _STOCK_NP_SCALAR_CACHE is None:
+        try:
+            import numpy as np
+        except ImportError:  # pragma: no cover - numpy is a hard torchlens dependency
+            _STOCK_NP_SCALAR_CACHE = (frozenset(), frozenset())
+        else:
+            all_types: set[type] = set()
+            transparent: set[type] = set()
+            for code in np.typecodes["All"]:
+                try:
+                    dtype = np.dtype(code)
+                except TypeError:  # pragma: no cover - stale typecode entry
+                    continue
+                all_types.add(dtype.type)
+                # Transparent VALUE wrappers: numeric/bool kinds whose ``.item()``
+                # round-trips exactly (itemsize <= 8 excludes lossy longdouble).
+                if dtype.kind in "biuf" and dtype.itemsize <= 8:
+                    transparent.add(dtype.type)
+            _STOCK_NP_SCALAR_CACHE = (frozenset(all_types), frozenset(transparent))
+    return _STOCK_NP_SCALAR_CACHE[0]
+
+
+def _stock_numpy_transparent_scalar_types() -> "frozenset[type]":
+    """Exact stock NumPy numeric/bool wrapper classes admitted as VALUE-transparent."""
+
+    _stock_numpy_scalar_types()
+    assert _STOCK_NP_SCALAR_CACHE is not None
+    return _STOCK_NP_SCALAR_CACHE[1]
+
+
+_STOCK_NP_SCALAR_CACHE: "tuple[frozenset[type], frozenset[type]] | None" = None
+
+
+def classify_scalar(value: Any) -> "tuple[str, Any]":
+    """THE closed input-boundary scalar type-class lattice (r69 B/D).
+
+    Every scalar type dispatch on the model-input boundary -- snapshot leaf
+    disposition, literal encoding (``_encode_literal``), runtime literal comparison
+    (``_literal_leaf_equal``), and mapping-key encoding (``encode_mapping_key``) --
+    consumes this ONE classifier, so a scalar can never be classified two different
+    ways by two different code paths (the r68 B/D conflation root). Classification
+    order is load-bearing:
+
+    1. ``("semantic", None)`` -- ``enum.Enum`` FIRST (``IntEnum`` / ``IntFlag`` /
+       ``StrEnum`` / float-Enum / plain ``Enum``), before any numeric family, then
+       (after the exact/stock checks below) every other ``int``/``float``/``str``
+       subclass and every non-stock ``np.generic`` subclass. Type identity is
+       application semantics (``isinstance``/``is Mode.FAST`` steering); such a
+       VALUE refuses runnable save typed and such a runtime value diverges -- it
+       never collapses into the builtin atom lane.
+    2. ``("plain", value)`` -- ``type(value)`` is EXACTLY ``bool``/``int``/``float``/
+       ``str`` (exact ``type() is``, never ``isinstance``).
+    3. ``("singleton", value)`` -- ``None`` / ``Ellipsis`` (their existing grammar).
+    4. ``("numpy", value.item())`` -- ``type(value)`` is EXACTLY a stock NumPy
+       numeric/bool wrapper class (programmatic identity set; broad
+       ``isinstance(value, np.generic)`` is forbidden for this admission) AND
+       ``.item()`` lands on an exact builtin numeric/bool atom. The RATIFIED
+       transparent-wrapper VALUE lane: ``np.float64(2.0) <-> 2.0`` verifies.
+       A stock wrapper whose ``.item()`` is not an exact builtin numeric/bool
+       falls to ``semantic`` (fail closed, platform ``longdouble`` edges).
+    5. ``("opaque", None)`` -- everything else (bytes, complex, Decimal, datetime64,
+       arbitrary objects, containers): the existing opaque/outside-grammar lane.
+    """
+
+    import enum as _enum
+
+    if isinstance(value, _enum.Enum):
+        return ("semantic", None)
+    value_type = type(value)
+    if value_type in (bool, int, float, str):
+        return ("plain", value)
+    if value is None or value is Ellipsis:
+        return ("singleton", value)
+    if value_type in _stock_numpy_transparent_scalar_types():
+        try:
+            item = value.item()
+        except Exception:  # pragma: no cover - stock wrappers implement item()
+            return ("semantic", None)
+        if type(item) in (bool, int, float):
+            return ("numpy", item)
+        return ("semantic", None)
+    if isinstance(value, (int, float, str)):
+        # A builtin-scalar-family subclass outside the exact/stock sets (custom
+        # int/float/str subclasses, np.str_, subclasses of np.float64, ...).
+        return ("semantic", None)
+    try:
+        import numpy as np
+    except ImportError:  # pragma: no cover - numpy is a hard torchlens dependency
+        return ("opaque", None)
+    if isinstance(value, np.generic) and value_type not in _stock_numpy_scalar_types():
+        # A non-stock np.generic subclass is user semantics, never a wrapper.
+        return ("semantic", None)
+    return ("opaque", None)
+
+
+def encode_mapping_key(key: Any) -> "str | int":
+    """Encode one grammar mapping key into the canonical type-strict component (r69 D).
+
+    THE sole mapping-key identity authority: snapshot ordered-key facts, literal
+    leaf paths, tensor binding paths, and runtime lookup all speak this token
+    vocabulary, and runtime binding compares canonical tokens -- never decoded
+    values. Admission is classifier-gated (exact builtin ``str``/``int``/``bool``/
+    ``float``/``None`` and EXACT tuples whose members recursively satisfy the
+    grammar); enums, NumPy scalar wrappers, builtin-scalar subclasses, and tuple
+    subclasses raise ``ValueError`` and refuse typed at save (``opaque_mapping_key``)
+    -- a key is never admitted and then advertised-then-failed later.
+
+    Token codec: ``str`` keys pass through unless they collide with the codec prefix
+    (then escaped); ``int`` keys pass through as ints; ``bool``/``None`` use tagged
+    strings; finite floats use exact ``float.hex()`` (``-0.0`` distinct from
+    ``+0.0``); a NaN key encodes its binary64 BIT PATTERN
+    (``f:nan:<16 hex digits>``) so distinct NaN payloads stay distinct and an
+    identical NaN key can bind itself. The codec is injective over every admitted
+    mapping node (duplicate-token nodes refuse at save as ``ambiguous_mapping_key``).
+    """
+
+    kind, _payload = classify_scalar(key)
+    if kind == "semantic":
+        raise ValueError(
+            f"Mapping key {key!r} carries semantic type identity (enum or scalar "
+            "subclass) and is outside the input-boundary key grammar."
+        )
+    if kind == "numpy":
+        raise ValueError(
+            f"Mapping key {key!r} is a NumPy scalar wrapper; key identity is "
+            "structural, so wrapper keys are outside the input-boundary key grammar."
+        )
     if isinstance(key, bool):
         return f"{_KEY_CODEC_TAG}b:{'1' if key else '0'}"
-    if isinstance(key, int):
+    if type(key) is int:
         return key
-    if isinstance(key, str):
+    if type(key) is str:
         if key.startswith(_KEY_CODEC_TAG):
             return f"{_KEY_CODEC_TAG}s:{key[len(_KEY_CODEC_TAG) :]}"
         return key
     if key is None:
         return f"{_KEY_CODEC_TAG}n:"
-    if isinstance(key, float):
+    if type(key) is float:
+        if key != key:  # NaN: float.hex() collapses every payload to "nan"
+            import struct as _struct
+
+            return f"{_KEY_CODEC_TAG}f:nan:{_struct.pack('>d', key).hex()}"
         return f"{_KEY_CODEC_TAG}f:{key.hex()}"
-    if isinstance(key, tuple):
+    if type(key) is tuple:
         parts = []
         for item in key:
             encoded = encode_mapping_key(item)
@@ -304,7 +436,12 @@ def encode_mapping_key(key: Any) -> "str | int":
 
 
 def decode_mapping_key(component: "str | int") -> Any:
-    """Decode one canonical component back to its mapping key (mapping nodes only)."""
+    """Decode one canonical component back to its mapping key (mapping nodes only).
+
+    Retained for legitimate output-dict reconstruction and diagnostics; RUNTIME
+    INPUT BINDING never decodes -- ``_value_at_path`` encodes each runtime candidate
+    and compares exact canonical tokens (r69 D).
+    """
 
     if isinstance(component, int) or not component.startswith(_KEY_CODEC_TAG):
         return component
@@ -317,6 +454,10 @@ def decode_mapping_key(component: "str | int") -> Any:
     if tag == "n":
         return None
     if tag == "f":
+        if payload.startswith("nan:"):
+            import struct as _struct
+
+            return _struct.unpack(">d", bytes.fromhex(payload[len("nan:") :]))[0]
         return float.fromhex(payload)
     if tag == "t":
         items = []
@@ -343,15 +484,75 @@ def decode_mapping_key(component: "str | int") -> Any:
     raise ValueError(f"Unknown key-codec component {component!r}.")
 
 
-def undeclared_instance_state(value: Any, kind: str) -> bool:
-    """Return whether a container INSTANCE carries state its DECLARED schema drops (r67 C2).
+def instance_state_names(value: Any) -> frozenset[str]:
+    """Enumerate every SET instance-state NAME on ``value``, inertly (r69 C).
 
-    Scope: kinds with a declared FIELD schema. A dataclass with a non-field ``__dict__``
-    attribute or a namedtuple subclass with instance ``__dict__`` state would silently
-    lose that state on replay reconstruction -- and it can steer control flow the
-    declared schema never witnesses (r66 R1: ``box.mode``). Registered containers prove
-    completeness through their explicit ``state_complete`` declaration instead (checked
-    by the snapshot's registered branch).
+    THE single live-instance-state enumerator for declared-schema containers:
+
+    * every ``__dict__`` key, regardless of the stored value (``None``, ``False``,
+      ``0``, an empty container, and any other falsey value all count -- PRESENCE is
+      state: r68 hon1-F3 proved a ``hasattr``-steered branch on a ``None``-valued
+      extra);
+    * every SET slot across ALL classes in ``type(value).__mro__``: string
+      ``__slots__`` declarations are normalized to one name, the ``__dict__`` /
+      ``__weakref__`` pseudo-slots are ignored, CPython private-name mangling is
+      resolved relative to the DECLARING class, and only genuine slot member
+      descriptors found in ``vars(declaring_class)`` are read -- directly through
+      the descriptor, so no property, user ``__getattr__``, or user
+      ``__getattribute__`` can ever execute (inert by construction). An unset slot
+      is absent; a slot set to ANY value (including ``None``) is present.
+
+    Returns the set of ACTUAL storage names (private slot names appear mangled,
+    matching their ``__dict__`` spelling).
+    """
+
+    import types as _types
+
+    names: set[str] = set()
+    instance_dict = getattr(value, "__dict__", None)
+    if isinstance(instance_dict, dict):
+        names.update(str(key) for key in instance_dict)
+    for cls in type(value).__mro__:
+        raw_slots = cls.__dict__.get("__slots__")
+        if raw_slots is None:
+            continue
+        slot_names = [raw_slots] if isinstance(raw_slots, str) else [str(s) for s in raw_slots]
+        for raw_name in slot_names:
+            if raw_name in {"__dict__", "__weakref__"}:
+                continue
+            name = raw_name
+            if raw_name.startswith("__") and not raw_name.endswith("__"):
+                # CPython mangles private slot names against the DECLARING class.
+                stripped = cls.__name__.lstrip("_")
+                if stripped:
+                    name = f"_{stripped}{raw_name}"
+            descriptor = cls.__dict__.get(name)
+            if not isinstance(descriptor, _types.MemberDescriptorType):
+                # A shadowed/replaced slot descriptor makes the slot storage
+                # unreachable by ordinary attribute access; reading anything else
+                # here could execute user code, so the name is skipped (inert).
+                continue
+            try:
+                descriptor.__get__(value, cls)
+            except AttributeError:
+                continue  # unset slot: absent
+            names.add(name)
+    return frozenset(names)
+
+
+def undeclared_instance_state(value: Any, kind: str) -> bool:
+    """Return whether a container INSTANCE carries state its DECLARED schema drops (r69 C).
+
+    Scope: kinds with a declared FIELD schema. A dataclass or namedtuple subclass
+    carrying live instance state outside its declared fields would silently lose that
+    state on replay reconstruction -- and it can steer control flow the declared schema
+    never witnesses (r66 R1: ``box.mode``; r68 hon1-F2: a ``__slots__`` subclass; r68
+    hon1-F3: ``hasattr`` presence on a ``None``-valued extra). The live state set comes
+    from the ONE inert enumerator :func:`instance_state_names` (``__dict__`` keys plus
+    all-MRO set slots, presence counting regardless of value -- NO ``None`` carve-out),
+    minus the declared field names. Registered containers prove completeness through
+    their explicit ``state_complete`` declaration instead (checked by the snapshot's
+    registered branch).
 
     Mapping/sequence SUBCLASSES are deliberately NOT judged here (heavy-gate F7 ruling):
     their witnessed schema is the protocol view (ordered keys/children) plus the EXACT
@@ -359,28 +560,21 @@ def undeclared_instance_state(value: Any, kind: str) -> bool:
     legitimately keeps its backing store in ``__dict__`` (``self.data = {...}``) --
     blanket-refusing it would reject every well-behaved custom Mapping input the
     incumbent F7 contract admits. A hidden non-protocol attribute steering control flow
-    on such a subclass remains the documented pre-r67 residual (attribute reads are
-    invisible to every Python-level net), never a false structural pass: the class swap
-    itself still diverges through the exact-type node fact.
+    on such a subclass remains the documented residual (attribute reads are invisible
+    to every Python-level net), never a false structural pass: the class swap itself
+    still diverges through the exact-type node fact.
     """
 
     import dataclasses as _dc
 
     if kind == "dataclass" or (kind == "empty" and _dc.is_dataclass(value)):
-        field_names = {field.name for field in _dc.fields(value)}
-        extra = {
-            name
-            for name, attr_value in getattr(value, "__dict__", {}).items()
-            if name not in field_names and attr_value is not None
-        }
-        return bool(extra)
+        declared = {field.name for field in _dc.fields(value)}
+        return bool(instance_state_names(value) - declared)
     if kind == "namedtuple" or (
         kind == "empty" and isinstance(value, tuple) and hasattr(value, "_fields")
     ):
-        extras = getattr(value, "__dict__", None)
-        if not isinstance(extras, dict) or not extras:
-            return False
-        return any(item is not None for item in extras.values())
+        declared = {str(name) for name in getattr(value, "_fields", ())}
+        return bool(instance_state_names(value) - declared)
     return False
 
 
@@ -480,6 +674,15 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
                     refusals.append({"path": list(path), "reason": "opaque_mapping_key"})
                     encodable = False
                     break
+            if encodable and len(set(keys)) != len(keys):
+                # r69 D: two distinct key objects encoding to ONE canonical token
+                # (e.g. multiple same-bit NaN objects -- hash-equal, eq-False, so
+                # separate dict slots) make key identity ambiguous: ordered-key
+                # facts self-collide and token binding would be first-match-wins.
+                # Refuse typed at save; the symmetric runtime snapshot refusal
+                # fails the structure check on a runtime-ambiguous mapping.
+                refusals.append({"path": list(path), "reason": "ambiguous_mapping_key"})
+                encodable = False
             node["keys"] = keys if encodable else []
             nodes.append(node)
             if encodable:
@@ -492,7 +695,16 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
             for index, child in enumerate(item):
                 _descend(child, (*path, index))
             return
-        nodes.append(node)  # literal leaf: value witnessed by the literal walker
+        # Literal leaf: the VALUE is witnessed by the literal walker, but the scalar
+        # TYPE-CLASS disposition is decided here by the ONE classifier (r69 B). A
+        # semantic-typed scalar (enum member, builtin/np-scalar subclass) steers host
+        # control flow through type identity that no persisted value fact can carry,
+        # so it refuses the runnable save typed (``semantic_scalar_type``); the SAME
+        # refusal fires in the runtime snapshot, so an admitted builtin/stock-numpy
+        # capture replayed with a same-value semantic type diverges structurally.
+        if classify_scalar(item)[0] == "semantic":
+            refusals.append({"path": list(path), "reason": "semantic_scalar_type"})
+        nodes.append(node)
 
     def _safe_aux(aux: Any) -> Any:
         if aux is None or isinstance(aux, (bool, int, float, str)):

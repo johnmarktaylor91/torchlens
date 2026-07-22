@@ -835,6 +835,36 @@ def _apply_state_metadata_facts(
     """
 
     facts = recorded_state_metadata_facts(descriptor)
+    # r69 A belt: the applied (state, fact) identities must equal the parse-validated
+    # required inventory EXACTLY. Impossible to violate post-parse; a descriptor that
+    # somehow reached staging with a deficit fails closed typed instead of silently
+    # omitting a declared bit (the free-F1-secondary strip lane).
+    applied_identities = sorted(
+        f"{name}::{fact_name}" for name, fact_map in facts.items() for fact_name in fact_map
+    )
+    inventory_row = next(
+        (
+            row
+            for row in descriptor.required_witness_inventory.families
+            if row.family == "state_metadata"
+        ),
+        None,
+    )
+    required_identities = sorted(inventory_row.members) if inventory_row is not None else None
+    if required_identities is None or applied_identities != required_identities:
+        raise _binding_error(
+            (
+                _diagnostic(
+                    RunnableErrorCode.CONTEXT_FIELD_INVALID,
+                    "Declared state-metadata facts do not equal the parse-validated "
+                    f"required inventory (applied {applied_identities[:8]!r}, required "
+                    f"{required_identities[:8] if required_identities else None!r}); "
+                    "staging refuses rather than silently omitting a declared bit.",
+                    detection_stage="state_metadata_fact_staging",
+                    details=(("reason", "state_metadata_inventory_mismatch"),),
+                ),
+            )
+        )
     if not facts:
         return prepared
     name_by_slot: dict[str, str] = {}

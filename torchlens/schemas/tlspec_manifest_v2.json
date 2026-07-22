@@ -172,6 +172,25 @@
           }
         },
         "control_witnesses": {"type": "array"},
+        "required_witness_inventory": {
+          "type": "object",
+          "required": ["registry_version", "families"],
+          "properties": {
+            "registry_version": {"type": "string"},
+            "families": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["family", "disposition", "members"],
+                "properties": {
+                  "family": {"type": "string"},
+                  "disposition": {"type": "string"},
+                  "members": {"type": "array", "items": {"type": "string"}}
+                }
+              }
+            }
+          }
+        },
         "rng_profile": {
           "type": "object",
           "required": ["host_rng_consumed", "capture_seed"],

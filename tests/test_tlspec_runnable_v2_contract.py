@@ -83,6 +83,9 @@ def test_legacy_v1_capability_loads_analysis_only(tmp_path: Path) -> None:
         run["compatibility"]["initializer_policy_version"] = "torchlens_role_init_v1"
         run["payload_layers"]["activations"]["schema"] = "selected_activation_v1"
         run.pop("ambient_context", None)
+        # r69 A: the required-witness inventory is v2-only, exactly like the ambient
+        # context -- a genuine legacy v1 artifact predates and never carries it.
+        run.pop("required_witness_inventory", None)
         for call in run["calls"]:
             call.pop("execution_context", None)
 

@@ -104,32 +104,24 @@ def _assert_not_blessed(report) -> None:
 
 
 @pytest.mark.smoke
-def test_changed_enum_leaf_is_unverifiable_not_attested(tmp_path: Path) -> None:
-    """A changed opaque enum control input must not false-verify the wrong path."""
+def test_enum_leaf_refuses_runnable_save_typed(tmp_path: Path) -> None:
+    """r69 B supersedes the save-then-UNVERIFIABLE lane for enum leaves.
+
+    An ``enum.Enum`` input leaf is a SEMANTIC-typed scalar: its type/member
+    identity steers host control flow (``mode is _Mode.A``), which no persisted
+    value fact can carry. The runnable save now refuses typed
+    (``missing_input_container_contract`` / ``semantic_scalar_type``) instead of
+    producing an artifact that could ever replay the wrong arm; analysis saves
+    stay available. Strictly stronger than the former UNVERIFIABLE ceiling.
+    """
 
     model = EnumBranch()
     x = torch.tensor([2.0, 3.0])
-    path = _save_runnable(model, [x, _Mode.A], tmp_path / "enum.tlspec")
-
-    result = tl.load(path).run(inputs=[x, _Mode.B])
-    _assert_not_blessed(result.report)
-    # The replayed (recorded) path is x+1; the true model output is x*10. The honest
-    # report must not bless the wrong result as correct.
-    assert not torch.equal(result.output, model(x, _Mode.B))
-
-
-@pytest.mark.smoke
-def test_unchanged_enum_leaf_runs_unverifiable_not_verified(tmp_path: Path) -> None:
-    """An *unchanged* opaque leaf still runs, but honestly reports UNVERIFIABLE."""
-
-    model = EnumBranch()
-    x = torch.tensor([2.0, 3.0])
-    path = _save_runnable(model, [x, _Mode.A], tmp_path / "enum.tlspec")
-
-    result = tl.load(path).run(inputs=[x, _Mode.A])
-    _assert_not_blessed(result.report)
-    # Output happens to be numerically right here, but the run cannot prove it.
-    assert torch.equal(result.output, model(x, _Mode.A))
+    with pytest.raises(tl.errors.RunnablePreflightError) as excinfo:
+        _save_runnable(model, [x, _Mode.A], tmp_path / "enum.tlspec")
+    diagnostics = str(excinfo.value.fields.get("diagnostics"))
+    assert "missing_input_container_contract" in diagnostics
+    assert "semantic_scalar_type" in diagnostics
 
 
 def test_non_finite_inf_leaf_is_unverifiable_not_attested(tmp_path: Path) -> None:

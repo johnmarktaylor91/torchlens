@@ -53,6 +53,8 @@ from ..runnable import (
     ProducerPreflight,
     ReadinessReport,
     ReadinessStatus,
+    RequiredWitnessFamily,
+    RequiredWitnessInventory,
     ResolverRecord,
     ResolverStatus,
     RunProvider,
@@ -71,7 +73,10 @@ from ..runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
     TensorUseSite,
+    WITNESS_FAMILY_REGISTRY,
+    WITNESS_FAMILY_REGISTRY_VERSION,
     WitnessCompleteness,
+    decode_input_site_position,
 )
 from ..utils._callable_safety import (
     _PURE_TENSOR_PROPERTY_NAMES,
@@ -157,6 +162,11 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
     )
     _validate_state_metadata_fact_witnesses(witnesses)
     _validate_input_structure_witnesses(witnesses)
+    # r69 A parse order: slots/witness syntax first (above), then the REQUIRED
+    # descriptor-native presence ledger, then independently derived/cross-family
+    # sets and exact family/member equality (inside the validator).
+    inventory = _parse_required_witness_inventory(value.get("required_witness_inventory"))
+    _validate_required_witness_inventory(inventory, witnesses, slots)
     payload = _mapping(value, "payload_layers")
     compatibility = _mapping(value, "compatibility")
     preflight = _mapping(value, "preflight")
@@ -181,6 +191,7 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
         calls=calls,
         tensor_slots=slots,
         control_witnesses=witnesses,
+        required_witness_inventory=inventory,
         witness_completeness=WitnessCompleteness(_string(value, "witness_completeness")),
         rng_profile=_parse_rng_profile(value.get("rng_profile")),
         ambient_context=ambient,
@@ -370,6 +381,242 @@ def _validate_state_metadata_fact_witnesses(witnesses: "Sequence[ControlWitness]
                 raise ContextFieldInvalidError(
                     field, f"state-metadata fact {fact_name!r} carries a non-bool value"
                 )
+
+
+_REQUIRED_WITNESS_INVENTORY_FIELD = "required_witness_inventory"
+"""Manifest/diagnostic field name of the r69 A presence ledger."""
+
+
+def _parse_required_witness_inventory(value: Any) -> RequiredWitnessInventory:
+    """Parse the REQUIRED descriptor-native presence ledger (r69 A).
+
+    Missing inventory, unknown registry discriminator, malformed rows, missing/extra/
+    duplicate families, non-string or duplicate member IDs, a disposition disagreeing
+    with the closed registry, and members on an anchored family all refuse
+    ``context_field_invalid`` -- analysis load survives, readiness is unavailable,
+    execution cannot attach. Absence NEVER means the old weaker semantics.
+    """
+
+    field = _REQUIRED_WITNESS_INVENTORY_FIELD
+    if not isinstance(value, Mapping):
+        raise ContextFieldInvalidError(field, "required witness inventory is missing or malformed")
+    version = value.get("registry_version")
+    if version != WITNESS_FAMILY_REGISTRY_VERSION:
+        raise ContextFieldInvalidError(
+            field, f"unknown witness-family registry discriminator {version!r}"
+        )
+    raw_families = value.get("families")
+    if not isinstance(raw_families, Sequence) or isinstance(raw_families, (str, bytes)):
+        raise ContextFieldInvalidError(field, "malformed inventory family rows")
+    rows: list[RequiredWitnessFamily] = []
+    seen: set[str] = set()
+    for raw in raw_families:
+        if not isinstance(raw, Mapping):
+            raise ContextFieldInvalidError(field, "malformed inventory family row")
+        family = raw.get("family")
+        disposition = raw.get("disposition")
+        members = raw.get("members")
+        if not isinstance(family, str) or family not in WITNESS_FAMILY_REGISTRY:
+            raise ContextFieldInvalidError(field, f"unknown witness family {family!r}")
+        if family in seen:
+            raise ContextFieldInvalidError(field, f"duplicate witness family row {family!r}")
+        seen.add(family)
+        if disposition != WITNESS_FAMILY_REGISTRY[family]:
+            raise ContextFieldInvalidError(
+                field, f"family {family!r} declares disposition {disposition!r}"
+            )
+        if (
+            not isinstance(members, Sequence)
+            or isinstance(members, (str, bytes))
+            or not all(isinstance(member, str) for member in members)
+        ):
+            raise ContextFieldInvalidError(field, f"malformed member set for {family!r}")
+        member_tuple = tuple(members)
+        if len(set(member_tuple)) != len(member_tuple):
+            raise ContextFieldInvalidError(field, f"duplicate member identity in family {family!r}")
+        if WITNESS_FAMILY_REGISTRY[family] == "independent_ceiling" and member_tuple:
+            raise ContextFieldInvalidError(
+                field,
+                f"family {family!r} is anchored by an independent structural proof "
+                "and carries no inventory members",
+            )
+        rows.append(
+            RequiredWitnessFamily(family=family, disposition=str(disposition), members=member_tuple)
+        )
+    if seen != set(WITNESS_FAMILY_REGISTRY):
+        raise ContextFieldInvalidError(
+            field,
+            f"inventory family set {sorted(seen)!r} does not equal the closed "
+            f"registry {sorted(WITNESS_FAMILY_REGISTRY)!r}",
+        )
+    return RequiredWitnessInventory(registry_version=str(version), families=tuple(rows))
+
+
+def _validate_required_witness_inventory(
+    inventory: RequiredWitnessInventory,
+    witnesses: "Sequence[ControlWitness]",
+    slots: "Sequence[TensorSlotDescriptor]",
+) -> None:
+    """Require EXACT family+member coverage plus the independent cross-checks (r69 A).
+
+    The present member sets are re-derived from the parsed witnesses with the SAME
+    single-source function the producer authored the inventory from
+    (``torchlens._io.runnable.required_witness_family_members``); exact set equality
+    is required for every ``inventory_indexed`` family, so stripping, duplicating,
+    or forging any fact refuses ``context_field_invalid``. Independent cross-checks
+    anchor the ledger to the rest of the descriptor: every tensor ``MODEL_INPUT``
+    binding position, literal-fact position, and metadata-fact position must sit
+    inside the inventory site set; positional roots are dense; ``site_count``
+    values are redundant consistency only; and literal-leaf paths cross-anchor
+    BIDIRECTIONALLY with the structure snapshots' leaf/empty nodes, so per-leaf
+    literal stripping cannot hide behind site-level coverage.
+    """
+
+    from .._runnable_execution import _decode_literal
+    from .runnable import (
+        EMPTY_CONTAINER_PATH_MARKER,
+        required_witness_family_members,
+        witness_family_of,
+    )
+
+    field = _REQUIRED_WITNESS_INVENTORY_FIELD
+    # Family closure: every SHAPE_STRUCTURE_FACT witness must belong to a registered
+    # family -- an unregistered fact family can never ride a v2 descriptor silently.
+    for witness in witnesses:
+        if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
+            continue
+        if witness_family_of(witness.site_label) is None:
+            raise ContextFieldInvalidError(
+                field,
+                f"witness site label {witness.site_label!r} belongs to no registered "
+                "replay-critical family",
+            )
+    try:
+        present = required_witness_family_members(witnesses)
+    except ValueError as exc:
+        raise ContextFieldInvalidError(field, f"malformed witness envelope: {exc}")
+    rows = {row.family: row for row in inventory.families}
+    for family, disposition in WITNESS_FAMILY_REGISTRY.items():
+        if disposition != "inventory_indexed":
+            continue
+        present_members = present[family]
+        if len(set(present_members)) != len(present_members):
+            raise ContextFieldInvalidError(
+                field, f"duplicate {family!r} member identity among present facts"
+            )
+        if sorted(present_members) != list(rows[family].members):
+            raise ContextFieldInvalidError(
+                field,
+                f"{family!r} facts do not equal the required inventory (declared "
+                f"{list(rows[family].members)[:8]!r}, present "
+                f"{sorted(present_members)[:8]!r})",
+            )
+    # ---- independent input-site cross-checks -------------------------------------
+    try:
+        sites = {decode_input_site_position(member) for member in rows["input_structure"].members}
+    except ValueError as exc:
+        raise ContextFieldInvalidError(field, str(exc))
+    arg_indices = sorted(key for kind, key in sites if kind == "arg")
+    if arg_indices != list(range(len(arg_indices))):
+        raise ContextFieldInvalidError(
+            field, f"positional input sites are not dense: {arg_indices[:8]!r}"
+        )
+    for slot in slots:
+        if slot.role is not TensorSlotRole.MODEL_INPUT or slot.input_binding is None:
+            continue
+        position = slot.input_binding.model_site_position
+        if not isinstance(position, tuple) or len(position) != 2 or tuple(position) not in sites:
+            raise ContextFieldInvalidError(
+                field,
+                f"tensor MODEL_INPUT binding position {position!r} is outside the "
+                "required input-site inventory",
+            )
+    # ---- bidirectional literal-leaf <-> structure-leaf cross-anchor --------------
+    structure_expected: dict[tuple[Any, ...], set[tuple[Any, ...]]] = {}
+    literal_present: dict[tuple[Any, ...], set[tuple[Any, ...]]] = {}
+    literal_claims: list[tuple[Any, ...]] = []
+    for witness in witnesses:
+        if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
+            continue
+        fact_family = witness_family_of(witness.site_label)
+        if fact_family == "input_structure":
+            fact = _decode_literal(witness.observed_value)
+            site_position = tuple(fact.get("position", ()))
+            expected: set[tuple[Any, ...]] = set()
+            for node in fact.get("nodes", ()):
+                if not isinstance(node, Mapping):
+                    continue
+                node_path = tuple(node.get("path", ()))
+                if node.get("kind") == "leaf":
+                    expected.add(node_path)
+                elif node.get("kind") == "empty":
+                    expected.add((*node_path, EMPTY_CONTAINER_PATH_MARKER))
+            structure_expected[site_position] = expected
+            declared_count = fact.get("site_count")
+            if declared_count != len(sites):
+                raise ContextFieldInvalidError(
+                    field,
+                    f"site {site_position!r} declares site_count={declared_count!r}, but the "
+                    f"required inventory proves {len(sites)} sites (site_count is a "
+                    "redundant consistency value, never authority)",
+                )
+        elif fact_family == "model_input_literal":
+            fact = _decode_literal(witness.observed_value)
+            if not isinstance(fact, Mapping):
+                raise ContextFieldInvalidError(field, "undecodable model-input literal fact")
+            raw_position = fact.get("position")
+            site_position = (
+                tuple(raw_position) if isinstance(raw_position, (list, tuple)) else (raw_position,)
+            )
+            if site_position not in sites:
+                raise ContextFieldInvalidError(
+                    field,
+                    f"literal fact position {site_position!r} is outside the required "
+                    "input-site inventory",
+                )
+            path = tuple(fact.get("path", ()) or ())
+            claim = (site_position, path)
+            if claim in literal_claims:
+                raise ContextFieldInvalidError(field, f"duplicate literal fact identity {claim!r}")
+            literal_claims.append(claim)
+            literal_present.setdefault(site_position, set()).add(path)
+        elif fact_family == "model_input_metadata":
+            fact = _decode_literal(witness.observed_value)
+            if not isinstance(fact, Mapping):
+                raise ContextFieldInvalidError(field, "undecodable model-input metadata fact")
+            raw_position = fact.get("position")
+            site_position = (
+                tuple(raw_position) if isinstance(raw_position, (list, tuple)) else (raw_position,)
+            )
+            if site_position not in sites:
+                raise ContextFieldInvalidError(
+                    field,
+                    f"metadata fact position {site_position!r} is outside the required "
+                    "input-site inventory",
+                )
+    if set(structure_expected) != sites:
+        raise ContextFieldInvalidError(
+            field,
+            f"structure fact positions {sorted(structure_expected, key=repr)!r} do not "
+            f"equal the required inventory sites {sorted(sites, key=repr)!r}",
+        )
+    for site_position, expected in structure_expected.items():
+        actual = literal_present.get(site_position, set())
+        if actual != expected:
+            missing = sorted(expected - actual, key=repr)[:4]
+            extra = sorted(actual - expected, key=repr)[:4]
+            raise ContextFieldInvalidError(
+                field,
+                f"literal facts at site {site_position!r} do not cross-anchor the structure "
+                f"leaf nodes (missing {missing!r}, extra {extra!r}); per-leaf literal "
+                "stripping cannot hide behind site-level coverage",
+            )
+    for site_position in literal_present:
+        if site_position not in structure_expected:
+            raise ContextFieldInvalidError(
+                field,
+                f"literal facts at site {site_position!r} have no structure fact to anchor",
+            )
 
 
 class DescriptorStructuralBoundError(ValueError):

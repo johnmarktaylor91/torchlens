@@ -71,6 +71,8 @@ def test_authoritative_descriptor_and_report_field_names() -> None:
         "calls",
         "tensor_slots",
         "control_witnesses",
+        # r69 A: the REQUIRED descriptor-native presence ledger (contract section 4).
+        "required_witness_inventory",
         "witness_completeness",
         "rng_profile",
         "ambient_context",
