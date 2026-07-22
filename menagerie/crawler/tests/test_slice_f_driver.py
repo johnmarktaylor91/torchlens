@@ -544,6 +544,60 @@ def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[st
 """
 
 
+@dataclass(frozen=True)
+class TypedAdapterPatch:
+    """Describe a schema-valid typed-adapter projection for a test artifact."""
+
+    source: str
+    input_shape: tuple[int, ...] = (1, 2)
+    modes: tuple[str, ...] = ("eval",)
+    evidence_supports: tuple[str, ...] = (
+        "implementation.code_manifest[].path",
+        "implementation.code_manifest[].sha256",
+    )
+
+
+def apply_typed_adapter_patch(artifact: AuthorArtifact, patch: TypedAdapterPatch) -> None:
+    """Apply common schema-owned typed-adapter fields without binding identities."""
+
+    adapter_path = artifact.model_dir / "adapter.py"
+    adapter_path.write_text(patch.source, encoding="utf-8")
+    adapter_digest = hash_bytes(adapter_path.read_bytes())
+    code_manifest = [dict(row) for row in model_code_manifest(adapter_path, artifact.model_dir)]
+    proposal = artifact.proposal
+    facts = proposal["proposed_facts"]
+    facts["implementation"].update(
+        {
+            "recipe_type": "typed-adapter",
+            "code_path": "adapter.py",
+            "code_sha256": adapter_digest,
+            "builder_symbol": "build_model",
+            "dummy_call_symbol": "make_dummy_call",
+            "library_recipe": None,
+            "code_manifest": code_manifest,
+        }
+    )
+    facts["input_contract"]["args"][0]["shape"] = list(patch.input_shape)
+    facts["modes"]["meaningful_modes"] = list(patch.modes)
+    facts["external_metadata"]["modes"]["meaningful_modes"] = list(patch.modes)
+    facts["evidence"]["excerpts"][0]["supports"] = sorted(
+        set(facts["evidence"]["excerpts"][0]["supports"]) | set(patch.evidence_supports)
+    )
+    proposal["verified_hashes"]["code"] = adapter_digest
+    proposal["verified_hashes"]["code_manifest"] = stable_hash(code_manifest)
+
+
+def finalize_typed_adapter_patch(artifact: AuthorArtifact, config: DriverConfig) -> AuthorArtifact:
+    """Bind proposal identities after all typed-adapter patches are complete."""
+
+    _refresh_proposal_identities(
+        artifact.proposal,
+        checker_model=config.checker_model,
+        checker_version=config.checker_version,
+    )
+    return _rebind_fake_author_result(artifact)
+
+
 class BothDeferredRealAuthor(FakeAuthor):
     """Retain one real typed adapter in each durable platform handoff."""
 
@@ -557,40 +611,8 @@ class BothDeferredRealAuthor(FakeAuthor):
         """Return a deferral whose nested proposal runs in the real worker."""
 
         artifact = super().author(item, work_root, config, context)
-        adapter_path = artifact.model_dir / "adapter.py"
-        adapter_path.write_text(_HANDOFF_ADAPTER, encoding="utf-8")
-        adapter_digest = hash_bytes(adapter_path.read_bytes())
-        code_manifest = [dict(row) for row in model_code_manifest(adapter_path, artifact.model_dir)]
-        facts = artifact.proposal["proposed_facts"]
-        facts["implementation"].update(
-            {
-                "recipe_type": "typed-adapter",
-                "code_path": "adapter.py",
-                "code_sha256": adapter_digest,
-                "builder_symbol": "build_model",
-                "dummy_call_symbol": "make_dummy_call",
-                "library_recipe": None,
-                "code_manifest": code_manifest,
-            }
-        )
-        facts["input_contract"]["args"][0]["shape"] = [1, 2]
-        facts["modes"]["meaningful_modes"] = ["eval"]
-        facts["external_metadata"]["modes"]["meaningful_modes"] = ["eval"]
-        facts["evidence"]["excerpts"][0]["supports"] = sorted(
-            set(facts["evidence"]["excerpts"][0]["supports"])
-            | {
-                "implementation.code_manifest[].path",
-                "implementation.code_manifest[].sha256",
-            }
-        )
-        artifact.proposal["verified_hashes"]["code"] = adapter_digest
-        artifact.proposal["verified_hashes"]["code_manifest"] = stable_hash(code_manifest)
-        _refresh_proposal_identities(
-            artifact.proposal,
-            checker_model=config.checker_model,
-            checker_version=config.checker_version,
-        )
-        rebound = _rebind_fake_author_result(artifact)
+        apply_typed_adapter_patch(artifact, TypedAdapterPatch(source=_HANDOFF_ADAPTER))
+        rebound = finalize_typed_adapter_patch(artifact, config)
         platform = "cuda" if len(self.calls) == 1 else "x86"
         return _terminal_fake_author_result(rebound, platform=platform)
 

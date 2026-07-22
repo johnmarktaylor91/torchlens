@@ -19,8 +19,7 @@ from menagerie.crawler.driver import (
     DriverDependencies,
     DriverIntegrationError,
 )
-from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
-from menagerie.crawler.proposal import model_code_manifest
+from menagerie.crawler.identity import canonical_json_bytes
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import CanonicalReducer
 from menagerie.crawler.tests import test_round17_structural_inventories as structural
@@ -33,13 +32,14 @@ from menagerie.crawler.tests.test_slice_f_driver import (
     FakeEnvironments,
     FakeForward,
     FakeNotifier,
+    TypedAdapterPatch,
     _copy_clean_clone_handoff_authority,
     _driver,
     _paths,
-    _rebind_fake_author_result,
-    _refresh_proposal_identities,
     _snapshot,
     _terminal_fake_author_result,
+    apply_typed_adapter_patch,
+    finalize_typed_adapter_patch,
     test_linux_handoff_attempts_both_deferred_statuses_and_supersedes,
 )
 
@@ -76,40 +76,8 @@ class _ChangedDeferredRealAuthor(FakeAuthor):
         """Return changed same-work authority through the ordinary author contract."""
 
         artifact = super().author(item, work_root, config, context)
-        adapter_path = artifact.model_dir / "adapter.py"
-        adapter_path.write_text(_CHANGED_HANDOFF_ADAPTER, encoding="utf-8")
-        adapter_digest = hash_bytes(adapter_path.read_bytes())
-        code_manifest = [dict(row) for row in model_code_manifest(adapter_path, artifact.model_dir)]
-        facts = artifact.proposal["proposed_facts"]
-        facts["implementation"].update(
-            {
-                "recipe_type": "typed-adapter",
-                "code_path": "adapter.py",
-                "code_sha256": adapter_digest,
-                "builder_symbol": "build_model",
-                "dummy_call_symbol": "make_dummy_call",
-                "library_recipe": None,
-                "code_manifest": code_manifest,
-            }
-        )
-        facts["input_contract"]["args"][0]["shape"] = [1, 2]
-        facts["modes"]["meaningful_modes"] = ["eval"]
-        facts["external_metadata"]["modes"]["meaningful_modes"] = ["eval"]
-        facts["evidence"]["excerpts"][0]["supports"] = sorted(
-            set(facts["evidence"]["excerpts"][0]["supports"])
-            | {
-                "implementation.code_manifest[].path",
-                "implementation.code_manifest[].sha256",
-            }
-        )
-        artifact.proposal["verified_hashes"]["code"] = adapter_digest
-        artifact.proposal["verified_hashes"]["code_manifest"] = stable_hash(code_manifest)
-        _refresh_proposal_identities(
-            artifact.proposal,
-            checker_model=config.checker_model,
-            checker_version=config.checker_version,
-        )
-        rebound = _rebind_fake_author_result(artifact)
+        apply_typed_adapter_patch(artifact, TypedAdapterPatch(source=_CHANGED_HANDOFF_ADAPTER))
+        rebound = finalize_typed_adapter_patch(artifact, config)
         return _terminal_fake_author_result(rebound, platform="cuda")
 
 

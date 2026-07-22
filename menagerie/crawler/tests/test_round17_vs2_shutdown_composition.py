@@ -22,8 +22,7 @@ from menagerie.crawler.driver import (
     SupervisedForwardLane,
     WorkItem,
 )
-from menagerie.crawler.identity import hash_bytes, stable_hash
-from menagerie.crawler.proposal import model_code_manifest
+from menagerie.crawler.identity import stable_hash
 from menagerie.crawler.recordio import scan_jsonl
 from menagerie.crawler.tests.conftest import (
     RealEnvironmentFixture,
@@ -33,11 +32,12 @@ from menagerie.crawler.tests.conftest import (
 from menagerie.crawler.tests.test_slice_f_driver import (
     FakeAuthor,
     FakeChecker,
+    TypedAdapterPatch,
     _driver,
     _paths,
-    _rebind_fake_author_result,
-    _refresh_proposal_identities,
     _snapshot,
+    apply_typed_adapter_patch,
+    finalize_typed_adapter_patch,
 )
 
 
@@ -96,23 +96,29 @@ class TinyAdapterAuthor(FakeAuthor):
 
         artifact = super().author(item, work_root, config, context)
         artifact.source_manifest["sources"][0]["retrieval_status"] = "fetched"
-        adapter_path = artifact.model_dir / "adapter.py"
-        adapter_path.write_text(_TINY_ADAPTER, encoding="utf-8")
-        adapter_digest = hash_bytes(adapter_path.read_bytes())
-        code_manifest = [dict(row) for row in model_code_manifest(adapter_path, artifact.model_dir)]
         proposal = artifact.proposal
-        facts = proposal["proposed_facts"]
-        facts["implementation"].update(
-            {
-                "recipe_type": "typed-adapter",
-                "code_path": "adapter.py",
-                "code_sha256": adapter_digest,
-                "builder_symbol": "build_model",
-                "dummy_call_symbol": "make_dummy_call",
-                "library_recipe": None,
-                "code_manifest": code_manifest,
-            }
+        apply_typed_adapter_patch(
+            artifact,
+            TypedAdapterPatch(
+                source=_TINY_ADAPTER,
+                evidence_supports=(
+                    "implementation.code_manifest[].path",
+                    "implementation.code_manifest[].sha256",
+                    "implementation.source_to_code_map[].code_locator",
+                    "implementation.source_to_code_map[].code_path",
+                    "implementation.source_to_code_map[].disposition",
+                    "implementation.source_to_code_map[].evidence_ids[]",
+                    "implementation.source_to_code_map[].material_item",
+                    "implementation.source_to_code_map[].source_id",
+                    "implementation.source_to_code_map[].source_locator",
+                    "implementation.upstream_files[].path",
+                    "implementation.upstream_files[].sha256",
+                    "implementation.upstream_files[].source_id",
+                    "implementation.upstream_files[].use",
+                ),
+            ),
         )
+        facts = proposal["proposed_facts"]
         source = facts["source_resolution"]["sources"][0]
         excerpt = facts["evidence"]["excerpts"][0]
         facts["source_resolution"].update(
@@ -154,38 +160,10 @@ class TinyAdapterAuthor(FakeAuthor):
                 "disposition": "vendor-adapted",
             }
         ]
-        facts["input_contract"]["args"][0]["shape"] = [1, 2]
-        facts["modes"]["meaningful_modes"] = ["eval"]
-        facts["external_metadata"]["modes"]["meaningful_modes"] = ["eval"]
-        facts["evidence"]["excerpts"][0]["supports"] = sorted(
-            set(facts["evidence"]["excerpts"][0]["supports"])
-            | {
-                "implementation.code_manifest[].path",
-                "implementation.code_manifest[].sha256",
-                "implementation.source_to_code_map[].code_locator",
-                "implementation.source_to_code_map[].code_path",
-                "implementation.source_to_code_map[].disposition",
-                "implementation.source_to_code_map[].evidence_ids[]",
-                "implementation.source_to_code_map[].material_item",
-                "implementation.source_to_code_map[].source_id",
-                "implementation.source_to_code_map[].source_locator",
-                "implementation.upstream_files[].path",
-                "implementation.upstream_files[].sha256",
-                "implementation.upstream_files[].source_id",
-                "implementation.upstream_files[].use",
-            }
-        )
-        proposal["verified_hashes"]["code"] = adapter_digest
-        proposal["verified_hashes"]["code_manifest"] = stable_hash(code_manifest)
         proposal["verified_hashes"]["source_to_code_map"] = stable_hash(
             facts["implementation"]["source_to_code_map"]
         )
-        _refresh_proposal_identities(
-            proposal,
-            checker_model=config.checker_model,
-            checker_version=config.checker_version,
-        )
-        return _rebind_fake_author_result(artifact)
+        return finalize_typed_adapter_patch(artifact, config)
 
 
 def _files_below(path: Path) -> list[str]:
