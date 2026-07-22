@@ -65,6 +65,7 @@ from typing import Any, Callable
 __all__ = [
     "INPUT_CONTAINER_KINDS",
     "classify_input_container",
+    "instance_state_names",
     "raw_mapping_key_component",
     "tagged_mapping_key_component",
     "walk_input_boundary",
@@ -343,15 +344,75 @@ def decode_mapping_key(component: "str | int") -> Any:
     raise ValueError(f"Unknown key-codec component {component!r}.")
 
 
-def undeclared_instance_state(value: Any, kind: str) -> bool:
-    """Return whether a container INSTANCE carries state its DECLARED schema drops (r67 C2).
+def instance_state_names(value: Any) -> frozenset[str]:
+    """Enumerate every SET instance-state NAME on ``value``, inertly (r69 C).
 
-    Scope: kinds with a declared FIELD schema. A dataclass with a non-field ``__dict__``
-    attribute or a namedtuple subclass with instance ``__dict__`` state would silently
-    lose that state on replay reconstruction -- and it can steer control flow the
-    declared schema never witnesses (r66 R1: ``box.mode``). Registered containers prove
-    completeness through their explicit ``state_complete`` declaration instead (checked
-    by the snapshot's registered branch).
+    THE single live-instance-state enumerator for declared-schema containers:
+
+    * every ``__dict__`` key, regardless of the stored value (``None``, ``False``,
+      ``0``, an empty container, and any other falsey value all count -- PRESENCE is
+      state: r68 hon1-F3 proved a ``hasattr``-steered branch on a ``None``-valued
+      extra);
+    * every SET slot across ALL classes in ``type(value).__mro__``: string
+      ``__slots__`` declarations are normalized to one name, the ``__dict__`` /
+      ``__weakref__`` pseudo-slots are ignored, CPython private-name mangling is
+      resolved relative to the DECLARING class, and only genuine slot member
+      descriptors found in ``vars(declaring_class)`` are read -- directly through
+      the descriptor, so no property, user ``__getattr__``, or user
+      ``__getattribute__`` can ever execute (inert by construction). An unset slot
+      is absent; a slot set to ANY value (including ``None``) is present.
+
+    Returns the set of ACTUAL storage names (private slot names appear mangled,
+    matching their ``__dict__`` spelling).
+    """
+
+    import types as _types
+
+    names: set[str] = set()
+    instance_dict = getattr(value, "__dict__", None)
+    if isinstance(instance_dict, dict):
+        names.update(str(key) for key in instance_dict)
+    for cls in type(value).__mro__:
+        raw_slots = cls.__dict__.get("__slots__")
+        if raw_slots is None:
+            continue
+        slot_names = [raw_slots] if isinstance(raw_slots, str) else [str(s) for s in raw_slots]
+        for raw_name in slot_names:
+            if raw_name in {"__dict__", "__weakref__"}:
+                continue
+            name = raw_name
+            if raw_name.startswith("__") and not raw_name.endswith("__"):
+                # CPython mangles private slot names against the DECLARING class.
+                stripped = cls.__name__.lstrip("_")
+                if stripped:
+                    name = f"_{stripped}{raw_name}"
+            descriptor = cls.__dict__.get(name)
+            if not isinstance(descriptor, _types.MemberDescriptorType):
+                # A shadowed/replaced slot descriptor makes the slot storage
+                # unreachable by ordinary attribute access; reading anything else
+                # here could execute user code, so the name is skipped (inert).
+                continue
+            try:
+                descriptor.__get__(value, cls)
+            except AttributeError:
+                continue  # unset slot: absent
+            names.add(name)
+    return frozenset(names)
+
+
+def undeclared_instance_state(value: Any, kind: str) -> bool:
+    """Return whether a container INSTANCE carries state its DECLARED schema drops (r69 C).
+
+    Scope: kinds with a declared FIELD schema. A dataclass or namedtuple subclass
+    carrying live instance state outside its declared fields would silently lose that
+    state on replay reconstruction -- and it can steer control flow the declared schema
+    never witnesses (r66 R1: ``box.mode``; r68 hon1-F2: a ``__slots__`` subclass; r68
+    hon1-F3: ``hasattr`` presence on a ``None``-valued extra). The live state set comes
+    from the ONE inert enumerator :func:`instance_state_names` (``__dict__`` keys plus
+    all-MRO set slots, presence counting regardless of value -- NO ``None`` carve-out),
+    minus the declared field names. Registered containers prove completeness through
+    their explicit ``state_complete`` declaration instead (checked by the snapshot's
+    registered branch).
 
     Mapping/sequence SUBCLASSES are deliberately NOT judged here (heavy-gate F7 ruling):
     their witnessed schema is the protocol view (ordered keys/children) plus the EXACT
@@ -359,28 +420,21 @@ def undeclared_instance_state(value: Any, kind: str) -> bool:
     legitimately keeps its backing store in ``__dict__`` (``self.data = {...}``) --
     blanket-refusing it would reject every well-behaved custom Mapping input the
     incumbent F7 contract admits. A hidden non-protocol attribute steering control flow
-    on such a subclass remains the documented pre-r67 residual (attribute reads are
-    invisible to every Python-level net), never a false structural pass: the class swap
-    itself still diverges through the exact-type node fact.
+    on such a subclass remains the documented residual (attribute reads are invisible
+    to every Python-level net), never a false structural pass: the class swap itself
+    still diverges through the exact-type node fact.
     """
 
     import dataclasses as _dc
 
     if kind == "dataclass" or (kind == "empty" and _dc.is_dataclass(value)):
-        field_names = {field.name for field in _dc.fields(value)}
-        extra = {
-            name
-            for name, attr_value in getattr(value, "__dict__", {}).items()
-            if name not in field_names and attr_value is not None
-        }
-        return bool(extra)
+        declared = {field.name for field in _dc.fields(value)}
+        return bool(instance_state_names(value) - declared)
     if kind == "namedtuple" or (
         kind == "empty" and isinstance(value, tuple) and hasattr(value, "_fields")
     ):
-        extras = getattr(value, "__dict__", None)
-        if not isinstance(extras, dict) or not extras:
-            return False
-        return any(item is not None for item in extras.values())
+        declared = {str(name) for name in getattr(value, "_fields", ())}
+        return bool(instance_state_names(value) - declared)
     return False
 
 

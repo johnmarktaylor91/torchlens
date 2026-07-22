@@ -518,6 +518,186 @@ def test_r67_depth3_torture_tree_snapshot_is_mutation_sensitive() -> None:
         assert mutated["nodes"] != baseline["nodes"], swap
 
 
+# ======================================================================================
+# r69 C -- ONE inert instance-state enumerator: __dict__ + all-MRO set slots, presence
+# counts regardless of value (hon1-F2 __slots__ evasion, hon1-F3 None carve-out)
+# ======================================================================================
+
+
+@dataclasses.dataclass
+class _SlotBase:
+    x: torch.Tensor
+
+
+class _OwnSlotBox(_SlotBase):
+    __slots__ = ("mode",)
+
+    def __init__(self, x, mode):
+        super().__init__(x)
+        self.mode = mode
+
+
+class _PrivateSlotBox(_SlotBase):
+    __slots__ = ("__secret",)
+
+    def __init__(self, x, secret):
+        super().__init__(x)
+        self.__secret = secret
+
+
+class _InheritedSlotMixin:
+    __slots__ = ("inherited",)
+
+
+@dataclasses.dataclass
+class _InheritedSlotBox(_InheritedSlotMixin):
+    x: torch.Tensor
+
+
+class _SingleStringSlotBox(_SlotBase):
+    __slots__ = "solo"
+
+    def __init__(self, x, solo):
+        super().__init__(x)
+        self.solo = solo
+
+
+class _UnsetSlotBox(_SlotBase):
+    __slots__ = ("maybe",)
+
+
+@dataclasses.dataclass
+class _SlottedDC:
+    """Declared-fields-only slotted dataclass (must stay admitted)."""
+
+    x: torch.Tensor
+
+    __slots__ = ("x",)
+
+
+def test_r69_instance_state_names_enumerates_dict_and_all_mro_slots() -> None:
+    from torchlens._input_walk import instance_state_names, undeclared_instance_state
+
+    x = torch.zeros(1)
+    # __dict__ storage (plain dataclass): declared field only.
+    assert instance_state_names(_Box(x)) == {"x"}
+    assert not undeclared_instance_state(_Box(x), "dataclass")
+    # Own-class slot on a dataclass subclass (hon1-F2 verbatim).
+    assert "mode" in instance_state_names(_OwnSlotBox(x, "fast"))
+    assert undeclared_instance_state(_OwnSlotBox(x, "fast"), "dataclass")
+    # Private slot resolves through CPython name mangling on the declaring class.
+    assert "_PrivateSlotBox__secret" in instance_state_names(_PrivateSlotBox(x, 1))
+    assert undeclared_instance_state(_PrivateSlotBox(x, 1), "dataclass")
+    # MRO-inherited slot from a non-dataclass mixin.
+    box = _InheritedSlotBox(x)
+    assert not undeclared_instance_state(box, "dataclass")  # unset slot is absent
+    box.inherited = None  # set to None: PRESENCE is state
+    assert "inherited" in instance_state_names(box)
+    assert undeclared_instance_state(box, "dataclass")
+    # Single-string __slots__ declaration normalizes to one name.
+    assert "solo" in instance_state_names(_SingleStringSlotBox(x, 0))
+    assert undeclared_instance_state(_SingleStringSlotBox(x, 0), "dataclass")
+    # Unset slot stays absent (no refusal).
+    assert "maybe" not in instance_state_names(_UnsetSlotBox(x))
+    assert not undeclared_instance_state(_UnsetSlotBox(x), "dataclass")
+    # dataclass(slots=True)-style declared-field slots stay admitted.
+    assert not undeclared_instance_state(_SlottedDC(x), "dataclass")
+    # Mixed __dict__ + slot storage: both surfaces enumerated.
+    mixed = _OwnSlotBox(x, "fast")
+    mixed.extra_dict_attr = None
+    assert {"mode", "extra_dict_attr"} <= set(instance_state_names(mixed))
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    "extra_value",
+    [None, False, 0, {}, (), "", object()],
+    ids=["none", "false", "zero", "empty_dict", "empty_tuple", "empty_str", "object"],
+)
+def test_r69_presence_matrix_every_falsey_extra_refuses(extra_value, tmp_path: Path) -> None:
+    """Every extra-attr VALUE (falsey included) has the SAME refusal disposition.
+
+    hon1-F3 verbatim: the old ``is not None`` carve-out made attribute PRESENCE
+    unwitnessable -- a ``hasattr``-steered model admitted a ``None``-valued extra at
+    save and replayed VERIFIED against an attr-absent same-class twin.
+    """
+
+    from torchlens._input_walk import snapshot_input_boundary
+
+    box = _Box(torch.zeros(1))
+    box.extra = extra_value
+    snapshot = snapshot_input_boundary(box)
+    assert any(
+        refusal["reason"] == "undeclared_instance_state" for refusal in snapshot["refusals"]
+    ), extra_value
+
+
+@pytest.mark.smoke
+def test_r69_slotted_dataclass_hidden_state_refuses_at_save(tmp_path: Path) -> None:
+    """hon1-F2: __slots__ control state on a dataclass subclass refuses typed at save."""
+
+    class _SlotModel(nn.Module):
+        def forward(self, box) -> torch.Tensor:
+            if getattr(box, "mode", "slow") == "fast":
+                return box.x * 2.0
+            return box.x + 100.0
+
+    x = torch.randn(3)
+    trace = _trace(_SlotModel(), _OwnSlotBox(x, "fast"))
+    _assert_refuses_contract(trace, tmp_path / "slots.tlspec", "undeclared_instance_state")
+
+
+def test_r69_none_extra_hasattr_steering_refuses_at_save(tmp_path: Path) -> None:
+    """hon1-F3: a None-valued extra attr (hasattr steering) refuses typed at save."""
+
+    class _HasattrModel(nn.Module):
+        def forward(self, box) -> torch.Tensor:
+            if hasattr(box, "extra"):
+                return box.x * 2.0
+            return box.x + 100.0
+
+    x = torch.randn(3)
+    box = _Box(x.clone())
+    box.extra = None
+    trace = _trace(_HasattrModel(), box)
+    _assert_refuses_contract(trace, tmp_path / "none_extra.tlspec", "undeclared_instance_state")
+
+
+def test_r69_runtime_added_slot_state_diverges(tmp_path: Path) -> None:
+    """Symmetric bind-side proof for slots: runtime-added slot state cannot pass."""
+
+    class _SlotModel(nn.Module):
+        def forward(self, box) -> torch.Tensor:
+            if getattr(box, "maybe", None) == "fast":
+                return box.x * 2.0
+            return box.x + 100.0
+
+    x = torch.randn(3)
+    path = _save(_trace(_SlotModel(), _UnsetSlotBox(x.clone())), tmp_path / "rt_slot.tlspec")
+    original = tl.load(path).run(inputs=_UnsetSlotBox(x.clone()))
+    assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
+    twin = _UnsetSlotBox(x.clone())
+    twin.maybe = "fast"  # flips the branch through slot state no snapshot declared
+    _assert_diverges(path, twin)
+
+
+def test_r69_clean_declared_schema_lanes_stay_admitted(tmp_path: Path) -> None:
+    """No over-trigger: clean dataclass/namedtuple/custom-Mapping lanes stay green."""
+
+    from torchlens._input_walk import snapshot_input_boundary
+
+    x = torch.zeros(1)
+    for value in (_Box(x), _SlottedDC(x), _NTA(x), _EmptyA()):
+        snapshot = snapshot_input_boundary(value)
+        assert snapshot["refusals"] == [], type(value).__name__
+
+    class _GoodMapping(dict):
+        """Well-behaved Mapping subclass (heavy-gate F7 admitted lane)."""
+
+    snapshot = snapshot_input_boundary(_GoodMapping({"k": x}))
+    assert snapshot["refusals"] == []
+
+
 @pytest.mark.smoke
 def test_r67_consumer_source_scan() -> None:
     """Capture recorder and runtime check both derive from the ONE snapshot spine."""
