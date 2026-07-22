@@ -1201,6 +1201,17 @@ def _add_persistent_buffer_slot_drafts(
 ) -> None:
     """Add every persistent source-model buffer to the value-free state map.
 
+    Prefers the LIVE source model (weak reference, inspection-only). When the model is
+    gone -- a caller that never held it plus one ``gc.collect()`` between trace and save
+    (r75 F2) -- the SAME state universe is rebuilt from capture-time records: the
+    capture-boundary state snapshot supplies the ``state_dict`` name set and per-slot
+    shape/dtype/device, cooked ``Param`` addresses partition parameters from persistent
+    buffers, and the capture-time alias-topology snapshot supplies buffer alias groups.
+    A silent early return here DROPPED never-forward-used persistent buffers (BN's
+    ``num_batches_tracked``) from the declared slot universe, so the embedded snapshot
+    failed strict binding with ``state_unexpected_key`` -- the second, downstream leg of
+    the same gc-timing honest-save over-refusal as the parameter-identity rung.
+
     Parameters
     ----------
     trace:
@@ -1216,31 +1227,65 @@ def _add_persistent_buffer_slot_drafts(
     named_parameters_method = getattr(model, "named_parameters", None)
     named_buffers_method = getattr(model, "named_buffers", None)
     if (
-        not callable(state_dict_method)
-        or not callable(named_parameters_method)
-        or not callable(named_buffers_method)
+        callable(state_dict_method)
+        and callable(named_parameters_method)
+        and callable(named_buffers_method)
     ):
-        return
-    state = state_dict_method()
-    if not isinstance(state, Mapping):
-        return
-    parameter_names = {
-        str(name) for name, _value in named_parameters_method(remove_duplicate=False)
-    }
-    buffers = {str(name): value for name, value in named_buffers_method(remove_duplicate=False)}
-    buffer_names = tuple(
-        name
-        for name, value in state.items()
-        if name not in parameter_names and name in buffers and isinstance(value, torch.Tensor)
-    )
-    names_by_object: dict[int, list[str]] = defaultdict(list)
-    for name in buffer_names:
-        names_by_object[id(buffers[name])].append(name)
-    alias_by_name = {
-        name: (f"buffer_alias:{min(names)}" if len(names) > 1 else None)
-        for names in names_by_object.values()
-        for name in names
-    }
+        state = state_dict_method()
+        if not isinstance(state, Mapping):
+            return
+        parameter_names = {
+            str(name) for name, _value in named_parameters_method(remove_duplicate=False)
+        }
+        buffers = {str(name): value for name, value in named_buffers_method(remove_duplicate=False)}
+        buffer_names = tuple(
+            name
+            for name, value in state.items()
+            if name not in parameter_names and name in buffers and isinstance(value, torch.Tensor)
+        )
+        names_by_object: dict[int, list[str]] = defaultdict(list)
+        for name in buffer_names:
+            names_by_object[id(buffers[name])].append(name)
+        alias_by_name = {
+            name: (f"buffer_alias:{min(names)}" if len(names) > 1 else None)
+            for names in names_by_object.values()
+            for name in names
+        }
+    else:
+        # r75 F2 capture-time fallback: the model died before the save.
+        snapshot = getattr(trace, "_runnable_capture_state", None)
+        if not isinstance(snapshot, Mapping):
+            return
+        state = snapshot
+        parameter_names = set()
+        param_logs = getattr(trace, "param_logs", None)
+        for param_log in tuple(param_logs) if param_logs is not None else ():
+            address = getattr(param_log, "address", None)
+            if address is not None:
+                parameter_names.add(str(address))
+            for alias_address in getattr(param_log, "all_addresses", ()) or ():
+                parameter_names.add(str(alias_address))
+        # ``state_dict`` contains exactly parameters + persistent buffers, and the
+        # snapshot admitted tensor-only values, so the complement IS the persistent
+        # buffer set.
+        buffer_names = tuple(name for name in state if name not in parameter_names)
+        topology = getattr(trace, "_runnable_state_alias_topology", None)
+        topology_groups = (topology.get("groups") if isinstance(topology, Mapping) else None) or {}
+        buffer_name_set = set(buffer_names)
+        names_by_group: dict[str, list[str]] = defaultdict(list)
+        for name in buffer_names:
+            group = topology_groups.get(name)
+            if isinstance(group, str):
+                names_by_group[group].append(name)
+        alias_by_name = {name: None for name in buffer_names}
+        for names in names_by_group.values():
+            # Same convention as the live path: only groups with >=2 BUFFER members
+            # (a param<->buffer identity pair is the alias-topology gates' domain).
+            buffer_members = [name for name in names if name in buffer_name_set]
+            if len(buffer_members) > 1:
+                group_id = f"buffer_alias:{min(buffer_members)}"
+                for name in buffer_members:
+                    alias_by_name[name] = group_id
     existing_by_name = {
         draft.state_binding.state_dict_name: draft
         for draft in drafts.values()
@@ -1792,7 +1837,13 @@ def _append_argument_component(
         )
         return
     if isinstance(component, LiteralTensor):
-        param = _match_parameter(component.value, path, op, parameter_candidates)
+        param = _match_parameter(
+            component.value,
+            path,
+            op,
+            parameter_candidates,
+            template_barcode=getattr(component, "param_barcode", None),
+        )
         if param is None:
             diagnostics.append(
                 _diagnostic(
@@ -1870,14 +1921,41 @@ def _match_parameter(
     path: tuple[str | int, ...],
     op: Any,
     candidates: Sequence[Any],
+    template_barcode: "str | None" = None,
 ) -> Any | None:
-    """Match a template tensor literal to one cooked named parameter."""
+    """Match a template tensor literal to one cooked named parameter.
+
+    Identity ladder, most reliable rung first:
+
+    * CAPTURE-TIME BARCODE (r75 F2): model prep stamped a per-capture random barcode on
+      each parameter (weak registry meta) and mirrored it onto the cooked ``Param``
+      record; ``_classify_arg_component`` snapshotted it onto the arg template
+      (``LiteralTensor.param_barcode``) mid-capture, while the model was provably alive.
+      Comparing snapshot to record is gc-immune: the r74 F2 refusal came from the
+      LIVE-REFERENCE rung below, whose ``_param_ref`` / ``_source_model_ref`` chain dies
+      with the model (postprocess releases ``_param_ref``, session cleanup strips the
+      registry meta; a caller that never held the model plus one ``gc.collect()`` between
+      trace and save kills the weakref), so BN-like models with two same-shape+dtype
+      params refused ``unsupported_tensor_constant`` nondeterministically. A missing
+      snapshot (pre-r75 template, foreign/unstamped parameter) falls back to the live
+      registry meta and then simply falls through -- this rung only ever ADDS a positive
+      match, never blocks the others.
+    * LIVE-REFERENCE identity (object or data pointer) while the model survives.
+    * argument-name and single-candidate fallbacks (shape+dtype-filtered).
+    """
 
     shape = _shape_tuple(getattr(tensor, "shape", None))
     dtype = str(getattr(tensor, "dtype", ""))
     matches = [
         param for param in candidates if tuple(param.shape) == shape and str(param.dtype) == dtype
     ]
+    barcode = template_barcode or _captured_parameter_barcode(tensor)
+    if barcode is not None:
+        barcode_matches = [
+            param for param in matches if str(getattr(param, "barcode", "")) == barcode
+        ]
+        if len(barcode_matches) == 1:
+            return barcode_matches[0]
     identity_matches = [param for param in matches if _same_tensor_identity(tensor, param)]
     if len(identity_matches) == 1:
         return identity_matches[0]
@@ -1892,6 +1970,26 @@ def _match_parameter(
     if len(named_matches) == 1:
         return named_matches[0]
     return matches[0] if len(matches) == 1 else None
+
+
+def _captured_parameter_barcode(tensor: Any) -> str | None:
+    """Return the capture-time barcode stamped on a template ``nn.Parameter``, if any (r75 F2).
+
+    The barcode was written into the parameter's identity-keyed weak meta registry at model
+    prep (model provably alive) and mirrored onto the cooked ``Param`` record; the template's
+    strong hold on the Parameter object keeps the registry entry alive, so this identity
+    survives the caller dropping the model and any ``gc.collect()`` before the save. Returns
+    ``None`` for non-Parameter literals and unstamped parameters (callers fall through to the
+    other rungs).
+    """
+
+    if not isinstance(tensor, torch.nn.Parameter):
+        return None
+    from ..backends.torch._tl import get_param_meta
+
+    meta = get_param_meta(tensor)
+    barcode = getattr(meta, "param_barcode", None) if meta is not None else None
+    return str(barcode) if barcode is not None else None
 
 
 def _same_tensor_identity(tensor: Any, param: Any) -> bool:

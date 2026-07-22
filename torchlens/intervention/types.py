@@ -225,9 +225,23 @@ class ParentRef:
 
 @dataclass(frozen=True)
 class LiteralTensor:
-    """Template component that stores a tensor literal for replay."""
+    """Template component that stores a tensor literal for replay.
+
+    ``param_barcode`` (r75 F2) snapshots, AT CLASSIFICATION TIME (mid-capture, model
+    provably alive), the per-capture random barcode model prep stamped on an
+    ``nn.Parameter`` argument -- the same barcode mirrored onto the cooked ``Param``
+    record. The runnable producer's parameter matcher uses it as its gc-immune identity
+    rung: session cleanup strips the parameter's weak registry meta and postprocess
+    releases ``Param._param_ref``, so without this snapshot a caller that never held the
+    model (plus one ``gc.collect()`` before the save) left two same-shape+dtype BN params
+    unmatchable -- a nondeterministic honest-save over-refusal. ``None`` for non-Parameter
+    literals and foreign/unstamped parameters (matching falls through to the other rungs);
+    optional-with-default keeps unpickling of pre-r75 payloads intact (readers use
+    ``getattr`` with a ``None`` fallback).
+    """
 
     value: Any
+    param_barcode: "str | None" = None
 
 
 @dataclass(frozen=True)

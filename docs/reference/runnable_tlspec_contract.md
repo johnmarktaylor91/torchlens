@@ -622,6 +622,20 @@ express.
 Preflight is whole-graph and fail-closed. After diagnostic failure a producer may write ordinary
 analysis output but must not write runnable capability. It rejects when:
 
+**Capture-time identity, gc-independent saves (r75 F2).** A runnable save never requires the
+SOURCE MODEL to still be alive: every identity the producer needs is resolved at capture time,
+while the model provably exists. Parameter-argument identity is the model-prep barcode
+snapshotted onto the arg template (`LiteralTensor.param_barcode`) and mirrored on the cooked
+`Param` record -- the matcher's first rung, with live-reference/argument-name/single-candidate
+rungs unchanged; the persistent-buffer slot universe falls back to the capture-boundary state
+snapshot + cooked `Param` addresses + the capture-time alias-topology snapshot when the weak
+model reference is dead. Before r75, `tl.trace(Model(), x)` (caller holding no model reference)
+followed by a `gc.collect()` before `save(level="runnable")` nondeterministically refused
+`unsupported_tensor_constant` (two same-shape+dtype BN params, identity chain dead) or
+`state_unexpected_key` (never-forward-used persistent buffers dropped from the declared
+universe) -- an honest-save over-refusal, never a wrong verdict, now closed. A
+genuinely-unmatched tensor constant still refuses `unsupported_tensor_constant`.
+
 1. A computational group lacks a key, uses another ref schema, requests custom/import code, or is
    outside the stock resolver protocol.
 2. An argument violates the literal grammar, contains a tensor literal, has an ambiguous path, or
