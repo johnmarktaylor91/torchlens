@@ -86,8 +86,17 @@ def test_legacy_v1_capability_loads_analysis_only(tmp_path: Path) -> None:
         # r69 A: the required-witness inventory is v2-only, exactly like the ambient
         # context -- a genuine legacy v1 artifact predates and never carries it.
         run.pop("required_witness_inventory", None)
+        # r71 A: the input-boundary record, the gap ledger, and the per-call/slot
+        # obligation fields are likewise v2-only.
+        run.pop("input_boundary", None)
+        run.pop("coverage_gaps", None)
         for call in run["calls"]:
             call.pop("execution_context", None)
+            call.pop("control_obligations", None)
+            call.pop("control_dependencies", None)
+        for slot in run["tensor_slots"]:
+            slot.pop("host_escape", None)
+            slot.pop("inert_sink", None)
 
     _rewrite_manifest(bundle, _to_legacy)
     loaded = tl.load(str(bundle))

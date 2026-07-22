@@ -341,7 +341,12 @@ def _big_slot(shape: tuple[int, ...], dtype: str) -> TensorSlotDescriptor:
             trainable=True,
             persistent=True,
             alias_group=None,
+            captured_requires_grad=True,
+            captured_grad_fn=False,
+            host_escape_disposition=None,
         ),
+        host_escape=False,
+        inert_sink=False,
     )
 
 

@@ -822,7 +822,7 @@ def test_r69_inventory_is_authored_for_every_registry_family(tmp_path: Path) -> 
     rows = {row.family: row for row in inventory.families}
     assert set(rows) == set(WITNESS_FAMILY_REGISTRY)
     for family, row in rows.items():
-        assert row.disposition == WITNESS_FAMILY_REGISTRY[family]
+        assert row.disposition == WITNESS_FAMILY_REGISTRY[family].disposition
     assert rows["input_structure"].members == ("arg:0", "arg:1")
     # Anchored family carries no inventory members (its proof is the cross-anchor).
     assert rows["model_input_literal"].members == ()
@@ -1069,29 +1069,23 @@ def test_r69_positive_family_matrix_round_trips(tmp_path: Path) -> None:
 def test_r69_emission_meta_test_every_prefix_is_registered(tmp_path: Path) -> None:
     """A future replay-critical family cannot ship without a registry row.
 
-    (1) Every SHAPE_STRUCTURE_FACT emitted by a canonical multi-family artifact
-    carries a registered prefix; (2) the number of SHAPE_STRUCTURE_FACT emitter
-    sites in the producer source equals the registry size, so ADDING an emitter
-    without a registry row fails here on arrival.
+    Every witness emitted by a canonical multi-family artifact resolves to a
+    registered family -- SHAPE_STRUCTURE_FACT prefixes AND the direct control kinds
+    (r71 A). The old source-text emitter-count heuristic is REPLACED by the typed
+    registry-closure meta-test in
+    ``tests/test_tlspec_runnable_r71_witness_obligations.py`` (registry keys ==
+    direct kinds | shape prefixes | claim families, each row with a non-empty
+    anchor and runtime consumer).
     """
 
-    import inspect
-
     from torchlens._io import runnable as io_runnable
-    from torchlens.runnable import ControlWitnessKind
 
     x = torch.randn(3)
     path = _save(_trace(_RichFamilies(), [x, 1]), tmp_path / "emit.tlspec")
     descriptor = tl.load(path).__dict__["_runnable_descriptor"]
     for witness in descriptor.control_witnesses:
-        if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
-            continue
-        assert io_runnable.witness_family_of(witness.site_label) is not None, witness.site_label
-    source = inspect.getsource(io_runnable)
-    emitter_count = source.count("kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT")
-    assert emitter_count == len(WITNESS_FAMILY_REGISTRY), (
-        f"{emitter_count} SHAPE_STRUCTURE_FACT emitters vs "
-        f"{len(WITNESS_FAMILY_REGISTRY)} registered families -- register the new "
-        "family (with a presence disposition) in WITNESS_FAMILY_REGISTRY"
-    )
+        family = io_runnable.witness_family_of_witness(witness)
+        assert family is not None, witness.site_label
+        assert family in WITNESS_FAMILY_REGISTRY, family
+        assert WITNESS_FAMILY_REGISTRY[family].witness_kind is witness.kind, family
     _heal_capture_state(path, [x.clone(), 1])

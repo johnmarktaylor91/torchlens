@@ -348,6 +348,11 @@ def _validate_sparse_run_descriptor(
         # r69 A: v2 requires the descriptor-native required-witness presence
         # ledger (exact family/member coverage validated by the typed parser).
         required.add("required_witness_inventory")
+        # r71 A: the REQUIRED witness-free replay-structure records -- the
+        # input-boundary site/arity authority and the explicit typed coverage-gap
+        # ledger the completeness floor derives from. Never optional or defaulted.
+        required.add("input_boundary")
+        required.add("coverage_gaps")
     if set(value) != required:
         missing = sorted(required - set(value))
         extra = sorted(set(value) - required)

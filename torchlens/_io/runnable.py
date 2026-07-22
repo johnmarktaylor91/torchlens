@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, fields, is_dataclass, replace
 from enum import Enum
 from hashlib import sha256
@@ -40,12 +40,22 @@ from ..runnable import (
     ActivationPayloadMember,
     AmbientExecutionContext,
     AutocastDeviceContext,
+    CallControlObligation,
     CallExecutionContext,
     CallableRegistryEntry,
+    ControlDependencyEdge,
     InputAttestationFingerprint,
+    InputBoundarySite,
+    InputBoundaryTensorSite,
     ControlWitness,
     ControlWitnessKind,
     InputSlotBinding,
+    WITNESS_GAP_REGISTRY,
+    WitnessCoverageGap,
+    WitnessGapKind,
+    control_dependency_site_label,
+    decode_input_site_position,
+    derived_witness_completeness,
     LiteralArgumentRef,
     LiteralAtom,
     LiteralAtomKind,
@@ -79,7 +89,6 @@ from ..runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
     TensorUseSite,
-    WitnessCompleteness,
 )
 
 
@@ -100,6 +109,8 @@ class _SlotDraft:
     input_binding: InputSlotBinding | None = None
     state_binding: StateSlotBinding | None = None
     use_sites: list[TensorUseSite] | None = None
+    host_escape: bool = False
+    inert_sink: bool = False
 
     def freeze(self) -> TensorSlotDescriptor:
         """Freeze this draft into the Stage-0 descriptor type.
@@ -125,6 +136,8 @@ class _SlotDraft:
             output_path=self.output_path,
             input_binding=self.input_binding,
             state_binding=self.state_binding,
+            host_escape=self.host_escape,
+            inert_sink=self.inert_sink,
         )
 
 
@@ -449,36 +462,70 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
                     representative, func_id, call_ops, execution_context
                 ),
                 execution_context=execution_context,
+                control_obligations=(),
+                control_dependencies=(),
             )
         )
 
     _mark_inplace_versions(calls, slot_drafts)
-    witnesses, completeness = _build_control_witnesses(trace, ops, diagnostics)
-    literal_witnesses, saw_opaque_leaf = _input_literal_witnesses(trace, start_order=len(witnesses))
+    # r71 A3: the ordered, typed, source-linked gap ledger REPLACES the former direct
+    # completeness-enum cascade. Every downgrade cause appends one gap in the SAME
+    # historical first-cause-wins order; the persisted summary is DERIVED from the
+    # ledger (``derived_witness_completeness``), never assigned ad hoc.
+    gaps: list[WitnessCoverageGap] = []
+
+    def _gap(kind: WitnessGapKind, member: str) -> None:
+        """Append one typed, source-linked coverage gap from the closed registry."""
+
+        spec = WITNESS_GAP_REGISTRY[kind]
+        gaps.append(
+            WitnessCoverageGap(
+                gap_kind=kind,
+                source_family=spec.source_family,
+                source_member=member,
+                order=len(gaps),
+                resulting_completeness=spec.resulting_completeness,
+            )
+        )
+
+    # r71 A2: the REQUIRED input-boundary record (runtime site/arity + tree-binding
+    # authority + totalized metadata-envelope domain) is built from replay structure
+    # BEFORE any witness is emitted -- structure before witnesses.
+    input_boundary = _build_input_boundary(trace, slot_drafts, diagnostics)
+    witnesses, obligations_by_call, dependencies_by_call = _build_control_witnesses(
+        trace, ops, calls, diagnostics, gap=_gap
+    )
+    literal_witnesses, opaque_leaf_members = _input_literal_witnesses(
+        trace, start_order=len(witnesses)
+    )
     witnesses.extend(literal_witnesses)
-    witnesses.extend(_input_metadata_witnesses(trace, start_order=len(witnesses)))
+    for member in opaque_leaf_members:
+        # An opaque non-tensor input leaf cannot be re-verified, so its control
+        # dependency is unobserved: gap-downgrade to keep the run honest
+        # (UNVERIFIABLE + NOT_APPLICABLE), never a false VERIFIED/ATTESTED. The gap is
+        # anchored by the surviving value-free (``encodable=False``) literal fact.
+        _gap(WitnessGapKind.OPAQUE_INPUT_LEAF, member)
+    witnesses.extend(_input_metadata_witnesses(trace, input_boundary, start_order=len(witnesses)))
     witnesses.extend(_input_structure_witnesses(trace, start_order=len(witnesses)))
     witnesses.extend(_module_training_mode_witnesses(trace, start_order=len(witnesses)))
-    witnesses.extend(_state_metadata_fact_witnesses(trace, start_order=len(witnesses)))
-    escape_witnesses, escape_incomplete = _escape_witnesses(
-        trace, ops, calls, slot_drafts, start_order=len(witnesses)
+    _stamp_state_binding_facts(trace, slot_drafts, diagnostics)
+    witnesses.extend(_state_metadata_fact_witnesses(slot_drafts, start_order=len(witnesses)))
+    escape_witnesses = _escape_witnesses(
+        trace, ops, calls, slot_drafts, start_order=len(witnesses), gap=_gap
     )
     witnesses.extend(escape_witnesses)
-    if saw_opaque_leaf and completeness is WitnessCompleteness.COMPLETE:
-        # An opaque non-tensor input leaf cannot be re-verified, so its control
-        # dependency is unobserved: downgrade to keep the run honest
-        # (UNVERIFIABLE + NOT_APPLICABLE), never a false VERIFIED/ATTESTED.
-        completeness = WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
-    if escape_incomplete and completeness is WitnessCompleteness.COMPLETE:
-        # A tensor->host escape (of ANY source class or mechanism) whose source cannot
-        # be witnessed leaves the escape unobservable at run time: keep the run honestly
-        # UNVERIFIABLE. The unified pass folds the former tensor-op and unbound-state
-        # incomplete signals into this single fail-closed downgrade.
-        completeness = WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
-    if (
-        _has_forward_value_override_intervention(trace)
-        and completeness is WitnessCompleteness.COMPLETE
-    ):
+    # r71 A2: attach the owner-record obligations to their calls, then close
+    # terminal-slot accounting with explicit inert_sink claims.
+    calls = [
+        replace(
+            call,
+            control_obligations=tuple(obligations_by_call.get(call.call_id, ())),
+            control_dependencies=tuple(dependencies_by_call.get(call.call_id, ())),
+        )
+        for call in calls
+    ]
+    _stamp_terminal_claims(calls, slot_drafts, gaps)
+    if _has_forward_value_override_intervention(trace):
         # A forward-modifying intervention (e.g. ``zero_ablate``/``replace_with``)
         # substituted the captured value of an op INSIDE the forward pass. The sparse
         # DAG records only the ORIGINAL op recipe, so a replay recomputes the
@@ -492,8 +539,8 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # a false VERIFIED, and never a contradicting NumericAttestationError). An
         # observe-only or backward/grad intervention leaves the forward output
         # reproducible byte-for-byte and is NOT flagged here, so it still VERIFIES.
-        completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
-    if _has_input_metadata_view_read(trace) and completeness is WitnessCompleteness.COMPLETE:
+        _gap(WitnessGapKind.FORWARD_VALUE_OVERRIDE, "capture")
+    if _has_input_metadata_view_read(trace):
         # A metadata predicate (``is_contiguous`` / ``stride`` / ``storage_offset`` / autograd
         # flag) was read on a DERIVED VIEW of a model input (``x.t().is_contiguous()``): the
         # view is an orphan-pruned intermediate the sparse replay never re-derives, so its
@@ -502,8 +549,8 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # captured arm, so keep the run honestly UNVERIFIABLE + NOT_APPLICABLE rather than a
         # false VERIFIED. A model that never reads metadata on an input-derived view records
         # nothing and stays VERIFIED (no over-trigger).
-        completeness = WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
-    if _has_pruned_rng_control_flow(trace) and completeness is WitnessCompleteness.COMPLETE:
+        _gap(WitnessGapKind.INPUT_METADATA_VIEW_READ, "capture")
+    if _has_pruned_rng_control_flow(trace):
         # A torch-RNG draw steered pure-Python control flow, so its predicate chain
         # is input-disconnected and was orphaned out of the visible graph. The
         # recorded taken branch is nondeterministic (a fresh seeded forward may take
@@ -512,23 +559,23 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # NOT_APPLICABLE, never a false VERIFIED + ATTESTED. A genuinely-dead RNG
         # draw (result influences nothing) is never recorded, so a deterministic
         # model stays VERIFIED.
-        completeness = WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
-    if _has_pruned_alias_mutation(trace) and completeness is WitnessCompleteness.COMPLETE:
+        _gap(WitnessGapKind.PRUNED_RNG_CONTROL, "capture")
+    if _has_pruned_alias_mutation(trace):
         # An in-place op mutated an UNLABELLED alias (``y.data.add_(5.0)``): the write targets
         # storage the sparse DAG cannot model, so the op was orphan-pruned and the mutation is
         # lost. A replay recomputes the PRE-mutation value (wrong output) yet nothing else
         # witnesses the drop, so keep the run honestly UNVERIFIABLE + NOT_APPLICABLE rather than
         # a false VERIFIED with the mutation gone. An in-place op on a LABELLED alias is graph-
         # connected (replayed) and is never recorded, so a normal model stays VERIFIED.
-        completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
-    if saw_unmodelled_host_write and completeness is WitnessCompleteness.COMPLETE:
+        _gap(WitnessGapKind.PRUNED_ALIAS_MUTATION, "capture")
+    if saw_unmodelled_host_write:
         # A surviving in-place op with a removed receiver came from a host alias such as
         # ``buffer.data.add_(1.0)``. The sparse recipe can keep running by reconnecting the receiver
         # to the cooked parent, but the original host write bypassed the ordinary labelled tensor
         # path, so the descriptor cannot honestly prove full path fidelity.
-        completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
+        _gap(WitnessGapKind.UNMODELLED_HOST_WRITE, "capture")
     ledger_facts = _runnable_ledger_facts_for_trace(trace)
-    if ledger_facts and completeness is WitnessCompleteness.COMPLETE:
+    if ledger_facts:
         # r35 I2 (hon2_1): the event-lifecycle ledger recorded an UNDISCHARGED
         # dispatch outcome -- a caught in-forward raise (exception-driven control
         # flow: the taken path was decided by whether an op raised, a channel no
@@ -537,27 +584,24 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # that decision, so EVERY run of this artifact (original or changed
         # input) must ceiling at UNVERIFIABLE + NOT_APPLICABLE, never a silent
         # false VERIFIED. A raise-free model records zero facts (no over-trigger).
-        completeness = (
-            WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
-            if any(bool(fact.get("mutates")) for fact in ledger_facts)
-            else WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
-        )
-    if (
-        bool(getattr(trace, "_runnable_rng_monitor_uncertain", False))
-        and completeness is WitnessCompleteness.COMPLETE
-    ):
+        if any(bool(fact.get("mutates")) for fact in ledger_facts):
+            _gap(WitnessGapKind.LIFECYCLE_LEDGER_MUTATION, "capture")
+        else:
+            _gap(WitnessGapKind.LIFECYCLE_LEDGER_DISPATCH, "capture")
+    if bool(getattr(trace, "_runnable_rng_monitor_uncertain", False)):
         # r37 hon1_2 fail-closed rule: the host-nondeterminism monitor could not
         # prove its own installation/chain/restoration, so channel coverage for
         # this forward is unknowable -- INCOMPLETE, never "no consumption".
-        completeness = WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
-    if (
-        getattr(trace, "capture_verified", None) is False
-        and completeness is WitnessCompleteness.COMPLETE
-    ):
+        _gap(WitnessGapKind.RNG_MONITOR_UNCERTAIN, "capture")
+    if getattr(trace, "capture_verified", None) is False:
         # r35 I2 completion: a capture whose own verification tripwire fired
         # (unaccounted dispatches, escaped callables, unverified transform
         # routes) cannot claim complete witness coverage for replay either.
-        completeness = WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
+        _gap(WitnessGapKind.CAPTURE_VERIFICATION_FAILED, "capture")
+    # r71 A3: the persisted summary is DERIVED from the ordered gap ledger by the ONE
+    # derivation function -- never assigned directly (first-gap-wins, matching the
+    # historical cascade precedence).
+    completeness = derived_witness_completeness(tuple(gaps))
     diagnostics.extend(_preflight_output_contracts(trace, ops))
     diagnostics.extend(_preflight_state_alias_topology(trace, slot_drafts))
     diagnostics.extend(_preflight_state_metadata(trace))
@@ -629,10 +673,14 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         callable_registry=tuple(registry_entries),
         calls=tuple(calls),
         tensor_slots=tuple(draft.freeze() for draft in slot_drafts.values()),
+        input_boundary=input_boundary,
         control_witnesses=tuple(witnesses),
-        # r69 A: the REQUIRED presence ledger, authored from the SAME final witness
-        # list the descriptor persists (one draft result -- emission cannot drift).
-        required_witness_inventory=_build_required_witness_inventory(witnesses),
+        coverage_gaps=tuple(gaps),
+        # r71 A: the inventory is DEMOTED to a redundant witness-discharge MIRROR
+        # (single-strip trip); required coverage is derived independently from the
+        # witness-free replay structure by ``derive_required_witness_members`` and
+        # re-validated by the producer save-time self-check + the parser.
+        required_witness_inventory=_build_required_witness_inventory(witnesses, slot_drafts),
         witness_completeness=completeness,
         rng_profile=_build_rng_profile(trace),
         ambient_context=ambient_context,
@@ -648,6 +696,35 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         preflight=preflight,
         unsupported_sites=tuple(diagnostics),
     )
+    # r71 A4: the producer runs the SAME comprehensive obligation validator the
+    # parser runs, over its own descriptor, BEFORE writing -- a producer-emission
+    # regression that drops a control witness (or drifts any obligation/discharge
+    # pair) fails typed at SAVE, never as a shipped false-VERIFIED artifact.
+    if not diagnostics:
+        from .runnable_load import ContextFieldInvalidError, validate_witness_obligations
+
+        container_members = tuple(
+            witness.site_label for witness in _container_structure_witnesses(trace, start_order=0)
+        )
+        try:
+            validate_witness_obligations(descriptor, container_members=container_members)
+        except ContextFieldInvalidError as exc:
+            diagnostics = _deduplicate_diagnostics(
+                [
+                    *diagnostics,
+                    _diagnostic(
+                        RunnableErrorCode.CONTEXT_FIELD_INVALID,
+                        f"Producer save-time self-check failed the shared witness-"
+                        f"obligation validator: {exc}",
+                        detection_stage="producer_obligation_self_check",
+                        details=(("context_field", exc.field), ("reason", exc.detail)),
+                    ),
+                ]
+            )
+            preflight = ProducerPreflight(passed=False, diagnostics=tuple(diagnostics))
+            descriptor = replace(
+                descriptor, preflight=preflight, unsupported_sites=tuple(diagnostics)
+            )
     assert_sparse_core_has_no_tensor_payload(descriptor)
     return descriptor
 
@@ -1107,6 +1184,11 @@ def _build_parameter_slot_drafts(trace: Any) -> dict[str, _SlotDraft]:
                     trainable=bool(param.is_trainable),
                     persistent=True,
                     alias_group=alias_group,
+                    # Provisional draft values; ``_stamp_state_binding_facts`` /
+                    # ``_escape_witnesses`` stamp the final totalized facts + claims.
+                    captured_requires_grad=bool(param.is_trainable),
+                    captured_grad_fn=False,
+                    host_escape_disposition=None,
                 ),
                 use_sites=[],
             )
@@ -1194,6 +1276,11 @@ def _add_persistent_buffer_slot_drafts(
                 trainable=False,
                 persistent=True,
                 alias_group=alias_group,
+                # Provisional draft values; ``_stamp_state_binding_facts`` /
+                # ``_escape_witnesses`` stamp the final totalized facts + claims.
+                captured_requires_grad=False,
+                captured_grad_fn=False,
+                host_escape_disposition=None,
             ),
             use_sites=[],
         )
@@ -2002,12 +2089,30 @@ def _input_binding_for_op(
 def _build_control_witnesses(
     trace: Any,
     ops: Sequence[Any],
+    calls: Sequence[RunnableCallDescriptor],
     diagnostics: list[RunnableDiagnostic],
-) -> tuple[list[ControlWitness], WitnessCompleteness]:
-    """Build ordered scalar, loop, arm-entry, and structure witnesses."""
+    *,
+    gap: "Callable[[WitnessGapKind, str], None]",
+) -> tuple[
+    list[ControlWitness],
+    dict[str, list[CallControlObligation]],
+    dict[str, list[ControlDependencyEdge]],
+]:
+    """Build ordered scalar/loop/arm witnesses AND their owner-record obligations (r71 A2).
+
+    Every emitted scalar-bool / loop-predicate witness creates a
+    :class:`CallControlObligation` on its OWNING call, and every arm-entry witness a
+    :class:`ControlDependencyEdge` on its CHILD call -- structure the parser
+    independently re-derives required members from and the runtime check builders
+    consume. A predicate that cannot be witnessed (no recorded bool value, no owning
+    call) or an arm edge that cannot attach to a surviving call becomes a typed
+    source-linked coverage gap, never a silent drop.
+    """
 
     witnesses: list[ControlWitness] = []
-    completeness = WitnessCompleteness.COMPLETE
+    obligations_by_call: dict[str, list[CallControlObligation]] = {}
+    dependencies_by_call: dict[str, list[ControlDependencyEdge]] = {}
+    known_call_ids = {call.call_id for call in calls}
     for op in ops:
         if not bool(getattr(op, "is_scalar_bool", False)):
             continue
@@ -2022,7 +2127,7 @@ def _build_control_witnesses(
                     detection_stage="producer_control_witness",
                 )
             )
-            completeness = WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
+            gap(WitnessGapKind.UNOBSERVED_PREDICATE, f"slot:{op.label}")
             continue
         if context_kind in {None, "unknown"} and bool(getattr(op, "is_terminal_bool", False)):
             diagnostics.append(
@@ -2033,42 +2138,83 @@ def _build_control_witnesses(
                     detection_stage="producer_control_witness",
                 )
             )
-            completeness = WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
+            gap(WitnessGapKind.UNCLASSIFIED_TERMINAL_BOOL, f"slot:{op.label}")
         kind = (
             ControlWitnessKind.LOOP_PREDICATE
             if context_kind == "while"
             else ControlWitnessKind.SCALAR_BOOL
         )
         call_number = getattr(op, "func_call_id", None)
+        call_id = None if call_number is None else f"call:{call_number}"
+        if call_id is None or call_id not in known_call_ids:
+            # No surviving owner record can anchor this predicate: fail closed as an
+            # explicit gap (the accompanying skipped-call diagnostic already fails
+            # preflight on every known route here), never an orphan witness whose
+            # presence no independent structure requires.
+            gap(WitnessGapKind.UNOBSERVED_PREDICATE, f"slot:{op.label}")
+            continue
+        conditional_id = getattr(op, "terminal_conditional_id", None)
+        obligations_by_call.setdefault(call_id, []).append(
+            CallControlObligation(
+                kind=kind,
+                output_slot_id=f"slot:{op.label}",
+                site_label=str(op.label),
+                conditional_id=None if conditional_id is None else int(conditional_id),
+            )
+        )
         witnesses.append(
             ControlWitness(
                 witness_id=f"witness:{len(witnesses) + 1}",
                 kind=kind,
                 order=len(witnesses),
-                call_id=None if call_number is None else f"call:{call_number}",
+                call_id=call_id,
                 site_label=str(op.label),
                 observed_value=_encode_literal(bool(bool_value)),
             )
         )
 
+    call_by_op_label: dict[str, str] = {}
+    for call in calls:
+        for label in call.op_labels:
+            call_by_op_label.setdefault(str(label), call.call_id)
+            # Arm-edge endpoints are pass-free LAYER labels (the raw->final parent
+            # layer map), while call op labels carry the pass suffix: register the
+            # stripped alias so a loop-arm child resolves to its first owning call.
+            if ":" in str(label):
+                call_by_op_label.setdefault(str(label).rsplit(":", 1)[0], call.call_id)
     arm_edges = getattr(trace, "conditional_arm_entry_edges", {}) or {}
     for (conditional_id, arm_kind), edges in sorted(
         arm_edges.items(), key=lambda item: (int(item[0][0]), str(item[0][1]))
     ):
         for parent, child in edges:
+            edge = ControlDependencyEdge(
+                conditional_id=int(conditional_id),
+                arm_kind=str(arm_kind),
+                parent_op_label=str(parent),
+                child_op_label=str(child),
+            )
+            site_label = control_dependency_site_label(edge)
+            child_call_id = call_by_op_label.get(str(child))
+            if child_call_id is None:
+                # Sol A2: an arm edge that cannot attach to a surviving call is an
+                # anchored incompleteness gap (UNVERIFIABLE floor), never silently
+                # dropped and never an orphan witness.
+                gap(WitnessGapKind.UNANCHORABLE_ARM_EDGE, site_label)
+                continue
+            dependencies_by_call.setdefault(child_call_id, []).append(edge)
             witnesses.append(
                 ControlWitness(
                     witness_id=f"witness:{len(witnesses) + 1}",
                     kind=ControlWitnessKind.CONDITIONAL_ARM_ENTRY,
                     order=len(witnesses),
                     call_id=None,
-                    site_label=f"conditional:{conditional_id}:{arm_kind}:{parent}->{child}",
+                    site_label=site_label,
                     observed_value=_encode_literal(True),
                 )
             )
 
     witnesses.extend(_container_structure_witnesses(trace, start_order=len(witnesses)))
-    return witnesses, completeness
+    return witnesses, obligations_by_call, dependencies_by_call
 
 
 def _op_retained_tensor(trace: Any, op: Any) -> torch.Tensor | None:
@@ -2258,6 +2404,262 @@ def _has_forward_value_override_intervention(trace: Any) -> bool:
     return False
 
 
+def _build_input_boundary(
+    trace: Any,
+    slot_drafts: Mapping[str, _SlotDraft],
+    diagnostics: list[RunnableDiagnostic],
+) -> tuple[InputBoundarySite, ...]:
+    """Build the REQUIRED input-boundary record from replay structure (r71 A2).
+
+    One :class:`InputBoundarySite` per captured top-level model-input site (from the
+    capture structure snapshots -- the same source as the structure facts) carrying
+    the tensor leaves from the MODEL_INPUT slot bindings plus each leaf's EXPLICIT
+    (possibly empty) metadata-read name set. This record is the runtime site/arity
+    and metadata-envelope domain authority; the required-witness inventory becomes a
+    redundant mirror. A binding that cannot join the snapshot site set (or a
+    duplicate tensor path) refuses typed at save -- fail closed, never a silently
+    partial boundary record.
+    """
+
+    snapshots = trace.__dict__.get("_runnable_input_structure")
+    if not isinstance(snapshots, tuple):
+        # The positive-proof preflight (``_preflight_input_structure``) owns this
+        # refusal; an empty boundary can never bless a run (parse requires the
+        # boundary to cross-anchor every MODEL_INPUT binding).
+        return ()
+    reads = trace.__dict__.get("_runnable_input_metadata_reads")
+    reads_map: Mapping[Any, Any] = reads if isinstance(reads, Mapping) else {}
+    tensor_by_position: dict[tuple[Any, ...], list[InputBoundaryTensorSite]] = {}
+    for draft in slot_drafts.values():
+        if (
+            draft.role is not TensorSlotRole.MODEL_INPUT
+            or draft.input_binding is None
+            or draft.version_of is not None
+        ):
+            continue
+        position = draft.input_binding.model_site_position
+        if not isinstance(position, tuple) or len(position) != 2:
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.MISSING_INPUT_CONTAINER_CONTRACT,
+                    f"Model-input binding position {position!r} is outside the root "
+                    "site grammar; the input-boundary record cannot anchor it.",
+                    detection_stage="producer_input_boundary",
+                )
+            )
+            continue
+        path = tuple(draft.input_binding.container_path)
+        site_facts = reads_map.get((tuple(position), path))
+        read_names: tuple[str, ...] = ()
+        if isinstance(site_facts, Mapping):
+            read_names = tuple(
+                sorted(str(name) for name in site_facts if str(name) in _INPUT_METADATA_FACT_NAMES)
+            )
+        tensor_by_position.setdefault(tuple(position), []).append(
+            InputBoundaryTensorSite(
+                container_path=path,
+                slot_id=draft.slot_id,
+                metadata_reads=read_names,
+            )
+        )
+    sites: list[InputBoundarySite] = []
+    seen_positions: set[tuple[Any, ...]] = set()
+    for snapshot in snapshots:
+        raw_position = snapshot.get("position")
+        snapshot_position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else None
+        try:
+            member = encode_input_site_position(snapshot_position)
+        except ValueError:
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.MISSING_INPUT_CONTAINER_CONTRACT,
+                    f"Captured input site position {raw_position!r} is outside the "
+                    "root site grammar; the input-boundary record cannot anchor it.",
+                    detection_stage="producer_input_boundary",
+                )
+            )
+            continue
+        assert snapshot_position is not None
+        seen_positions.add(snapshot_position)
+        tensor_sites = sorted(
+            tensor_by_position.get(snapshot_position, []),
+            key=lambda site: repr(site.container_path),
+        )
+        paths = [site.container_path for site in tensor_sites]
+        if len(set(paths)) != len(paths):
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.MISSING_INPUT_CONTAINER_CONTRACT,
+                    f"Model-input site {snapshot_position!r} binds duplicate tensor "
+                    "container paths; the metadata-envelope domain would be ambiguous.",
+                    detection_stage="producer_input_boundary",
+                )
+            )
+            continue
+        sites.append(InputBoundarySite(position=member, tensor_sites=tuple(tensor_sites)))
+    for position in tensor_by_position:
+        if position not in seen_positions:
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.MISSING_INPUT_CONTAINER_CONTRACT,
+                    f"Model-input binding position {position!r} has no captured "
+                    "structure snapshot; the input-boundary record cannot anchor it.",
+                    detection_stage="producer_input_boundary",
+                )
+            )
+    return tuple(sites)
+
+
+def _stamp_state_binding_facts(
+    trace: Any,
+    slot_drafts: Mapping[str, _SlotDraft],
+    diagnostics: list[RunnableDiagnostic],
+) -> None:
+    """Stamp the TOTALIZED declared state-metadata facts on every state binding (r71 E1).
+
+    ``captured_requires_grad`` records the capture-time trainable bit for EVERY
+    declared state name from the pre-clone live signature (fallback: the binding's
+    role-derived ``trainable`` when no signature entry exists); staging applies it
+    -- capture truth always wins, strictly more oracle-1-faithful than the detached
+    default and aligned with the LOCKED r65 F-1 declared-fact ruling.
+    ``captured_grad_fn`` totalizes grad_fn PRESENCE: ``True`` (a non-leaf live state
+    tensor) refuses at save -- no staged leaf can carry a grad_fn, so the declared
+    state model cannot reproduce it. A recorded READ fact disagreeing with the
+    signature-derived bit (a mid-forward flip) refuses: one bit cannot honestly
+    describe both observations.
+    """
+
+    from ..backends.torch.completeness_witness import host_escape_state_metadata_facts
+
+    signatures = trace.__dict__.get("_runnable_capture_state_signatures")
+    signature_map: Mapping[str, Any] = signatures if isinstance(signatures, Mapping) else {}
+    read_facts = host_escape_state_metadata_facts(trace)
+    for draft in slot_drafts.values():
+        binding = draft.state_binding
+        if binding is None:
+            continue
+        name = binding.state_dict_name
+        signature = signature_map.get(name)
+        requires_grad: bool | None
+        grad_fn_present: bool | None
+        if isinstance(signature, Mapping) and str(signature.get("class_category", "")) in {
+            "parameter",
+            "tensor",
+        }:
+            raw_requires = signature.get("requires_grad")
+            requires_grad = raw_requires if isinstance(raw_requires, bool) else None
+            raw_leaf = signature.get("is_leaf")
+            grad_fn_present = (not raw_leaf) if isinstance(raw_leaf, bool) else None
+        else:
+            # Subclass / non-tensor signature lanes short-circuit the autograd reads BY
+            # DESIGN (a hostile ``__torch_function__`` subclass must observe nothing),
+            # and nested/non-strided values leave them UNKNOWN. Those lanes fall back
+            # to the same inert cooked-metadata truth as the no-signature lane below;
+            # actual admissibility of exotic state stays the binding/alias gates' job.
+            signature = None
+        if signature is None:
+            # Legacy/no-signature lane: parameters carry their cooked trainable bit
+            # (the live ``requires_grad`` at capture); buffers default to the
+            # detached truth. grad_fn presence is unprovable without a signature,
+            # and every state_dict transport value is a leaf, so ``False`` is the
+            # declared-state truth (a READ ``True`` still refuses via the r65 lane).
+            requires_grad = bool(binding.trainable)
+            grad_fn_present = False
+        recorded = read_facts.get(name, {})
+        recorded_requires = recorded.get("requires_grad")
+        if requires_grad is None or grad_fn_present is None:
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.STATE_METADATA_MISMATCH,
+                    f"State tensor {name!r} has an unreadable capture-time autograd "
+                    "signature (requires_grad / is_leaf); the totalized declared "
+                    "state-metadata facts cannot be recorded, so the runnable save "
+                    "is refused (fail closed).",
+                    detection_stage="producer_state_metadata",
+                    details=(("reason", "state_metadata_signature_unreadable"), ("state", name)),
+                )
+            )
+            requires_grad = bool(binding.trainable)
+            grad_fn_present = False
+        elif isinstance(recorded_requires, bool) and recorded_requires != requires_grad:
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.STATE_METADATA_MISMATCH,
+                    f"State tensor {name!r} READ requires_grad={recorded_requires!r} "
+                    f"during the captured forward but its capture signature records "
+                    f"{requires_grad!r}; a single declared bit cannot reproduce both "
+                    "observations, so the runnable save is refused.",
+                    detection_stage="producer_state_metadata",
+                    details=(("reason", "state_metadata_read_disagrees"), ("state", name)),
+                )
+            )
+        if grad_fn_present:
+            diagnostics.append(
+                _diagnostic(
+                    RunnableErrorCode.STATE_METADATA_MISMATCH,
+                    f"State tensor {name!r} carries a grad_fn at capture (non-leaf "
+                    "registered state); no staged or fresh-oracle state can reproduce "
+                    "grad_fn presence, so the runnable save is refused "
+                    "(state_metadata_mismatch).",
+                    detection_stage="producer_state_metadata",
+                    details=(("reason", "state_metadata_grad_fn_present"), ("state", name)),
+                )
+            )
+        draft.state_binding = replace(
+            binding,
+            captured_requires_grad=bool(requires_grad),
+            captured_grad_fn=bool(grad_fn_present),
+        )
+
+
+def _stamp_terminal_claims(
+    calls: Sequence[RunnableCallDescriptor],
+    slot_drafts: Mapping[str, _SlotDraft],
+    gaps: Sequence[WitnessCoverageGap],
+) -> None:
+    """Close terminal-slot accounting with explicit ``inert_sink`` claims (r71 A2).
+
+    Domain: call-produced slots consumed by NO call's tensor arguments and not bound
+    by the output contract (an OUTPUT-role slot, its producer, or an output-container
+    path) and not a mutation-version record (anchored by the mutation contracts).
+    Every such slot must be claimed by EXACTLY one of {scalar_bool, loop_predicate,
+    tensor_derived_scalar_literal, inert_sink, typed coverage gap}; the remainder are
+    genuinely dead values (e.g. the unused half of a multi-output op) and receive the
+    EXPLICIT ``inert_sink`` claim, so a stripped control/escape claim can never
+    masquerade as an honest dead slot (the strip leaves an UNCLAIMED terminal ->
+    parse refuses).
+    """
+
+    produced = {slot_id for call in calls for slot_id in call.output_slot_ids}
+    consumed = {argument.slot_id for call in calls for argument in call.tensor_arguments}
+    output_bound: set[str] = set()
+    for draft in slot_drafts.values():
+        if draft.role is TensorSlotRole.OUTPUT:
+            output_bound.add(draft.slot_id)
+            if draft.producer_slot_id is not None:
+                output_bound.add(draft.producer_slot_id)
+        elif draft.output_path is not None:
+            output_bound.add(draft.slot_id)
+    claimed: set[str] = set()
+    for call in calls:
+        for obligation in call.control_obligations:
+            claimed.add(obligation.output_slot_id)
+    for draft in slot_drafts.values():
+        if draft.host_escape:
+            claimed.add(draft.slot_id)
+    claim_families = {"scalar_bool", "loop_predicate", "tensor_derived_scalar_literal"}
+    for gap_record in gaps:
+        if gap_record.source_family in claim_families:
+            claimed.add(gap_record.source_member)
+    for slot_id in sorted(produced - consumed - output_bound):
+        terminal_draft = slot_drafts.get(slot_id)
+        if terminal_draft is None or terminal_draft.version_of is not None:
+            continue
+        if slot_id in claimed:
+            continue
+        terminal_draft.inert_sink = True
+
+
 def _escape_witnesses(
     trace: Any,
     ops: Sequence[Any],
@@ -2265,7 +2667,8 @@ def _escape_witnesses(
     slot_drafts: Mapping[str, _SlotDraft],
     *,
     start_order: int,
-) -> tuple[list[ControlWitness], bool]:
+    gap: "Callable[[WitnessGapKind, str], None]",
+) -> list[ControlWitness]:
     """Witness the SOURCE of every tensor->host escape in one exhaustive fail-closed pass.
 
     A tensor->Python escape (``.item()`` / ``int()`` / ``float()`` / ``__index__``
@@ -2334,29 +2737,30 @@ def _escape_witnesses(
     # no dispatch and no version bump, so the sparse replay recomputes the pre-write value and the
     # source digest cannot witness it; keep the run honestly UNVERIFIABLE. A raw ``data_ptr()``
     # pointer escape is likewise unobservable (r15-H1) and fails closed here too.
-    incomplete = unresolvable_escape
+    if unresolvable_escape:
+        gap(WitnessGapKind.UNWITNESSABLE_ESCAPE_SOURCE, "capture")
     if host_escape_has_unattributable_bool(trace):
-        incomplete = True
+        gap(WitnessGapKind.UNATTRIBUTABLE_BOOL_ESCAPE, "capture")
     if host_escape_has_unattributable_opaque(trace):
-        incomplete = True
+        gap(WitnessGapKind.UNATTRIBUTABLE_OPAQUE_ESCAPE, "capture")
     if host_escape_has_mutable_writeback(trace):
-        incomplete = True
+        gap(WitnessGapKind.MUTABLE_WRITEBACK_ESCAPE, "capture")
     # A raw ``Tensor.data_ptr()`` pointer escape (r15-H1) leaves the source tensor's subsequent
     # value unobservable (a raw ctypes read/write bypasses every dispatch and byte watch), so the
     # run must fail closed to UNVERIFIABLE rather than a false VERIFIED.
     if host_escape_has_raw_pointer(trace):
-        incomplete = True
+        gap(WitnessGapKind.RAW_POINTER_ESCAPE, "capture")
     # r39 hon2_1: a REQUIRED mode-independent host-value observer (the scalar numeric protocol
     # / predicate belt) failed to install or restore, so a ``_disable_current_modes()``-region
     # value escape could have gone unwitnessed this forward -- coverage is unknowable, fail closed.
     if host_escape_observer_install_failed(trace):
-        incomplete = True
+        gap(WitnessGapKind.ESCAPE_OBSERVER_UNCERTAIN, "capture")
     # r43 CLASS 2 (JMT-locked): any NON-OWNER thread that touched a CAPTURED tensor during the
     # armed forward window is outside the single-owner-thread replay model -- the escape is not
     # witnessable as a precise source, so the run must fail closed to UNVERIFIABLE + NOT_APPLICABLE
     # rather than a false VERIFIED. Subsumes the r42 hon2_1/hon2_2/hon2_3/hon2_4 findings.
     if host_escape_has_cross_thread_captured_tensor(trace):
-        incomplete = True
+        gap(WitnessGapKind.CROSS_THREAD_TENSOR_ACCESS, "capture")
 
     # r37 INV-1 (hon2_2): the former unattributable-VALUE plumbing is deleted. An
     # unlabelled-source escape now resolves through the census attribution ladder
@@ -2402,15 +2806,21 @@ def _escape_witnesses(
         is_unbound = slot_id not in bound_slot_ids and name not in bound_state_names
         if not (is_named_escape or is_unbound):
             continue
+        # r71 A2 owner-record obligation: the binding CLAIMS the host escape whether or
+        # not a witness can be produced -- a witness failure below discharges through
+        # an explicit typed gap, so a later strip of the witness leaves the surviving
+        # claim contradicted (parse refuses) rather than an honest-looking absence.
+        draft.state_binding = replace(binding, host_escape_disposition="escaped")
+        binding = draft.state_binding
         if not isinstance(captured, torch.Tensor):
             # A state slot that must be witnessed but whose capture value is not
             # available cannot be re-verified: fail closed (UNVERIFIABLE).
-            incomplete = True
+            gap(WitnessGapKind.UNWITNESSABLE_STATE_ESCAPE, f"{name}::{slot_id}")
             continue
         try:
             digest = runnable_tensor_byte_digest(captured)
         except (RuntimeError, ValueError, TypeError):
-            incomplete = True
+            gap(WitnessGapKind.UNWITNESSABLE_STATE_ESCAPE, f"{name}::{slot_id}")
             continue
         fact = {
             UNBOUND_STATE_ESCAPE_FACT_KEY: True,
@@ -2421,7 +2831,7 @@ def _escape_witnesses(
         try:
             observed = _encode_literal(fact)
         except _UnsupportedLiteralError:
-            incomplete = True
+            gap(WitnessGapKind.UNWITNESSABLE_STATE_ESCAPE, f"{name}::{slot_id}")
             continue
         order = start_order + len(witnesses)
         witnesses.append(
@@ -2468,10 +2878,17 @@ def _escape_witnesses(
         is_sink = bool(getattr(op, "is_internal_sink", False))
         if not is_escape and not is_sink:
             continue
+        escape_draft = slot_drafts.get(slot_id)
+        if is_escape and escape_draft is not None:
+            # r71 A2 owner-record obligation: a census-recognized escape source slot
+            # CLAIMS its host escape structurally; a witness failure below discharges
+            # through an explicit typed gap, so a stripped witness leaves the claim
+            # contradicted at parse instead of an honest-looking absence.
+            escape_draft.host_escape = True
         value = _op_retained_tensor(trace, op)
         if value is None:
             if is_escape:
-                incomplete = True
+                gap(WitnessGapKind.UNWITNESSABLE_ESCAPE_SOURCE, slot_id)
             continue
         matched = is_escape
         # Value-equality OPTIMIZATION (secondary, ADDITIVE-only per INV-1): a dual-use
@@ -2486,14 +2903,18 @@ def _escape_witnesses(
             digest = runnable_tensor_byte_digest(value)
         except (RuntimeError, ValueError, TypeError):
             if is_escape:
-                incomplete = True
+                gap(WitnessGapKind.UNWITNESSABLE_ESCAPE_SOURCE, slot_id)
             continue
         try:
             observed = _encode_literal(digest)
         except _UnsupportedLiteralError:
             if is_escape:
-                incomplete = True
+                gap(WitnessGapKind.UNWITNESSABLE_ESCAPE_SOURCE, slot_id)
             continue
+        if escape_draft is not None:
+            # The witnessed slot (escape source or dual-use baked sink) carries the
+            # owner-record obligation the witness discharges.
+            escape_draft.host_escape = True
         order = start_order + len(witnesses)
         witnesses.append(
             ControlWitness(
@@ -2509,24 +2930,28 @@ def _escape_witnesses(
         if is_escape:
             covered_labels.add(str(op.label))
 
-    # ---- Structural invariant: every recorded escape fact is witnessed OR INCOMPLETE ----
+    # ---- Structural invariant: every recorded escape fact is witnessed OR gapped ----
     # No net-exclusion may silently drop a recognized escape.
-    if not incomplete:
-        from ..backends.torch.completeness_witness import host_escape_bool_source_labels
+    from ..backends.torch.completeness_witness import host_escape_bool_source_labels
 
-        raw_bool = host_escape_bool_source_labels(trace)
-        raw_to_final = getattr(trace, "_raw_to_final_op_labels", {}) or {}
-        bool_final_labels = {
-            raw_to_final[raw] for raw in raw_bool if isinstance(raw_to_final.get(raw), str)
-        }
-        for label in escaped_labels:
-            if label in covered_labels or label in bool_final_labels:
-                continue
-            # A resolvable non-bool escape source that PASS A/B did not witness would
-            # otherwise slip through a net seam: fail closed instead.
-            incomplete = True
-            break
-    return witnesses, incomplete
+    raw_bool = host_escape_bool_source_labels(trace)
+    raw_to_final = getattr(trace, "_raw_to_final_op_labels", {}) or {}
+    bool_final_labels = {
+        raw_to_final[raw] for raw in raw_bool if isinstance(raw_to_final.get(raw), str)
+    }
+    for label in sorted(escaped_labels):
+        if label in covered_labels or label in bool_final_labels:
+            continue
+        # A resolvable non-bool escape source that PASS A/B did not witness would
+        # otherwise slip through a net seam: fail closed instead.
+        uncovered_slot_id = f"slot:{label}"
+        uncovered = slot_drafts.get(uncovered_slot_id)
+        if uncovered is not None and not uncovered.host_escape:
+            uncovered.host_escape = True
+            gap(WitnessGapKind.UNWITNESSABLE_ESCAPE_SOURCE, uncovered_slot_id)
+        elif uncovered is None:
+            gap(WitnessGapKind.UNWITNESSABLE_ESCAPE_SOURCE, uncovered_slot_id)
+    return witnesses
 
 
 def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], frozenset[str], bool]:
@@ -2707,15 +3132,30 @@ def _input_structure_witnesses(trace: Any, *, start_order: int) -> list[ControlW
 def witness_family_of(site_label: str) -> "str | None":
     """Resolve one ``SHAPE_STRUCTURE_FACT`` site label to its registered family.
 
-    Returns the ``WITNESS_FAMILY_REGISTRY`` family whose ``<family>:`` prefix matches,
-    or ``None`` for an unregistered label (the parser refuses such a witness; the
-    producer-emission meta-test fails when a new builder ships without a registry row).
+    Returns the ``WITNESS_FAMILY_REGISTRY`` family whose declared ``site_prefix``
+    matches, or ``None`` for an unregistered label (the parser refuses such a
+    witness; the r71 registry-closure meta-test fails when a new builder ships
+    without a registry row). Direct-kind and claim-only families carry no prefix and
+    can never match a site label.
     """
 
-    for family in WITNESS_FAMILY_REGISTRY:
-        if site_label.startswith(f"{family}:"):
+    for family, spec in WITNESS_FAMILY_REGISTRY.items():
+        if spec.site_prefix is not None and site_label.startswith(spec.site_prefix):
             return family
     return None
+
+
+def witness_family_of_witness(witness: "ControlWitness") -> "str | None":
+    """Resolve ANY control witness to its registered family (r71 A).
+
+    Direct-kind witnesses (scalar_bool / loop_predicate / conditional_arm_entry /
+    tensor_derived_scalar_literal) map by their enum kind; ``SHAPE_STRUCTURE_FACT``
+    witnesses map by site-label prefix.
+    """
+
+    if witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT:
+        return witness_family_of(witness.site_label)
+    return witness.kind.value
 
 
 def required_witness_family_members(
@@ -2748,6 +3188,18 @@ def required_witness_family_members(
     members: dict[str, list[str]] = {family: [] for family in WITNESS_FAMILY_REGISTRY}
     for witness in witnesses:
         if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
+            # r71 A: the four direct control kinds are first-class registry families.
+            if witness.kind in {
+                ControlWitnessKind.SCALAR_BOOL,
+                ControlWitnessKind.LOOP_PREDICATE,
+            }:
+                if not isinstance(witness.call_id, str) or not witness.call_id:
+                    raise ValueError("scalar-bool/loop-predicate witness carries no owning call id")
+                members[witness.kind.value].append(f"{witness.call_id}::{witness.site_label}")
+            elif witness.kind is ControlWitnessKind.CONDITIONAL_ARM_ENTRY:
+                members["conditional_arm_entry"].append(witness.site_label)
+            elif witness.kind is ControlWitnessKind.TENSOR_DERIVED_SCALAR_LITERAL:
+                members["tensor_derived_scalar_literal"].append(witness.site_label)
             continue
         family = witness_family_of(witness.site_label)
         if family is None:
@@ -2789,19 +3241,34 @@ def required_witness_family_members(
 
 def _build_required_witness_inventory(
     witnesses: "Sequence[ControlWitness]",
+    slot_drafts: Mapping[str, _SlotDraft],
 ) -> RequiredWitnessInventory:
-    """Author the REQUIRED presence ledger from the final emitted witness list (r69 A)."""
+    """Author the redundant discharge MIRROR from the final witnesses + claims (r71 A).
+
+    Witness-carrying families mirror the emitted witness stream (the single-strip
+    trip: stripping a witness alone breaks mirror equality); claim-only families
+    mirror the structural claims on the slots/bindings. The inventory is a MIRROR,
+    never authority: required coverage is derived independently from the witness-free
+    replay structure (``derive_required_witness_members``) at parse and by the
+    producer save-time self-check.
+    """
 
     members = required_witness_family_members(witnesses)
+    for draft in slot_drafts.values():
+        if draft.inert_sink:
+            members["inert_sink"].append(draft.slot_id)
+        binding = draft.state_binding
+        if binding is not None and binding.host_escape_disposition == "inert":
+            members["unbound_state_inert"].append(f"{binding.state_dict_name}::{draft.slot_id}")
     return RequiredWitnessInventory(
         registry_version=WITNESS_FAMILY_REGISTRY_VERSION,
         families=tuple(
             RequiredWitnessFamily(
                 family=family,
-                disposition=disposition,
+                disposition=spec.disposition,
                 members=tuple(sorted(members[family])),
             )
-            for family, disposition in WITNESS_FAMILY_REGISTRY.items()
+            for family, spec in WITNESS_FAMILY_REGISTRY.items()
         ),
     )
 
@@ -2917,47 +3384,43 @@ decision, never an incidental producer change.
 
 
 def _state_metadata_fact_witnesses(
-    trace: Any,
+    slot_drafts: Mapping[str, _SlotDraft],
     *,
     start_order: int,
 ) -> list[ControlWitness]:
-    """Witness capture-time DECLARED state-metadata facts per state slot (r65 F-1).
+    """Witness the TOTALIZED declared state-metadata facts per state NAME (r71 E1).
 
     A forward that reads ``self.w.requires_grad`` (or branches on ``self.w.grad_fn``)
-    steers Python control flow on a bit that ``state_dict()`` transport DETACHES away, so
-    without a declared fact an autograd-branching frozen model would replay against a staged
-    slot whose bit silently differs from capture. Each observed (state, fact, value) --
-    recorded by the completeness-witness property patch ONLY when such a read actually
-    happened on the DIRECT registered object -- becomes a ``SHAPE_STRUCTURE_FACT`` witness
-    whose recorded bit run preparation re-applies to the staged slot (the declared-state
-    model gains the capture-time trainable bit for exactly the slots that READ it). A model
-    that never reads state autograd metadata records no facts and emits no witnesses: zero
-    over-trigger and zero artifact growth by construction.
+    steers Python control flow on a bit that ``state_dict()`` transport DETACHES away
+    (r65 F-1). r71 totalizes BOTH facts over the declared state-name universe: every
+    state name emits exactly one witness carrying its capture-time ``requires_grad``
+    bit (staging applies it -- capture truth wins) and its ``grad_fn`` presence
+    (``True`` refused at save, so every admitted artifact records ``False``). The
+    fact values come from the stamped :class:`StateSlotBinding` owner records, so the
+    witness stream, the binding fields, and the inventory mirror agree by
+    construction and any strip leaves a surviving contradiction. The former
+    read-gated zero-overhead rationale is obsolete: PRESENCE is the anchor now, and
+    the cost is one bool pair per declared state name.
     """
 
-    from ..backends.torch.completeness_witness import host_escape_state_metadata_facts
-
-    facts_by_state = host_escape_state_metadata_facts(trace)
-    if not facts_by_state:
-        return []
-    witnesses: list[ControlWitness] = []
-    for name in sorted(facts_by_state):
-        recorded = {
-            str(fact): bool(fact_value)
-            for fact, fact_value in sorted(facts_by_state[name].items())
-            if str(fact) in _STATE_METADATA_FACT_NAMES
-        }
-        if not recorded:
+    facts_by_name: dict[str, tuple[bool, bool]] = {}
+    for draft in slot_drafts.values():
+        binding = draft.state_binding
+        if binding is None:
             continue
+        facts_by_name.setdefault(
+            binding.state_dict_name,
+            (binding.captured_requires_grad, binding.captured_grad_fn),
+        )
+    witnesses: list[ControlWitness] = []
+    for name in sorted(facts_by_name):
+        requires_grad, grad_fn_present = facts_by_name[name]
         fact = {
             STATE_METADATA_FACT_KEY: True,
             "state": str(name),
-            "facts": recorded,
+            "facts": {"grad_fn": bool(grad_fn_present), "requires_grad": bool(requires_grad)},
         }
-        try:
-            observed = _encode_literal(fact)
-        except _UnsupportedLiteralError:  # pragma: no cover - bool/str facts always encode
-            continue
+        observed = _encode_literal(fact)
         order = start_order + len(witnesses)
         witnesses.append(
             ControlWitness(
@@ -3011,61 +3474,70 @@ adds the capability-driven surface ``retains_grad`` / ``_base`` / ``_is_view`` /
 
 def _input_metadata_witnesses(
     trace: Any,
+    input_boundary: "tuple[InputBoundarySite, ...]",
     *,
     start_order: int,
 ) -> list[ControlWitness]:
-    """Witness capture-time metadata-predicate reads on model-input leaves (r27-H2).
+    """Emit ONE totalized metadata envelope per input-boundary tensor site (r71 A2).
 
     A forward that reads ``x.is_contiguous()`` / ``x.stride()`` / ``x.requires_grad`` on a
     model input steers Python control flow on facts the input contract does NOT check
     (only shape+dtype): a same-shape runtime input differing in layout or grad flag would
-    silently replay the wrong recorded arm as a false VERIFIED+ATTESTED. Each observed
-    (site, predicate, value) fact -- recorded by the completeness-witness scoped patch
-    ONLY when such a read actually happened -- becomes a ``SHAPE_STRUCTURE_FACT`` witness
-    the executor compares against the RAW runtime input (before the detach-clone that
-    erases ``requires_grad``), diverging on mismatch. A model that never reads input
-    metadata records no facts and emits no witnesses: zero over-trigger by construction.
+    silently replay the wrong recorded arm as a false VERIFIED+ATTESTED (r27-H2).
+
+    r71 totalized PRESENCE (free-F1 closure): the producer ALWAYS emits exactly one
+    envelope witness per tensor MODEL_INPUT site named by the REQUIRED input-boundary
+    record -- an unread site carries the EXPLICIT empty fact set -- so a lockstep
+    witness+inventory-member strip leaves a bound site without its envelope and refuses
+    at parse. The read-gated COMPARISON semantics are unchanged: the executor compares
+    only the facts the envelope carries (an empty envelope compares nothing), against
+    the RAW runtime input, diverging on mismatch. The envelope's fact-NAME set must
+    equal the boundary record's declared ``metadata_reads`` (the owner record carries
+    the read-site existence; the witness carries the observed values).
     """
 
     reads = getattr(trace, "__dict__", {}).get("_runnable_input_metadata_reads", None)
-    if not isinstance(reads, Mapping) or not reads:
-        return []
+    reads_map: Mapping[Any, Any] = reads if isinstance(reads, Mapping) else {}
     witnesses: list[ControlWitness] = []
-    for (position, path), site_facts in reads.items():
-        if not isinstance(site_facts, Mapping):
-            continue
-        recorded = {
-            str(name): (list(value) if isinstance(value, tuple) else value)
-            for name, value in site_facts.items()
-            if str(name) in _INPUT_METADATA_FACT_NAMES
-        }
-        if not recorded:
-            continue
-        fact = {
-            MODEL_INPUT_METADATA_FACT_KEY: True,
-            "position": list(position) if isinstance(position, tuple) else position,
-            "path": list(path),
-            "facts": recorded,
-        }
-        try:
-            observed = _encode_literal(fact)
-        except _UnsupportedLiteralError:
-            # Defensive: a fact site under a non-encodable container key cannot be
-            # re-resolved at run time. The literal-leaf walker independently records
-            # such a subtree as an OPAQUE leaf, downgrading the run to UNVERIFIABLE,
-            # so dropping the witness here can never produce a false VERIFIED.
-            continue
-        order = start_order + len(witnesses)
-        witnesses.append(
-            ControlWitness(
-                witness_id=f"witness:{order + 1}",
-                kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
-                order=order,
-                call_id=None,
-                site_label=f"{MODEL_INPUT_METADATA_SITE_PREFIX}{position!r}:{list(path)!r}",
-                observed_value=observed,
+    for site in input_boundary:
+        position = decode_input_site_position(site.position)
+        for tensor_site in site.tensor_sites:
+            path = tuple(tensor_site.container_path)
+            site_facts = reads_map.get((position, path))
+            recorded: dict[str, Any] = {}
+            if isinstance(site_facts, Mapping):
+                recorded = {
+                    str(name): (list(value) if isinstance(value, tuple) else value)
+                    for name, value in site_facts.items()
+                    if str(name) in _INPUT_METADATA_FACT_NAMES
+                }
+            fact = {
+                MODEL_INPUT_METADATA_FACT_KEY: True,
+                "position": list(position),
+                "path": list(path),
+                "facts": recorded,
+            }
+            try:
+                observed = _encode_literal(fact)
+            except _UnsupportedLiteralError:
+                # Defensive: an unencodable observed VALUE cannot silently shrink the
+                # envelope -- emit the envelope with an empty fact set so PRESENCE
+                # stays total; the boundary record still declares the read names, and
+                # the parse-time envelope/owner agreement check refuses the artifact
+                # typed (fail closed, never a silent partial envelope).
+                fact["facts"] = {}
+                observed = _encode_literal(fact)
+            order = start_order + len(witnesses)
+            witnesses.append(
+                ControlWitness(
+                    witness_id=f"witness:{order + 1}",
+                    kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+                    order=order,
+                    call_id=None,
+                    site_label=f"{MODEL_INPUT_METADATA_SITE_PREFIX}{position!r}:{list(path)!r}",
+                    observed_value=observed,
+                )
             )
-        )
     return witnesses
 
 
@@ -3073,7 +3545,7 @@ def _input_literal_witnesses(
     trace: Any,
     *,
     start_order: int,
-) -> tuple[list[ControlWitness], bool]:
+) -> tuple[list[ControlWitness], list[str]]:
     """Witness capture-time non-tensor model-input leaves as structure facts.
 
     The runnable executor binds only tensor input leaves; a changed non-tensor
@@ -3106,18 +3578,20 @@ def _input_literal_witnesses(
 
     Returns
     -------
-    tuple[list[ControlWitness], bool]
-        Ordered non-tensor model-input leaf witnesses, and whether any leaf was
-        value-free (opaque), signalling incomplete witness coverage.
+    tuple[list[ControlWitness], list[str]]
+        Ordered non-tensor model-input leaf witnesses, and the canonical member
+        identity of every value-free (opaque) leaf -- each becomes a typed
+        ``OPAQUE_INPUT_LEAF`` coverage gap anchored by its surviving
+        ``encodable=False`` literal fact.
     """
 
     leaves = getattr(trace, "__dict__", {}).get("_runnable_input_nontensor_leaves", ())
     witnesses: list[ControlWitness] = []
-    saw_opaque_leaf = False
+    opaque_members: list[str] = []
     for position, path, value in leaves:
         encodable = _is_encodable_model_input_leaf(value)
         if not encodable:
-            saw_opaque_leaf = True
+            opaque_members.append(f"{position!r}:{list(path)!r}")
         fact = {
             MODEL_INPUT_LITERAL_FACT_KEY: True,
             "position": list(position) if isinstance(position, tuple) else position,
@@ -3142,7 +3616,7 @@ def _input_literal_witnesses(
                 observed_value=observed,
             )
         )
-    return witnesses, saw_opaque_leaf
+    return witnesses, opaque_members
 
 
 def _is_encodable_model_input_leaf(value: Any) -> bool:
@@ -3494,6 +3968,11 @@ def _buffer_binding(trace: Any, op: Any) -> StateSlotBinding | None:
         trainable=False,
         persistent=persistent,
         alias_group=alias_group,
+        # Provisional draft values; ``_stamp_state_binding_facts`` /
+        # ``_escape_witnesses`` stamp the final totalized facts + claims.
+        captured_requires_grad=False,
+        captured_grad_fn=False,
+        host_escape_disposition=None,
     )
 
 

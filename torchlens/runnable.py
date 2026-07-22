@@ -24,8 +24,15 @@ so an absent context can only ever mean a legacy v1 artifact, which is
 analysis-only (fail-closed), never "assume disabled".
 """
 
-RUNNABLE_CALL_RECIPE_VERSION: Final = "non_tensor_args_tensor_slots_and_context_v2"
-"""Frozen sparse call-recipe version string (v2: adds required call context)."""
+RUNNABLE_CALL_RECIPE_VERSION: Final = "non_tensor_args_tensor_slots_context_and_obligations_v3"
+"""Frozen sparse call-recipe version string.
+
+v3 (r71 A) adds REQUIRED per-call obligation fields to every call record:
+``control_obligations`` (owner-record scalar-bool/loop-predicate obligations) and
+``control_dependencies`` (owner-record conditional arm-entry edges on the CHILD
+call). Absence of either field is a parse failure -- the explicit-schema-decision
+doctrine: obligation fields are never optional or defaulted.
+"""
 
 RUNNABLE_CALLABLE_REF_SCHEMA_VERSION: Final = 1
 """Frozen ``FunctionRegistryKey`` schema version accepted by rung 1."""
@@ -47,51 +54,20 @@ LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS: Final[frozenset[str]] = frozenset(
 )
 """Known legacy capability strings: analysis-only load, typed run refusal."""
 
-WITNESS_FAMILY_REGISTRY_VERSION: Final = "witness_family_registry_v1"
+WITNESS_FAMILY_REGISTRY_VERSION: Final = "witness_family_registry_v2"
 """Closed registry/version discriminator persisted in every required-witness inventory.
 
 A parser only accepts an inventory authored against ITS OWN closed registry; any other
 discriminator refuses at parse (``context_field_invalid``), so a future registry change
-is an explicit schema decision, never a silent vocabulary drift.
-"""
+is an explicit schema decision, never a silent vocabulary drift. v2 (r71 A) extends the
+registry from the seven ``SHAPE_STRUCTURE_FACT`` prefixes to EVERY verdict-steering
+witness family -- the four direct control kinds included -- plus the two explicit
+claim-only families, each row a typed :class:`FamilySpec` naming its independent
+replay-structural anchor. A v1 inventory refuses at parse (analysis-only load); there
+is no legacy fallback and no silent compatibility default.
 
-WITNESS_FAMILY_REGISTRY: Final[Mapping[str, str]] = MappingProxyType(
-    {
-        "input_structure": "inventory_indexed",
-        "model_input_literal": "independent_ceiling",
-        "model_input_metadata": "inventory_indexed",
-        "module_training_mode": "inventory_indexed",
-        "state_metadata": "inventory_indexed",
-        "container": "inventory_indexed",
-        "unbound_state_escape": "inventory_indexed",
-    }
-)
-"""THE closed replay-critical witness-family registry (r69 A).
-
-Maps every ``SHAPE_STRUCTURE_FACT`` site-label family (prefix ``<family>:``) the
-producer may emit to its presence disposition:
-
-* ``inventory_indexed`` -- the exact member-identity set is persisted in the required
-  descriptor-native :class:`RequiredWitnessInventory` and the parser requires EXACT
-  family+member equality with the present facts (stripping any member, duplicating one,
-  or forging an extra refuses ``context_field_invalid``). Member-ID vocabulary per
-  family: ``input_structure`` uses canonical root site positions (``arg:<i>`` /
-  ``kwarg:<name>``); ``state_metadata`` uses ``<state_dict_name>::<fact_name>`` pairs
-  (read-gated facts stay read-gated -- the inventory declares exactly which reads
-  happened, including the explicit empty set); every other indexed family uses its
-  exact witness ``site_label``.
-* ``independent_ceiling`` -- presence is proven by an independent structural
-  cross-anchor instead of inventory membership: every ``model_input_literal`` fact
-  path must be a structure-snapshot leaf/empty node and every structure leaf/empty
-  node must own a literal fact (bidirectional set equality per site), so per-leaf
-  literal stripping cannot hide behind site-level coverage.
-
-Both the producer and the parser author their required sets from this ONE registry;
-an emitted ``SHAPE_STRUCTURE_FACT`` family outside it refuses at parse, and the
-producer-emission meta-test fails when a new replay-critical prefix/builder ships
-without a registry row. ``always_required`` (a family that must be non-empty in every
-artifact) is reserved vocabulary: no current family qualifies, because every family's
-membership is capture-dependent.
+``WITNESS_FAMILY_REGISTRY`` itself is defined after :class:`ControlWitnessKind` below
+(the typed rows reference the kind enum).
 """
 
 
@@ -410,7 +386,23 @@ class InputSlotBinding:
 
 @dataclass(frozen=True, slots=True)
 class StateSlotBinding:
-    """Name, ownership, role, and alias metadata for one state slot."""
+    """Name, ownership, role, alias, and declared-fact metadata for one state slot.
+
+    r71 A owner-record obligations (REQUIRED, never defaulted):
+
+    * ``captured_requires_grad`` / ``captured_grad_fn`` -- the TOTALIZED declared
+      state-metadata facts (r65 F-1, E1-settled): the capture-time autograd trainable
+      bit recorded for EVERY declared state name (staging applies it -- capture truth
+      always wins) and grad_fn presence (``True`` refuses at save: no staged leaf can
+      carry a grad_fn, so every admitted artifact records ``False``).
+    * ``host_escape_disposition`` -- the per-slot host-escape claim consumed by strict
+      state preparation and ``_unbound_state_escape_stale``: ``"escaped"`` demands an
+      exact ``unbound_state_escape`` witness (SHA staleness guard) XOR a typed gap;
+      ``"inert"`` is the explicit no-witness claim (reserved vocabulary -- the current
+      producer cannot prove inertness and always claims ``"escaped"``); ``None`` for a
+      graph-bound, non-escaping slot. Parse-time domain totality requires a non-None
+      disposition on every slot of an unbound state name.
+    """
 
     module_path: str
     state_dict_name: str
@@ -418,11 +410,28 @@ class StateSlotBinding:
     trainable: bool
     persistent: bool
     alias_group: str | None
+    captured_requires_grad: bool
+    captured_grad_fn: bool
+    host_escape_disposition: Literal["escaped", "inert"] | None
 
 
 @dataclass(frozen=True, slots=True)
 class TensorSlotDescriptor:
-    """Value-free allocation and binding contract for one tensor slot."""
+    """Value-free allocation and binding contract for one tensor slot.
+
+    r71 A owner-record obligations (REQUIRED, never defaulted):
+
+    * ``host_escape`` -- this slot's value escaped to the Python host (or was baked
+      verbatim into a downstream literal): an exact ``tensor_derived_scalar_literal``
+      digest witness is REQUIRED for the slot XOR a typed :class:`WitnessCoverageGap`.
+      Consumed by ``_tensor_derived_scalar_stale`` as its required domain.
+    * ``inert_sink`` -- the explicit claim discharging terminal-slot totality for a
+      genuinely dead call-produced slot (e.g. the unused half of a multi-output op).
+      Mutually exclusive with ``host_escape``; parse-time terminal-slot accounting
+      requires every terminal non-output call-produced slot to be claimed by EXACTLY
+      one of {scalar_bool, loop_predicate, tensor_derived_scalar_literal, inert_sink,
+      typed gap}.
+    """
 
     slot_id: str
     role: TensorSlotRole
@@ -438,6 +447,8 @@ class TensorSlotDescriptor:
     output_path: ContainerPath | None
     input_binding: InputSlotBinding | None
     state_binding: StateSlotBinding | None
+    host_escape: bool
+    inert_sink: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -482,6 +493,8 @@ class RunnableCallDescriptor:
     is_inplace: bool
     runtime_fingerprint: str
     execution_context: "CallExecutionContext"
+    control_obligations: tuple[CallControlObligation, ...]
+    control_dependencies: tuple[ControlDependencyEdge, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -600,6 +613,391 @@ class ControlWitnessKind(str, Enum):
 
 
 @dataclass(frozen=True, slots=True)
+class FamilySpec:
+    """One closed registry-v2 row: the typed presence policy for one witness family (r71 A).
+
+    Every verdict-steering witness family declares IN CODE (never prose):
+
+    * ``witness_kind`` -- the direct :class:`ControlWitnessKind` the family's witnesses
+      carry (``SHAPE_STRUCTURE_FACT`` for prefix families); ``None`` for a claim-only
+      family that never owns witnesses.
+    * ``site_prefix`` -- the ``site_label`` prefix for ``SHAPE_STRUCTURE_FACT`` families,
+      ``None`` for direct-kind and claim-only families.
+    * ``disposition`` -- ``inventory_indexed`` (exact member equality with the persisted
+      mirror), ``independent_ceiling`` (anchored by a bidirectional structural
+      cross-anchor, no members), or ``claim_only`` (members are structural claims, no
+      witnesses exist).
+    * ``anchor`` -- the NAMED independent replay-structural domain the parser re-derives
+      the family's required members from. Never the witness stream, the inventory, or
+      the completeness summary: those are never authority for their own coverage.
+    * ``discharge`` -- ``exact_witness`` (every required member must own an exact
+      witness), ``witness_or_gap`` (an explicit source-linked
+      :class:`WitnessCoverageGap` may discharge instead, ceiling the derived
+      completeness floor), or ``claim_only``.
+    * ``runtime_consumer`` -- the named runtime consumer proving the anchor is
+      replay-consumed structure, never a second decorative ledger.
+    """
+
+    family: str
+    witness_kind: ControlWitnessKind | None
+    site_prefix: str | None
+    disposition: str
+    anchor: str
+    discharge: str
+    runtime_consumer: str
+
+
+WITNESS_FAMILY_REGISTRY: Final[Mapping[str, FamilySpec]] = MappingProxyType(
+    {
+        # ---- direct control kinds (the r70 corr2recover-H1 perimeter closure) ----
+        "scalar_bool": FamilySpec(
+            family="scalar_bool",
+            witness_kind=ControlWitnessKind.SCALAR_BOOL,
+            site_prefix=None,
+            disposition="inventory_indexed",
+            anchor="call_control_obligations+terminal_slot_totality",
+            discharge="witness_or_gap",
+            runtime_consumer="_call_witness_checks",
+        ),
+        "loop_predicate": FamilySpec(
+            family="loop_predicate",
+            witness_kind=ControlWitnessKind.LOOP_PREDICATE,
+            site_prefix=None,
+            disposition="inventory_indexed",
+            anchor="call_control_obligations+terminal_slot_totality",
+            discharge="witness_or_gap",
+            runtime_consumer="_call_witness_checks",
+        ),
+        "conditional_arm_entry": FamilySpec(
+            family="conditional_arm_entry",
+            witness_kind=ControlWitnessKind.CONDITIONAL_ARM_ENTRY,
+            site_prefix=None,
+            disposition="inventory_indexed",
+            anchor="child_call_control_dependencies+op_label_referential_integrity"
+            "+conditional_predicate_pairing",
+            discharge="witness_or_gap",
+            runtime_consumer="_conditional_arm_check",
+        ),
+        "tensor_derived_scalar_literal": FamilySpec(
+            family="tensor_derived_scalar_literal",
+            witness_kind=ControlWitnessKind.TENSOR_DERIVED_SCALAR_LITERAL,
+            site_prefix=None,
+            disposition="inventory_indexed",
+            anchor="tensor_slot_host_escape_obligations+terminal_slot_totality",
+            discharge="witness_or_gap",
+            runtime_consumer="_tensor_derived_scalar_stale",
+        ),
+        # ---- SHAPE_STRUCTURE_FACT prefix families (r69 A rows, re-expressed) ----
+        "input_structure": FamilySpec(
+            family="input_structure",
+            witness_kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+            site_prefix="input_structure:",
+            disposition="inventory_indexed",
+            anchor="input_boundary_sites+model_input_bindings+dense_positional_roots",
+            discharge="exact_witness",
+            runtime_consumer="_input_structure_witness_check",
+        ),
+        "model_input_literal": FamilySpec(
+            family="model_input_literal",
+            witness_kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+            site_prefix="model_input_literal:",
+            disposition="independent_ceiling",
+            anchor="bidirectional_structure_leaf_cross_anchor",
+            discharge="exact_witness",
+            runtime_consumer="_input_literal_contract_checks",
+        ),
+        "model_input_metadata": FamilySpec(
+            family="model_input_metadata",
+            witness_kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+            site_prefix="model_input_metadata:",
+            disposition="inventory_indexed",
+            anchor="input_boundary_tensor_sites_totalized_envelope",
+            discharge="exact_witness",
+            runtime_consumer="_input_metadata_contract_checks",
+        ),
+        "module_training_mode": FamilySpec(
+            family="module_training_mode",
+            witness_kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+            site_prefix="module_training_mode:",
+            disposition="inventory_indexed",
+            anchor="mode_sensitive_call_domain",
+            discharge="exact_witness",
+            runtime_consumer="_mode_sensitive_op_unwitnessed",
+        ),
+        "state_metadata": FamilySpec(
+            family="state_metadata",
+            witness_kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+            site_prefix="state_metadata:",
+            disposition="inventory_indexed",
+            anchor="declared_state_name_totality+state_binding_fact_mirror",
+            discharge="exact_witness",
+            runtime_consumer="_apply_state_metadata_facts",
+        ),
+        "container": FamilySpec(
+            family="container",
+            witness_kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+            site_prefix="container:",
+            disposition="inventory_indexed",
+            anchor="container_record_snapshot_totality",
+            discharge="exact_witness",
+            runtime_consumer="_structure_witness_check",
+        ),
+        "unbound_state_escape": FamilySpec(
+            family="unbound_state_escape",
+            witness_kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+            site_prefix="unbound_state_escape:",
+            disposition="inventory_indexed",
+            anchor="state_binding_host_escape_disposition_totality",
+            discharge="witness_or_gap",
+            runtime_consumer="_unbound_state_escape_stale",
+        ),
+        # ---- explicit claim-only families (terminal-slot / unbound-name totality) ----
+        "inert_sink": FamilySpec(
+            family="inert_sink",
+            witness_kind=None,
+            site_prefix=None,
+            disposition="claim_only",
+            anchor="terminal_slot_totality",
+            discharge="claim_only",
+            runtime_consumer="terminal_slot_accounting",
+        ),
+        "unbound_state_inert": FamilySpec(
+            family="unbound_state_inert",
+            witness_kind=None,
+            site_prefix=None,
+            disposition="claim_only",
+            anchor="state_binding_host_escape_disposition_totality",
+            discharge="claim_only",
+            runtime_consumer="strict_state_preparation",
+        ),
+    }
+)
+"""THE closed replay-critical witness-family registry v2 (r71 A).
+
+One typed :class:`FamilySpec` row per verdict-steering witness family -- the four
+direct control kinds (``scalar_bool`` / ``loop_predicate`` / ``conditional_arm_entry``
+/ ``tensor_derived_scalar_literal``) PLUS the seven ``SHAPE_STRUCTURE_FACT`` prefix
+families -- and the two explicit claim-only families (``inert_sink`` /
+``unbound_state_inert``) that discharge terminal-slot / unbound-state-name domain
+totality without witnesses. This registry is the ONLY dispatch authority for producer
+authoring, parser validation, and the generated mutation matrix.
+
+The agreed r71 invariant (deletion-closure): every replay-structure item that can
+affect a faithfulness verdict creates a typed, independently derived OBLIGATION,
+anchored to structure the replay itself consumes. Each obligation is discharged
+exactly once, by an exact witness XOR an explicit, source-linked
+:class:`WitnessCoverageGap`. The witness stream, the required-witness inventory, and
+the ``witness_completeness`` summary are NEVER authority for their own required
+coverage; the inventory is a redundant mirror/diagnostic. Consequence: no combination
+of record DELETIONS can improve a verdict -- any partial strip leaves a surviving
+anchor contradiction (parse-refuse ``context_field_invalid``, analysis-only) or an
+UNVERIFIABLE floor, never VERIFIED. The single out-of-scope boundary is coherent
+reauthoring (see the threat-model subsection of
+``docs/reference/runnable_tlspec_contract.md``).
+"""
+
+VERDICT_STEERING_WITNESS_FAMILIES: Final[frozenset[str]] = frozenset(
+    family for family, spec in WITNESS_FAMILY_REGISTRY.items() if spec.witness_kind is not None
+)
+"""The 11 witness-carrying registry families (claim-only rows excluded)."""
+
+
+class WitnessGapKind(str, Enum):
+    """Closed vocabulary of explicit witness-coverage gap causes (r71 A3).
+
+    Every producer-side completeness downgrade is one of these typed, source-linked
+    causes; a new gap constructor without a registered row REDs the r71 meta-test.
+    """
+
+    OPAQUE_INPUT_LEAF = "opaque_input_leaf"
+    UNWITNESSABLE_ESCAPE_SOURCE = "unwitnessable_escape_source"
+    UNATTRIBUTABLE_BOOL_ESCAPE = "unattributable_bool_escape"
+    UNATTRIBUTABLE_OPAQUE_ESCAPE = "unattributable_opaque_escape"
+    MUTABLE_WRITEBACK_ESCAPE = "mutable_writeback_escape"
+    RAW_POINTER_ESCAPE = "raw_pointer_escape"
+    ESCAPE_OBSERVER_UNCERTAIN = "escape_observer_uncertain"
+    CROSS_THREAD_TENSOR_ACCESS = "cross_thread_tensor_access"
+    UNWITNESSABLE_STATE_ESCAPE = "unwitnessable_state_escape"
+    UNOBSERVED_PREDICATE = "unobserved_predicate"
+    UNCLASSIFIED_TERMINAL_BOOL = "unclassified_terminal_bool"
+    UNANCHORABLE_ARM_EDGE = "unanchorable_arm_edge"
+    FORWARD_VALUE_OVERRIDE = "forward_value_override"
+    INPUT_METADATA_VIEW_READ = "input_metadata_view_read"
+    PRUNED_RNG_CONTROL = "pruned_rng_control"
+    PRUNED_ALIAS_MUTATION = "pruned_alias_mutation"
+    UNMODELLED_HOST_WRITE = "unmodelled_host_write"
+    LIFECYCLE_LEDGER_MUTATION = "lifecycle_ledger_mutation"
+    LIFECYCLE_LEDGER_DISPATCH = "lifecycle_ledger_dispatch"
+    RNG_MONITOR_UNCERTAIN = "rng_monitor_uncertain"
+    CAPTURE_VERIFICATION_FAILED = "capture_verification_failed"
+
+
+@dataclass(frozen=True, slots=True)
+class GapSpec:
+    """Closed gap-registry row: the structural source and resulting floor per cause."""
+
+    source_family: str
+    resulting_completeness: "WitnessCompleteness"
+
+
+WITNESS_GAP_REGISTRY: Final[Mapping[WitnessGapKind, GapSpec]] = MappingProxyType(
+    {
+        WitnessGapKind.OPAQUE_INPUT_LEAF: GapSpec(
+            "model_input_literal", WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
+        ),
+        WitnessGapKind.UNWITNESSABLE_ESCAPE_SOURCE: GapSpec(
+            "tensor_derived_scalar_literal", WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
+        ),
+        WitnessGapKind.UNATTRIBUTABLE_BOOL_ESCAPE: GapSpec(
+            "scalar_bool", WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
+        ),
+        WitnessGapKind.UNATTRIBUTABLE_OPAQUE_ESCAPE: GapSpec(
+            "tensor_derived_scalar_literal", WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
+        ),
+        WitnessGapKind.MUTABLE_WRITEBACK_ESCAPE: GapSpec(
+            "tensor_derived_scalar_literal", WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
+        ),
+        WitnessGapKind.RAW_POINTER_ESCAPE: GapSpec(
+            "tensor_derived_scalar_literal", WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
+        ),
+        WitnessGapKind.ESCAPE_OBSERVER_UNCERTAIN: GapSpec(
+            "tensor_derived_scalar_literal", WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
+        ),
+        WitnessGapKind.CROSS_THREAD_TENSOR_ACCESS: GapSpec(
+            "tensor_derived_scalar_literal", WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
+        ),
+        WitnessGapKind.UNWITNESSABLE_STATE_ESCAPE: GapSpec(
+            "unbound_state_escape", WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
+        ),
+        WitnessGapKind.UNOBSERVED_PREDICATE: GapSpec(
+            "scalar_bool", WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
+        ),
+        WitnessGapKind.UNCLASSIFIED_TERMINAL_BOOL: GapSpec(
+            "scalar_bool", WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
+        ),
+        WitnessGapKind.UNANCHORABLE_ARM_EDGE: GapSpec(
+            "conditional_arm_entry", WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
+        ),
+        WitnessGapKind.FORWARD_VALUE_OVERRIDE: GapSpec(
+            "capture", WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
+        ),
+        WitnessGapKind.INPUT_METADATA_VIEW_READ: GapSpec(
+            "model_input_metadata", WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
+        ),
+        WitnessGapKind.PRUNED_RNG_CONTROL: GapSpec(
+            "capture", WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
+        ),
+        WitnessGapKind.PRUNED_ALIAS_MUTATION: GapSpec(
+            "capture", WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
+        ),
+        WitnessGapKind.UNMODELLED_HOST_WRITE: GapSpec(
+            "capture", WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
+        ),
+        WitnessGapKind.LIFECYCLE_LEDGER_MUTATION: GapSpec(
+            "capture", WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
+        ),
+        WitnessGapKind.LIFECYCLE_LEDGER_DISPATCH: GapSpec(
+            "capture", WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
+        ),
+        WitnessGapKind.RNG_MONITOR_UNCERTAIN: GapSpec(
+            "capture", WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE
+        ),
+        WitnessGapKind.CAPTURE_VERIFICATION_FAILED: GapSpec(
+            "capture", WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
+        ),
+    }
+)
+"""Closed gap registry: source family + resulting completeness floor per gap kind.
+
+``source_family`` is a :data:`WITNESS_FAMILY_REGISTRY` family for obligation-anchored
+gaps (stripping such a gap leaves its obligation undischarged -> parse-refuse) or the
+symbolic ``"capture"`` source for capture-event-only causes whose only closure is the
+coherent-reauthoring boundary (documented in the contract's threat-model subsection).
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class WitnessCoverageGap:
+    """One ordered, typed, source-linked witness-coverage gap record (r71 A3).
+
+    Replaces the producer's former direct ``witness_completeness`` enum assignments:
+    every downgrade cause persists as an explicit gap carrying its closed
+    :class:`WitnessGapKind`, the registry source family, the canonical source member
+    (a slot/state/site identity, or ``"capture"`` for capture-global causes), the
+    capture order, and the resulting completeness (which must equal the registry row).
+    The parser derives the completeness FLOOR from these records plus the structural
+    obligations; the persisted summary is a redundant assertion only.
+    """
+
+    gap_kind: WitnessGapKind
+    source_family: str
+    source_member: str
+    order: int
+    resulting_completeness: WitnessCompleteness
+
+
+def derived_witness_completeness(
+    gaps: "tuple[WitnessCoverageGap, ...]",
+) -> WitnessCompleteness:
+    """Derive the completeness FLOOR from the ordered gap ledger (r71 A3).
+
+    THE single derivation authority: the producer's persisted summary, the parser's
+    floor check, readiness, and the ``_path_faithfulness`` VERIFIED gate all consult
+    this function; no verdict/readiness code may read the raw persisted
+    ``witness_completeness`` outside the parse-time equality check (source-scan
+    meta-test). The floor is the resulting completeness of the FIRST gap in capture
+    order (matching the historical first-cause-wins producer cascade), or ``COMPLETE``
+    for an empty ledger. A persisted summary claiming STRONGER than this floor is an
+    internally contradictory descriptor (``context_field_invalid``).
+    """
+
+    if not gaps:
+        return WitnessCompleteness.COMPLETE
+    first = min(gaps, key=lambda gap: gap.order)
+    return first.resulting_completeness
+
+
+@dataclass(frozen=True, slots=True)
+class CallControlObligation:
+    """Owner-record scalar-bool / loop-predicate obligation on one call (r71 A2).
+
+    Stamped on the OWNING :class:`RunnableCallDescriptor` (the call producing the
+    predicate slot) and consumed by the runtime check builder
+    (``_call_witness_checks``): every obligation demands an exact same-kind witness
+    with this call/site identity XOR a typed :class:`WitnessCoverageGap`.
+    ``conditional_id`` links the predicate to its arm-entry edges (E2 pairing).
+    """
+
+    kind: ControlWitnessKind
+    output_slot_id: str
+    site_label: str
+    conditional_id: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class ControlDependencyEdge:
+    """Owner-record conditional arm-entry edge on the CHILD call (r71 A2).
+
+    Consumed by scheduling/topological validation (parent call precedes child call;
+    labels resolve against descriptor slots) and by the runtime arm check domain.
+    """
+
+    conditional_id: int
+    arm_kind: str
+    parent_op_label: str
+    child_op_label: str
+
+
+def control_dependency_site_label(edge: ControlDependencyEdge) -> str:
+    """Return the canonical arm-entry witness ``site_label`` for one edge record."""
+
+    return (
+        f"conditional:{edge.conditional_id}:{edge.arm_kind}:"
+        f"{edge.parent_op_label}->{edge.child_op_label}"
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class ControlWitness:
     """One ordered, non-tensor control-flow witness."""
 
@@ -639,6 +1037,38 @@ class RequiredWitnessInventory:
 
     registry_version: str
     families: tuple[RequiredWitnessFamily, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class InputBoundaryTensorSite:
+    """One tensor leaf of the REQUIRED input-boundary record (r71 A2).
+
+    ``metadata_reads`` is the EXPLICIT (possibly empty) closed-vocabulary set of
+    metadata-predicate names the captured forward read on this leaf: the totalized
+    ``model_input_metadata`` envelope witness for this (site, path) must carry exactly
+    these fact names (the witness carries the observed VALUES; this owner record
+    carries the read-site existence). Cross-checked at parse against the tensor
+    MODEL_INPUT slot bindings -- never against the witness stream.
+    """
+
+    container_path: ContainerPath
+    slot_id: str
+    metadata_reads: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class InputBoundarySite:
+    """One REQUIRED top-level input-boundary site record (r71 A2).
+
+    THE runtime site/arity and tree-binding authority (one exact record per captured
+    arg/kwarg, canonical ``arg:<i>`` / ``kwarg:<name>`` position). Replaces the
+    required-witness inventory as ``_inventory_site_positions``' authority -- the
+    inventory is a redundant mirror. Consumed by runtime site selection, arity
+    contracts, and the metadata-envelope domain.
+    """
+
+    position: str
+    tensor_sites: tuple[InputBoundaryTensorSite, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -769,7 +1199,7 @@ class SparseRunDescriptor:
 
     capability: Literal["sparse_recorded_taken_path_v2"]
     backend: str
-    call_recipe: Literal["non_tensor_args_tensor_slots_and_context_v2"]
+    call_recipe: Literal["non_tensor_args_tensor_slots_context_and_obligations_v3"]
     callable_ref_schema: Literal[1]
     state_binding: Literal["module_path_role_v1"]
     input_binding: Literal["model_site_io_role_v1"]
@@ -779,7 +1209,9 @@ class SparseRunDescriptor:
     callable_registry: tuple[CallableRegistryEntry, ...]
     calls: tuple[RunnableCallDescriptor, ...]
     tensor_slots: tuple[TensorSlotDescriptor, ...]
+    input_boundary: tuple[InputBoundarySite, ...]
     control_witnesses: tuple[ControlWitness, ...]
+    coverage_gaps: tuple[WitnessCoverageGap, ...]
     required_witness_inventory: RequiredWitnessInventory
     witness_completeness: WitnessCompleteness
     rng_profile: RunnableRngProfile
@@ -787,6 +1219,150 @@ class SparseRunDescriptor:
     compatibility: RunnableCompatibility
     preflight: ProducerPreflight
     unsupported_sites: tuple[RunnableDiagnostic, ...]
+
+
+def is_mode_sensitive_qualname(qualname: str | None) -> bool:
+    """Return whether a qualname is a train/eval mode-sensitive op (BatchNorm family).
+
+    BatchNorm / InstanceNorm produce numerically different results in eval (running
+    statistics) vs train (batch statistics) mode. Single-sourced here (r71 A) so the
+    parse-time ``module_training_mode`` domain derivation and the runtime
+    ``_mode_sensitive_op_unwitnessed`` belt can never disagree. Dropout is intentionally
+    excluded: its train arm is already RNG-tainted (``not_applicable``) and its eval arm
+    is identity, so it never creates a mode-driven false VERIFIED.
+    """
+
+    if not qualname:
+        return False
+    tail = qualname.rsplit(".", 1)[-1]
+    if tail.endswith("_"):
+        tail = tail[:-1]
+    return "batch_norm" in tail or tail.endswith("instance_norm")
+
+
+@dataclass(frozen=True, slots=True)
+class ReplayWitnessStructure:
+    """The frozen WITNESS-FREE replay-structure view (r71 A2).
+
+    Built ONLY from replay-essential structures -- calls, tensor slots, the required
+    input-boundary record, and the callable registry (plus, when the container source
+    is available, the container-record snapshot identities). By construction it cannot
+    contain or expose ``control_witnesses``, ``coverage_gaps``,
+    ``required_witness_inventory``, or ``witness_completeness``: the typed input makes
+    accidental self-referential coverage derivation impossible (r70 free-F1 root).
+
+    ``container_members`` is ``None`` when the container source (the rehydrated
+    ``Trace._containers`` records) is not in scope -- the pure-parse stage; the
+    container family's independent anchor is then enforced at readiness attach, where
+    the loaded trace is available. Producer-side it is always populated.
+    """
+
+    calls: tuple[RunnableCallDescriptor, ...]
+    tensor_slots: tuple[TensorSlotDescriptor, ...]
+    input_boundary: tuple[InputBoundarySite, ...]
+    callable_registry: tuple[CallableRegistryEntry, ...]
+    container_members: tuple[str, ...] | None
+
+    @classmethod
+    def from_descriptor(
+        cls,
+        descriptor: "SparseRunDescriptor",
+        *,
+        container_members: "tuple[str, ...] | None" = None,
+    ) -> "ReplayWitnessStructure":
+        """Project a descriptor onto its witness-free replay structure."""
+
+        return cls(
+            calls=descriptor.calls,
+            tensor_slots=descriptor.tensor_slots,
+            input_boundary=descriptor.input_boundary,
+            callable_registry=descriptor.callable_registry,
+            container_members=container_members,
+        )
+
+
+def derive_required_witness_members(
+    structure: ReplayWitnessStructure,
+) -> "dict[str, list[str]]":
+    """Derive every family's REQUIRED member identities from replay structure (r71 A2).
+
+    THE independent required-coverage authority: iterates the closed
+    :data:`WITNESS_FAMILY_REGISTRY` anchors over the witness-free
+    :class:`ReplayWitnessStructure` only. The producer authors witnesses, gaps, and
+    the inventory mirror FROM this output (structure before witnesses); the parser
+    independently rebuilds the structure, re-derives, and requires exact discharge.
+    Deleting or replacing the witness stream, the inventory, or the persisted summary
+    cannot change this output (the r71 independence meta-test).
+
+    Per-family anchor sources (the merged r71 anchor table):
+
+    * ``scalar_bool`` / ``loop_predicate`` -- ``CallControlObligation`` owner records.
+    * ``conditional_arm_entry`` -- ``ControlDependencyEdge`` owner records on the
+      child call.
+    * ``tensor_derived_scalar_literal`` -- ``TensorSlotDescriptor.host_escape``.
+    * ``inert_sink`` -- ``TensorSlotDescriptor.inert_sink`` (claim only).
+    * ``input_structure`` -- the required input-boundary site records.
+    * ``model_input_literal`` -- none here (independent bidirectional ceiling).
+    * ``model_input_metadata`` -- the totalized envelope domain: one member per
+      input-boundary tensor site.
+    * ``module_training_mode`` -- mode-sensitive calls derived from the callable
+      registry / call DAG (a REQUIRED-minimum: honest artifacts may declare the mode
+      without any mode-sensitive op).
+    * ``state_metadata`` -- the declared state-name universe x the closed two-fact
+      vocabulary (totalized, E1).
+    * ``unbound_state_escape`` / ``unbound_state_inert`` --
+      ``StateSlotBinding.host_escape_disposition`` claims.
+    * ``container`` -- the container-record snapshot identities when in scope.
+    """
+
+    members: dict[str, list[str]] = {family: [] for family in WITNESS_FAMILY_REGISTRY}
+    for call in structure.calls:
+        for obligation in call.control_obligations:
+            family = (
+                "loop_predicate"
+                if obligation.kind is ControlWitnessKind.LOOP_PREDICATE
+                else "scalar_bool"
+            )
+            members[family].append(f"{call.call_id}::{obligation.site_label}")
+        for edge in call.control_dependencies:
+            members["conditional_arm_entry"].append(control_dependency_site_label(edge))
+    state_names: dict[str, None] = {}
+    for slot in structure.tensor_slots:
+        if slot.host_escape:
+            members["tensor_derived_scalar_literal"].append(slot.slot_id)
+        if slot.inert_sink:
+            members["inert_sink"].append(slot.slot_id)
+        binding = slot.state_binding
+        if binding is not None:
+            state_names.setdefault(binding.state_dict_name, None)
+            if binding.host_escape_disposition == "escaped":
+                members["unbound_state_escape"].append(f"{binding.state_dict_name}::{slot.slot_id}")
+            elif binding.host_escape_disposition == "inert":
+                members["unbound_state_inert"].append(f"{binding.state_dict_name}::{slot.slot_id}")
+    metadata_prefix = WITNESS_FAMILY_REGISTRY["model_input_metadata"].site_prefix
+    for site in structure.input_boundary:
+        members["input_structure"].append(site.position)
+        position = decode_input_site_position(site.position)
+        for tensor_site in site.tensor_sites:
+            members["model_input_metadata"].append(
+                f"{metadata_prefix}{position!r}:{list(tensor_site.container_path)!r}"
+            )
+    registry_by_id = {entry.registry_id: entry for entry in structure.callable_registry}
+    mode_sensitive = False
+    for call in structure.calls:
+        entry = registry_by_id.get(call.registry_id)
+        if entry is not None and is_mode_sensitive_qualname(entry.key.qualname):
+            mode_sensitive = True
+            break
+    if mode_sensitive:
+        mode_prefix = WITNESS_FAMILY_REGISTRY["module_training_mode"].site_prefix
+        members["module_training_mode"].append(str(mode_prefix))
+    for name in state_names:
+        members["state_metadata"].append(f"{name}::grad_fn")
+        members["state_metadata"].append(f"{name}::requires_grad")
+    if structure.container_members is not None:
+        members["container"].extend(structure.container_members)
+    return members
 
 
 @dataclass(frozen=True, slots=True)
@@ -988,13 +1564,30 @@ __all__ = [
     "RUNNABLE_CALL_RECIPE_VERSION",
     "RUNNABLE_INITIALIZER_POLICY_VERSION",
     "RUNNABLE_TLSPEC_SCHEMA_VERSION",
+    "CallControlObligation",
     "CallExecutionContext",
     "CallableRegistryEntry",
     "InputAttestationFingerprint",
+    "InputBoundarySite",
+    "InputBoundaryTensorSite",
     "ContractCheck",
+    "ControlDependencyEdge",
     "ControlWitness",
     "ControlWitnessKind",
     "DivergencePolicy",
+    "FamilySpec",
+    "GapSpec",
+    "ReplayWitnessStructure",
+    "VERDICT_STEERING_WITNESS_FAMILIES",
+    "WITNESS_FAMILY_REGISTRY",
+    "WITNESS_FAMILY_REGISTRY_VERSION",
+    "WITNESS_GAP_REGISTRY",
+    "WitnessCoverageGap",
+    "WitnessGapKind",
+    "control_dependency_site_label",
+    "derive_required_witness_members",
+    "derived_witness_completeness",
+    "is_mode_sensitive_qualname",
     "InitializerPolicy",
     "InputSlotBinding",
     "LiteralArgumentRef",

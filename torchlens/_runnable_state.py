@@ -336,6 +336,7 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
         "output_nr_is_zero": None,
         "grad_is_none": None,
         "storage_nbytes_is_tight": None,
+        "requires_grad": None,
     }
     cls = type(value)
     if cls is torch.nn.Parameter:
@@ -413,6 +414,13 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
         pass
     try:
         signature["is_leaf"] = bool(value.is_leaf)
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
+    try:
+        # r71 E1: the capture-time autograd trainable bit, stamped PRE-CLONE from the
+        # LIVE tensor -- the source of the TOTALIZED declared ``requires_grad`` fact
+        # (state_dict transport detaches, so only this pre-clone read is capture truth).
+        signature["requires_grad"] = bool(value.requires_grad)
     except (RuntimeError, TypeError, AttributeError, NotImplementedError):
         pass
     try:

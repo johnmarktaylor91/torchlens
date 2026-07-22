@@ -685,12 +685,16 @@ def test_r65_requires_grad_read_is_declared_fact_never_refusal(tmp_path: Path) -
 
 
 def test_r65_unread_bit_records_no_fact(tmp_path: Path) -> None:
-    """A model that never reads state autograd metadata emits ZERO fact witnesses.
+    """No-read models record ZERO read facts; emission is TOTALIZED per name (r71 E1).
 
-    The read-gated pin (and the internal-read-marker meta-pin): TorchLens's own per-op
-    bookkeeping ``requires_grad``/``grad_fn``/``_version`` reads on state receivers are
-    marked internal at their source, so the fact route stays sparse -- no witness bloat,
-    zero artifact growth for the oblivious population.
+    The internal-read-marker meta-pin survives r71: TorchLens's own per-op
+    bookkeeping ``requires_grad``/``grad_fn``/``_version`` reads on state receivers
+    are marked internal at their source, so the READ-fact tables stay empty for the
+    oblivious population. r71 totalizes EMISSION over the declared state-name
+    universe (presence is the anchor now): every declared name owns exactly one
+    ``state_metadata`` witness carrying its capture-time ``requires_grad`` truth and
+    ``grad_fn=False`` -- the parse-time domain totality that closes the r70
+    matched-pair strip (hon1-F2).
     """
 
     class Plain(nn.Module):
@@ -708,11 +712,17 @@ def test_r65_unread_bit_records_no_fact(tmp_path: Path) -> None:
     assert host_escape_state_metadata_reads(trace) == {}
     loaded = tl.load(_save(trace, tmp_path / "plain.tlspec"))
     descriptor = loaded.__dict__["_runnable_descriptor"]
-    assert not [
-        witness
-        for witness in descriptor.control_witnesses
-        if witness.site_label.startswith("state_metadata:")
-    ]
+    facts = recorded_state_metadata_facts(descriptor)
+    declared_names = {
+        binding.state_dict_name
+        for slot in descriptor.tensor_slots
+        if (binding := slot.state_binding) is not None
+    }
+    assert set(facts) == declared_names
+    assert facts["lin.weight"] == {"grad_fn": False, "requires_grad": True}
+    assert facts["b"] == {"grad_fn": False, "requires_grad": False}
+    assert facts["bn.running_mean"]["requires_grad"] is False
+    assert all(name_facts["grad_fn"] is False for name_facts in facts.values())
 
 
 def test_r65_grad_fn_present_state_read_refuses(tmp_path: Path) -> None:
@@ -1169,8 +1179,9 @@ def test_r69_forged_extra_state_fact_refuses(tmp_path: Path) -> None:
 def test_r69_read_gated_emission_and_locked_staging_semantics_unchanged(
     tmp_path: Path,
 ) -> None:
-    """No-read models emit no state facts + an EXPLICIT empty inventory set; the
-    locked r65 F-1 application semantics (recorded requires_grad wins) still hold."""
+    """r71 E1: emission is TOTALIZED (one member pair per declared name, explicit --
+    never absence-means-default); the locked r65 F-1 application semantics (recorded
+    requires_grad wins, capture truth staged) still hold."""
 
     class _NoRead(nn.Module):
         def __init__(self) -> None:
@@ -1195,8 +1206,16 @@ def test_r69_read_gated_emission_and_locked_staging_semantics_unchanged(
         for row in descriptor.required_witness_inventory.families
         if row.family == "state_metadata"
     )
-    assert row.members == ()  # explicit empty set, never absence-means-default
-    assert recorded_state_metadata_facts(descriptor) == {}
+    # Totalized domain: exact (name, fact) identity per declared name x both facts.
+    assert row.members == (
+        "lin.bias::grad_fn",
+        "lin.bias::requires_grad",
+        "lin.weight::grad_fn",
+        "lin.weight::requires_grad",
+    )
+    facts = recorded_state_metadata_facts(descriptor)
+    assert facts["lin.weight"] == {"grad_fn": False, "requires_grad": True}
+    assert facts["lin.bias"] == {"grad_fn": False, "requires_grad": True}
     # Locked F-1: a read-gated capture still stages the recorded bit.
     read_path = _r69_save(tmp_path, "readgated.tlspec")
     loaded = tl.load(read_path)
