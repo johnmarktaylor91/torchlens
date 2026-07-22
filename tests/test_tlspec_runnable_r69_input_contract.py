@@ -576,3 +576,82 @@ def test_r69_snapshot_key_tokens_paths_and_lookup_share_the_authority() -> None:
         assert component in root["keys"]
         # Every persisted component resolves through canonical-token lookup.
         _value_at_path(value, tuple(node["path"][:1]))
+
+
+# ======================================================================================
+# Cross-cutting r69 belt: NO untyped error on ANY input-boundary runnable save
+# ======================================================================================
+
+
+class _BeltStrSub(str):
+    pass
+
+
+_BELT_LEAVES: dict[str, Any] = {
+    "str": "fast",
+    "bytes": b"fast",
+    "str_subclass": _BeltStrSub("fast"),
+    "complex": 1 + 2j,
+    "decimal": Decimal("1.5"),
+    "enum": _PlainEnum.A,
+    "np_scalar": np.float64(2.0),
+    "object": object(),
+}
+
+_BELT_POSITIONS = ("top_level", "mapping_value", "dataclass_field", "tuple_element")
+
+
+@pytest.mark.parametrize("position", _BELT_POSITIONS)
+@pytest.mark.parametrize("leaf_name", sorted(_BELT_LEAVES))
+def test_r69_no_untyped_error_input_boundary_save_sweep(
+    leaf_name: str, position: str, tmp_path: Path
+) -> None:
+    """Every runnable-save cell either SUCCEEDS or refuses through a typed
+    ``RunnableErrorCode`` disposition -- a bare AssertionError or untyped
+    ``TorchLensIOError`` anywhere in the matrix is a failure (the belt that
+    catches the NEXT DROP-order-shaped bug regardless of which leaf trips it).
+    """
+
+    from torchlens._io import TorchLensIOError
+
+    leaf = _BELT_LEAVES[leaf_name]
+    x = torch.randn(3)
+    model: nn.Module = _DictArg()
+    if position == "top_level":
+        capture_inputs: Any = [x, leaf]
+    elif position == "mapping_value":
+        capture_inputs = [x, {"flag": leaf}]
+    elif position == "dataclass_field":
+        capture_inputs = _FlagBox(x, leaf)
+        model = _BoxArg()
+    else:
+        capture_inputs = [x, (leaf,)]
+
+    try:
+        trace = _trace(model, capture_inputs)
+    except Exception:
+        # Pre-save CAPTURE-lane interception (e.g. the pre-existing top-level
+        # str-family tokenizer coercion in _input_coerce) -- outside the runnable
+        # SAVE belt's contract.
+        pytest.skip(f"capture-lane interception for {leaf_name}@{position}")
+
+    try:
+        _save(trace, tmp_path / f"belt_{leaf_name}_{position}.tlspec")
+    except RunnablePreflightError as exc:
+        # Typed refusal: carries structured RunnableErrorCode diagnostics.
+        assert exc.fields.get("diagnostics"), (leaf_name, position)
+    except TorchLensIOError as exc:
+        cause_chain = []
+        cause = exc.__cause__
+        while cause is not None:
+            cause_chain.append(type(cause).__name__)
+            cause = cause.__cause__
+        raise AssertionError(
+            f"untyped IO failure for {leaf_name}@{position}: {exc} (causes {cause_chain})"
+        ) from exc
+    except AssertionError:
+        raise
+    except Exception as exc:  # noqa: BLE001 -- the belt's whole point
+        raise AssertionError(
+            f"untyped {type(exc).__name__} for {leaf_name}@{position}: {exc}"
+        ) from exc
