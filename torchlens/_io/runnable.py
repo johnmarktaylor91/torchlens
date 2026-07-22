@@ -3463,13 +3463,30 @@ _INPUT_METADATA_FACT_NAMES = frozenset(
         "_grad",
         "_version",
         "output_nr",
+        "derived_layout_read",
     }
 )
 """Metadata predicates the capture-time observer records for model-input receivers (r27-H2,
 extended r29-C1 with ``storage_offset`` / ``grad_fn`` / ``is_leaf`` / ``storage_nbytes``; r31
 adds the capability-driven surface ``retains_grad`` / ``_base`` / ``_is_view`` / ``is_conj`` /
 ``is_neg`` / ``is_inference`` / ``is_pinned`` / ``is_shared`` / ``is_coalesced``; r33 adds
-``grad`` / ``_grad`` presence + ``_version`` / ``output_nr`` int facts)."""
+``grad`` / ``_grad`` presence + ``_version`` / ``output_nr`` int facts; r73 adds the synthetic
+``derived_layout_read`` fact -- a layout-trio read on an activation whose value DAG roots at
+this input site, carrying the leaf's capture-time stride tuple; the executor consumes it as a
+run-time UNVERIFIABLE ceiling on a layout-changed input, never a DIVERGED compare -- see
+``torchlens.backends.torch.completeness_witness.INPUT_DERIVED_LAYOUT_FACT_NAME``)."""
+
+_INPUT_METADATA_SYNTHETIC_FACT_NAMES = frozenset({"derived_layout_read"})
+"""The SYNTHETIC (non-accessor) subset of :data:`_INPUT_METADATA_FACT_NAMES` (r73).
+
+Every other fact name IS a wrappable tensor accessor and therefore owes the r65 Cluster-X
+state-mirror a per-accessor disposition (the T-X1 parity tripwire). A synthetic fact is
+ancestry-ATTRIBUTED, not accessor-dispatched: the reads that produce ``derived_layout_read``
+are the layout trio, whose state dispositions the mirror already carries, and its STATE-rooted
+twin (``(self.w * 2).is_contiguous()``) is deliberately unwitnessed -- contract residual (3),
+state strides being canonicalized at save. The parity test subtracts exactly this named set,
+so adding a future synthetic fact still REDs the test until the state-side decision is made
+explicit here."""
 
 
 def _input_metadata_witnesses(

@@ -126,7 +126,15 @@ def test_r65_mirror_keys_equal_input_constant_union_and_fact_vocabulary() -> Non
         | {"storage_nbytes"}
     )
     assert set(STATE_METADATA_MIRROR) == input_union
-    assert input_union == io_runnable._INPUT_METADATA_FACT_NAMES
+    # r73: the io fact vocabulary additionally carries the SYNTHETIC (non-accessor)
+    # ``derived_layout_read`` fact -- ancestry-attributed, never accessor-dispatched, so it
+    # owes no state-mirror row (its state-rooted twin is contract residual (3), deliberately
+    # unwitnessed). The subtraction uses the NAMED constant so a future synthetic fact still
+    # REDs this test until its state-side decision is made explicit there.
+    assert io_runnable._INPUT_METADATA_SYNTHETIC_FACT_NAMES == {"derived_layout_read"}
+    assert input_union == (
+        io_runnable._INPUT_METADATA_FACT_NAMES - io_runnable._INPUT_METADATA_SYNTHETIC_FACT_NAMES
+    )
     assert len(input_union) == 20
 
 

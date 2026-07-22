@@ -313,7 +313,17 @@ structure, re-derives, and requires exact discharge.
 * `model_input_metadata` -- **totalized PRESENCE**: the producer ALWAYS emits exactly one
   envelope per tensor MODEL_INPUT site (explicit empty read set); read-gated COMPARISON
   semantics unchanged; the envelope's fact-name set must equal the boundary record's declared
-  `metadata_reads`.
+  `metadata_reads`. r73 adds the synthetic `derived_layout_read` fact to the envelope
+  vocabulary: a layout-trio read (`is_contiguous`/`stride`/`storage_offset`) on a
+  fresh-storage ACTIVATION whose value DAG roots at the owning input (attributed by traced
+  `input_ancestors`, so state-rooted intermediates never carry it) records the rooting leaf's
+  capture-time stride tuple. Its consumer is `_input_derived_layout_stale`, a RUN-TIME
+  UNVERIFIABLE ceiling on any runtime-vs-capture leaf-stride difference -- never a DIVERGED
+  compare in `_input_metadata_contract_checks` (a changed input layout does not PROVE the
+  derived read flipped), and never triggered by a same-stride input (honest
+  channels_last-on-channels_last runs stay `verified`). Strip coherence is inherited from the
+  envelope: deleting the envelope breaks totality, deleting only the fact breaks the
+  envelope/`metadata_reads` fact-name equality.
 * `state_metadata` -- **totalized BOTH facts** over the declared state-name universe:
   `captured_requires_grad` (staging applies it -- capture truth wins, the LOCKED r65 F-1
   ruling) and `grad_fn` presence (True refuses at save AND parse). The staging belt is pointed
@@ -2237,11 +2247,19 @@ accessor witnesses) ceilings at `unverifiable` through the existing incomplete-e
 machinery -- honest, never a false `verified`. (3) a metadata read on an ACTIVATION whose
 physical layout PROPAGATED from non-canonical state (e.g. `(self.w * 2).is_contiguous()`
 under a channels-last `w`) is not attributed to the state slot -- value origins are not
-layout origins, and taint-attributing them would refuse honest channels-last models -- and is
-a documented residual of the escape gate; the state twin of the input net's leaf-only rule
+layout origins for STATE (state strides are canonicalized at save, so no runtime comparison
+basis survives), and taint-attributing them would refuse honest channels-last models -- and
+is a documented residual of the escape gate; the state twin of the input net's leaf-only rule
 puts alias/view reads of the AUTOGRAD family (`self.w.data.requires_grad`,
 `self.w.t().is_leaf`) in the same residual class, for the same framework-contamination and
-non-invariance reasons. (4) object-identity aliasing of a non-canonical state slot through an
+non-invariance reasons. This residual is now STATE-side only: the INPUT-side twin (a layout
+read on an activation rooted at a MODEL INPUT, `(x * 2).is_contiguous(...)` -- the r72 hon1
+F1 false `verified`) is CLOSED as of r73, because the input's layout -- unlike canonicalized
+state -- is supplied fresh at run time and IS comparable: the read is attributed by traced
+value ancestry (`OpEvent.input_ancestors`) as a `derived_layout_read` fact on the rooting
+input site(s), and a runtime input whose strides differ from capture ceilings the run
+`unverifiable` (see the `model_input_metadata` family entry). The direct-leaf spelling keeps
+its stricter r27/r31 witnessed-fact semantics (`diverged`). (4) object-identity aliasing of a non-canonical state slot through an
 aliasing-polymorphic op, tested via pure Python identity (`y = self.w.contiguous(); y is
 self.w`), is a documented residual (locked r65 ruling): no accessor fires on ANY tensor, so
 the leak is unobservable by any Python-level net, and closing it would require refusing every
