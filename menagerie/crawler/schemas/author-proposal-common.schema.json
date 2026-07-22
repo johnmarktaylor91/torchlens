@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/author-proposal-common.schema.json",
+  "title": "Menagerie crawler version-neutral author proposal definitions",
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "nullable_hash": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "nonempty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nullable_string": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "string_array": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "author": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "model",
+        "version",
+        "prompt_sha256"
+      ],
+      "properties": {
+        "provider": {
+          "const": "anthropic",
+          "description": "Best-effort provider associated with the event."
+        },
+        "model": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory model."
+        },
+        "version": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory version."
+        },
+        "prompt_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory prompt sha256."
+        }
+      }
+    },
+    "verified_hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_manifest",
+        "evidence",
+        "code",
+        "source_to_code_map",
+        "family_template"
+      ],
+      "properties": {
+        "source_manifest": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory source manifest."
+        },
+        "evidence": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory literal evidence and coverage record."
+        },
+        "code": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory closed status code."
+        },
+        "code_manifest": {
+          "$ref": "#/$defs/hash",
+          "description": "Closed recursive model-code path-and-byte manifest digest."
+        },
+        "source_to_code_map": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory source to code map."
+        },
+        "family_template": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory family template."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/hash",
+                "description": "Typed implementation entry-point digest."
+              }
+            },
+            "required": [
+              "code"
+            ]
+          },
+          "then": {
+            "required": [
+              "code_manifest"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "code_manifest"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_name",
+        "aliases",
+        "acronym",
+        "variant",
+        "variant_scope",
+        "family_representative_id",
+        "duplicate_of",
+        "alias_of"
+      ],
+      "properties": {
+        "canonical_name": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory canonical name."
+        },
+        "aliases": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory aliases."
+        },
+        "acronym": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory acronym."
+        },
+        "variant": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory variant."
+        },
+        "variant_scope": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory variant scope."
+        },
+        "family_representative_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory family representative id."
+        },
+        "duplicate_of": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory duplicate of."
+        },
+        "alias_of": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory alias of."
+        }
+      }
+    },
+    "taxonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "domains",
+        "tasks",
+        "modalities",
+        "era",
+        "architecture_tags",
+        "novel_ops"
+      ],
+      "properties": {
+        "family": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory family."
+        },
+        "domains": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory domains."
+        },
+        "tasks": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory tasks."
+        },
+        "modalities": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory modalities."
+        },
+        "era": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory era."
+        },
+        "architecture_tags": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory architecture tags."
+        },
+        "novel_ops": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory novel ops."
+        }
+      }
+    }
+  }
+}
