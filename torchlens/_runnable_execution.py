@@ -1245,6 +1245,18 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
 
     from torchlens._input_walk import classify_scalar
 
+    # r71 B: a ``slice`` is a COMPOSITE literal leaf. ``slice.__eq__`` compares
+    # component VALUES only, so ``slice(5) == slice(MyIntEnum.FAST)`` is True and a
+    # type-steered branch would falsely VERIFY. Compare component-by-component through
+    # the SAME scalar type/value rules (never ``slice.__eq__`` as authority).
+    if isinstance(recorded, slice) or isinstance(runtime, slice):
+        if not (isinstance(recorded, slice) and isinstance(runtime, slice)):
+            return False
+        return all(
+            _literal_leaf_equal(getattr(recorded, field), getattr(runtime, field))
+            for field in ("start", "stop", "step")
+        )
+
     recorded_kind, recorded_norm = classify_scalar(recorded)
     runtime_kind, runtime_norm = classify_scalar(runtime)
     # r69 B: a semantic-typed scalar (enum member, builtin/np-scalar subclass) never

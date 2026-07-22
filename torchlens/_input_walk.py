@@ -64,6 +64,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 __all__ = [
+    "COMPOSITE_LITERAL_COMPONENT_POLICY",
     "INPUT_CONTAINER_KINDS",
     "InstanceStateInspection",
     "classify_input_container",
@@ -71,6 +72,7 @@ __all__ = [
     "inspect_instance_state",
     "instance_state_names",
     "raw_mapping_key_component",
+    "slice_semantic_component",
     "tagged_mapping_key_component",
     "walk_input_boundary",
 ]
@@ -378,6 +380,44 @@ def classify_scalar(value: Any) -> "tuple[str, Any]":
         # A non-stock np.generic subclass is user semantics, never a wrapper.
         return ("semantic", None)
     return ("opaque", None)
+
+
+COMPOSITE_LITERAL_COMPONENT_POLICY: "Mapping[str, tuple[str, ...]]" = {
+    # r71 B: the ONE shared composite-literal component policy table. Each recursive
+    # ``NonTensorLiteral`` composite node kind lists the classifier-backed lane every
+    # sub-component MUST route through, so a semantic-typed scalar can never launder
+    # through ANY composite edge (secA-F1: slice components were the ungated seam).
+    # This table is BOTH implementation authority and the future-kind meta-test: a
+    # new composite ``NonTensorLiteral`` without a declared policy REDs
+    # ``test_r71b_composite_component_policy_covers_every_edge``.
+    "LiteralSlice": ("classify_scalar",),  # start / stop / step (int|None, no semantic)
+    "LiteralSequence": ("_encode_literal",),  # items recurse through the classifier-first encoder
+    "LiteralMapping": (
+        "encode_mapping_key",
+        "_encode_literal",
+    ),  # keys via codec, values via encoder
+    "LiteralTupleKey": ("encode_mapping_key",),  # recursive tuple-key items via the key codec
+}
+"""Closed policy: every composite ``NonTensorLiteral`` edge -> its classifier lane (r71 B)."""
+
+
+def slice_semantic_component(value: slice) -> str | None:
+    """Return the field name of the first semantic-typed slice component, else ``None``.
+
+    r71 B: applies the ``LiteralSlice`` component policy (``classify_scalar`` first) to
+    a runtime/capture ``slice`` leaf. A component classifying ``semantic`` (enum member,
+    builtin/np-scalar subclass) is outside the grammar -- the snapshot preflight and the
+    runtime comparison both refuse/diverge on it, so a plain-int capture and a same-value
+    semantic runtime component can never falsely compare equal through ``slice.__eq__``.
+    """
+
+    for field_name in ("start", "stop", "step"):
+        component = getattr(value, field_name)
+        if component is None:
+            continue
+        if classify_scalar(component)[0] == "semantic":
+            return field_name
+    return None
 
 
 def encode_mapping_key(key: Any) -> "str | int":
@@ -841,6 +881,14 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
         # refusal fires in the runtime snapshot, so an admitted builtin/stock-numpy
         # capture replayed with a same-value semantic type diverges structurally.
         if classify_scalar(item)[0] == "semantic":
+            refusals.append({"path": list(path), "reason": "semantic_scalar_type"})
+        # r71 B: a COMPOSITE literal leaf (a ``slice``) is one opaque snapshot leaf, but
+        # its sub-components carry type identity too (secA-F1). Apply the shared
+        # component policy: a semantic slice component emits the SAME
+        # ``semantic_scalar_type`` refusal at save AND in the symmetric runtime
+        # snapshot, so a plain-slice capture replayed with a same-value semantic
+        # component diverges structurally.
+        if isinstance(item, slice) and slice_semantic_component(item) is not None:
             refusals.append({"path": list(path), "reason": "semantic_scalar_type"})
         nodes.append(node)
 

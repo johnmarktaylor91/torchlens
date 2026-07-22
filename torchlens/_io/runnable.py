@@ -4180,17 +4180,33 @@ def _nonfinite_float_payload(value: float) -> str:
 
 
 def _encode_slice_component(value: Any, field_name: str) -> LiteralAtom:
-    """Encode one ``slice.start``/``.stop``/``.step`` component.
+    """Encode one ``slice.start``/``.stop``/``.step`` component (r71 B: classifier-first).
 
-    A Python ``slice`` component is always ``None`` or an integer (indices with
-    ``__index__`` are normalized to ``int`` by the interpreter before the ``slice``
-    object is constructed), so the encoded shape is restricted to those two atom
-    kinds -- no callables, no arbitrary objects.
+    A ``slice`` object does NOT normalize its components: ``slice(MyIntEnum.FAST).start``
+    retains the semantic type (secA-F1). r71 routes the component through the ONE
+    ``classify_scalar`` lattice BEFORE any ``isinstance`` coercion, so a semantic-typed
+    component (IntEnum member, int subclass, non-stock np scalar) can never launder into
+    a plain ``LiteralAtom(INT)`` -- it refuses typed (``semantic_scalar_type``), mirroring
+    the direct-leaf path. Accepted: ``None``, an EXACT builtin non-bool ``int``, and a
+    ratified stock-numpy wrapper whose ``.item()`` is an exact non-bool ``int``. A
+    ``bool`` (bool is not a slice index) and every non-int type refuse.
     """
+
+    from torchlens._input_walk import classify_scalar
 
     if value is None:
         return LiteralAtom(LiteralAtomKind.NONE, None)
-    if isinstance(value, bool) or not isinstance(value, int):
+    scalar_kind, scalar_payload = classify_scalar(value)
+    if scalar_kind == "semantic":
+        value_type = f"{type(value).__module__}.{type(value).__qualname__}"
+        raise _UnsupportedLiteralError(
+            f"Slice component {field_name!r} of type {value_type} carries semantic type "
+            "identity (enum or scalar subclass) and is outside the frozen non-tensor "
+            "literal grammar (semantic_scalar_type)."
+        )
+    if scalar_kind == "numpy":
+        value = scalar_payload
+    if isinstance(value, bool) or not isinstance(value, int) or type(value) is not int:
         value_type = f"{type(value).__module__}.{type(value).__qualname__}"
         raise _UnsupportedLiteralError(
             f"Slice component {field_name!r} of type {value_type} is outside the frozen "
