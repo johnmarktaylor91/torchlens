@@ -72,6 +72,7 @@ __all__ = [
     "inspect_instance_state",
     "instance_state_names",
     "raw_mapping_key_component",
+    "reserved_input_path_components",
     "slice_semantic_component",
     "tagged_mapping_key_component",
     "walk_input_boundary",
@@ -277,6 +278,29 @@ type-distinct (``hash(True) == hash(1) == hash(1.0)`` would otherwise conflate t
 sets and ordered-key facts).
 """
 
+_RESERVED_NAMESPACE_PREFIX = "\x00"
+"""The reserved input-path component namespace (r71 D).
+
+Every TorchLens-synthesized path sentinel lives under the null-byte prefix
+(``EMPTY_CONTAINER_PATH_MARKER`` / ``BOOL_KEY_PATH_TAG`` / the codec tag). A REAL dict
+key sharing the prefix is escaped by :func:`encode_mapping_key` into the ``r:`` lane so
+it can never collide with a sentinel interpreted before mapping lookup.
+"""
+
+
+def reserved_input_path_components() -> "frozenset[str]":
+    """The closed registry of reserved input-path SENTINELS (r71 D).
+
+    Every string sentinel any runtime consumer interprets POSITIONALLY before a mapping
+    lookup (``_value_at_path``) is enumerated here; the r71 D meta-test asserts each such
+    sentinel is a member AND that ``encode_mapping_key(sentinel) != sentinel`` (a real
+    dict key equal to a sentinel is always escaped, never round-tripped raw).
+    """
+
+    from torchlens._io.runnable import BOOL_KEY_PATH_TAG, EMPTY_CONTAINER_PATH_MARKER
+
+    return frozenset({EMPTY_CONTAINER_PATH_MARKER, BOOL_KEY_PATH_TAG, _KEY_CODEC_TAG})
+
 
 def _stock_numpy_scalar_types() -> "frozenset[type]":
     """Every CONCRETE stock NumPy scalar class, enumerated programmatically (r69 B).
@@ -458,7 +482,16 @@ def encode_mapping_key(key: Any) -> "str | int":
         return key
     if type(key) is str:
         if key.startswith(_KEY_CODEC_TAG):
+            # Legacy ``s:`` lane: a real key colliding with the codec prefix itself.
             return f"{_KEY_CODEC_TAG}s:{key[len(_KEY_CODEC_TAG) :]}"
+        if key.startswith(_RESERVED_NAMESPACE_PREFIX):
+            # r71 D: any OTHER null-byte-prefixed key could collide with a reserved
+            # input-path sentinel (``EMPTY_CONTAINER_PATH_MARKER`` / ``BOOL_KEY_PATH_TAG``
+            # / any future ``\x00`` marker interpreted positionally before mapping
+            # lookup). Escape the WHOLE ``\x00`` namespace into the unambiguous
+            # ``r:<UTF-8 hex>`` lane so a real dict key equal to a marker round-trips
+            # instead of false-DIVERGING on the unchanged input.
+            return f"{_KEY_CODEC_TAG}r:{key.encode('utf-8').hex()}"
         return key
     if key is None:
         return f"{_KEY_CODEC_TAG}n:"
@@ -494,6 +527,9 @@ def decode_mapping_key(component: "str | int") -> Any:
         return payload == "1"
     if tag == "s":
         return _KEY_CODEC_TAG + payload
+    if tag == "r":
+        # r71 D: the reserved-namespace escape (any ``\x00``-prefixed real key).
+        return bytes.fromhex(payload).decode("utf-8")
     if tag == "n":
         return None
     if tag == "f":
