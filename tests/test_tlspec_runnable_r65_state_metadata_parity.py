@@ -40,13 +40,22 @@ import torchlens as tl
 from torchlens._io import runnable as io_runnable
 from torchlens._io import runnable_load
 from torchlens._runnable_state import (
+    _ORACLE_POLICY_CLASSES,
     _STATE_METADATA_BIND_SCOPE,
+    _STATE_METADATA_OBSERVED_PLACEMENT_KINDS,
     _STATE_METADATA_PHYSICAL_SCOPE,
     _STATE_METADATA_READ_REQUIRED_DIMS,
+    ORACLE_POLICY_DECLARED_REPRODUCED,
+    ORACLE_POLICY_ORACLE_CANONICAL,
+    ORACLE_POLICY_REFUSE_ON_ANY_READ,
+    ORACLE_POLICY_STRUCTURALLY_COVERED,
+    STATE_METADATA_ORACLE_POLICY,
     _state_metadata_signature,
+    _state_placement_canonical,
     prepare_runnable_state,
     recorded_state_metadata_facts,
     state_metadata_full_violations,
+    state_metadata_read_violations,
 )
 from torchlens.backends.torch.completeness_witness import (
     INPUT_METADATA_BOOL_METHODS,
@@ -133,6 +142,25 @@ def test_r65_every_mirror_row_chains_into_enforcement() -> None:
     signature_keys = set(_state_metadata_signature(torch.zeros(2, 2)))
     for name, (route, detail) in STATE_METADATA_MIRROR.items():
         if route == _STATE_ROUTE_READ_KIND:
+            # r67 C4: every read kind is either an oracle_canonical row that resolves to a
+            # signature dim, or a refuse_on_any_read row (``_version``) that terminates in
+            # the unconditional producer refusal instead of a dim.
+            policy = STATE_METADATA_ORACLE_POLICY.get(detail)
+            if policy == ORACLE_POLICY_REFUSE_ON_ANY_READ:
+                assert detail not in _STATE_METADATA_READ_REQUIRED_DIMS, name
+                assert state_metadata_read_violations(None, [detail]) == [
+                    (detail, "<refuse_on_any_read>", None)
+                ], name
+                continue
+            assert policy == ORACLE_POLICY_ORACLE_CANONICAL, name
+            if detail in _STATE_METADATA_OBSERVED_PLACEMENT_KINDS:
+                # r67 C3: observed-value rows terminate in the observation predicate,
+                # not a signature dim -- a missing/unknown observation refuses.
+                assert detail not in _STATE_METADATA_READ_REQUIRED_DIMS, name
+                assert state_metadata_read_violations(
+                    _state_metadata_signature(torch.zeros(2)), [detail], {}
+                ) == [(detail, "<observed_placement>", None)], name
+                continue
             assert detail in _STATE_METADATA_READ_REQUIRED_DIMS, name
         elif route == _STATE_ROUTE_DECLARED_FACT:
             assert detail in io_runnable._STATE_METADATA_FACT_NAMES, name
@@ -402,7 +430,7 @@ _REFUSE_CASES = (
     ("_base", _view_buffer, "is_view"),
     ("is_leaf", _nonleaf_buffer, "is_leaf"),
     ("retains_grad", _retains_grad_buffer, "retains_grad"),
-    ("_version", _versioned_buffer, "version_is_zero"),
+    ("_version", _versioned_buffer, "refuse_on_any_read"),
     ("storage_nbytes", _big_base_view_buffer, "storage_nbytes_is_tight"),
 )
 
@@ -434,16 +462,41 @@ def test_r65_read_noncanonical_state_refuses_at_save(
         "_base",
         "is_leaf",
         "retains_grad",
-        "_version",
         "storage_nbytes",
     ],
 )
 def test_r65_canonical_state_read_stays_verified(reader: str, tmp_path: Path) -> None:
-    """The same read on a CANONICAL captured slot saves and settles VERIFIED (no over-refusal)."""
+    """The same read on a CANONICAL captured slot saves and settles VERIFIED (no over-refusal).
+
+    ``_version`` is deliberately ABSENT here (r67 C4): it has NO canonical value -- oracle-1's
+    default copy leaves 1 on a plain slot and 2 on an initialized-module slot, never the fresh
+    constructor's 0 -- so a version-0 capture read refuses exactly like a versioned one
+    (pinned by ``test_r67_version_read_refuses_for_both_construction_histories``).
+    """
 
     _assert_verified(
         _BufferReadModel(torch.arange(3.0), reader), torch.randn(3), tmp_path / "canon.tlspec"
     )
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    "builder", [lambda: torch.arange(3.0), _versioned_buffer], ids=["version_zero", "versioned"]
+)
+def test_r67_version_read_refuses_for_both_construction_histories(builder, tmp_path: Path) -> None:
+    """ANY attributed ``_version`` read refuses at save -- version-0 AND mutated captures alike.
+
+    r66 hon1-F3: ``version_is_zero`` described a TorchLens-engineered staging clone, not
+    oracle-1 -- the default ``load_state_dict(strict=True, assign=False)`` copy increments
+    constructor-owned counters (0 -> 1 plain, 1 -> 2 initialized), so a captured
+    ``_version == 0`` branch saved+VERIFIED yet the contract's OWN oracle could never read 0.
+    ``_version`` is now ``refuse_on_any_read``: no construction history makes the read
+    reproducible.
+    """
+
+    trace = _trace(_BufferReadModel(builder(), "_version"), torch.randn(3))
+    assert "_version" in host_escape_state_metadata_reads(trace).get("b", frozenset())
+    _assert_refuses(trace, tmp_path / "version.tlspec", "b", "refuse_on_any_read")
 
 
 @pytest.mark.parametrize(
@@ -777,3 +830,220 @@ def test_r65_contiguous_identity_alias_is_documented_residual(tmp_path: Path) ->
     trace = _trace(IdentityAlias(), x)
     assert host_escape_state_metadata_reads(trace) == {}
     _save(trace, tmp_path / "residual.tlspec")
+
+
+# ======================================================================================
+# r67 C4 -- THE shared Oracle-1 post-copy parity matrix + the closed oracle-policy table
+# ======================================================================================
+#
+# hon1-F3 root cause: ``version_is_zero`` described a TorchLens-ENGINEERED staging clone,
+# not Oracle 1 -- the locked doctrine's fresh instance + default
+# ``load_state_dict(strict=True, assign=False)`` copy. Default copy increments
+# constructor-owned counters (0 -> 1 plain slots, 1 -> 2 initialized modules), so a
+# version-0 canonical could save+VERIFY a branch the contract's OWN oracle can never take.
+# The structural fix: every read-gated canonical dim must equal what ORACLE-1 actually
+# produces (this matrix), and a dim with no artifact-independent oracle value is
+# ``refuse_on_any_read`` -- no static expected scalar may exist without an oracle probe
+# recipe exercised here.
+
+from torchlens._runnable_state import _staged_state_clone  # noqa: E402
+
+
+class _OracleProbeModule(nn.Module):
+    """Fresh-instance oracle destination carrying every probe slot family.
+
+    Plain zero-version parameter, initialized Linear/BatchNorm slots (constructor version
+    1), a tied/alias parameter pair, a persistent buffer, and a non-persistent buffer.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.plain = nn.Parameter(torch.zeros(2, 3))
+        self.lin = nn.Linear(3, 3)
+        self.bn = nn.BatchNorm1d(3)
+        self.tied_a = nn.Parameter(torch.zeros(3))
+        self.tied_b = self.tied_a  # tied/alias group: one allocation, two canonical names
+        self.register_buffer("persistent_buf", torch.zeros(3))
+        self.register_buffer("nonpersistent_buf", torch.zeros(3), persistent=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover - probe only
+        return x
+
+
+def _device_available(device: str) -> bool:
+    if device == "cpu":
+        return True
+    if device == "cuda":
+        return torch.cuda.is_available()
+    if device == "mps":
+        return bool(getattr(torch.backends, "mps", None)) and torch.backends.mps.is_available()
+    if device == "xpu":
+        xpu = getattr(torch, "xpu", None)
+        return (
+            xpu is not None and callable(getattr(xpu, "is_available", None)) and xpu.is_available()
+        )
+    return False
+
+
+def _probe_source_states(device: str) -> dict[str, dict[str, torch.Tensor]]:
+    """Probe state variants: canonical, larger-base view, mutated-version, shared-memory."""
+
+    base = {
+        name: value.detach().clone().to(device)
+        for name, value in _OracleProbeModule().state_dict().items()
+    }
+    variants: dict[str, dict[str, torch.Tensor]] = {"canonical": dict(base)}
+    larger = dict(base)
+    larger["plain"] = torch.arange(100.0, device=device)[:6].reshape(2, 3)
+    assert larger["plain"].untyped_storage().nbytes() > 6 * larger["plain"].element_size()
+    variants["larger_base_view"] = larger
+    versioned = dict(base)
+    mutated = base["lin.weight"].clone()
+    mutated.add_(1.0)
+    versioned["lin.weight"] = mutated
+    variants["mutated_version"] = versioned
+    if device == "cpu":
+        shared = dict(base)
+        shared_buf = base["persistent_buf"].clone().share_memory_()
+        assert shared_buf.is_shared()
+        shared["persistent_buf"] = shared_buf
+        variants["shared_memory"] = shared
+    return variants
+
+
+@pytest.mark.smoke
+def test_r67_oracle_policy_table_is_closed_and_total() -> None:
+    """Every state-metadata row carries exactly one policy from the closed 4-class vocabulary.
+
+    ``oracle_canonical`` rows resolve to a signature dim through the required-dims table;
+    ``refuse_on_any_read`` rows (``_version``) deliberately do NOT -- there is no dim to
+    compare, only the unconditional producer refusal.
+    """
+
+    assert set(STATE_METADATA_ORACLE_POLICY.values()) <= _ORACLE_POLICY_CLASSES
+    expected_keys = set()
+    for name, (route, detail) in STATE_METADATA_MIRROR.items():
+        expected_keys.add(name if route == _STATE_ROUTE_STRUCTURAL else detail)
+    assert set(STATE_METADATA_ORACLE_POLICY) == expected_keys
+    for kind, policy in STATE_METADATA_ORACLE_POLICY.items():
+        if policy == ORACLE_POLICY_ORACLE_CANONICAL:
+            # An oracle_canonical row terminates in EXACTLY one validation mechanism:
+            # a signature dim (pre-clone stamp) or an observed-value placement predicate.
+            assert (kind in _STATE_METADATA_READ_REQUIRED_DIMS) != (
+                kind in _STATE_METADATA_OBSERVED_PLACEMENT_KINDS
+            ), kind
+        else:
+            assert kind not in _STATE_METADATA_READ_REQUIRED_DIMS, kind
+            assert kind not in _STATE_METADATA_OBSERVED_PLACEMENT_KINDS, kind
+    assert STATE_METADATA_ORACLE_POLICY["_version"] == ORACLE_POLICY_REFUSE_ON_ANY_READ
+    assert STATE_METADATA_ORACLE_POLICY["requires_grad"] == ORACLE_POLICY_DECLARED_REPRODUCED
+    assert STATE_METADATA_ORACLE_POLICY["grad_fn"] == ORACLE_POLICY_DECLARED_REPRODUCED
+    assert STATE_METADATA_ORACLE_POLICY["is_coalesced"] == ORACLE_POLICY_STRUCTURALLY_COVERED
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("device", ["cpu", "cuda", "mps", "xpu"])
+def test_r67_oracle1_post_copy_parity_matrix(device: str) -> None:
+    """EVERY read-gated canonical dim equals what oracle-1's default copy actually produces.
+
+    The shared machine-checked matrix: fresh instance + ``load_state_dict(strict=True,
+    assign=False)`` over plain zero-version slots, initialized Linear/BatchNorm slots,
+    tied/alias groups, larger-base views, shared-memory state, and persistent buffers;
+    non-persistent buffers probe their reproduction mechanism (the staging clone). Every
+    ``oracle_canonical`` row must satisfy its predicate on the REAL oracle destination --
+    a static expected scalar with no probe observation here is RED.
+    """
+
+    if not _device_available(device):
+        pytest.skip(f"device {device} unavailable")
+    scope = _STATE_METADATA_BIND_SCOPE + _STATE_METADATA_PHYSICAL_SCOPE
+    scope_dims = {dim for dim, _ in scope}
+    observed_dims: set[str] = set()
+    for variant_name, source_state in _probe_source_states(device).items():
+        oracle = _OracleProbeModule().to(device)
+        oracle.load_state_dict(source_state, strict=True, assign=False)
+        entries = list(oracle.named_parameters(remove_duplicate=False))
+        entries.extend(oracle.named_buffers(remove_duplicate=False))
+        assert any(name == "tied_b" for name, _ in entries)  # alias group is in the walk
+        for name, dest in entries:
+            signature = _state_metadata_signature(dest)
+            for dim, expected in scope:
+                assert signature[dim] == expected, (variant_name, name, dim, signature[dim])
+                observed_dims.add(dim)
+            # r67 C3: the observed-value placement rows -- the REAL accessor reads on the
+            # oracle destination must equal the device-defined predicate the producer
+            # applies to user observations.
+            for kind in sorted(_STATE_METADATA_OBSERVED_PLACEMENT_KINDS):
+                canonical = _state_placement_canonical(kind, signature["device_type"])
+                assert canonical is not None, (variant_name, name, kind)
+                assert bool(getattr(dest, kind)()) == canonical, (variant_name, name, kind)
+                observed_dims.add(kind)
+    # Non-persistent buffers never ride oracle-1's copy; their reproduction mechanism is
+    # the staging clone, which must satisfy the same rows.
+    staged = _staged_state_clone(
+        torch.arange(3.0, device=device), state_dict_name="nonpersistent_buf"
+    )
+    staged_signature = _state_metadata_signature(staged)
+    for dim, expected in scope:
+        assert staged_signature[dim] == expected, ("staged_nonpersistent", dim)
+    for kind in sorted(_STATE_METADATA_OBSERVED_PLACEMENT_KINDS):
+        canonical = _state_placement_canonical(kind, staged_signature["device_type"])
+        assert bool(getattr(staged, kind)()) == canonical, ("staged_nonpersistent", kind)
+    # No canonical dim without an oracle probe observation (the anti-static-scalar pin).
+    assert observed_dims == scope_dims | _STATE_METADATA_OBSERVED_PLACEMENT_KINDS
+    for kind, policy in STATE_METADATA_ORACLE_POLICY.items():
+        if policy == ORACLE_POLICY_ORACLE_CANONICAL:
+            if kind in _STATE_METADATA_OBSERVED_PLACEMENT_KINDS:
+                assert kind in observed_dims
+                continue
+            dim, _expected = _STATE_METADATA_READ_REQUIRED_DIMS[kind]
+            assert dim in observed_dims, kind
+
+
+@pytest.mark.smoke
+def test_r67_version_is_constructor_history_dependent_post_copy() -> None:
+    """Oracle-1 default copy leaves DIFFERENT ``_version`` values per construction history.
+
+    The recorded r66 evidence, machine-checked: a plain zero-version slot lands at 1 and an
+    initialized Linear slot at 2 after the SAME default copy -- no artifact-independent
+    scalar exists, so ``_version`` can only be ``refuse_on_any_read`` (never resurrect
+    ``version_is_zero`` or any other static canonical).
+    """
+
+    oracle = _OracleProbeModule()
+    source = {
+        name: value.detach().clone() for name, value in _OracleProbeModule().state_dict().items()
+    }
+    assert oracle.plain._version == 0  # fresh constructor counter, pre-copy
+    assert oracle.lin.weight._version > 0  # initializer already bumped it
+    oracle.load_state_dict(source, strict=True, assign=False)
+    assert oracle.plain._version > 0  # 0 -> 1: the oracle can never read 0
+    assert oracle.lin.weight._version > oracle.plain._version  # 1 -> 2: history-dependent
+    assert STATE_METADATA_ORACLE_POLICY["_version"] == ORACLE_POLICY_REFUSE_ON_ANY_READ
+
+
+@pytest.mark.smoke
+def test_r67_meta_destination_has_no_oracle_copy() -> None:
+    """Meta-device destinations never receive oracle-1's default copy bytes.
+
+    On current torch the default copy into a meta parameter is a warned NO-OP (older
+    versions raise); either way NO oracle-1 destination value exists on meta, so the matrix
+    honestly excludes meta rather than fabricating a canonical row.
+    """
+
+    with torch.device("meta"):
+        oracle = _OracleProbeModule()
+    source = {
+        name: value.detach().clone() for name, value in _OracleProbeModule().state_dict().items()
+    }
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            oracle.load_state_dict(source, strict=True, assign=False)
+    except (RuntimeError, NotImplementedError):
+        return  # raising torch versions: no destination exists, trivially no canonical
+    entries = list(oracle.named_parameters(remove_duplicate=False))
+    entries.extend(oracle.named_buffers(remove_duplicate=False))
+    assert entries
+    for name, dest in entries:
+        assert dest.is_meta, name  # the copy was a no-op: no oracle value landed

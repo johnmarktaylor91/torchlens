@@ -760,6 +760,8 @@ _ESCAPE_RECIPES: dict[str, _EscapeRecipe] = {
     # observable escape, so each recipe reaches ``data_ptr`` and asserts the flag)
     "untyped_storage": _EscapeRecipe(lambda gf, gi: gf.untyped_storage().data_ptr(), "raw_pointer"),
     "storage": _EscapeRecipe(_storage_data_ptr, "raw_pointer"),
+    # r67 C3: the private typed-storage bridge joined STORAGE_BRIDGE_ESCAPE_FUNCS.
+    "_typed_storage": _EscapeRecipe(lambda gf, gi: gf._typed_storage().data_ptr(), "raw_pointer"),
     "data_ptr": _EscapeRecipe(lambda gf, gi: gf.data_ptr(), "raw_pointer"),
     # HOST_VALUE_ESCAPE_MODULE_FUNCS (module spellings expose no receiver -- the
     # module wrapper is the sole cross-thread observer for them)

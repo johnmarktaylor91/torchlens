@@ -388,6 +388,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_capture_container_structure",
         "_capture_output_structure",
         "_runnable_input_nontensor_leaves",
+        "_runnable_input_structure",
         "_runnable_input_tensor_sites",
         "_runnable_input_metadata_reads",
         "_runnable_output_losslessness",

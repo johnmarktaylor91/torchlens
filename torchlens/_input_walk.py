@@ -72,9 +72,13 @@ __all__ = [
 
 
 INPUT_CONTAINER_KINDS: frozenset[str] = frozenset(
-    {"tensor", "empty", "namedtuple", "dataclass", "mapping", "sequence", "leaf"}
+    {"tensor", "empty", "namedtuple", "dataclass", "mapping", "sequence", "registered", "leaf"}
 )
-"""The CLOSED container-kind vocabulary of the model-input boundary (see module doc)."""
+"""The CLOSED container-kind vocabulary of the model-input boundary (see module doc).
+
+r67 C2 adds ``registered`` (a ``tl.register_container`` type, descended through its own
+``flatten`` with indexed children) and extends ``empty`` to zero-field dataclasses.
+"""
 
 
 def classify_input_container(value: Any) -> str:
@@ -88,9 +92,16 @@ def classify_input_container(value: Any) -> str:
     import torch
 
     from torchlens._io.runnable import empty_container_kind
+    from torchlens.ir.container import get_registered_container
 
     if isinstance(value, torch.Tensor):
         return "tensor"
+    # r67 C2 (corr1-3): a REGISTERED container type is the user's explicit declaration and
+    # wins over the generic kinds -- capture and runtime both descend its ``flatten``
+    # children, so a registered input can never be admitted at save and then fail
+    # traversal at bind (advertise-then-fail).
+    if not isinstance(value, type) and get_registered_container(type(value)) is not None:
+        return "registered"
     if empty_container_kind(value) is not None:
         return "empty"
     if isinstance(value, tuple) and hasattr(value, "_fields"):
@@ -121,17 +132,21 @@ def tagged_mapping_key_component(key: Any) -> Any:
 
 
 def raw_mapping_key_component(key: Any) -> Any:
-    """Metadata-fact-site mapping-key vocabulary (W2): the raw key, every key accepted.
+    """Metadata-fact-site mapping-key vocabulary (W2): the ONE codec, every key accepted.
 
-    See the module docstring (dual mapping-key vocabulary, residual R6) for why W2
-    keeps raw keys this round: fact-site paths are attribution keys, not persisted
-    decodable literals; the bool/int conflation is shielded by the r33
-    ``_type_strict_path`` symmetric belt; and a fact site under a non-representable
-    key fails literal encoding at witness time while the literal walker's OPAQUE leaf
-    independently ceilings the run -- never a false VERIFIED.
+    r67 C2 retires the dual vocabulary (residual R6): W2 components now come from the
+    SAME type-strict codec as the persisted literal paths, so ``{True: x}`` and
+    ``{1: x}`` fact sites stay distinct and every path family speaks one language. A
+    NON-grammar key keeps the raw key object as an in-memory-only attribution component
+    (W2 must accept every key; the literal walker's OPAQUE leaf independently ceilings
+    such a subtree, so a dropped metadata fact under an exotic key can never yield a
+    false VERIFIED).
     """
 
-    return key
+    try:
+        return encode_mapping_key(key)
+    except ValueError:
+        return key
 
 
 def walk_input_boundary(
@@ -187,6 +202,25 @@ def walk_input_boundary(
                 assert empty_kind is not None  # classify_input_container said "empty"
                 on_empty_container(empty_kind, path)
             return
+        if kind == "registered":
+            # r67 C2 (corr1-3): descend the registration's OWN flatten children with
+            # indexed components; a throwing/nonconforming hook routes the node to the
+            # opaque handler (fail closed: witness coverage downgrades / save refuses),
+            # never a silent drop and never an advertise-then-fail at bind.
+            from torchlens.ir.container import get_registered_container
+
+            registration = get_registered_container(type(value))
+            try:
+                children = list(registration.flatten(value)[0]) if registration else None
+            except Exception:
+                children = None
+            if children is None:
+                if on_opaque_key_subtree is not None:
+                    on_opaque_key_subtree(value, path)
+                return
+            for index, child in enumerate(children):
+                _descend(child, (*path, index))
+            return
         if kind == "namedtuple":
             for name in value._fields:
                 _descend(getattr(value, name), (*path, str(name)))
@@ -213,3 +247,259 @@ def walk_input_boundary(
             on_leaf(value, path)
 
     _descend(value, path)
+
+
+# --- r67 C2: the input-boundary SNAPSHOT spine -----------------------------------------------
+#
+# The r66 C2 findings (free-F2/F3, hon1-F1/F2a/F2b/F2c, corr1-3) share one root: the structure
+# witness recorded ROOT kind only, so nested kinds, exact classes, empty-dataclass arity,
+# non-str/int grammar keys, hidden instance state, and registered containers could be lost or
+# treated inconsistently. One traversal per model-input site now produces an immutable
+# per-node record list -- kind, exact (module, qualname) type, declared child schema, ordered
+# type-strict-encoded mapping keys, and an instance-state/losslessness proof -- persisted by
+# the runnable producer and re-derived at bind time by the SAME function, so capture and
+# runtime can never diverge in vocabulary.
+
+_KEY_CODEC_TAG = "\x00tlk:"
+"""Reserved prefix of the canonical type-strict mapping-key codec (r67 C2).
+
+Every non-``str``/``int`` grammar key (bool, float, None, safe tuple) -- and any string key
+that could collide with an encoding -- is encoded into ONE tagged string component, so the
+persisted path/key shape stays ``str | int`` while ``True != 1`` and ``1.0 != 1`` stay
+type-distinct (``hash(True) == hash(1) == hash(1.0)`` would otherwise conflate them in path
+sets and ordered-key facts).
+"""
+
+
+def encode_mapping_key(key: Any) -> "str | int":
+    """Encode one grammar mapping key into the canonical type-strict component (r67 C2).
+
+    ``str`` keys pass through unless they collide with the codec prefix (then escaped);
+    ``int`` keys pass through as ints; ``bool`` / ``float`` / ``None`` / recursively safe
+    tuples encode into tagged strings (floats via ``float.hex`` -- exact round-trip,
+    ``1.0`` distinct from ``1``). A non-grammar key raises ``ValueError`` (the caller
+    refuses or routes the subtree opaque -- never a silent drop).
+    """
+
+    if isinstance(key, bool):
+        return f"{_KEY_CODEC_TAG}b:{'1' if key else '0'}"
+    if isinstance(key, int):
+        return key
+    if isinstance(key, str):
+        if key.startswith(_KEY_CODEC_TAG):
+            return f"{_KEY_CODEC_TAG}s:{key[len(_KEY_CODEC_TAG) :]}"
+        return key
+    if key is None:
+        return f"{_KEY_CODEC_TAG}n:"
+    if isinstance(key, float):
+        return f"{_KEY_CODEC_TAG}f:{key.hex()}"
+    if isinstance(key, tuple):
+        parts = []
+        for item in key:
+            encoded = encode_mapping_key(item)
+            text = f"i:{encoded}" if isinstance(encoded, int) else f"c:{encoded}"
+            parts.append(text.replace("\\", "\\\\").replace("|", "\\|"))
+        return f"{_KEY_CODEC_TAG}t:{'|'.join(parts)}"
+    raise ValueError(f"Mapping key {key!r} is outside the input-boundary key grammar.")
+
+
+def decode_mapping_key(component: "str | int") -> Any:
+    """Decode one canonical component back to its mapping key (mapping nodes only)."""
+
+    if isinstance(component, int) or not component.startswith(_KEY_CODEC_TAG):
+        return component
+    body = component[len(_KEY_CODEC_TAG) :]
+    tag, _, payload = body.partition(":")
+    if tag == "b":
+        return payload == "1"
+    if tag == "s":
+        return _KEY_CODEC_TAG + payload
+    if tag == "n":
+        return None
+    if tag == "f":
+        return float.fromhex(payload)
+    if tag == "t":
+        items = []
+        part = ""
+        escaped = False
+        parts: list[str] = []
+        for ch in payload:
+            if escaped:
+                part += ch
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == "|":
+                parts.append(part)
+                part = ""
+            else:
+                part += ch
+        if part or payload:
+            parts.append(part)
+        for text in parts:
+            kind, _, inner = text.partition(":")
+            items.append(int(inner) if kind == "i" else decode_mapping_key(inner))
+        return tuple(items)
+    raise ValueError(f"Unknown key-codec component {component!r}.")
+
+
+def undeclared_instance_state(value: Any, kind: str) -> bool:
+    """Return whether a container INSTANCE carries state its DECLARED schema drops (r67 C2).
+
+    Scope: kinds with a declared FIELD schema. A dataclass with a non-field ``__dict__``
+    attribute or a namedtuple subclass with instance ``__dict__`` state would silently
+    lose that state on replay reconstruction -- and it can steer control flow the
+    declared schema never witnesses (r66 R1: ``box.mode``). Registered containers prove
+    completeness through their explicit ``state_complete`` declaration instead (checked
+    by the snapshot's registered branch).
+
+    Mapping/sequence SUBCLASSES are deliberately NOT judged here (heavy-gate F7 ruling):
+    their witnessed schema is the protocol view (ordered keys/children) plus the EXACT
+    class identity the snapshot already records and compares, and a custom Mapping
+    legitimately keeps its backing store in ``__dict__`` (``self.data = {...}``) --
+    blanket-refusing it would reject every well-behaved custom Mapping input the
+    incumbent F7 contract admits. A hidden non-protocol attribute steering control flow
+    on such a subclass remains the documented pre-r67 residual (attribute reads are
+    invisible to every Python-level net), never a false structural pass: the class swap
+    itself still diverges through the exact-type node fact.
+    """
+
+    import dataclasses as _dc
+
+    if kind == "dataclass" or (kind == "empty" and _dc.is_dataclass(value)):
+        field_names = {field.name for field in _dc.fields(value)}
+        extra = {
+            name
+            for name, attr_value in getattr(value, "__dict__", {}).items()
+            if name not in field_names and attr_value is not None
+        }
+        return bool(extra)
+    if kind == "namedtuple" or (
+        kind == "empty" and isinstance(value, tuple) and hasattr(value, "_fields")
+    ):
+        extras = getattr(value, "__dict__", None)
+        if not isinstance(extras, dict) or not extras:
+            return False
+        return any(item is not None for item in extras.values())
+    return False
+
+
+def snapshot_input_boundary(value: Any) -> dict[str, Any]:
+    """Build ONE immutable per-node structure snapshot of a model-input site (r67 C2).
+
+    Returns ``{"nodes": [...], "refusals": [...]}`` where every node record carries
+    ``path`` (canonical components), ``kind`` (closed vocabulary + ``registered``),
+    ``type`` (exact ``[module, qualname]``), and the declared child schema (``fields``
+    for namedtuple/dataclass, ordered codec-encoded ``keys`` for mappings, ``size`` for
+    sequences/registered, ``empty_kind`` for empty nodes, ``aux`` for registered
+    containers). Refusals name the path and reason -- opaque keys, undeclared instance
+    state, throwing/nonconforming or state-incomplete registrations -- and the runnable
+    producer refuses the save on any of them (the existing
+    ``missing_input_container_contract``); analysis captures are unaffected.
+    """
+
+    import dataclasses as _dc
+
+    from torchlens._io.runnable import empty_container_kind
+    from torchlens.ir.container import get_registered_container
+
+    nodes: list[dict[str, Any]] = []
+    refusals: list[dict[str, Any]] = []
+
+    def _type_ref(item: Any) -> list[str]:
+        cls = type(item)
+        return [str(cls.__module__), str(cls.__qualname__)]
+
+    def _descend(item: Any, path: tuple[Any, ...]) -> None:
+        kind = classify_input_container(item)
+        # r67 heavy-gate fix: only CONTAINER nodes carry the exact-class witness. A
+        # tensor leaf's identity is the admission gate's domain, and a scalar LEAF
+        # literal's semantics are the literal-witness VALUE contract (numeric equality
+        # across float subclasses: a captured ``np.float64(2.0)`` re-run with plain
+        # ``2.0`` must verify) -- an exact-type fact on leaves would structurally
+        # diverge value-equal inputs the value contract admits.
+        node: dict[str, Any] = {"path": list(path), "kind": kind}
+        if kind not in {"tensor", "leaf"}:
+            node["type"] = _type_ref(item)
+        if kind == "tensor":
+            nodes.append(node)
+            return
+        registration = None
+        if kind not in {"tensor", "leaf"}:
+            registration = get_registered_container(type(item))
+        if registration is not None:
+            node["kind"] = "registered"
+            if not registration.state_complete and getattr(item, "__dict__", None):
+                refusals.append(
+                    {"path": list(path), "reason": "registered_state_not_declared_complete"}
+                )
+            try:
+                children, aux = registration.flatten(item)
+                children = list(children)
+            except Exception:
+                refusals.append({"path": list(path), "reason": "registered_flatten_failed"})
+                nodes.append(node)
+                return
+            try:
+                node["aux"] = _safe_aux(aux)
+            except ValueError:
+                refusals.append({"path": list(path), "reason": "registered_aux_unsafe"})
+                nodes.append(node)
+                return
+            node["size"] = len(children)
+            nodes.append(node)
+            for index, child in enumerate(children):
+                _descend(child, (*path, index))
+            return
+        if undeclared_instance_state(item, kind):
+            refusals.append({"path": list(path), "reason": "undeclared_instance_state"})
+        if kind == "empty":
+            empty_kind = empty_container_kind(item)
+            node["empty_kind"] = str(empty_kind)
+            nodes.append(node)
+            return
+        if kind == "namedtuple":
+            node["fields"] = [str(name) for name in item._fields]
+            nodes.append(node)
+            for name in item._fields:
+                _descend(getattr(item, name), (*path, str(name)))
+            return
+        if kind == "dataclass":
+            node["fields"] = [field.name for field in _dc.fields(item)]
+            nodes.append(node)
+            for field in _dc.fields(item):
+                _descend(getattr(item, field.name), (*path, field.name))
+            return
+        if kind == "mapping":
+            keys: list[Any] = []
+            encodable = True
+            for key in item.keys():
+                try:
+                    keys.append(encode_mapping_key(key))
+                except ValueError:
+                    refusals.append({"path": list(path), "reason": "opaque_mapping_key"})
+                    encodable = False
+                    break
+            node["keys"] = keys if encodable else []
+            nodes.append(node)
+            if encodable:
+                for key, child in item.items():
+                    _descend(child, (*path, encode_mapping_key(key)))
+            return
+        if kind == "sequence":
+            node["size"] = len(item)
+            nodes.append(node)
+            for index, child in enumerate(item):
+                _descend(child, (*path, index))
+            return
+        nodes.append(node)  # literal leaf: value witnessed by the literal walker
+
+    def _safe_aux(aux: Any) -> Any:
+        if aux is None or isinstance(aux, (bool, int, float, str)):
+            return aux
+        if isinstance(aux, (list, tuple)):
+            return [_safe_aux(item) for item in aux]
+        raise ValueError(f"Registered container aux data {type(aux).__name__} is unsafe.")
+
+    _descend(value, ())
+    return {"nodes": nodes, "refusals": refusals}

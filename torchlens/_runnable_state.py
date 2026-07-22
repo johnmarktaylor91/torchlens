@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from hashlib import sha256
 import math
 from types import MappingProxyType
 from typing import Any
+import warnings
 
 import torch
 
 from . import _state
 from .errors import RunCapabilityUnavailableError, StateBindingError
-from .utils._torch_compat import tensor_version_or_none
 from .utils._torch_symbols import torch_attr
 from .runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
@@ -112,23 +113,22 @@ _STATE_METADATA_PHYSICAL_SCOPE: tuple[tuple[str, Any], ...] = (
     ("is_neg", False),
     # r65 Cluster X: the full input-net-parity dims. Every one is transport/staging-
     # normalized -- the canonical staging clone produces a fresh, non-inference,
-    # non-view, leaf, grad-free, version-0, tightly-allocated tensor -- so the
+    # non-view, leaf, grad-free, tightly-allocated tensor -- so the
     # UNCONDITIONAL staged-runtime tripwire stays sound (pinned by the staging
     # canonicality self-check tests, CPU and CUDA). ``is_shared``/``is_pinned`` are
-    # HOST-memory transport-placement bits (shared-memory backing, page-locking):
-    # canonical False means "no such backing", which the signature helper proves BY
-    # DEVICE off CPU -- raw ``is_shared()`` is a device CONSTANT True on CUDA (not a
-    # user sharing signal), so a device-blind raw read here would false-fire the
-    # tripwire on every CUDA slot device (r65 regap).
-    ("is_shared", False),
-    ("is_pinned", False),
+    # deliberately ABSENT (r67 C3): they are OBSERVED-VALUE read kinds -- the honest
+    # producer predicate is the user's one actual accessor return against the
+    # device-defined staged canonical (``_state_placement_canonical``), never a
+    # pre-forward signature stamp (free-F4: the CUDA-init proof-by-absence stamped
+    # canonical False on genuinely pinned XPU/MPS/externally-registered memory). The
+    # staged runtime tripwire checks them with real reads on TorchLens's OWN staged
+    # clones (``_staged_placement_violations``).
     ("is_inference", False),
     ("is_view", False),
     ("is_leaf", True),
     ("retains_grad", False),
     ("output_nr_is_zero", True),
     ("grad_is_none", True),
-    ("version_is_zero", True),
     ("storage_nbytes_is_tight", True),
 )
 """Destination-owned PHYSICAL signature dims (r63 C1; r65 full mirror) and their canonicals.
@@ -152,19 +152,15 @@ _STATE_METADATA_READ_REQUIRED_DIMS: Mapping[str, tuple[str, Any]] = MappingProxy
         "is_conj": ("is_conj", False),
         "is_neg": ("is_neg", False),
         # r65 Cluster X rows (kinds emitted by the STATE_METADATA_MIRROR dispatch in
-        # ``torchlens.backends.torch.completeness_witness``):
-        "is_shared": ("is_shared", False),
-        "is_pinned": ("is_pinned", False),
+        # ``torchlens.backends.torch.completeness_witness``). ``is_shared``/``is_pinned``
+        # are ABSENT (r67 C3): observed-value kinds validate through
+        # ``_STATE_METADATA_OBSERVED_PLACEMENT_KINDS``, never a signature dim.
         "is_inference": ("is_inference", False),
         "is_view": ("is_view", False),
         "is_leaf": ("is_leaf", True),
         "retains_grad": ("retains_grad", False),
         "output_nr": ("output_nr_is_zero", True),
         "grad_presence": ("grad_is_none", True),
-        # Converged r65 ruling: a ``._version`` read refuses iff the captured pre-clone
-        # version was NON-default -- the counter is transport-lost (every staged clone is
-        # version 0), so only a version-0 capture can honestly reproduce the read.
-        "_version": ("version_is_zero", True),
         # r64 F3: ``untyped_storage().nbytes()`` off a state receiver pins the BASE storage
         # byte count; reproducible iff the captured storage was exactly
         # ``numel * element_size`` (a larger-base offset-0-contiguous view is NOT).
@@ -179,7 +175,113 @@ explicit ``memory_format=``, or a zero-copy view export -- ``numpy()`` / ``__arr
 ``__dlpack__`` / ``__cuda_array_interface__`` / ``to_dlpack``, which pin the exact layout with
 no accessor call) pins the full stride tuple, reproducible iff the captured stride equals the
 canonical dense stride of the shape; the remaining kinds map one-to-one onto their dims. An
-UNKNOWN future kind resolves to no entry and fails closed at the consumer.
+UNKNOWN future kind resolves to no entry and fails closed at the consumer. ``_version`` is
+deliberately ABSENT: it is a ``refuse_on_any_read`` policy row (r67 C4), never a canonical dim.
+``is_shared``/``is_pinned`` are ALSO absent (r67 C3): observed-value kinds, below.
+"""
+
+
+_STATE_METADATA_OBSERVED_PLACEMENT_KINDS = frozenset({"is_shared", "is_pinned"})
+"""OBSERVED-VALUE placement read kinds (r67 C3): validated against the user's ONE actual
+accessor return, never a pre-forward signature stamp and never a speculative TorchLens
+re-read. The producer predicate is device-defined (:func:`_state_placement_canonical`),
+evaluated from the slot's inert pre-clone ``device_type`` stamp."""
+
+
+def _state_placement_canonical(kind: str, device_type: Any) -> bool | None:
+    """Return the device-defined staged/oracle placement value for one observed kind.
+
+    ``is_pinned``: a staged/oracle-1 destination is never page-locked (staging clones and
+    default ``load_state_dict`` copies allocate ordinary memory) -- canonical ``False`` on
+    every device. ``is_shared``: the ``share_memory_()`` CPU transport backing is dropped by
+    staging (canonical ``False`` on CPU), while off-CPU ``is_shared()`` is a DEVICE CONSTANT
+    ``True`` (device memory is inherently "shared" in torch's sense) that a staged clone on
+    the slot device reproduces (r65 regap ruling). Unknown device -> ``None`` (fail closed).
+    """
+
+    if not isinstance(device_type, str) or not device_type:
+        return None
+    if kind == "is_pinned":
+        return False
+    if kind == "is_shared":
+        return device_type != "cpu"
+    return None
+
+
+ORACLE_POLICY_ORACLE_CANONICAL = "oracle_canonical"
+"""Policy: the read exposes a dim whose value on the ORACLE-1 destination (fresh instance +
+default ``load_state_dict(strict=True, assign=False)`` copy) is a provable device/layout
+observation predicate; the producer refuses the save iff the captured pre-clone value departs
+that canonical (the escape gate), and the staged runtime tripwire enforces it unconditionally."""
+
+ORACLE_POLICY_DECLARED_REPRODUCED = "declared_reproduced"
+"""Policy: the read records a DECLARED-STATE FACT staging REPRODUCES (r65 F-1 ``requires_grad``
+/ ``grad_fn`` presence) -- never a canonicality dim, never an escape-gated refusal except a
+fact staging provably cannot reproduce."""
+
+ORACLE_POLICY_STRUCTURALLY_COVERED = "structurally_covered"
+"""Policy: provably covered by another gate (e.g. ``is_coalesced`` raises on the dense strided
+state the layout dim already pins); nothing is recorded."""
+
+ORACLE_POLICY_REFUSE_ON_ANY_READ = "refuse_on_any_read"
+"""Policy: NO artifact-independent canonical value exists on the oracle-1 destination, so ANY
+attributed read refuses the runnable save (``state_metadata_mismatch``). r67 C4: ``_version``
+is the charter member -- oracle-1's default copy increments constructor-owned counters
+(``0 -> 1`` for plain slots, ``1 -> 2`` for initialized modules), so no static expected scalar
+is honest and no engineered staging form may manufacture one."""
+
+_ORACLE_POLICY_CLASSES = frozenset(
+    {
+        ORACLE_POLICY_ORACLE_CANONICAL,
+        ORACLE_POLICY_DECLARED_REPRODUCED,
+        ORACLE_POLICY_STRUCTURALLY_COVERED,
+        ORACLE_POLICY_REFUSE_ON_ANY_READ,
+    }
+)
+"""The CLOSED oracle-policy vocabulary: every state-metadata row is exactly one of these."""
+
+STATE_METADATA_ORACLE_POLICY: Mapping[str, str] = MappingProxyType(
+    {
+        # -- escape-gated read kinds whose canonical is the oracle-1 post-copy observation --
+        "contiguous_default": ORACLE_POLICY_ORACLE_CANONICAL,
+        "stride_exact": ORACLE_POLICY_ORACLE_CANONICAL,
+        "storage_offset": ORACLE_POLICY_ORACLE_CANONICAL,
+        "is_conj": ORACLE_POLICY_ORACLE_CANONICAL,
+        "is_neg": ORACLE_POLICY_ORACLE_CANONICAL,
+        # r67 C3: observed-value placement rows -- still oracle_canonical (their canonical
+        # IS the device-defined oracle/staging predicate), but validated against the user's
+        # ONE actual accessor return (``_STATE_METADATA_OBSERVED_PLACEMENT_KINDS``), never a
+        # pre-forward signature stamp.
+        "is_shared": ORACLE_POLICY_ORACLE_CANONICAL,
+        "is_pinned": ORACLE_POLICY_ORACLE_CANONICAL,
+        "is_inference": ORACLE_POLICY_ORACLE_CANONICAL,
+        "is_view": ORACLE_POLICY_ORACLE_CANONICAL,
+        "is_leaf": ORACLE_POLICY_ORACLE_CANONICAL,
+        "retains_grad": ORACLE_POLICY_ORACLE_CANONICAL,
+        "output_nr": ORACLE_POLICY_ORACLE_CANONICAL,
+        "grad_presence": ORACLE_POLICY_ORACLE_CANONICAL,
+        "storage_nbytes": ORACLE_POLICY_ORACLE_CANONICAL,
+        # -- constructor-history-dependent counter: refuse EVERY attributed read (r67 C4) --
+        "_version": ORACLE_POLICY_REFUSE_ON_ANY_READ,
+        # -- declared-state facts (r65 F-1) --
+        "requires_grad": ORACLE_POLICY_DECLARED_REPRODUCED,
+        "grad_fn": ORACLE_POLICY_DECLARED_REPRODUCED,
+        # -- structural rows --
+        "is_coalesced": ORACLE_POLICY_STRUCTURALLY_COVERED,
+    }
+)
+"""THE authoritative oracle-policy classification for state-metadata rows (r67 C4).
+
+Keys are the state read-KIND vocabulary (escape-gated rows), the declared fact names, and the
+structural accessor names -- one row per state-metadata surface member. Producer checks
+(:func:`state_metadata_read_violations`), signatures, staging tripwires, and diagnostics
+consume the SAME rows: an ``oracle_canonical`` row resolves through
+``_STATE_METADATA_READ_REQUIRED_DIMS`` to its signature dim; a ``refuse_on_any_read`` row
+refuses regardless of any signature; ``declared_reproduced`` rows ride the fact ledger;
+``structurally_covered`` rows record nothing. The oracle-1 parity matrix
+(tests/test_tlspec_runnable_r65_state_metadata_parity.py) machine-checks that every
+``oracle_canonical`` dim equals what oracle-1's default copy into a fresh instance actually
+produces, and that no static expected scalar exists without an oracle probe recipe.
 """
 
 
@@ -217,6 +319,7 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
 
     signature: dict[str, Any] = {
         "class_category": "non_tensor",
+        "device_type": None,
         "layout": None,
         "is_nested": None,
         "is_quantized": None,
@@ -226,15 +329,12 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
         "storage_offset_is_zero": None,
         "is_conj": None,
         "is_neg": None,
-        "is_shared": None,
-        "is_pinned": None,
         "is_inference": None,
         "is_view": None,
         "is_leaf": None,
         "retains_grad": None,
         "output_nr_is_zero": None,
         "grad_is_none": None,
-        "version_is_zero": None,
         "storage_nbytes_is_tight": None,
     }
     cls = type(value)
@@ -247,6 +347,12 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
         return signature
     else:
         return signature
+    try:
+        # Inert placement context (r67 C3): the device type feeds the observed-value
+        # placement predicate; reading ``.device`` has no side effects on any backend.
+        signature["device_type"] = str(value.device.type)
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        pass
     try:
         signature["is_nested"] = bool(value.is_nested)
     except (RuntimeError, TypeError, AttributeError, NotImplementedError):
@@ -290,37 +396,13 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
     except (RuntimeError, TypeError, AttributeError, NotImplementedError):
         pass
     # -- r65 Cluster X dims (each exception-guarded to None: unreadable == UNKNOWN, and
-    # every consumer treats UNKNOWN as non-canonical -- fail closed, never a pass) --
-    try:
-        # ``is_shared()`` is a DEVICE CONSTANT off CPU (always True for CUDA -- device
-        # memory is inherently "shared" in torch's sense, NOT a user-chosen transport
-        # signal), so a fresh staging clone on a non-CPU slot device REPRODUCES it
-        # rather than normalizing it away: any captured read of the constant replays
-        # identically, and no canonical-False invariant exists to assert. The dim
-        # therefore records the CPU shared-memory TRANSPORT bit only (the
-        # ``share_memory_()`` backing a staging clone genuinely drops), proven False
-        # by device off CPU -- mirroring the ``is_pinned`` device guard below.
-        if value.device.type != "cpu":
-            signature["is_shared"] = False
-        else:
-            signature["is_shared"] = bool(value.is_shared())
-    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
-        pass
-    try:
-        # ``is_pinned()`` routes through the accelerator hooks and can LAZILY INITIALIZE
-        # the CUDA context (a heavyweight capture-time side effect this signature stamp
-        # must never trigger). Pinned host memory cannot exist in a process whose CUDA
-        # context was never initialized (page-locking goes through the CUDA allocator),
-        # so the dim is proven False without the read whenever CUDA is absent or
-        # uninitialized; only an already-initialized context performs the real read.
-        if value.device.type != "cpu":
-            signature["is_pinned"] = False
-        elif torch.cuda.is_available() and torch.cuda.is_initialized():
-            signature["is_pinned"] = bool(value.is_pinned())
-        else:
-            signature["is_pinned"] = False
-    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
-        pass
+    # every consumer treats UNKNOWN as non-canonical -- fail closed, never a pass).
+    # ``is_shared``/``is_pinned`` are deliberately NOT stamped here (r67 C3): the honest
+    # authority for those reads is the user's ONE actual accessor return (the observation
+    # ledger), and a pre-forward speculative stamp is both forbidden (a TorchLens-added
+    # ``is_pinned()`` could lazily initialize an accelerator as a capture side effect on
+    # pre-guard-era torch) and dishonest (free-F4: the CUDA-init proof-by-absence stamped
+    # canonical False on genuinely pinned XPU/MPS/externally-registered memory). --
     try:
         signature["is_inference"] = bool(value.is_inference())
     except (RuntimeError, TypeError, AttributeError, NotImplementedError):
@@ -330,33 +412,26 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
     except (RuntimeError, TypeError, AttributeError, NotImplementedError):
         pass
     try:
-        is_leaf = bool(value.is_leaf)
-        signature["is_leaf"] = is_leaf
+        signature["is_leaf"] = bool(value.is_leaf)
     except (RuntimeError, TypeError, AttributeError, NotImplementedError):
-        is_leaf = None
+        pass
     try:
-        retains_grad = bool(value.retains_grad)
-        signature["retains_grad"] = retains_grad
+        signature["retains_grad"] = bool(value.retains_grad)
     except (RuntimeError, TypeError, AttributeError, NotImplementedError):
-        retains_grad = None
+        pass
     try:
         signature["output_nr_is_zero"] = int(value.output_nr) == 0
     except (RuntimeError, TypeError, ValueError, AttributeError, NotImplementedError):
         pass
     try:
-        if is_leaf or retains_grad:
+        # r67 C6: ALWAYS the actual ``.grad`` read, under local warning suppression (the
+        # non-leaf access warning) -- torch 2.8 allows assigning ``.grad`` on a non-leaf,
+        # so the former "a non-leaf without retains_grad structurally carries no grad"
+        # shortcut asserted a fact it never read (free-F5). Failure stays UNKNOWN.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
             signature["grad_is_none"] = value.grad is None
-        elif is_leaf is not None and retains_grad is not None:
-            # A non-leaf without retains_grad structurally carries no ``.grad``
-            # (reading it would only emit torch's non-leaf warning).
-            signature["grad_is_none"] = True
     except (RuntimeError, TypeError, AttributeError, NotImplementedError):
-        pass
-    try:
-        version = tensor_version_or_none(value)
-        if version is not None:
-            signature["version_is_zero"] = int(version) == 0
-    except (RuntimeError, TypeError, ValueError, AttributeError, NotImplementedError):
         pass
     try:
         # Stamped PRE-CLONE (``snapshot_capture_state_signatures`` runs before the
@@ -398,29 +473,78 @@ def state_metadata_bind_violations(value: Any) -> list[tuple[str, Any, Any]]:
     return _signature_scope_violations(_state_metadata_signature(value), _STATE_METADATA_BIND_SCOPE)
 
 
+def _staged_placement_violations(value: Any) -> list[tuple[str, Any, Any]]:
+    """Return staged-clone placement violations via REAL run-time reads (r67 C3 tripwire leg).
+
+    The staged runtime tripwire keeps enforcing ``is_shared``/``is_pinned`` on TorchLens's
+    OWN staged clones -- these are run-time self-checks on TorchLens-constructed tensors,
+    not capture-time speculative reads of the user's slot. Canonicals are the same
+    device-defined predicate the producer applies to observations
+    (:func:`_state_placement_canonical`); an unreadable value fails closed.
+    """
+
+    violations: list[tuple[str, Any, Any]] = []
+    try:
+        device_type: Any = str(value.device.type)
+    except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+        device_type = None
+    for kind, reader in (("is_shared", "is_shared"), ("is_pinned", "is_pinned")):
+        expected = _state_placement_canonical(kind, device_type)
+        try:
+            observed: Any = bool(getattr(value, reader)())
+        except (RuntimeError, TypeError, AttributeError, NotImplementedError):
+            observed = None
+        if expected is None or observed != expected:
+            violations.append((kind, expected, observed))
+    return violations
+
+
 def state_metadata_full_violations(value: Any) -> list[tuple[str, Any, Any]]:
     """Return full-signature violations for one STAGED runtime state tensor (tripwire scope)."""
 
-    return _signature_scope_violations(
-        _state_metadata_signature(value),
+    signature = _state_metadata_signature(value)
+    violations = _signature_scope_violations(
+        signature,
         _STATE_METADATA_BIND_SCOPE + _STATE_METADATA_PHYSICAL_SCOPE,
     )
+    if signature.get("class_category") in _ADMITTED_STATE_CLASS_CATEGORIES:
+        violations.extend(_staged_placement_violations(value))
+    return violations
 
 
 def state_metadata_read_violations(
     signature: Mapping[str, Any] | None,
     read_kinds: Iterable[str],
+    observations: Mapping[str, Any] | None = None,
 ) -> list[tuple[str, str, Any]]:
     """Return ``(read_kind, dim, actual)`` rows a witnessed metadata read cannot reproduce.
 
     ``signature`` is the PRE-CLONE capture-time signature stamped for the slot; ``None`` (an
     absent stamp) fails closed for every read kind, as does an unknown kind or an unreadable
     dim -- a metadata read whose captured value cannot be PROVEN canonical can never settle
-    ``verified`` after transport normalization.
+    ``verified`` after transport normalization. ``observations`` carries the ACTUAL values
+    returned by the slot's placement accessor calls (r67 C3): an observed-value kind
+    validates the user's one real return against the device-defined staged canonical --
+    a missing, unknown (``None``), or non-canonical observation refuses.
     """
 
+    observed_map: Mapping[str, Any] = observations if isinstance(observations, Mapping) else {}
     violations: list[tuple[str, str, Any]] = []
     for kind in sorted(set(read_kinds)):
+        # r67 C4: a ``refuse_on_any_read`` policy row refuses REGARDLESS of the captured
+        # signature -- no artifact-independent oracle-1 canonical exists for the dim, so no
+        # captured value can make the read reproducible (``_version``: oracle-1's default
+        # copy perturbs constructor-owned counters, 0 -> 1 plain / 1 -> 2 initialized).
+        if STATE_METADATA_ORACLE_POLICY.get(kind) == ORACLE_POLICY_REFUSE_ON_ANY_READ:
+            violations.append((kind, "<refuse_on_any_read>", None))
+            continue
+        if kind in _STATE_METADATA_OBSERVED_PLACEMENT_KINDS:
+            device_type = signature.get("device_type") if isinstance(signature, Mapping) else None
+            canonical = _state_placement_canonical(kind, device_type)
+            observed = observed_map.get(kind)
+            if canonical is None or observed is None or bool(observed) != canonical:
+                violations.append((kind, "<observed_placement>", observed))
+            continue
         required = _STATE_METADATA_READ_REQUIRED_DIMS.get(kind)
         if required is None:
             violations.append((kind, "<unknown_read_kind>", None))
@@ -1358,6 +1482,36 @@ single-output call.
 """
 
 
+@contextmanager
+def _guarded_defensive_materialize() -> Iterator[None]:
+    """NEUTRAL ambient for every PRE-EXECUTION defensive materialization (r67 C5).
+
+    Oracle 1 constructs/loads state and receives inputs BEFORE its forward context, so
+    TorchLens's defensive materializations -- the staging clone (incl. re-layout and
+    cross-device ``.to()`` transfer), the second state clone, the runtime input mirror,
+    and random-state allocation/fill -- run under neutral ``torch.inference_mode(False)``
+    plus ``torch.enable_grad()``:
+
+    * never the CALLER's ambient -- a user calling ``.run()`` / binding state inside
+      ``torch.inference_mode()`` or ``torch.no_grad()`` must not mint inference-mode
+      clones that trip the staged-state tripwire (corr1-2's false
+      ``PathDivergenceError(state_metadata_mismatch is_inference)``) or strip the mirror
+      of attestation eligibility on an otherwise-exact run;
+    * never the RECORDED ambient -- recorded ambient/per-call contexts govern sparse
+      EXECUTION only, entered around the transaction after binding/staging.
+
+    Exact caller restoration is the context managers' contract (both restore prior state
+    on exit, success or raise). NARROW by design: mid-transaction op/witness/attestation
+    snapshots (:meth:`RunResourceCeiling.guarded_clone` from execution sites) stay OUTSIDE
+    this helper -- they legitimately run under recorded execution semantics, so neither
+    ``guarded_clone`` nor :func:`_byte_guarded_clone` is globally neutralized. The
+    bidirectional source-scan immunizer owns this boundary.
+    """
+
+    with torch.inference_mode(False), torch.enable_grad():
+        yield
+
+
 def _byte_guarded_clone(
     value: torch.Tensor,
     *,
@@ -1436,11 +1590,12 @@ def _staged_state_clone(
     when non-canonical (an unreadable stride fails closed into the re-lay).
     """
 
-    # r65 staging hardening (a): materialize under ``torch.inference_mode(False)`` so a user
-    # calling ``tl.load(...).run()`` (or binding state) INSIDE an inference_mode region cannot
-    # mint inference-mode staged clones and trip the ``is_inference`` runtime tripwire dim on
-    # TorchLens's own staging output.
-    with torch.inference_mode(False):
+    # r67 C5: materialize under the ONE neutral defensive-materialization ambient
+    # (``inference_mode(False)`` + ``enable_grad``) so a user calling ``tl.load(...).run()``
+    # (or binding state) INSIDE an inference_mode/no_grad region cannot mint inference-mode
+    # staged clones and trip the ``is_inference`` runtime tripwire dim on TorchLens's own
+    # staging output (supersedes the r65 staging hardening (a) inference-only guard).
+    with _guarded_defensive_materialize():
         clone = _byte_guarded_clone(value, slot_id=slot_id, state_dict_name=state_dict_name)
         try:
             canonical = tuple(int(v) for v in clone.stride()) == _default_dense_stride(
@@ -1450,18 +1605,10 @@ def _staged_state_clone(
             canonical = False
         if not canonical:
             clone = clone.clone(memory_format=torch.contiguous_format)
-        # r65 staging hardening (b): a clone materialized FROM an inference-mode source
-        # carries ``_version == 1`` (torch counts the out-of-inference materialization as a
-        # mutation on the fresh destination), which would over-fire the new
-        # ``version_is_zero`` tripwire dim on TorchLens's own staging output. One extra
-        # clone of the now-ordinary tensor restores the canonical fresh counter; every
-        # ordinary source already stages at version 0 and never pays this.
-        try:
-            version = tensor_version_or_none(clone)
-        except (RuntimeError, TypeError, AttributeError, NotImplementedError):
-            version = None
-        if version is None or int(version) != 0:
-            clone = clone.clone()
+        # r67 C4: the r65 "staging hardening (b)" extra clone that engineered ``_version == 0``
+        # is REMOVED with the ``version_is_zero`` dim itself: ``_version`` is a
+        # ``refuse_on_any_read`` policy row (oracle-1's default copy leaves 1 or 2, never a
+        # stable scalar), so no staged form needs to -- or may -- manufacture a version value.
     return clone
 
 
@@ -1841,7 +1988,22 @@ def _initialize_slot(
     slot: TensorSlotDescriptor,
     generator: torch.Generator | None,
 ) -> torch.Tensor:
-    """Allocate and fill one representative slot under ``torchlens_role_init_v2``."""
+    """Allocate and fill one representative slot under ``torchlens_role_init_v2``.
+
+    r67 C5: the WHOLE allocation+fill is a defensive materialization -- neutral ambient,
+    so a caller inference_mode/no_grad region cannot mint inference-mode slots or alter
+    the fill semantics.
+    """
+
+    with _guarded_defensive_materialize():
+        return _initialize_slot_neutral(slot, generator)
+
+
+def _initialize_slot_neutral(
+    slot: TensorSlotDescriptor,
+    generator: torch.Generator | None,
+) -> torch.Tensor:
+    """Allocate and fill one representative slot (inside the neutral ambient)."""
 
     binding = slot.state_binding
     assert binding is not None
@@ -1992,7 +2154,10 @@ def stage_state_to_slot_devices(
         cached = moved_by_identity.get(id(value))
         if cached is None:
             try:
-                with _state.pause_logging():
+                # r67 C5: the cross-device staging transfer is a defensive
+                # materialization -- neutral ambient, never the caller's (a ``.to()``
+                # inside a caller inference_mode region would mint an inference tensor).
+                with _state.pause_logging(), _guarded_defensive_materialize():
                     cached = value.to(_slot_device(slot))
             except (RuntimeError, AssertionError) as exc:
                 raise RunCapabilityUnavailableError(

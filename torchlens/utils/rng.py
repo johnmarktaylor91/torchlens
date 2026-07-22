@@ -716,10 +716,11 @@ _DATETIME_CLOCK_READERS: tuple[tuple[Any, str], ...] = (
 # downstream DAG RNG op from BOTH the capture and the fresh-run oracle (a python/numpy
 # in-forward reseed, by contrast, is re-run by the conceptual oracle and stays honest
 # through the existing snapshot compare). Every public name of the torch / torch.random /
-# torch.cuda(.random) / torch.mps / torch.xpu RNG surfaces carries an EXPLICIT disposition
-# in the frozen closed vocabulary below; the r65 enumeration meta-test makes a torch
-# upgrade that grows this surface a FAILING test, never a silent false-VERIFIED (the r39
-# "one more name" doctrine, now covering torch itself).
+# torch.cuda(.random) / torch.mps / torch.mtia / torch.xpu(.random) RNG surfaces carries
+# an EXPLICIT disposition in the frozen closed vocabulary below; the independent no-list
+# module-discovery meta-test (r67) makes a torch upgrade that grows this surface -- or
+# loads one more RNG-bearing module -- a FAILING test, never a silent false-VERIFIED
+# (the r39 "one more name" doctrine, now covering torch itself).
 
 TORCH_RNG_DISPOSITIONS: frozenset[str] = frozenset(
     {"entropy", "mutation", "replayable_read", "structurally_covered", "op_captured"}
@@ -779,29 +780,40 @@ _TORCH_RNG_MODULE_SPECS: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...
     ("torch.cuda", _TORCH_RNG_DEVICE_SPEC),
     ("torch.cuda.random", _TORCH_RNG_DEVICE_SPEC),
     ("torch.mps", _TORCH_RNG_CORE_SPEC),
+    # r67 C1 (hon1-F6): ``torch.mtia`` carries the full feature-detected device RNG
+    # spec -- on torch 2.8 only ``get_rng_state``/``set_rng_state`` resolve, and any
+    # torch upgrade that grows the mtia surface lights up through the same
+    # ``hasattr`` feature detection instead of a hand-list edit.
+    ("torch.mtia", _TORCH_RNG_DEVICE_SPEC),
     ("torch.xpu", _TORCH_RNG_DEVICE_SPEC),
+    # r67 C1: ``torch.xpu.random`` re-exports the xpu RNG surface exactly like
+    # ``torch.cuda.random`` does for cuda; found by the independent no-list module
+    # discovery immunizer (the same shared-blind-spot class as mtia).
+    ("torch.xpu.random", _TORCH_RNG_DEVICE_SPEC),
 )
 # Non-function endpoints the enumeration meta-test still demands dispositions for.
 _TORCH_RNG_STRUCTURAL_EXTRAS: tuple[tuple[str, str], ...] = (
     (
         "torch.Generator",
-        "construction is deterministic (probed constant initial seed); instance draws "
-        "feed ops only through the opaque generator= kwarg, refused at save",
+        "construction is deterministic (probed constant initial seed); EVERY receiver's "
+        "method c_calls dispatch through GENERATOR_METHOD_TABLE (r67 C1 all-receiver "
+        "closure), and instance draws feed ops only through the opaque generator= "
+        "kwarg, refused at save",
     ),
     (
         "torch.random.Generator",
-        "same object as torch.Generator (construction deterministic; no entropy)",
+        "same object as torch.Generator (construction deterministic; all-receiver "
+        "method classification)",
     ),
     (
         "torch.default_generator",
-        "receiver_profile registry row: method c_calls on the default generator are "
-        "identity-classified (seed->entropy, manual_seed/set_state/set_offset/"
-        "graphsafe_set_state->mutation, initial_seed->replayable_read; get_state family "
-        "unclassified -- tensor return covered by the r39 escape belt)",
+        "receiver_profile registry row: method c_calls on ANY torch.Generator receiver "
+        "dispatch through GENERATOR_METHOD_TABLE; process/device defaults select the "
+        "default-receiver column via dynamic identity membership",
     ),
     (
         "torch.random.default_generator",
-        "same object as torch.default_generator (receiver-identity classified)",
+        "same object as torch.default_generator (receiver-classified)",
     ),
     (
         "torch.random.fork_rng",
@@ -810,13 +822,31 @@ _TORCH_RNG_STRUCTURAL_EXTRAS: tuple[tuple[str, str], ...] = (
     ),
     (
         "torch.cuda.default_generators",
-        "device default generators; identity-joined into the default-generator "
-        "receiver classification when populated (CUDA initialized)",
+        "device default generators; identity-joined into the default-receiver column "
+        "of GENERATOR_METHOD_TABLE dynamically (re-resolved on a routing-cache miss, "
+        "so a default populated mid-forward is still classified default)",
     ),
     (
         "torch.xpu.default_generators",
-        "device default generators; not walked as a host surface (module-level xpu "
-        "seed/state setters above carry the monitored surface)",
+        "device default generators; identity-joined dynamically exactly like the cuda "
+        "entry (r67 C1 closes the r65 xpu identity-join gap)",
+    ),
+    (
+        "torch.mtia.default_generators",
+        "device default generators; identity-joined dynamically exactly like the cuda "
+        "entry (feature-detected: absent on torch builds without an mtia generator "
+        "surface)",
+    ),
+    (
+        "torch.utils.data.graph_settings.apply_random_seed",
+        "draws ONLY from the caller-provided generator through a captured tensor RNG "
+        "op (torch.empty(()).random_(generator=rng)) whose generator= kwarg is refused "
+        "at save; the .item() scalar transits the r39 tensor->host escape belt, and "
+        "datapipe set_seed() mutations are instance state, not global-engine state",
+    ),
+    (
+        "torch.utils.data.graph_settings.apply_shuffle_seed",
+        "deprecated alias delegating to apply_random_seed (same structural coverage)",
     ),
 )
 
@@ -862,27 +892,204 @@ ONE table. ``structurally_covered`` rows carry their covering-mechanism proof in
 ``note`` and deliberately install nothing.
 """
 
-# Method-name classification for c_calls whose receiver IS a process default generator
-# (``torch.default_generator`` or a populated ``torch.cuda.default_generators`` entry).
-# ``torch.manual_seed`` & co literally delegate to these bound C methods, so a direct
-# ``torch.default_generator.manual_seed(...)`` spelling is the same host mutation and is
-# classified receiver-identity-scoped (a USER-constructed ``torch.Generator`` mutates
-# only instance state -- it feeds an op solely through the generator= kwarg, refused at
-# save -- so it deliberately never marks). ``None`` = deliberately unclassified (state
-# tensor returns ride the r39 escape belt; pure metadata reads are inert).
-_DEFAULT_GENERATOR_METHOD_DISPOSITIONS: dict[str, str | None] = {
-    "seed": "entropy",
-    "manual_seed": "mutation",
-    "set_state": "mutation",
-    "set_offset": "mutation",
-    "graphsafe_set_state": "mutation",
-    "initial_seed": "replayable_read",
-    "get_state": None,
-    "get_offset": None,
-    "graphsafe_get_state": None,
-    "clone_state": None,
-    "device": None,
+# ---- All-receiver Generator method table (r67 C1) --------------------------------------
+#
+# r65 classified Generator method c_calls by RECEIVER IDENTITY (process defaults only),
+# which let scalar-returning methods on user-constructed / held / RETURNED generators
+# escape unwitnessed (r66 free-F1 ``torch.Generator().seed()``, corr1-1
+# ``default.clone_state().initial_seed()``, hon1-F5 ``get_offset()``): the returned
+# Python int leaks OS entropy or engine/instance history into control flow with no
+# channel recorded -> false VERIFIED+ATTESTED. r67 replaces the default-only dict with
+# ONE authoritative method table dispatched for EVERY ``isinstance(receiver,
+# torch.Generator)`` c_call (subclasses included -- an inherited C method's c_call
+# receiver is the subclass instance). Each row is CLOSED UNDER ITS RETURN VALUE:
+#
+# * ``host_scalar`` returns carry a marking disposition in BOTH receiver columns
+#   (nothing downstream can see a bare Python int);
+# * ``state_tensor`` returns are structural ONLY because the r39 tensor->host
+#   escape belt covers the returned tensor's value use;
+# * ``generator`` / ``self_generator`` returns are structural ONLY because the
+#   returned Generator re-enters this same all-receiver classifier (closure) --
+#   its later scalar reads cannot escape;
+# * an UNKNOWN public method on ANY Generator receiver flags monitor uncertainty
+#   (INCOMPLETE), never a silent miss.
+#
+# The default identity set survives ONLY as a routing cache (which column applies),
+# re-resolved dynamically on a miss -- never an install-time honesty boundary.
+
+GENERATOR_METHOD_DISPOSITIONS: frozenset[str] = frozenset(
+    {"entropy", "mutation", "replayable_read", "instance_read"}
+)
+"""Closed disposition vocabulary for :data:`GENERATOR_METHOD_TABLE` columns.
+
+``entropy`` / ``mutation`` / ``replayable_read`` exactly as in
+:data:`TORCH_RNG_DISPOSITIONS`. ``instance_read`` -- a host scalar read of
+engine/instance HISTORY (``get_offset``; ``initial_seed`` on a non-default receiver):
+not reproduced by any run seed -> permanent ceiling. ``None`` in a column = inert or
+structurally covered there (the row's ``note`` names the covering mechanism).
+"""
+
+GENERATOR_RETURN_FAMILIES: frozenset[str] = frozenset(
+    {"host_scalar", "state_tensor", "generator", "self_generator", "device_attr"}
+)
+"""Closed return-family vocabulary for :data:`GENERATOR_METHOD_TABLE` rows.
+
+``host_scalar`` -- Python int; ``state_tensor`` -- ``torch.Tensor`` engine state;
+``generator`` -- a NEW ``torch.Generator``; ``self_generator`` -- returns the
+receiver (fluent setter); ``device_attr`` -- non-callable getset attribute.
+"""
+
+
+@dataclass(frozen=True)
+class GeneratorMethodRow:
+    """One public ``torch.Generator`` method with its per-receiver-class dispositions.
+
+    ``default_disposition`` applies when the receiver is a proven process/device
+    default generator; ``nondefault_disposition`` applies to every other receiver
+    (user-constructed, model-held, cloned, subclass). ``note`` carries the covering-
+    mechanism proof for structural (``None``) columns; the return-closure meta-test
+    machine-checks that each row's dispositions are closed under ``return_family``.
+    """
+
+    method: str
+    return_family: str
+    default_disposition: str | None
+    nondefault_disposition: str | None
+    note: str
+
+
+GENERATOR_METHOD_TABLE: tuple[GeneratorMethodRow, ...] = (
+    GeneratorMethodRow(
+        "seed",
+        "host_scalar",
+        "entropy",
+        "entropy",
+        "draws OS entropy in C++ (bypassing the patched os.urandom funnel) and returns "
+        "it as a Python int: the scalar return IS the entropy channel on EVERY "
+        "receiver (r66 free-F1)",
+    ),
+    GeneratorMethodRow(
+        "manual_seed",
+        "self_generator",
+        "mutation",
+        None,
+        "default: in-forward host mutation of a global engine. Non-default: instance "
+        "state only -- inert (the pinned private-manual_seed no-over-trigger); the "
+        "returned receiver re-enters this classifier",
+    ),
+    GeneratorMethodRow(
+        "set_state",
+        "self_generator",
+        "mutation",
+        None,
+        "default: in-forward host mutation of a global engine. Non-default: instance "
+        "state only -- inert; the returned receiver re-enters this classifier",
+    ),
+    GeneratorMethodRow(
+        "set_offset",
+        "self_generator",
+        "mutation",
+        None,
+        "default: in-forward host mutation of a global engine's philox offset. "
+        "Non-default: instance state only -- inert; the returned receiver re-enters "
+        "this classifier; capability-gated (raises on CPU)",
+    ),
+    GeneratorMethodRow(
+        "graphsafe_set_state",
+        "self_generator",
+        "mutation",
+        None,
+        "default: in-forward host mutation of a global engine. Non-default: instance "
+        "state only -- inert; the returned receiver re-enters this classifier; "
+        "capability-gated (raises on CPU)",
+    ),
+    GeneratorMethodRow(
+        "initial_seed",
+        "host_scalar",
+        "replayable_read",
+        "instance_read",
+        "default: scalar fully determined by the capture seed (consumed-flag only). "
+        "Non-default: instance/clone history is untracked -> ceiling (the accepted, "
+        "documented over-ceiling for a clone of a seeded default; r66 corr1-1)",
+    ),
+    GeneratorMethodRow(
+        "get_offset",
+        "host_scalar",
+        "instance_read",
+        "instance_read",
+        "philox consumption offset: a host int of engine HISTORY (advanced by every "
+        "prior draw, reset by manual_seed) -- no belt sees it, no run seed reproduces "
+        "it -> ceiling on every receiver; marks at c_call entry, so the CPU "
+        "capability-raise still marks fail-closed (r66 hon1-F5)",
+    ),
+    GeneratorMethodRow(
+        "get_state",
+        "state_tensor",
+        None,
+        None,
+        "structural: the returned state TENSOR rides the r39 tensor->host escape belt "
+        "(branch-on-state-bytes -> INCOMPLETE_SCALAR_ESCAPE); a row would over-ceiling "
+        "torch.utils.checkpoint(preserve_rng_state=True) (pinned za4)",
+    ),
+    GeneratorMethodRow(
+        "graphsafe_get_state",
+        "generator",
+        None,
+        None,
+        "structural closure: returns a Generator that re-enters this all-receiver "
+        "classifier -- its later scalar reads are classified by their own rows; "
+        "capability-gated (raises on CPU)",
+    ),
+    GeneratorMethodRow(
+        "clone_state",
+        "generator",
+        None,
+        None,
+        "structural closure: returns a NEW Generator that re-enters this all-receiver "
+        "classifier, so default.clone_state().initial_seed() lands on the non-default "
+        "instance_read ceiling (r66 corr1-1)",
+    ),
+    GeneratorMethodRow(
+        "device",
+        "device_attr",
+        None,
+        None,
+        "non-callable getset attribute (never emits a c_call); inert metadata",
+    ),
+)
+"""The authoritative all-receiver ``torch.Generator`` method table (r67 C1)."""
+
+_GENERATOR_METHOD_ROWS_BY_NAME: dict[str, GeneratorMethodRow] = {
+    row.method: row for row in GENERATOR_METHOD_TABLE
 }
+
+# Device modules whose ``default_generators`` tuples join the default-receiver column.
+# Resolved through ``sys.modules`` only (never an import) and via a plain module-attr
+# read (never device initialization); an uninitialized device contributes an empty
+# tuple and a torch build without the module contributes nothing.
+_DEFAULT_GENERATOR_HOLDER_MODULES: tuple[str, ...] = ("torch.cuda", "torch.xpu", "torch.mtia")
+
+
+def _resolve_default_generator_ids() -> frozenset[int]:
+    """Identity set of the CURRENTLY populated process/device default generators.
+
+    Called at monitor install (routing-cache seed) and again on any Generator-receiver
+    cache miss (r67 C1 dynamic membership): a device default generator populated
+    MID-FORWARD (lazy device init) still selects the default-receiver column, without
+    imports and without forcing device initialization.
+    """
+
+    ids: set[int] = set()
+    process_default = getattr(torch, "default_generator", None)
+    if process_default is not None:
+        ids.add(id(process_default))
+    for module_path in _DEFAULT_GENERATOR_HOLDER_MODULES:
+        holder = _torch_rng_holder_module(module_path)
+        if holder is None:
+            continue
+        for device_generator in tuple(getattr(holder, "default_generators", ()) or ()):
+            ids.add(id(device_generator))
+    return frozenset(ids)
 
 
 def _build_host_nondeterminism_registry() -> tuple[HostNondeterminismRow, ...]:
@@ -975,10 +1182,14 @@ def _build_host_nondeterminism_registry() -> tuple[HostNondeterminismRow, ...]:
                     family, surface_row.target, "module_patch", "any", surface_row.disposition
                 )
             )
+    # r67 C1: ONE all-receiver row -- method c_calls on ANY ``torch.Generator``
+    # (process/device defaults, user-constructed, held, cloned, subclass) dispatch
+    # through GENERATOR_METHOD_TABLE; the default identity set is only the
+    # column-routing cache, re-resolved dynamically on a miss.
     rows.append(
         HostNondeterminismRow(
             "rng_instance",
-            "torch.default_generator",
+            "torch.Generator",
             "receiver_profile",
             "hooked",
             "generator_method",
@@ -1509,11 +1720,12 @@ class host_nondeterminism_monitor:
         # keeps a TorchLens capture wrapper's shared code object from ever being
         # registered (which would misattribute every wrapped torch call).
         self._held_code_marks: dict[int, tuple[str, str]] = {}
-        # r65 CLUSTER Z: identity set of the process default generator(s). Method
-        # c_calls whose receiver is one of these are the same host mutation/read as the
-        # module-level APIs that delegate to them; a USER-constructed ``torch.Generator``
-        # is deliberately outside the set (instance state only; feeds ops solely through
-        # the generator= kwarg, refused at save).
+        # r67 C1: identity ROUTING CACHE of the process/device default generators --
+        # it selects WHICH GENERATOR_METHOD_TABLE column applies, never WHETHER a
+        # Generator receiver is classified (every ``isinstance(receiver,
+        # torch.Generator)`` c_call dispatches through the table). Seeded at install
+        # and re-resolved dynamically on a receiver miss, so a device default
+        # populated mid-forward still selects the default column.
         self._default_generator_ids: frozenset[int] = frozenset()
         # r41 hon2_1: idents of threads hooked by the in-window threading profile hook,
         # consumed by the escape belt's 3-class thread gate via ``_ACTIVE_MONITOR``.
@@ -1738,26 +1950,36 @@ class host_nondeterminism_monitor:
         receiver = getattr(arg, "__self__", None)
         if receiver is None:
             return
-        # r65 CLUSTER Z: method c_calls on the PROCESS DEFAULT torch generator(s).
-        # ``torch.manual_seed`` & co literally delegate to these bound C methods, so a
-        # direct ``torch.default_generator.manual_seed(...)`` spelling is the same host
-        # mutation/read as the module-level API; classification is receiver-IDENTITY
-        # scoped (a user-constructed local ``torch.Generator`` never marks) and
-        # method-name driven from the frozen disposition vocabulary. An UNKNOWN method
-        # name on a default generator is unclassifiable host-RNG semantics -> monitor
-        # uncertainty (INCOMPLETE), never a silent miss; the r65 vocabulary meta-test
-        # additionally goes RED at torch-upgrade time for any new method name.
-        if id(receiver) in self._default_generator_ids:
+        # r67 C1: method c_calls on ANY ``torch.Generator`` receiver -- process/device
+        # defaults, user-constructed, model-held, RETURNED clones, and subclasses (an
+        # inherited C method's c_call receiver IS the subclass instance) -- dispatch
+        # through the one authoritative GENERATOR_METHOD_TABLE. The default identity
+        # set only routes WHICH column applies; on a miss it is re-resolved against
+        # the currently populated ``torch.{cuda,xpu,mtia}.default_generators`` (no
+        # imports, no device init) so a default populated mid-forward still selects
+        # the default column. Scalar-returning methods carry a marking disposition in
+        # BOTH columns (return closure -- r66 free-F1/corr1-1/hon1-F5 can no longer
+        # escape); Generator-returning methods are structural because the returned
+        # object lands back HERE. An UNKNOWN public method on any Generator receiver
+        # is unclassifiable host-RNG semantics -> monitor uncertainty (INCOMPLETE),
+        # never a silent miss; the return-closure meta-test additionally goes RED at
+        # torch-upgrade time for any new method name.
+        if isinstance(receiver, torch.Generator):
             method_name = getattr(arg, "__name__", None)
             if isinstance(method_name, str) and not method_name.startswith("__"):
-                if method_name in _DEFAULT_GENERATOR_METHOD_DISPOSITIONS:
-                    disposition = _DEFAULT_GENERATOR_METHOD_DISPOSITIONS[method_name]
-                    if disposition is not None:
-                        self._mark_disposition(
-                            f"torch.default_generator.{method_name}", disposition
-                        )
-                else:
-                    self._flag_uncertain(f"default_generator_method:{method_name}")
+                row = _GENERATOR_METHOD_ROWS_BY_NAME.get(method_name)
+                if row is None:
+                    self._flag_uncertain(f"generator_method:{method_name}")
+                    return
+                is_default = id(receiver) in self._default_generator_ids
+                if not is_default:
+                    refreshed = _resolve_default_generator_ids()
+                    self._default_generator_ids = refreshed
+                    is_default = id(receiver) in refreshed
+                disposition = row.default_disposition if is_default else row.nondefault_disposition
+                if disposition is not None:
+                    spelling = "torch.default_generator" if is_default else "torch.Generator"
+                    self._mark_disposition(f"{spelling}.{method_name}", disposition)
             return
         # numpy instance draws + bare ``_random.Random`` draws (receiver typing -- no
         # draw-method NAME enumeration, so new draw methods need no detector edit).
@@ -2640,16 +2862,11 @@ class host_nondeterminism_monitor:
                     attr_name,
                     self._torch_rng_wrapper(original, surface_row.target, surface_row.disposition),
                 )
-            # r65 CLUSTER Z: default-generator receiver identities for the c_call
-            # classifier. Never forces device init: an uninitialized
-            # ``torch.cuda.default_generators`` is simply an empty tuple.
-            default_generator_ids: set[int] = set()
-            default_generator = getattr(torch, "default_generator", None)
-            if default_generator is not None:
-                default_generator_ids.add(id(default_generator))
-            for device_generator in tuple(getattr(torch.cuda, "default_generators", ()) or ()):
-                default_generator_ids.add(id(device_generator))
-            self._default_generator_ids = frozenset(default_generator_ids)
+            # r67 C1: seed the default-generator ROUTING CACHE for the all-receiver
+            # c_call classifier (process default + every populated cuda/xpu/mtia
+            # device default). Never forces device init, and never an honesty
+            # boundary: the classifier re-resolves on any miss.
+            self._default_generator_ids = _resolve_default_generator_ids()
             # BELT (thread-independent, CHEAP -- model attributes + builtin-container
             # nesting): digest generators the model HOLDS, so a draw on ANY thread
             # (incl. a pre-existing worker) is caught by the before/after state

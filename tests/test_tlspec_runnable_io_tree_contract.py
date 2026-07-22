@@ -147,19 +147,22 @@ def test_encodable_exotic_key_scalar_diverges_on_change(
 
 @pytest.mark.smoke
 def test_opaque_enum_key_subtree_is_unverifiable_not_skipped(tmp_path: Path) -> None:
-    """A scalar under an OPAQUE enum key must downgrade to UNVERIFIABLE, never skip."""
+    """A subtree under an OPAQUE enum key REFUSES the runnable save typed, never skips.
+
+    r67 C2 supersedes the former save-then-UNVERIFIABLE downgrade lane: the agreed
+    disposition matrix refuses opaque (non-grammar) mapping keys at producer preflight
+    through the EXISTING ``missing_input_container_contract`` (positive per-site
+    structure proof), so no artifact exists that could ever replay the subtree at all
+    -- strictly stronger than the old ceiling, and never a silent skip.
+    """
 
     model = _EnumKeyBranch()
     x = torch.tensor([2.0, 3.0])
-    path = _save_runnable(model, [x, {_EnumKey.FAST: 0}], tmp_path / "enum_key.tlspec")
-
-    # Even the unchanged identical input cannot be proven -> UNVERIFIABLE, not VERIFIED.
-    result = tl.load(path).run(
-        inputs=[x, {_EnumKey.FAST: 0}], on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert result.report.poisoned
+    with pytest.raises(tl.errors.RunnablePreflightError) as excinfo:
+        _save_runnable(model, [x, {_EnumKey.FAST: 0}], tmp_path / "enum_key.tlspec")
+    diagnostics = str(excinfo.value.fields.get("diagnostics"))
+    assert "missing_input_container_contract" in diagnostics
+    assert "opaque_mapping_key" in diagnostics
 
 
 @pytest.mark.smoke

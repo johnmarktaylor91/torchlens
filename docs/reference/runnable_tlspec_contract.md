@@ -235,6 +235,24 @@ autocast cannot contaminate a disabled capture) and restores the caller's contex
 Context entry never saves/restores RNG. A recorded context the runtime cannot enter or restore is
 a typed refusal (`execution_context_unavailable`), never a silent ambient passthrough.
 
+**Neutral pre-forward defensive materialization** (r67 C5) is a SEPARATE regime from the
+recorded execution contexts above. Oracle 1 constructs/loads state and receives inputs BEFORE
+its forward context, so every TorchLens-owned defensive materialization that runs before the
+sparse transaction -- the staging clone (including re-layout and the cross-device staging
+`.to()` transfer), the second run-local state clone, the runtime input mirror clone, and
+random-state allocation/fill -- executes under one narrowly scoped neutral helper
+(`_guarded_defensive_materialize`: `torch.inference_mode(False)` + `torch.enable_grad()`),
+never under the CALLER's ambient (a `.run()` or state bind inside a caller
+`torch.inference_mode()`/`torch.no_grad()` region must not mint inference-mode clones, trip
+the staged tripwire, or strip attestation eligibility from an otherwise-exact run) and never
+under the RECORDED ambient (recorded ambient/per-call contexts govern sparse EXECUTION only,
+entered around the transaction after binding/staging). The helper promises EXACT caller
+restoration on every exit -- success, divergence raise, or typed error. It is deliberately
+narrow: mid-transaction op/witness/attestation/fork-output snapshots taken through the
+resource ceiling's guarded clone retain recorded execution semantics, and a bidirectional
+source scan pins the boundary in both directions (every defensive phase inside the helper;
+every in-transaction snapshot outside it).
+
 `RunnableCompatibility` has exactly `torchlens_version: str`, `python_version: str`,
 `backend_version: str`, `descriptor_version: str`, `call_recipe_version: str`,
 `callable_ref_schema_version: int`, and `initializer_policy_version: str`. The last four repeat
@@ -395,7 +413,34 @@ analysis output but must not write runnable capability. It rejects when:
 3. A tensor use lacks stable slot ID, role/path, shape/dtype/rank/placement, producer/version relation,
    or required input/state/output binding.
 4. An input/output container is missing, opaque, unreconstructable, or lacks complete
-   `ContainerRecord`/`ModelSite` paths.
+   `ContainerRecord`/`ModelSite` paths. r67 C2: the runnable producer additionally requires a
+   POSITIVE per-site input-boundary structure proof from the ONE snapshot spine
+   (`torchlens._input_walk.snapshot_input_boundary`): one traversal per normalized model-input
+   site records the complete site set/arity and EVERY node -- including empty nodes and the
+   zero-field-dataclass empty kind -- with its container kind, exact `(module, qualname)`
+   class (no import required or performed to compare it), declared child schema (namedtuple/
+   dataclass fields, ordered type-strict-codec mapping keys, sequence/registered arity),
+   registered-container aux, and the instance-state proof. The per-gap disposition matrix is
+   fixed: exact class identity (including builtin subclasses), empty-dataclass nodes, and
+   non-`str`/`int` GRAMMAR-encodable mapping keys (bool/float/None/safe tuple -- encoded by
+   ONE canonical codec that keeps `True != 1` and `1.0 != 1` type-distinct while preserving
+   the persisted `str | int` path shape, retiring the dual raw/tagged vocabulary) are
+   WITNESSED and verified at bind (`input_tree_mismatch` divergence on drift, with tensor
+   descendants under grammar keys entering the tensor-leaf accounting and binding as
+   first-class leaves); opaque/non-grammar keys and undeclared per-instance container state
+   (non-field dataclass `__dict__`, namedtuple/subclass instance attributes) REFUSE at
+   runnable save through the EXISTING `missing_input_container_contract` (no new enum), with
+   the SYMMETRIC bind-side check refusing runtime-added undeclared state; REGISTERED
+   containers are SUPPORTED behind their existing declarations and typed fences (registration
+   must exist in the loading process -- TorchLens imports nothing to obtain a hook; capture
+   and bind both invoke `flatten` and descend indexed children; exact class, child schema,
+   and safely encoded aux persist and compare; path resolution re-flattens instead of
+   indexing; missing/throwing/nonconforming registration, unsafe aux, schema drift, or an
+   unmet `state_complete` declaration fails typed). The complete structure block is REQUIRED
+   and parse-validated inside existing v2 (no v3): missing, duplicate, malformed, stripped,
+   or internally inconsistent site/node/key facts make readiness unavailable through the
+   typed `context_field_invalid` path -- absence never means the old weaker semantics.
+   Structure facts are keyed by model-site position, never recovered through tensor bindings.
 5. State lacks canonical module path/name/role/shape/dtype/persistence/trainability/coherent aliases.
 6. A tensor constant is neither input nor state and has no allowed value-free initializer.
 7. A control site lacks completeness classification or a witness required by that classification.
@@ -417,23 +462,28 @@ analysis output but must not write runnable capability. It rejects when:
     means refuse at save with `missing_output_container_contract`, uniformly with every other
     output refusal.
 12. The captured forward READ physical state metadata that transport normalizes away (r63,
-    escape-gated; r65 extends the net to the FULL input-accessor mirror): a witnessed read on
-    a registered param/buffer -- the r63 layout/conj/neg five, plus `is_shared` / `is_pinned`
-    / `is_inference` / `_is_view` / `_base` / `is_leaf` / `retains_grad` / `output_nr` /
-    `grad`-presence / `_version` / `storage_nbytes`, and the zero-copy view exports
-    (`numpy()` / `__array__` / `__dlpack__` / `__cuda_array_interface__` / `to_dlpack`),
-    which pin exact layout with no accessor call -- whose PRE-clone capture signature was
-    non-canonical on the read dim refuses with `state_metadata_mismatch` (detection stage
-    `producer_state_metadata`, details `state_dict_name`/`read_kinds`/`violations`). The
-    refusal is gated on the READ, never on the form alone: an UNREAD non-canonical slot (a
-    channels-last conv weight, a transposed dense param, an offset or conj buffer no code
-    inspects, a shared/pinned/inference/view-registered or larger-base-view slot no code
-    inspects) stays saveable and can settle `verified` -- its physical form is
-    destination-owned and value-invariant when unobserved (section 11, state-metadata
-    subsection). A witnessed read with no stamped signature, an unreadable signature dim, or
-    an unknown read kind refuses fail-closed. `requires_grad` / `grad_fn`-presence reads are
-    NOT refusals: they record declared-state facts staging reproduces (section 11), refusing
-    only the irreproducible cases (`grad_fn` present; `requires_grad` True on a
+    escape-gated; r65 extends the net to the FULL input-accessor mirror; r67 C3/C6 gates
+    every fact on the ACTUAL accessor call): a witnessed read on a registered param/buffer
+    -- the r63 layout/conj/neg five, plus `is_shared` / `is_pinned` / `is_inference` /
+    `_is_view` / `_base` / `is_leaf` / `retains_grad` / `output_nr` / `grad`-presence /
+    `_version` / `storage_nbytes`, and the zero-copy view exports (`numpy()` / `__array__`
+    / `__dlpack__` / `__cuda_array_interface__` / `to_dlpack`), which pin exact layout with
+    no accessor call -- that cannot be reproduced by staging refuses with
+    `state_metadata_mismatch` (detection stage `producer_state_metadata`, details
+    `state_dict_name`/`read_kinds`/`violations`). Signature-dim rows compare the PRE-clone
+    capture signature; the observed-value placement rows (`is_shared` / `is_pinned`)
+    compare the user's ONE actual accessor return against the device-defined
+    staged/oracle predicate. The refusal is gated on the READ, never on the form alone: an
+    UNREAD non-canonical slot (a channels-last conv weight, a transposed dense param, an
+    offset or conj buffer no code inspects, a shared/pinned/inference/view-registered or
+    larger-base-view slot no code inspects -- including a DISCARDED storage handle whose
+    geometry accessor was never called) stays saveable and can settle `verified` -- its
+    physical form is destination-owned and value-invariant when unobserved (section 11,
+    state-metadata subsection). A witnessed read with no stamped signature, an unreadable
+    signature dim, an unknown read kind, or a missing/unknown/arg-directed placement
+    observation refuses fail-closed. `requires_grad` / `grad_fn`-presence reads are
+    NOT refusals: they record declared-state facts staging reproduces (section 11),
+    refusing only the irreproducible cases (`grad_fn` present; `requires_grad` True on a
     non-differentiable slot). No schema/version identifier changes and the capture-state
     blob families are byte-unchanged; the declared-fact witnesses are a v2
     descriptor-vocabulary extension on the unreleased format.
@@ -1267,12 +1317,16 @@ seed) reports `unverifiable` + `not_applicable`:
    the Python-visible `c_call`, not exact base-class object id (r42 hon1_1). A subclass method that
    genuinely OVERRIDES the current-clock reader is not attributed to the base reader merely because
    of its name;
-7. the torch Python-level RNG API surface (r65): every public endpoint of `torch` /
-   `torch.random` / `torch.cuda(.random)` / `torch.mps` / `torch.xpu` RNG namespaces carries an
-   explicit disposition in a frozen closed vocabulary (`TORCH_RNG_SURFACE`), from which the
-   registry rows, the monitor patches, and the coverage meta-tests all derive -- a torch upgrade
-   that grows the surface (a new module endpoint OR a new `torch._C.Generator` method) is a
-   FAILING meta-test until classified, never a silent gap:
+7. the torch Python-level RNG API surface (r65, extended r67): every public endpoint of the
+   `torch` / `torch.random` / `torch.cuda(.random)` / `torch.mps` / `torch.mtia` /
+   `torch.xpu(.random)` RNG namespaces carries an explicit disposition in a frozen closed
+   vocabulary (`TORCH_RNG_SURFACE`), from which the registry rows, the monitor patches, and the
+   coverage meta-tests all derive -- a torch upgrade that grows the surface (a new module
+   endpoint OR a new `torch._C.Generator` method) is a FAILING meta-test until classified, never
+   a silent gap. The module inventory itself is checked by an INDEPENDENT no-list discovery
+   meta-test that sweeps every already-loaded public torch module for RNG-bearing endpoints
+   (r67; production and its meta-test can no longer share a hand-maintained module blind spot,
+   the r66 `torch.mtia` gap class):
    * `seed` / `seed_all` spellings = ENTROPY -> permanent ceiling (`host_rng_consumed=true`,
      `capture_seed` discarded; `os.urandom` semantics);
    * `manual_seed(_all)` / `set_rng_state(_all)` spellings = in-forward MUTATION -> permanent
@@ -1288,15 +1342,33 @@ seed) reports `unverifiable` + `not_applicable`:
      (branch-on-state-bytes -> `incomplete_scalar_escape`, never `verified`); store-only reads
      are out of scope by design, which keeps `torch.utils.checkpoint(preserve_rng_state=True)`
      round-tripping `verified`+`attested` (the pinned zero-collateral guard);
-   * method calls whose `c_call` receiver IS a process default generator
-     (`torch.default_generator`, populated `torch.cuda.default_generators` entries) classify by
-     method name under the same dispositions (`seed`->entropy, `manual_seed`/`set_state`/
-     `set_offset`/`graphsafe_set_state`->mutation, `initial_seed`->replayable read; the
-     `get_state` family deliberately inert) -- receiver-IDENTITY scoped, so a user-constructed
-     `torch.Generator` (deterministic construction, probed) mutates instance state only and
-     never marks; it can feed an op solely through the `generator=` kwarg, refused at save. An
-     in-window call of an UNCLASSIFIED default-generator method flags monitor uncertainty
-     (INCOMPLETE), never a silent miss.
+   * method calls whose `c_call` receiver is ANY `torch.Generator` (r67 C1) -- process/device
+     defaults, user-constructed, model-held, RETURNED clones, and subclasses (an inherited C
+     method's `c_call` receiver is the subclass instance) -- dispatch through ONE authoritative
+     method table (`GENERATOR_METHOD_TABLE`) whose rows carry a return family plus separate
+     default-receiver and non-default-receiver dispositions, machine-checked to be CLOSED UNDER
+     THE RETURN VALUE: a host-scalar return is witnessed on EVERY receiver class, so user
+     Generators are NOT harmless -- `seed()` returns fresh OS entropy as a Python int on any
+     receiver (entropy ceiling everywhere); `initial_seed()` is a replayable read only on a
+     proven process/device default and ceilings on every other receiver (instance/clone history
+     is untracked); `get_offset()` ceilings every receiver (engine-history philox scalar no belt
+     sees; the classifier marks at `c_call` entry, so a CPU capability raise still marks
+     fail-closed); `clone_state()`/`graphsafe_get_state()` are structural ONLY because the
+     returned Generator re-enters this same all-receiver classifier (its later scalar reads
+     land on their own rows); non-default mutations (`manual_seed`/`set_state`/`set_offset`/
+     `graphsafe_set_state`) stay inert instance state (the pinned private-`manual_seed`
+     no-over-trigger), while the same methods on a default receiver are host mutations; the
+     `get_state` family keeps its r39 tensor-belt exemption exactly (a row would over-ceiling
+     `torch.utils.checkpoint(preserve_rng_state=True)`, pinned). Default-receiver membership is
+     a dynamically re-resolved ROUTING CACHE, never an install-time honesty boundary: on a
+     receiver miss the classifier re-resolves the currently populated
+     `torch.{cuda,xpu,mtia}.default_generators` (no imports, no device initialization), so a
+     device default populated mid-forward still selects the default column. An in-window call
+     of an UNCLASSIFIED public method on ANY Generator receiver flags monitor uncertainty
+     (INCOMPLETE), never a silent miss. Accepted, documented over-ceiling: a private Generator
+     cloned from a seeded process default and then queried with `initial_seed()` is replayable
+     in principle but conservatively ceilings, because clone lineage is not tracked
+     (fail-closed first; refine only on a demonstrated real-workload over-trigger).
    The torch RNG APIs are Python functions, so their held-reference layer registers the
    INNERMOST function's CODE identity (unwinding capture-wrapper `__wrapped__` chains) and
    classifies `call` profile events -- a pre-window `from torch import manual_seed` /
@@ -1679,15 +1751,31 @@ through the table, so an accessor added to any input constant without a state di
 RED test, never a silently-unmirrored "Nth state read". Dispositions:
 
 * **Escape-gated read kinds** (the r63 machinery, now covering the full physical family): the
-  layout trio and conj/neg bits (r63, unchanged); `is_shared`/`is_pinned`/`is_inference`
-  (storage/creation placement, r65); `_is_view`/`_base` (view-ness, one shared dim);
-  `is_leaf`/`retains_grad`/`output_nr`/`grad`-presence (autograd structure); `_version` (the
-  in-place mutation counter -- converged r65 ruling: refuse-on-read of a transport-lost
-  version, i.e. a read refuses iff the captured pre-clone version was non-default, since every
-  staged clone reproduces version 0); and `storage_nbytes` (base-storage byte count, recorded
-  at storage-handle exposure -- closes the r64 F3 larger-base offset-0-contiguous view via the
-  `storage_nbytes_is_tight` dim). A resolved read joins the state-escape names (digest
-  witness) and records its READ KIND for the producer gate, exactly as r63.
+  layout trio and conj/neg bits (r63, unchanged); `is_inference` (creation placement, r65);
+  `_is_view`/`_base` (view-ness, one shared dim);
+  `is_leaf`/`retains_grad`/`output_nr`/`grad`-presence (autograd structure -- `grad`-presence
+  is ALWAYS the actual `.grad` read under local warning suppression, r67 C6: torch permits
+  assigning `.grad` on a non-leaf, so no structural "cannot carry a grad" inference may stamp
+  the fact); `_version` (the in-place mutation counter -- r67 C4 ruling: `refuse_on_any_read`,
+  see the oracle-policy table below); and `storage_nbytes` (base-storage byte count, gated on
+  the ACTUAL `.nbytes()`/`.size()`/`__len__` accessor call -- closes the r64 F3 larger-base
+  offset-0-contiguous view via the `storage_nbytes_is_tight` dim, with zero discarded-handle
+  over-trigger). A resolved read joins the state-escape names (digest witness) and records
+  its READ KIND for the producer gate, exactly as r63.
+* **Observed-value placement reads** (`is_shared` / `is_pinned`, r67 C3): the recorded fact
+  is the ACTUAL value returned by the user's ONE accessor call, carried in a per-slot
+  observation ledger next to the read kind. TorchLens never infers the value from
+  accelerator initialization (the r65 CUDA-init proof-by-absence stamped canonical False on
+  genuinely pinned XPU/MPS/externally-registered memory) and never performs a speculative
+  pre-forward or save-time second read merely to build the producer signature. Producer
+  validation applies the device-defined staged/oracle predicate to the observation: on the
+  normalized CPU state path, observed `is_pinned` True refuses and observed False is
+  reproduced by the ordinary staged allocation; `is_shared` observed True refuses on CPU
+  (staging drops the `share_memory_()` backing) while the off-CPU device constant True is
+  reproduced by a staged clone on the slot device. Exceptions, arg-directed queries
+  (`is_pinned(device=...)`), disagreeing repeat observations, and unknown attribution all
+  record `None` and refuse. The staged runtime tripwire keeps enforcing both dims with real
+  run-time reads on TorchLens's OWN staged clones.
 * **Zero-copy view exports** (closes r64 F2): `numpy()` / `__array__` / `__dlpack__` /
   `__cuda_array_interface__` / `to_dlpack` off a state-derived receiver pin the receiver's
   full layout with NO accessor call (ndarray `.strides`/`.flags`, DLPack strides + byte
@@ -1723,22 +1811,101 @@ registered `nn.Parameter` / buffer object itself -- because a view's autograd st
 pure function of the slot's canonical form and TorchLens's own per-op bookkeeping reads
 `requires_grad`/`grad_fn`/`_version` on op-output views (the known direct-receiver bookkeeping
 reads are excluded at their source under the `internal_scalar_read` marker, pinned by a
-zero-reads no-over-trigger test).
+zero-reads no-over-trigger test). Every resolved state read, declared fact, and observation
+fans out to the COMPLETE r37 alias group (r67 C6): a direct read on one canonical name of a
+tied parameter / double-registered buffer marks every name sharing the allocation -- the
+former single-address restriction that silently dropped a tied twin is removed.
 
-Read kinds map to signature dims one-to-one; all state metadata comparisons still flow through
-ONE signature helper (`_state_metadata_signature`), which r65 extends with the ten mirror dims
-(`is_shared`, `is_pinned`, `is_inference`, `is_view`, `is_leaf`, `retains_grad`,
-`output_nr_is_zero`, `grad_is_none`, `version_is_zero`, `storage_nbytes_is_tight` -- the last
-stamped PRE-CLONE, which is exactly why the F3 large-base view is catchable). Future physical
-dims are added only there. All ten join the destination-owned PHYSICAL scope: every one is
-staging-canonicalized (the staging clone materializes under `inference_mode(False)` and
-re-clones an inference-source materialization back to version 0, so binding or running inside
-a user `inference_mode` region never trips TorchLens's own staging output), keeping the
-unconditional in-transaction staged-state tripwire (`state_metadata:<slot_id>` check) sound;
-`is_pinned` is proven False without a read whenever the CUDA context is absent or
-uninitialized (pinned host memory cannot exist without it, and the probe itself would
-otherwise initialize the context as a capture side effect). Signatures are stamped from the
-LIVE tensors BEFORE the capture-state clone, as r63.
+**Tensor and storage-handle spellings are ONE metadata surface** (r67 C3/C6, corr1-4 +
+r66b-R3). Storage ACQUISITION (`untyped_storage()` / `storage()` / `_typed_storage()`)
+records ORIGIN and the existing writeback watch ONLY -- no read kind, no geometry fact: a
+discarded handle is not an observation (the former exposure-time `storage_nbytes` stamp
+false-refused larger-base slots whose geometry was never read). A capture-scoped WEAK origin
+map attributes every handle to its input site and/or entire state alias group -- registered
+at each bridge return (a typed handle also registers its backing untyped storage), with a
+pointer fallback covering handles acquired before the wrappers armed. The ACTUAL accessor
+call on the handle records the real result through ONE authoritative per-class table,
+`STORAGE_METADATA_ACCESSOR_DISPOSITIONS`, covering the public receiver surface of BOTH
+`UntypedStorage` and `TypedStorage` (a reflection immunizer makes a new public storage member
+RED until classified -- never omission):
+
+* `nbytes` / `size` / `__len__` -> the `storage_nbytes` fact/read kind (always the BASE
+  untyped byte count, for typed and untyped spellings alike);
+* `is_shared` / `is_pinned` -> exactly the same observed-value read kinds as the Tensor
+  spellings, attributed via the origin map;
+* `data_ptr` -> the existing raw-pointer fail-closed belt;
+* mutators (`copy_`, `fill_`, `resize_`, `share_memory_`, `byteswap`, `__setitem__`) on a
+  captured-slot storage -> the host-mutation/writeback ceiling;
+* value reads and dtype/device conversions (`__getitem__`, `__iter__`, `tolist`, `float()`,
+  `to()`, `cpu()`, `pin_memory()`, ...) -> a state receiver joins the digest witness; an
+  input receiver fails closed (base-storage bytes outside the view window are not re-bound);
+* `device` / `element_size` / `get_device` / dtype-name helpers -> inert (slot-contract
+  covered); constructors (`from_buffer` / `from_file` / `new`) -> structural;
+  `TypedStorage.untyped()` -> an origin bridge (registers the returned handle);
+* `resizable()` -> fail-closed on a captured receiver (no staged reproduction recipe).
+
+An UNATTRIBUTABLE owner-thread storage accessor fails closed (observer uncertainty -- the
+opaque ceiling), never silently records nothing. Wrappers call through ONCE (the original
+runs paused+marked, so torch's own delegation -- `UntypedStorage.is_pinned` builds a scratch
+tensor and calls `Tensor.is_pinned(device)` -- is neither captured as phantom ops nor
+double-recorded), restore class attributes identity-exactly, and preserve the r43
+owner/non-owner rules (a non-owner touch of a captured storage handle ceilings via storage
+identity). Typed-to-untyped delegation may double-report idempotently. Named residual:
+`filename` and `_cdata` are PROPERTIES that TorchLens's own output/stack introspection
+getattr-walks on every storage object it encounters mid-forward, indistinguishably from a
+user read (and the locked allowlist-by-construction principle forbids a stack-filename
+discriminator), so those two rows are classified `contaminated_property_residual` --
+documented, never silently omitted -- exactly like the r31/r65 leaf-only autograd residuals.
+Documented residual (locked r67): on pre-guard-era supported torch, the user's OWN
+`is_pinned()` call may lazily initialize an accelerator; TorchLens still records that one
+actual return and adds no compatibility branch and no speculative second read.
+
+Every state-metadata row carries exactly one disposition from the CLOSED four-class
+oracle-policy vocabulary (`STATE_METADATA_ORACLE_POLICY` in `torchlens._runnable_state`,
+r67 C4), and producer checks, signatures, staging tripwires, and diagnostics consume the SAME
+rows:
+
+* `oracle_canonical` -- the dim's canonical value is the device/layout observation predicate
+  that Oracle 1's default `load_state_dict(strict=True, assign=False)` copy into a fresh
+  instance actually produces; a machine-checked Oracle-1 post-copy parity matrix proves every
+  such row against real oracle destinations (plain zero-version slots, initialized
+  Linear/BatchNorm slots, tied/alias groups, larger-base views, shared-memory state,
+  persistent buffers, and the staging-clone reproduction of non-persistent buffers, across
+  the supported device set), and NO static expected scalar may exist without an oracle probe
+  recipe in that matrix.
+* `declared_reproduced` -- `requires_grad` / `grad_fn` presence: declared-state facts staging
+  REPRODUCES (the locked r65 F-1 ruling, unchanged).
+* `structurally_covered` -- provably covered by another gate (`is_coalesced` raises on the
+  dense strided state the layout dim already pins).
+* `refuse_on_any_read` -- NO artifact-independent oracle-1 canonical exists, so ANY
+  attributed read refuses the runnable save (`state_metadata_mismatch` at
+  `producer_state_metadata`). `_version` is the charter member: oracle-1's default copy
+  increments constructor-owned counters (`0 -> 1` for plain slots, `1 -> 2` for initialized
+  modules), so the former `version_is_zero` canonical described a TorchLens-engineered
+  staging clone -- an observed value the contract's own oracle can never read. Every
+  version-zero staging guarantee is deleted: `version_is_zero` is removed from the canonical
+  table and the staged physical scope, and staging no longer performs the extra clone whose
+  sole purpose was manufacturing version zero. `_version` is NOT declared state (replay
+  cannot reconstruct a fresh constructor's pre-load counter); UNREAD version counters remain
+  irrelevant and allowed (both construction histories save and run when unread), and the
+  separate relative before/after mutation counters used by the in-transaction runtime checks
+  are unaffected.
+
+Read kinds of signature-backed `oracle_canonical` rows map to signature dims one-to-one; all
+state metadata comparisons still flow through ONE signature helper
+(`_state_metadata_signature`), with the r65 mirror dims (`is_inference`, `is_view`,
+`is_leaf`, `retains_grad`, `output_nr_is_zero`, `grad_is_none`, `storage_nbytes_is_tight` --
+the last stamped PRE-CLONE, which is exactly why the F3 large-base view is catchable; the
+helper also stamps the inert `device_type` context the placement predicate consumes).
+`is_shared`/`is_pinned` are deliberately NOT signature dims (r67 C3: their authority is the
+observation ledger; the pre-forward stamp was itself the forbidden speculative read). Future
+physical dims are added only there. All signature dims join the destination-owned PHYSICAL
+scope: every one is staging-canonicalized (the staging clone materializes under a neutral
+non-inference context, so binding or running inside a user `inference_mode` region never
+trips TorchLens's own staging output), keeping the unconditional in-transaction staged-state
+tripwire (`state_metadata:<slot_id>` check) sound -- the tripwire additionally verifies the
+two placement dims with real run-time reads on the staged clones. Signatures are stamped from
+the LIVE tensors BEFORE the capture-state clone, as r63.
 
 Explicitly changed vs the r63 ruling: the artifact now MAY carry recorded state-metadata
 facts -- the `state_metadata:<name>` declared-fact witnesses supersede the r63 sentence "no

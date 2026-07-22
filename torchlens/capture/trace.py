@@ -886,6 +886,40 @@ def _record_runnable_input_literal_leaves(
         trace.__dict__["_runnable_input_nontensor_leaves"] = tuple(leaves)
 
 
+def _record_runnable_input_structure(
+    trace: "Trace",
+    input_args: list[Any],
+    input_kwargs: dict[Any, Any],
+) -> None:
+    """Stash ONE per-site input-boundary structure snapshot for runnable honesty (r67 C2).
+
+    One traversal per normalized model-input site (the snapshot spine in
+    ``torchlens._input_walk``) records the complete site set/arity and every nested node
+    -- kind, exact ``(module, qualname)`` type, declared child schema, ordered
+    type-strict-encoded mapping keys, registered aux, and the instance-state proof. The
+    runnable producer persists the records as REQUIRED structure facts (positive proof:
+    a site without a snapshot, or a snapshot carrying a refusal, refuses the runnable
+    save); the executor re-derives the runtime snapshot with the SAME function and
+    diverges on any node mismatch. Analysis captures are unaffected.
+    """
+
+    if not bool(getattr(trace, "intervention_ready", False)):
+        return
+
+    from torchlens._input_walk import snapshot_input_boundary
+
+    snapshots: list[dict[str, Any]] = []
+    for index, arg in enumerate(input_args):
+        record = snapshot_input_boundary(arg)
+        record["position"] = ["arg", index]
+        snapshots.append(record)
+    for key, value in input_kwargs.items():
+        record = snapshot_input_boundary(value)
+        record["position"] = ["kwarg", str(key)]
+        snapshots.append(record)
+    trace.__dict__["_runnable_input_structure"] = tuple(snapshots)
+
+
 def _record_runnable_input_tensor_sites(
     trace: "Trace",
     input_args: list[Any],
@@ -1320,6 +1354,7 @@ def run_and_log_inputs_through_model(
             _register_model_input_container_snapshots(self, input_args, input_kwargs)
             _record_runnable_input_literal_leaves(self, input_args, input_kwargs)
             _record_runnable_input_tensor_sites(self, input_args, input_kwargs)
+            _record_runnable_input_structure(self, input_args, input_kwargs)
             _record_runnable_module_training_modes(self, model)
             if bool(getattr(self, "intervention_ready", False)):
                 # r35 decision E: capture the ambient backend execution context the
