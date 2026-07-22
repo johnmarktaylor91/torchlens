@@ -36,6 +36,7 @@ from menagerie.crawler.tests.conftest import (
     RealEnvironmentFixtureFactory,
     RealEnvironmentSealCounter,
     _copy_up_real_environment_member,
+    hardlink_bytes,
 )
 from menagerie.crawler.tests.test_round19_environment_authority_composition import (
     _typed_artifact,
@@ -99,24 +100,6 @@ def _site_packages(prefix: Path) -> Path:
     if not candidates:
         raise AssertionError("real prefix has no immediate site-packages directory")
     return candidates[-1]
-
-
-def _hardlink_test_member(root: Path, member: Path, content: bytes) -> None:
-    """Add one hardlinked test-owned regular member before sealing.
-
-    Parameters
-    ----------
-    root, member:
-        Isolated fixture root and destination below its real prefix.
-    content:
-        Exact bytes shared by the outside staging inode and sealed member.
-    """
-
-    source = root / "round21-overlay" / member.name
-    source.parent.mkdir(parents=True, exist_ok=True)
-    member.parent.mkdir(parents=True, exist_ok=True)
-    source.write_bytes(content)
-    os.link(source, member)
 
 
 def _adapter_source(build_body: str) -> str:
@@ -758,8 +741,16 @@ def _proof_e09(
         """Add equal-length internal targets and one sealed module symlink."""
 
         site = _site_packages(prefix)
-        _hardlink_test_member(root, site / "menagerie_round21_target_a.py", b"VALUE = 'a'\n")
-        _hardlink_test_member(root, site / "menagerie_round21_target_b.py", b"VALUE = 'b'\n")
+        hardlink_bytes(
+            root / "round21-overlay" / "menagerie_round21_target_a.py",
+            site / "menagerie_round21_target_a.py",
+            b"VALUE = 'a'\n",
+        )
+        hardlink_bytes(
+            root / "round21-overlay" / "menagerie_round21_target_b.py",
+            site / "menagerie_round21_target_b.py",
+            b"VALUE = 'b'\n",
+        )
         (site / link_name).symlink_to("menagerie_round21_target_a.py")
 
     fixture = factory(configure)
@@ -856,7 +847,11 @@ def _proof_e12(
         """Add one hardlinked checkpoint payload before the shipped seal."""
 
         checkpoint = _site_packages(prefix) / "menagerie_round21_checkpoint.pt"
-        _hardlink_test_member(root, checkpoint, b"trusted-model-checkpoint-bytes\n")
+        hardlink_bytes(
+            root / "round21-overlay" / checkpoint.name,
+            checkpoint,
+            b"trusted-model-checkpoint-bytes\n",
+        )
         state["checkpoint"] = checkpoint
 
     fixture = factory(configure)
@@ -884,7 +879,11 @@ def _proof_e13(
         """Add one binary immediate site-packages ``.pth`` before sealing."""
 
         checkpoint = _site_packages(prefix) / "menagerie_round21_binary.pth"
-        _hardlink_test_member(root, checkpoint, b"\x00round21-binary-pth\n")
+        hardlink_bytes(
+            root / "round21-overlay" / checkpoint.name,
+            checkpoint,
+            b"\x00round21-binary-pth\n",
+        )
         state["checkpoint"] = checkpoint
 
     fixture = factory(configure)

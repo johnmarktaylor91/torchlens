@@ -731,24 +731,39 @@ def _fixture_intent(
     return intent, probe_results
 
 
-def _hardlink_clone_real_environment(source: Path, prefix: Path) -> None:
-    """Create one checked hardlink clone of a selected real environment.
+def hardlink_clone_tree(source: Path, destination: Path) -> None:
+    """Create one checked same-filesystem hardlink tree clone.
 
     Parameters
     ----------
-    source, prefix:
-        Existing source environment and empty destination directory.
+    source, destination:
+        Existing source tree and new destination directory.
     """
 
-    try:
-        subprocess.run(
-            ("cp", "-al", f"{source}/.", str(prefix)),
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except (OSError, subprocess.CalledProcessError) as exc:
-        _real_environment_failure(f"hardlink clone failed: {exc}")
+    destination.mkdir()
+    subprocess.run(
+        ("cp", "-al", f"{source}/.", str(destination)),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def hardlink_bytes(source: Path, destination: Path, content: bytes) -> None:
+    """Create one file and a hardlinked destination with the same bytes.
+
+    Parameters
+    ----------
+    source, destination:
+        Outside staging file and exact hardlinked destination.
+    content:
+        Exact bytes shared by both paths.
+    """
+
+    source.parent.mkdir(parents=True, exist_ok=True)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(content)
+    os.link(source, destination)
 
 
 def _copy_real_environment_member(source: Path, destination: Path) -> None:
@@ -1054,8 +1069,10 @@ def _build_real_environment_fixture(
     source = _real_environment_source()
     clone_source = source if shared else _private_real_environment_source(source, root)
     prefix = root / "prefix"
-    prefix.mkdir()
-    _hardlink_clone_real_environment(clone_source, prefix)
+    try:
+        hardlink_clone_tree(clone_source, prefix)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        _real_environment_failure(f"hardlink clone failed: {exc}")
     site_candidates = sorted(prefix.glob("lib/python*/site-packages"))
     if not site_candidates:
         _real_environment_failure("clone has no immediate site-packages directory")

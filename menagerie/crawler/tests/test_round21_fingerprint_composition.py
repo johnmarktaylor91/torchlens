@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import stat
-import subprocess
 import sys
 
 import pytest
@@ -20,29 +19,12 @@ from menagerie.crawler.driver import bind_materialized_environment
 from menagerie.crawler.tests.conftest import (
     RealEnvironmentFixture,
     _copy_up_real_environment_member,
+    hardlink_clone_tree,
 )
 from menagerie.crawler.tests import test_round17_structural_inventories as structural
 from menagerie.crawler.tests.test_round19_environment_authority_composition import (
     _run_host_denial_composition,
 )
-
-
-def _hardlink_clone(source: Path, destination: Path) -> None:
-    """Create one checked same-filesystem hardlink tree clone.
-
-    Parameters
-    ----------
-    source, destination:
-        Existing source tree and new clone destination.
-    """
-
-    destination.mkdir()
-    subprocess.run(
-        ("cp", "-al", f"{source}/.", str(destination)),
-        check=True,
-        capture_output=True,
-        text=True,
-    )
 
 
 def _different_same_size(content: bytes) -> bytes:
@@ -270,7 +252,7 @@ def test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false
         raise AssertionError("real environment fixture lacks strict authority")
 
     primary = tmp_path / "primary"
-    _hardlink_clone(real_environment_fixture.prefix, primary)
+    hardlink_clone_tree(real_environment_fixture.prefix, primary)
     verify_environment_authority(fixture_authority)
     external_target = tmp_path / "external-target.bin"
     external_original = b"round21 external seal\n"
@@ -283,7 +265,7 @@ def test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false
     authority_id = clone_authority.authority_id
     generation = clone_authority.environment_generation
     second_clone = tmp_path / "second-clone"
-    _hardlink_clone(primary, second_clone)
+    hardlink_clone_tree(primary, second_clone)
     clone_cache.verify(clone_authority)
     verify_environment_authority(fixture_authority)
     clone_rehashes = clone_cache.rehashes

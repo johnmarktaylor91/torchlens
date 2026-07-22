@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import subprocess
 
 import pytest
 
@@ -27,6 +26,7 @@ from menagerie.crawler.tests.conftest import (
     RealEnvironmentLane,
     RealEnvironmentSealCounter,
     _copy_up_real_environment_member,
+    hardlink_clone_tree,
     real_environment_registry,
 )
 from menagerie.crawler.tests.dry_run_support import DRY_RUN_CASES, TinyModelAuthor
@@ -36,24 +36,6 @@ from menagerie.crawler.tests.test_slice_f_driver import (
     _paths,
     _write_jsonl,
 )
-
-
-def _hardlink_clone(source: Path, destination: Path) -> None:
-    """Create one checked same-filesystem hardlink tree clone.
-
-    Parameters
-    ----------
-    source, destination:
-        Existing real prefix and new clone destination.
-    """
-
-    destination.mkdir()
-    subprocess.run(
-        ("cp", "-al", f"{source}/.", str(destination)),
-        check=True,
-        capture_output=True,
-        text=True,
-    )
 
 
 def _private_mutable_member(
@@ -165,7 +147,7 @@ def _assert_spawn_validation_catches_post_pass_mutation(
     """
 
     prefix = tmp_path / "mutation-prefix"
-    _hardlink_clone(fixture.prefix, prefix)
+    hardlink_clone_tree(fixture.prefix, prefix)
     mutable = _private_mutable_member(fixture, prefix)
     cache = EnvironmentAuthorityCache()
     binding = bind_materialized_environment(

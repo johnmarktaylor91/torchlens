@@ -34,6 +34,7 @@ from menagerie.crawler.tests.conftest import (
     RealEnvironmentFixture,
     RealEnvironmentLane,
     _copy_up_real_environment_member,
+    hardlink_bytes,
     real_environment_registry,
 )
 from menagerie.crawler.tests.dry_run_support import DRY_RUN_CASES, TinyModelAuthor
@@ -157,23 +158,6 @@ def test_real_hardlink_clone_binds_complete_environment_authority(
     assert any(entry.relative_path.endswith(".so") for entry in authority.content_manifest.entries)
 
 
-def _hardlink_file(source: Path, target: Path, content: bytes) -> None:
-    """Create one file and its hardlinked sealed-prefix member.
-
-    Parameters
-    ----------
-    source, target:
-        Outside staging file and in-prefix member path.
-    content:
-        Exact shared bytes.
-    """
-
-    source.parent.mkdir(parents=True, exist_ok=True)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    source.write_bytes(content)
-    os.link(source, target)
-
-
 def test_hardlinked_prefix_is_one_sealed_authority_and_mutation_stales(
     tmp_path: Path,
 ) -> None:
@@ -181,20 +165,20 @@ def test_hardlinked_prefix_is_one_sealed_authority_and_mutation_stales(
 
     prefix = tmp_path / "prefix"
     staging = tmp_path / "staging"
-    _hardlink_file(staging / "python", prefix / "bin" / "python", b"python")
+    hardlink_bytes(staging / "python", prefix / "bin" / "python", b"python")
     (prefix / "bin" / "python").chmod(0o755)
-    _hardlink_file(
+    hardlink_bytes(
         staging / "future.py",
         prefix / "lib" / "python3.11" / "__future__.py",
         b"future = True\n",
     )
-    _hardlink_file(
+    hardlink_bytes(
         staging / "startup.pth",
         prefix / "lib" / "python3.11" / "site-packages" / "sentinel.pth",
         b"import sentinel\n",
     )
-    _hardlink_file(staging / "native.so", prefix / "lib" / "libsentinel.so", b"native")
-    _hardlink_file(
+    hardlink_bytes(staging / "native.so", prefix / "lib" / "libsentinel.so", b"native")
+    hardlink_bytes(
         staging / "metadata.json",
         prefix / "conda-meta" / "sentinel-1-0.json",
         b"{}\n",
@@ -380,7 +364,7 @@ def test_manifest_v3_rejects_changed_interpreter_association(tmp_path: Path) -> 
     prefix = tmp_path / "prefix"
     staging = tmp_path / "staging"
     interpreter = prefix / "bin" / "python"
-    _hardlink_file(staging / "python", interpreter, b"python")
+    hardlink_bytes(staging / "python", interpreter, b"python")
     interpreter.chmod(0o755)
     code = tmp_path / "adapter.py"
     code.write_text("VALUE = 1\n", encoding="utf-8")
