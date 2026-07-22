@@ -15,7 +15,7 @@ from collections import defaultdict
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Mapping, Optional, Protocol as Protocol, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, Protocol as Protocol, Sequence
 from menagerie.crawler.artifact_transactions import (
     StagedArtifact as StagedArtifact,
 )
@@ -23,6 +23,7 @@ from menagerie.crawler.author_dispatch import (
     AuthorResult as AuthorResult,
 )
 from menagerie.crawler.authority import (
+    AuthorityDerivationError,
     EnvironmentVerificationToken,
     ExecutableClosureV3,
     ExecutionReadManifestV3,
@@ -32,6 +33,7 @@ from menagerie.crawler.authority import (
     WorkerLease,
     collect_executable_closure_v3,
     compile_execution_read_manifest_v3_from_closure,
+    load_current_attempt_proof,
 )
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION_V3,
@@ -39,6 +41,7 @@ from menagerie.crawler.constants import (
     DEFAULT_NOTIFY_COMMAND as DEFAULT_NOTIFY_COMMAND,
     DEFAULT_PROGRESS_MILESTONES as DEFAULT_PROGRESS_MILESTONES,
     DEFAULT_REVIEW_CHECKPOINT_AT as DEFAULT_REVIEW_CHECKPOINT_AT,
+    OPERATIONAL_EVENT_SCHEMA_VERSION,
     OperationalEventKind,
     OperationalEventStatus,
 )
@@ -53,7 +56,9 @@ from menagerie.crawler.metadata import (
 )
 from menagerie.crawler.modes import classify_observed_mode_receipts
 from menagerie.crawler.models import JsonObject, LedgerPaths as LedgerPaths
+from menagerie.crawler.recordio import JsonlLedger, resolve_attempt_slot, scan_jsonl
 from menagerie.crawler.reducer import (
+    CanonicalReducer,
     cold_forward_policy,
     default_ledger_paths as default_ledger_paths,
     expected_standard_asset,
@@ -74,6 +79,7 @@ from menagerie.crawler.worker_supervisor import (
     SupervisedResult,
 )
 from menagerie.crawler.driver_contracts import (
+    ActivatedHandoffArtifact,
     AuthorArtifact,
     AuthorLane as AuthorLane,
     BoundaryHook as BoundaryHook,
@@ -81,16 +87,30 @@ from menagerie.crawler.driver_contracts import (
     Clock as Clock,
     DriverError as DriverError,
     DriverIntegrationError,
+    DriverPaused,
     DriverShutdown,
     EnvironmentBinding,
     EnvironmentLane as EnvironmentLane,
     ForwardLane as ForwardLane,
     Notifier as Notifier,
     UsagePauseScheduler as UsagePauseScheduler,
+    WorkItem,
     default_driver_paths as default_driver_paths,
 )
 from menagerie.crawler.driver_progress import (
+    _is_sandbox_unavailable,
+    _read_json,
+    _write_driver_state,
     _write_json_atomic,
+)
+from menagerie.crawler.driver_models import (
+    _assemble_run_model,
+    _attempt_policy_satisfied,
+    _detected_mode_expansion,
+    _driver_failure_attempt,
+    _matching_attempts,
+    _matching_model_attempts,
+    _without_ledger_fields,
 )
 
 
@@ -2011,3 +2031,543 @@ def _physical_memory_bytes() -> int:
         return int(os.sysconf("SC_PHYS_PAGES")) * int(os.sysconf("SC_PAGE_SIZE"))
     except (OSError, ValueError):
         return 0
+
+
+class ReceiptDriverMixin:
+    """Driver-side worker lifecycle, receipt, and run-award orchestration."""
+
+    if TYPE_CHECKING:
+        _reduced: int
+
+        def __getattr__(self, name: str) -> Any:
+            """Describe collaborators supplied by the concrete driver facade."""
+
+            raise AttributeError(name)
+
+    def _append_worker_lifecycle_event(
+        self,
+        operational: JsonlLedger,
+        *,
+        event_kind: str,
+        status: str,
+        lease_id: str,
+        stable_id: str,
+        details: Mapping[str, Any],
+    ) -> None:
+        """Append one idempotent worker lifecycle event."""
+
+        identity = stable_hash(
+            {"event_kind": event_kind, "lease_id": lease_id, "details": dict(details)}
+        )[7:31]
+        operational.append(
+            {
+                "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+                "event_id": f"worker-{identity}",
+                "created_at": self.dependencies.clock(),
+                "event_kind": event_kind,
+                "status": status,
+                "provider": None,
+                "observed_response": None,
+                "reset_at": None,
+                "queued_work_counts": {"models": 0},
+                "current_environment": None,
+                "run_id": self.config.run_id,
+                "machine_id": self.config.machine_id,
+                "details": {"lease_id": lease_id, "stable_id": stable_id, **dict(details)},
+            }
+        )
+
+    def _ensure_pending_run_anchors(
+        self,
+        work: Sequence[WorkItem],
+        artifacts: dict[str, AuthorArtifact],
+        reducer: CanonicalReducer,
+        operational: JsonlLedger,
+        state: JsonObject,
+    ) -> None:
+        """Require private custody before checker backoff.
+
+        Parameters
+        ----------
+        work, artifacts:
+            Current scheduled items and mutable normalized artifact map.
+        reducer, operational, state:
+            Locked canonical stores used to terminalize one failed staging transaction.
+
+        Notes
+        -----
+        Pending mechanical work remains private. Publication is authorized only after the
+        accepted checker decision is part of the reducer authority projection.
+        """
+
+        del reducer, operational, state
+        for item in work:
+            artifact = artifacts.get(item.stable_id)
+            if artifact is not None and artifact.staged is None:
+                raise DriverIntegrationError(
+                    "pending mechanical work must execute from verified private custody"
+                )
+
+    def _forward_and_reduce(
+        self,
+        item: WorkItem,
+        artifact: AuthorArtifact,
+        environment: EnvironmentBinding,
+        reducer: CanonicalReducer,
+        operational: JsonlLedger,
+        state: JsonObject,
+        *,
+        award_run: bool,
+        closure: Optional[ExecutableClosureV3] = None,
+        verification_token: Optional[EnvironmentVerificationToken] = None,
+    ) -> Optional[str]:
+        """Append honest worker attempts and return a checker pause from run repair.
+
+        Parameters
+        ----------
+        item, artifact, environment, reducer, operational, state:
+            Exact scheduled work, authority, ledgers, and durable driver state.
+        award_run:
+            Whether successful attempts may advance to run award.
+        closure:
+            Optional closure already collected once for this artifact in the pass.
+        verification_token:
+            Optional cache-created currentness-pass proof used for closure collection.
+
+        Returns
+        -------
+        str | None
+            Checker pause reason, or ``None`` after ordinary reduction.
+        """
+
+        if isinstance(self.dependencies.forward, SupervisedForwardLane):
+            collected_closure = closure or _collect_worker_executable_closure(
+                artifact,
+                environment,
+                verification_token=verification_token,
+            )
+            closure_identity = collected_closure.identity
+        else:
+            collected_closure = None
+            closure_identity = _driver_facade()._INJECTED_FORWARD_CLOSURE_IDENTITY
+        execution_identity = _driver_facade()._execution_identity(
+            artifact, environment, closure_identity=closure_identity
+        )
+        self.dependencies.boundary_hook("pre-forward", item.stable_id)
+        self._check_shutdown(
+            "forward-admission",
+            item=item,
+            work_id=str(artifact.proposal["work_id"]),
+            execution_identity=execution_identity,
+        )
+        attempts = _matching_attempts(
+            self.paths.ledgers.attempts,
+            artifact.proposal,
+            environment,
+            execution_identity,
+        )
+        rung = artifact.proposal.get("proposed_facts", {}).get("source_resolution", {}).get("rung")
+        cold_runs = cold_forward_policy(item.stable_id, rung).required_cold_forwards
+        if not _attempt_policy_satisfied(attempts, artifact.proposal, cold_runs):
+            generated: tuple[Mapping[str, Any], ...]
+            cache_identity = stable_hash(
+                {
+                    "execution_identity": execution_identity,
+                    "work_id": artifact.proposal.get("work_id"),
+                }
+            )
+            cache = (
+                self.paths.work_root
+                / item.stable_id
+                / f"driver-forward-attempts-{cache_identity[7:23]}.json"
+            )
+            persisted_by_lane = isinstance(self.dependencies.forward, SupervisedForwardLane)
+            attempts_persisted_by_lane = False
+
+            def persist_worker_attempt(attempt: Mapping[str, Any]) -> None:
+                """Persist one honest attempt before its worker lease closes."""
+
+                candidate = _without_ledger_fields(attempt)
+                reducer.append_attempt(
+                    _redact_attempt_diagnostics(
+                        candidate,
+                        None,
+                        _diagnostics_root_for_work_root(self.paths.work_root),
+                    )
+                )
+                self.dependencies.boundary_hook("after-attempt", item.stable_id)
+
+            def persist_worker_lifecycle(event_kind: str, status: str, lease: WorkerLease) -> None:
+                """Persist a lock-ordered worker lifecycle transition."""
+
+                self._append_worker_lifecycle_event(
+                    operational,
+                    event_kind=event_kind,
+                    status=status,
+                    lease_id=lease.lease_id,
+                    stable_id=lease.stable_id,
+                    details={
+                        "work_id": lease.work_id,
+                        "execution_identity": lease.execution_identity,
+                        "request_identity": lease.request_identity,
+                        "child_pid": lease.child_pid,
+                    },
+                )
+                if event_kind == OperationalEventKind.WORKER_LEASE_STARTED.value:
+                    self.dependencies.boundary_hook(event_kind, lease.stable_id)
+
+            def resolve_worker_attempt(cold_index: int, mode: str) -> Optional[Mapping[str, Any]]:
+                """Authenticate one canonical deterministic slot before any capability opens."""
+
+                resolved = resolve_attempt_slot(
+                    scan_jsonl(self.paths.ledgers.attempts),
+                    work_id=str(artifact.proposal["work_id"]),
+                    execution_identity=execution_identity,
+                    cold_index=cold_index,
+                    mode=mode,
+                )
+                if resolved is None:
+                    return None
+                try:
+                    authority = load_current_attempt_proof(resolved)
+                except AuthorityDerivationError as exc:
+                    raise DriverIntegrationError(str(exc)) from exc
+                if resolved.get("result") == "succeeded" and authority is None:
+                    raise DriverIntegrationError(
+                        "canonical execution slot lacks authenticated success authority"
+                    )
+                return resolved
+
+            cached: JsonObject | None = None
+            if cache.is_file() and not persisted_by_lane:
+                try:
+                    candidate = _read_json(cache)
+                except Exception:  # noqa: BLE001 -- disposable replay cache is regenerable
+                    cache.unlink(missing_ok=True)
+                else:
+                    if (
+                        candidate.get("work_id") == artifact.proposal.get("work_id")
+                        and candidate.get("execution_identity") == execution_identity
+                    ):
+                        cached = candidate
+                    else:
+                        cache.unlink(missing_ok=True)
+            if cached is not None:
+                generated = tuple(
+                    dict(value)
+                    for value in cached.get("attempts", [])
+                    if isinstance(value, Mapping)
+                )
+            else:
+                try:
+                    if isinstance(self.dependencies.forward, SupervisedForwardLane):
+                        generated = tuple(
+                            self.dependencies.forward.forward(
+                                artifact,
+                                environment,
+                                cold_runs,
+                                self.paths.work_root,
+                                worker_lock_path=self.paths.worker_lock,
+                                worker_lease_path=self.paths.worker_lease,
+                                run_id=self.config.run_id,
+                                shutdown_event=self._shutdown_event,
+                                lifecycle_event=persist_worker_lifecycle,
+                                attempt_sink=persist_worker_attempt,
+                                attempt_resolver=resolve_worker_attempt,
+                                closure=collected_closure,
+                            )
+                        )
+                        attempts_persisted_by_lane = True
+                    else:
+                        generated = tuple(
+                            self.dependencies.forward.forward(
+                                artifact,
+                                environment,
+                                cold_runs,
+                                self.paths.work_root,
+                            )
+                        )
+                except Exception as exc:  # noqa: BLE001 -- supervisor failure is model-local
+                    stage, reason = (
+                        ("policy", "sandbox-unavailable-v1")
+                        if _is_sandbox_unavailable(exc)
+                        else ("runner", "internal-error")
+                    )
+                    generated = (
+                        _driver_failure_attempt(
+                            item,
+                            artifact,
+                            stage,
+                            reason,
+                            exc,
+                            self.config,
+                            diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
+                            environment=environment.family,
+                            created_at=self.dependencies.clock(),
+                        ),
+                    )
+                _write_json_atomic(
+                    cache,
+                    {
+                        "work_id": artifact.proposal["work_id"],
+                        "execution_identity": execution_identity,
+                        "attempts": list(generated),
+                    },
+                )
+            if not attempts_persisted_by_lane:
+                for attempt in generated:
+                    persist_worker_attempt(attempt)
+            attempts = _matching_attempts(
+                self.paths.ledgers.attempts,
+                artifact.proposal,
+                environment,
+                execution_identity,
+            )
+            if not _attempt_policy_satisfied(attempts, artifact.proposal, cold_runs):
+                all_attempts = _matching_model_attempts(
+                    self.paths.ledgers.attempts, artifact.proposal
+                )
+                expansion = _detected_mode_expansion(all_attempts, artifact.proposal)
+                if expansion is not None:
+                    if not any(
+                        attempt.get("error", {}).get("details", {}).get("route")
+                        == "recipe-and-gate-revision-required"
+                        for attempt in all_attempts
+                        if isinstance(attempt.get("error"), Mapping)
+                    ):
+                        expansion_attempt = _driver_failure_attempt(
+                            item,
+                            artifact,
+                            "input",
+                            "contract-invalid",
+                            DriverIntegrationError(
+                                "worker detected meaningful modes absent from the gated proposal"
+                            ),
+                            self.config,
+                            diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
+                            environment=environment.family,
+                            created_at=self.dependencies.clock(),
+                        )
+                        expansion_attempt["attempt_id"] = stable_hash(
+                            {
+                                "work_id": artifact.proposal["work_id"],
+                                "route": "recipe-and-gate-revision-required",
+                                "detected_meaningful_modes": expansion["detected_meaningful_modes"],
+                            }
+                        )
+                        expansion_attempt["error"]["details"] = deepcopy(expansion)
+                        expansion_attempt["error"]["root_cause_fingerprint"] = stable_hash(
+                            expansion
+                        )
+                        persisted_expansion = reducer.append_attempt(expansion_attempt).record
+                        all_attempts = (*all_attempts, persisted_expansion)
+                    try:
+                        repaired = self._repair_author_for_detected_modes(
+                            item,
+                            artifact,
+                            expansion,
+                            reducer,
+                        )
+                    except Exception as exc:  # noqa: BLE001 -- bounded repair is model-local
+                        reason = (
+                            "protocol-violation"
+                            if isinstance(exc, DriverIntegrationError)
+                            and not self._is_infrastructure_error(exc)
+                            else "internal-error"
+                        )
+                        repair_failure = reducer.append_attempt(
+                            _driver_failure_attempt(
+                                item,
+                                artifact,
+                                "runner",
+                                reason,
+                                exc,
+                                self.config,
+                                diagnostics_root=_diagnostics_root_for_work_root(
+                                    self.paths.work_root
+                                ),
+                                environment=environment.family,
+                                created_at=self.dependencies.clock(),
+                            )
+                        ).record
+                        self._terminalize(
+                            item,
+                            artifact,
+                            "failed:runner",
+                            reason,
+                            str(exc),
+                            (*all_attempts, repair_failure),
+                            reducer,
+                            operational,
+                            state,
+                        )
+                        return None
+                    repaired_artifacts = {item.stable_id: repaired}
+                    pause = self._ensure_gates(
+                        (item,), repaired_artifacts, reducer, operational, state
+                    )
+                    current = reducer.current_records.get(item.stable_id)
+                    if current is not None and current.get("status", {}).get("kind") != "runs":
+                        return pause
+                    if pause is not None:
+                        return pause
+                    repaired = repaired_artifacts[item.stable_id]
+                    self._family_artifacts[item.stable_id] = repaired
+                    repaired_closure = (
+                        _collect_worker_executable_closure(
+                            repaired,
+                            environment,
+                            verification_token=verification_token,
+                        )
+                        if isinstance(self.dependencies.forward, SupervisedForwardLane)
+                        else None
+                    )
+                    return self._forward_and_reduce(
+                        item,
+                        repaired,
+                        environment,
+                        reducer,
+                        operational,
+                        state,
+                        award_run=award_run,
+                        closure=repaired_closure,
+                        verification_token=verification_token,
+                    )
+                failure = next(
+                    (
+                        attempt
+                        for attempt in reversed(all_attempts)
+                        if attempt["result"] == "failed"
+                    ),
+                    None,
+                )
+                if failure is None:
+                    integration_error = DriverIntegrationError(
+                        f"worker attempts do not satisfy modes/cold policy for {item.stable_id}"
+                    )
+                    failure = reducer.append_attempt(
+                        _driver_failure_attempt(
+                            item,
+                            artifact,
+                            "runner",
+                            "protocol-violation",
+                            integration_error,
+                            self.config,
+                            diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
+                            environment=environment.family,
+                            created_at=self.dependencies.clock(),
+                        )
+                    ).record
+                    all_attempts = (*all_attempts, failure)
+                error = failure["error"]
+                if not isinstance(error, Mapping):
+                    raise DriverIntegrationError("failed attempt lost its structured error")
+                stage = str(error["stage"])
+                self._terminalize(
+                    item,
+                    artifact,
+                    f"failed:{stage}",
+                    str(error["reason_code"]),
+                    None,
+                    all_attempts,
+                    reducer,
+                    operational,
+                    state,
+                )
+                return None
+            self.dependencies.boundary_hook("after-forward", item.stable_id)
+        if not award_run:
+            return None
+        self.dependencies.boundary_hook("post-attempt-pre-award", item.stable_id)
+        self._check_shutdown(
+            "post-attempt-pre-award",
+            item=item,
+            work_id=str(artifact.proposal["work_id"]),
+            execution_identity=execution_identity,
+        )
+        gates = scan_jsonl(self.paths.ledgers.gates)
+        representative_model = (
+            reducer.current_records.get(item.family_representative_id)
+            if item.is_family_variant
+            else None
+        )
+        try:
+            model = _assemble_run_model(
+                item,
+                artifact,
+                attempts,
+                gates,
+                self.config,
+                representative_model=representative_model,
+            )
+        except DriverIntegrationError as exc:
+            if artifact.template_source_revision is None:
+                raise
+            failure = reducer.append_attempt(
+                _driver_failure_attempt(
+                    item,
+                    artifact,
+                    "runner",
+                    "protocol-violation",
+                    exc,
+                    self.config,
+                    diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
+                    environment=environment.family,
+                    created_at=self.dependencies.clock(),
+                )
+            ).record
+            self._terminalize(
+                item,
+                artifact,
+                "failed:runner",
+                "protocol-violation",
+                str(exc),
+                (*attempts, failure),
+                reducer,
+                operational,
+                state,
+            )
+            return None
+        current_model = reducer.current_records.get(item.stable_id)
+        model["parent_revision"] = (
+            current_model["record_revision"] if current_model is not None else None
+        )
+        if current_model is not None:
+            model["status"]["supersedes_revision"] = current_model["record_revision"]
+
+        self.dependencies.boundary_hook("pre-publication", item.stable_id)
+        self._check_shutdown(
+            "pre-publication-admission",
+            item=item,
+            work_id=str(artifact.proposal["work_id"]),
+            execution_identity=execution_identity,
+        )
+        self.dependencies.boundary_hook("pre-award-commit", item.stable_id)
+        self._check_shutdown(
+            "pre-award-commit",
+            item=item,
+            work_id=str(artifact.proposal["work_id"]),
+            execution_identity=execution_identity,
+        )
+        self.dependencies.boundary_hook("award-commit-entered", item.stable_id)
+        # Graceful-shutdown atomic award section: publication authorization and
+        # materialization must remain check-free through the canonical model append.
+        if model.get("authored_metadata_state") == "accepted" and not isinstance(
+            artifact, ActivatedHandoffArtifact
+        ):
+            self._authorize_and_publish_artifact(artifact, model, gates, reducer)
+        result = reducer.append_model(reducer.prepare_model(model))
+        if result.appended:
+            self._reduced += 1
+        self.dependencies.boundary_hook("post-award-commit", item.stable_id)
+        self._check_shutdown("post-award-commit")
+        self.dependencies.boundary_hook("after-reduce", item.stable_id)
+        current_records = reducer.current_records
+        snapshot = self._policy_snapshot()
+        self._handle_progress(operational, current_records, snapshot, state=state)
+        if self._maybe_pause_for_review(operational, current_records, snapshot, state):
+            raise DriverPaused("review checkpoint reached")
+        state["last_terminal_count"] = len(current_records)
+        state["status"] = "running"
+        _write_driver_state(self.paths.driver_state, state)
+        return None

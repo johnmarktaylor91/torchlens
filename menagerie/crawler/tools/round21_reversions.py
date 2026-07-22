@@ -550,7 +550,7 @@ def _delete_shutdown_guard(root: Path, _reversion_id: str) -> None:
 
     _replace_once(
         root,
-        _DRIVER_PATH,
+        _DRIVER_RECEIPTS_PATH,
         """        self.dependencies.boundary_hook("post-award-commit", item.stable_id)
         self._check_shutdown("post-award-commit")
         self.dependencies.boundary_hook("after-reduce", item.stable_id)
@@ -578,7 +578,7 @@ def _move_shutdown_inside_publication(root: Path, _reversion_id: str) -> None:
 
     _replace_once(
         root,
-        _DRIVER_PATH,
+        _DRIVER_RECEIPTS_PATH,
         """        if model.get("authored_metadata_state") == "accepted" and not isinstance(
             artifact, ActivatedHandoffArtifact
         ):

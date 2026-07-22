@@ -282,10 +282,6 @@ _RUNNER_IDENTITY_CACHE: dict[str, str] = {}
 _RUNNER_EXECUTION_CLOSURE = _RUNNER_COMMON_EXECUTION_CLOSURE
 _INJECTED_FORWARD_CLOSURE_IDENTITY = stable_hash("injected-forward-lane-executable-closure")
 _AWARD_CLOSURE_SYMBOLS = {
-    "driver.py": (
-        "CrawlerDriver._forward_and_reduce",
-        "CrawlerDriver._ensure_pending_run_anchors",
-    ),
     "driver_admission.py": (
         "AdmissionEnvironmentMixin._run_environment_work",
         "_source_symbol_bytes",
@@ -301,6 +297,8 @@ _AWARD_CLOSURE_SYMBOLS = {
         "_observed_interpreter_facts",
     ),
     "driver_receipts.py": (
+        "ReceiptDriverMixin._forward_and_reduce",
+        "ReceiptDriverMixin._ensure_pending_run_anchors",
         "SupervisedForwardLane.forward",
         "_attempts_from_supervised",
         "_collect_worker_executable_closure",

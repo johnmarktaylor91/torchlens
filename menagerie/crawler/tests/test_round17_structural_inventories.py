@@ -65,10 +65,10 @@ _SENSITIVE_EDGE_COUNTS = Counter(
         ("AdmissionEnvironmentMixin._run_environment_work", "dependencies.environments.run"): 1,
         ("SupervisedForwardLane.forward", "open_worker_lease"): 1,
         ("SupervisedForwardLane.forward", "supervise_worker"): 1,
-        ("CrawlerDriver._forward_and_reduce", "dependencies.forward.forward"): 2,
+        ("ReceiptDriverMixin._forward_and_reduce", "dependencies.forward.forward"): 2,
         ("CrawlerDriver._authorize_and_publish_artifact", "publish_authorized_artifact"): 1,
         ("CrawlerDriver._authorize_terminal_artifact", "publish_authorized_artifact"): 1,
-        ("CrawlerDriver._forward_and_reduce", "append_model"): 1,
+        ("ReceiptDriverMixin._forward_and_reduce", "append_model"): 1,
         ("CrawlerDriver._terminalize", "append_model"): 1,
     }
 )
@@ -442,13 +442,11 @@ def test_round21_verification_tree_walk_inventory_is_closed() -> None:
             "environment_read_capability",
             "verify_execution_read_manifest_v3",
         },
-        "driver.py": {
-            "CrawlerDriver._forward_and_reduce",
-        },
         "driver_admission.py": {
             "AdmissionEnvironmentMixin._run_environment_work",
         },
         "driver_receipts.py": {
+            "ReceiptDriverMixin._forward_and_reduce",
             "SupervisedForwardLane.forward",
             "_collect_worker_executable_closure",
             "_compile_worker_read_manifest",
@@ -462,7 +460,6 @@ def test_round21_verification_tree_walk_inventory_is_closed() -> None:
     }
     modules = {
         "authority.py": authority_module,
-        "driver.py": driver_module,
         "driver_admission.py": driver_admission_module,
         "driver_receipts.py": __import__(
             "menagerie.crawler.driver_receipts", fromlist=["driver_receipts"]
