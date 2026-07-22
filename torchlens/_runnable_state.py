@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from hashlib import sha256
 import math
@@ -1481,6 +1482,36 @@ single-output call.
 """
 
 
+@contextmanager
+def _guarded_defensive_materialize() -> Iterator[None]:
+    """NEUTRAL ambient for every PRE-EXECUTION defensive materialization (r67 C5).
+
+    Oracle 1 constructs/loads state and receives inputs BEFORE its forward context, so
+    TorchLens's defensive materializations -- the staging clone (incl. re-layout and
+    cross-device ``.to()`` transfer), the second state clone, the runtime input mirror,
+    and random-state allocation/fill -- run under neutral ``torch.inference_mode(False)``
+    plus ``torch.enable_grad()``:
+
+    * never the CALLER's ambient -- a user calling ``.run()`` / binding state inside
+      ``torch.inference_mode()`` or ``torch.no_grad()`` must not mint inference-mode
+      clones that trip the staged-state tripwire (corr1-2's false
+      ``PathDivergenceError(state_metadata_mismatch is_inference)``) or strip the mirror
+      of attestation eligibility on an otherwise-exact run;
+    * never the RECORDED ambient -- recorded ambient/per-call contexts govern sparse
+      EXECUTION only, entered around the transaction after binding/staging.
+
+    Exact caller restoration is the context managers' contract (both restore prior state
+    on exit, success or raise). NARROW by design: mid-transaction op/witness/attestation
+    snapshots (:meth:`RunResourceCeiling.guarded_clone` from execution sites) stay OUTSIDE
+    this helper -- they legitimately run under recorded execution semantics, so neither
+    ``guarded_clone`` nor :func:`_byte_guarded_clone` is globally neutralized. The
+    bidirectional source-scan immunizer owns this boundary.
+    """
+
+    with torch.inference_mode(False), torch.enable_grad():
+        yield
+
+
 def _byte_guarded_clone(
     value: torch.Tensor,
     *,
@@ -1559,11 +1590,12 @@ def _staged_state_clone(
     when non-canonical (an unreadable stride fails closed into the re-lay).
     """
 
-    # r65 staging hardening (a): materialize under ``torch.inference_mode(False)`` so a user
-    # calling ``tl.load(...).run()`` (or binding state) INSIDE an inference_mode region cannot
-    # mint inference-mode staged clones and trip the ``is_inference`` runtime tripwire dim on
-    # TorchLens's own staging output.
-    with torch.inference_mode(False):
+    # r67 C5: materialize under the ONE neutral defensive-materialization ambient
+    # (``inference_mode(False)`` + ``enable_grad``) so a user calling ``tl.load(...).run()``
+    # (or binding state) INSIDE an inference_mode/no_grad region cannot mint inference-mode
+    # staged clones and trip the ``is_inference`` runtime tripwire dim on TorchLens's own
+    # staging output (supersedes the r65 staging hardening (a) inference-only guard).
+    with _guarded_defensive_materialize():
         clone = _byte_guarded_clone(value, slot_id=slot_id, state_dict_name=state_dict_name)
         try:
             canonical = tuple(int(v) for v in clone.stride()) == _default_dense_stride(
@@ -1956,7 +1988,22 @@ def _initialize_slot(
     slot: TensorSlotDescriptor,
     generator: torch.Generator | None,
 ) -> torch.Tensor:
-    """Allocate and fill one representative slot under ``torchlens_role_init_v2``."""
+    """Allocate and fill one representative slot under ``torchlens_role_init_v2``.
+
+    r67 C5: the WHOLE allocation+fill is a defensive materialization -- neutral ambient,
+    so a caller inference_mode/no_grad region cannot mint inference-mode slots or alter
+    the fill semantics.
+    """
+
+    with _guarded_defensive_materialize():
+        return _initialize_slot_neutral(slot, generator)
+
+
+def _initialize_slot_neutral(
+    slot: TensorSlotDescriptor,
+    generator: torch.Generator | None,
+) -> torch.Tensor:
+    """Allocate and fill one representative slot (inside the neutral ambient)."""
 
     binding = slot.state_binding
     assert binding is not None
@@ -2107,7 +2154,10 @@ def stage_state_to_slot_devices(
         cached = moved_by_identity.get(id(value))
         if cached is None:
             try:
-                with _state.pause_logging():
+                # r67 C5: the cross-device staging transfer is a defensive
+                # materialization -- neutral ambient, never the caller's (a ``.to()``
+                # inside a caller inference_mode region would mint an inference tensor).
+                with _state.pause_logging(), _guarded_defensive_materialize():
                     cached = value.to(_slot_device(slot))
             except (RuntimeError, AssertionError) as exc:
                 raise RunCapabilityUnavailableError(

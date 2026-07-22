@@ -22,6 +22,7 @@ from ._runnable_state import (
     PreparedRunnableState,
     RunResourceCeiling,
     _allocation_budget_bytes,
+    _guarded_defensive_materialize,
     prepare_runnable_state,
     runnable_tensor_byte_digest,
     state_metadata_full_violations,
@@ -1500,15 +1501,21 @@ def _runtime_mirror_clone(
     typed at ``clone_allocation_preflight`` BEFORE the materializing clone, never
     an allocator death. Honest inputs clone with ``requires_grad`` mirrored, so
     attestation eligibility is unchanged.
+
+    r67 C5 (corr1-2): the mirror is a PRE-EXECUTION defensive materialization, so it
+    runs under the neutral ambient -- a caller inside ``torch.inference_mode()`` no
+    longer mints an inference-mode mirror (which lost attestation on an otherwise
+    exact run and could not carry the mirrored ``requires_grad``).
     """
 
-    return ceiling.guarded_clone(
-        raw,
-        call_id=None,
-        slot_id=slot.slot_id,
-        affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
-        mirror_requires_grad=True,
-    )
+    with _guarded_defensive_materialize():
+        return ceiling.guarded_clone(
+            raw,
+            call_id=None,
+            slot_id=slot.slot_id,
+            affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
+            mirror_requires_grad=True,
+        )
 
 
 def _model_input_version_closure(descriptor: SparseRunDescriptor) -> set[str]:
@@ -1756,6 +1763,11 @@ def _clone_state_values(
     r61 corr_2: each identity's single clone routes through the transaction
     ceiling's byte guard, so an oversized staged value refuses typed at
     ``clone_allocation_preflight`` instead of dying in the allocator.
+
+    r67 C5 (corr1-2): the second state clone is a PRE-EXECUTION defensive
+    materialization, so it runs under the neutral ambient -- a caller inside
+    ``torch.inference_mode()`` no longer mints inference-mode run-local state that
+    trips the staged tripwire's ``is_inference`` dim on TorchLens's own output.
     """
 
     trainable_by_slot = {
@@ -1765,17 +1777,18 @@ def _clone_state_values(
     }
     clones_by_identity: dict[int, torch.Tensor] = {}
     cloned: dict[str, torch.Tensor] = {}
-    for slot_id, value in values.items():
-        clone = clones_by_identity.get(id(value))
-        if clone is None:
-            clone = ceiling.guarded_clone(value, call_id=None, slot_id=slot_id)
-            if trainable_by_slot.get(slot_id, False) and not clone.requires_grad:
-                try:
-                    clone.requires_grad_(True)
-                except RuntimeError:
-                    pass  # non-differentiable dtype cannot carry the trainable bit
-            clones_by_identity[id(value)] = clone
-        cloned[slot_id] = clone
+    with _guarded_defensive_materialize():
+        for slot_id, value in values.items():
+            clone = clones_by_identity.get(id(value))
+            if clone is None:
+                clone = ceiling.guarded_clone(value, call_id=None, slot_id=slot_id)
+                if trainable_by_slot.get(slot_id, False) and not clone.requires_grad:
+                    try:
+                        clone.requires_grad_(True)
+                    except RuntimeError:
+                        pass  # non-differentiable dtype cannot carry the trainable bit
+                clones_by_identity[id(value)] = clone
+            cloned[slot_id] = clone
     return cloned
 
 

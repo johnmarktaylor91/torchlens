@@ -235,6 +235,24 @@ autocast cannot contaminate a disabled capture) and restores the caller's contex
 Context entry never saves/restores RNG. A recorded context the runtime cannot enter or restore is
 a typed refusal (`execution_context_unavailable`), never a silent ambient passthrough.
 
+**Neutral pre-forward defensive materialization** (r67 C5) is a SEPARATE regime from the
+recorded execution contexts above. Oracle 1 constructs/loads state and receives inputs BEFORE
+its forward context, so every TorchLens-owned defensive materialization that runs before the
+sparse transaction -- the staging clone (including re-layout and the cross-device staging
+`.to()` transfer), the second run-local state clone, the runtime input mirror clone, and
+random-state allocation/fill -- executes under one narrowly scoped neutral helper
+(`_guarded_defensive_materialize`: `torch.inference_mode(False)` + `torch.enable_grad()`),
+never under the CALLER's ambient (a `.run()` or state bind inside a caller
+`torch.inference_mode()`/`torch.no_grad()` region must not mint inference-mode clones, trip
+the staged tripwire, or strip attestation eligibility from an otherwise-exact run) and never
+under the RECORDED ambient (recorded ambient/per-call contexts govern sparse EXECUTION only,
+entered around the transaction after binding/staging). The helper promises EXACT caller
+restoration on every exit -- success, divergence raise, or typed error. It is deliberately
+narrow: mid-transaction op/witness/attestation/fork-output snapshots taken through the
+resource ceiling's guarded clone retain recorded execution semantics, and a bidirectional
+source scan pins the boundary in both directions (every defensive phase inside the helper;
+every in-transaction snapshot outside it).
+
 `RunnableCompatibility` has exactly `torchlens_version: str`, `python_version: str`,
 `backend_version: str`, `descriptor_version: str`, `call_recipe_version: str`,
 `callable_ref_schema_version: int`, and `initializer_policy_version: str`. The last four repeat
