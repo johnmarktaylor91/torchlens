@@ -579,6 +579,76 @@ def test_r69_snapshot_key_tokens_paths_and_lookup_share_the_authority() -> None:
 
 
 # ======================================================================================
+# r69 A regression (heavy-gate): per-slot escape witnesses under ONE name-keyed label
+# ======================================================================================
+
+
+class _BufferNumpyWriteback(nn.Module):
+    """r15-C2 shape: zero-copy numpy write-back into a registered buffer's storage."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("b", torch.tensor([2.0, 4.0]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.b.detach().numpy()[0] = 99.0
+        return self.b * x
+
+
+@pytest.mark.smoke
+def test_r69_multi_slot_escape_witnesses_stay_runnable(tmp_path: Path) -> None:
+    """A state name owning MULTIPLE escape-witnessed slots must not over-refuse.
+
+    The producer legitimately emits one ``unbound_state_escape:<name>`` witness per
+    qualifying SLOT (same site label, distinct per-fact ``slot_id``), so the
+    inventory member identity is ``<name>::<slot_id>`` -- never the bare label
+    (which would false-refuse the r15 buffer-numpy-writeback artifact as a
+    duplicate member and silently LOSE its UNVERIFIABLE honesty verdict by
+    degrading the load to analysis-only).
+    """
+
+    from torchlens._io.runnable import required_witness_family_members
+
+    x = torch.tensor([3.0, 5.0])
+    path = _save(_trace(_BufferNumpyWriteback(), x.clone()), tmp_path / "wb.tlspec")
+    loaded = tl.load(path)
+    descriptor = loaded.__dict__["_runnable_descriptor"]
+    assert descriptor is not None, "artifact must stay RUNNABLE, never analysis-only"
+    members = required_witness_family_members(descriptor.control_witnesses)["unbound_state_escape"]
+    assert len(members) == len(set(members)), members
+    assert len(members) >= 2, members  # same name, several slots -> distinct identities
+    assert all(member.startswith("b::") for member in members), members
+    # The r15 honesty verdict is preserved: the run executes and is NOT verified.
+    result = loaded.run(inputs=x.clone(), seed=0, on_divergence=DivergencePolicy.RETURN_DIVERGED)
+    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
+    # A genuinely DUPLICATED escape fact (same name AND slot) still refuses at parse.
+    import copy as _copy
+    import json as _json
+    import os as _os
+
+    manifest_path = _os.path.join(path, "manifest.json")
+    manifest = _json.load(open(manifest_path))
+    run = manifest["run"]
+    twin = _copy.deepcopy(
+        next(
+            w
+            for w in run["control_witnesses"]
+            if str(w.get("site_label", "")).startswith("unbound_state_escape:")
+        )
+    )
+    twin["witness_id"] = "witness:9999"
+    twin["order"] = 9999
+    run["control_witnesses"] = list(run["control_witnesses"]) + [twin]
+    _json.dump(manifest, open(manifest_path, "w"))
+    from torchlens.runnable import ReadinessStatus
+
+    reloaded = tl.load(path)
+    readiness = reloaded.__dict__.get("_runnable_readiness")
+    assert readiness.status is ReadinessStatus.UNAVAILABLE
+    assert "context_field_invalid" in {d.code.value for d in readiness.diagnostics}
+
+
+# ======================================================================================
 # Cross-cutting r69 belt: NO untyped error on ANY input-boundary runnable save
 # ======================================================================================
 

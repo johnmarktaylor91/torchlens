@@ -2730,7 +2730,11 @@ def required_witness_family_members(
     equality. Member vocabulary per family follows ``WITNESS_FAMILY_REGISTRY``:
     ``input_structure`` -> canonical root site positions; ``state_metadata`` ->
     ``<state>::<fact_name>`` identities; ``model_input_literal`` -> none
-    (independent bidirectional structure-leaf cross-anchor); every other family ->
+    (independent bidirectional structure-leaf cross-anchor); ``unbound_state_escape``
+    -> ``<state_dict_name>::<slot_id>`` (the producer legitimately emits ONE witness
+    per qualifying SLOT under a name-keyed site label, so a state name owning
+    multiple slots yields several same-label facts whose true identity is the
+    per-fact ``slot_id`` -- r15 buffer-numpy-writeback shape); every other family ->
     its exact witness ``site_label``. Lists are returned UNSORTED and with
     duplicates preserved so the parser can refuse duplicate member identities.
 
@@ -2766,6 +2770,18 @@ def required_witness_family_members(
                 raise ValueError("malformed state-metadata fact envelope")
             for fact_name in sorted(str(name) for name in facts):
                 members[family].append(f"{state}::{fact_name}")
+            continue
+        if family == "unbound_state_escape":
+            fact = _decode_literal(witness.observed_value)
+            if not isinstance(fact, Mapping):
+                raise ValueError("undecodable unbound-state-escape fact envelope")
+            state_name = fact.get("state_dict_name")
+            slot_id = fact.get("slot_id")
+            if not isinstance(state_name, str) or not isinstance(slot_id, str):
+                raise ValueError("malformed unbound-state-escape fact envelope")
+            if witness.site_label != f"{UNBOUND_STATE_ESCAPE_SITE_PREFIX}{state_name}":
+                raise ValueError("unbound-state-escape site label disagrees with its state entry")
+            members[family].append(f"{state_name}::{slot_id}")
             continue
         members[family].append(witness.site_label)
     return members

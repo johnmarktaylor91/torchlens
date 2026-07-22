@@ -783,6 +783,21 @@ def _assert_context_field_invalid(path: Path, run_inputs) -> None:
         loaded.run(inputs=run_inputs)
 
 
+def _heal_capture_state(source_path: Path, run_inputs) -> None:
+    """Run the pristine artifact once so this test leaves no cross-test residue.
+
+    Works around the PRE-EXISTING main-branch global-state bug (r68 ledger, out of
+    r69 scope; same workaround as test_r67_zero_field_dataclass_argument_cannot_vanish):
+    saving a multi-positional-arg runnable artifact without a subsequent loaded run
+    breaks buffer-address resolution for the NEXT buffer-carrying capture in the same
+    process. A loaded run heals it; tests that only save/analysis-load such artifacts
+    must heal explicitly.
+    """
+
+    result = tl.load(source_path).run(inputs=run_inputs)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
 def test_r69_site_position_member_codec_round_trips() -> None:
     for position in (("arg", 0), ("arg", 12), ("kwarg", "flag"), ("kwarg", "a:b")):
         member = encode_input_site_position(position)
@@ -813,6 +828,7 @@ def test_r69_inventory_is_authored_for_every_registry_family(tmp_path: Path) -> 
     assert rows["model_input_literal"].members == ()
     # Read-gated state facts are indexed by exact (state, fact) identity.
     assert any("::requires_grad" in member for member in rows["state_metadata"].members)
+    _heal_capture_state(path, [x.clone(), 1])
 
 
 def _strip_family(run: dict, family: str, count: int | None = None) -> int:
@@ -874,6 +890,7 @@ def test_r69_registry_generated_strip_matrix_refuses(tmp_path: Path) -> None:
 
             _mutate_manifest(path, _apply)
             _assert_context_field_invalid(path, run_inputs)
+    _heal_capture_state(source, [x.clone(), 1])
 
 
 def test_r69_forged_inventory_mutations_refuse(tmp_path: Path) -> None:
@@ -960,6 +977,7 @@ def test_r69_forged_inventory_mutations_refuse(tmp_path: Path) -> None:
                 return
 
     _case("forged_count", _forged_count)
+    _heal_capture_state(source, [x.clone(), 1])
 
 
 @pytest.mark.smoke
@@ -978,16 +996,25 @@ def test_r69_literal_fact_strip_breaks_the_cross_anchor(tmp_path: Path) -> None:
     """Fable ADD-1: per-leaf literal stripping cannot hide behind site coverage."""
 
     x = torch.randn(3)
-    path = _save(_trace(_LitBranch(), [x.clone(), 1]), tmp_path / "anchor.tlspec")
+    source = _save(_trace(_LitBranch(), [x.clone(), 1]), tmp_path / "anchor_src.tlspec")
+    import shutil as _shutil
+
+    path = tmp_path / "anchor.tlspec"
+    _shutil.copytree(source, path)
     _mutate_manifest(path, lambda run: _strip_family(run, "model_input_literal", count=1))
     _assert_context_field_invalid(path, [x.clone(), 1])
+    _heal_capture_state(source, [x.clone(), 1])
 
 
 def test_r69_unregistered_family_fact_refuses(tmp_path: Path) -> None:
     """A SHAPE_STRUCTURE_FACT outside the closed registry can never ride silently."""
 
     x = torch.randn(3)
-    path = _save(_trace(_LitBranch(), [x.clone(), 1]), tmp_path / "closure.tlspec")
+    source = _save(_trace(_LitBranch(), [x.clone(), 1]), tmp_path / "closure_src.tlspec")
+    import shutil as _shutil
+
+    path = tmp_path / "closure.tlspec"
+    _shutil.copytree(source, path)
 
     def _forge(run: dict) -> None:
         twin = dict(run["control_witnesses"][-1])
@@ -999,6 +1026,7 @@ def test_r69_unregistered_family_fact_refuses(tmp_path: Path) -> None:
 
     _mutate_manifest(path, _forge)
     _assert_context_field_invalid(path, [x.clone(), 1])
+    _heal_capture_state(source, [x.clone(), 1])
 
 
 @pytest.mark.smoke
@@ -1066,3 +1094,4 @@ def test_r69_emission_meta_test_every_prefix_is_registered(tmp_path: Path) -> No
         f"{len(WITNESS_FAMILY_REGISTRY)} registered families -- register the new "
         "family (with a presence disposition) in WITNESS_FAMILY_REGISTRY"
     )
+    _heal_capture_state(path, [x.clone(), 1])
