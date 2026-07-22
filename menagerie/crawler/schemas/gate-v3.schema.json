@@ -209,367 +209,49 @@
   ],
   "$defs": {
     "hash": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/hash"
     },
     "nullable_hash": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/hash"
-        },
-        {
-          "type": "null"
-        }
-      ]
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/nullable_hash"
     },
     "timestamp": {
-      "type": "string",
-      "format": "date-time",
-      "pattern": "Z$"
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/timestamp"
     },
     "nonempty_string": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/nonempty_string"
     },
     "nullable_string": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/nonempty_string"
-        },
-        {
-          "type": "null"
-        }
-      ]
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/nullable_string"
     },
     "string_array": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/string_array"
     },
     "accuracy_verdict": {
-      "enum": [
-        "accurate",
-        "inaccurate",
-        "cannot-verify"
-      ]
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/accuracy_verdict"
     },
     "rung": {
-      "enum": [
-        "R1_LIBRARY",
-        "R2_VENDOR",
-        "R3_PORT",
-        "R4_REIMPLEMENT",
-        "R5_SKIP"
-      ]
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/rung"
     },
     "checker": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "provider",
-        "model",
-        "version",
-        "prompt_sha256",
-        "started_at",
-        "finished_at"
-      ],
-      "properties": {
-        "provider": {
-          "const": "openai",
-          "description": "Best-effort provider associated with the event."
-        },
-        "model": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory model."
-        },
-        "version": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory version."
-        },
-        "prompt_sha256": {
-          "$ref": "#/$defs/hash",
-          "description": "Mandatory prompt sha256."
-        },
-        "started_at": {
-          "$ref": "#/$defs/timestamp",
-          "description": "Mandatory UTC start timestamp."
-        },
-        "finished_at": {
-          "$ref": "#/$defs/timestamp",
-          "description": "Mandatory UTC completion timestamp."
-        }
-      }
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/checker"
     },
     "verified_hashes": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "proposal",
-        "source_manifest",
-        "evidence",
-        "code",
-        "source_to_code_map",
-        "family_template"
-      ],
-      "properties": {
-        "proposal": {
-          "$ref": "#/$defs/hash",
-          "description": "Mandatory proposal."
-        },
-        "source_manifest": {
-          "$ref": "#/$defs/hash",
-          "description": "Mandatory source manifest."
-        },
-        "evidence": {
-          "$ref": "#/$defs/hash",
-          "description": "Mandatory literal evidence and coverage record."
-        },
-        "code": {
-          "$ref": "#/$defs/nullable_hash",
-          "description": "Mandatory closed status code."
-        },
-        "code_manifest": {
-          "$ref": "#/$defs/hash",
-          "description": "Closed recursive model-code path-and-byte manifest digest."
-        },
-        "source_to_code_map": {
-          "$ref": "#/$defs/hash",
-          "description": "Mandatory source to code map."
-        },
-        "family_template": {
-          "$ref": "#/$defs/nullable_hash",
-          "description": "Mandatory family template."
-        }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "code": {
-                "$ref": "#/$defs/hash",
-                "description": "Typed implementation entry-point digest."
-              }
-            },
-            "required": [
-              "code"
-            ]
-          },
-          "then": {
-            "required": [
-              "code_manifest"
-            ]
-          },
-          "else": {
-            "not": {
-              "required": [
-                "code_manifest"
-              ]
-            }
-          }
-        }
-      ]
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/verified_hashes"
     },
     "integrity": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "verdict",
-        "hash_mismatches",
-        "excerpt_discrepancies",
-        "locator_failures"
-      ],
-      "properties": {
-        "verdict": {
-          "$ref": "#/$defs/accuracy_verdict",
-          "description": "Mandatory checker verdict."
-        },
-        "hash_mismatches": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory hash mismatches."
-        },
-        "excerpt_discrepancies": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory excerpt discrepancies."
-        },
-        "locator_failures": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory locator failures."
-        }
-      }
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/integrity"
     },
     "field_check": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "field",
-        "verdict",
-        "evidence_ids",
-        "checked_source_ids",
-        "reason",
-        "required_repair"
-      ],
-      "properties": {
-        "field": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory field."
-        },
-        "verdict": {
-          "$ref": "#/$defs/accuracy_verdict",
-          "description": "Mandatory checker verdict."
-        },
-        "evidence_ids": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory supporting evidence identifiers; may be empty only for external_metadata.keywords relevance judgments, which still require checked_source_ids and a reason."
-        },
-        "checked_source_ids": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory checked source ids."
-        },
-        "reason": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory reason."
-        },
-        "required_repair": {
-          "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory required repair."
-        }
-      }
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/field_check"
     },
     "material_check": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "category",
-        "verdict",
-        "source_id",
-        "source_locator",
-        "evidence_ids",
-        "code_path",
-        "code_locator",
-        "reason"
-      ],
-      "properties": {
-        "category": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory category."
-        },
-        "verdict": {
-          "enum": [
-            "match",
-            "minor-drift",
-            "major-drift",
-            "slop",
-            "cannot-verify"
-          ],
-          "description": "Mandatory checker verdict."
-        },
-        "source_id": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory source identifier."
-        },
-        "source_locator": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory source locator."
-        },
-        "evidence_ids": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory supporting evidence identifiers."
-        },
-        "code_path": {
-          "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory code path."
-        },
-        "code_locator": {
-          "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory code locator."
-        },
-        "reason": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory reason."
-        }
-      }
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/material_check"
     },
     "fidelity": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "required",
-        "verdict",
-        "material_checks",
-        "unsupported_choices",
-        "contradictions",
-        "omissions",
-        "permanent_scar"
-      ],
-      "properties": {
-        "required": {
-          "type": "boolean",
-          "description": "Mandatory required."
-        },
-        "verdict": {
-          "enum": [
-            "match",
-            "minor-drift",
-            "major-drift",
-            "slop",
-            "cannot-verify",
-            "not-applicable"
-          ],
-          "description": "Mandatory checker verdict."
-        },
-        "material_checks": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/material_check"
-          },
-          "description": "Mandatory material fidelity findings."
-        },
-        "unsupported_choices": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory unsupported choices."
-        },
-        "contradictions": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory contradictions."
-        },
-        "omissions": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory omissions."
-        },
-        "permanent_scar": {
-          "type": "boolean",
-          "description": "Mandatory permanent scar."
-        }
-      }
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/fidelity"
     },
     "rung_check": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "selected_rung",
-        "highest_applicable",
-        "verdict",
-        "findings"
-      ],
-      "properties": {
-        "selected_rung": {
-          "$ref": "#/$defs/rung",
-          "description": "Mandatory selected rung."
-        },
-        "highest_applicable": {
-          "$ref": "#/$defs/rung",
-          "description": "Mandatory highest applicable."
-        },
-        "verdict": {
-          "$ref": "#/$defs/accuracy_verdict",
-          "description": "Mandatory checker verdict."
-        },
-        "findings": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory findings."
-        }
-      }
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/rung_check"
     },
     "item": {
       "type": "object",

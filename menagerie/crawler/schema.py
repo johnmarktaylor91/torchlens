@@ -47,6 +47,7 @@ SCHEMA_FILES = {
 
 SCHEMA_RESOURCE_FILES = (
     "attempt-common.schema.json",
+    "gate-common.schema.json",
     "model-common.schema.json",
 )
 
