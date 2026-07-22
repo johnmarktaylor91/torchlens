@@ -707,6 +707,21 @@ def test_r65_unread_bit_records_no_fact(tmp_path: Path) -> None:
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             return self.bn(self.lin(x)) + self.b
 
+    # Heal the PRE-EXISTING multi-positional-arg buffer-address global-state bug
+    # (documented residual, base-repro'd on 35ddfca3, out of r71 scope) so this
+    # buffer-carrying capture is order-independent: a preceding foreign multi-arg
+    # runnable save can otherwise corrupt buffer-address resolution until any loaded
+    # run heals it (the same workaround the r67 suite uses via _heal_capture_state).
+    class _Triv(nn.Module):
+        def forward(self, t: torch.Tensor) -> torch.Tensor:
+            return t + 1.0
+
+    heal_path = tmp_path / "heal.tlspec"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _trace(_Triv(), torch.randn(3)).save(heal_path, level="runnable")
+    tl.load(heal_path).run(inputs=torch.randn(3))
+
     trace = _trace(Plain(), torch.randn(4, 3))
     assert host_escape_state_metadata_facts(trace) == {}
     assert host_escape_state_metadata_reads(trace) == {}
