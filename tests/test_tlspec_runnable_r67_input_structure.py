@@ -716,6 +716,304 @@ def test_r67_consumer_source_scan() -> None:
 
 
 # ======================================================================================
+# r71 C -- uninspectable declared-schema instance state (hon1-F1 + adjacent closures)
+# ======================================================================================
+
+
+class _HookCounter:
+    """Tracks whether the hostile attribute hook ever ran during TL inspection."""
+
+    property_calls = 0
+    getattribute_calls = 0
+    getattr_calls = 0
+
+
+@pytest.fixture(autouse=True)
+def _reset_hook_counters():
+    _HookCounter.property_calls = 0
+    _HookCounter.getattribute_calls = 0
+    _HookCounter.getattr_calls = 0
+    yield
+
+
+class _GateModel(nn.Module):
+    """Branches on a hidden ``gate`` attribute the declared schema never witnesses."""
+
+    def forward(self, cfg) -> torch.Tensor:
+        t = cfg.t
+        return t * 10.0 if object.__getattribute__(cfg, "__dict__").get("gate") else t + 1.0
+
+
+def _dict_property_shadowed_dataclass():
+    @dataclasses.dataclass
+    class _EvilCfg:
+        t: torch.Tensor
+
+        __dict__ = property(lambda self: {})  # type: ignore[assignment]
+
+    return _EvilCfg
+
+
+@pytest.mark.smoke
+def test_r71c_property_shadowed_dict_refuses_without_running_hook(tmp_path: Path) -> None:
+    """hon1-F1: a property-shadowed __dict__ hides hidden state -> the enumerator no
+    longer trusts it, save refuses ``instance_state_uninspectable``, and the hostile
+    property never runs during TL inspection."""
+
+    from torchlens._input_walk import inspect_instance_state
+
+    calls = {"n": 0}
+
+    @dataclasses.dataclass
+    class _EvilCfg:
+        t: torch.Tensor
+
+        @property
+        def __dict__(self):  # type: ignore[override]
+            calls["n"] += 1
+            return {}
+
+    cfg = _EvilCfg(torch.randn(3))
+    object.__setattr__(cfg, "gate", True) if False else None
+    inspection = inspect_instance_state(cfg)
+    assert inspection.complete is False
+    assert inspection.reason == "instance_state_uninspectable"
+    assert calls["n"] == 0, "the shadowing property must NOT execute during inspection"
+
+    snapshot = snapshot_input_boundary(cfg)
+    assert any(r["reason"] == "instance_state_uninspectable" for r in snapshot["refusals"])
+    assert calls["n"] == 0
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    "factory_name",
+    ["descriptor_shadow", "dict_subclass", "custom_getattribute", "custom_getattr"],
+)
+def test_r71c_uninspectable_variants_refuse(factory_name: str, tmp_path: Path) -> None:
+    """Every uninspectable declared-schema variant refuses fail-closed at save."""
+
+    from torchlens._input_walk import inspect_instance_state, undeclared_instance_state
+
+    if factory_name == "descriptor_shadow":
+
+        class _Desc:
+            def __get__(self, obj, owner=None):
+                return {}
+
+        @dataclasses.dataclass
+        class _Cfg:
+            t: torch.Tensor
+
+            __dict__ = _Desc()  # type: ignore[assignment]
+
+        value = _Cfg(torch.randn(3))
+        assert inspect_instance_state(value).reason == "instance_state_uninspectable"
+    elif factory_name == "dict_subclass":
+
+        class _DictSub(dict):
+            pass
+
+        class _GetSet:
+            def __get__(self, obj, owner=None):
+                return _DictSub()
+
+        @dataclasses.dataclass
+        class _Cfg:
+            t: torch.Tensor
+
+            __dict__ = _GetSet()  # type: ignore[assignment]
+
+        value = _Cfg(torch.randn(3))
+        assert inspect_instance_state(value).complete is False
+    elif factory_name == "custom_getattribute":
+
+        @dataclasses.dataclass
+        class _Cfg:
+            t: torch.Tensor
+
+            def __getattribute__(self, name):
+                return object.__getattribute__(self, name)
+
+        value = _Cfg(torch.randn(3))
+        assert undeclared_instance_state(value, "dataclass") is True
+    else:  # custom_getattr
+
+        @dataclasses.dataclass
+        class _Cfg:
+            t: torch.Tensor
+
+            def __getattr__(self, name):
+                return "fast"
+
+        value = _Cfg(torch.randn(3))
+        assert undeclared_instance_state(value, "dataclass") is True
+
+    snapshot = snapshot_input_boundary(value)
+    assert any(r["reason"] == "instance_state_uninspectable" for r in snapshot["refusals"]), (
+        factory_name,
+        snapshot["refusals"],
+    )
+
+
+def test_r71c_shadowed_fields_namedtuple_refuses() -> None:
+    """A namedtuple whose ``_fields`` is shadowed (custom __getattr__) refuses."""
+
+    from torchlens._input_walk import snapshot_input_boundary
+
+    Pt = namedtuple("Pt", ["t"])
+
+    class _EvilPt(Pt):
+        def __getattr__(self, name):
+            return ()
+
+    value = _EvilPt(torch.randn(3))
+    snapshot = snapshot_input_boundary(value)
+    assert any(r["reason"] == "instance_state_uninspectable" for r in snapshot["refusals"])
+
+
+def test_r71c_registered_container_shadowed_dict_refuses(tmp_path: Path) -> None:
+    """The registered-container ``__dict__`` read routes through the inert helper."""
+
+    from torchlens._input_walk import snapshot_input_boundary
+
+    class _EvilReg:
+        def __init__(self, t):
+            object.__setattr__(self, "_t", t)
+
+        @property
+        def __dict__(self):
+            return {}
+
+    register_container(
+        _EvilReg,
+        flatten=lambda box: ((object.__getattribute__(box, "_t"),), None),
+        unflatten=lambda children, aux: _EvilReg(children[0]),
+        state_complete=False,
+    )
+    value = _EvilReg(torch.randn(3))
+    snapshot = snapshot_input_boundary(value)
+    assert any(r["reason"] == "instance_state_uninspectable" for r in snapshot["refusals"])
+
+
+@pytest.mark.smoke
+def test_r71c_runtime_uninspectable_twin_never_verifies(tmp_path: Path) -> None:
+    """Symmetric runtime proof: an admitted plain capture vs an uninspectable
+    same-schema runtime twin diverges/refuses, never VERIFIED (the hon1-F1 E2E)."""
+
+    @dataclasses.dataclass
+    class _PlainCfg:
+        t: torch.Tensor
+
+    class _Model(nn.Module):
+        def forward(self, cfg) -> torch.Tensor:
+            return cfg.t * 2.0
+
+    x = torch.randn(3)
+    path = _save(_trace(_Model(), _PlainCfg(x.clone())), tmp_path / "plain_cfg.tlspec")
+    assert (
+        tl.load(path).run(inputs=_PlainCfg(x.clone())).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
+
+    @dataclasses.dataclass
+    class _UninspectableCfg:
+        t: torch.Tensor
+
+        @property
+        def __dict__(self):  # type: ignore[override]
+            return {}
+
+    with pytest.raises((PathDivergenceError, RunPreconditionError)):
+        tl.load(path).run(inputs=_UninspectableCfg(x.clone()))
+
+
+def test_r71c_greens_ordinary_declared_schemas(tmp_path: Path) -> None:
+    """No over-trigger: ordinary/frozen/slots/inheritance dataclasses, standard
+    namedtuples + subclasses, zero-field variants, and the well-behaved custom-Mapping
+    lane all stay admitted (no uninspectable refusal)."""
+
+    from torchlens._input_walk import inspect_instance_state, snapshot_input_boundary
+
+    x = torch.zeros(1)
+
+    @dataclasses.dataclass
+    class _Plain:
+        t: torch.Tensor
+
+    @dataclasses.dataclass(frozen=True)
+    class _Frozen:
+        t: torch.Tensor
+
+    @dataclasses.dataclass
+    class _Slotted:
+        __slots__ = ("t",)
+        t: torch.Tensor
+
+    @dataclasses.dataclass
+    class _Base:
+        t: torch.Tensor
+
+    @dataclasses.dataclass
+    class _Child(_Base):
+        pass
+
+    Pt = namedtuple("Pt", ["t"])
+
+    class _PtSub(Pt):
+        pass
+
+    class _EmptyNT(namedtuple("EmptyNT", [])):
+        pass
+
+    @dataclasses.dataclass
+    class _EmptyDC:
+        pass
+
+    class _GoodMapping(dict):
+        pass
+
+    clean_values = [
+        _Plain(x),
+        _Frozen(x),
+        _Slotted(x),
+        _Child(x),
+        Pt(x),
+        _PtSub(x),
+        _EmptyNT(),
+        _EmptyDC(),
+        _GoodMapping({"k": x}),
+    ]
+    for value in clean_values:
+        inspection = inspect_instance_state(value)
+        assert inspection.complete is True, type(value).__name__
+        snapshot = snapshot_input_boundary(value)
+        assert not any(
+            r["reason"] == "instance_state_uninspectable" for r in snapshot["refusals"]
+        ), type(value).__name__
+
+
+@pytest.mark.smoke
+def test_r71c_no_live_dict_getattr_in_normative_module() -> None:
+    """Source-scan tripwire: the normative input-boundary module never reads a live
+    instance ``__dict__`` via ``getattr`` (only the inert raw-MRO helper)."""
+
+    import inspect
+
+    from torchlens import _input_walk
+
+    for func in (
+        _input_walk.inspect_instance_state,
+        _input_walk.undeclared_instance_state,
+        _input_walk.snapshot_input_boundary,
+        _input_walk.walk_input_boundary,
+    ):
+        source = inspect.getsource(func)
+        assert 'getattr(value, "__dict__"' not in source, func.__name__
+        assert 'getattr(item, "__dict__"' not in source, func.__name__
+
+
+# ======================================================================================
 # r69 A -- RequiredWitnessInventory: descriptor-native presence proof, generated from
 # WITNESS_FAMILY_REGISTRY (secA-F1/free-F1 witness-strip class + literal cross-anchor)
 # ======================================================================================
@@ -822,7 +1120,7 @@ def test_r69_inventory_is_authored_for_every_registry_family(tmp_path: Path) -> 
     rows = {row.family: row for row in inventory.families}
     assert set(rows) == set(WITNESS_FAMILY_REGISTRY)
     for family, row in rows.items():
-        assert row.disposition == WITNESS_FAMILY_REGISTRY[family]
+        assert row.disposition == WITNESS_FAMILY_REGISTRY[family].disposition
     assert rows["input_structure"].members == ("arg:0", "arg:1")
     # Anchored family carries no inventory members (its proof is the cross-anchor).
     assert rows["model_input_literal"].members == ()
@@ -1069,29 +1367,23 @@ def test_r69_positive_family_matrix_round_trips(tmp_path: Path) -> None:
 def test_r69_emission_meta_test_every_prefix_is_registered(tmp_path: Path) -> None:
     """A future replay-critical family cannot ship without a registry row.
 
-    (1) Every SHAPE_STRUCTURE_FACT emitted by a canonical multi-family artifact
-    carries a registered prefix; (2) the number of SHAPE_STRUCTURE_FACT emitter
-    sites in the producer source equals the registry size, so ADDING an emitter
-    without a registry row fails here on arrival.
+    Every witness emitted by a canonical multi-family artifact resolves to a
+    registered family -- SHAPE_STRUCTURE_FACT prefixes AND the direct control kinds
+    (r71 A). The old source-text emitter-count heuristic is REPLACED by the typed
+    registry-closure meta-test in
+    ``tests/test_tlspec_runnable_r71_witness_obligations.py`` (registry keys ==
+    direct kinds | shape prefixes | claim families, each row with a non-empty
+    anchor and runtime consumer).
     """
 
-    import inspect
-
     from torchlens._io import runnable as io_runnable
-    from torchlens.runnable import ControlWitnessKind
 
     x = torch.randn(3)
     path = _save(_trace(_RichFamilies(), [x, 1]), tmp_path / "emit.tlspec")
     descriptor = tl.load(path).__dict__["_runnable_descriptor"]
     for witness in descriptor.control_witnesses:
-        if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
-            continue
-        assert io_runnable.witness_family_of(witness.site_label) is not None, witness.site_label
-    source = inspect.getsource(io_runnable)
-    emitter_count = source.count("kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT")
-    assert emitter_count == len(WITNESS_FAMILY_REGISTRY), (
-        f"{emitter_count} SHAPE_STRUCTURE_FACT emitters vs "
-        f"{len(WITNESS_FAMILY_REGISTRY)} registered families -- register the new "
-        "family (with a presence disposition) in WITNESS_FAMILY_REGISTRY"
-    )
+        family = io_runnable.witness_family_of_witness(witness)
+        assert family is not None, witness.site_label
+        assert family in WITNESS_FAMILY_REGISTRY, family
+        assert WITNESS_FAMILY_REGISTRY[family].witness_kind is witness.kind, family
     _heal_capture_state(path, [x.clone(), 1])

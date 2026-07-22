@@ -256,7 +256,7 @@ def test_runnable_save_emits_frozen_sparse_descriptor_and_value_free_recipe(
     assert manifest["schema_version"] == 2
     assert manifest["save_level"] == "runnable"
     assert run["capability"] == "sparse_recorded_taken_path_v2"
-    assert run["call_recipe"] == "non_tensor_args_tensor_slots_and_context_v2"
+    assert run["call_recipe"] == "non_tensor_args_tensor_slots_context_and_obligations_v3"
     assert run["preflight"] == {"passed": True, "diagnostics": []}
     assert run["unsupported_sites"] == []
     assert run["payload_layers"] == {

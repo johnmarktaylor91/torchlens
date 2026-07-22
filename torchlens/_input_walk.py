@@ -60,14 +60,20 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any, Callable
 
 __all__ = [
+    "COMPOSITE_LITERAL_COMPONENT_POLICY",
     "INPUT_CONTAINER_KINDS",
+    "InstanceStateInspection",
     "classify_input_container",
     "classify_scalar",
+    "inspect_instance_state",
     "instance_state_names",
     "raw_mapping_key_component",
+    "reserved_input_path_components",
+    "slice_semantic_component",
     "tagged_mapping_key_component",
     "walk_input_boundary",
 ]
@@ -224,7 +230,7 @@ def walk_input_boundary(
                 _descend(child, (*path, index))
             return
         if kind == "namedtuple":
-            for name in value._fields:
+            for name in _instance_fields(value):
                 _descend(getattr(value, name), (*path, str(name)))
             return
         if kind == "dataclass":
@@ -271,6 +277,29 @@ persisted path/key shape stays ``str | int`` while ``True != 1`` and ``1.0 != 1`
 type-distinct (``hash(True) == hash(1) == hash(1.0)`` would otherwise conflate them in path
 sets and ordered-key facts).
 """
+
+_RESERVED_NAMESPACE_PREFIX = "\x00"
+"""The reserved input-path component namespace (r71 D).
+
+Every TorchLens-synthesized path sentinel lives under the null-byte prefix
+(``EMPTY_CONTAINER_PATH_MARKER`` / ``BOOL_KEY_PATH_TAG`` / the codec tag). A REAL dict
+key sharing the prefix is escaped by :func:`encode_mapping_key` into the ``r:`` lane so
+it can never collide with a sentinel interpreted before mapping lookup.
+"""
+
+
+def reserved_input_path_components() -> "frozenset[str]":
+    """The closed registry of reserved input-path SENTINELS (r71 D).
+
+    Every string sentinel any runtime consumer interprets POSITIONALLY before a mapping
+    lookup (``_value_at_path``) is enumerated here; the r71 D meta-test asserts each such
+    sentinel is a member AND that ``encode_mapping_key(sentinel) != sentinel`` (a real
+    dict key equal to a sentinel is always escaped, never round-tripped raw).
+    """
+
+    from torchlens._io.runnable import BOOL_KEY_PATH_TAG, EMPTY_CONTAINER_PATH_MARKER
+
+    return frozenset({EMPTY_CONTAINER_PATH_MARKER, BOOL_KEY_PATH_TAG, _KEY_CODEC_TAG})
 
 
 def _stock_numpy_scalar_types() -> "frozenset[type]":
@@ -377,6 +406,44 @@ def classify_scalar(value: Any) -> "tuple[str, Any]":
     return ("opaque", None)
 
 
+COMPOSITE_LITERAL_COMPONENT_POLICY: "Mapping[str, tuple[str, ...]]" = {
+    # r71 B: the ONE shared composite-literal component policy table. Each recursive
+    # ``NonTensorLiteral`` composite node kind lists the classifier-backed lane every
+    # sub-component MUST route through, so a semantic-typed scalar can never launder
+    # through ANY composite edge (secA-F1: slice components were the ungated seam).
+    # This table is BOTH implementation authority and the future-kind meta-test: a
+    # new composite ``NonTensorLiteral`` without a declared policy REDs
+    # ``test_r71b_composite_component_policy_covers_every_edge``.
+    "LiteralSlice": ("classify_scalar",),  # start / stop / step (int|None, no semantic)
+    "LiteralSequence": ("_encode_literal",),  # items recurse through the classifier-first encoder
+    "LiteralMapping": (
+        "encode_mapping_key",
+        "_encode_literal",
+    ),  # keys via codec, values via encoder
+    "LiteralTupleKey": ("encode_mapping_key",),  # recursive tuple-key items via the key codec
+}
+"""Closed policy: every composite ``NonTensorLiteral`` edge -> its classifier lane (r71 B)."""
+
+
+def slice_semantic_component(value: slice) -> str | None:
+    """Return the field name of the first semantic-typed slice component, else ``None``.
+
+    r71 B: applies the ``LiteralSlice`` component policy (``classify_scalar`` first) to
+    a runtime/capture ``slice`` leaf. A component classifying ``semantic`` (enum member,
+    builtin/np-scalar subclass) is outside the grammar -- the snapshot preflight and the
+    runtime comparison both refuse/diverge on it, so a plain-int capture and a same-value
+    semantic runtime component can never falsely compare equal through ``slice.__eq__``.
+    """
+
+    for field_name in ("start", "stop", "step"):
+        component = getattr(value, field_name)
+        if component is None:
+            continue
+        if classify_scalar(component)[0] == "semantic":
+            return field_name
+    return None
+
+
 def encode_mapping_key(key: Any) -> "str | int":
     """Encode one grammar mapping key into the canonical type-strict component (r69 D).
 
@@ -415,7 +482,16 @@ def encode_mapping_key(key: Any) -> "str | int":
         return key
     if type(key) is str:
         if key.startswith(_KEY_CODEC_TAG):
+            # Legacy ``s:`` lane: a real key colliding with the codec prefix itself.
             return f"{_KEY_CODEC_TAG}s:{key[len(_KEY_CODEC_TAG) :]}"
+        if key.startswith(_RESERVED_NAMESPACE_PREFIX):
+            # r71 D: any OTHER null-byte-prefixed key could collide with a reserved
+            # input-path sentinel (``EMPTY_CONTAINER_PATH_MARKER`` / ``BOOL_KEY_PATH_TAG``
+            # / any future ``\x00`` marker interpreted positionally before mapping
+            # lookup). Escape the WHOLE ``\x00`` namespace into the unambiguous
+            # ``r:<UTF-8 hex>`` lane so a real dict key equal to a marker round-trips
+            # instead of false-DIVERGING on the unchanged input.
+            return f"{_KEY_CODEC_TAG}r:{key.encode('utf-8').hex()}"
         return key
     if key is None:
         return f"{_KEY_CODEC_TAG}n:"
@@ -451,6 +527,9 @@ def decode_mapping_key(component: "str | int") -> Any:
         return payload == "1"
     if tag == "s":
         return _KEY_CODEC_TAG + payload
+    if tag == "r":
+        # r71 D: the reserved-namespace escape (any ``\x00``-prefixed real key).
+        return bytes.fromhex(payload).decode("utf-8")
     if tag == "n":
         return None
     if tag == "f":
@@ -484,33 +563,72 @@ def decode_mapping_key(component: "str | int") -> Any:
     raise ValueError(f"Unknown key-codec component {component!r}.")
 
 
-def instance_state_names(value: Any) -> frozenset[str]:
-    """Enumerate every SET instance-state NAME on ``value``, inertly (r69 C).
+@dataclass(frozen=True, slots=True)
+class InstanceStateInspection:
+    """One inert instance-state inspection result (r71 C).
 
-    THE single live-instance-state enumerator for declared-schema containers:
+    ``complete`` is ``True`` only when the enumeration is PROVABLY total inertly;
+    ``reason`` names the closed fail-closed cause otherwise. ``uncertainty is NEVER
+    an empty set``: a blinded inspection reports ``complete=False`` with a non-empty
+    reason, never ``names=frozenset()`` masquerading as "no extra state".
+    """
 
-    * every ``__dict__`` key, regardless of the stored value (``None``, ``False``,
-      ``0``, an empty container, and any other falsey value all count -- PRESENCE is
-      state: r68 hon1-F3 proved a ``hasattr``-steered branch on a ``None``-valued
-      extra);
-    * every SET slot across ALL classes in ``type(value).__mro__``: string
-      ``__slots__`` declarations are normalized to one name, the ``__dict__`` /
-      ``__weakref__`` pseudo-slots are ignored, CPython private-name mangling is
-      resolved relative to the DECLARING class, and only genuine slot member
-      descriptors found in ``vars(declaring_class)`` are read -- directly through
-      the descriptor, so no property, user ``__getattr__``, or user
-      ``__getattribute__`` can ever execute (inert by construction). An unset slot
-      is absent; a slot set to ANY value (including ``None``) is present.
+    names: frozenset[str]
+    complete: bool
+    reason: str | None
 
-    Returns the set of ACTUAL storage names (private slot names appear mangled,
-    matching their ``__dict__`` spelling).
+
+def _raw_mro_attr(value: Any, attr: str) -> Any:
+    """Resolve one attribute through raw class-dict MRO lookup (never ``getattr``).
+
+    Returns the WINNING descriptor/object from ``type(value).__mro__`` without
+    invoking any descriptor protocol, ``__getattribute__``, or ``__getattr__`` -- so
+    a property/custom-descriptor shadow is OBSERVED, never executed.
+    """
+
+    for cls in type(value).__mro__:
+        if attr in cls.__dict__:
+            return cls.__dict__[attr]
+    return None
+
+
+def inspect_instance_state(value: Any) -> InstanceStateInspection:
+    """Inertly enumerate the SET instance-state NAMES on ``value``, fail-closed (r71 C).
+
+    THE single instance-state inspector for declared-schema containers. It NEVER routes the instance ``__dict__`` through ``getattr`` (r70 hon1-F1: a property/descriptor-shadowed
+    ``__dict__`` executes user code returning attacker-chosen ``{}``, turning
+    "untrustworthy" into "proved empty"). Instead:
+
+    * The instance ``__dict__`` descriptor is resolved by RAW MRO lookup. Absence is
+      valid (a genuinely slotted type). If present it must be EXACTLY
+      ``types.GetSetDescriptorType`` (the standard instance-dict getset); it is
+      invoked DIRECTLY and the result must be ``type(result) is dict``. A property,
+      custom/replaced descriptor, dict-subclass/non-dict result, or an exception is
+      INCOMPLETE (``instance_state_uninspectable``).
+    * The all-MRO genuine ``MemberDescriptorType`` slot scan is unchanged (unset
+      slots absent, mangled private names, falsey values counted -- inert).
+
+    PRESENCE is state (a ``None``-valued extra counts). Returns ``complete=True`` with
+    the actual storage names only when the enumeration is inertly total.
     """
 
     import types as _types
 
     names: set[str] = set()
-    instance_dict = getattr(value, "__dict__", None)
-    if isinstance(instance_dict, dict):
+    dict_descriptor = _raw_mro_attr(value, "__dict__")
+    if dict_descriptor is not None:
+        if type(dict_descriptor) is not _types.GetSetDescriptorType:
+            # A property or non-standard descriptor shadows __dict__: reading it would
+            # execute user code and could report attacker-chosen state. Fail closed.
+            return InstanceStateInspection(frozenset(), False, "instance_state_uninspectable")
+        try:
+            instance_dict = dict_descriptor.__get__(value, type(value))
+        except Exception:
+            return InstanceStateInspection(frozenset(), False, "instance_state_uninspectable")
+        if type(instance_dict) is not dict:
+            # A dict SUBCLASS (or non-dict) result could carry a custom __iter__ /
+            # __contains__ that hides keys: not inertly trustworthy.
+            return InstanceStateInspection(frozenset(), False, "instance_state_uninspectable")
         names.update(str(key) for key in instance_dict)
     for cls in type(value).__mro__:
         raw_slots = cls.__dict__.get("__slots__")
@@ -537,7 +655,49 @@ def instance_state_names(value: Any) -> frozenset[str]:
             except AttributeError:
                 continue  # unset slot: absent
             names.add(name)
-    return frozenset(names)
+    return InstanceStateInspection(frozenset(names), True, None)
+
+
+def instance_state_names(value: Any) -> frozenset[str]:
+    """Enumerate the SET instance-state names inertly (r69 C; r71 C fail-closed helper).
+
+    Thin compatibility wrapper over :func:`inspect_instance_state`: an INCOMPLETE
+    (uninspectable) inspection returns the empty set here for legacy callers, but the
+    declared-schema gate consumes the full :class:`InstanceStateInspection` so a
+    blinded inspection fails closed rather than reading as "no extra state".
+    """
+
+    return inspect_instance_state(value).names
+
+
+def _declared_schema_uninspectable(value: Any) -> bool:
+    """Return whether a custom attribute hook blinds the declared-field proof (r71 C).
+
+    A dataclass/namedtuple with a non-standard ``__getattribute__`` or ANY MRO
+    ``__getattr__`` can compute or hide declared-field values, so the walker cannot
+    inertly prove field completeness WITHOUT invoking the untrusted hook. Raw-MRO
+    resolution observes the hooks without executing them; any override short-circuits
+    to uninspectable BEFORE any declared-field read. Namedtuples pass by default
+    (``tuple`` does not override ``__getattribute__`` and declares no ``__getattr__``).
+    """
+
+    import types as _types
+
+    getattribute = _raw_mro_attr(value, "__getattribute__")
+    # A USER override is a Python callable (``FunctionType``); a builtin standard
+    # ``__getattribute__`` (``object`` / ``tuple`` for namedtuples) is a C-level
+    # ``wrapper_descriptor`` that cannot run arbitrary user code. Only a non-builtin
+    # override blinds the proof.
+    if getattribute is not object.__getattribute__ and not isinstance(
+        getattribute, _types.WrapperDescriptorType
+    ):
+        return True
+    # ``object`` / ``tuple`` declare NO ``__getattr__``, so any MRO ``__getattr__`` is
+    # a user-added hook that can compute or hide declared-field values.
+    for cls in type(value).__mro__:
+        if "__getattr__" in cls.__dict__:
+            return True
+    return False
 
 
 def undeclared_instance_state(value: Any, kind: str) -> bool:
@@ -548,11 +708,17 @@ def undeclared_instance_state(value: Any, kind: str) -> bool:
     state on replay reconstruction -- and it can steer control flow the declared schema
     never witnesses (r66 R1: ``box.mode``; r68 hon1-F2: a ``__slots__`` subclass; r68
     hon1-F3: ``hasattr`` presence on a ``None``-valued extra). The live state set comes
-    from the ONE inert enumerator :func:`instance_state_names` (``__dict__`` keys plus
-    all-MRO set slots, presence counting regardless of value -- NO ``None`` carve-out),
-    minus the declared field names. Registered containers prove completeness through
-    their explicit ``state_complete`` declaration instead (checked by the snapshot's
-    registered branch).
+    from the ONE inert inspector :func:`inspect_instance_state` (raw-MRO ``__dict__``
+    descriptor + all-MRO set slots, presence counting regardless of value -- NO
+    ``None`` carve-out), minus the declared field names.
+
+    r71 C fail-closed: an UNINSPECTABLE inspection (property/descriptor-shadowed
+    ``__dict__``, non-dict result, custom ``__getattribute__`` / ``__getattr__`` on
+    the declared-schema container) reads as undeclared state PRESENT -- the walker
+    can never inertly prove completeness, and it must never invoke the shadowing hook
+    to try. Registered containers prove completeness through their explicit
+    ``state_complete`` declaration instead (checked by the snapshot's registered
+    branch).
 
     Mapping/sequence SUBCLASSES are deliberately NOT judged here (heavy-gate F7 ruling):
     their witnessed schema is the protocol view (ordered keys/children) plus the EXACT
@@ -567,15 +733,38 @@ def undeclared_instance_state(value: Any, kind: str) -> bool:
 
     import dataclasses as _dc
 
-    if kind == "dataclass" or (kind == "empty" and _dc.is_dataclass(value)):
-        declared = {field.name for field in _dc.fields(value)}
-        return bool(instance_state_names(value) - declared)
-    if kind == "namedtuple" or (
+    is_dataclass_kind = kind == "dataclass" or (kind == "empty" and _dc.is_dataclass(value))
+    is_namedtuple_kind = kind == "namedtuple" or (
         kind == "empty" and isinstance(value, tuple) and hasattr(value, "_fields")
-    ):
-        declared = {str(name) for name in getattr(value, "_fields", ())}
-        return bool(instance_state_names(value) - declared)
-    return False
+    )
+    if not (is_dataclass_kind or is_namedtuple_kind):
+        return False
+    # r71 C: a custom attribute hook on the declared-schema container blinds the
+    # field-completeness proof BEFORE any field is read -- fail closed.
+    if _declared_schema_uninspectable(value):
+        return True
+    inspection = inspect_instance_state(value)
+    if not inspection.complete:
+        return True
+    if is_dataclass_kind:
+        declared = {field.name for field in _dc.fields(value)}
+    else:
+        declared = {str(name) for name in _instance_fields(value)}
+    return bool(inspection.names - declared)
+
+
+def _instance_fields(value: Any) -> tuple[str, ...]:
+    """Read a namedtuple's ``_fields`` at TYPE level (r71 C; inert, no instance hook).
+
+    Resolves ``_fields`` through the raw MRO so a shadowed instance ``_fields`` cannot
+    forge the declared schema; requires a tuple of strings (else empty -> the
+    all-state set is treated as undeclared, fail closed at the caller).
+    """
+
+    fields = _raw_mro_attr(value, "_fields")
+    if isinstance(fields, tuple) and all(isinstance(name, str) for name in fields):
+        return fields
+    return ()
 
 
 def snapshot_input_boundary(value: Any) -> dict[str, Any]:
@@ -623,10 +812,20 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
             registration = get_registered_container(type(item))
         if registration is not None:
             node["kind"] = "registered"
-            if not registration.state_complete and getattr(item, "__dict__", None):
-                refusals.append(
-                    {"path": list(path), "reason": "registered_state_not_declared_complete"}
-                )
+            # r71 C adjacent closure: the registration's ``state_complete`` trust
+            # rule reads the instance ``__dict__`` through the ONE inert inspector
+            # (never a live ``getattr`` __dict__ read -- a property-shadowed __dict__
+            # would blind or forge the state check). An uninspectable registered
+            # container refuses fail-closed; the explicit ``state_complete=True``
+            # trust is preserved.
+            if not registration.state_complete:
+                inspection = inspect_instance_state(item)
+                if not inspection.complete:
+                    refusals.append({"path": list(path), "reason": "instance_state_uninspectable"})
+                elif inspection.names:
+                    refusals.append(
+                        {"path": list(path), "reason": "registered_state_not_declared_complete"}
+                    )
             try:
                 children, aux = registration.flatten(item)
                 children = list(children)
@@ -645,6 +844,20 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
             for index, child in enumerate(children):
                 _descend(child, (*path, index))
             return
+        # r71 C: a declared-schema container whose attribute hooks / __dict__ cannot
+        # be inspected inertly refuses with the DISTINCT ``instance_state_uninspectable``
+        # reason BEFORE any declared field is read, so the shadowing hook never runs.
+        if kind in {"dataclass", "namedtuple", "empty"} and _declared_schema_uninspectable(item):
+            refusals.append({"path": list(path), "reason": "instance_state_uninspectable"})
+            nodes.append(node)
+            return
+        if (
+            kind in {"dataclass", "namedtuple", "empty"}
+            and not inspect_instance_state(item).complete
+        ):
+            refusals.append({"path": list(path), "reason": "instance_state_uninspectable"})
+            nodes.append(node)
+            return
         if undeclared_instance_state(item, kind):
             refusals.append({"path": list(path), "reason": "undeclared_instance_state"})
         if kind == "empty":
@@ -653,9 +866,10 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
             nodes.append(node)
             return
         if kind == "namedtuple":
-            node["fields"] = [str(name) for name in item._fields]
+            fields = _instance_fields(item)
+            node["fields"] = [str(name) for name in fields]
             nodes.append(node)
-            for name in item._fields:
+            for name in fields:
                 _descend(getattr(item, name), (*path, str(name)))
             return
         if kind == "dataclass":
@@ -703,6 +917,14 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
         # refusal fires in the runtime snapshot, so an admitted builtin/stock-numpy
         # capture replayed with a same-value semantic type diverges structurally.
         if classify_scalar(item)[0] == "semantic":
+            refusals.append({"path": list(path), "reason": "semantic_scalar_type"})
+        # r71 B: a COMPOSITE literal leaf (a ``slice``) is one opaque snapshot leaf, but
+        # its sub-components carry type identity too (secA-F1). Apply the shared
+        # component policy: a semantic slice component emits the SAME
+        # ``semantic_scalar_type`` refusal at save AND in the symmetric runtime
+        # snapshot, so a plain-slice capture replayed with a same-value semantic
+        # component diverges structurally.
+        if isinstance(item, slice) and slice_semantic_component(item) is not None:
             refusals.append({"path": list(path), "reason": "semantic_scalar_type"})
         nodes.append(node)
 

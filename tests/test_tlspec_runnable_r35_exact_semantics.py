@@ -175,7 +175,12 @@ def test_r35_empty_slot_initializes_without_rng(shape: tuple[int, ...]) -> None:
             trainable=True,
             persistent=True,
             alias_group=None,
+            captured_requires_grad=True,
+            captured_grad_fn=False,
+            host_escape_disposition=None,
         ),
+        host_escape=False,
+        inert_sink=False,
     )
     before = torch.get_rng_state()
     value = _initialize_slot(slot, None)

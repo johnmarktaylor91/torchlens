@@ -31,7 +31,7 @@ def test_frozen_runnable_schema_values() -> None:
     """Keep the v2 schema versions and key enum values frozen."""
 
     assert RUNNABLE_TLSPEC_SCHEMA_VERSION == "sparse_recorded_taken_path_v2"
-    assert RUNNABLE_CALL_RECIPE_VERSION == "non_tensor_args_tensor_slots_and_context_v2"
+    assert RUNNABLE_CALL_RECIPE_VERSION == "non_tensor_args_tensor_slots_context_and_obligations_v3"
     assert RUNNABLE_INITIALIZER_POLICY_VERSION == "torchlens_role_init_v2"
     assert RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION == "selected_activation_v2"
     assert LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS == frozenset({"sparse_recorded_taken_path_v1"})
@@ -70,8 +70,15 @@ def test_authoritative_descriptor_and_report_field_names() -> None:
         "callable_registry",
         "calls",
         "tensor_slots",
+        # r71 A: the REQUIRED witness-free input-boundary record (site/arity +
+        # metadata-envelope domain authority).
+        "input_boundary",
         "control_witnesses",
-        # r69 A: the REQUIRED descriptor-native presence ledger (contract section 4).
+        # r71 A: the explicit typed coverage-gap ledger the completeness floor
+        # derives from.
+        "coverage_gaps",
+        # r69 A: the descriptor-native presence ledger, DEMOTED r71 to a redundant
+        # discharge mirror (contract section 4).
         "required_witness_inventory",
         "witness_completeness",
         "rng_profile",
@@ -95,6 +102,9 @@ def test_authoritative_descriptor_and_report_field_names() -> None:
         "is_inplace",
         "runtime_fingerprint",
         "execution_context",
+        # r71 A2 (call-recipe v3): REQUIRED owner-record obligations.
+        "control_obligations",
+        "control_dependencies",
     )
     assert tuple(field.name for field in fields(CallExecutionContext)) == (
         "autocast",

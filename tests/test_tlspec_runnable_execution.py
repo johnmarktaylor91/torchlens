@@ -18,6 +18,7 @@ from torchlens.errors import (
     PathDivergenceError,
     PoisonedRunError,
     RunCapabilityUnavailableError,
+    RunPreconditionError,
 )
 from torchlens.options import CaptureOptions
 from torchlens.runnable import (
@@ -826,13 +827,34 @@ def test_poisoned_trace_is_refused_by_faithful_downstream_consumers(
 def test_incomplete_witness_coverage_is_unverifiable_and_poisoned(
     honesty_artifact: Path,
 ) -> None:
-    """Never promote absence of an observed mismatch to verified without coverage."""
+    """Never promote absence of an observed mismatch to verified without coverage.
+
+    r71 A3: incompleteness is carried by the typed gap LEDGER (the summary is a
+    redundant derived assertion). A surviving gap ceilings the run UNVERIFIABLE;
+    a summary flipped WITHOUT its gap is an internally contradictory descriptor
+    and refuses typed at run preparation (the floor re-assert belt).
+    """
+
+    from torchlens.runnable import (
+        WITNESS_GAP_REGISTRY,
+        WitnessCoverageGap,
+        WitnessGapKind,
+    )
 
     loaded = tl.load(honesty_artifact)
     descriptor = loaded.__dict__["_runnable_descriptor"]
+    gap_spec = WITNESS_GAP_REGISTRY[WitnessGapKind.RNG_MONITOR_UNCERTAIN]
+    gap = WitnessCoverageGap(
+        gap_kind=WitnessGapKind.RNG_MONITOR_UNCERTAIN,
+        source_family=gap_spec.source_family,
+        source_member="capture",
+        order=0,
+        resulting_completeness=gap_spec.resulting_completeness,
+    )
     loaded.__dict__["_runnable_descriptor"] = replace(
         descriptor,
-        witness_completeness=WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE,
+        coverage_gaps=(gap,),
+        witness_completeness=gap_spec.resulting_completeness,
     )
 
     result = loaded.run(inputs=torch.ones(2), seed=29)
@@ -842,6 +864,16 @@ def test_incomplete_witness_coverage_is_unverifiable_and_poisoned(
     assert result.report.poisoned
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     assert result.trace.__dict__["_runnable_poisoned"] is True
+
+    # Summary-only flip (no gap): internally contradictory -> typed refusal, never
+    # a silently trusted summary in EITHER direction.
+    contradictory = tl.load(honesty_artifact)
+    contradictory.__dict__["_runnable_descriptor"] = replace(
+        contradictory.__dict__["_runnable_descriptor"],
+        witness_completeness=WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE,
+    )
+    with pytest.raises(RunPreconditionError):
+        contradictory.run(inputs=torch.ones(2), seed=29)
 
 
 def test_poison_mark_and_first_mismatch_are_monotonic(honesty_artifact: Path) -> None:
@@ -1137,9 +1169,18 @@ def test_h5_dropout_model_in_eval_records_mode_and_verifies(tmp_path: Path) -> N
 def test_h5_mode_sensitive_op_without_declared_mode_is_unverifiable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A BatchNorm op with NO declared mode (old bundle / capture gap) is UNVERIFIABLE."""
+    """A BatchNorm capture that records NO mode now fails TYPED at save (r71 A4).
+
+    The r71 mode-domain check moved to parse and the producer runs the SAME validator
+    as its save-time self-check, so a capture gap that drops the declared train/eval
+    mode (the corr2recover producer-regression lane) refuses the runnable save with
+    ``context_field_invalid`` -- strictly stronger than the former ship-then-
+    UNVERIFIABLE disposition. ``_mode_sensitive_op_unwitnessed`` remains as the
+    runtime belt behind the parse gate.
+    """
 
     import torchlens.capture.trace as capture_trace
+    from torchlens.errors import RunnablePreflightError
 
     # Simulate an old bundle / capture gap: skip the mode recording entirely.
     monkeypatch.setattr(
@@ -1155,13 +1196,10 @@ def test_h5_mode_sensitive_op_without_declared_mode_is_unverifiable(
         ),
     )
     assert trace.__dict__.get("_runnable_module_training_modes") is None
-    trace.save(tmp_path / "bn_nomode.tlspec", level="runnable", include_activations=True)
-
-    result = tl.load(tmp_path / "bn_nomode.tlspec").run(
-        inputs=x, on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
+    with pytest.raises(RunnablePreflightError) as excinfo:
+        trace.save(tmp_path / "bn_nomode.tlspec", level="runnable", include_activations=True)
+    assert "context_field_invalid" in str(excinfo.value.fields.get("diagnostics"))
+    assert "module_training_mode" in str(excinfo.value.fields.get("diagnostics"))
 
 
 def test_h5_mode_insensitive_model_without_mode_still_verifies(

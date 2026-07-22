@@ -18,11 +18,12 @@ attestation. It does not change the ordinary capture path or analysis save level
 | Name | Frozen value |
 |---|---|
 | sparse capability/schema | `sparse_recorded_taken_path_v2` |
-| call recipe | `non_tensor_args_tensor_slots_and_context_v2` |
+| call recipe | `non_tensor_args_tensor_slots_context_and_obligations_v3` |
 | callable-ref schema | integer `1` |
 | state binding | `module_path_role_v1` |
 | input binding | `model_site_io_role_v1` |
 | control-witness schema | `scalar_bool_and_arm_entry_v1` |
+| witness-family registry | `witness_family_registry_v2` |
 | initializer policy | `torchlens_role_init_v2` |
 | optional weight payload schema | `state_dict_v1` |
 | **required** non-persistent buffer payload schema | `runnable_nonpersistent_buffer_v1` |
@@ -38,6 +39,16 @@ grad/inference mode) and the descriptor carries one capture-scoped `AmbientExecu
 The parser REJECTS their absence. An absent context record therefore only ever means a legacy v1
 artifact, which is analysis-only (section 1a) -- absence is never interpreted as "disabled" or
 any other default.
+
+The call recipe is bumped to `...context_and_obligations_v3` (r71 A): every call descriptor
+additionally carries REQUIRED `control_obligations` (owner-record scalar-bool / loop-predicate
+obligations) and `control_dependencies` (owner-record conditional arm-entry edges on the child
+call), every tensor slot carries REQUIRED `host_escape` / `inert_sink` claims, every state
+binding carries REQUIRED `captured_requires_grad` / `captured_grad_fn` / `host_escape_disposition`,
+and the descriptor carries the REQUIRED witness-free `input_boundary` record and the REQUIRED
+typed `coverage_gaps` ledger. None is optional or defaulted; their absence fails validation
+outright. The witness-family registry discriminator bumps to `witness_family_registry_v2` (a v1
+inventory is analysis-only). See the witness-obligation / discharge model in section 4.
 
 ## 1a. Legacy `sparse_recorded_taken_path_v1` posture
 
@@ -84,7 +95,7 @@ recipe.
 | Node | Exact fields | Constraint |
 |---|---|---|
 | `LiteralAtom` | `kind`, `value` | kind is `none`, `bool`, `int`, `float`, `str`, or `ellipsis`; value has exactly that Python type (`None` for `none` and for `ellipsis` -- the atom KIND, not the wire value, disambiguates a real `None` index from a `...` index) |
-| `LiteralSlice` | `start`, `stop`, `step` | each component is a `LiteralAtom` restricted to kind `none` or `int`; decodes to `slice(start, stop, step)` |
+| `LiteralSlice` | `start`, `stop`, `step` | each component is a `LiteralAtom` restricted to kind `none` or `int`; **classifier-first (r71 B)** -- a semantic-typed component (`IntEnum`, int subclass) refuses `semantic_scalar_type`; decodes to `slice(start, stop, step)` |
 | `LiteralTorchSymbol` | `qualname` | non-callable symbol below an explicitly allowlisted stock torch root |
 | `LiteralSequence` | `kind`, `items` | kind is `list` or `tuple`; items are ordered literal nodes |
 | `LiteralMapping` | `entries` | ordered `LiteralMappingEntry` nodes; duplicate keys invalid |
@@ -124,6 +135,21 @@ CLASSIFIER-FIRST at `_encode_literal`, so no recipe path can launder a semantic 
   admitted builtin/stock-wrapper capture replayed with a same-value semantic type DIVERGES
   (both admitted lanes, both directions); a semantic runtime value can never verify or attest.
 - Everything else keeps the existing opaque/outside-grammar disposition.
+
+**Composite-literal component policy (r71 B).** A composite literal node carries type identity
+in its COMPONENTS too, so the classifier is applied per-edge, not only at the leaf. The closed
+`COMPOSITE_LITERAL_COMPONENT_POLICY` table (`torchlens._input_walk`) names the classifier lane
+every recursive `NonTensorLiteral` edge routes through -- `LiteralSlice` start/stop/step via
+`classify_scalar`, `LiteralSequence` items and `LiteralMapping` values via the classifier-first
+`_encode_literal`, `LiteralMapping` keys and `LiteralTupleKey` items via the classifier-backed
+`encode_mapping_key`. It is both implementation authority and a future-kind meta-test: a new
+composite node without a declared component policy REDs. secA-F1 (an `IntEnum` /  int-subclass
+`slice` component laundering into a plain `int` because `_encode_slice_component` gated only
+`isinstance(int)`) is closed: the encoder classifies first, the snapshot preflight applies the
+component policy to composite `slice` leaves (the SAME `semantic_scalar_type` refusal at save
+and in the symmetric runtime snapshot), and `_literal_leaf_equal` compares slices
+component-by-component through the scalar rules -- `slice.__eq__` (value-only) is never the
+authority.
 
 No runnable-save input-boundary path may fail untyped: every producer-preflight refusal
 reachable from a model-input composition raises a typed `RunnableErrorCode` disposition, never
@@ -196,9 +222,11 @@ fields.
 | `callable_registry` | tuple of `CallableRegistryEntry` |
 | `calls` | tuple of `RunnableCallDescriptor` |
 | `tensor_slots` | tuple of `TensorSlotDescriptor` |
+| `input_boundary` | tuple of `InputBoundarySite` (REQUIRED, r71 A; see below) |
 | `control_witnesses` | tuple of `ControlWitness` |
-| `required_witness_inventory` | `RequiredWitnessInventory` (REQUIRED, r69 A; see below) |
-| `witness_completeness` | `WitnessCompleteness` |
+| `coverage_gaps` | tuple of `WitnessCoverageGap` (REQUIRED, r71 A; see below) |
+| `required_witness_inventory` | `RequiredWitnessInventory` (REQUIRED; DEMOTED r71 to a redundant mirror; see below) |
+| `witness_completeness` | `WitnessCompleteness` (DERIVED from `coverage_gaps`; a redundant assertion, never authority) |
 | `rng_profile` | `RunnableRngProfile` |
 | `ambient_context` | `AmbientExecutionContext` (REQUIRED, explicit) |
 | `compatibility` | `RunnableCompatibility` |
@@ -225,52 +253,115 @@ such a run honestly stays eligible with the byte-exact tripwire still armed. Sch
 `runnable_nonpersistent_buffer_v1`, and `selected_activation_v2`. Any payload bytes/references
 live outside the sparse core.
 
-### Required-witness inventory (r69 A)
+### Witness-obligation / discharge model (r71 A)
 
-`RequiredWitnessInventory` is the REQUIRED descriptor-native presence ledger for
-replay-critical witness families. It is structurally OUTSIDE `control_witnesses` -- the stream
-being validated can never declare its own required membership -- and is authored by both the
-producer and the parser from the ONE closed `WITNESS_FAMILY_REGISTRY`
-(`torchlens/runnable.py`), which gives every replay-critical `SHAPE_STRUCTURE_FACT` family
+The r69 A presence ledger is superseded by a structural **obligation/discharge invariant**.
+The invariant (deletion-closure), stated once:
+
+> Every replay-structure item that can affect a faithfulness verdict creates a typed,
+> independently derived OBLIGATION, anchored to structure the replay itself consumes. Each
+> obligation is discharged exactly once, by an exact witness XOR an explicit, source-linked
+> `WitnessCoverageGap`. The witness stream, the required-witness inventory, and the
+> `witness_completeness` summary are NEVER authority for their own required coverage.
+> Consequence: no combination of record DELETIONS can improve a verdict -- any partial strip
+> leaves a surviving anchor contradiction (parse-refuse `context_field_invalid`, analysis-only)
+> or an UNVERIFIABLE floor, never VERIFIED. The single out-of-scope boundary is coherent
+> reauthoring (threat-model subsection below).
+
+**Registry v2.** `WITNESS_FAMILY_REGISTRY` (`torchlens/runnable.py`, discriminator
+`witness_family_registry_v2`) is a closed table of typed `FamilySpec` rows -- one per
+verdict-steering witness family. It now covers the four DIRECT control kinds (`scalar_bool`,
+`loop_predicate`, `conditional_arm_entry`, `tensor_derived_scalar_literal`) that r70's
+corr2recover-H1 found had NO presence proof, the seven `SHAPE_STRUCTURE_FACT` prefix families
 (`input_structure`, `model_input_literal`, `model_input_metadata`, `module_training_mode`,
-`state_metadata`, `container`, `unbound_state_escape`) one explicit presence disposition. The
-record carries the closed registry discriminator (`witness_family_registry_v1`) plus one row
-per registered family -- `family`, `disposition`, and the EXACT sorted member-identity set,
-explicit empty sets included. Member vocabulary: `input_structure` uses canonical normalized
-root model-input site positions (`arg:<i>` / `kwarg:<name>`); `state_metadata` uses the exact
-read-gated `(state_dict_name, fact_name)` identities (`<state>::<fact>`) -- state facts stay
-read-gated, and the ledger declares exactly which reads happened, so an empty read set is
-represented explicitly rather than inferred from absence; every other `inventory_indexed`
-family uses its exact witness `site_label`. The producer builds facts and inventory member IDs
-from ONE draft result (the final emitted witness list), so emission cannot drift.
+`state_metadata`, `container`, `unbound_state_escape`), and two explicit claim-only families
+(`inert_sink`, `unbound_state_inert`). Each row declares IN CODE its witness kind / site
+prefix, presence disposition, the NAMED independent replay-structural anchor, the discharge
+rule (`exact_witness` vs `witness_or_gap` vs `claim_only`), and the named runtime consumer. A
+v1 inventory refuses at parse (analysis-only); there is no legacy fallback and no silent
+compatibility default. The registry is the ONLY dispatch authority for producer authoring,
+parser validation, and the generated mutation matrix.
 
-Parse order is: slots and witness syntax, then the inventory, then the independently derived
-and cross-family sets, then exact family/member equality. The parser requires the inventory
-family set to equal the closed registry exactly and the present facts of every
-`inventory_indexed` family to equal the row's member set exactly. A missing family or member,
-an extra or duplicate family row or member, a duplicate present-fact identity, an unknown
-family (in the inventory OR on an emitted `SHAPE_STRUCTURE_FACT` site label), an unknown
-registry discriminator, a disposition disagreeing with the registry, a malformed row, a forged
-or shrunk inventory, or a forged `site_count` refuses at parse with `context_field_invalid`:
-the load stays available for analysis, readiness is `unavailable`, and execution cannot
-attach. A v2 manifest missing the `required_witness_inventory` FIELD altogether fails manifest
-validation outright (the same disposition as a missing `ambient_context`). Independent
-cross-checks anchor the ledger to the rest of the descriptor: every tensor `MODEL_INPUT`
-binding position, every literal-fact position, and every metadata-fact position must sit
-inside the inventory site set; positional roots are dense; structure-fact positions equal the
-site set; and `site_count` values inside facts are redundant consistency checks only -- NEVER
-required-set authority (the r68 secA-F1 lane derived both cardinality and membership from the
-stream being validated, so stripping a family silently restored weaker semantics; absence
-never means weaker semantics now).
+**Owner-record obligations + witness-free derivation.** Every obligation is stamped as a
+REQUIRED field on the OWNING replay record (consumed by scheduling/binding/staging, never a
+decorative ledger): `CallControlObligation` / `ControlDependencyEdge` on
+`RunnableCallDescriptor`; `host_escape` / `inert_sink` on `TensorSlotDescriptor`;
+`captured_requires_grad` / `captured_grad_fn` / `host_escape_disposition` on `StateSlotBinding`;
+the REQUIRED `input_boundary` record (`InputBoundarySite` -> `InputBoundaryTensorSite`) as the
+runtime site/arity + tree-binding + totalized metadata-envelope-domain authority. A frozen
+witness-free `ReplayWitnessStructure` (calls, slots, input-boundary, callable registry, and --
+at readiness attach -- the rehydrated container records) is the ONLY input to
+`derive_required_witness_members`; it cannot contain or expose `control_witnesses`,
+`coverage_gaps`, `required_witness_inventory`, or `witness_completeness`, so accidental
+self-referential coverage is impossible. The producer authors witnesses/gaps/inventory FROM
+the derived required sets (structure before witnesses); the parser independently rebuilds the
+structure, re-derives, and requires exact discharge.
 
-`model_input_literal` is the one `independent_ceiling` family: its presence proof is the
-BIDIRECTIONAL literal-leaf <-> structure-leaf cross-anchor rather than inventory membership.
-Every `input_structure` leaf node (and every empty-container node, through its synthetic
-marker path) must own exactly one literal fact at the same `(site, path)`, and every literal
-fact's `(site, path)` must be a structure leaf/empty node -- set equality in both directions,
-so per-leaf literal stripping cannot hide behind site-level coverage. Runtime site selection
-consumes the parse-validated inventory sites (never the surviving facts) with typed
-fail-closed belts on the execution and state-staging sides.
+**Per-family anchor + domain totality.**
+
+* `scalar_bool` / `loop_predicate` -- control obligation on the owning call; **terminal-slot
+  totality**: every call-produced slot consumed by no call and not bound by the output contract
+  is claimed by EXACTLY one of {scalar_bool, loop_predicate, tensor_derived_scalar_literal,
+  explicit `inert_sink` claim, typed gap}. An unclaimed terminal refuses.
+* `tensor_derived_scalar_literal` -- host-escape obligation on the source slot
+  (`TensorSlotDescriptor.host_escape`); same terminal totality; consumed by
+  `_tensor_derived_scalar_stale`.
+* `conditional_arm_entry` -- required control-dependency edges on the CHILD call, consumed by
+  scheduling/topological validation; referential integrity (parent/child labels resolve) +
+  the **E2 pairing** obligation: every conditional id in arm edges requires a same-conditional
+  predicate obligation XOR a typed predicate gap.
+* `model_input_metadata` -- **totalized PRESENCE**: the producer ALWAYS emits exactly one
+  envelope per tensor MODEL_INPUT site (explicit empty read set); read-gated COMPARISON
+  semantics unchanged; the envelope's fact-name set must equal the boundary record's declared
+  `metadata_reads`.
+* `state_metadata` -- **totalized BOTH facts** over the declared state-name universe:
+  `captured_requires_grad` (staging applies it -- capture truth wins, the LOCKED r65 F-1
+  ruling) and `grad_fn` presence (True refuses at save AND parse). The staging belt is pointed
+  at the parse-derived set, never the inventory mirror.
+* `unbound_state_escape` -- per-slot host-escape disposition on the state binding
+  (`escaped` demands a witness/SHA guard XOR a typed gap; `unbound_state_inert` is the explicit
+  no-witness claim); declared-unbound-name domain totality.
+* `container` -- MODEL_INPUT snapshots anchor to the input-boundary site domain; MODEL_OUTPUT
+  snapshots anchor to the persisted output container contract. The container witness check is
+  the generic `SHAPE_STRUCTURE_FACT` fall-through in `_post_execution_contract_checks` ->
+  `_structure_witness_check` (the ONLY witness check on OUTPUT container structure -- kept and
+  anchored, never removed). At readiness attach the descriptor's `container:*` witnesses must
+  equal, bidirectionally, the snapshot identities the rehydrated trace's own container records
+  imply.
+* `module_training_mode` -- mode-sensitive-call domain (single-sourced
+  `is_mode_sensitive_qualname`); parse requires the declared mode as a minimum, the runtime
+  `_mode_sensitive_op_unwitnessed` stays as the belt.
+* `input_structure` / `model_input_literal` -- the existing MODEL_INPUT-binding + dense
+  positional-root + bidirectional literal-leaf<->structure-leaf anchors, re-expressed as
+  registry rows.
+
+**Explicit gaps + parser-derived completeness floor.** `WitnessCoverageGap` is the ordered,
+typed, source-linked ledger (closed `WitnessGapKind` registry mapping each cause to a source
+family + resulting completeness). Every producer downgrade cause (opaque leaf, unresolvable /
+unattributable / writeback / raw-pointer / cross-thread / observer-uncertain escape, unbound
+state escape, unobserved predicate, unclassified terminal bool, unanchorable arm edge, forward
+value override, input-metadata view read, pruned RNG / alias, unmodelled host write, lifecycle
+ledger, RNG-monitor uncertainty, failed capture verification) is a gap. `witness_completeness`
+is DERIVED from the ledger by the ONE `derived_witness_completeness` function (first gap in
+capture order wins). The persisted summary is a redundant assertion: differing from the floor
+is `context_field_invalid`; `_path_faithfulness` consults ONLY the derived value; readiness
+republishes it; run preparation re-asserts summary==floor as a belt; a source-scan tripwire
+forbids any verdict/readiness read of the raw persisted summary outside that derivation.
+
+**Inventory demotion.** `RequiredWitnessInventory` (still REQUIRED, discriminator bumped to
+`witness_family_registry_v2`, one row per registry family with exact sorted member IDs and
+explicit empty sets) is DEMOTED to a redundant discharge MIRROR: stripping a witness alone
+breaks mirror equality (the single-strip trip), but required coverage is derived independently
+from the witness-free structure. A missing family/member, extra/duplicate row or member,
+unknown family, unknown discriminator, disposition mismatch, or malformed row still refuses
+`context_field_invalid`. A v2 manifest missing the `input_boundary`, `coverage_gaps`, or
+`required_witness_inventory` FIELD, or a call missing `control_obligations` /
+`control_dependencies`, or a slot missing `host_escape` / `inert_sink`, fails validation
+outright (never optional or defaulted). `model_input_literal` stays the one
+`independent_ceiling` family (bidirectional literal-leaf<->structure-leaf cross-anchor, no
+inventory members). The producer runs the SAME comprehensive validator
+(`validate_witness_obligations`) as its save-time self-check, so a producer-emission regression
+that drops a control witness or drifts any obligation/discharge pair fails typed at SAVE.
 
 ### Execution-context records
 
@@ -355,7 +446,16 @@ parent_call_ids: tuple[str, ...]
 is_inplace: bool
 runtime_fingerprint: str
 execution_context: CallExecutionContext
+control_obligations: tuple[CallControlObligation, ...]
+control_dependencies: tuple[ControlDependencyEdge, ...]
 ```
+
+`control_obligations` (r71 A) are the owner-record scalar-bool / loop-predicate obligations on
+the call producing the predicate slot (`kind`, `output_slot_id`, `site_label`, `conditional_id`),
+consumed by `_call_witness_checks`. `control_dependencies` are the owner-record conditional
+arm-entry edges on the CHILD call (`conditional_id`, `arm_kind`, parent/child op labels),
+consumed by scheduling/topological validation and the runtime arm check. Both are REQUIRED (never
+defaulted); the parser re-derives the required witness members from them (section 4).
 
 `TensorArgumentRef` is `argument_path: tuple[str | int, ...]` plus `slot_id: str`.
 `LiteralArgumentRef` has the same path plus `value: NonTensorLiteral`. A path begins with `args`, a
@@ -386,8 +486,14 @@ producer_slot_id: str | None
 output_path: tuple[str | int, ...] | None
 input_binding: InputSlotBinding | None
 state_binding: StateSlotBinding | None
+host_escape: bool
+inert_sink: bool
 ```
 
+`host_escape` / `inert_sink` (r71 A, REQUIRED, mutually exclusive) are the owner-record claims
+for terminal-slot totality: `host_escape` means the slot's value escaped to the Python host (an
+exact `tensor_derived_scalar_literal` witness or a typed gap is required); `inert_sink` is the
+explicit dead-slot claim discharging a terminal call-produced slot that no witness/gap claims.
 `rank == len(shape)` and dimensions are non-negative. Null device index means any index of the
 required device class. `version_of` links mutation versions; `producer_slot_id` links produced
 views/uses. Output/container leaves require `output_path`. `TensorUseSite` is exactly `call_id: str`
@@ -415,22 +521,34 @@ semantic_role: StateSlotRole
 trainable: bool
 persistent: bool
 alias_group: str | None
+captured_requires_grad: bool
+captured_grad_fn: bool
+host_escape_disposition: escaped | inert | None
 ```
 
 It exists only on `parameter`/`buffer` slots. Parameters are persistent. Non-persistent buffers are
 not sourced from a `state_dict` but still need a role initializer. Alias members have identical
-shape/dtype and share one allocation.
+shape/dtype and share one allocation. `captured_requires_grad` / `captured_grad_fn` (r71 A E1,
+REQUIRED) are the TOTALIZED declared state-metadata facts (staging applies `requires_grad` --
+capture truth; `captured_grad_fn=True` refuses at save AND parse). `host_escape_disposition`
+(`escaped` / `inert` / `None`) is the per-slot unbound-state claim; parse-time declared-name
+domain totality requires a non-None disposition on every slot of an unbound state name.
 
 ### Control witness
 
 `ControlWitnessKind` values are `scalar_bool`, `conditional_arm_entry`, `loop_predicate`,
 `shape_structure_fact`, and `tensor_derived_scalar_literal`. A witness has exactly
 `witness_id: str`, `kind: ControlWitnessKind`, `order: int`, `call_id: str | None`,
-`site_label: str`, and `observed_value: NonTensorLiteral`.
+`site_label: str`, and `observed_value: NonTensorLiteral`. As of r71 A all FOUR direct control
+kinds are first-class `WITNESS_FAMILY_REGISTRY` families (the r70 corr2recover-H1 closure): each
+witness's presence is a typed obligation on its owner record, discharged by the exact witness XOR
+a typed `WitnessCoverageGap` (section 4). A witness with no owning structural obligation, or an
+obligation with neither witness nor gap, refuses at parse.
 
-IDs are unique and order is dense zero-based. Scalar/loop predicates use boolean `LiteralAtom`;
-arm entry uses a stable arm identity; shape/structure uses the literal grammar. Missing/opaque facts
-use completeness plus diagnostics, never an opaque payload.
+IDs are unique and order is dense zero-based (a raw deletion trips the density belt; renumbering
+is coherent reauthoring). Scalar/loop predicates use boolean `LiteralAtom`; arm entry uses a
+stable arm identity; shape/structure uses the literal grammar. Missing/opaque facts use the typed
+`coverage_gaps` ledger plus diagnostics, never an opaque payload.
 
 A `tensor_derived_scalar_literal` witness records a tensor->Python-scalar escape
 (`.item()`/`int()`/`float()`/`aten._local_scalar_dense`) whose derived scalar was baked into a
@@ -515,7 +633,15 @@ analysis output but must not write runnable capability. It rejects when:
    admitted input key is recursively composed of metadata-safe builtin atoms by
    construction). Finite float keys use exact `float.hex()` spelling (`-0.0` distinct from
    `+0.0`); a NaN key token carries its binary64 BIT PATTERN, so an identical NaN key binds
-   itself and distinct NaN payloads stay distinct. Tokens are injective over every admitted
+   itself and distinct NaN payloads stay distinct. **Reserved-namespace escaping (r71 D):** a
+   real `str` key colliding with a reserved input-path sentinel -- the whole `\x00` prefix
+   namespace, `EMPTY_CONTAINER_PATH_MARKER` / `BOOL_KEY_PATH_TAG` / the codec tag itself
+   (`reserved_input_path_components()`) -- is escaped into the unambiguous `r:<UTF-8 hex>` codec
+   lane (the legacy `s:` lane keeps its codec-prefix meaning), so a dict input keyed by a
+   sentinel round-trips VERIFIED on the unchanged input instead of false-DIVERGING when
+   `_value_at_path` interprets `EMPTY_CONTAINER_PATH_MARKER` positionally before mapping lookup;
+   a meta-test asserts every positionally-interpreted sentinel is in the registry and that
+   `encode_mapping_key(sentinel) != sentinel`. Tokens are injective over every admitted
    mapping node: a node whose distinct key objects encode to one token (multiple same-bit NaN
    objects) refuses typed at save with reason `ambiguous_mapping_key`, and multiple runtime
    token matches fail closed through the same typed disposition. Runtime binding encodes each
@@ -527,15 +653,29 @@ analysis output but must not write runnable capability. It rejects when:
    undeclared per-instance container state REFUSE at runnable save through the EXISTING
    `missing_input_container_contract` (no new enum), with the SYMMETRIC bind-side check
    refusing runtime-added undeclared state. Undeclared instance state is judged by ONE inert
-   enumerator (r69 C): every `__dict__` key regardless of value UNION every SET slot across
-   all classes in `type(value).__mro__` (string `__slots__` normalized, `__dict__`/
-   `__weakref__` pseudo-slots ignored, private names mangled against the declaring class,
-   only genuine member descriptors read directly -- no property or user
-   `__getattr__`/`__getattribute__` can execute), minus the declared dataclass fields or
-   namedtuple `_fields`. PRESENCE is semantic: a slot or attribute set to `None`, `False`,
-   zero, or an empty container counts (there is no value carve-out -- `hasattr` presence
+   inspector (r69 C; **fail-closed r71 C**): `inspect_instance_state` returns one typed result
+   (`names` / `complete` / closed `reason`) -- uncertainty is NEVER an empty set. The instance
+   `__dict__` descriptor is resolved by RAW-MRO class-dict lookup (NEVER a live
+   `getattr(value, "__dict__")`, which would execute a property/descriptor shadow returning
+   attacker-chosen `{}` -- hon1-F1); it must be exactly `types.GetSetDescriptorType`, is invoked
+   directly, and the result must be `type(result) is dict`. A property, custom/replaced
+   descriptor, dict-subclass/non-dict result, or exception is INCOMPLETE
+   (`instance_state_uninspectable`). A declared-schema container (dataclass / namedtuple, incl.
+   `empty` variants) with a non-builtin `__getattribute__` override or ANY MRO `__getattr__` is
+   likewise uninspectable, short-circuiting BEFORE any declared field is read (the walker never
+   invokes the untrusted hook while proving safety; builtin C slot wrappers like `tuple`'s pass,
+   so ordinary namedtuples stay admitted). An incomplete inspection reads as undeclared state
+   PRESENT and refuses at save with the DISTINCT `instance_state_uninspectable` reason, the
+   symmetric runtime snapshot failing closed (an admitted plain capture vs an uninspectable
+   same-schema runtime twin diverges, never verifies). The all-MRO genuine `MemberDescriptorType`
+   slot scan (string `__slots__` normalized, `__dict__`/`__weakref__` pseudo-slots ignored,
+   private names mangled against the declaring class) is unchanged; namedtuple `_fields` reads
+   move to raw-MRO type level; the registered-container `__dict__` state check routes through the
+   same inert inspector; a source-scan tripwire forbids any live `getattr(..., "__dict__")` in
+   the normative input-boundary module. PRESENCE is semantic: a slot or attribute set to `None`,
+   `False`, zero, or an empty container counts (there is no value carve-out -- `hasattr` presence
    steers control flow); an unset slot is absent. Ordinary and `kind == "empty"` dataclass/
-   namedtuple lanes route through the same enumerator. Well-behaved Mapping/sequence
+   namedtuple lanes route through the same inspector. Well-behaved Mapping/sequence
    subclasses stay judged by protocol view + exact class only (the custom-`Mapping` hidden
    non-protocol-state residual, section 11). REGISTERED
    containers are SUPPORTED behind their existing declarations and typed fences (registration
@@ -1767,11 +1907,37 @@ serially replayed DAG); and autotuner cache state (subsumed by the `cudnn.benchm
 ineligibility marking). Where one of these residuals changes bytes, the byte-exact attestation
 tripwire fails loud (`numeric_attestation_failed`), never falsely `attested`.
 
+### Threat-model scope: coherent reauthoring is out of contract scope (r71)
+
+After r71 A, every DELETION subset of an artifact leaves a surviving anchor contradiction and
+fails closed (the r71 strip matrix proves it per family: single, matched-pair, and 3-way
+lockstep strips all reach `context_field_invalid`/analysis-only or an UNVERIFIABLE floor, never
+VERIFIED). The ONLY remaining pass-through is rewriting the artifact into a fully coherent
+DIFFERENT (weaker) program -- e.g. for the stale-escape shape, deleting the predicate call and
+its slot, renumbering, rebuilding the inventory, and keeping completeness coherent. That
+endpoint is byte-for-byte an HONEST capture of the weaker program, and its VERIFIED is TRUE
+against THAT program's oracle 1 (a fresh live model implementing the descriptor's own DAG from
+its declared state). The tool attests **replay-faithfulness to the artifact's described program
++ declared state** -- never author-intent or provenance. Separating a reauthored artifact from
+its honest twin would require refusing IDENTICAL inputs; provenance needs an external trust root
+and no manifest signature exists (self-computed digests are part of the artifact and are
+recomputed by the reauthor). This is a documented threat-model SCOPE statement, NOT an open
+residual. The r71 immunizer's reauthor pin locks the boundary in code: it constructs the full
+coherent reauthor of an escape f-artifact (`n=int(x[0].item()); return x+n` rewritten to
+`x+5`) AND an honest capture of `g(x)=x+5`, and asserts both parse to semantically identical
+descriptors and both run VERIFIED against the g-oracle -- so any future change that would
+"detect" the reauthored artifact REDs the test by also refusing the honest twin. Per family the
+minimum coherent-reauthor edit set (which records must ALL be rewritten together) is the union
+of that family's owner records, its witness, its inventory member, and any density/renumbering
+the deletion forces. The r69-era dual-use-escape and metadata-read-content edits collapse into
+this single boundary; there are zero OPEN residuals for A/B/C/D.
+
 ### Input-boundary behavioral residuals (r69 -- exactly two)
 
 The r69 input-contract closure leaves EXACTLY TWO documented behavioral residuals on the
 model-input boundary. No third input-boundary residual exists; a new one requires its own
-contract amendment.
+contract amendment. r71 C does NOT narrow residual 1 (the declared-field-schema lane is the C
+scope; the custom-Mapping protocol-state residual is untouched).
 
 1. **Custom-`Mapping` hidden non-protocol state.** A well-behaved custom `Mapping` subclass is
    admitted through its protocol view (ordered keys/children) plus exact class identity. It can

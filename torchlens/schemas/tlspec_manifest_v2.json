@@ -104,7 +104,7 @@
       ],
       "properties": {
         "capability": {"const": "sparse_recorded_taken_path_v2"},
-        "call_recipe": {"const": "non_tensor_args_tensor_slots_and_context_v2"},
+        "call_recipe": {"const": "non_tensor_args_tensor_slots_context_and_obligations_v3"},
         "callable_ref_schema": {"const": 1},
         "state_binding": {"const": "module_path_role_v1"},
         "input_binding": {"const": "model_site_io_role_v1"},
@@ -171,7 +171,48 @@
             }
           }
         },
+        "input_boundary": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["position", "tensor_sites"],
+            "properties": {
+              "position": {"type": "string"},
+              "tensor_sites": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["container_path", "slot_id", "metadata_reads"],
+                  "properties": {
+                    "slot_id": {"type": "string"},
+                    "metadata_reads": {"type": "array", "items": {"type": "string"}}
+                  }
+                }
+              }
+            }
+          }
+        },
         "control_witnesses": {"type": "array"},
+        "coverage_gaps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "gap_kind",
+              "source_family",
+              "source_member",
+              "order",
+              "resulting_completeness"
+            ],
+            "properties": {
+              "gap_kind": {"type": "string"},
+              "source_family": {"type": "string"},
+              "source_member": {"type": "string"},
+              "order": {"type": "integer", "minimum": 0},
+              "resulting_completeness": {"type": "string"}
+            }
+          }
+        },
         "required_witness_inventory": {
           "type": "object",
           "required": ["registry_version", "families"],

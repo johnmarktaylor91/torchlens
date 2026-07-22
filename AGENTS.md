@@ -167,12 +167,24 @@ pytest tests/ -m "not slow" -x --tb=short
     exposure; mismatch raises `numeric_attestation_failed` with rollback, while changed-input
     (logical OR physical), random/non-equivalent-state, and nondeterministic-capture-context runs
     report `not_applicable`. `attested` implies `verified` and unpoisoned, always.
-17c. Runnable descriptors are `sparse_recorded_taken_path_v2`: every call carries a REQUIRED
+17c. Runnable descriptors are `sparse_recorded_taken_path_v2` (call recipe
+    `non_tensor_args_tensor_slots_context_and_obligations_v3`): every call carries a REQUIRED
     explicit `CallExecutionContext` (autocast with affirmative disabled state + grad/inference
-    mode) and the descriptor carries one `AmbientExecutionContext` (defaults, matmul precision,
-    determinism, TF32/cuDNN flags, SDP toggles), both restored at replay or refused typed. Absent
-    context records only ever mean a legacy v1 artifact, which loads analysis-only with a typed
-    readiness refusal -- never a defaulted replay.
+    mode) and the descriptor carries one `AmbientExecutionContext`, both restored at replay or
+    refused typed. Absent context records only ever mean a legacy v1 artifact, which loads
+    analysis-only. r71 A closes the witness-strip class with a structural obligation/discharge
+    invariant: `WITNESS_FAMILY_REGISTRY` v2 (`witness_family_registry_v2`) covers EVERY
+    verdict-steering witness family -- the four direct control kinds plus the shape families plus
+    two claim-only families -- each row naming its independent replay-structural anchor. Every
+    obligation is stamped on its owning replay record (`control_obligations` /
+    `control_dependencies` on calls, `host_escape` / `inert_sink` on slots,
+    `captured_requires_grad` / `captured_grad_fn` / `host_escape_disposition` on state bindings,
+    the REQUIRED `input_boundary` record) and discharged by an exact witness XOR a typed
+    `WitnessCoverageGap`; `witness_completeness` is DERIVED from the gap ledger (the summary is a
+    redundant assertion, never authority), and the required-witness inventory is a redundant
+    mirror. No record deletion can improve a verdict; the ONE out-of-scope boundary is coherent
+    reauthoring (an honest capture of a weaker program), documented in the contract's threat-model
+    subsection.
 18. `Trace.run(inputs=..., seed=...)` is transactional for live and loaded sparse providers, runs
     internal sparse calls under `pause_logging()`, and returns `RunResult(output, trace, report)`.
     Stage 6 enforces input/state, per-call/output, and control-witness honesty before exposure;

@@ -353,6 +353,11 @@ _NAN = float("nan")
 _ADMITTED_KEYS: dict[str, Any] = {
     "str": "k",
     "reserved_prefix_str": "\x00tlk:b:1",
+    # r71 D: reserved-namespace sentinels are REAL dict keys that must round-trip
+    # (never false-DIVERGE by positional sentinel interpretation).
+    "empty_container_marker": "\x00tl_empty_container",
+    "bool_key_marker": "\x00tl_bool_key",
+    "null_prefixed_junk": "\x00junk",
     "int": 7,
     "bool_true": True,
     "float": 2.5,
@@ -365,6 +370,8 @@ _ADMITTED_KEYS: dict[str, Any] = {
     "none": None,
     "nested_tuple": ("a", (True, 2.5)),
     "nan_in_tuple": (_NAN, 1),
+    # free repro3c: a tuple carrying reserved strings round-trips.
+    "reserved_in_tuple": ("\x00tl_empty_container", 1),
 }
 
 
@@ -482,12 +489,82 @@ def test_r69_nan_key_nested_and_bit_distinct_payloads() -> None:
     assert encode_mapping_key((quiet, 1)) != encode_mapping_key((payload_nan, 1))
 
 
+@pytest.mark.smoke
+def test_r71d_reserved_marker_keys_round_trip_without_false_divergence(tmp_path: Path) -> None:
+    """free repro3c: a dict input keyed by a reserved sentinel (or a tuple containing
+    one) saves/loads/runs VERIFIED on the UNCHANGED input; a changed value under such
+    a key still diverges; the empty-container marker behavior is unaffected."""
+
+    from torchlens.errors import PathDivergenceError, RunPreconditionError
+
+    x = torch.tensor([1.0, 2.0, 3.0])
+    payload = torch.tensor([0.5, 0.5, 0.5])
+    reserved = ["\x00tl_empty_container", "\x00tl_bool_key", "\x00tlk:x", "\x00junk"]
+    for index, key in enumerate(reserved):
+        path = _save(_trace(_KeyedTensor(), [x, {key: payload}]), tmp_path / f"d_{index}.tlspec")
+        result = tl.load(path).run(inputs=[x, {key: payload.clone()}])
+        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED, key
+        assert torch.equal(result.output, x + payload)
+        # A CHANGED KEY (a different reserved marker) diverges: the token contract is
+        # intact, the belt only escapes the key -- it never conflates two distinct
+        # reserved keys.
+        other = "\x00tl_bool_key" if key != "\x00tl_bool_key" else "\x00junk"
+        with pytest.raises((PathDivergenceError, RunPreconditionError)):
+            tl.load(path).run(inputs=[x, {other: payload.clone()}])
+
+    # Tuple carrying a reserved string round-trips.
+    tup_key = ("\x00tl_empty_container", 1)
+    path = _save(_trace(_KeyedTensor(), [x, {tup_key: payload}]), tmp_path / "d_tup.tlspec")
+    result = tl.load(path).run(inputs=[x, {tup_key: payload.clone()}])
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+    # A GENUINE empty-container marker still behaves (an added empty container
+    # diverges) -- the belt escapes real keys, never the synthetic sentinel.
+    class _EmptyBranch(nn.Module):
+        def forward(self, x, cfg):
+            return x * 2.0 if cfg.get("flag", {}) else x + 100.0
+
+    path = _save(_trace(_EmptyBranch(), [x, {"flag": {}}]), tmp_path / "d_empty.tlspec")
+    assert (
+        tl.load(path).run(inputs=[x, {"flag": {}}]).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
+    with pytest.raises((PathDivergenceError, RunPreconditionError)):
+        tl.load(path).run(inputs=[x, {"flag": {"present": 1}}])
+
+
+@pytest.mark.smoke
+def test_r71d_reserved_registry_meta_test() -> None:
+    """Every sentinel interpreted before mapping lookup is in the reserved registry
+    AND is never round-tripped raw by the key codec."""
+
+    import inspect
+
+    from torchlens import _runnable_execution
+    from torchlens._input_walk import encode_mapping_key, reserved_input_path_components
+
+    registry = reserved_input_path_components()
+    # The one sentinel _value_at_path interprets positionally before mapping lookup.
+    from torchlens._io.runnable import EMPTY_CONTAINER_PATH_MARKER
+
+    assert EMPTY_CONTAINER_PATH_MARKER in registry
+    # No reserved sentinel round-trips raw (each is escaped away from itself).
+    for sentinel in registry:
+        assert encode_mapping_key(sentinel) != sentinel, sentinel
+    # The runtime path resolver still compares canonical tokens only (no decoded lane).
+    bind_source = inspect.getsource(_runnable_execution._value_at_path)
+    assert "decode_mapping_key" not in bind_source
+
+
 def test_r69_key_codec_is_injective_and_round_trips() -> None:
     """Property: distinct admitted keys -> distinct tokens; grammar round-trips."""
 
     keys = [
         "k",
         "\x00tlk:x",
+        "\x00tl_empty_container",
+        "\x00tl_bool_key",
+        "\x00junk",
         "",
         0,
         1,
