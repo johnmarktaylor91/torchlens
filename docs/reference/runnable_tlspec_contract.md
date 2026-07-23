@@ -333,7 +333,13 @@ structure, re-derives, and requires exact discharge.
   no-record. An ancestry-orphaned empty `input_ancestors` is re-resolved or fails closed;
   only a POSITIVELY state-rooted / literal-only chain records nothing (residual (3) stays
   STATE-side only). Any future unlabeled-receiver layout consumer MUST fail closed the same
-  way. Malformed fact encodings stay in the typed lane (r75 L1): a metadata/literal/structure
+  way. The break marker itself is provenance-honest (r77 F1): a tensor argument counts as
+  attributed only with REAL TorchLens provenance -- the prep-stamped parameter address
+  written at model preparation, or TorchLens tensor metadata -- never by type alone. A
+  fresh in-forward or foreign `nn.Parameter` (no prep stamp) is NOT exempt: it leaves the
+  `unattributed_tensor_args` marker like any unlabeled tensor, so a Parameter-wrapped
+  laundering chain taints and re-resolves or fails closed instead of riding the
+  state-rooted no-record branch. Malformed fact encodings stay in the typed lane (r75 L1): a metadata/literal/structure
   fact whose `path`/`position` is not a sequence (int-encoded, or a string that would shred
   into per-character components) refuses `context_field_invalid` at parse -- analysis-only
   with the diagnostic intact, never the generic catch-all -- and the execution-side readers
@@ -2295,7 +2301,12 @@ intermediate (label-less, `_base`-less, and ancestry-laundering for everything d
 now resolves through the ancestry-integrity check + dispatch-origin-ledger leaf origins +
 live captured-storage identity, and otherwise FAILS CLOSED to `unverifiable` -- the layout
 consumer follows the same single-exit positive ladder as escape-source attribution, never a
-silent no-record. The direct-leaf spelling keeps
+silent no-record. r77 closes the last vehicle INTO that ladder: wrapping the intermediate in
+a fresh `nn.Parameter` used to satisfy the known-provenance check by bare type, suppressing
+the ancestry-break marker the ladder keys on; provenance now requires the prep-stamped
+parameter address (or tensor metadata), so a receiver whose provenance is not
+TorchLens-known ALWAYS leaves the taint marker -- prepped/registered parameters are
+unaffected and state-rooted reads keep residual (3). The direct-leaf spelling keeps
 its stricter r27/r31 witnessed-fact semantics (`diverged`). (4) object-identity aliasing of a non-canonical state slot through an
 aliasing-polymorphic op, tested via pure Python identity (`y = self.w.contiguous(); y is
 self.w`), is a documented residual (locked r65 ruling): no accessor fires on ANY tensor, so
