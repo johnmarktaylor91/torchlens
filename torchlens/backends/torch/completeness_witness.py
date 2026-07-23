@@ -62,6 +62,7 @@ from ...utils._callable_safety import private_c_forward_op_module_names
 from ... import _state
 from ..._errors import TorchLensCaptureGapWarning
 from ._tl import get_buffer_address, get_tensor_label, get_tensor_meta
+from .buffer_writes import session_validated_buffer_address
 from .escape_detection import ExpectedOriginalToken, _active_token
 
 CompletenessWitnessMode = Literal["off", "shadow"]
@@ -1160,9 +1161,13 @@ def _state_derived_addresses(trace: Any, source: torch.Tensor) -> set[str]:
     (``self.w`` and any ``.data`` / view / detach alias of it); the forward-start buffer
     storage index (the ``.data`` / view alias twin for buffers). A miss returns empty --
     an activation receiver records nothing (its geometry is recomputed by the replayed DAG).
+
+    r81: the direct-stamp rung requires the SESSION-VALIDATED stamp (current-session
+    object + live storage identity); a stale or ``.data``-rebound stamp falls through
+    to the storage-index rungs, which are anchored on live registered storage.
     """
 
-    address = get_buffer_address(source)
+    address = session_validated_buffer_address(trace, source)
     if address is not None:
         return {str(address)}
     addresses = _param_derived_addresses(trace, source)
@@ -1368,9 +1373,12 @@ def _state_direct_address(trace: Any, source: torch.Tensor) -> "str | None":
     returns the parameter ITSELF, e.g. an already-contiguous ``w.contiguous()``, is the same
     object and attributes correctly). A miss returns ``None`` -- the read is the documented
     alias/view residual, never misattributed.
+
+    r81: "IS the registered object" is enforced with the session belt (current-session
+    stamp + live storage identity), never the raw static stamp.
     """
 
-    address = get_buffer_address(source)
+    address = session_validated_buffer_address(trace, source)
     if address is not None:
         return str(address)
     if type(source) is torch.nn.Parameter:
@@ -2869,11 +2877,12 @@ def _operand_origins(trace: Any, operand: torch.Tensor) -> frozenset[str]:
     label = get_tensor_label(operand)
     if isinstance(label, str):
         return frozenset({f"{_ORIGIN_LABEL_PREFIX}{label}"})
-    meta = get_tensor_meta(operand)
-    address = getattr(meta, "address", None) if meta is not None else None
-    if address is not None:
-        return frozenset({f"{_ORIGIN_STATE_PREFIX}{address}"})
-    buffer_address = get_buffer_address(operand)
+    # r81 (r80 F2): a ``state:`` origin requires the SESSION-VALIDATED stamp
+    # (current-session object + live storage identity), never the raw static
+    # stamp -- a stamped plain-attr buffer whose storage was ``.data``-rebound
+    # to input data mid-forward must resolve as ``unknown`` (explicit taint),
+    # not launder input-derived values into the residual-(3) state exemption.
+    buffer_address = session_validated_buffer_address(trace, operand)
     if buffer_address is not None:
         return frozenset({f"{_ORIGIN_STATE_PREFIX}{buffer_address}"})
     registry = _DISPATCH_TENSOR_ORIGINS.get(trace)
@@ -2901,11 +2910,13 @@ def _operand_leaf_origins(trace: Any, operand: torch.Tensor) -> frozenset[str]:
     mechanism A: "falls back to propagated leaf origins for pruned labels").
     """
 
-    meta = get_tensor_meta(operand)
-    address = getattr(meta, "address", None) if meta is not None else None
-    if address is not None:
-        return frozenset({f"{_ORIGIN_STATE_PREFIX}{address}"})
-    buffer_address = get_buffer_address(operand)
+    # r81 (r80 F2): the leaf ``state:`` rung requires the SESSION-VALIDATED
+    # stamp -- this ledger rung was the actual suppression vehicle for the
+    # plain-attr ``.data=`` input-layout launder: the rebound receiver's raw
+    # stamp resolved every downstream product to a pure ``state:`` leaf basis,
+    # so the layout ladder recorded nothing (residual (3)) and the twin
+    # false-VERIFIED. The belt makes the rebound receiver ``unknown`` instead.
+    buffer_address = session_validated_buffer_address(trace, operand)
     if buffer_address is not None:
         return frozenset({f"{_ORIGIN_STATE_PREFIX}{buffer_address}"})
     registry = _DISPATCH_TENSOR_ORIGINS.get(trace)
@@ -3462,6 +3473,7 @@ _BUFFER_STATE_VIEW_OPERATORS = frozenset({"aten.detach", "aten.alias"})
 
 
 def _is_buffer_state_view_dispatch(
+    trace: Any,
     func: Any,
     owner: "ExpectedOriginalToken | None",
     mutates: bool,
@@ -3479,10 +3491,14 @@ def _is_buffer_state_view_dispatch(
       value-affecting in-place drop can never be credited here.
     * ``aten.detach`` / ``aten.alias`` only -- pure aliasing views. A dropped value-producing
       op (``aten.add``/``aten.mul``/...) on the buffer is NOT in this set and stays unaccounted.
-    * ``args[0]`` is a REGISTERED BUFFER (``get_buffer_address`` resolves a dotted address).
+    * ``args[0]`` is a REGISTERED BUFFER whose stamp is SESSION-VALIDATED (r81:
+      current-session object + live storage identity -- a stale or input-rebound
+      stamp is never credited as a benign state view).
 
     Parameters
     ----------
+    trace:
+        Active capture trace owning the session buffer identity registry.
     func:
         Dispatcher operator overload.
     owner:
@@ -3505,7 +3521,10 @@ def _is_buffer_state_view_dispatch(
     if not args:
         return False
     source = args[0]
-    return isinstance(source, torch.Tensor) and get_buffer_address(source) is not None
+    return (
+        isinstance(source, torch.Tensor)
+        and session_validated_buffer_address(trace, source) is not None
+    )
 
 
 def _dispatch_callsite() -> _DispatchCallsite:
@@ -3627,7 +3646,7 @@ class _CompletenessDispatchMode(TorchDispatchMode):
                 in_replacement_hook = _in_replacement_hook_frame() if self.state.census else False
                 mutates = _is_mutating_operator(func)
                 state_view_accessor = (
-                    _is_buffer_state_view_dispatch(func, owner, mutates, args)
+                    _is_buffer_state_view_dispatch(self.state.trace, func, owner, mutates, args)
                     if self.state.census
                     else False
                 )

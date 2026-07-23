@@ -64,7 +64,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch._tl import get_buffer_address, get_tensor_meta
+from torchlens.backends.torch._tl import (
+    get_buffer_address,
+    get_tensor_meta,
+    set_buffer_address,
+    set_tensor_label,
+)
+from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness
 
@@ -179,6 +185,185 @@ class StashLaunderBranch(nn.Module):
         return y - 10.0
 
 
+class CollidingBufferLaunder(StashLaunderBranch):
+    """Launder variant registering its OWN buffer at the forged/stale address.
+
+    Pins the tracker's direct-stamp fast path: a foreign object whose stamp
+    address merely COLLIDES with a current-session registered name must not
+    resolve (identity is required), so the launder still ceilings.
+    """
+
+    def __init__(self, stash: object) -> None:
+        super().__init__(stash)
+        torch.manual_seed(13)
+        self.register_buffer("b", torch.randn(2, 4, 8, 8))
+
+
+class PlainAttrRebindBranch(nn.Module):
+    """F2/M3: direct plain-tensor attribute, prep-stamped, ``.data``-rebound."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(3)
+        self.q = torch.randn(2, 4, 8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Rebind the stamped plain-attr buffer to input data, branch on layout."""
+
+        y = x * 2.0
+        q = self.q
+        q.data = y.detach()
+        z = q * 1.0
+        if z.is_contiguous(memory_format=torch.channels_last):
+            return y + 10.0
+        return y - 10.0
+
+
+class ListAttrRebindBranch(nn.Module):
+    """F2/M1: list-element plain tensor, prep-stamped ``holder.0``, rebound."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(4)
+        self.holder = [torch.randn(2, 4, 8, 8)]
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Rebind the stamped list-element buffer to input data, branch on layout."""
+
+        y = x * 2.0
+        q = self.holder[0]
+        q.data = y.detach()
+        z = q * 1.0
+        if z.is_contiguous(memory_format=torch.channels_last):
+            return y + 10.0
+        return y - 10.0
+
+
+class UnderscoreAttrRebindBranch(nn.Module):
+    """F2/M2 control: underscore attr is never prep-stamped -> already ceiled."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(5)
+        self._holder = torch.randn(2, 4, 8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Rebind the UNSTAMPED plain tensor, branch on layout."""
+
+        y = x * 2.0
+        q = self._holder
+        q.data = y.detach()
+        z = q * 1.0
+        if z.is_contiguous(memory_format=torch.channels_last):
+            return y + 10.0
+        return y - 10.0
+
+
+class RegisteredBufferRebindBranch(nn.Module):
+    """F2/M4 control: registered buffer is host-write-tracked -> already ceiled."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(6)
+        self.register_buffer("q", torch.randn(2, 4, 8, 8))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Rebind the registered buffer, branch on layout."""
+
+        y = x * 2.0
+        q = self.q
+        q.data = y.detach()
+        z = q * 1.0
+        if z.is_contiguous(memory_format=torch.channels_last):
+            return y + 10.0
+        return y - 10.0
+
+
+class PlainAttrHonestLayoutBranch(nn.Module):
+    """Zero-collateral: STATE-derived layout branch off an UNREBOUND plain attr.
+
+    The belt must PASS here (same object, same storage as stamped), so the
+    branch stays attributed to state and both runs stay VERIFIED (residual (3)).
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(3)
+        self.q = torch.randn(2, 4, 8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Branch on a layout derived purely from plain-attr state."""
+
+        y = x * 2.0
+        z = self.q * 1.0
+        if z.is_contiguous(memory_format=torch.channels_last):
+            return y + 10.0
+        return y - 10.0
+
+
+class RegisteredBufferLayoutBranch(nn.Module):
+    """Zero-collateral: layout branch through a REGISTERED buffer."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(7)
+        self.register_buffer("b", torch.randn(2, 4, 8, 8))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Branch on a registered-buffer-derived intermediate's layout."""
+
+        z = self.b * 1.0
+        if z.is_contiguous(memory_format=torch.channels_last):
+            return x + 1.0
+        return x - 1.0
+
+
+class ParamDataReadBranch(nn.Module):
+    """Zero-collateral: residual-(3) layout branch through ``self.w.data``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(8)
+        self.w = nn.Parameter(torch.randn(2, 4, 8, 8))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Branch on a state ``.data``-READ-derived intermediate's layout."""
+
+        z = self.w.data * 1.0
+        if z.is_contiguous(memory_format=torch.channels_last):
+            return x + 1.0
+        return x - 1.0
+
+
+class HonestPlainAttrValueRead(nn.Module):
+    """Plain-attr buffer consumed on the VALUE path (pre-existing save refusal)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(11)
+        self.scale = torch.randn(2, 4, 8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Consume the plain-attr buffer's values."""
+
+        return x * 2.0 + self.scale
+
+
+class ConvBN(nn.Module):
+    """Zero-collateral control: honest conv+BN (params AND buffers on-path)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(9)
+        self.conv = nn.Conv2d(4, 4, 3, padding=1)
+        self.bn = nn.BatchNorm2d(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Standard conv -> BN chain."""
+
+        return self.bn(self.conv(x))
+
+
 def _fresh_module_stash() -> types.ModuleType:
     """Return a ModuleType holding a fresh external payload tensor."""
 
@@ -279,3 +464,235 @@ def test_r81_no_donor_control_ceils(tmp_path: Path) -> None:
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.poisoned
+
+
+# ---------------------------------------------------------------------------
+# Defense in depth: FORGED stamps (simulated future tagging-path escape) must
+# be rejected by the session belt alone
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.smoke
+def test_r81_forged_stale_buffer_stamp_launder_ceils(tmp_path: Path) -> None:
+    """White-box: a raw ``set_buffer_address`` stamp that DID survive never resolves.
+
+    Simulates a hypothetical future tagging path that escapes both the
+    inventory and the cleanup walks. The consumer-side belt (current-session
+    identity registry + live storage identity) must reject it on its own.
+    """
+
+    x = _nchw()
+    torch.manual_seed(20)
+    forged = torch.zeros(2, 4, 8, 8)
+    set_buffer_address(forged, "q")
+
+    path = _save(StashLaunderBranch(forged).eval(), x.clone(), tmp_path / "forged.tlspec")
+    result = tl.load(path).run(inputs=_twin(x))
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.poisoned
+
+
+@pytest.mark.smoke
+def test_r81_forged_stamp_address_collision_ceils(tmp_path: Path) -> None:
+    """White-box: a forged stamp COLLIDING with a registered name cannot resolve.
+
+    The launder model registers its OWN buffer ``'b'``; the foreign object's
+    forged ``'b'`` stamp must not resolve through the tracker's direct-stamp
+    fast path (identity required) nor the belt (not session-registered), so
+    the twin still ceilings instead of binding to the model's own state.
+    """
+
+    x = _nchw()
+    torch.manual_seed(21)
+    forged = torch.full((2, 4, 8, 8), 7.0)
+    set_buffer_address(forged, "b")
+
+    path = _save(CollidingBufferLaunder(forged).eval(), x.clone(), tmp_path / "collide.tlspec")
+    result = tl.load(path).run(inputs=_twin(x))
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.poisoned
+
+
+@pytest.mark.smoke
+def test_r81_forged_stale_label_launder_ceils(tmp_path: Path) -> None:
+    """White-box: a bare stale ``label_raw`` no longer satisfies the rung.
+
+    Pre-fix ANY non-None ``label_raw`` counted as provenance; post-fix the
+    label must resolve in THIS capture's live event index. A stale label that
+    resolves nowhere leaves the break marker and the twin ceilings.
+    """
+
+    x = _nchw()
+    torch.manual_seed(22)
+    forged = torch.zeros(2, 4, 8, 8)
+    set_tensor_label(forged, "buffer_9_raw")
+
+    path = _save(StashLaunderBranch(forged).eval(), x.clone(), tmp_path / "label.tlspec")
+    result = tl.load(path).run(inputs=_twin(x))
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.poisoned
+
+
+# ---------------------------------------------------------------------------
+# F2 RED-now-fixed: plain-attr buffer ``.data=`` input-layout launder
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.smoke
+def test_r81_plain_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
+    """RED-now-fixed (F2/M3): the direct plain-attr rebind twin must ceiling.
+
+    Pre-fix the legit prep stamp resolved the rebound receiver -- and every
+    downstream product -- to a pure ``state:`` leaf basis, the layout ladder
+    recorded nothing (residual (3)), and the channels_last twin replayed the
+    captured arm as VERIFIED with max-diff 20.0 in a SINGLE fresh capture.
+    """
+
+    x = _nchw()
+    path = _save(PlainAttrRebindBranch().eval(), x.clone(), tmp_path / "m3.tlspec")
+    result = tl.load(path).run(inputs=_twin(x))
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.poisoned
+
+
+@pytest.mark.smoke
+def test_r81_list_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
+    """RED-now-fixed (F2/M1): the list-element spelling must ceiling too."""
+
+    x = _nchw()
+    path = _save(ListAttrRebindBranch().eval(), x.clone(), tmp_path / "m1.tlspec")
+    result = tl.load(path).run(inputs=_twin(x))
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.poisoned
+
+
+@pytest.mark.smoke
+def test_r81_underscore_attr_rebind_stays_ceiled(tmp_path: Path) -> None:
+    """Control (F2/M2): the unstamped underscore-attr spelling keeps ceiling."""
+
+    x = _nchw()
+    path = _save(UnderscoreAttrRebindBranch().eval(), x.clone(), tmp_path / "m2.tlspec")
+    result = tl.load(path).run(inputs=_twin(x))
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.poisoned
+
+
+@pytest.mark.smoke
+def test_r81_registered_buffer_rebind_stays_ceiled(tmp_path: Path) -> None:
+    """Control (F2/M4): the registered-buffer spelling keeps ceiling.
+
+    Registered buffers were always host-write-tracked; plain-attr spellings
+    now ceiling exactly like this control (the asymmetry was the bug).
+    """
+
+    x = _nchw()
+    path = _save(RegisteredBufferRebindBranch().eval(), x.clone(), tmp_path / "m4.tlspec")
+    result = tl.load(path).run(inputs=_twin(x))
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.poisoned
+
+
+# ---------------------------------------------------------------------------
+# Zero-collateral GREENs
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.smoke
+def test_r81_plain_attr_state_layout_branch_stays_verified(tmp_path: Path) -> None:
+    """Zero collateral: an UNREBOUND plain-attr state layout branch verifies.
+
+    The belt passes for a stamp whose object and storage are unchanged, so the
+    branch stays state-attributed (residual (3)) on both the same-layout run
+    and the channels_last input twin.
+    """
+
+    x = _nchw()
+    path = _save(PlainAttrHonestLayoutBranch().eval(), x.clone(), tmp_path / "green_pa.tlspec")
+
+    same = tl.load(path).run(inputs=x.clone())
+    assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not same.report.poisoned
+
+    twin = tl.load(path).run(inputs=_twin(x))
+    assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not twin.report.poisoned
+
+
+@pytest.mark.smoke
+def test_r81_registered_buffer_layout_branch_stays_verified(tmp_path: Path) -> None:
+    """Zero collateral: a registered-buffer layout read verifies both ways."""
+
+    x = _nchw()
+    path = _save(RegisteredBufferLayoutBranch().eval(), x.clone(), tmp_path / "green_rb.tlspec")
+
+    same = tl.load(path).run(inputs=x.clone())
+    assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not same.report.poisoned
+
+    twin = tl.load(path).run(inputs=_twin(x))
+    assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not twin.report.poisoned
+
+
+@pytest.mark.smoke
+def test_r81_param_data_read_branch_stays_verified(tmp_path: Path) -> None:
+    """Zero collateral: residual-(3) ``self.w.data`` READ-sourced layout verifies."""
+
+    x = _nchw()
+    path = _save(ParamDataReadBranch().eval(), x.clone(), tmp_path / "green_pd.tlspec")
+
+    same = tl.load(path).run(inputs=x.clone())
+    assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not same.report.poisoned
+
+    twin = tl.load(path).run(inputs=_twin(x))
+    assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not twin.report.poisoned
+
+
+@pytest.mark.smoke
+def test_r81_honest_conv_bn_stays_verified(tmp_path: Path) -> None:
+    """Zero collateral: honest conv+BN (params AND buffers on-path) verifies."""
+
+    x = _nchw()
+    path = _save(ConvBN().eval(), x.clone(), tmp_path / "green_bn.tlspec")
+    result = tl.load(path).run(inputs=x.clone())
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not result.report.poisoned
+
+
+@pytest.mark.smoke
+def test_r81_plain_attr_value_read_keeps_typed_refusal(tmp_path: Path) -> None:
+    """Boundary pin: plain-attr VALUE-path reads keep the pre-existing refusal.
+
+    A plain-tensor attribute is not part of the declared runnable state model,
+    so consuming its VALUES on the output path refused at save BEFORE r81 and
+    must keep refusing typed (never silently succeed or crash) after.
+    """
+
+    x = _nchw()
+    trace = _capture(HonestPlainAttrValueRead().eval(), x.clone())
+    with pytest.raises(RunnablePreflightError):
+        trace.save(tmp_path / "value_read.tlspec", level="runnable", include_weights=True)
+
+
+@pytest.mark.smoke
+def test_r81_sequential_captures_registry_idempotent(tmp_path: Path) -> None:
+    """Zero collateral: back-to-back captures reset and re-clean the registry.
+
+    The identity registry is rebuilt at prep and emptied at cleanup; two
+    sequential captures of the same model must leave no stamp behind and keep
+    producing VERIFIED artifacts.
+    """
+
+    x = _nchw()
+    model = PlainAttrHonestLayoutBranch().eval()
+
+    tl.trace(model, x.clone())
+    assert _meta_clear(model.q)
+
+    path = _save(model, x.clone(), tmp_path / "second.tlspec")
+    assert _meta_clear(model.q)
+    result = tl.load(path).run(inputs=x.clone())
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not result.report.poisoned
