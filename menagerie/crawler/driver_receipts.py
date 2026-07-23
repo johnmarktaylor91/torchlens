@@ -83,25 +83,12 @@ from menagerie.crawler.driver_models import (
     _assemble_run_model,
     _attempt_policy_satisfied,
     _detected_mode_expansion,
+    _driver_facade,
     _driver_failure_attempt,
     _matching_attempts,
     _matching_model_attempts,
     _without_ledger_fields,
 )
-
-
-def _driver_facade() -> Any:
-    """Return the import-compatible driver facade for late-bound collaborators.
-
-    Returns
-    -------
-    module
-        Imported driver facade.
-    """
-
-    from menagerie.crawler import driver as driver_facade
-
-    return driver_facade
 
 
 _WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V3 "
