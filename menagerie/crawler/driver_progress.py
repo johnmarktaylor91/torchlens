@@ -1,10 +1,6 @@
 """Progress reporting, notification, and durable driver state I/O."""
 
 from __future__ import annotations
-
-from __future__ import annotations
-from dataclasses import dataclass as dataclass
-import fcntl as fcntl
 import json
 import logging
 import os
@@ -14,13 +10,7 @@ import subprocess
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Mapping, Optional, Protocol as Protocol
-from menagerie.crawler.artifact_transactions import (
-    StagedArtifact as StagedArtifact,
-)
-from menagerie.crawler.author_dispatch import (
-    AuthorResult as AuthorResult,
-)
+from typing import Any, Mapping, Optional
 from menagerie.crawler.checker_dispatch import (
     CheckerBackoffSignal,
 )
@@ -28,9 +18,6 @@ from menagerie.crawler.checkpoint import (
     FunnelSnapshot,
 )
 from menagerie.crawler.constants import (
-    DEFAULT_NOTIFY_COMMAND as DEFAULT_NOTIFY_COMMAND,
-    DEFAULT_PROGRESS_MILESTONES as DEFAULT_PROGRESS_MILESTONES,
-    DEFAULT_REVIEW_CHECKPOINT_AT as DEFAULT_REVIEW_CHECKPOINT_AT,
     DEFAULT_NOTIFY_TIMEOUT_SECONDS,
 )
 from menagerie.crawler.env_lifecycle import (
@@ -45,25 +32,12 @@ from menagerie.crawler.intake import (
     IntakeItem,
     legacy_requires_fidelity_audit,
 )
-from menagerie.crawler.models import JsonObject, LedgerPaths as LedgerPaths
-from menagerie.crawler.reducer import (
-    default_ledger_paths as default_ledger_paths,
-)
+from menagerie.crawler.models import JsonObject
 from menagerie.crawler.status import (
     funnel_counts,
 )
 from menagerie.crawler.driver_contracts import (
-    AuthorLane as AuthorLane,
-    BoundaryHook as BoundaryHook,
-    CheckerLane as CheckerLane,
-    Clock as Clock,
-    DriverError as DriverError,
     DriverIntegrationError,
-    EnvironmentLane as EnvironmentLane,
-    ForwardLane as ForwardLane,
-    Notifier as Notifier,
-    UsagePauseScheduler as UsagePauseScheduler,
-    default_driver_paths as default_driver_paths,
 )
 
 LOGGER = logging.getLogger("menagerie.crawler.driver")
