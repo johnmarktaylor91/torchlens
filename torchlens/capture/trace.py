@@ -1326,6 +1326,7 @@ def run_and_log_inputs_through_model(
             from .._runnable_state import (
                 snapshot_capture_state,
                 snapshot_capture_state_signatures,
+                snapshot_persistent_buffer_universe,
                 snapshot_state_alias_topology,
             )
 
@@ -1341,6 +1342,11 @@ def run_and_log_inputs_through_model(
             # ``producer_state_metadata`` preflight.
             self._runnable_capture_state_signatures = snapshot_capture_state_signatures(model)
             self._runnable_capture_state = snapshot_capture_state(model)
+            # r77 F2: the persistent-buffer NAME universe survives non-tensor state
+            # (``get_extra_state()`` / packed entries), so a dead-model
+            # include_weights=False save declares the SAME slot universe as the
+            # live lane instead of silently dropping never-forward-used buffers.
+            self._runnable_persistent_buffer_universe = snapshot_persistent_buffer_universe(model)
 
         # Turn on the logging toggle and run the forward pass.
         # Inside this context, every decorated torch function will log its

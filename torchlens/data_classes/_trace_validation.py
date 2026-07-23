@@ -369,6 +369,18 @@ class TraceValidationMixin(_TraceMixinBase):
             compatibility return until that surface is migrated.
         """
 
+        if seed is not None and not isinstance(seed, int):
+            # r77 nit: type-check ``seed`` at the run door so junk raises the typed
+            # precondition lane instead of escaping as torch's raw
+            # ``RuntimeError: manual_seed expected a long``. The failed call is
+            # transactional either way (global torch RNG untouched).
+            from ..errors import RunPreconditionError
+            from ..runnable import RunnableErrorCode
+
+            raise RunPreconditionError(
+                f"run(seed=...) requires an int or None, got {type(seed).__name__}.",
+                code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
+            )
         readiness = self.__dict__.get("_runnable_readiness")
         loaded_provider = getattr(readiness, "provider", None)
         use_unified_provider = inputs is not MISSING or (

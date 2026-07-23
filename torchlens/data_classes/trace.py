@@ -1297,6 +1297,9 @@ class Trace(
         # r63 C1: pre-clone per-slot state metadata signatures (producer-side only,
         # never portable) and the buffer storage-pointer attribution index.
         "_runnable_capture_state_signatures": FieldPolicy.DROP,
+        # r77 F2: capture-time persistent-buffer name universe + geometry
+        # (producer-side only, never portable).
+        "_runnable_persistent_buffer_universe": FieldPolicy.DROP,
         "_buffer_storage_addresses": FieldPolicy.DROP,
         "_runnable_host_rng_unreplayable": FieldPolicy.DROP,
         "_runnable_host_rng_channels": FieldPolicy.DROP,

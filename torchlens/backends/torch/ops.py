@@ -1770,11 +1770,29 @@ def _tensor_has_known_provenance(value: torch.Tensor) -> bool:
     Returns
     -------
     bool
-        True when the tensor is a Parameter or has TorchLens tensor metadata.
+        True when the tensor is a prep-stamped Parameter or has TorchLens tensor
+        metadata.
+
+    Notes
+    -----
+    r77 F1: the Parameter rung requires ACTUAL TorchLens provenance -- the
+    prep-stamped :class:`ParamMeta` address written by model preparation
+    (``_create_session_param_logs``) -- not bare ``isinstance``. A fresh
+    in-forward ``torch.nn.Parameter(...)`` or a foreign model's parameter has no
+    prep stamp; exempting it suppressed the ``unattributed_tensor_args`` break
+    marker, so the r75 layout ancestry-integrity rung judged the chain CLEAN and
+    a layout twin replayed as false VERIFIED. The lazy op-time barcode stamp
+    (``_process_parent_param_ops``, which runs BEFORE this check for the same
+    call) writes ``param_address=""``, so registry presence or a barcode alone
+    is NOT provenance -- only the non-empty prep address is. Unprepped
+    Parameters fall through to the tensor-meta rung like any other tensor and
+    leave the break marker when unlabeled.
     """
 
     if isinstance(value, torch.nn.Parameter):
-        return True
+        param_meta = get_param_meta(value)
+        if param_meta is not None and param_meta.param_address:
+            return True
     meta = get_tensor_meta(value)
     return meta is not None and any(
         item is not None for item in (meta.label_raw, meta.address, meta.buffer_source)

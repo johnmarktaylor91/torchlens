@@ -80,6 +80,60 @@ def snapshot_capture_state(model: object) -> Mapping[str, torch.Tensor] | None:
         return MappingProxyType({name: value.detach().clone() for name, value in state.items()})
 
 
+def snapshot_persistent_buffer_universe(model: object) -> dict[str, dict[str, Any]] | None:
+    """Record the persistent-buffer NAME universe and geometry at the capture boundary (r77 F2).
+
+    :func:`snapshot_capture_state` deliberately returns ``None`` for a model whose
+    ``state_dict()`` carries ANY non-tensor value (``get_extra_state()``, packed or
+    quantized entries) -- the embedded-state comparison basis is missing, and that
+    ceiling stays. But the DECLARED persistent-buffer slot universe must not shrink
+    with it: a dead-model save whose r75 fallback silently returned dropped
+    never-forward-used persistent buffers (BatchNorm's ``num_batches_tracked``) from
+    the declared universe, so an honest tensor-only ``load_state_dict`` refused with
+    ``state_unexpected_key`` while the live lane bound fine. This record derives the
+    SAME name set the live save computes -- ``state_dict()`` names that are buffers
+    (present in ``named_buffers``, absent from ``named_parameters``) with tensor
+    values -- plus the per-slot geometry the value-free slot drafts need, so the dead
+    lane declares identically. No tensor values are retained.
+
+    Returns
+    -------
+    dict[str, dict[str, Any]] | None
+        ``name -> {"shape", "dtype", "device"}`` for every persistent buffer. ``{}``
+        when the model exposes no state accessors (a stateless callable positively
+        has an empty persistent-buffer universe). ``None`` when ``state_dict()``
+        itself fails or is not a mapping -- an UNKNOWN universe the producer must
+        refuse loudly, never silently under-declare.
+    """
+
+    state_dict_method = getattr(model, "state_dict", None)
+    named_parameters = getattr(model, "named_parameters", None)
+    named_buffers = getattr(model, "named_buffers", None)
+    if not (callable(state_dict_method) and callable(named_parameters) and callable(named_buffers)):
+        return {}
+    try:
+        state = state_dict_method()
+        parameter_names = {str(name) for name, _value in named_parameters(remove_duplicate=False)}
+        buffer_names = {str(name) for name, _value in named_buffers(remove_duplicate=False)}
+    except Exception:
+        return None
+    if not isinstance(state, Mapping):
+        return None
+    with _state.pause_logging():
+        universe: dict[str, dict[str, Any]] = {}
+        for name, value in state.items():
+            if not isinstance(name, str) or name in parameter_names or name not in buffer_names:
+                continue
+            if not isinstance(value, torch.Tensor):
+                continue
+            universe[name] = {
+                "shape": tuple(int(dim) for dim in value.shape),
+                "dtype": str(value.dtype),
+                "device": str(value.device),
+            }
+    return universe
+
+
 _ADMITTED_STATE_CLASS_CATEGORIES = frozenset({"tensor", "parameter"})
 """Exact-type state admission (r63 C1): ``torch.Tensor`` and ``torch.nn.Parameter`` only.
 

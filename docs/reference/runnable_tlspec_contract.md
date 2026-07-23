@@ -333,11 +333,22 @@ structure, re-derives, and requires exact discharge.
   no-record. An ancestry-orphaned empty `input_ancestors` is re-resolved or fails closed;
   only a POSITIVELY state-rooted / literal-only chain records nothing (residual (3) stays
   STATE-side only). Any future unlabeled-receiver layout consumer MUST fail closed the same
-  way. Malformed fact encodings stay in the typed lane (r75 L1): a metadata/literal/structure
+  way. The break marker itself is provenance-honest (r77 F1): a tensor argument counts as
+  attributed only with REAL TorchLens provenance -- the prep-stamped parameter address
+  written at model preparation, or TorchLens tensor metadata -- never by type alone. A
+  fresh in-forward or foreign `nn.Parameter` (no prep stamp) is NOT exempt: it leaves the
+  `unattributed_tensor_args` marker like any unlabeled tensor, so a Parameter-wrapped
+  laundering chain taints and re-resolves or fails closed instead of riding the
+  state-rooted no-record branch. Malformed fact encodings stay in the typed lane (r75 L1): a metadata/literal/structure
   fact whose `path`/`position` is not a sequence (int-encoded, or a string that would shred
   into per-character components) refuses `context_field_invalid` at parse -- analysis-only
   with the diagnostic intact, never the generic catch-all -- and the execution-side readers
-  keep a fail-closed belt for the same shape.
+  keep a fail-closed belt for the same shape. The lane is component-deep (r77 L1): every
+  `path`/`position` COMPONENT must be a `str`/`int` scalar (the r67 structure-node-path
+  vocabulary); a nested list/mapping/slice component -- unhashable, formerly a `TypeError`
+  crash from the first `set`/`dict` consumer into the untyped catch-all -- refuses
+  `context_field_invalid` at parse, and the execution-side belt fails closed on the same
+  component shapes.
 * `state_metadata` -- **totalized BOTH facts** over the declared state-name universe:
   `captured_requires_grad` (staging applies it -- capture truth wins, the LOCKED r65 F-1
   ruling) and `grad_fn` presence (True refuses at save AND parse). The staging belt is pointed
@@ -638,7 +649,19 @@ followed by a `gc.collect()` before `save(level="runnable")` nondeterministicall
 `unsupported_tensor_constant` (two same-shape+dtype BN params, identity chain dead) or
 `state_unexpected_key` (never-forward-used persistent buffers dropped from the declared
 universe) -- an honest-save over-refusal, never a wrong verdict, now closed. A
-genuinely-unmatched tensor constant still refuses `unsupported_tensor_constant`.
+genuinely-unmatched tensor constant still refuses `unsupported_tensor_constant`. r77 F2
+closes the NON-TENSOR-STATE leg of the same class: the capture-boundary value snapshot is
+`None` by design for a model whose `state_dict()` carries any non-tensor value
+(`get_extra_state()`, packed/quantized entries), so the dead lane now derives the
+persistent-buffer NAME universe (plus per-slot geometry) from a dedicated capture-time
+record that walks `state_dict()` names against `named_parameters`/`named_buffers` and
+survives extra state -- the dead save declares EXACTLY the live lane's universe, and an
+honest tensor-only `load_state_dict` binds identically in both lanes. The embedded-state
+ceiling is untouched: an extra-state model still cannot report `verified` (missing
+comparison basis, coherent in both lanes). If NEITHER capture-time record exists
+(`state_dict()` not a mapping at the capture boundary), the dead save refuses loudly and
+typed (`TorchLensIOError`, mirroring the `include_weights=True` lane) -- never a silent
+under-declaration.
 
 1. A computational group lacks a key, uses another ref schema, requests custom/import code, or is
    outside the stock resolver protocol.
@@ -1360,7 +1383,9 @@ slot-ID order. Every alias member is still reported random-filled.
 `seed` controls state and runtime RNG/source slots through isolated run-local backend generators. A
 fixed seed, descriptor, inputs, backend/runtime version, and device reproduces both without changing
 global RNG. Null seed uses normal entropy. The report records it. This is architecture execution,
-never original-weight or original-random-draw recovery.
+never original-weight or original-random-draw recovery. A non-`int`, non-`None` `seed` refuses at
+the run door with `RunPreconditionError` (`context_field_invalid`), transactionally -- never a raw
+backend error escaping the typed lane (r77).
 
 Seeded-RNG isolation is TOTAL over the generators the run actually seeds: the executor seeds only
 the CPU generator plus each individually forked CUDA device generator (never a global
@@ -2295,7 +2320,12 @@ intermediate (label-less, `_base`-less, and ancestry-laundering for everything d
 now resolves through the ancestry-integrity check + dispatch-origin-ledger leaf origins +
 live captured-storage identity, and otherwise FAILS CLOSED to `unverifiable` -- the layout
 consumer follows the same single-exit positive ladder as escape-source attribution, never a
-silent no-record. The direct-leaf spelling keeps
+silent no-record. r77 closes the last vehicle INTO that ladder: wrapping the intermediate in
+a fresh `nn.Parameter` used to satisfy the known-provenance check by bare type, suppressing
+the ancestry-break marker the ladder keys on; provenance now requires the prep-stamped
+parameter address (or tensor metadata), so a receiver whose provenance is not
+TorchLens-known ALWAYS leaves the taint marker -- prepped/registered parameters are
+unaffected and state-rooted reads keep residual (3). The direct-leaf spelling keeps
 its stricter r27/r31 witnessed-fact semantics (`diverged`). (4) object-identity aliasing of a non-canonical state slot through an
 aliasing-polymorphic op, tested via pure Python identity (`y = self.w.contiguous(); y is
 self.w`), is a documented residual (locked r65 ruling): no accessor fires on ANY tensor, so
