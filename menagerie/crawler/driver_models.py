@@ -1,22 +1,14 @@
 """Pure gate, attempt, and terminal/run model assembly for the crawler driver."""
 
 from __future__ import annotations
-
-from __future__ import annotations
-from dataclasses import dataclass as dataclass
-import fcntl as fcntl
 import platform
 import traceback
 from collections import Counter, defaultdict
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Mapping, Optional, Protocol as Protocol, Sequence
-from menagerie.crawler.artifact_transactions import (
-    StagedArtifact as StagedArtifact,
-)
+from typing import Any, Mapping, Optional, Sequence
 from menagerie.crawler.author_dispatch import (
-    AuthorResult as AuthorResult,
     BlockedRecommendation,
     DeferRecommendation,
     ProposedAuthorResult,
@@ -31,9 +23,6 @@ from menagerie.crawler.authority import (
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION_V3,
     DEFAULT_FORWARD_TIMEOUT_SECONDS,
-    DEFAULT_NOTIFY_COMMAND as DEFAULT_NOTIFY_COMMAND,
-    DEFAULT_PROGRESS_MILESTONES as DEFAULT_PROGRESS_MILESTONES,
-    DEFAULT_REVIEW_CHECKPOINT_AT as DEFAULT_REVIEW_CHECKPOINT_AT,
     MODEL_SCHEMA_VERSION_V3,
 )
 from menagerie.crawler.family_templates import (
@@ -59,32 +48,21 @@ from menagerie.crawler.metadata import (
     recompute_accepted_identities,
     validate_authored_facts_for_write,
 )
-from menagerie.crawler.models import JsonObject, LedgerPaths as LedgerPaths
+from menagerie.crawler.models import JsonObject
 from menagerie.crawler.recordio import (
     scan_jsonl,
 )
 from menagerie.crawler.reducer import (
     cold_forward_policy,
-    default_ledger_paths as default_ledger_paths,
     output_signature_error,
 )
 from menagerie.crawler.driver_contracts import (
     AuthorArtifact,
-    AuthorLane as AuthorLane,
-    BoundaryHook as BoundaryHook,
-    CheckerLane as CheckerLane,
     CheckerOutcome,
-    Clock as Clock,
     DriverConfig,
-    DriverError as DriverError,
     DriverIntegrationError,
     EnvironmentBinding,
-    EnvironmentLane as EnvironmentLane,
-    ForwardLane as ForwardLane,
-    Notifier as Notifier,
-    UsagePauseScheduler as UsagePauseScheduler,
     WorkItem,
-    default_driver_paths as default_driver_paths,
 )
 
 
