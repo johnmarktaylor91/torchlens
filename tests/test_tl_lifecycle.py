@@ -18,6 +18,7 @@ from torchlens.backends.torch._tl import (
     set_tensor_label,
 )
 from torchlens.backends.torch.model_prep import _tag_untagged_buffers
+from torchlens.data_classes.trace import Trace
 from torchlens.intervention.runtime import _copy_tl_replacement_attrs
 from torchlens.options import CaptureOptions, SaveOptions
 from torchlens.partial import PartialTrace
@@ -114,18 +115,35 @@ def test_failed_capture_cleans_partial_outputs_buffers_and_params() -> None:
 
 @pytest.mark.smoke
 def test_tag_untagged_buffers_promotes_prior_label_mid_session() -> None:
-    """Dynamic buffer tagging should preserve prior label as buffer_source."""
+    """Dynamic buffer tagging should preserve prior label as buffer_source.
+
+    r79: ``_tag_untagged_buffers`` is trace-threaded -- every dynamically
+    stamped buffer must ALSO be recorded in the session buffer inventory
+    (``trace._session_buffer_inventory``) so the inventory-driven cleanup can
+    clear its stamp even if it is popped from ``_buffers`` later in the same
+    forward. This test locks both the label promotion and that recording.
+    """
+    trace = Trace("Module")
+    assert trace._session_buffer_inventory == []
     module = nn.Module()
     module.register_buffer("buf", torch.ones(2))
     set_module_meta(module, address="block", module_type="Module")
     set_tensor_label(module.buf, "mul_1_2_raw")
 
-    _tag_untagged_buffers(module)
+    _tag_untagged_buffers(trace, module)
 
     assert get_tensor_label(module.buf) is None
     assert get_buffer_address(module.buf) == "block.buf"
     assert isinstance(module.buf._tl, TensorMeta)
     assert module.buf._tl.buffer_source == "mul_1_2_raw"
+    # r79 inventory recording: the stamped buffer joins the session inventory
+    # by object identity, exactly once.
+    assert any(entry is module.buf for entry in trace._session_buffer_inventory)
+    assert sum(1 for entry in trace._session_buffer_inventory if entry is module.buf) == 1
+
+    # Idempotence: an already-tagged buffer is skipped, not re-recorded.
+    _tag_untagged_buffers(trace, module)
+    assert sum(1 for entry in trace._session_buffer_inventory if entry is module.buf) == 1
 
 
 @pytest.mark.smoke

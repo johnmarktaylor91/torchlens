@@ -26,6 +26,7 @@ from ._runnable_state import (
     prepare_runnable_state,
     runnable_tensor_byte_digest,
     state_metadata_full_violations,
+    validate_run_seed,
 )
 from .errors import (
     NumericAttestationError,
@@ -233,6 +234,9 @@ def _seed_run_generators(seed: int, forked_cuda_devices: list[int], *, reseed_ho
     -- Python/NumPy (whose prior state the caller snapshot-restores).
     """
 
+    # r79 seed-door mirror: no path may reach raw ``manual_seed`` with a
+    # bool/out-of-range seed even if it bypassed the run door.
+    validate_run_seed(seed)
     if reseed_host:
         import random
 

@@ -1759,19 +1759,21 @@ def _build_edge_use_records(
     return _edge_uses
 
 
-def _tensor_has_known_provenance(value: torch.Tensor) -> bool:
+def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
     """Return whether a tensor carries TorchLens input/op/buffer provenance.
 
     Parameters
     ----------
+    trace:
+        Active capture Trace whose session the provenance stamp must belong to.
     value:
         Tensor argument to inspect.
 
     Returns
     -------
     bool
-        True when the tensor is a prep-stamped Parameter or has TorchLens tensor
-        metadata.
+        True when the tensor is a CURRENT-SESSION prep-stamped Parameter or has
+        TorchLens tensor metadata.
 
     Notes
     -----
@@ -1787,12 +1789,28 @@ def _tensor_has_known_provenance(value: torch.Tensor) -> bool:
     is NOT provenance -- only the non-empty prep address is. Unprepped
     Parameters fall through to the tensor-meta rung like any other tensor and
     leave the break marker when unlabeled.
+
+    r79 session-leak defense in depth: a non-empty prep address counts ONLY when
+    it resolves in THIS capture's session -- the address maps in
+    ``trace.param_logs`` AND the recorded log's live object IS this value (exact
+    identity). A stamp that leaked from a PRIOR session (r78: a param popped
+    from ``_parameters`` mid-forward escaped the old re-traversal cleanup) can
+    therefore never be accepted, even if some future path escapes the
+    inventory-driven cleanup again. Stale/foreign stamps fall through to the
+    tensor-meta rung and leave the break marker.
     """
 
     if isinstance(value, torch.nn.Parameter):
         param_meta = get_param_meta(value)
         if param_meta is not None and param_meta.param_address:
-            return True
+            addr = param_meta.param_address
+            param_logs = getattr(trace, "param_logs", None)
+            if (
+                param_logs is not None
+                and addr in param_logs
+                and getattr(param_logs[addr], "_param_ref", None) is value
+            ):
+                return True
     meta = get_tensor_meta(value)
     return meta is not None and any(
         item is not None for item in (meta.label_raw, meta.address, meta.buffer_source)
@@ -1800,6 +1818,7 @@ def _tensor_has_known_provenance(value: torch.Tensor) -> bool:
 
 
 def _unattributed_tensor_arg_positions(
+    trace: "Trace",
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
 ) -> tuple[str, ...]:
@@ -1807,6 +1826,8 @@ def _unattributed_tensor_arg_positions(
 
     Parameters
     ----------
+    trace:
+        Active capture Trace (provenance stamps are session-scoped to it).
     args:
         Positional function arguments.
     kwargs:
@@ -1824,7 +1845,7 @@ def _unattributed_tensor_arg_positions(
         """Append unattributed tensor positions under ``path``."""
 
         if isinstance(value, torch.Tensor):
-            if not _tensor_has_known_provenance(value):
+            if not _tensor_has_known_provenance(trace, value):
                 positions.append(path)
             return
         if isinstance(value, (list, tuple)):
@@ -2981,14 +3002,28 @@ def _build_param_fields(
     fields_dict: dict[str, Any],
     arg_parameters: list[torch.nn.Parameter],
 ) -> dict[str, int]:
-    """Populate parameter-involvement fields. Returns parent_param_ops dict."""
+    """Populate parameter-involvement fields. Returns parent_param_ops dict.
+
+    r79 session-leak defense (r78 wrong-bind closure): a parameter resolves by
+    address ONLY when the address maps in THIS session AND the recorded log's
+    live object IS the value (exact identity, never ``==``). Pre-fix, a foreign
+    parameter carrying a stale leaked stamp whose address collided with one of
+    THIS model's own parameters resolved into this trace's ``param_logs`` with
+    no object check, so the save bound the call's tensor slot to the model's own
+    (different-valued) state and replay staged the WRONG values as VERIFIED.
+    Unresolved parameters fall through unprovenanced (the honest path: break
+    marker via ``_tensor_has_known_provenance``).
+    """
     _param_logs = []
     resolved_parameters = []
     for param in arg_parameters:
         param_meta = get_param_meta(param)
         addr = None if param_meta is None else param_meta.param_address
         if addr is not None and addr in self.param_logs:
-            _param_logs.append(self.param_logs[addr])
+            param_log = self.param_logs[addr]
+            if getattr(param_log, "_param_ref", None) is not param:
+                continue
+            _param_logs.append(param_log)
             resolved_parameters.append(param)
 
     parent_param_ops = _process_parent_param_ops(resolved_parameters)
@@ -3168,7 +3203,7 @@ def _build_shared_fields_dict(
     fields_dict["transform_fn_name"] = getattr(func, "__tl_transform_fn_name__", None)
     fields_dict["transform_fn_qualname"] = getattr(func, "__tl_transform_fn_qualname__", None)
     fields_dict["transform_fn_source"] = getattr(func, "__tl_transform_fn_source__", None)
-    fields_dict["unattributed_tensor_args"] = _unattributed_tensor_arg_positions(args, kwargs)
+    fields_dict["unattributed_tensor_args"] = _unattributed_tensor_arg_positions(self, args, kwargs)
 
     # Function config — lightweight hyperparameter extraction, always on.
     param_shapes = cast(list[tuple[int, ...]] | None, fields_dict.get("param_shapes"))
