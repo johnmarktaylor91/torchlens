@@ -1210,7 +1210,11 @@ def _schema_parity_errors(schema: Mapping[str, Any], sources: Mapping[str, str])
     errors = [f"schema-missing:{path}" for path in sorted(expected_leaves - leaves)]
     required_literals = {
         "authority.py:derive_mode_summary": {"output_value_sha256"},
-        "authority.py:derive_terminal_proof": {"capability_observation", "claim", "supported"},
+        "authority.py:_TerminalProofPipeline._derive_deferral": {
+            "capability_observation",
+            "claim",
+            "supported",
+        },
         "worker.py:_mode_receipt": {"output_value_sha256"},
         "worker.py:_raw_award_receipt": {"output_value_sha256"},
         "driver_receipts.py:_attempts_from_supervised": {
@@ -1489,7 +1493,8 @@ def test_attempt_schema_consumers_and_producers_have_exact_parity() -> None:
         'probe.get("capability_observation")', 'probe.get("retired_capability")', 1
     )
     assert (
-        "consumer-or-producer-missing:authority.py:derive_terminal_proof:capability_observation"
+        "consumer-or-producer-missing:"
+        "authority.py:_TerminalProofPipeline._derive_deferral:capability_observation"
         in (_schema_parity_errors(schema, missing_consumer))
     )
 

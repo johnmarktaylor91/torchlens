@@ -4530,6 +4530,353 @@ def _derive_gate_failure(
     return str(gate["gate_id"]), reason, fingerprint
 
 
+@dataclass
+class _TerminalProofPipeline:
+    """Run terminal-proof checks in their frozen diagnostic order.
+
+    Parameters
+    ----------
+    stable_id, work_id, status_code:
+        Exact terminal association and closed public status code.
+    attempts, gates:
+        Canonical append-only facts available to the reducer.
+    source_manifest, evidence_excerpts:
+        Exact source and literal-evidence facts for terminal predicates.
+    source_resolution:
+        Exact accepted R5 facts required for epistemic skips.
+    source_manifest_identity, evidence_identity, license_identity:
+        Reducer-resolved frozen identities required by terminal gates.
+    meaningful_modes:
+        Ordered meaningful-mode iterable used for the complete per-mode map.
+    proof_rule_identity:
+        Versioned terminal-rule closure from the mandatory authority context.
+    """
+
+    stable_id: str
+    work_id: str
+    status_code: str
+    attempts: Sequence[Mapping[str, Any]]
+    gates: Sequence[Mapping[str, Any]]
+    source_manifest: Sequence[Mapping[str, Any]]
+    evidence_excerpts: Sequence[Mapping[str, Any]]
+    source_resolution: Optional[Mapping[str, Any]]
+    source_manifest_identity: Optional[str]
+    evidence_identity: Optional[str]
+    license_identity: Optional[str]
+    meaningful_modes: Iterable[str]
+    proof_rule_identity: str
+    relevant: tuple[Mapping[str, Any], ...] = dataclass_field(init=False, default=())
+    per_mode: tuple[tuple[str, str], ...] = dataclass_field(init=False, default=())
+    gate_id: DependencyValue = dataclass_field(init=False, default=DependencyState.NOT_APPLICABLE)
+    source_ids: tuple[str, ...] = dataclass_field(init=False, default=())
+    evidence_ids: tuple[str, ...] = dataclass_field(init=False, default=())
+    failure_stage: DependencyValue = dataclass_field(
+        init=False, default=DependencyState.NOT_APPLICABLE
+    )
+    reason_code: DependencyValue = dataclass_field(
+        init=False, default=DependencyState.NOT_APPLICABLE
+    )
+    root_cause: DependencyValue = dataclass_field(
+        init=False, default=DependencyState.NOT_APPLICABLE
+    )
+    platform_claim: DependencyValue = dataclass_field(
+        init=False, default=DependencyState.NOT_APPLICABLE
+    )
+    decisive_ids: tuple[str, ...] = dataclass_field(init=False, default=())
+    gate_proof_identity: DependencyValue = dataclass_field(
+        init=False, default=DependencyState.NOT_APPLICABLE
+    )
+    resolved_reference_identity: DependencyValue = dataclass_field(
+        init=False, default=DependencyState.NOT_APPLICABLE
+    )
+
+    def run(self) -> TerminalProof:
+        """Execute the ordered proof pipeline and return its immutable projection.
+
+        Returns
+        -------
+        TerminalProof
+            Immutable reducer-derived terminal authority.
+        """
+
+        self._initialize()
+        self._derive_status_proof()
+        return self._build_proof()
+
+    def _initialize(self) -> None:
+        """Validate roots and derive shared attempt projections in original order."""
+
+        self.stable_id = _require_nonempty_string(self.stable_id, "stable_id")
+        self.work_id = _require_nonempty_string(self.work_id, "work_id")
+        self.proof_rule_identity = _require_nonempty_string(
+            self.proof_rule_identity, "proof_rule_identity"
+        )
+        self.relevant = tuple(
+            attempt
+            for attempt in self.attempts
+            if attempt.get("stable_id") == self.stable_id and attempt.get("work_id") == self.work_id
+        )
+        self.per_mode = derive_per_mode_attempt_ids(
+            self.attempts,
+            stable_id=self.stable_id,
+            work_id=self.work_id,
+            meaningful_modes=self.meaningful_modes,
+        )
+
+    def _derive_status_proof(self) -> None:
+        """Dispatch exactly one closed status rule without changing precedence."""
+
+        if self.status_code == "runs":
+            self._derive_runs()
+        elif self.status_code.startswith("failed:"):
+            self._derive_failure()
+        elif self.status_code.startswith("deferred:"):
+            self._derive_deferral()
+        elif self.status_code.startswith("skipped:"):
+            self._derive_skip()
+        else:
+            raise AuthorityDerivationError("status code has no closed terminal proof rule")
+
+    def _derive_runs(self) -> None:
+        """Validate complete successful per-mode authority for a runs status."""
+
+        expected_modes = tuple(dict.fromkeys(str(mode) for mode in self.meaningful_modes))
+        if {mode for mode, _attempt_id in self.per_mode} != set(expected_modes):
+            raise AuthorityDerivationError("runs proof does not cover every meaningful mode")
+        attempt_index = {str(attempt.get("attempt_id")): attempt for attempt in self.relevant}
+        for mode, attempt_id in self.per_mode:
+            attempt = attempt_index.get(attempt_id)
+            if (
+                attempt is None
+                or attempt.get("mode") != mode
+                or attempt.get("result") != "succeeded"
+            ):
+                raise AuthorityDerivationError("runs proof contains a non-successful mode attempt")
+            _authenticated_observation(attempt)
+        self.decisive_ids = tuple(attempt_id for _mode, attempt_id in self.per_mode)
+
+    def _derive_failure(self) -> None:
+        """Validate the exact gate or attempt proof for a failed status."""
+
+        stage = self.status_code.removeprefix("failed:")
+        self.failure_stage = stage
+        if stage in {"accuracy-gate", "fidelity"}:
+            self.gate_id, self.reason_code, self.root_cause = _derive_gate_failure(
+                self.gates,
+                stable_id=self.stable_id,
+                work_id=self.work_id,
+                stage=stage,
+            )
+            return
+        candidates = []
+        for attempt in self.relevant:
+            error = attempt.get("error")
+            if (
+                attempt.get("result") == "failed"
+                and attempt.get("stage") == stage
+                and isinstance(error, Mapping)
+                and error.get("stage") == stage
+                and isinstance(error.get("reason_code"), str)
+                and isinstance(error.get("root_cause_fingerprint"), str)
+            ):
+                candidates.append(attempt)
+        if not candidates:
+            raise AuthorityDerivationError(
+                f"{self.status_code} lacks an exact same-stage failed attempt"
+            )
+        decisive = max(candidates, key=_attempt_order)
+        error = decisive["error"]
+        assert isinstance(error, Mapping)
+        self.reason_code = str(error["reason_code"])
+        if self.reason_code not in FAILURE_REASON_CODES.get(stage, frozenset()):
+            raise AuthorityDerivationError("failed attempt reason is not closed for its stage")
+        self.root_cause = str(error["root_cause_fingerprint"])
+        self.decisive_ids = (str(decisive["attempt_id"]),)
+        if stage == "source" and self.reason_code == "missing-mandatory-link":
+            if decisive.get("stage") != "source":
+                raise AuthorityDerivationError(
+                    "missing-mandatory-link must bind an exact source-stage attempt"
+                )
+
+    def _derive_deferral(self) -> None:
+        """Validate exact gate, source, evidence, and probe authority for deferral."""
+
+        predicate = self.status_code.removeprefix("deferred:")
+        if predicate not in {"needs-cuda", "needs-x86"}:
+            raise AuthorityDerivationError("unknown platform deferral status")
+        gate, item, disposition = _terminal_gate(
+            self.gates,
+            stable_id=self.stable_id,
+            work_id=self.work_id,
+            predicate=predicate,
+        )
+        self.gate_id = str(gate["gate_id"])
+        self.gate_proof_identity = stable_hash({"gate_id": self.gate_id, "item": item})
+        self.platform_claim = predicate
+        _validate_terminal_gate_identities(
+            disposition,
+            source_manifest_identity=self.source_manifest_identity,
+            evidence_identity=self.evidence_identity,
+            license_identity=self.license_identity,
+        )
+        self.source_ids, self.evidence_ids = _validate_terminal_references(
+            disposition,
+            predicate=predicate,
+            source_manifest=self.source_manifest,
+            evidence_excerpts=self.evidence_excerpts,
+        )
+        self.resolved_reference_identity = stable_hash(
+            {
+                "sources": [
+                    source
+                    for source in self.source_manifest
+                    if str(source.get("source_id")) in self.source_ids
+                ],
+                "evidence": [
+                    excerpt
+                    for excerpt in self.evidence_excerpts
+                    if str(excerpt.get("evidence_id")) in self.evidence_ids
+                ],
+            }
+        )
+        probe_ids: list[str] = []
+        for attempt in self.relevant:
+            defer = attempt.get("defer_evidence")
+            if not isinstance(defer, Mapping) or defer.get("target_status") != self.status_code:
+                continue
+            if set(str(value) for value in defer.get("source_ids", ())) != set(self.source_ids):
+                raise AuthorityDerivationError("deferral attempt source set is not gate-exact")
+            named_probes = tuple(str(value) for value in defer.get("probe_attempt_ids", ()))
+            for probe_id in named_probes:
+                probe = next(
+                    (
+                        candidate
+                        for candidate in self.relevant
+                        if candidate.get("attempt_id") == probe_id
+                    ),
+                    None,
+                )
+                capability = probe.get("capability_observation") if probe is not None else None
+                if (
+                    probe is None
+                    or probe.get("result") not in {"observed", "succeeded"}
+                    or not isinstance(capability, Mapping)
+                    or capability.get("claim") != predicate
+                    or capability.get("supported") is not True
+                ):
+                    raise AuthorityDerivationError(
+                        "deferral probe lacks a structured positive same-work capability "
+                        "observation"
+                    )
+                probe_ids.append(probe_id)
+        self.decisive_ids = tuple(dict.fromkeys(probe_ids))
+
+    def _derive_skip(self) -> None:
+        """Validate exact R5 gate, reference, and typed skip-predicate authority."""
+
+        predicate = self.status_code.removeprefix("skipped:")
+        if predicate not in {
+            "insufficient-description",
+            "no-description",
+            "not-a-real-NN",
+        }:
+            raise AuthorityDerivationError("unknown epistemic skip status")
+        gate, item, disposition = _terminal_gate(
+            self.gates,
+            stable_id=self.stable_id,
+            work_id=self.work_id,
+            predicate=predicate,
+        )
+        if (
+            item.get("rung_check", {}).get("selected_rung") != "R5_SKIP"
+            or item.get("rung_check", {}).get("verdict") != "accurate"
+        ):
+            raise AuthorityDerivationError("skip gate does not prove an accurate R5 decision")
+        self.gate_id = str(gate["gate_id"])
+        self.gate_proof_identity = stable_hash({"gate_id": self.gate_id, "item": item})
+        _validate_terminal_gate_identities(
+            disposition,
+            source_manifest_identity=self.source_manifest_identity,
+            evidence_identity=self.evidence_identity,
+            license_identity=self.license_identity,
+        )
+        self.source_ids, self.evidence_ids = _validate_terminal_references(
+            disposition,
+            predicate=predicate,
+            source_manifest=self.source_manifest,
+            evidence_excerpts=self.evidence_excerpts,
+        )
+        if self.source_resolution is None:
+            raise AuthorityDerivationError(
+                "skip proof requires exact accepted source-resolution facts"
+            )
+        _validate_skip_predicate(
+            predicate,
+            self.source_resolution,
+            self.evidence_excerpts,
+            self.evidence_ids,
+        )
+        self.resolved_reference_identity = stable_hash(
+            {
+                "source_resolution": self.source_resolution,
+                "sources": [
+                    source
+                    for source in self.source_manifest
+                    if str(source.get("source_id")) in self.source_ids
+                ],
+                "evidence": [
+                    excerpt
+                    for excerpt in self.evidence_excerpts
+                    if str(excerpt.get("evidence_id")) in self.evidence_ids
+                ],
+            }
+        )
+
+    def _build_proof(self) -> TerminalProof:
+        """Derive the final observation hash and immutable proof payload."""
+
+        terminal_observation = derive_terminal_observation(
+            self.attempts,
+            stable_id=self.stable_id,
+            work_id=self.work_id,
+        )
+        proof_payload = {
+            "proof_rule_identity": self.proof_rule_identity,
+            "stable_id": self.stable_id,
+            "work_id": self.work_id,
+            "status_code": self.status_code,
+            "decisive_attempt_ids": list(self.decisive_ids),
+            "gate_id": self.gate_id,
+            "source_ids": list(self.source_ids),
+            "evidence_ids": list(self.evidence_ids),
+            "failure_stage": self.failure_stage,
+            "reason_code": self.reason_code,
+            "root_cause_fingerprint": self.root_cause,
+            "platform_claim": self.platform_claim,
+            "per_mode_attempt_ids": [list(value) for value in self.per_mode],
+            "terminal_observation_sha256": stable_hash(terminal_observation),
+            "gate_proof_identity": self.gate_proof_identity,
+            "resolved_reference_identity": self.resolved_reference_identity,
+        }
+        return TerminalProof(
+            proof_id=stable_hash(proof_payload),
+            proof_rule_identity=self.proof_rule_identity,
+            stable_id=self.stable_id,
+            work_id=self.work_id,
+            status_code=self.status_code,
+            decisive_attempt_ids=self.decisive_ids,
+            gate_id=self.gate_id,
+            source_ids=self.source_ids,
+            evidence_ids=self.evidence_ids,
+            failure_stage=self.failure_stage,
+            reason_code=self.reason_code,
+            root_cause_fingerprint=self.root_cause,
+            platform_claim=self.platform_claim,
+            per_mode_attempt_ids=self.per_mode,
+            terminal_observation_sha256=str(proof_payload["terminal_observation_sha256"]),
+        )
+
+
 def derive_terminal_proof(
     stable_id: str,
     work_id: str,
@@ -4576,247 +4923,21 @@ def derive_terminal_proof(
         If the status is unknown or lacks its specific status-proving predicate.
     """
 
-    stable_id = _require_nonempty_string(stable_id, "stable_id")
-    work_id = _require_nonempty_string(work_id, "work_id")
-    proof_rule_identity = _require_nonempty_string(proof_rule_identity, "proof_rule_identity")
-    relevant = tuple(
-        attempt
-        for attempt in attempts
-        if attempt.get("stable_id") == stable_id and attempt.get("work_id") == work_id
-    )
-    per_mode = derive_per_mode_attempt_ids(
-        attempts,
-        stable_id=stable_id,
-        work_id=work_id,
-        meaningful_modes=meaningful_modes,
-    )
-    gate_id: DependencyValue = DependencyState.NOT_APPLICABLE
-    source_ids: tuple[str, ...] = ()
-    evidence_ids: tuple[str, ...] = ()
-    failure_stage: DependencyValue = DependencyState.NOT_APPLICABLE
-    reason_code: DependencyValue = DependencyState.NOT_APPLICABLE
-    root_cause: DependencyValue = DependencyState.NOT_APPLICABLE
-    platform_claim: DependencyValue = DependencyState.NOT_APPLICABLE
-    decisive_ids: tuple[str, ...] = ()
-    gate_proof_identity: DependencyValue = DependencyState.NOT_APPLICABLE
-    resolved_reference_identity: DependencyValue = DependencyState.NOT_APPLICABLE
-
-    if status_code == "runs":
-        expected_modes = tuple(dict.fromkeys(str(mode) for mode in meaningful_modes))
-        if {mode for mode, _attempt_id in per_mode} != set(expected_modes):
-            raise AuthorityDerivationError("runs proof does not cover every meaningful mode")
-        attempt_index = {str(attempt.get("attempt_id")): attempt for attempt in relevant}
-        for mode, attempt_id in per_mode:
-            attempt = attempt_index.get(attempt_id)
-            if (
-                attempt is None
-                or attempt.get("mode") != mode
-                or attempt.get("result") != "succeeded"
-            ):
-                raise AuthorityDerivationError("runs proof contains a non-successful mode attempt")
-            _authenticated_observation(attempt)
-        decisive_ids = tuple(attempt_id for _mode, attempt_id in per_mode)
-    elif status_code.startswith("failed:"):
-        stage = status_code.removeprefix("failed:")
-        failure_stage = stage
-        if stage in {"accuracy-gate", "fidelity"}:
-            gate_id, reason_code, root_cause = _derive_gate_failure(
-                gates, stable_id=stable_id, work_id=work_id, stage=stage
-            )
-        else:
-            candidates = []
-            for attempt in relevant:
-                error = attempt.get("error")
-                if (
-                    attempt.get("result") == "failed"
-                    and attempt.get("stage") == stage
-                    and isinstance(error, Mapping)
-                    and error.get("stage") == stage
-                    and isinstance(error.get("reason_code"), str)
-                    and isinstance(error.get("root_cause_fingerprint"), str)
-                ):
-                    candidates.append(attempt)
-            if not candidates:
-                raise AuthorityDerivationError(
-                    f"{status_code} lacks an exact same-stage failed attempt"
-                )
-            decisive = max(candidates, key=_attempt_order)
-            error = decisive["error"]
-            assert isinstance(error, Mapping)
-            reason_code = str(error["reason_code"])
-            if reason_code not in FAILURE_REASON_CODES.get(stage, frozenset()):
-                raise AuthorityDerivationError("failed attempt reason is not closed for its stage")
-            root_cause = str(error["root_cause_fingerprint"])
-            decisive_ids = (str(decisive["attempt_id"]),)
-            if stage == "source" and reason_code == "missing-mandatory-link":
-                if decisive.get("stage") != "source":
-                    raise AuthorityDerivationError(
-                        "missing-mandatory-link must bind an exact source-stage attempt"
-                    )
-    elif status_code.startswith("deferred:"):
-        predicate = status_code.removeprefix("deferred:")
-        if predicate not in {"needs-cuda", "needs-x86"}:
-            raise AuthorityDerivationError("unknown platform deferral status")
-        gate, item, disposition = _terminal_gate(
-            gates,
-            stable_id=stable_id,
-            work_id=work_id,
-            predicate=predicate,
-        )
-        gate_id = str(gate["gate_id"])
-        gate_proof_identity = stable_hash({"gate_id": gate_id, "item": item})
-        platform_claim = predicate
-        _validate_terminal_gate_identities(
-            disposition,
-            source_manifest_identity=source_manifest_identity,
-            evidence_identity=evidence_identity,
-            license_identity=license_identity,
-        )
-        source_ids, evidence_ids = _validate_terminal_references(
-            disposition,
-            predicate=predicate,
-            source_manifest=source_manifest,
-            evidence_excerpts=evidence_excerpts,
-        )
-        resolved_reference_identity = stable_hash(
-            {
-                "sources": [
-                    source
-                    for source in source_manifest
-                    if str(source.get("source_id")) in source_ids
-                ],
-                "evidence": [
-                    excerpt
-                    for excerpt in evidence_excerpts
-                    if str(excerpt.get("evidence_id")) in evidence_ids
-                ],
-            }
-        )
-        probe_ids: list[str] = []
-        for attempt in relevant:
-            defer = attempt.get("defer_evidence")
-            if not isinstance(defer, Mapping) or defer.get("target_status") != status_code:
-                continue
-            if set(str(value) for value in defer.get("source_ids", ())) != set(source_ids):
-                raise AuthorityDerivationError("deferral attempt source set is not gate-exact")
-            named_probes = tuple(str(value) for value in defer.get("probe_attempt_ids", ()))
-            for probe_id in named_probes:
-                probe = next(
-                    (
-                        candidate
-                        for candidate in relevant
-                        if candidate.get("attempt_id") == probe_id
-                    ),
-                    None,
-                )
-                capability = probe.get("capability_observation") if probe is not None else None
-                if (
-                    probe is None
-                    or probe.get("result") not in {"observed", "succeeded"}
-                    or not isinstance(capability, Mapping)
-                    or capability.get("claim") != predicate
-                    or capability.get("supported") is not True
-                ):
-                    raise AuthorityDerivationError(
-                        "deferral probe lacks a structured positive same-work capability observation"
-                    )
-                probe_ids.append(probe_id)
-        decisive_ids = tuple(dict.fromkeys(probe_ids))
-    elif status_code.startswith("skipped:"):
-        predicate = status_code.removeprefix("skipped:")
-        if predicate not in {"insufficient-description", "no-description", "not-a-real-NN"}:
-            raise AuthorityDerivationError("unknown epistemic skip status")
-        gate, item, disposition = _terminal_gate(
-            gates,
-            stable_id=stable_id,
-            work_id=work_id,
-            predicate=predicate,
-        )
-        if (
-            item.get("rung_check", {}).get("selected_rung") != "R5_SKIP"
-            or item.get("rung_check", {}).get("verdict") != "accurate"
-        ):
-            raise AuthorityDerivationError("skip gate does not prove an accurate R5 decision")
-        gate_id = str(gate["gate_id"])
-        gate_proof_identity = stable_hash({"gate_id": gate_id, "item": item})
-        _validate_terminal_gate_identities(
-            disposition,
-            source_manifest_identity=source_manifest_identity,
-            evidence_identity=evidence_identity,
-            license_identity=license_identity,
-        )
-        source_ids, evidence_ids = _validate_terminal_references(
-            disposition,
-            predicate=predicate,
-            source_manifest=source_manifest,
-            evidence_excerpts=evidence_excerpts,
-        )
-        if source_resolution is None:
-            raise AuthorityDerivationError(
-                "skip proof requires exact accepted source-resolution facts"
-            )
-        _validate_skip_predicate(
-            predicate,
-            source_resolution,
-            evidence_excerpts,
-            evidence_ids,
-        )
-        resolved_reference_identity = stable_hash(
-            {
-                "source_resolution": source_resolution,
-                "sources": [
-                    source
-                    for source in source_manifest
-                    if str(source.get("source_id")) in source_ids
-                ],
-                "evidence": [
-                    excerpt
-                    for excerpt in evidence_excerpts
-                    if str(excerpt.get("evidence_id")) in evidence_ids
-                ],
-            }
-        )
-    else:
-        raise AuthorityDerivationError("status code has no closed terminal proof rule")
-
-    terminal_observation = derive_terminal_observation(
-        attempts, stable_id=stable_id, work_id=work_id
-    )
-    proof_payload = {
-        "proof_rule_identity": proof_rule_identity,
-        "stable_id": stable_id,
-        "work_id": work_id,
-        "status_code": status_code,
-        "decisive_attempt_ids": list(decisive_ids),
-        "gate_id": gate_id,
-        "source_ids": list(source_ids),
-        "evidence_ids": list(evidence_ids),
-        "failure_stage": failure_stage,
-        "reason_code": reason_code,
-        "root_cause_fingerprint": root_cause,
-        "platform_claim": platform_claim,
-        "per_mode_attempt_ids": [list(value) for value in per_mode],
-        "terminal_observation_sha256": stable_hash(terminal_observation),
-        "gate_proof_identity": gate_proof_identity,
-        "resolved_reference_identity": resolved_reference_identity,
-    }
-    return TerminalProof(
-        proof_id=stable_hash(proof_payload),
-        proof_rule_identity=proof_rule_identity,
+    return _TerminalProofPipeline(
         stable_id=stable_id,
         work_id=work_id,
         status_code=status_code,
-        decisive_attempt_ids=decisive_ids,
-        gate_id=gate_id,
-        source_ids=source_ids,
-        evidence_ids=evidence_ids,
-        failure_stage=failure_stage,
-        reason_code=reason_code,
-        root_cause_fingerprint=root_cause,
-        platform_claim=platform_claim,
-        per_mode_attempt_ids=per_mode,
-        terminal_observation_sha256=str(proof_payload["terminal_observation_sha256"]),
-    )
+        attempts=attempts,
+        gates=gates,
+        source_manifest=source_manifest,
+        evidence_excerpts=evidence_excerpts,
+        source_resolution=source_resolution,
+        source_manifest_identity=source_manifest_identity,
+        evidence_identity=evidence_identity,
+        license_identity=license_identity,
+        meaningful_modes=meaningful_modes,
+        proof_rule_identity=proof_rule_identity,
+    ).run()
 
 
 def derive_family_authority(
