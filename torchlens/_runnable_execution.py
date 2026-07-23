@@ -1014,11 +1014,16 @@ def _fact_path_tuple_or_none(fact: Mapping[str, Any]) -> "tuple[Any, ...] | None
 
     Parse refuses a non-sequence fact ``path`` as ``context_field_invalid`` before any
     execution-side consumer runs; this belt keeps the execution readers total anyway so a
-    malformed path can never crash ``tuple(...)`` into an untyped lane.
+    malformed path can never crash ``tuple(...)`` into an untyped lane. r77 L1 extends
+    the belt one nesting level down to match the parse contract: a non-``str``/``int``
+    COMPONENT (a nested list/mapping/slice decoded literal) also fails closed here
+    instead of riding into the runtime-tree resolvers as an unresolvable key.
     """
 
     raw_path = fact.get("path", ()) or ()
     if not isinstance(raw_path, (list, tuple)):
+        return None
+    if any(not isinstance(component, (str, int)) for component in raw_path):
         return None
     return tuple(raw_path)
 

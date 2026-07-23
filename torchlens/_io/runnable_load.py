@@ -590,9 +590,8 @@ def _validate_required_witness_inventory(
             fact = _decode_literal(witness.observed_value)
             if not isinstance(fact, Mapping):
                 raise ContextFieldInvalidError(field, "undecodable model-input literal fact")
-            raw_position = fact.get("position")
-            site_position = (
-                tuple(raw_position) if isinstance(raw_position, (list, tuple)) else (raw_position,)
+            site_position = _fact_position_tuple(
+                field, fact.get("position"), "literal fact position"
             )
             if site_position not in sites:
                 raise ContextFieldInvalidError(
@@ -610,9 +609,8 @@ def _validate_required_witness_inventory(
             fact = _decode_literal(witness.observed_value)
             if not isinstance(fact, Mapping):
                 raise ContextFieldInvalidError(field, "undecodable model-input metadata fact")
-            raw_position = fact.get("position")
-            site_position = (
-                tuple(raw_position) if isinstance(raw_position, (list, tuple)) else (raw_position,)
+            site_position = _fact_position_tuple(
+                field, fact.get("position"), "metadata fact position"
             )
             if site_position not in sites:
                 raise ContextFieldInvalidError(
@@ -654,6 +652,12 @@ def _fact_path_tuple(field: str, raw: Any, description: str) -> tuple[Any, ...]:
     vocabulary ``context_field_invalid`` analysis-only lane its sibling ``position``
     checks use. A string is refused too: iterating it would silently shred one
     component into characters instead of refusing the malformed encoding.
+
+    r77 L1 extends the same check one nesting level down: the COMPONENTS are decoded
+    literals that may be nested list/mapping/slice values -- all unhashable -- which
+    crashed the first downstream ``set``/``dict`` consumer with a ``TypeError`` into
+    the same untyped catch-all. Every component must be a ``str``/``int`` scalar
+    (the r67 structure-node-path precedent); anything else refuses typed here.
     """
 
     if raw is None:
@@ -662,7 +666,33 @@ def _fact_path_tuple(field: str, raw: Any, description: str) -> tuple[Any, ...]:
         raise ContextFieldInvalidError(
             field, f"{description} {raw!r} is not a sequence of path components"
         )
+    for component in raw:
+        if not isinstance(component, (str, int)):
+            raise ContextFieldInvalidError(
+                field, f"{description} component {component!r} is not a str/int scalar"
+            )
     return tuple(raw)
+
+
+def _fact_position_tuple(field: str, raw: Any, description: str) -> tuple[Any, ...]:
+    """Return a decoded fact's site position as a component-validated tuple (r77 L1).
+
+    The former inline coercions (``tuple(raw) if isinstance(raw, (list, tuple)) else
+    (raw,)``) validated only the CONTAINER type; a position carrying a nested
+    list/mapping/slice component crashed the inventory-membership ``in set`` check
+    with a ``TypeError`` into the untyped parse catch-all. Components must be
+    ``str``/``int`` scalars (a well-formed position is ``("arg", i)`` /
+    ``("kwarg", name)``); a scalar position is wrapped so the existing inventory
+    membership check refuses it typed as before.
+    """
+
+    coerced = tuple(raw) if isinstance(raw, (list, tuple)) else (raw,)
+    for component in coerced:
+        if not isinstance(component, (str, int)):
+            raise ContextFieldInvalidError(
+                field, f"{description} component {component!r} is not a str/int scalar"
+            )
+    return coerced
 
 
 def _parse_input_boundary(value: Any) -> tuple[InputBoundarySite, ...]:
@@ -1083,9 +1113,8 @@ def validate_witness_obligations(
         fact = _decode_literal(witness.observed_value)
         if not isinstance(fact, Mapping):
             raise ContextFieldInvalidError(field, "undecodable model-input metadata fact")
-        raw_position = fact.get("position")
-        fact_position: Any = (
-            tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
+        fact_position: Any = _fact_position_tuple(
+            field, fact.get("position"), "metadata envelope position"
         )
         path = _fact_path_tuple(field, fact.get("path", ()) or (), "metadata envelope path")
         declared_reads = reads_by_site.get((fact_position, path))

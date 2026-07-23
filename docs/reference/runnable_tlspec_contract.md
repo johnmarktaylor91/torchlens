@@ -343,7 +343,12 @@ structure, re-derives, and requires exact discharge.
   fact whose `path`/`position` is not a sequence (int-encoded, or a string that would shred
   into per-character components) refuses `context_field_invalid` at parse -- analysis-only
   with the diagnostic intact, never the generic catch-all -- and the execution-side readers
-  keep a fail-closed belt for the same shape.
+  keep a fail-closed belt for the same shape. The lane is component-deep (r77 L1): every
+  `path`/`position` COMPONENT must be a `str`/`int` scalar (the r67 structure-node-path
+  vocabulary); a nested list/mapping/slice component -- unhashable, formerly a `TypeError`
+  crash from the first `set`/`dict` consumer into the untyped catch-all -- refuses
+  `context_field_invalid` at parse, and the execution-side belt fails closed on the same
+  component shapes.
 * `state_metadata` -- **totalized BOTH facts** over the declared state-name universe:
   `captured_requires_grad` (staging applies it -- capture truth wins, the LOCKED r65 F-1
   ruling) and `grad_fn` presence (True refuses at save AND parse). The staging belt is pointed
