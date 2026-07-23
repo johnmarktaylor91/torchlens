@@ -1339,6 +1339,8 @@ class Trace(
         "_grad_fn_param_refs": FieldPolicy.KEEP,
         "_grad_fn_param_refs_by_object_id": FieldPolicy.DROP,
         "_param_log_by_pid": FieldPolicy.DROP,
+        "_session_param_inventory": FieldPolicy.DROP,
+        "_session_buffer_inventory": FieldPolicy.DROP,
         "backward_root_grad_fn_object_ids": FieldPolicy.KEEP,
         "backward_durations": FieldPolicy.KEEP,
         "num_backward_passes": FieldPolicy.KEEP,
@@ -1682,6 +1684,13 @@ class Trace(
         self.backward_pass_logs: Dict[int, BackwardPass] = OrderedDict()
         self._grad_fn_param_refs: dict[str, str] = {}
         self._param_log_by_pid: dict[int, str] = {}
+        # r79 session-leak fix: the RECORDED prep inventories of stamped
+        # parameters/buffers. Session-scoped strong refs -- authoritative source
+        # for stamp cleanup (a param/buffer popped from the live module tree
+        # mid-forward escapes re-traversal but never this list); emptied by
+        # ``_cleanup_model_session``. Never portable.
+        self._session_param_inventory: list[Any] = []
+        self._session_buffer_inventory: list[Any] = []
         self.backward_root_grad_fn_object_ids: list[int] = []
         self.backward_durations: list[Duration] = []
         self.num_backward_passes: int = 0

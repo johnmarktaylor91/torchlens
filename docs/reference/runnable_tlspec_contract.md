@@ -339,7 +339,16 @@ structure, re-derives, and requires exact discharge.
   fresh in-forward or foreign `nn.Parameter` (no prep stamp) is NOT exempt: it leaves the
   `unattributed_tensor_args` marker like any unlabeled tensor, so a Parameter-wrapped
   laundering chain taints and re-resolves or fails closed instead of riding the
-  state-rooted no-record branch. Malformed fact encodings stay in the typed lane (r75 L1): a metadata/literal/structure
+  state-rooted no-record branch. The prep stamp is CURRENT-SESSION-scoped by construction
+  (r79): session cleanup clears stamps from the RECORDED prep inventory (every
+  param/buffer stamped at preparation), never only by re-traversing the live model tree,
+  so a param/buffer popped from `_parameters`/`_buffers` mid-forward cannot carry its
+  stamp into a later capture; and, defense in depth, a non-empty prep address counts as
+  provenance ONLY when it resolves in the ACTIVE capture's session -- the address maps in
+  this trace's param logs AND the recorded log's live object IS the argument (exact
+  identity) -- with the same identity gate applied before a parameter resolves into
+  `param_logs` at all, closing the stale-address wrong-bind (a foreign leaked object can
+  never be silently bound to this model's own same-named state). Malformed fact encodings stay in the typed lane (r75 L1): a metadata/literal/structure
   fact whose `path`/`position` is not a sequence (int-encoded, or a string that would shred
   into per-character components) refuses `context_field_invalid` at parse -- analysis-only
   with the diagnostic intact, never the generic catch-all -- and the execution-side readers
@@ -2325,7 +2334,15 @@ a fresh `nn.Parameter` used to satisfy the known-provenance check by bare type, 
 the ancestry-break marker the ladder keys on; provenance now requires the prep-stamped
 parameter address (or tensor metadata), so a receiver whose provenance is not
 TorchLens-known ALWAYS leaves the taint marker -- prepped/registered parameters are
-unaffected and state-rooted reads keep residual (3). The direct-leaf spelling keeps
+unaffected and state-rooted reads keep residual (3). r79 closes the SESSION-HYGIENE leak
+under that predicate (r78): stamps escaping cleanup via a mid-forward
+`_parameters`/`_buffers` pop (the re-traversal cleanup missed popped objects) let a later
+capture accept the STALE stamp -- resurrecting the launder as false `verified` on both the
+param and buffer rungs and enabling a stale-address wrong-bind on the same input. Cleanup
+is now driven by the recorded prep inventory (a popped object escapes the tree, never the
+inventory), and consumers additionally require current-session identity resolution, so a
+stale or forged stamp can never be accepted even if some future path escapes cleanup
+again. The direct-leaf spelling keeps
 its stricter r27/r31 witnessed-fact semantics (`diverged`). (4) object-identity aliasing of a non-canonical state slot through an
 aliasing-polymorphic op, tested via pure Python identity (`y = self.w.contiguous(); y is
 self.w`), is a documented residual (locked r65 ruling): no accessor fires on ANY tensor, so
