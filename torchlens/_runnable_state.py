@@ -15,7 +15,7 @@ import warnings
 import torch
 
 from . import _state
-from .errors import RunCapabilityUnavailableError, StateBindingError
+from .errors import RunCapabilityUnavailableError, RunPreconditionError, StateBindingError
 from .utils._torch_symbols import torch_attr
 from .runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
@@ -41,6 +41,60 @@ class PreparedRunnableState:
     initializer_policy_version: str | None
     seed: int | None
     random_filled_slot_ids: tuple[str, ...]
+
+
+TORCH_MANUAL_SEED_MIN = -0x8000_0000_0000_0000
+"""Smallest seed torch ``Generator.manual_seed`` accepts (int64 min)."""
+
+TORCH_MANUAL_SEED_MAX = 0xFFFF_FFFF_FFFF_FFFF
+"""Largest seed torch ``Generator.manual_seed`` accepts (uint64 max)."""
+
+
+def validate_run_seed(seed: Any) -> int | None:
+    """Validate a user-supplied run seed before any generator work.
+
+    The r77 run door rejected non-``int`` seeds, but two values still escaped
+    to raw torch ``RuntimeError`` (r78, hon1 + Sol): ``bool`` (an ``int``
+    subclass, so it passed the type check but ``Generator.manual_seed``
+    rejects it) and an ``int`` outside torch's accepted
+    ``[-0x8000_0000_0000_0000, 0xFFFF_FFFF_FFFF_FFFF]`` long range (pybind
+    overflow). This is the ONE canonical guard for every ``manual_seed`` site
+    on the run path -- the run door plus the executor/state-initializer
+    mirrors -- matching the capture-seed convention
+    (``isinstance(seed, int) and not isinstance(seed, bool)``).
+
+    Parameters
+    ----------
+    seed:
+        User-supplied seed value, or ``None`` for unseeded runs.
+
+    Returns
+    -------
+    int | None
+        The validated seed unchanged.
+
+    Raises
+    ------
+    RunPreconditionError
+        Typed ``context_field_invalid`` refusal for a non-int (including
+        ``bool``) or out-of-range seed. Transactional: raised before any
+        generator state is touched.
+    """
+
+    if seed is None:
+        return None
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise RunPreconditionError(
+            f"run(seed=...) requires an int or None, got {type(seed).__name__}.",
+            code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
+        )
+    if not TORCH_MANUAL_SEED_MIN <= seed <= TORCH_MANUAL_SEED_MAX:
+        raise RunPreconditionError(
+            "run(seed=...) is outside torch's accepted manual_seed range "
+            f"[{TORCH_MANUAL_SEED_MIN}, {TORCH_MANUAL_SEED_MAX}], got {seed}.",
+            code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
+        )
+    return seed
 
 
 def snapshot_capture_state(model: object) -> Mapping[str, torch.Tensor] | None:
@@ -2031,6 +2085,9 @@ def _generator_for_slot(
 
     if seed is None:
         return None
+    # r79 seed-door mirror: no path may reach raw ``manual_seed`` with a
+    # bool/out-of-range seed even if it bypassed the run door.
+    validate_run_seed(seed)
     device = _slot_device(slot)
     key = str(device)
     if key not in generators:

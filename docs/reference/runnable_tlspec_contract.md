@@ -1394,7 +1394,12 @@ fixed seed, descriptor, inputs, backend/runtime version, and device reproduces b
 global RNG. Null seed uses normal entropy. The report records it. This is architecture execution,
 never original-weight or original-random-draw recovery. A non-`int`, non-`None` `seed` refuses at
 the run door with `RunPreconditionError` (`context_field_invalid`), transactionally -- never a raw
-backend error escaping the typed lane (r77).
+backend error escaping the typed lane (r77). The door predicate matches the capture-seed
+convention and torch's own acceptance (r79): `bool` (an `int` subclass that
+`Generator.manual_seed` rejects) and any `int` outside torch's accepted
+`[-0x8000_0000_0000_0000, 0xFFFF_FFFF_FFFF_FFFF]` long range refuse the same typed way, and the
+ONE canonical guard is mirrored at every run-path `manual_seed` site (the executor's generator
+seeding and random-state slot initialization) so no path reaches raw torch.
 
 Seeded-RNG isolation is TOTAL over the generators the run actually seeds: the executor seeds only
 the CPU generator plus each individually forked CUDA device generator (never a global
