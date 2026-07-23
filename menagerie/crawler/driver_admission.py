@@ -160,6 +160,7 @@ from menagerie.crawler.driver_contracts import (
 from menagerie.crawler.driver_models import (
     _artifact_lineage,
     _checker_item,
+    _current_checker_prompt_hash,
     _driver_failure_attempt,
     _fidelity_gate_history,
     _fidelity_item_accepted,
@@ -198,20 +199,6 @@ from menagerie.crawler.driver_receipts import (
 LOGGER = logging.getLogger("menagerie.crawler.driver")
 
 _T = TypeVar("_T")
-
-
-def _current_checker_prompt_hash() -> str:
-    """Return the checker prompt identity exposed by the compatibility facade.
-
-    Returns
-    -------
-    str
-        Current checker prompt identity, including compatibility monkeypatches.
-    """
-
-    from menagerie.crawler import driver as driver_facade
-
-    return driver_facade._checker_prompt_hash()
 
 
 def _current_award_closure_identity() -> str:
