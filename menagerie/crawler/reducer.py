@@ -975,6 +975,323 @@ class _GateValidationPipeline:
             )
 
 
+@dataclass
+class _ModelAuthorityPipeline:
+    """Derive one model's authority through ordered, independently sourced steps."""
+
+    reducer: CanonicalReducer
+    model: Mapping[str, Any]
+    artifact_inputs: JsonObject = dataclass_field(init=False)
+    stable_id: str = dataclass_field(init=False)
+    work_id: str = dataclass_field(init=False)
+    meaningful_modes: tuple[str, ...] = dataclass_field(init=False)
+    event: Any = dataclass_field(init=False)
+    document: Any = dataclass_field(init=False)
+    source_manifest: Sequence[Mapping[str, Any]] = dataclass_field(init=False)
+    evidence_excerpts: Sequence[Mapping[str, Any]] = dataclass_field(init=False)
+    source_resolution: Optional[Mapping[str, Any]] = dataclass_field(init=False)
+    source_manifest_identity: Optional[str] = dataclass_field(init=False)
+    evidence_identity: Any = dataclass_field(init=False)
+    license_identity: Any = dataclass_field(init=False)
+    current_attempts: tuple[Mapping[str, Any], ...] = dataclass_field(init=False)
+    terminal_proof: TerminalProof = dataclass_field(init=False)
+    family_authority: FamilyAuthority = dataclass_field(init=False)
+    checker_gate: DependencyValue = dataclass_field(init=False)
+    environment_id: Optional[str] = dataclass_field(init=False)
+
+    def run(self) -> tuple[TerminalProof, FamilyAuthority, JsonObject, JsonObject]:
+        """Run the model-authority derivation in canonical validation order.
+
+        Returns
+        -------
+        tuple[TerminalProof, FamilyAuthority, dict[str, Any], dict[str, Any]]
+            Exact proof objects plus the derived vector and artifact inputs.
+        """
+
+        self._initialize()
+        self._derive_persisted_evidence()
+        self._apply_evidence_fallbacks()
+        self._derive_terminal_and_family_proofs()
+        self._validate_mode_projections()
+        self._derive_checker_gate()
+        self._derive_environment()
+        vector_projection = self._derive_dependency_projection()
+        return (
+            self.terminal_proof,
+            self.family_authority,
+            vector_projection,
+            self.artifact_inputs,
+        )
+
+    def _initialize(self) -> None:
+        """Initialize model identities and empty evidence projections."""
+
+        self.artifact_inputs = self.reducer._artifact_authority_inputs(self.model)
+        self.stable_id = str(self.model.get("stable_id"))
+        self.work_id = self.reducer._model_work_id(self.model, self.artifact_inputs)
+        self.meaningful_modes = tuple(
+            str(value) for value in self.model.get("modes", {}).get("meaningful_modes", ())
+        )
+        self.event = self.artifact_inputs.get("event")
+        self.document = self.artifact_inputs.get("document")
+        self.source_manifest = ()
+        self.evidence_excerpts = ()
+        self.source_resolution = None
+        self.source_manifest_identity = None
+        self.evidence_identity = None
+        self.license_identity = None
+
+    def _derive_persisted_evidence(self) -> None:
+        """Derive evidence only from the independently persisted artifact inputs."""
+
+        if isinstance(self.event, Mapping):
+            self.source_manifest_identity = str(self.event.get("source_manifest_identity"))
+        if not isinstance(self.document, Mapping):
+            return
+        manifest = self.document.get("source_manifest")
+        raw_sources = manifest.get("sources") if isinstance(manifest, Mapping) else None
+        if isinstance(raw_sources, list):
+            self.source_manifest = tuple(
+                value for value in raw_sources if isinstance(value, Mapping)
+            )
+        author_result = self.document.get("author_result")
+        payload = author_result.get("payload") if isinstance(author_result, Mapping) else None
+        if isinstance(payload, Mapping):
+            self.evidence_identity = payload.get("evidence_identity")
+            self.license_identity = payload.get("license_identity")
+        proposal = self.document.get("proposal")
+        facts = proposal.get("proposed_facts") if isinstance(proposal, Mapping) else None
+        if not isinstance(facts, Mapping):
+            return
+        source_resolution_value = facts.get("source_resolution")
+        evidence = facts.get("evidence")
+        if isinstance(source_resolution_value, Mapping):
+            self.source_resolution = source_resolution_value
+        excerpts = evidence.get("excerpts") if isinstance(evidence, Mapping) else None
+        if isinstance(excerpts, list):
+            self.evidence_excerpts = tuple(
+                value for value in excerpts if isinstance(value, Mapping)
+            )
+        if self.evidence_identity is None and isinstance(evidence, Mapping):
+            self.evidence_identity = evidence.get("evidence_identity")
+        if self.license_identity is None:
+            licenses = facts.get("licenses")
+            if isinstance(licenses, Mapping):
+                self.license_identity = stable_hash(licenses)
+
+    def _apply_evidence_fallbacks(self) -> None:
+        """Apply legacy model and gate evidence fallbacks in canonical order."""
+
+        if self.source_resolution is None:
+            candidate_resolution = self.model.get("source_resolution")
+            if isinstance(candidate_resolution, Mapping):
+                self.source_resolution = candidate_resolution
+        if not self.source_manifest and isinstance(self.source_resolution, Mapping):
+            candidate_sources = self.source_resolution.get("sources")
+            if isinstance(candidate_sources, list):
+                self.source_manifest = tuple(
+                    value for value in candidate_sources if isinstance(value, Mapping)
+                )
+        if not self.evidence_excerpts:
+            evidence = self.model.get("evidence")
+            excerpts = evidence.get("excerpts") if isinstance(evidence, Mapping) else None
+            if isinstance(excerpts, list):
+                self.evidence_excerpts = tuple(
+                    value for value in excerpts if isinstance(value, Mapping)
+                )
+            if self.evidence_identity is None and isinstance(evidence, Mapping):
+                self.evidence_identity = evidence.get("evidence_identity")
+        if self.license_identity is not None:
+            return
+        for gate in self.reducer._gates.records:
+            for item in gate.get("items", []):
+                if item.get("stable_id") != self.stable_id or item.get("work_id") != self.work_id:
+                    continue
+                terminal = item.get("terminal_disposition")
+                if isinstance(terminal, Mapping):
+                    self.license_identity = terminal.get("license_identity")
+                    self.evidence_identity = terminal.get(
+                        "evidence_identity", self.evidence_identity
+                    )
+
+    def _derive_terminal_and_family_proofs(self) -> None:
+        """Derive terminal and family proof objects from active authority."""
+
+        try:
+            self.current_attempts = self.reducer._current_attempt_records()
+            current_gates = self.reducer._current_gate_records()
+            self.terminal_proof = derive_terminal_proof(
+                self.stable_id,
+                self.work_id,
+                str(self.model.get("status", {}).get("code")),
+                attempts=self.current_attempts,
+                gates=current_gates,
+                source_manifest=self.source_manifest,
+                evidence_excerpts=self.evidence_excerpts,
+                source_resolution=self.source_resolution,
+                source_manifest_identity=self.source_manifest_identity,
+                evidence_identity=(
+                    str(self.evidence_identity) if self.evidence_identity is not None else None
+                ),
+                license_identity=(
+                    str(self.license_identity) if self.license_identity is not None else None
+                ),
+                meaningful_modes=self.meaningful_modes,
+                proof_rule_identity=self.reducer.context.terminal_policy_identity,
+            )
+            representative: Optional[Mapping[str, Any]] = None
+            binding = self.reducer.context.family_bindings.get(self.stable_id)
+            if isinstance(binding, Mapping):
+                representative_id = binding.get(
+                    "representative_stable_id", binding.get("family_representative_id")
+                )
+                if isinstance(representative_id, str) and representative_id != self.stable_id:
+                    representative = self.reducer._validation_current_records().get(
+                        representative_id
+                    )
+            self.family_authority = derive_family_authority(
+                self.reducer.context,
+                self.stable_id,
+                representative_record=representative,
+            )
+        except AuthorityDerivationError as exc:
+            raise ReductionError(str(exc)) from exc
+
+    def _validate_mode_projections(self) -> None:
+        """Validate per-mode, summary, and terminal-observation projections."""
+
+        relevant = tuple(
+            attempt
+            for attempt in self.current_attempts
+            if attempt.get("stable_id") == self.stable_id and attempt.get("work_id") == self.work_id
+        )
+        expected_per_mode = derive_per_mode_run(
+            relevant,
+            stable_id=self.stable_id,
+            work_id=self.work_id,
+            meaningful_modes=self.meaningful_modes,
+        )
+        if self.model.get("modes", {}).get("per_mode_run") != expected_per_mode:
+            raise ReductionError("model per_mode_run contradicts reducer-derived attempt authority")
+        expected_attempt_ids = {value["attempt_id"] for value in expected_per_mode.values()}
+        by_mode = {
+            str(attempt.get("mode")): attempt
+            for attempt in relevant
+            if attempt.get("attempt_id") in expected_attempt_ids
+            and attempt.get("result") == "succeeded"
+        }
+        try:
+            mode_projection = mode_summary_projection(
+                derive_mode_summary(by_mode.get("train"), by_mode.get("eval"))
+            )
+        except AuthorityDerivationError as exc:
+            raise ReductionError(str(exc)) from exc
+        for field, expected in mode_projection.items():
+            if self.model.get("modes", {}).get(field) != expected:
+                raise ReductionError(f"modes.{field} contradicts reducer-derived mode authority")
+        if self.model.get("status", {}).get("kind") != "runs":
+            expected_observed = derive_terminal_observation(
+                self.current_attempts,
+                stable_id=self.stable_id,
+                work_id=self.work_id,
+            )
+            if self.model.get("observed") != expected_observed:
+                raise ReductionError("terminal observed facts contradict reducer-derived authority")
+
+    def _derive_checker_gate(self) -> None:
+        """Derive the dependency identity for the checker gate."""
+
+        self.checker_gate = self.terminal_proof.gate_id
+        if self.checker_gate != DependencyState.NOT_APPLICABLE:
+            return
+        accuracy_gate = self.model.get("accuracy_gate", {}).get("gate_id")
+        self.checker_gate = (
+            accuracy_gate
+            if isinstance(accuracy_gate, str) and accuracy_gate
+            else DependencyState.PENDING_UNTRUSTED
+            if self.model.get("authored_metadata_state") == "pending"
+            else DependencyState.NOT_APPLICABLE
+        )
+
+    def _derive_environment(self) -> None:
+        """Validate and resolve the environment named by the terminal proof."""
+
+        self.environment_id = None
+        env_generation = self.model.get("execution", {}).get("env_generation")
+        proof_attempt_ids = set(self.terminal_proof.decisive_attempt_ids) | {
+            attempt_id for _mode, attempt_id in self.terminal_proof.per_mode_attempt_ids
+        }
+        proof_environment_generations = {
+            attempt.get("identities", {}).get("environment")
+            for attempt in self.current_attempts
+            if attempt.get("attempt_id") in proof_attempt_ids
+            and isinstance(attempt.get("identities", {}).get("environment"), str)
+        }
+        if len(proof_environment_generations) > 1:
+            raise ReductionError("terminal proof spans multiple environment generations")
+        proof_environment_generation = next(iter(proof_environment_generations), None)
+        if proof_environment_generation is not None:
+            if env_generation != proof_environment_generation:
+                raise ReductionError("model environment generation contradicts its attempt proof")
+            self.environment_id = next(
+                (
+                    name
+                    for name, generation in self.reducer.context.environment_generations.items()
+                    if generation == proof_environment_generation
+                ),
+                None,
+            )
+            if self.environment_id is None:
+                raise ReductionError("model environment generation is absent from active context")
+        elif self.model.get("status", {}).get("kind") == "runs":
+            raise ReductionError("runs proof has no environment generation")
+
+    def _derive_dependency_projection(self) -> JsonObject:
+        """Derive the final dependency-vector projection."""
+
+        accepted_ids = (
+            self.model.get("execution", {}).get("accepted_attempt_ids", [])
+            if self.model.get("status", {}).get("kind") == "runs"
+            else self.model.get("status", {}).get("attempt_ids", [])
+        )
+        proposal_identity: DependencyValue = DependencyState.NOT_APPLICABLE
+        author_result_identity: DependencyValue = DependencyState.NOT_APPLICABLE
+        if isinstance(self.event, Mapping):
+            event_proposal = self.event.get("proposal_id")
+            event_result = self.event.get("author_result_id")
+            if isinstance(event_proposal, str) and event_proposal:
+                proposal_identity = event_proposal
+            if isinstance(event_result, str) and event_result:
+                author_result_identity = event_result
+        candidate_recipe = self.model.get("implementation", {}).get("recipe_revision")
+        recipe_revision: DependencyValue = (
+            candidate_recipe
+            if isinstance(candidate_recipe, str)
+            else DependencyState.NOT_APPLICABLE
+        )
+        try:
+            vector = derive_dependency_vector(
+                self.reducer.context,
+                stable_id=self.stable_id,
+                terminal_proof=self.terminal_proof,
+                source_manifest_identity=(
+                    self.source_manifest_identity or DependencyState.NOT_APPLICABLE
+                ),
+                proposal_identity=proposal_identity,
+                author_result_identity=author_result_identity,
+                checker_gate_identity=self.checker_gate,
+                recipe_revision=recipe_revision,
+                environment_id=self.environment_id,
+                accepted_attempt_ids=accepted_ids,
+                artifact_transaction_id=self.artifact_inputs["transaction_id"],
+                artifact_claim_ids=self.artifact_inputs["claim_ids"],
+                family_authority=self.family_authority,
+            )
+        except AuthorityDerivationError as exc:
+            raise ReductionError(str(exc)) from exc
+        return dependency_vector_projection(vector)
+
+
 class CanonicalReducer:
     """Exclusive canonical writer enforcing parentage, gates, runs, and statuses.
 
@@ -1603,233 +1920,7 @@ class CanonicalReducer:
             Exact proof objects plus the derived vector and artifact inputs.
         """
 
-        artifact_inputs = self._artifact_authority_inputs(model)
-        stable_id = str(model.get("stable_id"))
-        work_id = self._model_work_id(model, artifact_inputs)
-        meaningful_modes = tuple(
-            str(value) for value in model.get("modes", {}).get("meaningful_modes", ())
-        )
-        event = artifact_inputs.get("event")
-        document = artifact_inputs.get("document")
-        source_manifest: Sequence[Mapping[str, Any]] = ()
-        evidence_excerpts: Sequence[Mapping[str, Any]] = ()
-        source_resolution: Optional[Mapping[str, Any]] = None
-        source_manifest_identity: Optional[str] = None
-        evidence_identity: Optional[str] = None
-        license_identity: Optional[str] = None
-        if isinstance(event, Mapping):
-            source_manifest_identity = str(event.get("source_manifest_identity"))
-        if isinstance(document, Mapping):
-            manifest = document.get("source_manifest")
-            raw_sources = manifest.get("sources") if isinstance(manifest, Mapping) else None
-            if isinstance(raw_sources, list):
-                source_manifest = tuple(
-                    value for value in raw_sources if isinstance(value, Mapping)
-                )
-            author_result = document.get("author_result")
-            payload = author_result.get("payload") if isinstance(author_result, Mapping) else None
-            if isinstance(payload, Mapping):
-                evidence_identity = payload.get("evidence_identity")
-                license_identity = payload.get("license_identity")
-            proposal = document.get("proposal")
-            facts = proposal.get("proposed_facts") if isinstance(proposal, Mapping) else None
-            if isinstance(facts, Mapping):
-                source_resolution_value = facts.get("source_resolution")
-                evidence = facts.get("evidence")
-                if isinstance(source_resolution_value, Mapping):
-                    source_resolution = source_resolution_value
-                excerpts = evidence.get("excerpts") if isinstance(evidence, Mapping) else None
-                if isinstance(excerpts, list):
-                    evidence_excerpts = tuple(
-                        value for value in excerpts if isinstance(value, Mapping)
-                    )
-                if evidence_identity is None and isinstance(evidence, Mapping):
-                    evidence_identity = evidence.get("evidence_identity")
-                if license_identity is None:
-                    licenses = facts.get("licenses")
-                    if isinstance(licenses, Mapping):
-                        license_identity = stable_hash(licenses)
-        if source_resolution is None:
-            candidate_resolution = model.get("source_resolution")
-            if isinstance(candidate_resolution, Mapping):
-                source_resolution = candidate_resolution
-        if not source_manifest and isinstance(source_resolution, Mapping):
-            candidate_sources = source_resolution.get("sources")
-            if isinstance(candidate_sources, list):
-                source_manifest = tuple(
-                    value for value in candidate_sources if isinstance(value, Mapping)
-                )
-        if not evidence_excerpts:
-            evidence = model.get("evidence")
-            excerpts = evidence.get("excerpts") if isinstance(evidence, Mapping) else None
-            if isinstance(excerpts, list):
-                evidence_excerpts = tuple(value for value in excerpts if isinstance(value, Mapping))
-            if evidence_identity is None and isinstance(evidence, Mapping):
-                evidence_identity = evidence.get("evidence_identity")
-        if license_identity is None:
-            for gate in self._gates.records:
-                for item in gate.get("items", []):
-                    if item.get("stable_id") != stable_id or item.get("work_id") != work_id:
-                        continue
-                    terminal = item.get("terminal_disposition")
-                    if isinstance(terminal, Mapping):
-                        license_identity = terminal.get("license_identity")
-                        evidence_identity = terminal.get("evidence_identity", evidence_identity)
-        try:
-            current_attempts = self._current_attempt_records()
-            current_gates = self._current_gate_records()
-            terminal_proof = derive_terminal_proof(
-                stable_id,
-                work_id,
-                str(model.get("status", {}).get("code")),
-                attempts=current_attempts,
-                gates=current_gates,
-                source_manifest=source_manifest,
-                evidence_excerpts=evidence_excerpts,
-                source_resolution=source_resolution,
-                source_manifest_identity=source_manifest_identity,
-                evidence_identity=(
-                    str(evidence_identity) if evidence_identity is not None else None
-                ),
-                license_identity=(str(license_identity) if license_identity is not None else None),
-                meaningful_modes=meaningful_modes,
-                proof_rule_identity=self.context.terminal_policy_identity,
-            )
-            representative: Optional[Mapping[str, Any]] = None
-            binding = self.context.family_bindings.get(stable_id)
-            if isinstance(binding, Mapping):
-                representative_id = binding.get(
-                    "representative_stable_id", binding.get("family_representative_id")
-                )
-                if isinstance(representative_id, str) and representative_id != stable_id:
-                    representative = self._validation_current_records().get(representative_id)
-            family_authority = derive_family_authority(
-                self.context,
-                stable_id,
-                representative_record=representative,
-            )
-        except AuthorityDerivationError as exc:
-            raise ReductionError(str(exc)) from exc
-
-        relevant = tuple(
-            attempt
-            for attempt in current_attempts
-            if attempt.get("stable_id") == stable_id and attempt.get("work_id") == work_id
-        )
-        expected_per_mode = derive_per_mode_run(
-            relevant,
-            stable_id=stable_id,
-            work_id=work_id,
-            meaningful_modes=meaningful_modes,
-        )
-        if model.get("modes", {}).get("per_mode_run") != expected_per_mode:
-            raise ReductionError("model per_mode_run contradicts reducer-derived attempt authority")
-        by_mode = {
-            str(attempt.get("mode")): attempt
-            for attempt in relevant
-            if attempt.get("attempt_id")
-            in {value["attempt_id"] for value in expected_per_mode.values()}
-            and attempt.get("result") == "succeeded"
-        }
-        try:
-            mode_projection = mode_summary_projection(
-                derive_mode_summary(by_mode.get("train"), by_mode.get("eval"))
-            )
-        except AuthorityDerivationError as exc:
-            raise ReductionError(str(exc)) from exc
-        for field, expected in mode_projection.items():
-            if model.get("modes", {}).get(field) != expected:
-                raise ReductionError(f"modes.{field} contradicts reducer-derived mode authority")
-        if model.get("status", {}).get("kind") != "runs":
-            expected_observed = derive_terminal_observation(
-                current_attempts,
-                stable_id=stable_id,
-                work_id=work_id,
-            )
-            if model.get("observed") != expected_observed:
-                raise ReductionError("terminal observed facts contradict reducer-derived authority")
-
-        checker_gate: DependencyValue = terminal_proof.gate_id
-        if checker_gate == DependencyState.NOT_APPLICABLE:
-            accuracy_gate = model.get("accuracy_gate", {}).get("gate_id")
-            checker_gate = (
-                accuracy_gate
-                if isinstance(accuracy_gate, str) and accuracy_gate
-                else DependencyState.PENDING_UNTRUSTED
-                if model.get("authored_metadata_state") == "pending"
-                else DependencyState.NOT_APPLICABLE
-            )
-        environment_id: Optional[str] = None
-        env_generation = model.get("execution", {}).get("env_generation")
-        proof_attempt_ids = set(terminal_proof.decisive_attempt_ids) | {
-            attempt_id for _mode, attempt_id in terminal_proof.per_mode_attempt_ids
-        }
-        proof_environment_generations = {
-            attempt.get("identities", {}).get("environment")
-            for attempt in current_attempts
-            if attempt.get("attempt_id") in proof_attempt_ids
-            and isinstance(attempt.get("identities", {}).get("environment"), str)
-        }
-        if len(proof_environment_generations) > 1:
-            raise ReductionError("terminal proof spans multiple environment generations")
-        proof_environment_generation = next(iter(proof_environment_generations), None)
-        if proof_environment_generation is not None:
-            if env_generation != proof_environment_generation:
-                raise ReductionError("model environment generation contradicts its attempt proof")
-            environment_id = next(
-                (
-                    name
-                    for name, generation in self.context.environment_generations.items()
-                    if generation == proof_environment_generation
-                ),
-                None,
-            )
-            if environment_id is None:
-                raise ReductionError("model environment generation is absent from active context")
-        elif model.get("status", {}).get("kind") == "runs":
-            raise ReductionError("runs proof has no environment generation")
-        accepted_ids = (
-            model.get("execution", {}).get("accepted_attempt_ids", [])
-            if model.get("status", {}).get("kind") == "runs"
-            else model.get("status", {}).get("attempt_ids", [])
-        )
-        proposal_identity: DependencyValue = DependencyState.NOT_APPLICABLE
-        author_result_identity: DependencyValue = DependencyState.NOT_APPLICABLE
-        if isinstance(event, Mapping):
-            event_proposal = event.get("proposal_id")
-            event_result = event.get("author_result_id")
-            if isinstance(event_proposal, str) and event_proposal:
-                proposal_identity = event_proposal
-            if isinstance(event_result, str) and event_result:
-                author_result_identity = event_result
-        candidate_recipe = model.get("implementation", {}).get("recipe_revision")
-        recipe_revision: DependencyValue = (
-            candidate_recipe
-            if isinstance(candidate_recipe, str)
-            else DependencyState.NOT_APPLICABLE
-        )
-        try:
-            vector = derive_dependency_vector(
-                self.context,
-                stable_id=stable_id,
-                terminal_proof=terminal_proof,
-                source_manifest_identity=(
-                    source_manifest_identity or DependencyState.NOT_APPLICABLE
-                ),
-                proposal_identity=proposal_identity,
-                author_result_identity=author_result_identity,
-                checker_gate_identity=checker_gate,
-                recipe_revision=recipe_revision,
-                environment_id=environment_id,
-                accepted_attempt_ids=accepted_ids,
-                artifact_transaction_id=artifact_inputs["transaction_id"],
-                artifact_claim_ids=artifact_inputs["claim_ids"],
-                family_authority=family_authority,
-            )
-        except AuthorityDerivationError as exc:
-            raise ReductionError(str(exc)) from exc
-        vector_projection = dependency_vector_projection(vector)
-        return terminal_proof, family_authority, vector_projection, artifact_inputs
+        return _ModelAuthorityPipeline(self, model).run()
 
     def _validate_derived_model_authority(self, model: Mapping[str, Any]) -> None:
         """Require exact reducer-derived proof, family, and dependency projections.
