@@ -1383,7 +1383,9 @@ slot-ID order. Every alias member is still reported random-filled.
 `seed` controls state and runtime RNG/source slots through isolated run-local backend generators. A
 fixed seed, descriptor, inputs, backend/runtime version, and device reproduces both without changing
 global RNG. Null seed uses normal entropy. The report records it. This is architecture execution,
-never original-weight or original-random-draw recovery.
+never original-weight or original-random-draw recovery. A non-`int`, non-`None` `seed` refuses at
+the run door with `RunPreconditionError` (`context_field_invalid`), transactionally -- never a raw
+backend error escaping the typed lane (r77).
 
 Seeded-RNG isolation is TOTAL over the generators the run actually seeds: the executor seeds only
 the CPU generator plus each individually forked CUDA device generator (never a global
