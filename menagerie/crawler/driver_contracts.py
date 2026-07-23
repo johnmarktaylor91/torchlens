@@ -5,8 +5,6 @@ This module contains data-only scheduler contracts and lock ownership mechanics.
 
 from __future__ import annotations
 
-from __future__ import annotations
-
 import fcntl
 import json
 import os
