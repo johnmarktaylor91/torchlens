@@ -1,11 +1,7 @@
 """Worker request, supervision, receipt projection, and diagnostic boundaries."""
 
 from __future__ import annotations
-
-from __future__ import annotations
 import ast
-from dataclasses import dataclass as dataclass
-import fcntl as fcntl
 import os
 import platform
 import re
@@ -15,13 +11,7 @@ from collections import defaultdict
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, Protocol as Protocol, Sequence
-from menagerie.crawler.artifact_transactions import (
-    StagedArtifact as StagedArtifact,
-)
-from menagerie.crawler.author_dispatch import (
-    AuthorResult as AuthorResult,
-)
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, Sequence
 from menagerie.crawler.authority import (
     AuthorityDerivationError,
     EnvironmentVerificationToken,
@@ -38,9 +28,6 @@ from menagerie.crawler.authority import (
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION_V3,
     DEFAULT_FORWARD_TIMEOUT_SECONDS,
-    DEFAULT_NOTIFY_COMMAND as DEFAULT_NOTIFY_COMMAND,
-    DEFAULT_PROGRESS_MILESTONES as DEFAULT_PROGRESS_MILESTONES,
-    DEFAULT_REVIEW_CHECKPOINT_AT as DEFAULT_REVIEW_CHECKPOINT_AT,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
     OperationalEventKind,
     OperationalEventStatus,
@@ -55,12 +42,11 @@ from menagerie.crawler.metadata import (
     input_signature_matches_contract,
 )
 from menagerie.crawler.modes import classify_observed_mode_receipts
-from menagerie.crawler.models import JsonObject, LedgerPaths as LedgerPaths
+from menagerie.crawler.models import JsonObject
 from menagerie.crawler.recordio import JsonlLedger, resolve_attempt_slot, scan_jsonl
 from menagerie.crawler.reducer import (
     CanonicalReducer,
     cold_forward_policy,
-    default_ledger_paths as default_ledger_paths,
     expected_standard_asset,
     output_signature_error,
 )
@@ -81,21 +67,11 @@ from menagerie.crawler.worker_supervisor import (
 from menagerie.crawler.driver_contracts import (
     ActivatedHandoffArtifact,
     AuthorArtifact,
-    AuthorLane as AuthorLane,
-    BoundaryHook as BoundaryHook,
-    CheckerLane as CheckerLane,
-    Clock as Clock,
-    DriverError as DriverError,
     DriverIntegrationError,
     DriverPaused,
     DriverShutdown,
     EnvironmentBinding,
-    EnvironmentLane as EnvironmentLane,
-    ForwardLane as ForwardLane,
-    Notifier as Notifier,
-    UsagePauseScheduler as UsagePauseScheduler,
     WorkItem,
-    default_driver_paths as default_driver_paths,
 )
 from menagerie.crawler.driver_progress import (
     _is_sandbox_unavailable,
