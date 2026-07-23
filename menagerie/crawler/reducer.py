@@ -20,6 +20,7 @@ from menagerie.crawler.artifact_transactions import (
     derive_publication_authorization_id,
 )
 from menagerie.crawler.authority import (
+    AttemptAuthority,
     AuthorityContext,
     AuthorityDerivationError,
     DependencyCurrencyProjection,
@@ -1290,6 +1291,474 @@ class _ModelAuthorityPipeline:
         except AuthorityDerivationError as exc:
             raise ReductionError(str(exc)) from exc
         return dependency_vector_projection(vector)
+
+
+@dataclass
+class _ExecutionValidationPipeline:
+    """Validate run execution authority through ordered receipt checks."""
+
+    reducer: CanonicalReducer
+    model: Mapping[str, Any]
+    execution: Mapping[str, Any] = dataclass_field(init=False)
+    modes: Mapping[str, Any] = dataclass_field(init=False)
+    meaningful_order: tuple[str, ...] = dataclass_field(init=False)
+    meaningful: set[str] = dataclass_field(init=False)
+    per_mode: Mapping[str, Any] = dataclass_field(init=False)
+    attempts_by_id: Mapping[str, Mapping[str, Any]] = dataclass_field(init=False)
+    accepted: set[Any] = dataclass_field(init=False)
+    stable_id: Any = dataclass_field(init=False)
+    cold_policy: ColdForwardPolicy = dataclass_field(init=False)
+    signatures: dict[str, list[Any]] = dataclass_field(init=False)
+    counts: dict[str, int] = dataclass_field(init=False)
+    cold_indexes: dict[str, set[int]] = dataclass_field(init=False)
+    parent_witnesses: set[str] = dataclass_field(init=False)
+    invocations: set[bytes] = dataclass_field(init=False)
+    accepted_work_ids: set[str] = dataclass_field(init=False)
+    implementation: Mapping[str, Any] = dataclass_field(init=False)
+    evidence: Mapping[str, Any] = dataclass_field(init=False)
+    pending_proposal: Any = dataclass_field(init=False)
+    expected_manifest_digest: Any = dataclass_field(init=False)
+    expected_asset_digest: Any = dataclass_field(init=False)
+    expected_asset_id: Any = dataclass_field(init=False)
+    accepted_identities: AcceptedIdentities = dataclass_field(init=False)
+    input_contract: Mapping[str, Any] = dataclass_field(init=False)
+    accepted_in_order: list[Any] = dataclass_field(init=False)
+    authenticated_by_id: dict[str, AttemptAuthority] = dataclass_field(init=False)
+
+    def run(self) -> None:
+        """Run execution validation in canonical diagnostic order."""
+
+        if self.model.get("status", {}).get("kind") != "runs":
+            return
+        self._initialize()
+        self._authenticate_attempts()
+        self._validate_accepted_attempts()
+        self._validate_work_binding()
+        self._validate_per_mode_receipts()
+        self._validate_observed_facts()
+        self._validate_cold_forward_policy()
+
+    def _initialize(self) -> None:
+        """Initialize execution inputs and reducer-derived identities."""
+
+        self.execution = self.model.get("execution", {})
+        if not self.execution.get("current"):
+            raise ReductionError("runs requires a current execution identity")
+        if self.execution.get("network_attempted") or self.execution.get("checkpoint_accessed"):
+            raise ReductionError("policy-contaminated execution cannot earn runs")
+        self.modes = self.model.get("modes", {})
+        self.meaningful_order = tuple(str(mode) for mode in self.modes.get("meaningful_modes", []))
+        self.meaningful = set(self.meaningful_order)
+        self.per_mode = self.modes.get("per_mode_run", {})
+        if self.meaningful != set(self.per_mode):
+            raise ReductionError("per_mode_run must cover exactly every meaningful mode")
+        self.attempts_by_id = self.reducer._attempt_index()
+        self.accepted = set(self.execution.get("accepted_attempt_ids", []))
+        self.stable_id = self.model["stable_id"]
+        rung = self.model.get("source_resolution", {}).get("rung")
+        self.cold_policy = cold_forward_policy(str(self.stable_id), rung)
+        self.signatures = {mode: [] for mode in self.meaningful}
+        self.counts = {mode: 0 for mode in self.meaningful}
+        self.cold_indexes = {mode: set() for mode in self.meaningful}
+        self.parent_witnesses = set()
+        self.invocations = set()
+        self.accepted_work_ids = set()
+        self.implementation = self.model.get("implementation", {})
+        self.evidence = self.model.get("evidence", {})
+        untrusted = self.model.get("untrusted_attempt")
+        self.pending_proposal = (
+            untrusted.get("proposal") if isinstance(untrusted, Mapping) else None
+        )
+        pending_facts = (
+            self.pending_proposal.get("proposed_facts")
+            if isinstance(self.pending_proposal, Mapping)
+            and self.model.get("authored_metadata_state") == "pending"
+            else None
+        )
+        code_manifest = self.implementation.get("code_manifest")
+        self.expected_manifest_digest = (
+            stable_hash(code_manifest)
+            if isinstance(code_manifest, list) and code_manifest
+            else None
+        )
+        external_metadata = (
+            pending_facts.get("external_metadata")
+            if isinstance(pending_facts, Mapping)
+            else self.model.get("external_metadata", {})
+        )
+        modality = (
+            external_metadata.get("modality") if isinstance(external_metadata, Mapping) else None
+        )
+        expected_asset = (
+            expected_standard_asset(modality)
+            if self.implementation.get("recipe_type") == "declarative-library"
+            else None
+        )
+        self.expected_asset_digest = (
+            expected_asset["sha256"] if expected_asset is not None else None
+        )
+        self.expected_asset_id = expected_asset["asset_id"] if expected_asset is not None else None
+        try:
+            self.accepted_identities = recompute_accepted_identities(
+                pending_facts if isinstance(pending_facts, Mapping) else _model_facts(self.model),
+                checker_prompt_hash=_checker_prompt_hash(),
+                checker_model=str(self.model.get("accuracy_gate", {}).get("checker_model")),
+                checker_version=str(self.model.get("accuracy_gate", {}).get("checker_version")),
+                schema_version=MODEL_SCHEMA_VERSION_V3,
+            )
+        except MetadataValidationError as exc:
+            raise ReductionError(str(exc)) from exc
+        self.input_contract = self.model.get("input_contract", {})
+
+    def _authenticate_attempts(self) -> None:
+        """Authenticate the unique ordered accepted-attempt list."""
+
+        self.accepted_in_order = self.execution.get("accepted_attempt_ids", [])
+        if not isinstance(self.accepted_in_order, list) or len(self.accepted_in_order) != len(
+            self.accepted
+        ):
+            raise ReductionError("accepted execution attempt IDs must be a unique ordered list")
+        try:
+            authenticated_attempts = authenticate_accepted_attempts(
+                self.accepted_in_order,
+                self.reducer._attempts.records,
+                stable_id=str(self.stable_id),
+                execution_identity=str(self.execution.get("execution_identity")),
+            )
+        except AuthorityDerivationError as exc:
+            raise ReductionError(str(exc)) from exc
+        self.authenticated_by_id = {
+            authority.attempt_id: authority for authority in authenticated_attempts
+        }
+
+    def _validate_accepted_attempts(self) -> None:
+        """Validate every authenticated attempt and accumulate cold-run facts."""
+
+        for attempt_id in self.accepted:
+            self._validate_accepted_attempt(attempt_id)
+
+    def _validate_accepted_attempt(self, attempt_id: Any) -> None:
+        """Validate one accepted attempt in canonical check order.
+
+        Parameters
+        ----------
+        attempt_id:
+            Accepted attempt identity selected from the execution record.
+        """
+
+        attempt = self.attempts_by_id.get(attempt_id)
+        if attempt is None:
+            raise ReductionError("accepted execution attempt is missing")
+        authority = self.authenticated_by_id[attempt_id]
+        self.accepted_work_ids.add(authority.work_id)
+        identities = attempt.get("identities", {})
+        receipt = attempt.get("worker_receipt", {})
+        policy = attempt.get("policy_observation", {})
+        self._validate_clean_attempt_policy(policy)
+
+        expected_observed_manifest = self.expected_manifest_digest
+        raw_receipt = attempt.get("raw_award_receipt")
+        if expected_observed_manifest is None and isinstance(raw_receipt, Mapping):
+            expected_observed_manifest = raw_receipt.get("code_manifest_identity")
+        self._validate_attempt_identities(
+            identities,
+            receipt,
+            expected_observed_manifest=expected_observed_manifest,
+        )
+        self._validate_and_record_attempt_completion(attempt, receipt)
+
+    def _validate_clean_attempt_policy(self, policy: Any) -> None:
+        """Require one accepted attempt's clean policy observation."""
+
+        if not isinstance(policy, Mapping) or any(
+            policy.get(key)
+            for key in (
+                "network_attempted",
+                "checkpoint_or_weight_read_attempted",
+                "cache_read_attempted",
+                "write_outside_scratch_attempted",
+                "credentials_present",
+                "torchlens_import_attempted",
+            )
+        ):
+            raise ReductionError("accepted attempt lacks a clean successful worker receipt")
+
+    def _validate_attempt_identities(
+        self,
+        identities: Any,
+        receipt: Any,
+        *,
+        expected_observed_manifest: Any,
+    ) -> None:
+        """Require one accepted attempt's current model and input identities.
+
+        Parameters
+        ----------
+        identities:
+            Attempt identity projection.
+        receipt:
+            Worker-owned receipt projection.
+        expected_observed_manifest:
+            Reducer-derived code-manifest identity.
+        """
+
+        observed_asset_pair = (
+            receipt.get("observed_input_asset_sha256"),
+            receipt.get("input_asset"),
+        )
+        if (
+            identities.get("source") != self.accepted_identities.source
+            or identities.get("recipe") != self.accepted_identities.recipe
+            or identities.get("recipe") != self.implementation.get("recipe_revision")
+            or identities.get("evidence") != self.accepted_identities.evidence
+            or identities.get("evidence") != self.evidence.get("evidence_identity")
+            or identities.get("environment") != self.execution.get("env_generation")
+            or identities.get("checker_prompt") != _checker_prompt_hash()
+            or receipt.get("observed_recipe_revision") != self.accepted_identities.recipe
+            or receipt.get("observed_adapter_sha256") != self.implementation.get("code_sha256")
+            or receipt.get("observed_code_manifest_sha256") != expected_observed_manifest
+            or observed_asset_pair
+            not in {(None, None), (self.expected_asset_digest, self.expected_asset_id)}
+        ):
+            raise ReductionError("accepted attempt identities are stale for the current model")
+
+    def _validate_and_record_attempt_completion(
+        self,
+        attempt: Mapping[str, Any],
+        receipt: Any,
+    ) -> None:
+        """Validate and accumulate one accepted attempt's completion receipt.
+
+        Parameters
+        ----------
+        attempt:
+            Authenticated current-v3 attempt.
+        receipt:
+            Worker-owned receipt projection.
+        """
+
+        mode = str(attempt.get("mode"))
+        observation = attempt.get("supervisor_observation", {})
+        signature = receipt.get("output_signature")
+        retries = attempt.get("retries", {})
+        stage_attempt = retries.get("stage_attempt")
+        cold_index = stage_attempt - 1 if isinstance(stage_attempt, int) else -1
+        mode_index = self.meaningful_order.index(mode) if mode in self.meaningful_order else -1
+        expected_attempt_id = stable_hash(
+            {
+                "work_id": attempt.get("work_id"),
+                "execution_identity": self.execution.get("execution_identity"),
+                "cold_index": cold_index,
+                "mode": mode,
+            }
+        )
+        completion_line = observation.get("stdout_completion_line")
+        invocation = attempt.get("invocation", {})
+        argv = invocation.get("argv") if isinstance(invocation, Mapping) else None
+        if (
+            mode not in self.meaningful
+            or attempt.get("result") != "succeeded"
+            or observation.get("exit_code") != 0
+            or observation.get("signal") is not None
+            or not receipt.get("constructor_started")
+            or not receipt.get("constructor_completed")
+            or not receipt.get("input_completed")
+            or not receipt.get("forward_started")
+            or not receipt.get("forward_completed")
+            or not input_signature_matches_contract(
+                receipt.get("input_signature"), self.input_contract
+            )
+            or output_signature_error(signature) is not None
+            or (
+                self.cold_policy.required_cold_forwards > 1
+                and (
+                    cold_index < 0
+                    or attempt.get("attempt_no")
+                    != cold_index * len(self.meaningful_order) + mode_index + 1
+                    or attempt.get("attempt_id") != expected_attempt_id
+                    or not isinstance(completion_line, str)
+                    or not isinstance(argv, list)
+                    or any(not isinstance(value, str) for value in argv)
+                )
+            )
+        ):
+            raise ReductionError("accepted attempt lacks a complete zero-exit receipt")
+        self._record_attempt_completion(
+            mode=mode,
+            signature=signature,
+            cold_index=cold_index,
+            completion_line=completion_line,
+            argv=argv,
+        )
+
+    def _record_attempt_completion(
+        self,
+        *,
+        mode: str,
+        signature: Any,
+        cold_index: int,
+        completion_line: Any,
+        argv: Any,
+    ) -> None:
+        """Accumulate one valid completion and enforce unique cold witnesses.
+
+        Parameters
+        ----------
+        mode:
+            Meaningful execution mode.
+        signature:
+            Validated output signature.
+        cold_index:
+            Reducer-derived cold-forward index.
+        completion_line:
+            Parent-process witness from the supervisor.
+        argv:
+            Exact isolated invocation arguments.
+        """
+
+        self.counts[mode] += 1
+        self.signatures[mode].append(signature)
+        if self.cold_policy.required_cold_forwards > 1:
+            self.cold_indexes[mode].add(cold_index)
+            if completion_line in self.parent_witnesses:
+                raise ReductionError("accepted cold forwards reuse a parent process witness")
+            self.parent_witnesses.add(completion_line)
+            invocation_bytes = canonical_json_bytes(argv)
+            if invocation_bytes in self.invocations:
+                raise ReductionError("accepted cold forwards reuse a scratch/request invocation")
+            self.invocations.add(invocation_bytes)
+        else:
+            self.cold_indexes[mode].add(0)
+
+    def _validate_work_binding(self) -> None:
+        """Validate accepted attempts against proposal or anti-slop authority."""
+
+        if len(self.accepted_work_ids) != 1:
+            raise ReductionError("accepted attempts span multiple proposal work identities")
+        if isinstance(self.pending_proposal, Mapping):
+            if str(self.pending_proposal.get("work_id")) not in self.accepted_work_ids:
+                raise ReductionError("pending run proposal is stale for the accepted work identity")
+            return
+        family_variant = str(self.stable_id) in self.reducer.intake_variant_bindings
+        if family_variant:
+            representative_id = str(
+                self.model.get("identity", {}).get("family_representative_id", "")
+            )
+            representative = self.reducer._validation_current_records().get(representative_id)
+            if not isinstance(representative, Mapping) or (
+                self.model.get("accuracy_gate") != representative.get("accuracy_gate")
+            ):
+                raise ReductionError(
+                    "family variant anti-slop authority is not its current representative"
+                )
+            return
+        rung_gate = self.reducer._gate_item(
+            self.model.get("accuracy_gate", {}).get("gate_id"), str(self.stable_id)
+        )
+        if rung_gate is None or str(rung_gate[1].get("work_id")) not in self.accepted_work_ids:
+            raise ReductionError("anti-slop/rung gate is stale for the accepted work identity")
+
+    def _validate_per_mode_receipts(self) -> None:
+        """Validate each meaningful mode's selected worker receipt."""
+
+        for mode in self.meaningful:
+            reference = self.per_mode[mode]
+            attempt_id = reference.get("attempt_id")
+            attempt = self.attempts_by_id.get(attempt_id)
+            if attempt_id not in self.accepted or attempt is None:
+                raise ReductionError(f"mode {mode} references an unaccepted/missing attempt")
+            receipt = attempt["worker_receipt"]
+            policy = attempt["policy_observation"]
+            if (
+                attempt["stable_id"] != self.stable_id
+                or attempt["stage"] != "forward"
+                or attempt["mode"] != mode
+                or attempt["result"] != "succeeded"
+                or reference.get("status") != "succeeded"
+                or attempt["identities"]["execution"] != self.execution.get("execution_identity")
+                or not receipt["present"]
+                or not receipt["constructor_started"]
+                or not receipt["constructor_completed"]
+                or not receipt["input_completed"]
+                or not receipt["forward_started"]
+                or not receipt["forward_completed"]
+                or not input_signature_matches_contract(
+                    receipt.get("input_signature"), self.input_contract
+                )
+                or receipt["mode"] != mode
+                or any(
+                    policy[key]
+                    for key in (
+                        "network_attempted",
+                        "checkpoint_or_weight_read_attempted",
+                        "cache_read_attempted",
+                        "write_outside_scratch_attempted",
+                        "credentials_present",
+                        "torchlens_import_attempted",
+                    )
+                )
+            ):
+                raise ReductionError(f"mode {mode} lacks a clean successful worker receipt")
+
+    def _validate_observed_facts(self) -> None:
+        """Validate model observations against the designated worker receipt."""
+
+        meaningful_order = self.model.get("modes", {}).get("meaningful_modes", [])
+        if not isinstance(meaningful_order, list) or not meaningful_order:
+            raise ReductionError("observed facts require an ordered meaningful-mode set")
+        measurement_mode = str(meaningful_order[0])
+        measurement_reference = self.per_mode.get(measurement_mode, {})
+        measurement_attempt = self.attempts_by_id.get(measurement_reference.get("attempt_id"))
+        if measurement_attempt is None:
+            raise ReductionError("observed facts lack their designated measurement attempt")
+        measurement_receipt = measurement_attempt.get("worker_receipt", {})
+        measurement_supervisor = measurement_attempt.get("supervisor_observation", {})
+        observed = self.model.get("observed", {})
+        receipt_observations = {
+            "parameter_count_total": measurement_receipt.get("parameter_count_total"),
+            "parameter_count_trainable": measurement_receipt.get("parameter_count_trainable"),
+            "native_framework": measurement_receipt.get("native_framework"),
+            "delegated_method": measurement_receipt.get("delegated_method"),
+            "output_signature": measurement_receipt.get("output_signature"),
+            "input_kind": measurement_receipt.get("input_kind"),
+            "input_asset": measurement_receipt.get("input_asset"),
+            "input_note": measurement_receipt.get("input_note"),
+            "constructor_seconds": measurement_receipt.get("constructor_seconds"),
+            "forward_seconds": measurement_receipt.get("forward_seconds"),
+            "peak_rss_bytes": measurement_supervisor.get("peak_rss_bytes"),
+            "measurement_attempt_ids": self.accepted_in_order,
+        }
+        if not isinstance(observed, Mapping) or any(
+            observed.get(field) != value for field, value in receipt_observations.items()
+        ):
+            raise ReductionError("observed runtime facts contradict accepted worker receipts")
+        snippet = "driver-owned isolated forward"
+        if observed.get("snippet") != snippet or observed.get("snippet_sha256") != stable_hash(
+            snippet
+        ):
+            raise ReductionError("observed snippet is not the driver-owned mechanical recipe")
+
+    def _validate_cold_forward_policy(self) -> None:
+        """Validate confirmation policy, cold indexes, and deterministic outputs."""
+
+        confirmation_policy = self.execution.get("confirmation_policy")
+        if confirmation_policy != self.cold_policy.confirmation_policy:
+            raise ReductionError("execution confirmation policy contradicts reducer policy")
+        expected_indexes = set(range(self.cold_policy.required_cold_forwards))
+        if any(
+            self.counts[mode] != self.cold_policy.required_cold_forwards
+            or self.cold_indexes[mode] != expected_indexes
+            for mode in self.meaningful
+        ):
+            raise ReductionError("accepted attempts do not satisfy reducer cold-forward policy")
+        if any(
+            any(
+                canonical_json_bytes(signature) != canonical_json_bytes(mode_signatures[0])
+                for signature in mode_signatures[1:]
+            )
+            for mode_signatures in self.signatures.values()
+        ):
+            raise ReductionError("non-deterministic cold-forward output signature")
 
 
 class CanonicalReducer:
@@ -2757,308 +3226,7 @@ class CanonicalReducer:
             Proposed model revision.
         """
 
-        if model.get("status", {}).get("kind") != "runs":
-            return
-        execution = model.get("execution", {})
-        if not execution.get("current"):
-            raise ReductionError("runs requires a current execution identity")
-        if execution.get("network_attempted") or execution.get("checkpoint_accessed"):
-            raise ReductionError("policy-contaminated execution cannot earn runs")
-        modes = model.get("modes", {})
-        meaningful_order = tuple(str(mode) for mode in modes.get("meaningful_modes", []))
-        meaningful = set(meaningful_order)
-        per_mode = modes.get("per_mode_run", {})
-        if meaningful != set(per_mode):
-            raise ReductionError("per_mode_run must cover exactly every meaningful mode")
-        attempts_by_id = self._attempt_index()
-        accepted = set(execution.get("accepted_attempt_ids", []))
-        stable_id = model["stable_id"]
-        rung = model.get("source_resolution", {}).get("rung")
-        cold_policy = cold_forward_policy(str(stable_id), rung)
-        signatures: dict[str, list[Any]] = {mode: [] for mode in meaningful}
-        counts: dict[str, int] = {mode: 0 for mode in meaningful}
-        cold_indexes: dict[str, set[int]] = {mode: set() for mode in meaningful}
-        parent_witnesses: set[str] = set()
-        invocations: set[bytes] = set()
-        accepted_work_ids: set[str] = set()
-        implementation = model.get("implementation", {})
-        evidence = model.get("evidence", {})
-        untrusted = model.get("untrusted_attempt")
-        pending_proposal = untrusted.get("proposal") if isinstance(untrusted, Mapping) else None
-        pending_facts = (
-            pending_proposal.get("proposed_facts")
-            if isinstance(pending_proposal, Mapping)
-            and model.get("authored_metadata_state") == "pending"
-            else None
-        )
-        code_manifest = implementation.get("code_manifest")
-        expected_manifest_digest = (
-            stable_hash(code_manifest)
-            if isinstance(code_manifest, list) and code_manifest
-            else None
-        )
-        external_metadata = (
-            pending_facts.get("external_metadata")
-            if isinstance(pending_facts, Mapping)
-            else model.get("external_metadata", {})
-        )
-        modality = (
-            external_metadata.get("modality") if isinstance(external_metadata, Mapping) else None
-        )
-        expected_asset = (
-            expected_standard_asset(modality)
-            if implementation.get("recipe_type") == "declarative-library"
-            else None
-        )
-        expected_asset_digest = expected_asset["sha256"] if expected_asset is not None else None
-        expected_asset_id = expected_asset["asset_id"] if expected_asset is not None else None
-        try:
-            accepted_identities = recompute_accepted_identities(
-                pending_facts if isinstance(pending_facts, Mapping) else _model_facts(model),
-                checker_prompt_hash=_checker_prompt_hash(),
-                checker_model=str(model.get("accuracy_gate", {}).get("checker_model")),
-                checker_version=str(model.get("accuracy_gate", {}).get("checker_version")),
-                schema_version=MODEL_SCHEMA_VERSION_V3,
-            )
-        except MetadataValidationError as exc:
-            raise ReductionError(str(exc)) from exc
-        input_contract = model.get("input_contract", {})
-        accepted_in_order = execution.get("accepted_attempt_ids", [])
-        if not isinstance(accepted_in_order, list) or len(accepted_in_order) != len(accepted):
-            raise ReductionError("accepted execution attempt IDs must be a unique ordered list")
-        try:
-            authenticated_attempts = authenticate_accepted_attempts(
-                accepted_in_order,
-                self._attempts.records,
-                stable_id=str(stable_id),
-                execution_identity=str(execution.get("execution_identity")),
-            )
-        except AuthorityDerivationError as exc:
-            raise ReductionError(str(exc)) from exc
-        authenticated_by_id = {
-            authority.attempt_id: authority for authority in authenticated_attempts
-        }
-        for attempt_id in accepted:
-            attempt = attempts_by_id.get(attempt_id)
-            if attempt is None:
-                raise ReductionError("accepted execution attempt is missing")
-            authority = authenticated_by_id[attempt_id]
-            accepted_work_ids.add(authority.work_id)
-            identities = attempt.get("identities", {})
-            receipt = attempt.get("worker_receipt", {})
-            policy = attempt.get("policy_observation", {})
-            if not isinstance(policy, Mapping) or any(
-                policy.get(key)
-                for key in (
-                    "network_attempted",
-                    "checkpoint_or_weight_read_attempted",
-                    "cache_read_attempted",
-                    "write_outside_scratch_attempted",
-                    "credentials_present",
-                    "torchlens_import_attempted",
-                )
-            ):
-                raise ReductionError("accepted attempt lacks a clean successful worker receipt")
-            observed_asset_pair = (
-                receipt.get("observed_input_asset_sha256"),
-                receipt.get("input_asset"),
-            )
-            raw_receipt = attempt.get("raw_award_receipt")
-            expected_observed_manifest = expected_manifest_digest
-            if expected_observed_manifest is None and isinstance(raw_receipt, Mapping):
-                expected_observed_manifest = raw_receipt.get("code_manifest_identity")
-            if (
-                identities.get("source") != accepted_identities.source
-                or identities.get("recipe") != accepted_identities.recipe
-                or identities.get("recipe") != implementation.get("recipe_revision")
-                or identities.get("evidence") != accepted_identities.evidence
-                or identities.get("evidence") != evidence.get("evidence_identity")
-                or identities.get("environment") != execution.get("env_generation")
-                or identities.get("checker_prompt") != _checker_prompt_hash()
-                or receipt.get("observed_recipe_revision") != accepted_identities.recipe
-                or receipt.get("observed_adapter_sha256") != implementation.get("code_sha256")
-                or receipt.get("observed_code_manifest_sha256") != expected_observed_manifest
-                or observed_asset_pair
-                not in {(None, None), (expected_asset_digest, expected_asset_id)}
-            ):
-                raise ReductionError("accepted attempt identities are stale for the current model")
-            mode = str(attempt.get("mode"))
-            observation = attempt.get("supervisor_observation", {})
-            signature = receipt.get("output_signature")
-            retries = attempt.get("retries", {})
-            stage_attempt = retries.get("stage_attempt")
-            cold_index = stage_attempt - 1 if isinstance(stage_attempt, int) else -1
-            mode_index = meaningful_order.index(mode) if mode in meaningful_order else -1
-            expected_attempt_id = stable_hash(
-                {
-                    "work_id": attempt.get("work_id"),
-                    "execution_identity": execution.get("execution_identity"),
-                    "cold_index": cold_index,
-                    "mode": mode,
-                }
-            )
-            completion_line = observation.get("stdout_completion_line")
-            invocation = attempt.get("invocation", {})
-            argv = invocation.get("argv") if isinstance(invocation, Mapping) else None
-            if (
-                mode not in meaningful
-                or attempt.get("result") != "succeeded"
-                or observation.get("exit_code") != 0
-                or observation.get("signal") is not None
-                or not receipt.get("constructor_started")
-                or not receipt.get("constructor_completed")
-                or not receipt.get("input_completed")
-                or not receipt.get("forward_started")
-                or not receipt.get("forward_completed")
-                or not input_signature_matches_contract(
-                    receipt.get("input_signature"), input_contract
-                )
-                or output_signature_error(signature) is not None
-                or (
-                    cold_policy.required_cold_forwards > 1
-                    and (
-                        cold_index < 0
-                        or attempt.get("attempt_no")
-                        != cold_index * len(meaningful_order) + mode_index + 1
-                        or attempt.get("attempt_id") != expected_attempt_id
-                        or not isinstance(completion_line, str)
-                        or not isinstance(argv, list)
-                        or any(not isinstance(value, str) for value in argv)
-                    )
-                )
-            ):
-                raise ReductionError("accepted attempt lacks a complete zero-exit receipt")
-            counts[mode] += 1
-            signatures[mode].append(signature)
-            if cold_policy.required_cold_forwards > 1:
-                cold_indexes[mode].add(cold_index)
-                if completion_line in parent_witnesses:
-                    raise ReductionError("accepted cold forwards reuse a parent process witness")
-                parent_witnesses.add(completion_line)
-                invocation_bytes = canonical_json_bytes(argv)
-                if invocation_bytes in invocations:
-                    raise ReductionError(
-                        "accepted cold forwards reuse a scratch/request invocation"
-                    )
-                invocations.add(invocation_bytes)
-            else:
-                cold_indexes[mode].add(0)
-        if len(accepted_work_ids) != 1:
-            raise ReductionError("accepted attempts span multiple proposal work identities")
-        if isinstance(pending_proposal, Mapping):
-            if str(pending_proposal.get("work_id")) not in accepted_work_ids:
-                raise ReductionError("pending run proposal is stale for the accepted work identity")
-        else:
-            family_variant = str(stable_id) in self.intake_variant_bindings
-            if family_variant:
-                representative_id = str(
-                    model.get("identity", {}).get("family_representative_id", "")
-                )
-                representative = self._validation_current_records().get(representative_id)
-                if not isinstance(representative, Mapping) or (
-                    model.get("accuracy_gate") != representative.get("accuracy_gate")
-                ):
-                    raise ReductionError(
-                        "family variant anti-slop authority is not its current representative"
-                    )
-            else:
-                rung_gate = self._gate_item(
-                    model.get("accuracy_gate", {}).get("gate_id"), str(stable_id)
-                )
-                if rung_gate is None or str(rung_gate[1].get("work_id")) not in accepted_work_ids:
-                    raise ReductionError(
-                        "anti-slop/rung gate is stale for the accepted work identity"
-                    )
-        for mode in meaningful:
-            reference = per_mode[mode]
-            attempt_id = reference.get("attempt_id")
-            attempt = attempts_by_id.get(attempt_id)
-            if attempt_id not in accepted or attempt is None:
-                raise ReductionError(f"mode {mode} references an unaccepted/missing attempt")
-            receipt = attempt["worker_receipt"]
-            policy = attempt["policy_observation"]
-            if (
-                attempt["stable_id"] != stable_id
-                or attempt["stage"] != "forward"
-                or attempt["mode"] != mode
-                or attempt["result"] != "succeeded"
-                or reference.get("status") != "succeeded"
-                or attempt["identities"]["execution"] != execution.get("execution_identity")
-                or not receipt["present"]
-                or not receipt["constructor_started"]
-                or not receipt["constructor_completed"]
-                or not receipt["input_completed"]
-                or not receipt["forward_started"]
-                or not receipt["forward_completed"]
-                or not input_signature_matches_contract(
-                    receipt.get("input_signature"), input_contract
-                )
-                or receipt["mode"] != mode
-                or any(
-                    policy[key]
-                    for key in (
-                        "network_attempted",
-                        "checkpoint_or_weight_read_attempted",
-                        "cache_read_attempted",
-                        "write_outside_scratch_attempted",
-                        "credentials_present",
-                        "torchlens_import_attempted",
-                    )
-                )
-            ):
-                raise ReductionError(f"mode {mode} lacks a clean successful worker receipt")
-        meaningful_order = model.get("modes", {}).get("meaningful_modes", [])
-        if not isinstance(meaningful_order, list) or not meaningful_order:
-            raise ReductionError("observed facts require an ordered meaningful-mode set")
-        measurement_mode = str(meaningful_order[0])
-        measurement_reference = per_mode.get(measurement_mode, {})
-        measurement_attempt = attempts_by_id.get(measurement_reference.get("attempt_id"))
-        if measurement_attempt is None:
-            raise ReductionError("observed facts lack their designated measurement attempt")
-        measurement_receipt = measurement_attempt.get("worker_receipt", {})
-        measurement_supervisor = measurement_attempt.get("supervisor_observation", {})
-        observed = model.get("observed", {})
-        receipt_observations = {
-            "parameter_count_total": measurement_receipt.get("parameter_count_total"),
-            "parameter_count_trainable": measurement_receipt.get("parameter_count_trainable"),
-            "native_framework": measurement_receipt.get("native_framework"),
-            "delegated_method": measurement_receipt.get("delegated_method"),
-            "output_signature": measurement_receipt.get("output_signature"),
-            "input_kind": measurement_receipt.get("input_kind"),
-            "input_asset": measurement_receipt.get("input_asset"),
-            "input_note": measurement_receipt.get("input_note"),
-            "constructor_seconds": measurement_receipt.get("constructor_seconds"),
-            "forward_seconds": measurement_receipt.get("forward_seconds"),
-            "peak_rss_bytes": measurement_supervisor.get("peak_rss_bytes"),
-            "measurement_attempt_ids": accepted_in_order,
-        }
-        if not isinstance(observed, Mapping) or any(
-            observed.get(field) != value for field, value in receipt_observations.items()
-        ):
-            raise ReductionError("observed runtime facts contradict accepted worker receipts")
-        snippet = "driver-owned isolated forward"
-        if observed.get("snippet") != snippet or observed.get("snippet_sha256") != stable_hash(
-            snippet
-        ):
-            raise ReductionError("observed snippet is not the driver-owned mechanical recipe")
-        confirmation_policy = execution.get("confirmation_policy")
-        if confirmation_policy != cold_policy.confirmation_policy:
-            raise ReductionError("execution confirmation policy contradicts reducer policy")
-        expected_indexes = set(range(cold_policy.required_cold_forwards))
-        if any(
-            counts[mode] != cold_policy.required_cold_forwards
-            or cold_indexes[mode] != expected_indexes
-            for mode in meaningful
-        ):
-            raise ReductionError("accepted attempts do not satisfy reducer cold-forward policy")
-        if any(
-            any(
-                canonical_json_bytes(signature) != canonical_json_bytes(mode_signatures[0])
-                for signature in mode_signatures[1:]
-            )
-            for mode_signatures in signatures.values()
-        ):
-            raise ReductionError("non-deterministic cold-forward output signature")
+        _ExecutionValidationPipeline(self, model).run()
 
     def _validate_deferral(self, model: Mapping[str, Any]) -> None:
         """Require positive source/probe evidence for either closed platform deferral.
