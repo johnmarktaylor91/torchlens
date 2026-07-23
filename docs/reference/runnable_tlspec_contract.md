@@ -649,7 +649,19 @@ followed by a `gc.collect()` before `save(level="runnable")` nondeterministicall
 `unsupported_tensor_constant` (two same-shape+dtype BN params, identity chain dead) or
 `state_unexpected_key` (never-forward-used persistent buffers dropped from the declared
 universe) -- an honest-save over-refusal, never a wrong verdict, now closed. A
-genuinely-unmatched tensor constant still refuses `unsupported_tensor_constant`.
+genuinely-unmatched tensor constant still refuses `unsupported_tensor_constant`. r77 F2
+closes the NON-TENSOR-STATE leg of the same class: the capture-boundary value snapshot is
+`None` by design for a model whose `state_dict()` carries any non-tensor value
+(`get_extra_state()`, packed/quantized entries), so the dead lane now derives the
+persistent-buffer NAME universe (plus per-slot geometry) from a dedicated capture-time
+record that walks `state_dict()` names against `named_parameters`/`named_buffers` and
+survives extra state -- the dead save declares EXACTLY the live lane's universe, and an
+honest tensor-only `load_state_dict` binds identically in both lanes. The embedded-state
+ceiling is untouched: an extra-state model still cannot report `verified` (missing
+comparison basis, coherent in both lanes). If NEITHER capture-time record exists
+(`state_dict()` not a mapping at the capture boundary), the dead save refuses loudly and
+typed (`TorchLensIOError`, mirroring the `include_weights=True` lane) -- never a silent
+under-declaration.
 
 1. A computational group lacks a key, uses another ref schema, requests custom/import code, or is
    outside the stock resolver protocol.

@@ -16,6 +16,7 @@ import numpy as np
 import torch
 
 from .. import __version__ as TORCHLENS_VERSION
+from . import TorchLensIOError
 from .._runnable_state import runnable_tensor_byte_digest
 from ..utils._callable_safety import _STORAGE_UNSAFE_NAMES
 from ..data_classes._state_adapter import state_items
@@ -1243,6 +1244,14 @@ def _add_persistent_buffer_slot_drafts(
             for name, value in state.items()
             if name not in parameter_names and name in buffers and isinstance(value, torch.Tensor)
         )
+        geometry_by_name: dict[str, tuple[tuple[int, ...], str, Any]] = {
+            name: (
+                tuple(int(dim) for dim in cast(torch.Tensor, state[name]).shape),
+                str(cast(torch.Tensor, state[name]).dtype),
+                cast(torch.Tensor, state[name]).device,
+            )
+            for name in buffer_names
+        }
         names_by_object: dict[int, list[str]] = defaultdict(list)
         for name in buffer_names:
             names_by_object[id(buffers[name])].append(name)
@@ -1254,21 +1263,58 @@ def _add_persistent_buffer_slot_drafts(
     else:
         # r75 F2 capture-time fallback: the model died before the save.
         snapshot = getattr(trace, "_runnable_capture_state", None)
-        if not isinstance(snapshot, Mapping):
-            return
-        state = snapshot
-        parameter_names = set()
-        param_logs = getattr(trace, "param_logs", None)
-        for param_log in tuple(param_logs) if param_logs is not None else ():
-            address = getattr(param_log, "address", None)
-            if address is not None:
-                parameter_names.add(str(address))
-            for alias_address in getattr(param_log, "all_addresses", ()) or ():
-                parameter_names.add(str(alias_address))
-        # ``state_dict`` contains exactly parameters + persistent buffers, and the
-        # snapshot admitted tensor-only values, so the complement IS the persistent
-        # buffer set.
-        buffer_names = tuple(name for name in state if name not in parameter_names)
+        if isinstance(snapshot, Mapping):
+            parameter_names = set()
+            param_logs = getattr(trace, "param_logs", None)
+            for param_log in tuple(param_logs) if param_logs is not None else ():
+                address = getattr(param_log, "address", None)
+                if address is not None:
+                    parameter_names.add(str(address))
+                for alias_address in getattr(param_log, "all_addresses", ()) or ():
+                    parameter_names.add(str(alias_address))
+            # ``state_dict`` contains exactly parameters + persistent buffers, and the
+            # snapshot admitted tensor-only values, so the complement IS the persistent
+            # buffer set.
+            buffer_names = tuple(name for name in snapshot if name not in parameter_names)
+            geometry_by_name = {
+                name: (
+                    tuple(int(dim) for dim in cast(torch.Tensor, snapshot[name]).shape),
+                    str(cast(torch.Tensor, snapshot[name]).dtype),
+                    cast(torch.Tensor, snapshot[name]).device,
+                )
+                for name in buffer_names
+            }
+        else:
+            # r77 F2: a NON-TENSOR-STATE model (``get_extra_state()``, packed or
+            # quantized entries) has NO value snapshot by design; the persistent-
+            # buffer NAME universe must still equal the live lane's, so it comes
+            # from the capture-time universe record (which walks ``state_dict``
+            # names against ``named_parameters``/``named_buffers`` and survives
+            # extra state). A silent return here DROPPED never-forward-used
+            # buffers (``num_batches_tracked``) and refused honest binds with
+            # ``state_unexpected_key``.
+            universe = getattr(trace, "_runnable_persistent_buffer_universe", None)
+            if not isinstance(universe, Mapping):
+                # No capture-time record either (``state_dict()`` failed at the
+                # capture boundary): the universe is UNKNOWN. Refuse loudly and
+                # typed -- mirroring the include_weights=True lane -- never
+                # silently under-declare.
+                raise TorchLensIOError(
+                    "Runnable save requires the persistent-buffer state universe, "
+                    "but the source model is no longer alive and no capture-time "
+                    "state records are available. The declared slot universe "
+                    "cannot be proven complete, so the runnable save is refused. "
+                    "Ordinary analysis save levels remain available."
+                )
+            buffer_names = tuple(str(name) for name in universe)
+            geometry_by_name = {
+                str(name): (
+                    tuple(int(dim) for dim in record["shape"]),
+                    str(record["dtype"]),
+                    record["device"],
+                )
+                for name, record in universe.items()
+            }
         topology = getattr(trace, "_runnable_state_alias_topology", None)
         topology_groups = (topology.get("groups") if isinstance(topology, Mapping) else None) or {}
         buffer_name_set = set(buffer_names)
@@ -1303,15 +1349,15 @@ def _add_persistent_buffer_slot_drafts(
                 alias_group=alias_group,
             )
             continue
-        value = cast(torch.Tensor, state[name])
+        shape, dtype, device = geometry_by_name[name]
         module_path, separator, leaf_name = name.rpartition(".")
-        device_type, device_index = _device_parts(value.device)
+        device_type, device_index = _device_parts(device)
         slot_id = f"state:{name}"
         drafts[slot_id] = _SlotDraft(
             slot_id=slot_id,
             role=TensorSlotRole.BUFFER,
-            shape=tuple(int(dim) for dim in value.shape),
-            dtype=str(value.dtype),
+            shape=shape,
+            dtype=dtype,
             device_type=device_type,
             device_index=device_index,
             state_binding=StateSlotBinding(
