@@ -33,7 +33,6 @@ from ... import _state
 from ...constants import get_orig_torch_funcs
 from ...data_classes.func_call_location import FuncCallLocation
 from ._tl import (
-    get_buffer_address,
     get_tensor_label,
     is_decorated_function,
     mark_decorated_function,
@@ -66,6 +65,7 @@ from .ops import (
 from .buffer_writes import (
     record_op_buffer_writes,
     resolve_registered_buffer_address,
+    session_validated_buffer_address,
     snapshot_buffer_args,
 )
 from .escape_detection import (
@@ -1041,7 +1041,12 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         for t in arg_tensorlike:
             if isinstance(t, torch.nn.Parameter):
                 continue
-            address = get_buffer_address(t)
+            # r81: the first-encounter registration gate must not trust the raw
+            # static stamp (stale cross-capture stamps and input-rebound storage
+            # would be re-rooted as internal state); require current-session
+            # object + storage identity, with the storage-anchored tracker as
+            # the alias fallback.
+            address = session_validated_buffer_address(trace, t)
             if address is None:
                 address = resolve_registered_buffer_address(trace, t)
             if address is not None and get_tensor_label(t) is None:

@@ -1341,6 +1341,7 @@ class Trace(
         "_param_log_by_pid": FieldPolicy.DROP,
         "_session_param_inventory": FieldPolicy.DROP,
         "_session_buffer_inventory": FieldPolicy.DROP,
+        "_session_buffer_identity": FieldPolicy.DROP,
         "backward_root_grad_fn_object_ids": FieldPolicy.KEEP,
         "backward_durations": FieldPolicy.KEEP,
         "num_backward_passes": FieldPolicy.KEEP,
@@ -1691,6 +1692,12 @@ class Trace(
         # ``_cleanup_model_session``. Never portable.
         self._session_param_inventory: list[Any] = []
         self._session_buffer_inventory: list[Any] = []
+        # r81: id(tensor) -> _SessionBufferStamp identity records for every
+        # buffer stamp written this session -- the buffer-rung storage-identity
+        # belt (param-rung ``_param_ref is value`` parity). Session-scoped
+        # strong refs (tensor + stamp-time storage keeper); emptied by
+        # ``_cleanup_model_session``. Never portable.
+        self._session_buffer_identity: dict[int, Any] = {}
         self.backward_root_grad_fn_object_ids: list[int] = []
         self.backward_durations: list[Duration] = []
         self.num_backward_passes: int = 0
