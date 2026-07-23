@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 from copy import deepcopy
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field as dataclass_field, replace
 from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any, Iterable, Mapping, Optional, Sequence, Union
@@ -72,6 +72,7 @@ from menagerie.crawler.family_templates import (
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.intake import legacy_requires_fidelity_audit
 from menagerie.crawler.metadata import (
+    AcceptedIdentities,
     MetadataValidationError,
     input_signature_matches_contract,
     recompute_accepted_identities,
@@ -704,6 +705,274 @@ def _record_attempt_ids(record: Mapping[str, Any]) -> tuple[str, ...]:
             if value is not None and str(value) not in referenced:
                 referenced.append(str(value))
     return tuple(referenced)
+
+
+@dataclass
+class _GateValidationPipeline:
+    """Run reducer gate checks in their frozen diagnostic order.
+
+    Parameters
+    ----------
+    reducer:
+        Locked canonical reducer supplying current gate and model authority.
+    model:
+        Proposed model revision.
+    """
+
+    reducer: "CanonicalReducer"
+    model: Mapping[str, Any]
+    stable_id: str = dataclass_field(init=False, default="")
+    accuracy: Mapping[str, Any] = dataclass_field(init=False, default_factory=dict)
+    rung: object = dataclass_field(init=False, default=None)
+    status_kind: object = dataclass_field(init=False, default=None)
+    metadata_state: object = dataclass_field(init=False, default=None)
+    family_variant: bool = dataclass_field(init=False, default=False)
+    representative_id: str = dataclass_field(init=False, default="")
+    representative: Optional[Mapping[str, Any]] = dataclass_field(init=False, default=None)
+    identities: Optional[AcceptedIdentities] = dataclass_field(init=False, default=None)
+    gate_stable_id: str = dataclass_field(init=False, default="")
+
+    def run(self) -> None:
+        """Execute rung, authored-metadata, and fidelity checks in order."""
+
+        self._initialize()
+        rung_gate_current = self._derive_rung_gate_current()
+        self._validate_runs_rung(rung_gate_current)
+        self._validate_accepted_metadata()
+        self._validate_fidelity()
+
+    def _initialize(self) -> None:
+        """Derive shared gate-validation inputs in original evaluation order."""
+
+        self.stable_id = str(self.model["stable_id"])
+        self.accuracy = self.model.get("accuracy_gate", {})
+        self.rung = self.model.get("source_resolution", {}).get("rung")
+        self.status_kind = self.model.get("status", {}).get("kind")
+        self.metadata_state = self.model.get("authored_metadata_state")
+        self.family_variant = self.stable_id in self.reducer.intake_variant_bindings
+        self.representative_id = str(
+            self.model.get("identity", {}).get("family_representative_id", "")
+        )
+        self.representative = (
+            self.reducer._validation_current_records().get(self.representative_id)
+            if self.family_variant
+            else None
+        )
+        self.gate_stable_id = self.representative_id if self.family_variant else self.stable_id
+
+    def _derive_rung_gate_current(self) -> bool:
+        """Return whether the referenced anti-slop/rung gate is current."""
+
+        rung_gate_current = False
+        rung_found = self.reducer._gate_item(self.accuracy.get("gate_id"), self.gate_stable_id)
+        if rung_found is not None:
+            rung_gate, rung_item = rung_found
+            rung_check = rung_item.get("rung_check")
+            verified_hashes = rung_item.get("verified_hashes", {})
+            rung_gate_current = bool(
+                rung_gate.get("gate_kind") == "metadata_batch"
+                and rung_item.get("vet_identity") == self.accuracy.get("vet_identity")
+                and isinstance(rung_check, Mapping)
+                and rung_check.get("selected_rung") == self.rung
+                and rung_check.get("verdict") == "accurate"
+                and verified_hashes.get("code")
+                == self.model.get("implementation", {}).get("code_sha256")
+                and rung_gate.get("checker", {}).get("prompt_sha256") == _checker_prompt_hash()
+            )
+        return rung_gate_current
+
+    def _validate_runs_rung(self, rung_gate_current: bool) -> None:
+        """Require current rung authority before a runs disposition."""
+
+        if self.status_kind == "runs" and not rung_gate_current:
+            if self.metadata_state == "pending":
+                self.reducer._validate_pending_run_rung(self.model)
+            else:
+                raise ReductionError(
+                    "runs requires a current identity-tight anti-slop/rung check gate"
+                )
+
+    def _validate_accepted_metadata(self) -> None:
+        """Validate accepted authored metadata and recompute its identities."""
+
+        if self.metadata_state != "accepted":
+            return
+        found = self.reducer._gate_item(self.accuracy.get("gate_id"), self.gate_stable_id)
+        if found is None:
+            raise ReductionError("accepted authored metadata is missing its gate")
+        gate, item = found
+        if gate["gate_kind"] != "metadata_batch":
+            raise ReductionError("authored metadata must reference a metadata_batch gate")
+        rung_check = item.get("rung_check")
+        if (
+            item["vet_identity"] != self.accuracy.get("vet_identity")
+            or item["verdict"] != "accurate"
+            or item["integrity"]["verdict"] != "accurate"
+            or not isinstance(rung_check, Mapping)
+            or rung_check.get("selected_rung") != self.rung
+            or rung_check.get("verdict") != "accurate"
+            or self.accuracy.get("verdict") != "accurate"
+            or not self.accuracy.get("current")
+            or gate.get("checker", {}).get("prompt_sha256") != self.accuracy.get("prompt_sha256")
+        ):
+            raise ReductionError(
+                "authored metadata gate is missing, stale, inaccurate, or has a blocked rung check"
+            )
+        facts = _authored_facts_for_vet(self.model)
+        if self.family_variant:
+            self._validate_variant_metadata(gate, facts)
+        else:
+            self._validate_ordinary_metadata(gate, item, facts)
+
+    def _validate_variant_metadata(
+        self,
+        gate: Mapping[str, Any],
+        facts: Mapping[str, Any],
+    ) -> None:
+        """Validate representative inheritance and variant identity freshness."""
+
+        representative_accuracy = (
+            self.representative.get("accuracy_gate", {})
+            if isinstance(self.representative, Mapping)
+            else {}
+        )
+        if (
+            not isinstance(self.representative, Mapping)
+            or self.representative.get("authored_metadata_state") != "accepted"
+            or representative_accuracy.get("current") is not True
+            or self.accuracy != representative_accuracy
+        ):
+            raise ReductionError(
+                "family variant does not inherit its current representative accuracy gate"
+            )
+        try:
+            self.identities = recompute_accepted_identities(
+                facts,
+                checker_prompt_hash=_checker_prompt_hash(),
+                checker_model=str(gate.get("checker", {}).get("model")),
+                checker_version=str(gate.get("checker", {}).get("version")),
+                schema_version=MODEL_SCHEMA_VERSION_V3,
+            )
+        except MetadataValidationError as exc:
+            raise ReductionError(str(exc)) from exc
+        if (
+            self.model.get("evidence", {}).get("evidence_identity") != self.identities.evidence
+            or self.model.get("implementation", {}).get("recipe_revision") != self.identities.recipe
+        ):
+            raise ReductionError("family variant source/evidence/recipe identities are stale")
+
+    def _validate_ordinary_metadata(
+        self,
+        gate: Mapping[str, Any],
+        item: Mapping[str, Any],
+        facts: Mapping[str, Any],
+    ) -> None:
+        """Validate ordinary authored facts and exact identity freshness."""
+
+        try:
+            validate_authored_facts_for_write(facts, item)
+            self.identities = recompute_accepted_identities(
+                facts,
+                checker_prompt_hash=_checker_prompt_hash(),
+                checker_model=str(gate.get("checker", {}).get("model")),
+                checker_version=str(gate.get("checker", {}).get("version")),
+                schema_version=MODEL_SCHEMA_VERSION_V3,
+            )
+        except MetadataValidationError as exc:
+            raise ReductionError(str(exc)) from exc
+        if (
+            self.model.get("evidence", {}).get("evidence_identity") != self.identities.evidence
+            or self.model.get("implementation", {}).get("recipe_revision") != self.identities.recipe
+            or item.get("vet_identity") != self.identities.vet
+            or self.accuracy.get("vet_identity") != self.identities.vet
+        ):
+            stale = [
+                name
+                for name, actual, expected in (
+                    (
+                        "evidence",
+                        self.model.get("evidence", {}).get("evidence_identity"),
+                        self.identities.evidence,
+                    ),
+                    (
+                        "recipe",
+                        self.model.get("implementation", {}).get("recipe_revision"),
+                        self.identities.recipe,
+                    ),
+                    ("gate-vet", item.get("vet_identity"), self.identities.vet),
+                    ("model-vet", self.accuracy.get("vet_identity"), self.identities.vet),
+                )
+                if actual != expected
+            ]
+            raise ReductionError(
+                "accepted source/evidence/recipe/vet identities are stale: " + ", ".join(stale)
+            )
+
+    def _validate_fidelity(self) -> None:
+        """Validate required fidelity authority after authored metadata checks."""
+
+        fidelity = self.model.get("fidelity", {})
+        legacy_flags = self.model.get("intake", {}).get("preserved_legacy_flags", [])
+        required = (
+            bool(fidelity.get("required"))
+            or self.rung in {"R3_PORT", "R4_REIMPLEMENT"}
+            or legacy_requires_fidelity_audit(legacy_flags)
+        )
+        if not required:
+            return
+        found = self.reducer._gate_item(fidelity.get("gate_id"), self.stable_id)
+        if found is None:
+            status = self.model.get("status", {})
+            if self.reducer._is_pre_fidelity_terminal(self.model):
+                return
+            if (
+                status.get("code") == "failed:fidelity"
+                and status.get("reason_code") == "identity-mismatch"
+                and not fidelity.get("current")
+            ):
+                return
+            raise ReductionError("required fidelity is missing its gate")
+        gate, item = found
+        if self.identities is None:
+            try:
+                self.identities = recompute_accepted_identities(
+                    _model_facts(self.model),
+                    checker_prompt_hash=_checker_prompt_hash(),
+                    checker_model=str(gate.get("checker", {}).get("model")),
+                    checker_version=str(gate.get("checker", {}).get("version")),
+                    schema_version=MODEL_SCHEMA_VERSION_V3,
+                )
+            except MetadataValidationError as exc:
+                raise ReductionError(str(exc)) from exc
+        if gate["gate_kind"] != "fidelity":
+            raise ReductionError("fidelity must reference a per-model fidelity gate")
+        rung_check = item.get("rung_check")
+        rejected_terminal = self.model.get("status", {}).get(
+            "code"
+        ) == "failed:fidelity" or self.reducer._is_fidelity_repair_failure(self.model)
+        allowed_verdicts = (
+            {"major-drift", "slop", "cannot-verify"}
+            if rejected_terminal
+            else {"match", "minor-drift"}
+        )
+        rung_accepted = isinstance(rung_check, Mapping) and (
+            rejected_terminal
+            or (
+                rung_check.get("verdict") == "accurate"
+                and rung_check.get("selected_rung") == self.rung
+            )
+        )
+        if (
+            item.get("fidelity_identity") != fidelity.get("fidelity_identity")
+            or item.get("fidelity_identity") != self.identities.fidelity
+            or item["fidelity"]["verdict"] != fidelity.get("verdict")
+            or fidelity.get("verdict") not in allowed_verdicts
+            or not rung_accepted
+            or not fidelity.get("current")
+        ):
+            raise ReductionError(
+                "required fidelity gate is stale, unacceptable, or has a blocked rung check"
+            )
 
 
 class CanonicalReducer:
@@ -2071,197 +2340,7 @@ class CanonicalReducer:
             Proposed model revision.
         """
 
-        stable_id = str(model["stable_id"])
-        accuracy = model.get("accuracy_gate", {})
-        rung = model.get("source_resolution", {}).get("rung")
-        status_kind = model.get("status", {}).get("kind")
-        metadata_state = model.get("authored_metadata_state")
-        family_variant = stable_id in self.intake_variant_bindings
-        representative_id = str(model.get("identity", {}).get("family_representative_id", ""))
-        representative = (
-            self._validation_current_records().get(representative_id) if family_variant else None
-        )
-        identities = None
-        rung_gate_current = False
-        gate_stable_id = representative_id if family_variant else stable_id
-        rung_found = self._gate_item(accuracy.get("gate_id"), gate_stable_id)
-        if rung_found is not None:
-            rung_gate, rung_item = rung_found
-            rung_check = rung_item.get("rung_check")
-            verified_hashes = rung_item.get("verified_hashes", {})
-            rung_gate_current = bool(
-                rung_gate.get("gate_kind") == "metadata_batch"
-                and rung_item.get("vet_identity") == accuracy.get("vet_identity")
-                and isinstance(rung_check, Mapping)
-                and rung_check.get("selected_rung") == rung
-                and rung_check.get("verdict") == "accurate"
-                and verified_hashes.get("code")
-                == model.get("implementation", {}).get("code_sha256")
-                and rung_gate.get("checker", {}).get("prompt_sha256") == _checker_prompt_hash()
-            )
-        if status_kind == "runs" and not rung_gate_current:
-            if metadata_state == "pending":
-                self._validate_pending_run_rung(model)
-            else:
-                raise ReductionError(
-                    "runs requires a current identity-tight anti-slop/rung check gate"
-                )
-        if metadata_state == "accepted":
-            found = self._gate_item(accuracy.get("gate_id"), gate_stable_id)
-            if found is None:
-                raise ReductionError("accepted authored metadata is missing its gate")
-            gate, item = found
-            if gate["gate_kind"] != "metadata_batch":
-                raise ReductionError("authored metadata must reference a metadata_batch gate")
-            rung_check = item.get("rung_check")
-            if (
-                item["vet_identity"] != accuracy.get("vet_identity")
-                or item["verdict"] != "accurate"
-                or item["integrity"]["verdict"] != "accurate"
-                or not isinstance(rung_check, Mapping)
-                or rung_check.get("selected_rung") != rung
-                or rung_check.get("verdict") != "accurate"
-                or accuracy.get("verdict") != "accurate"
-                or not accuracy.get("current")
-                or gate.get("checker", {}).get("prompt_sha256") != accuracy.get("prompt_sha256")
-            ):
-                raise ReductionError(
-                    "authored metadata gate is missing, stale, inaccurate, or has a blocked rung check"
-                )
-            facts = _authored_facts_for_vet(model)
-            if family_variant:
-                representative_accuracy = (
-                    representative.get("accuracy_gate", {})
-                    if isinstance(representative, Mapping)
-                    else {}
-                )
-                if (
-                    not isinstance(representative, Mapping)
-                    or representative.get("authored_metadata_state") != "accepted"
-                    or representative_accuracy.get("current") is not True
-                    or accuracy != representative_accuracy
-                ):
-                    raise ReductionError(
-                        "family variant does not inherit its current representative accuracy gate"
-                    )
-                try:
-                    identities = recompute_accepted_identities(
-                        facts,
-                        checker_prompt_hash=_checker_prompt_hash(),
-                        checker_model=str(gate.get("checker", {}).get("model")),
-                        checker_version=str(gate.get("checker", {}).get("version")),
-                        schema_version=MODEL_SCHEMA_VERSION_V3,
-                    )
-                except MetadataValidationError as exc:
-                    raise ReductionError(str(exc)) from exc
-                if (
-                    model.get("evidence", {}).get("evidence_identity") != identities.evidence
-                    or model.get("implementation", {}).get("recipe_revision") != identities.recipe
-                ):
-                    raise ReductionError(
-                        "family variant source/evidence/recipe identities are stale"
-                    )
-            else:
-                try:
-                    validate_authored_facts_for_write(facts, item)
-                    identities = recompute_accepted_identities(
-                        facts,
-                        checker_prompt_hash=_checker_prompt_hash(),
-                        checker_model=str(gate.get("checker", {}).get("model")),
-                        checker_version=str(gate.get("checker", {}).get("version")),
-                        schema_version=MODEL_SCHEMA_VERSION_V3,
-                    )
-                except MetadataValidationError as exc:
-                    raise ReductionError(str(exc)) from exc
-                if (
-                    model.get("evidence", {}).get("evidence_identity") != identities.evidence
-                    or model.get("implementation", {}).get("recipe_revision") != identities.recipe
-                    or item.get("vet_identity") != identities.vet
-                    or accuracy.get("vet_identity") != identities.vet
-                ):
-                    stale = [
-                        name
-                        for name, actual, expected in (
-                            (
-                                "evidence",
-                                model.get("evidence", {}).get("evidence_identity"),
-                                identities.evidence,
-                            ),
-                            (
-                                "recipe",
-                                model.get("implementation", {}).get("recipe_revision"),
-                                identities.recipe,
-                            ),
-                            ("gate-vet", item.get("vet_identity"), identities.vet),
-                            ("model-vet", accuracy.get("vet_identity"), identities.vet),
-                        )
-                        if actual != expected
-                    ]
-                    raise ReductionError(
-                        "accepted source/evidence/recipe/vet identities are stale: "
-                        + ", ".join(stale)
-                    )
-        fidelity = model.get("fidelity", {})
-        legacy_flags = model.get("intake", {}).get("preserved_legacy_flags", [])
-        required = (
-            bool(fidelity.get("required"))
-            or rung in {"R3_PORT", "R4_REIMPLEMENT"}
-            or legacy_requires_fidelity_audit(legacy_flags)
-        )
-        if required:
-            found = self._gate_item(fidelity.get("gate_id"), stable_id)
-            if found is None:
-                status = model.get("status", {})
-                if self._is_pre_fidelity_terminal(model):
-                    return
-                if (
-                    status.get("code") == "failed:fidelity"
-                    and status.get("reason_code") == "identity-mismatch"
-                    and not fidelity.get("current")
-                ):
-                    return
-                raise ReductionError("required fidelity is missing its gate")
-            gate, item = found
-            if identities is None:
-                try:
-                    identities = recompute_accepted_identities(
-                        _model_facts(model),
-                        checker_prompt_hash=_checker_prompt_hash(),
-                        checker_model=str(gate.get("checker", {}).get("model")),
-                        checker_version=str(gate.get("checker", {}).get("version")),
-                        schema_version=MODEL_SCHEMA_VERSION_V3,
-                    )
-                except MetadataValidationError as exc:
-                    raise ReductionError(str(exc)) from exc
-            if gate["gate_kind"] != "fidelity":
-                raise ReductionError("fidelity must reference a per-model fidelity gate")
-            rung_check = item.get("rung_check")
-            rejected_terminal = model.get("status", {}).get(
-                "code"
-            ) == "failed:fidelity" or self._is_fidelity_repair_failure(model)
-            allowed_verdicts = (
-                {"major-drift", "slop", "cannot-verify"}
-                if rejected_terminal
-                else {"match", "minor-drift"}
-            )
-            rung_accepted = isinstance(rung_check, Mapping) and (
-                rejected_terminal
-                or (
-                    rung_check.get("verdict") == "accurate"
-                    and rung_check.get("selected_rung") == rung
-                )
-            )
-            if (
-                item.get("fidelity_identity") != fidelity.get("fidelity_identity")
-                or item.get("fidelity_identity") != identities.fidelity
-                or item["fidelity"]["verdict"] != fidelity.get("verdict")
-                or fidelity.get("verdict") not in allowed_verdicts
-                or not rung_accepted
-                or not fidelity.get("current")
-            ):
-                raise ReductionError(
-                    "required fidelity gate is stale, unacceptable, or has a blocked rung check"
-                )
+        _GateValidationPipeline(self, model).run()
 
     def _validate_pending_run_rung(self, model: Mapping[str, Any]) -> None:
         """Validate a driver-owned R1/R2 run while authored metadata is pending.
