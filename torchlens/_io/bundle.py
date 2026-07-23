@@ -10,7 +10,7 @@ by partial saves. The bundle format is intentionally a plain directory with
 from __future__ import annotations
 
 from collections import OrderedDict, defaultdict
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 import json
 import platform
@@ -499,6 +499,44 @@ def save(
         raise
 
 
+def _require_canonical_runnable_labels(names: Iterable[object], *, family: str) -> None:
+    """Refuse a runnable payload family whose entry labels load would reject.
+
+    r79 (r78 free LOW): ``self._parameters[""] = nn.Parameter(...)`` bypasses
+    ``register_parameter``'s empty-name validation, captures, and SAVED an
+    artifact whose weight tensor entry carried label ``""`` -- which
+    ``validate_tlspec`` categorically refuses at load ("requires a canonical
+    label"). A save door must never produce a stillborn artifact, so this
+    preflight mirrors the load-side canonical-label predicate exactly
+    (non-``str`` or empty refuses; nothing wider).
+
+    Parameters
+    ----------
+    names:
+        Candidate canonical entry labels for one payload family.
+    family:
+        Human-readable payload family name for the refusal message.
+
+    Raises
+    ------
+    RunnablePreflightError
+        Typed save refusal for any label the load door would refuse.
+    """
+
+    from ..errors import RunnablePreflightError
+    from ..runnable import RunnableErrorCode
+
+    for name in names:
+        if not isinstance(name, str) or name == "":
+            raise RunnablePreflightError(
+                f"Runnable {family} entry requires a canonical label; got {name!r}. "
+                "An artifact with this label would be refused wholesale at load "
+                "(empty state names bypass register_parameter/register_buffer "
+                "validation and have no canonical state_dict identity).",
+                code=RunnableErrorCode.SPARSE_PREFLIGHT_FAILED.value,
+            )
+
+
 def _capture_weight_blob_specs(
     trace: Trace,
     descriptor: SparseRunDescriptor,
@@ -524,12 +562,18 @@ def _capture_weight_blob_specs(
         If the live source model or its state mapping is unavailable.
     StateBindingError
         If the full state dict disagrees with the descriptor contract.
+    RunnablePreflightError
+        If a state name is not a canonical (non-empty) label (r79 save-side
+        mirror of the load door's canonical-label check).
     """
 
     from .._runnable_state import validate_state_mapping_for_descriptor
 
     state = _capture_source_state(trace, option_name="include_weights")
     validate_state_mapping_for_descriptor(descriptor, state)
+    _require_canonical_runnable_labels(
+        cast(Mapping[str, torch.Tensor], state).keys(), family="weight tensor"
+    )
     return [
         BlobSpec(
             blob_id=f"runnable_weight_{index:05d}",
@@ -564,6 +608,9 @@ def _capture_nonpersistent_buffer_blob_specs(
     ------
     StateBindingError
         If a required captured value is missing or violates its slot contract.
+    RunnablePreflightError
+        If a buffer name is not a canonical (non-empty) label (r79 save-side
+        mirror of the load door's canonical-label check).
     """
 
     from .._runnable_state import validate_nonpersistent_buffer_mapping_for_descriptor
@@ -577,6 +624,7 @@ def _capture_nonpersistent_buffer_blob_specs(
             and not slot.state_binding.persistent
         }
     )
+    _require_canonical_runnable_labels(names, family="non-persistent buffer")
     captured_values = getattr(trace, "_buffer_initial_values", {}) or {}
     values = {name: captured_values[name] for name in names if name in captured_values}
     validate_nonpersistent_buffer_mapping_for_descriptor(descriptor, values)

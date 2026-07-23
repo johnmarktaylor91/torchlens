@@ -845,7 +845,13 @@ callables, model handles, or per-call snapshots. Optional activations are indepe
 `selected_activation_v2`: exactly the payloads retained by capture-time `save=`, never a new
 selector and never part of the sparse call recipe.
 Tensor arguments, RNG tensors, callables/code/imports remain forbidden, and payload-only runnable
-artifacts are invalid.
+artifacts are invalid. Weight and non-persistent-buffer entry labels must be canonical
+(non-empty) at BOTH doors (r79): the load-side manifest validation always refused a
+non-canonical label wholesale, and the save door now preflights the same predicate (a dict-poked
+`_parameters[""]` state name that bypasses `register_parameter` validation refuses typed
+`RunnablePreflightError` at save instead of producing a stillborn artifact the load door would
+refuse). The mirror is exactly load-scoped: the weightless lane, whose manifest carries no such
+entries and which the load door accepts, is unchanged.
 
 ### Output losslessness (invariant I1)
 
