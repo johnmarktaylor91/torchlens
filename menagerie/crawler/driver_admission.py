@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass as dataclass
-import fcntl as fcntl
 import json
 import logging
 import platform
@@ -23,7 +21,6 @@ from typing import (
     Callable,
     Mapping,
     Optional,
-    Protocol as Protocol,
     Sequence,
     TypeVar,
 )
@@ -33,14 +30,12 @@ from menagerie.crawler.artifact_transactions import (
     ArtifactEventKind,
     ArtifactRehydrationError,
     ArtifactTransactionProjection,
-    StagedArtifact as StagedArtifact,
     rehydrate_artifact_transaction,
     resolve_final_artifact_transaction,
     staged_artifact_for_result,
     validate_artifact_checkpoint,
 )
 from menagerie.crawler.author_dispatch import (
-    AuthorResult as AuthorResult,
     ProposedAuthorResult,
     build_author_envelope,
     serialize_author_result_cache,
@@ -71,9 +66,6 @@ from menagerie.crawler.checkpoint import (
 )
 from menagerie.crawler.constants import (
     CHECKER_PROMPT_NAME,
-    DEFAULT_NOTIFY_COMMAND as DEFAULT_NOTIFY_COMMAND,
-    DEFAULT_PROGRESS_MILESTONES as DEFAULT_PROGRESS_MILESTONES,
-    DEFAULT_REVIEW_CHECKPOINT_AT as DEFAULT_REVIEW_CHECKPOINT_AT,
     FAILURE_REASON_CODES,
     InvocationOrigin,
     MODEL_SCHEMA_VERSION_V3,
@@ -127,7 +119,7 @@ from menagerie.crawler.metadata import (
     canonical_meaningful_modes,
     recompute_accepted_identities,
 )
-from menagerie.crawler.models import JsonObject, LedgerPaths as LedgerPaths
+from menagerie.crawler.models import JsonObject
 from menagerie.crawler.mirrors import MirrorClass, MirrorStore
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.recordio import (
@@ -136,7 +128,6 @@ from menagerie.crawler.recordio import (
 )
 from menagerie.crawler.reducer import (
     CanonicalReducer,
-    default_ledger_paths as default_ledger_paths,
     expected_standard_asset,
 )
 from menagerie.crawler.routing import (
@@ -153,27 +144,17 @@ from menagerie.crawler.worker_supervisor import (
 from menagerie.crawler.driver_contracts import (
     ActivatedHandoffArtifact,
     AuthorArtifact,
-    AuthorLane as AuthorLane,
-    BoundaryHook as BoundaryHook,
-    CheckerLane as CheckerLane,
     CheckerOutcome,
-    Clock as Clock,
     DriverConfig,
-    DriverError as DriverError,
     DriverIntegrationError,
     DriverPaths,
     DriverPaused,
     DriverResult,
     EnvironmentBinding,
-    EnvironmentLane as EnvironmentLane,
-    ForwardLane as ForwardLane,
-    Notifier as Notifier,
-    UsagePauseScheduler as UsagePauseScheduler,
     VariantRecipeUnsupported,
     WorkItem,
     _campaign_id_for_item,
     _intake_discovery_urls,
-    default_driver_paths as default_driver_paths,
 )
 
 from menagerie.crawler.driver_models import (
