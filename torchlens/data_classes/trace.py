@@ -1285,6 +1285,14 @@ class Trace(
         "_module_forward_args": FieldPolicy.DROP,
         "_grad_fn_strong_refs": FieldPolicy.DROP,
         "_in_exhaustive_pass": FieldPolicy.DROP,
+        # r83 S4: live-capture scratch reinstated by ``__setstate__`` alongside
+        # ``_tl_backward_hooked_tensor_keys``, but never registered here. Any
+        # trace that went through ``__setstate__`` -- which ``cache=True`` makes
+        # routine -- therefore tripped the catalog tripwire and failed
+        # ``save(level="runnable")`` outright on the SECOND capture. DROP, like
+        # its sibling: pending live-fire records are session state and are
+        # already reset on rehydrate.
+        "_pending_live_fire_records": FieldPolicy.DROP,
         "_module_containment_engine": FieldPolicy.DROP,
         "_exhaustive_module_stack": FieldPolicy.DROP,
         "_module_logs": FieldPolicy.DROP,

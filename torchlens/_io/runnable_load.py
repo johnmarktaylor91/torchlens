@@ -1276,6 +1276,100 @@ def validate_container_witness_anchor(
         )
 
 
+def _normalized_callable_name(name: str | None) -> str | None:
+    """Return a callable name in the one spelling both records agree on (r83 S3).
+
+    ``sites[].function_path`` (derived from ``layer_list[].func_name``) and
+    ``run.callable_registry[].key.qualname`` are persisted independently and
+    agree verbatim for every op measured across dunder, in-place, method and
+    function dispatch, with two exceptions where the site keeps the operator
+    dunder while the registry records the torch method (``__neg__``/``neg``,
+    ``__pow__``/``pow``). Stripping the operator dunder underscores collapses
+    exactly those, and nothing else: ``__iadd__`` and ``relu_`` keep their
+    distinguishing characters, so an in-place op can never normalize onto its
+    out-of-place sibling.
+
+    Parameters
+    ----------
+    name:
+        Persisted callable name from either record.
+
+    Returns
+    -------
+    str | None
+        Normalized name, or ``None`` when the record states no opinion.
+    """
+
+    if not isinstance(name, str):
+        return None
+    stripped = name.strip()
+    if not stripped or stripped == "none":
+        return None
+    if stripped.startswith("__") and stripped.endswith("__") and len(stripped) > 4:
+        return stripped[2:-2]
+    return stripped
+
+
+def validate_callable_registry_anchor(
+    descriptor: SparseRunDescriptor,
+    func_names_by_op_label: "Mapping[str, str | None]",
+) -> None:
+    """Reconcile the execution authority against the independently persisted names (r83 S3).
+
+    The callable a loaded artifact EXECUTES comes from
+    ``manifest.json -> run.callable_registry[].key``. The SAME call is named
+    independently by ``manifest.json -> sites[].function_path`` and by
+    ``metadata.pkl -> layer_list[].func_name`` / ``.func_id.qualname``. Nothing
+    reconciled them, so editing one JSON field (``Tensor.__add__`` ->
+    ``__sub__``) left an internally SELF-CONTRADICTORY artifact that ran happily
+    and reported ``VERIFIED`` with different numbers -- three other persisted
+    fields still said ``add``.
+
+    This is defence-in-depth against artifact CORRUPTION or a partial rewrite,
+    not against an attacker: a competent one would simply capture the wrong
+    program honestly, which is out of scope by contract (coherent reauthoring).
+    A typed refusal beats a silent ``VERIFIED``. The attestation lane already
+    anchors this when ``include_activations=True`` makes it eligible; the gap
+    was the DEFAULT artifact, where the run is ``not_applicable``.
+
+    Fails closed only on a definite disagreement: a record that states no name
+    (a source op's ``"none"``, a missing label) is no opinion, never a refusal.
+
+    Parameters
+    ----------
+    descriptor:
+        Parsed sparse run descriptor carrying the callable registry and calls.
+    func_names_by_op_label:
+        Per-op function names implied by the REHYDRATED trace, keyed by op label.
+
+    Raises
+    ------
+    ContextFieldInvalidError
+        When the execution authority and an independent record disagree.
+    """
+
+    registry_by_id = {entry.registry_id: entry for entry in descriptor.callable_registry}
+    for call in descriptor.calls:
+        entry = registry_by_id.get(call.registry_id)
+        if entry is None:
+            continue
+        authority = _normalized_callable_name(entry.key.qualname)
+        if authority is None:
+            continue
+        for op_label in call.op_labels:
+            recorded = _normalized_callable_name(func_names_by_op_label.get(op_label.split(":")[0]))
+            if recorded is None or recorded == authority:
+                continue
+            raise ContextFieldInvalidError(
+                "callable_registry",
+                f"call {call.call_id!r} executes "
+                f"{entry.key.namespace}.{entry.key.qualname!r} but the artifact's "
+                f"independently recorded name for op {op_label!r} is "
+                f"{func_names_by_op_label.get(op_label.split(':')[0])!r}; the "
+                f"artifact contradicts itself and is refused rather than run",
+            )
+
+
 class DescriptorStructuralBoundError(ValueError):
     """A persisted runnable-descriptor integer failed structural cross-validation (r53 free_1).
 
@@ -1767,6 +1861,17 @@ def attach_sparse_run_readiness(
             witness.site_label for witness in _container_structure_witnesses(trace, start_order=0)
         )
         validate_container_witness_anchor(descriptor, container_members)
+        # r83 S3: the execution authority (``run.callable_registry``) reconciled
+        # against the name the rehydrated trace records for the same op. A
+        # single-field registry edit otherwise leaves a self-contradictory
+        # artifact that runs and reports VERIFIED with different numbers.
+        validate_callable_registry_anchor(
+            descriptor,
+            {
+                str(getattr(layer, "layer_label", "")): getattr(layer, "func_name", None)
+                for layer in getattr(trace, "layer_list", []) or ()
+            },
+        )
     except ContextFieldInvalidError as exc:
         diagnostic = _diagnostic(
             RunnableErrorCode.CONTEXT_FIELD_INVALID,
