@@ -690,9 +690,24 @@ def test_leak_vehicles_are_swept_by_the_session_inventory() -> None:
     capture, and it is gone before that capture stamps or reads anything.
     """
 
+    from torchlens.backends.torch import _tl
+
     _LEAK_GLOBAL_LIST.clear()
     _LeakDonor.CLASS_CACHE = None
-    tl.trace(_LeakDonor(), torch.ones(4), capture=_CAPTURE)
+
+    inventory_ids: list[set[int]] = []
+
+    class _InventoryProbe(_LeakDonor):
+        """Donor that samples the session inventory before the capture ends."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Stash into every vehicle, then read the inventory back."""
+
+            out = super().forward(x)
+            inventory_ids.append({id(t) for t in _tl.session_labeled_tensors()})
+            return out
+
+    tl.trace(_InventoryProbe(), torch.ones(4), capture=_CAPTURE)
 
     vehicles = {
         "helper nn.Module attr": _LEAK_HELPER_MODULE.cache,
@@ -700,13 +715,19 @@ def test_leak_vehicles_are_swept_by_the_session_inventory() -> None:
         "__slots__ object attr": _LEAK_SLOTS.cache,
         "ModuleType-nested list": _LEAK_MODULE_TYPE.box[0],
         "module-global list": _LEAK_GLOBAL_LIST[0],
-        "class attribute": _LeakDonor.CLASS_CACHE,
+        # ``type(self).CLASS_CACHE`` writes onto the RUNNING class.
+        "class attribute": _InventoryProbe.CLASS_CACHE,
     }
+    assert all(t is not None for t in vehicles.values()), "a vehicle failed to stash"
 
-    # The inventory must NAME every vehicle -- this is the root-A property, and
-    # it holds regardless of whether any reachability walk can reach them.
-    from torchlens.backends.torch import _tl
+    # ROOT A, stated directly: the inventory NAMES every vehicle, including the
+    # four the reachability walk cannot reach and the ModuleType-nested one
+    # r81's shallow sweep could not. That is the property the sweep rests on.
+    stamped = inventory_ids[0]
+    for name, tensor in vehicles.items():
+        assert id(tensor) in stamped, f"{name} is not in the session inventory"
 
+    # And the sweep clears all of them once the next session is installed.
     tl.trace(_Passthrough(), torch.ones(4), capture=_CAPTURE)
     for name, tensor in vehicles.items():
         assert raw_tensor_label(tensor) is None, f"{name} kept a stale stamp"
