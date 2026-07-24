@@ -213,6 +213,38 @@ def test_nested_plain_attribute_keeps_its_own_address() -> None:
     assert "top" in addresses.values()
 
 
+def test_display_address_and_backend_address_are_decoupled(tmp_path: Path) -> None:
+    """A plain-attribute buffer keeps a display ``address`` but no ``backend_address``.
+
+    ``.address`` is TorchLens's display/logical address (the attribute path);
+    ``.backend_address`` is the backend-native STATE address. A plain-attribute
+    or list-element constant is not part of the declared state universe, so it
+    has a display address but NO backend-native one -- ``backend_address`` must
+    stay None, exactly as it did before r83, including for a NESTED constant
+    where the recovery fallback would otherwise report the containing module's
+    address. A registered buffer keeps both, equal. This is the invariant
+    ``test_current_bundle_preserves_none_backend_address`` pins for the flat
+    case; here it is pinned for the nested mix so C2 cannot recouple them.
+    """
+
+    trace = _capture(_Nested(), torch.randn(2, 4, 8, 8))
+    by_address = {op.address: op for op in trace.ops if op.is_buffer and op.address is not None}
+
+    assert by_address["child.q"].backend_address is None, "plain-attr has no backend address"
+    assert by_address["child.cb"].backend_address == "child.cb", "registered keeps both"
+    assert by_address["top"].backend_address == "top"
+
+    # The distinction survives a save/load round trip.
+    path = tmp_path / "nested.tlspec"
+    trace.save(path)
+    loaded = tl.load(path)
+    loaded_by_address = {
+        op.address: op for op in loaded.ops if op.is_buffer and op.address is not None
+    }
+    assert loaded_by_address["child.q"].backend_address is None
+    assert loaded_by_address["child.cb"].backend_address == "child.cb"
+
+
 @pytest.mark.parametrize(
     "factory",
     [_Normalizer, _Minimal, _ListElement, _Nested],

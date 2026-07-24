@@ -56,9 +56,21 @@ def materialize_log_from_fields(fields_dict: dict[str, object]) -> "Op":
     from torchlens.data_classes.op import Op
 
     pending_blob_ids = _pop_pending_blob_ids(fields_dict)
+    # r83 C2: the display ``address`` and the backend-native ``backend_address``
+    # are resolved SEPARATELY for buffers (a plain-attribute constant has a
+    # display address but is not backend-native state, so its backend_address
+    # stays None). ``Op.__init__`` otherwise defaults ``backend_address`` from
+    # ``address`` whenever it is None, which would recouple them; the resolved
+    # value is stashed under an extra key here, popped before construction, and
+    # applied afterwards so the default cannot override it. Popped for EVERY
+    # record so an op/input (registered-only value ``None``) is unaffected.
+    has_backend_override = "_materialized_backend_address" in fields_dict
+    backend_address_override = fields_dict.pop("_materialized_backend_address", None)
     op_log = Op(fields_dict)  # type: ignore[arg-type]
     for field_name, blob_id in pending_blob_ids.items():
         setattr(op_log, field_name, blob_id)
+    if has_backend_override:
+        op_log.backend_address = cast("str | None", backend_address_override)
     return op_log
 
 
@@ -358,12 +370,24 @@ def _fields_from_event(
     parent_params = resolved_parent_params
     grad_handle = grad_fn_handle if grad_fn_handle is not None else event.grad_fn_handle
     module = event.modules[-1] if event.modules else None
-    # r83 C2: ``buffer_address`` (from ``_buffer_addresses_by_label``) now leads
-    # with the address the CAPTURE recorded, so preferring it here is no longer
-    # a heuristic overriding a recorded value -- it IS the recorded value
-    # whenever the event carried one. ``_event_address`` remains the fallback
-    # for events that recorded none.
-    resolved_address = buffer_address or _event_address(event)
+    # r83 C2: resolve the DISPLAY address and the backend-native address
+    # SEPARATELY.
+    #
+    # ``buffer_address`` (from ``_buffer_addresses_by_label``) is REGISTERED-only
+    # -- it names an entry of the model's declared state universe -- and is the
+    # backend-native address. The display ``address`` additionally falls back to
+    # the address the CAPTURE recorded for this event
+    # (``_recorded_buffer_address``): a plain-attribute or list-element buffer is
+    # not registered state, but it still has a meaningful display address (its
+    # attribute path, e.g. ``child.q``). Using the recorded address here is what
+    # makes a NESTED plain-attribute buffer show its full path rather than the
+    # containing module's address that ``_event_address`` would otherwise return,
+    # and it is authoritative -- the value/shape heuristics never reach it (see
+    # ``_buffer_addresses_by_label``). ``backend_address`` is decoupled to the
+    # registered-only value and applied post-construction in
+    # ``materialize_log_from_fields`` (None for a non-registered buffer, as a
+    # tensor outside the declared state universe should have).
+    resolved_address = buffer_address or _recorded_buffer_address(event) or _event_address(event)
     tensor_payload = _event_tensor_payload(event, resolved_address, buffer_alias_snapshots)
     fields_dict: dict[str, object] = {field_name: None for field_name in LAYER_PASS_LOG_FIELD_ORDER}
     fields_dict.update(
@@ -567,6 +591,12 @@ def _fields_from_event(
     fields_dict.update(buffer_write_fields)
     fields_dict.update(module_input_fields)
     fields_dict.update(module_output_fields)
+    # r83 C2: the registered-only backend-native address, decoupled from the
+    # display ``address`` above. ``materialize_log_from_fields`` pops this extra
+    # key before construction and applies it afterwards, so ``Op.__init__``'s
+    # ``backend_address <- address`` default cannot recouple them. ``None`` for
+    # a plain-attribute buffer (not declared state) and for every non-buffer.
+    fields_dict["_materialized_backend_address"] = buffer_address
     return fields_dict
 
 
@@ -835,25 +865,36 @@ def _buffer_addresses_by_label(trace: "Trace", op_events: list[OpEvent]) -> dict
             continue
         # r83 C2: the address the CAPTURE recorded for this event is
         # AUTHORITATIVE. The value/shape ladder below exists only to fill a
-        # genuinely MISSING address; it must never override a recorded one.
-        # Pre-fix the recorded address was discarded whenever it did not name a
-        # registered buffer, and a plain-attribute (or list-element) tensor
-        # source consumed before a same-shaped registered buffer then CLAIMED
-        # that buffer's address by shape -- binding it to the WRONG state at
-        # replay under VERIFIED/COMPLETE with no diagnostic, and reporting a
-        # foreign name on plain save-free metadata (``trace[...].address``). A
-        # recorded address that is not a registered buffer must instead reach
-        # the honest ``UNSUPPORTED_TENSOR_CONSTANT`` refusal in
-        # ``_io/runnable.py``, which is exactly what keeping it does.
-        address = _recorded_buffer_address(event)
-        if address is None:
+        # genuinely MISSING (anonymous) address; it must never OVERRIDE a
+        # recorded one.
+        recorded = _recorded_buffer_address(event)
+        if recorded is not None:
+            # A recorded address that names a REGISTERED buffer is assigned
+            # directly (this also fixes the predecessor's suffixed-vs-bare
+            # comparison, which never fired for a nested buffer). A recorded
+            # address that is NOT a registered buffer is a plain-attribute or
+            # list-element constant: the value/shape heuristics must NOT
+            # override it with a DIFFERENT registered buffer's address -- that
+            # was free's silent wrong-bind (a plain `mean` given `std`'s
+            # address by shape, replayed WRONG under VERIFIED). Leaving it
+            # unassigned keeps it out of this registered-address map -- so its
+            # `backend_address` stays None, as a non-registered buffer's should,
+            # and its display address is recovered from the equivalence class
+            # downstream (`postprocess.control_flow`), reaching the honest
+            # `UNSUPPORTED_TENSOR_CONSTANT` refusal on runnable save. Skipping
+            # the ladder here is what both blocks the theft AND preserves the
+            # recorded-vs-heuristic `address`/`backend_address` distinction.
+            if recorded not in unmatched_address_names:
+                continue
+            address = recorded
+        else:
             address = _unique_buffer_address_by_value(
                 event.output.tensor.payload, unmatched_addresses
             )
-        if address is None:
-            address = _unique_buffer_address_by_shape(
-                event.output.tensor.shape, unmatched_addresses
-            )
+            if address is None:
+                address = _unique_buffer_address_by_shape(
+                    event.output.tensor.shape, unmatched_addresses
+                )
         if address is not None:
             by_label[event.label_raw] = address
             unmatched_addresses = [
