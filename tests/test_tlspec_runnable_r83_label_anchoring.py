@@ -35,12 +35,20 @@ ladder and the replay-template builder are all closed at once. Gating only the
 two rungs in ``_tensor_has_known_provenance`` was empirically INSUFFICIENT --
 free's launder rode the layout/origin rungs instead, which is pinned below.
 
-Cleanup is inventory-driven off the same session (root A), so the leak vehicles
-the reachability walk cannot reach -- a helper ``nn.Module``, an ``nn.Sequential``,
-an ``__slots__`` object, a module-global appended to from a hook, a class
-attribute, a container nested in a ``types.ModuleType`` -- are cleared anyway.
-That is defence-in-depth: the belt is correct even when cleanup reaches nothing,
-which the "unanchored stamp is never provenance" pins below assert directly.
+ROOT A adds an inventory-driven sweep over the same session, so the leak
+vehicles the reachability walk cannot reach -- a helper ``nn.Module``, an
+``nn.Sequential``, an ``__slots__`` object, a module-global appended to from a
+hook, a class attribute, a container nested in a ``types.ModuleType`` -- are
+cleared too. It runs when the NEXT session is installed, not at capture cleanup:
+``_cleanup_model_session`` precedes ``_postprocess``, and sweeping at cleanup
+broke the output-attribution fallback in ``postprocess.graph_traversal``, which
+still reads output-tensor labels. Deferring is equally complete for the leak
+class, since a stale stamp can only ever matter to a subsequent capture.
+
+Root A is defence-in-depth only. The belt is correct even when the sweep reaches
+nothing, which ``test_stale_label_is_invisible_to_the_next_capture`` and
+``test_unanchored_stamp_is_never_provenance`` assert directly by re-applying a
+stale stamp with cleanup deliberately defeated.
 """
 
 from __future__ import annotations
@@ -203,6 +211,8 @@ def test_hook_collected_stale_label_is_not_current_session_provenance(
 
     # The vehicle only exists if the harvested tensor really kept a live label
     # text from capture 1 -- assert the collision is real, not assumed away.
+    # (Root A sweeps it once the NEXT session opens; the belt below is what
+    # makes it harmless in the meantime.)
     assert raw_tensor_label(harvested) == "mul_1_3_raw"
 
     model = _Consumer(harvested)
@@ -322,6 +332,8 @@ def test_helper_module_cached_stale_label_cannot_launder_layout(
     with _allow_break_marker():
         tl.trace(_SidecarDonor(), x, capture=_CAPTURE)
     leaked = _SIDECAR.cache
+    # A helper ``nn.Module`` value is skipped by the cleanup walk
+    # (``isinstance(value, nn.Module) -> return``), so the stamp is still here.
     assert raw_tensor_label(leaked) is not None
 
     run_input = _twin(_nchw()) if changed_input else _nchw()
@@ -398,6 +410,8 @@ def test_moduletype_nested_stale_label_cannot_launder(tmp_path: Path) -> None:
     x = _nchw()
     with _allow_break_marker():
         tl.trace(_StashDonor(stash), x, capture=_CAPTURE)
+    # r81's ModuleType sweep is shallow and never reaches a tensor nested one
+    # container deep, so the stamp survives the donor capture.
     assert raw_tensor_label(stash.box[0]) is not None
 
     run_input = _twin(_nchw())
@@ -555,18 +569,34 @@ def test_label_session_token_advances_and_anchors_per_capture() -> None:
 def test_stale_label_is_invisible_to_the_next_capture() -> None:
     """A prior capture's label must not be readable as provenance in a new one.
 
-    The belt in its most direct form, independent of any save/replay: the same
-    object, the same label TEXT, read from inside a later capture.
+    THE LOAD-BEARING PROPERTY, asserted with cleanup deliberately defeated: the
+    stale stamp is re-applied by hand AFTER the donor capture, reconstructing
+    exactly the state a future leak vehicle that escapes the inventory entirely
+    would produce. The belt must reject it on the anchor alone -- root A closing
+    today's known vehicles must never be what the correctness rests on.
     """
 
-    from torchlens.backends.torch._tl import get_tensor_label
+    from torchlens.backends.torch import _tl
+    from torchlens.backends.torch._tl import TensorMeta, get_tensor_label
 
-    _HOOK_FEATURES.clear()
-    with _allow_break_marker():
-        tl.trace(_Donor(), torch.full((4,), 2.0), capture=_CAPTURE)
-    harvested = _HOOK_FEATURES[0]
-    stale_text = raw_tensor_label(harvested)
-    assert stale_text is not None
+    donor_token: list[int | None] = []
+
+    class _TokenDonor(nn.Module):
+        """Donor that reports the token its own capture session issued."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Sample the active session token and emit one op."""
+
+            donor_token.append(_tl.active_label_session_token())
+            return x * 3.0
+
+    tl.trace(_TokenDonor(), torch.full((4,), 2.0), capture=_CAPTURE)
+    assert donor_token[0] is not None
+
+    # Re-apply the donor session's stamp, as though cleanup had never run.
+    harvested = torch.full((4,), 21.0)
+    harvested._tl = TensorMeta(label_raw="mul_1_3_raw", label_session=donor_token[0])
+    assert raw_tensor_label(harvested) == "mul_1_3_raw"
 
     observed: list[Any] = []
 
@@ -584,7 +614,123 @@ def test_stale_label_is_invisible_to_the_next_capture() -> None:
 
     gated, ungated = observed[0]
     assert gated is None, "a prior capture's label must not read as provenance"
-    assert ungated in (None, stale_text), "the raw view stays diagnostic-only"
+    assert ungated == "mul_1_3_raw", "the raw view stays diagnostic-only, not gated"
+
+
+# --------------------------------------------------------------------------- #
+# C1 ROOT A -- inventory-driven cleanup over free's leak-vehicle map.
+#
+# The reachability walk in ``model_prep._clear_session_tensor_metadata`` has
+# structural blind spots: it returns immediately for any ``nn.Module`` value
+# outside the traced tree and for any object with no ``__dict__``, r81's
+# ``types.ModuleType`` sweep is shallow, and globals are reached only through
+# ``forward.__code__.co_names``. Enumerating stamped objects by REGISTRATION
+# reaches all of them. Defence-in-depth only -- the belt above is what makes an
+# escaped stamp harmless.
+# --------------------------------------------------------------------------- #
+
+_LEAK_HELPER_MODULE = nn.Module()
+_LEAK_SEQUENTIAL = nn.Sequential(nn.Identity())
+_LEAK_MODULE_TYPE = types.ModuleType("r83_leak_modtype")
+_LEAK_GLOBAL_LIST: list[torch.Tensor] = []
+
+
+class _SlotsCache:
+    """``__slots__`` holder -- no ``__dict__``, so the cleanup walk skips it."""
+
+    __slots__ = ("cache",)
+
+
+_LEAK_SLOTS = _SlotsCache()
+
+
+class _LeakDonor(nn.Module):
+    """Donor stashing one state-rooted product into each leak vehicle."""
+
+    CLASS_CACHE: torch.Tensor | None = None
+
+    def __init__(self) -> None:
+        """Register the buffer whose products are stashed."""
+
+        super().__init__()
+        self.register_buffer("b", torch.ones(4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Stash a distinct labeled tensor in every vehicle."""
+
+        _LEAK_HELPER_MODULE.cache = self.b * 1.0
+        _LEAK_SEQUENTIAL.cache = self.b * 2.0
+        _LEAK_SLOTS.cache = self.b * 3.0
+        _LEAK_MODULE_TYPE.box = [self.b * 4.0]
+        _LEAK_GLOBAL_LIST.append(self.b * 5.0)
+        type(self).CLASS_CACHE = self.b * 6.0
+        return x + self.b
+
+
+class _Passthrough(nn.Module):
+    """Trivial model used purely to open a subsequent capture session."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Emit one op."""
+
+        return x * 2.0
+
+
+def test_leak_vehicles_are_swept_by_the_session_inventory() -> None:
+    """Every vehicle in free's map must be cleared, walk blind spots included.
+
+    Pre-fix, four of these LEAKED past cleanup: the helper ``nn.Module``, the
+    ``nn.Sequential``, the ``__slots__`` object and the helper-function-reached
+    object; the ModuleType-nested list defeated r81's shallow sweep. The sweep
+    runs when the NEXT session is installed rather than at cleanup, because
+    ``_cleanup_model_session`` precedes ``_postprocess`` and the output
+    attribution fallback in ``postprocess.graph_traversal`` still reads
+    output-tensor labels -- sweeping at cleanup broke it. Deferring is equally
+    complete for the leak class: a stale stamp can only matter to a subsequent
+    capture, and it is gone before that capture stamps or reads anything.
+    """
+
+    _LEAK_GLOBAL_LIST.clear()
+    _LeakDonor.CLASS_CACHE = None
+    tl.trace(_LeakDonor(), torch.ones(4), capture=_CAPTURE)
+
+    vehicles = {
+        "helper nn.Module attr": _LEAK_HELPER_MODULE.cache,
+        "nn.Sequential attr": _LEAK_SEQUENTIAL.cache,
+        "__slots__ object attr": _LEAK_SLOTS.cache,
+        "ModuleType-nested list": _LEAK_MODULE_TYPE.box[0],
+        "module-global list": _LEAK_GLOBAL_LIST[0],
+        "class attribute": _LeakDonor.CLASS_CACHE,
+    }
+
+    # The inventory must NAME every vehicle -- this is the root-A property, and
+    # it holds regardless of whether any reachability walk can reach them.
+    from torchlens.backends.torch import _tl
+
+    tl.trace(_Passthrough(), torch.ones(4), capture=_CAPTURE)
+    for name, tensor in vehicles.items():
+        assert raw_tensor_label(tensor) is None, f"{name} kept a stale stamp"
+    assert _tl.active_label_session_token() is None
+
+
+def test_sweep_never_touches_a_foreign_or_unstamped_tensor() -> None:
+    """The sweep clears session stamps only; foreign ``_tl`` values survive.
+
+    ``clear_meta`` preserves a non-TorchLens ``_tl``, and an object the session
+    never stamped is not in the inventory at all.
+    """
+
+    from torchlens.backends.torch import _tl
+
+    untouched = torch.ones(4)
+    sentinel = object()
+    untouched._tl = sentinel
+
+    tl.trace(_Passthrough(), torch.ones(4), capture=_CAPTURE)
+    tl.trace(_Passthrough(), torch.ones(4), capture=_CAPTURE)
+
+    assert untouched._tl is sentinel
+    assert _tl.sweep_retired_label_stamps() >= 0  # idempotent, never raises
 
 
 # --------------------------------------------------------------------------- #

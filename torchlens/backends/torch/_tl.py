@@ -30,6 +30,7 @@ __all__ = [
     "active_label_session_token",
     "session_meta_is_anchored",
     "session_labeled_tensors",
+    "sweep_retired_label_stamps",
     "clear_tensor_label",
     "promote_label_to_buffer_source_and_clear_label",
     "set_buffer_address",
@@ -194,14 +195,20 @@ class _LabelSession:
 
 
 _ACTIVE_LABEL_SESSION: Optional[_LabelSession] = None
+_RETIRED_LABEL_SESSION: Optional[_LabelSession] = None
 
 
 def begin_label_session() -> int:
     """Install a fresh label-anchoring session and return its token.
 
-    Called once per capture from per-session model preparation. Any previously
-    installed session is dropped, so a label issued by an earlier capture can
-    never resolve against the new one.
+    Called once per capture from per-session model preparation. Sweeping the
+    RETIRED session's stamps happens here rather than at capture cleanup: the
+    stamps are still needed after cleanup runs, because ``_cleanup_model_session``
+    precedes ``_postprocess`` and the output-attribution fallback in
+    ``postprocess.graph_traversal`` reads output-tensor labels. Sweeping at the
+    next session's start is equally complete for the leak class -- a stale stamp
+    can only ever matter to a SUBSEQUENT capture, and it is cleared before that
+    capture stamps or reads anything.
 
     Returns
     -------
@@ -210,13 +217,18 @@ def begin_label_session() -> int:
     """
 
     global _ACTIVE_LABEL_SESSION
+    sweep_retired_label_stamps()
     token = next(_LABEL_SESSION_COUNTER)
     _ACTIVE_LABEL_SESSION = _LabelSession(token)
     return token
 
 
 def end_label_session() -> None:
-    """Uninstall the active label-anchoring session.
+    """Retire the active label-anchoring session.
+
+    The retired session's weak inventory is kept (not dropped) so the next
+    capture can sweep the stamps that outlived it -- see
+    :func:`sweep_retired_label_stamps`.
 
     Returns
     -------
@@ -224,8 +236,43 @@ def end_label_session() -> None:
         Mutates module-level session state only.
     """
 
-    global _ACTIVE_LABEL_SESSION
+    global _ACTIVE_LABEL_SESSION, _RETIRED_LABEL_SESSION
+    _RETIRED_LABEL_SESSION = _ACTIVE_LABEL_SESSION
     _ACTIVE_LABEL_SESSION = None
+
+
+def sweep_retired_label_stamps() -> int:
+    """Clear every still-live label stamp issued by the retired session (root A).
+
+    The AUTHORITATIVE, inventory-driven counterpart to the reachability walk in
+    ``model_prep._clear_session_tensor_metadata``, which has structural blind
+    spots: it returns immediately for any ``nn.Module`` value outside the traced
+    tree (a helper module or ``nn.Sequential`` used as an activation cache) and
+    for any object with no ``__dict__`` (``__slots__``), and it reaches globals
+    only through ``forward.__code__.co_names``, so a module-global appended to
+    from a HOOK or a helper function, or a class attribute, is in none of its
+    sets. Enumerating by REGISTRATION instead reaches all of them -- and the
+    container-nested ``types.ModuleType`` stash r81's shallow sweep could not.
+
+    Defence-in-depth, NOT the correctness argument: the belt rejects an
+    unanchored stamp whether or not this sweep ever reached the object.
+
+    Returns
+    -------
+    int
+        Number of still-live stamped objects cleared.
+    """
+
+    global _RETIRED_LABEL_SESSION
+    retired = _RETIRED_LABEL_SESSION
+    _RETIRED_LABEL_SESSION = None
+    if retired is None:
+        return 0
+    cleared = 0
+    for stamped_tensor in list(retired.stamped.keys()):
+        clear_meta(stamped_tensor)
+        cleared += 1
+    return cleared
 
 
 def active_label_session_token() -> Optional[int]:
@@ -244,12 +291,10 @@ def active_label_session_token() -> Optional[int]:
 def session_labeled_tensors() -> List[Any]:
     """Return every still-live tensor stamped with a label this session.
 
-    This is the AUTHORITATIVE inventory used by session cleanup: it enumerates
-    stamped objects by registration rather than by reachability, so a stash the
-    cleanup walk cannot reach (a helper ``nn.Module``, an ``__slots__`` object, a
-    module-global appended to from a hook, a class attribute, a container nested
-    in a ``types.ModuleType``) is still cleared. Dead entries have already been
-    dropped by the weak registry.
+    The registration-driven inventory that :func:`sweep_retired_label_stamps`
+    consumes, and the observable form of root A. Dead entries have already been
+    dropped by the weak registry, so this names exactly the stamped objects
+    something is still holding.
 
     Returns
     -------
