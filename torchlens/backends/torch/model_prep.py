@@ -32,7 +32,6 @@ from ._tl import (
     mark_tensor_replacement_wrapped,
     promote_label_to_buffer_source_and_clear_label,
     restore_param_requires_grad,
-    set_buffer_address,
     set_module_meta,
     set_param_meta,
     set_tensor_label,
@@ -906,10 +905,17 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
     ``trace._session_buffer_inventory`` (session-scoped strong refs) so cleanup
     clears the stamps from the recorded inventory instead of relying on a model
     re-traversal that a mid-forward ``_buffers.pop(...)`` can escape.
+
+    r81 buffer-rung parity: every stamp routes through
+    ``register_session_buffer_stamp`` so it also joins the session identity
+    registry (``trace._session_buffer_identity``) consulted by the buffer-rung
+    storage-identity belt; the registry is reset here at session start.
     """
+    from .buffer_writes import register_session_buffer_stamp
+
     _state._tagged_buffer_ids.clear()
-    stamped_buffers: list[torch.Tensor] = []
-    trace._session_buffer_inventory = stamped_buffers
+    trace._session_buffer_inventory = []
+    trace._session_buffer_identity = {}
     for submodule in model.modules():
         module_addr = _module_address(submodule)
         # Scan registered buffers
@@ -921,9 +927,8 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
             ):
                 address = f"{module_addr}.{buf_name}" if module_addr else buf_name
                 try:
-                    set_buffer_address(buf_tensor, address)
+                    register_session_buffer_stamp(trace, buf_tensor, address)
                     _state._tagged_buffer_ids.add(id(buf_tensor))
-                    stamped_buffers.append(buf_tensor)
                 except Exception:
                     pass
         # Scan __dict__ for plain tensor attributes (not registered as buffers/params)
@@ -937,9 +942,8 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
             ):
                 address = f"{module_addr}.{attr_name}" if module_addr else attr_name
                 try:
-                    set_buffer_address(attr_val, address)
+                    register_session_buffer_stamp(trace, attr_val, address)
                     _state._tagged_buffer_ids.add(id(attr_val))
-                    stamped_buffers.append(attr_val)
                 except Exception:
                     pass
             elif isinstance(attr_val, (list, tuple)):
@@ -953,9 +957,8 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
                             f"{module_addr}.{attr_name}.{i}" if module_addr else f"{attr_name}.{i}"
                         )
                         try:
-                            set_buffer_address(item, item_addr)
+                            register_session_buffer_stamp(trace, item, item_addr)
                             _state._tagged_buffer_ids.add(id(item))
-                            stamped_buffers.append(item)
                         except Exception:
                             pass
 
@@ -976,12 +979,12 @@ def _tag_untagged_buffers(trace: "Trace", module: nn.Module) -> None:
 
     Dynamically stamped buffers join ``trace._session_buffer_inventory`` so the
     r79 inventory-driven cleanup clears them even if they are popped from
-    ``_buffers`` later in the same forward.
+    ``_buffers`` later in the same forward. r81: the stamp routes through
+    ``register_session_buffer_stamp`` so it also joins the session identity
+    registry consulted by the buffer-rung storage-identity belt.
     """
-    inventory = getattr(trace, "_session_buffer_inventory", None)
-    if inventory is None:
-        inventory = []
-        trace._session_buffer_inventory = inventory
+    from .buffer_writes import register_session_buffer_stamp
+
     for buffer_name, buffer_tensor in module.named_buffers():
         if get_buffer_address(buffer_tensor) is not None:
             continue
@@ -990,8 +993,7 @@ def _tag_untagged_buffers(trace: "Trace", module: nn.Module) -> None:
             address = buffer_name
         else:
             address = f"{module_addr}.{buffer_name}"
-        set_buffer_address(buffer_tensor, address)
-        inventory.append(buffer_tensor)
+        register_session_buffer_stamp(trace, buffer_tensor, address)
         # If this buffer was already logged as an intermediate tensor, save the
         # previous label as parent and reset so it gets a proper buffer source entry.
         promote_label_to_buffer_source_and_clear_label(buffer_tensor)
@@ -1021,6 +1023,8 @@ def _record_module_entry_metadata(
         needed by ``_record_module_exit_metadata`` for pass-through detection and
         replacement-output recovery.
     """
+    from .buffer_writes import session_validated_buffer_address
+
     module_address = _module_address(module)
     mod_id = id(module)
     trace._module_build_data["module_training_modes"][module_address] = module.training
@@ -1088,9 +1092,11 @@ def _record_module_entry_metadata(
     for t in input_tensors:
         if is_functorch_wrapped_tensor(t):
             continue
-        # Lazily register buffer tensors that haven't been logged yet.
+        # Lazily register buffer tensors that haven't been logged yet. r81: the
+        # module-entry gate validates the static stamp through the session belt
+        # (current-session object + storage identity), never raw.
         label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
-        buffer_address = cast(str, get_buffer_address(t))
+        buffer_address = session_validated_buffer_address(trace, t)
         if label is None and buffer_address is not None:
             log_source_tensor(trace, t, "buffer", buffer_address)
             label = get_tensor_label(t)
@@ -2205,7 +2211,25 @@ def _clear_session_tensor_metadata(value: Any, seen: set[int], depth: int = 0) -
         Mutates reachable tensors in place by removing TorchLens metadata.
     """
 
-    if value is None or isinstance(value, (str, bytes, int, float, bool, ModuleType)):
+    if value is None or isinstance(value, (str, bytes, int, float, bool)):
+        return
+    if isinstance(value, ModuleType):
+        # r81 (r80 F1 root B): a stamped tensor stashed as a DIRECT attribute of
+        # a ``types.ModuleType`` escaped the belt entirely (this walk returned
+        # immediately for modules). Sweep the module namespace SHALLOWLY for
+        # plain tensors only -- deep recursion into arbitrary imported modules
+        # (``torch``, ``numpy``) would be unbounded; deeper stashes are covered
+        # by the session identity belt, which never trusts an unregistered
+        # stamp anyway.
+        obj_id = id(value)
+        if obj_id in seen or depth >= 12:
+            return
+        seen.add(obj_id)
+        namespace = getattr(value, "__dict__", None)
+        if isinstance(namespace, dict):
+            for item in list(namespace.values()):
+                if isinstance(item, torch.Tensor) and not isinstance(item, torch.nn.Parameter):
+                    clear_meta(item)
         return
     if isinstance(value, torch.Tensor):
         if not isinstance(value, torch.nn.Parameter):
@@ -2285,12 +2309,22 @@ def _undecorate_model_tensors(trace: "Trace", model: nn.Module) -> None:
     below, and its surviving ``TensorMeta`` address would let a later capture
     accept stale buffer provenance. The traversal is kept as belt-and-suspenders
     for unstamped model-owned tensors; ``clear_meta`` is idempotent.
+
+    r81: the session identity registry (``trace._session_buffer_identity``) is
+    cleared alongside -- its entries pin the stamped objects and their stamp-time
+    storages, so releasing it both clears any stamp the inventory might ever
+    miss and drops the storage keepers.
     """
     buffer_inventory = getattr(trace, "_session_buffer_inventory", None)
     for stamped_tensor in buffer_inventory or ():
         clear_meta(stamped_tensor)
     if buffer_inventory:
         trace._session_buffer_inventory = []
+    identity_registry = getattr(trace, "_session_buffer_identity", None)
+    if identity_registry:
+        for stamp_entry in identity_registry.values():
+            clear_meta(stamp_entry.tensor)
+        trace._session_buffer_identity = {}
     seen: set[int] = set()
     for submodule in model.modules():
         for attr_val in submodule.__dict__.values():

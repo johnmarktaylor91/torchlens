@@ -36,12 +36,13 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
         Trace,
         tuple(constants.MODEL_LOG_FIELD_ORDER),
         # _grad_fn_param_refs, _phase_timings, and _replay_arg_version_data_complete
-        # were promoted into MODEL_LOG_FIELD_ORDER (cert10), so only the two
-        # remaining portable-only fields stay documented here.
+        # were promoted into MODEL_LOG_FIELD_ORDER (cert10); _buffer_persistence
+        # was promoted into MODEL_LOG_FIELD_ORDER too (r81 buffer-rung parity
+        # lockstep), so only the two remaining portable-only fields stay
+        # documented here.
         portable_only_fields=frozenset(
             {
                 "_buffer_initial_values",
-                "_buffer_persistence",
                 "ops_with_params",
             }
         ),

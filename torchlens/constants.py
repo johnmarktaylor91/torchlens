@@ -217,6 +217,7 @@ MODEL_LOG_FIELD_ORDER = [
     "_annotation_blobs",
     "buffer_layers",
     "buffer_num_calls",
+    "_buffer_persistence",
     "internal_source_ops",
     "internal_sink_ops",
     "internally_terminated_bool_ops",

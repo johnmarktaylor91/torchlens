@@ -348,7 +348,25 @@ structure, re-derives, and requires exact discharge.
   this trace's param logs AND the recorded log's live object IS the argument (exact
   identity) -- with the same identity gate applied before a parameter resolves into
   `param_logs` at all, closing the stale-address wrong-bind (a foreign leaked object can
-  never be silently bound to this model's own same-named state). Malformed fact encodings stay in the typed lane (r75 L1): a metadata/literal/structure
+  never be silently bound to this model's own same-named state). The BUFFER rung has full
+  parity with that param defense (r81): every buffer-stamp path (prep -- registered,
+  plain-attr, and list-element -- dynamic tagging, the tracker index refresh, and BOTH
+  buffer-write-journal entry points) registers the stamped object in a session identity
+  registry alongside the cleanup inventory, and a static buffer stamp counts as provenance
+  ONLY when the exact object was stamped in the ACTIVE session AND its LIVE storage is
+  still the storage pinned at stamp time -- so a stale cross-capture stamp never resolves,
+  and a legitimately stamped receiver whose storage was `.data`-rebound to input-derived
+  data mid-forward fails the storage match and leaves the break marker (plain-attr and
+  list-element buffers now ceiling exactly like the host-write-tracked registered-buffer
+  spelling). The same session-validated resolution gates every consumer that would
+  re-root a receiver as internal state: the buffer-source logging gates, the tracker's
+  direct-stamp fast path, and the witness state-attribution rungs (escape/state-read
+  addressing and the dispatch-origin ledger's `state:` origins). The rung's `label_raw`
+  and `buffer_source` components are session-scoped the same way: they count only when
+  they resolve in the ACTIVE capture's live event index. The ModuleType cleanup blind
+  spot is closed with a shallow module-namespace sweep (deep module recursion stays
+  bounded; deeper stashes are harmless because the belt never trusts an unregistered
+  stamp). Malformed fact encodings stay in the typed lane (r75 L1): a metadata/literal/structure
   fact whose `path`/`position` is not a sequence (int-encoded, or a string that would shred
   into per-character components) refuses `context_field_invalid` at parse -- analysis-only
   with the diagnostic intact, never the generic catch-all -- and the execution-side readers
@@ -2353,7 +2371,22 @@ param and buffer rungs and enabling a stale-address wrong-bind on the same input
 is now driven by the recorded prep inventory (a popped object escapes the tree, never the
 inventory), and consumers additionally require current-session identity resolution, so a
 stale or forged stamp can never be accepted even if some future path escapes cleanup
-again. The direct-leaf spelling keeps
+again. r81 completes that closure on the BUFFER rung, which r79 had left partial: the
+buffer-write journal's stamps join the inventory (both the reassignment and the
+in-place/op-write entry points -- the r80 cross-capture escape rode exactly that gap, with
+a `types.ModuleType` stash dodging the cleanup tree-walk), and the buffer stamp is trusted
+only through a session identity registry whose entries also pin the STAMP-TIME STORAGE:
+the receiver's live storage must still be that storage. This closes the second r80
+vehicle, a SINGLE-capture launder in which a legitimately stamped plain-attr buffer was
+`.data`-rebound to input-derived data mid-forward and the stale storage-blind stamp
+misattributed the INPUT-derived layout (which r73/r75 closed) INTO this residual's STATE
+exemption -- a rebound stamped receiver now resolves as unknown/unattributed and fails
+closed, while unrebound plain-attr state layout reads keep residual (3) `verified`
+(zero collateral). One defense-in-depth boundary remains documented rather than closed: a
+stale `label_raw` whose text COLLIDES with a same-named event in the active capture would
+pass the live-index membership check (the event index carries no object-identity anchor);
+reaching it requires a stamp that survives the now inventory-complete cleanup AND a label
+collision, and closing it would need per-event object anchoring in the live index. The direct-leaf spelling keeps
 its stricter r27/r31 witnessed-fact semantics (`diverged`). (4) object-identity aliasing of a non-canonical state slot through an
 aliasing-polymorphic op, tested via pure Python identity (`y = self.w.contiguous(); y is
 self.w`), is a documented residual (locked r65 ruling): no accessor fires on ANY tensor, so

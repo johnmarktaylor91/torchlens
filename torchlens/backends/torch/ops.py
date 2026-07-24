@@ -22,7 +22,6 @@ from ..._state import pause_logging
 from torch.utils.weak import WeakIdKeyDictionary
 
 from ._tl import (
-    get_buffer_address,
     get_label_list,
     get_live_label_list,
     get_live_tensor_label,
@@ -38,7 +37,7 @@ from .aliasing import (
     get_parent_contents_for_contract_position,
     parent_label_has_alias_contract,
 )
-from .buffer_writes import resolve_registered_buffer_address
+from .buffer_writes import resolve_registered_buffer_address, session_validated_buffer_address
 from . import module_stack as _mstack
 from ...fastlog._halt import HaltSignal
 from ...utils._callable_safety import _PURE_TENSOR_PROPERTY_NAMES
@@ -1798,6 +1797,21 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
     therefore never be accepted, even if some future path escapes the
     inventory-driven cleanup again. Stale/foreign stamps fall through to the
     tensor-meta rung and leave the break marker.
+
+    r81 buffer-rung parity (r80 F1+F2): the tensor-meta rung now requires
+    CURRENT-SESSION provenance component-wise, exactly like the param rung:
+
+    * ``label_raw`` counts only when it resolves in THIS capture's live event
+      index (a stale cross-capture label -- e.g. the ``buffer_N_raw`` stamped
+      onto a reassigned external by the donor's ``_record_write`` -- never
+      does, so it leaves the break marker instead of silently passing);
+    * ``address`` (the static buffer stamp) counts only when
+      :func:`session_validated_buffer_address` proves the exact object was
+      stamped THIS session AND its live storage is still the stamped storage
+      (an input-``.data=``-rebound plain-attr buffer fails the storage match;
+      a stale cross-capture object never resolves at all);
+    * ``buffer_source`` (a promoted pre-buffer producer label) counts only
+      when that producer label resolves in THIS capture's live event index.
     """
 
     if isinstance(value, torch.nn.Parameter):
@@ -1812,9 +1826,19 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
             ):
                 return True
     meta = get_tensor_meta(value)
-    return meta is not None and any(
-        item is not None for item in (meta.label_raw, meta.address, meta.buffer_source)
+    if meta is None:
+        return False
+    capture_events = getattr(trace, "capture_events", None)
+    live_labels: dict[str, Any] = (
+        capture_events.live_index.by_raw_label if capture_events is not None else {}
     )
+    if meta.label_raw is not None and meta.label_raw in live_labels:
+        return True
+    if meta.address is not None and session_validated_buffer_address(trace, value) is not None:
+        return True
+    if meta.buffer_source is not None and meta.buffer_source in live_labels:
+        return True
+    return False
 
 
 def _unattributed_tensor_arg_positions(
@@ -3105,7 +3129,12 @@ def _build_shared_fields_dict(
     for tensor in tensors_to_resolve:
         if isinstance(tensor, torch.nn.Parameter) or get_tensor_label(tensor) is not None:
             continue
-        buffer_address = get_buffer_address(tensor)
+        # r81: never source-log a "buffer" off the raw static stamp -- a stale
+        # cross-capture stamp (F1) or a legitimately stamped receiver whose
+        # storage was rebound to input data mid-forward (F2) would re-root an
+        # input-derived value as internal state. The session belt validates
+        # object + storage identity; the tracker fallback is storage-anchored.
+        buffer_address = session_validated_buffer_address(self, tensor)
         if buffer_address is None:
             buffer_address = resolve_registered_buffer_address(self, tensor)
         if buffer_address is not None:

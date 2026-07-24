@@ -63,6 +63,24 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_capture_config",
         "_raw_transform_escape_detected",
         "_stop_directive",
+        # r65-r81 buffer-rung/RNG-registry sprint: capture-scratch that
+        # legitimately survives on a finished Trace (host-RNG monitor state,
+        # session-scoped param/buffer inventories, and storage-address maps
+        # used by the buffer-rung witness/completeness machinery).
+        "_param_storage_addresses",
+        "_buffer_storage_addresses",
+        "_runnable_host_rng_consumed",
+        "_runnable_host_rng_unreplayable",
+        "_runnable_host_rng_channels",
+        "_runnable_host_rng_replayable_reads",
+        "_runnable_rng_monitor_uncertain",
+        "_runnable_rng_monitor_uncertain_detail",
+        "_runnable_output_losslessness",
+        "_runnable_embedded_nonpersistent_buffers",
+        "_orphan_pruned_func_call_ids",
+        "_session_param_inventory",
+        "_session_buffer_inventory",
+        "_session_buffer_identity",
     }
 
     actual = set(trace.__dict__.keys())

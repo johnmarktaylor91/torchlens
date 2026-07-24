@@ -50,6 +50,133 @@ class BufferSnapshot:
 
 
 @dataclass(slots=True)
+class _SessionBufferStamp:
+    """Current-session identity record for one buffer-stamped tensor (r81).
+
+    The strong ``tensor`` reference keeps ``id(tensor)`` stable for the session
+    and lets cleanup clear the stamp even when the object is unreachable from
+    the model tree. The strong ``storage`` reference (the ``UntypedStorage``
+    held at stamp time) pins the stamped storage alive so its ``data_ptr`` can
+    never be recycled during the session: a live-vs-keeper pointer match is
+    therefore a true storage-identity proof, not a heuristic.
+    """
+
+    tensor: torch.Tensor
+    address: str
+    storage: Any | None
+
+
+def register_session_buffer_stamp(trace: "Trace", value: torch.Tensor, address: str) -> None:
+    """Stamp a buffer address and record CURRENT-SESSION identity for it (r81).
+
+    Every path that writes a session-scoped buffer provenance stamp MUST route
+    through this helper (r80 F1 root A: ``_record_write`` stamped values without
+    inventorying them, so the r79 inventory cleanup could not clear them and the
+    stale stamp survived into later captures). The helper:
+
+    1. writes the ``TensorMeta.address`` stamp (``set_buffer_address``);
+    2. appends the object to ``trace._session_buffer_inventory`` (once per
+       object) so the inventory-driven cleanup always clears it; and
+    3. records the object + address + live storage keeper in
+       ``trace._session_buffer_identity`` -- the registry consulted by
+       :func:`session_validated_buffer_address`, the buffer twin of the param
+       rung's ``_param_ref is value`` identity belt.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace owning the session registries.
+    value:
+        Tensor receiving the buffer stamp.
+    address:
+        Dotted buffer address being stamped.
+    """
+
+    set_buffer_address(value, address)
+    registry = getattr(trace, "_session_buffer_identity", None)
+    if registry is None:
+        registry = {}
+        trace._session_buffer_identity = registry
+    inventory = getattr(trace, "_session_buffer_inventory", None)
+    if inventory is None:
+        inventory = []
+        trace._session_buffer_inventory = inventory
+    existing = registry.get(id(value))
+    if existing is None or existing.tensor is not value:
+        inventory.append(value)
+    storage: Any | None = None
+    try:
+        with _state.pause_logging():
+            storage = value.untyped_storage()
+    except Exception:
+        storage = None
+    registry[id(value)] = _SessionBufferStamp(tensor=value, address=address, storage=storage)
+
+
+def session_validated_buffer_address(trace: "Trace", value: torch.Tensor) -> str | None:
+    """Return a buffer stamp ONLY when it is current-session with live storage identity.
+
+    The buffer/tensor-meta provenance belt (r81, r80 F1+F2 shared root): a
+    static ``TensorMeta.address`` stamp is trusted only when ALL hold:
+
+    1. the exact object was stamped during THIS capture session (it resolves in
+       ``trace._session_buffer_identity`` by identity -- a stale cross-capture
+       leftover never resolves, closing F1 even if a future tagging path
+       escapes the inventory cleanup again); and
+    2. the receiver's LIVE storage is still the storage held at stamp time
+       (pointer/extent/device match against the pinned keeper -- a mid-forward
+       ``q.data = <input-derived>`` rebind fails the match, closing F2's
+       input-layout launder through a legitimately stamped plain-attr buffer).
+
+    Storage-identity is fail-closed: if the keeper or the live storage is
+    inaccessible on exactly one side, the stamp is NOT validated. Only the
+    symmetric-inaccessible case (exotic tensors whose storage cannot be read at
+    stamp time or now) falls back to pure object identity.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace owning the session registry.
+    value:
+        Tensor whose direct buffer stamp should be validated.
+
+    Returns
+    -------
+    str | None
+        The validated current-session buffer address, else ``None``.
+    """
+
+    address = get_buffer_address(value)
+    if address is None:
+        return None
+    registry = getattr(trace, "_session_buffer_identity", None)
+    if not registry:
+        return None
+    entry = registry.get(id(value))
+    if entry is None or entry.tensor is not value or entry.address != address:
+        return None
+    live: Any | None = None
+    try:
+        with _state.pause_logging():
+            live = value.untyped_storage()
+    except Exception:
+        live = None
+    keeper = entry.storage
+    if keeper is None or live is None:
+        return address if (keeper is None and live is None) else None
+    try:
+        with _state.pause_logging():
+            same = (
+                live.data_ptr() == keeper.data_ptr()
+                and live.nbytes() == keeper.nbytes()
+                and str(live.device) == str(keeper.device)
+            )
+    except Exception:
+        return None
+    return address if same else None
+
+
+@dataclass(slots=True)
 class _PatchedClass:
     """Original ``__setattr__`` and active prepared instances for one module class."""
 
@@ -160,7 +287,10 @@ class BufferWriteTracker:
                 if tensor is None or isinstance(tensor, nn.Parameter):
                     continue
                 address = f"{module_address}.{name}" if module_address else name
-                set_buffer_address(tensor, address)
+                # r81: route the re-stamp through the session registry so the
+                # identity belt stays coherent with the stamped address (e.g. a
+                # double-registered alias whose last-visited name wins here).
+                register_session_buffer_stamp(self.trace, tensor, address)
                 try:
                     with _state.pause_logging():
                         buffer_storage_addresses[tensor.untyped_storage().data_ptr()] = address
@@ -498,7 +628,11 @@ class BufferWriteTracker:
         )
         self.trace._buffer_write_events.append(event)
         self._register_address(address, value, copied_value)
-        set_buffer_address(value, address)
+        # r81 (r80 F1 root A): the written/reassigned value's stamp MUST be
+        # inventoried + identity-registered, not bare-stamped -- a reassigned
+        # external popped from ``_buffers`` escaped every cleanup walk and its
+        # surviving stamp resurrected the stale-provenance false VERIFIED.
+        register_session_buffer_stamp(self.trace, value, address)
         self._refresh_overlapping_alias_snapshots(address)
 
     def _log_buffer_version_node(
@@ -735,7 +869,9 @@ def resolve_registered_buffer_address(trace: "Trace", tensor: torch.Tensor) -> s
 
     tracker = getattr(trace, "_buffer_write_tracker", None)
     if not isinstance(tracker, BufferWriteTracker):
-        return get_buffer_address(tensor)
+        # r81: no tracker (non-exhaustive session) -- never trust the raw
+        # static stamp; require current-session identity + storage identity.
+        return session_validated_buffer_address(trace, tensor)
     return _resolve_buffer_address(tracker, tensor)
 
 
@@ -889,7 +1025,11 @@ def _resolve_buffer_address(
     """Resolve a tensor/view/data tensor to a registered-buffer address."""
 
     direct = get_buffer_address(tensor)
-    if direct in tracker.address_to_tensor:
+    # r81: the direct-stamp fast path resolves ONLY for the object that IS the
+    # current-session registered tensor at that address. A stale/foreign stamp
+    # whose address merely collides with a registered name falls through to the
+    # storage-key resolution below, which is anchored on live storage identity.
+    if direct is not None and tracker.address_to_tensor.get(direct) is tensor:
         return direct
     key = tracker.storage_key(tensor)
     if key is None:
