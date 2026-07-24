@@ -309,3 +309,231 @@ def test_convbn_eval_running_stats_stay_verified(tmp_path: Path) -> None:
     result = _verified(model, torch.randn(2, 3, 8, 8), tmp_path)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert not result.report.poisoned
+
+
+# --------------------------------------------------------------------------- #
+# COLUMN COMPLETENESS -- the ONE belt subsumes every storage-rebind sibling.
+#
+# The r85 belt is a single mechanism at the shared label choke points, so it
+# ceils every vehicle that swaps a state receiver's storage POINTER -- not just
+# SOL-1's exact buffer-derived spelling. These vehicles all reduce to the same
+# closure (save refusal / unverifiable) with NO per-vehicle code; the honest
+# siblings that keep the pointer stay VERIFIED. No sibling escapes the belt.
+# --------------------------------------------------------------------------- #
+
+
+class _ParamReboundActivation(nn.Module):
+    """A PARAM-derived activation ``.data``-rebound to input-derived storage."""
+
+    def __init__(self) -> None:
+        """Register the parameter whose product activation is rebound."""
+
+        super().__init__()
+        self.w = nn.Parameter(torch.ones(4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a param-rooted activation after rebinding its storage."""
+
+        y = self.w * 1.0
+        y.data = (x * 2.0).detach()
+        return y * 1.0
+
+
+class _SetReboundActivation(nn.Module):
+    """A state activation whose storage is swapped via ``set_(foreign_storage)``."""
+
+    def __init__(self) -> None:
+        """Register the state root."""
+
+        super().__init__()
+        self.register_buffer("b", torch.ones(4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a state activation after ``set_``-ing it to input-derived storage."""
+
+        y = self.b * 1.0
+        src = (x * 2.0).detach().clone()
+        y.set_(src.untyped_storage(), 0, y.shape, y.stride())
+        return y * 1.0
+
+
+class _ViewAfterRebind(nn.Module):
+    """A view taken AFTER the base's storage is rebound reads input-derived data."""
+
+    def __init__(self) -> None:
+        """Register the state root."""
+
+        super().__init__()
+        self.register_buffer("b", torch.ones(4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Rebind the base to input storage, then read a view of it."""
+
+        y = self.b * 1.0
+        y.data = (x * 2.0).detach()
+        v = y.view(4)
+        return v * 1.0
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    "factory",
+    [_ParamReboundActivation, _SetReboundActivation, _ViewAfterRebind],
+    ids=["param_derived_data_rebind", "set_foreign_storage", "view_after_base_rebind"],
+)
+def test_storage_rebind_sibling_vehicles_never_false_verified(
+    factory: Callable[[], nn.Module], tmp_path: Path
+) -> None:
+    """The single belt ceils every pointer-swap sibling (param / set_ / view-base).
+
+    Each pre-fix would false-VERIFY the pre-rebind value exactly like SOL-1; the
+    same storage-integrity belt orphans the rebound receiver so all three refuse.
+    """
+
+    _assert_storage_rebind_closed(
+        factory,
+        torch.full((4,), 10.0),
+        (torch.full((4,), 10.0), torch.full((4,), 7.0)),
+        tmp_path,
+    )
+
+
+def test_buffer_source_rung_honors_storage_pin() -> None:
+    """The ``buffer_source`` rung carries the SAME storage pin as ``label_raw``.
+
+    ``buffer_source`` is a promoted pre-buffer producer label (a tensor logged as
+    an intermediate then registered as a buffer). It is gated by the identical
+    ``label_storage_intact`` check in ``_tensor_has_known_provenance``, so a
+    ``buffer_source``-carrying object whose storage is rebound is no longer
+    trusted -- the sibling free warned could be "missed". Asserted directly on the
+    internal API (mirroring r81/r83's rung-level probes): the pin survives the
+    promotion and fails on rebind while an untouched object stays intact.
+    """
+
+    from torchlens.backends.torch import _tl
+
+    _tl.begin_label_session()
+    try:
+        t = torch.ones(4)
+        _tl.set_tensor_label(t, "mul_1_1_raw")
+        _tl.promote_label_to_buffer_source_and_clear_label(t)
+        meta = _tl.get_tensor_meta(t)
+        assert meta is not None
+        assert meta.buffer_source == "mul_1_1_raw"
+        assert meta.label_raw is None
+        assert _tl.session_label_storage_intact(meta, t) is True
+        t.data = torch.arange(4, dtype=torch.float32).detach()
+        assert _tl.session_label_storage_intact(meta, t) is False
+    finally:
+        _tl.end_label_session()
+
+
+# --------------------------------------------------------------------------- #
+# COLUMN COMPLETENESS -- honest siblings that KEEP the pointer stay VERIFIED.
+# --------------------------------------------------------------------------- #
+
+
+class _ViewBeforeRebind(nn.Module):
+    """A view taken BEFORE the base is rebound still reads the intact base storage."""
+
+    def __init__(self) -> None:
+        """Register the state root."""
+
+        super().__init__()
+        self.register_buffer("b", torch.ones(4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """View the base first, THEN rebind the base object (the view is honest)."""
+
+        y = self.b * 1.0
+        v = y.view(4)
+        y.data = (x * 2.0).detach()  # rebinds y only; v still reads the intact base
+        return v * 1.0
+
+
+class _SameStorageOwnViewRebind(nn.Module):
+    """A ``.data=`` to a view of the object's OWN storage keeps the pointer + value."""
+
+    def __init__(self) -> None:
+        """Register the state root."""
+
+        super().__init__()
+        self.register_buffer("b", torch.ones(4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Rebind to a view of the SAME storage -- value unchanged, pointer kept."""
+
+        y = self.b * 1.0
+        y.data = y.view(4)
+        return y * 1.0
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    "factory",
+    [_ViewBeforeRebind, _SameStorageOwnViewRebind],
+    ids=["view_before_base_rebind", "same_storage_own_view"],
+)
+def test_pointer_preserving_siblings_stay_verified(
+    factory: Callable[[], nn.Module], tmp_path: Path
+) -> None:
+    """Honest siblings that do NOT swap the receiver's storage pointer stay VERIFIED.
+
+    A view captured before the base's ``.data=`` still reads the intact base
+    storage; a ``.data=`` to a view of the receiver's OWN storage keeps both the
+    pointer and the value. Both are honest and replay exactly -- the belt keys on
+    the storage OBJECT, so neither is over-triggered.
+    """
+
+    torch.manual_seed(0)
+    model = factory()
+    capture_input = torch.full((4,), 10.0)
+    result = _verified(model, capture_input, tmp_path)
+    oracle = factory()(capture_input.clone())
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not result.report.poisoned
+    assert (result.output - oracle).abs().max().item() < 1e-6
+
+
+class _V6SameStorageInputStrided(nn.Module):
+    """hon1 V6: a same-storage ``.data=`` re-strided to the INPUT's layout."""
+
+    def __init__(self) -> None:
+        """Register a 4-D state buffer."""
+
+        super().__init__()
+        self.register_buffer("b", torch.ones(2, 3, 4, 4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Rebind ``.data`` to a re-strided view of OWN storage matching x's strides."""
+
+        y = self.b * 1.0
+        y.data = torch.as_strided(y, y.shape, x.stride())
+        return (y + 0.0).reshape(-1).sum() * 1.0
+
+
+def test_v6_same_storage_input_strided_rebind_ceils(tmp_path: Path) -> None:
+    """hon1 V6: same-storage input-strided ``.data=`` is caught by the layout net.
+
+    The rebind keeps the storage POINTER, so the r85 belt correctly passes it (it
+    is the object's own storage); the INPUT-layout dependency is instead caught by
+    the r73/r75 layout net -- a changed-layout (channels_last) input diverges
+    while the same-layout control stays honestly VERIFIED. Verifies the r85 belt
+    and the layout net compose without a gap.
+    """
+
+    torch.manual_seed(0)
+    model = _V6SameStorageInputStrided()
+    capture_input = torch.randn(2, 3, 4, 4)
+    path = tmp_path / "v6.tlspec"
+    trace = tl.trace(model, capture_input, capture=_CAPTURE)
+    trace.save(path, level="runnable", include_weights=True)
+    loaded = tl.load(path)
+
+    control = loaded.run(inputs=capture_input.clone())
+    assert control.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not control.report.poisoned
+
+    twin = capture_input.clone().to(memory_format=torch.channels_last)
+    with pytest.raises(PathDivergenceError):
+        loaded.run(inputs=twin)
