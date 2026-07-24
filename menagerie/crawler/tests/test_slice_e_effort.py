@@ -11,6 +11,9 @@ from menagerie.crawler.effort import (
     EffortTracker,
     RepeatedRootCauseError,
     StageCap,
+    _EFFORT_TRANSITIONS,
+    _EffortMetric,
+    _EffortTransition,
     fingerprint_root_cause,
 )
 
@@ -58,3 +61,26 @@ def test_explicit_grant_extends_only_its_stage_cap() -> None:
         )
     )
     assert tracker.consume("source", bytes_used=5).bytes == 15
+
+
+@pytest.mark.parametrize(
+    ("increments", "metric"),
+    [
+        ({"attempts": 1, "seconds": 1.0, "bytes_used": 1}, "attempts"),
+        ({"attempts": 0, "seconds": 1.0, "bytes_used": 1}, "seconds"),
+        ({"attempts": 0, "seconds": 0.0, "bytes_used": 1}, "bytes"),
+    ],
+)
+def test_effort_transition_table_is_exhaustive_and_preserves_diagnostic_order(
+    increments: dict[str, int | float], metric: str
+) -> None:
+    """Every budget dimension is ruled and the first exceeded cap stays exact."""
+
+    assert tuple(transition.metric for transition in _EFFORT_TRANSITIONS) == tuple(_EffortMetric)
+    assert all(isinstance(value, _EffortTransition) for value in _EFFORT_TRANSITIONS)
+    tracker = EffortTracker({"fetch": StageCap(attempts=0, seconds=0.0, bytes=0)})
+    with pytest.raises(
+        EffortCapExceeded,
+        match=rf"fetch effort cap exhausted: {metric} 1 > 0",
+    ):
+        tracker.consume("fetch", **increments)

@@ -9,11 +9,37 @@ optional callback and leaves terminal-record creation to the reducer/driver.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from enum import Enum
 from typing import Any, Callable, Mapping, Optional
 
 from menagerie.crawler.constants import FailureStage
 from menagerie.crawler.identity import is_sha256, stable_hash, utc_now
 from menagerie.crawler.models import JsonObject
+
+
+class _EffortMetric(str, Enum):
+    """Closed budget dimensions in diagnostic evaluation order."""
+
+    ATTEMPTS = "attempts"
+    SECONDS = "seconds"
+    BYTES = "bytes"
+
+
+@dataclass(frozen=True)
+class _EffortTransition:
+    """Typed cap, usage, and grant projection for one budget dimension."""
+
+    metric: _EffortMetric
+    integral: bool
+
+
+_EFFORT_TRANSITIONS: tuple[_EffortTransition, ...] = (
+    _EffortTransition(_EffortMetric.ATTEMPTS, integral=True),
+    _EffortTransition(_EffortMetric.SECONDS, integral=False),
+    _EffortTransition(_EffortMetric.BYTES, integral=True),
+)
+if tuple(transition.metric for transition in _EFFORT_TRANSITIONS) != tuple(_EffortMetric):
+    raise RuntimeError("effort transition table is not exhaustive")
 
 
 def _stage_name(stage: str | FailureStage) -> str:
@@ -54,7 +80,7 @@ class StageCap:
             If a configured cap is negative.
         """
 
-        values = (self.attempts, self.seconds, self.bytes)
+        values = tuple(getattr(self, transition.metric.value) for transition in _EFFORT_TRANSITIONS)
         if any(value is not None and value < 0 for value in values):
             raise ValueError("effort caps cannot be negative")
 
@@ -92,9 +118,10 @@ class EffortGrant:
         _stage_name(self.stage)
         if not self.grant_id.strip() or not self.reason.strip() or not self.granted_by.strip():
             raise ValueError("grant identity, reason, and granted_by must be non-empty")
-        if min(self.attempts, self.seconds, self.bytes) < 0:
+        values = tuple(getattr(self, transition.metric.value) for transition in _EFFORT_TRANSITIONS)
+        if min(values) < 0:
             raise ValueError("grant extensions cannot be negative")
-        if self.attempts == 0 and self.seconds == 0 and self.bytes == 0:
+        if all(value == 0 for value in values):
             raise ValueError("a grant must extend at least one cap dimension")
 
 
@@ -324,7 +351,8 @@ class EffortTracker:
             bytes=current.bytes + bytes_used,
         )
         effective = self._effective_cap(stage_name)
-        for metric in ("attempts", "seconds", "bytes"):
+        for transition in _EFFORT_TRANSITIONS:
+            metric = transition.metric.value
             limit = getattr(effective, metric)
             observed = getattr(proposed, metric)
             if limit is not None and observed > limit:
@@ -398,9 +426,14 @@ class EffortTracker:
 
             return None if value is None else value + added
 
-        attempts = extend(base.attempts, float(sum(grant.attempts for grant in grants)))
-        seconds = extend(base.seconds, sum(grant.seconds for grant in grants))
-        byte_limit = extend(base.bytes, float(sum(grant.bytes for grant in grants)))
+        extended: dict[_EffortMetric, Optional[float]] = {}
+        for transition in _EFFORT_TRANSITIONS:
+            metric = transition.metric
+            added = float(sum(getattr(grant, metric.value) for grant in grants))
+            extended[metric] = extend(getattr(base, metric.value), added)
+        attempts = extended[_EffortMetric.ATTEMPTS]
+        seconds = extended[_EffortMetric.SECONDS]
+        byte_limit = extended[_EffortMetric.BYTES]
         return StageCap(
             attempts=None if attempts is None else int(attempts),
             seconds=seconds,
