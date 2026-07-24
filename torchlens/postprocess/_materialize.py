@@ -358,6 +358,11 @@ def _fields_from_event(
     parent_params = resolved_parent_params
     grad_handle = grad_fn_handle if grad_fn_handle is not None else event.grad_fn_handle
     module = event.modules[-1] if event.modules else None
+    # r83 C2: ``buffer_address`` (from ``_buffer_addresses_by_label``) now leads
+    # with the address the CAPTURE recorded, so preferring it here is no longer
+    # a heuristic overriding a recorded value -- it IS the recorded value
+    # whenever the event carried one. ``_event_address`` remains the fallback
+    # for events that recorded none.
     resolved_address = buffer_address or _event_address(event)
     tensor_payload = _event_tensor_payload(event, resolved_address, buffer_alias_snapshots)
     fields_dict: dict[str, object] = {field_name: None for field_name in LAYER_PASS_LOG_FIELD_ORDER}
@@ -828,10 +833,19 @@ def _buffer_addresses_by_label(trace: "Trace", op_events: list[OpEvent]) -> dict
     for event in source_buffer_events:
         if event.label_raw in by_label:
             continue
-        address = _buffer_address_from_equivalence_class(
-            event.equivalence_class,
-            unmatched_address_names,
-        )
+        # r83 C2: the address the CAPTURE recorded for this event is
+        # AUTHORITATIVE. The value/shape ladder below exists only to fill a
+        # genuinely MISSING address; it must never override a recorded one.
+        # Pre-fix the recorded address was discarded whenever it did not name a
+        # registered buffer, and a plain-attribute (or list-element) tensor
+        # source consumed before a same-shaped registered buffer then CLAIMED
+        # that buffer's address by shape -- binding it to the WRONG state at
+        # replay under VERIFIED/COMPLETE with no diagnostic, and reporting a
+        # foreign name on plain save-free metadata (``trace[...].address``). A
+        # recorded address that is not a registered buffer must instead reach
+        # the honest ``UNSUPPORTED_TENSOR_CONSTANT`` refusal in
+        # ``_io/runnable.py``, which is exactly what keeping it does.
+        address = _recorded_buffer_address(event)
         if address is None:
             address = _unique_buffer_address_by_value(
                 event.output.tensor.payload, unmatched_addresses
@@ -851,29 +865,47 @@ def _buffer_addresses_by_label(trace: "Trace", op_events: list[OpEvent]) -> dict
     return by_label
 
 
-def _buffer_address_from_equivalence_class(
-    equivalence_class: str | None,
-    unmatched_addresses: set[str],
-) -> str | None:
-    """Return a registered-buffer address encoded in a buffer equivalence class.
+def _recorded_buffer_address(event: OpEvent) -> str | None:
+    """Return the buffer address the CAPTURE recorded for a source event (r83 C2).
+
+    Source-buffer events are built with ``equivalence_class =
+    f"buffer_{address}"`` plus the canonical module-stack suffix appended by
+    ``_append_module_suffix_to_equivalence_class`` (``"_".join`` of the module
+    addresses). The suffix is reconstructed exactly from ``event.modules``, so
+    the recorded address is recovered without ambiguity and without a schema
+    change -- the live tensor's own ``TensorMeta.address`` stamp is NOT usable
+    here, because session cleanup strips it before postprocess runs.
+
+    The predecessor of this helper additionally required the decoded address to
+    be an unassigned REGISTERED buffer, which silently discarded the recorded
+    address for every plain-attribute or list-element buffer source -- and, in
+    practice, for every nested buffer too, since it compared the suffixed string
+    against bare addresses. Both fell through to the value/shape heuristics.
 
     Parameters
     ----------
-    equivalence_class
-        Event equivalence class for a source buffer.
-    unmatched_addresses
-        Registered buffer addresses that have not yet been assigned.
+    event
+        Source-buffer operation event being resolved.
 
     Returns
     -------
     str | None
-        Matching registered-buffer address, if the equivalence class names one.
+        The recorded address, or ``None`` when the event records none.
     """
 
+    equivalence_class = event.equivalence_class
     if equivalence_class is None or not equivalence_class.startswith("buffer_"):
         return None
     candidate = equivalence_class.removeprefix("buffer_")
-    return candidate if candidate in unmatched_addresses else None
+    suffix = "_".join(module_pass[0] for module_pass in event.modules)
+    if suffix:
+        if not candidate.endswith(suffix):
+            return None
+        candidate = candidate[: -len(suffix)]
+    # ``extra_addr=None`` stringifies into the class; that is a missing address.
+    if not candidate or candidate == "None":
+        return None
+    return candidate
 
 
 def _buffer_alias_snapshots_by_address(trace: "Trace") -> dict[str, torch.Tensor]:
