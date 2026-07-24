@@ -14,6 +14,7 @@ from typing import Any, Callable, Collection, Iterable, Mapping, Optional, Seque
 
 from menagerie.crawler.artifact_transactions import (
     ARTIFACT_RECONSTRUCTION_SCHEMA_VERSION,
+    ArtifactCheckpointReference,
     ArtifactCheckpointProjection,
     ArtifactCheckpointError,
     ArtifactEventKind,
@@ -1512,6 +1513,9 @@ def _validate_gated_license_decisions(
             raise RestrictedPublicArtifact(
                 f"dependency-current model has malformed artifact authority: {stable_id}"
             )
+        checkpoint_reference = ArtifactCheckpointReference.from_authority_payload(authority)
+        transaction_id = checkpoint_reference.transaction_id
+        claim_ids = checkpoint_reference.claim_ids
         transactions = [
             transaction
             for (candidate_stable, _work_id, candidate_transaction), transaction in (

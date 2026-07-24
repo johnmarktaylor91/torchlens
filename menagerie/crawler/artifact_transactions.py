@@ -275,6 +275,160 @@ class ArtifactClaimRecord:
 
 
 @dataclass(frozen=True)
+class ReconstructionAnchorRecord:
+    """Canonical typed representation of one persisted reconstruction anchor."""
+
+    path: str
+    sha256: str
+    claim_ids: tuple[str, ...]
+
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, Any]) -> "ReconstructionAnchorRecord":
+        """Parse one schema-validated reconstruction anchor.
+
+        Parameters
+        ----------
+        payload:
+            Persisted artifact-event reconstruction mapping.
+
+        Returns
+        -------
+        ReconstructionAnchorRecord
+            Normalized immutable anchor fields.
+        """
+
+        return cls(
+            path=str(payload["path"]),
+            sha256=str(payload["sha256"]),
+            claim_ids=tuple(str(value) for value in payload["claim_ids"]),
+        )
+
+    def to_payload(self) -> JsonObject:
+        """Return the canonical reconstruction-anchor payload.
+
+        Returns
+        -------
+        dict[str, Any]
+            Schema-compatible artifact-event reconstruction fields.
+        """
+
+        return {
+            "path": self.path,
+            "sha256": self.sha256,
+            "claim_ids": list(self.claim_ids),
+        }
+
+
+@dataclass(frozen=True)
+class ArtifactAuthorityRecord:
+    """Canonical typed model reference to one latest artifact-event state."""
+
+    state: str
+    transaction_id: str
+    committed_event_id: str
+    authorization_id: str
+    reconstruction_sha256: str
+    claim_ids: tuple[str, ...]
+
+    @classmethod
+    def from_event(cls, event: Mapping[str, Any]) -> "ArtifactAuthorityRecord":
+        """Derive the canonical model authority reference from one latest event.
+
+        Parameters
+        ----------
+        event:
+            Schema-validated latest artifact event.
+
+        Returns
+        -------
+        ArtifactAuthorityRecord
+            Normalized model checkpoint reference.
+        """
+
+        reconstruction = event.get("reconstruction")
+        return cls(
+            state=str(event["event_kind"]),
+            transaction_id=str(event["transaction_id"]),
+            committed_event_id=str(event["artifact_event_id"]),
+            authorization_id=str(
+                event.get("authorization_id") or DependencyState.PENDING_UNTRUSTED.value
+            ),
+            reconstruction_sha256=(
+                ReconstructionAnchorRecord.from_payload(reconstruction).sha256
+                if isinstance(reconstruction, Mapping)
+                else DependencyState.NOT_APPLICABLE.value
+            ),
+            claim_ids=tuple(sorted(str(value["claim_id"]) for value in event.get("claims", []))),
+        )
+
+    @classmethod
+    def not_applicable(cls) -> "ArtifactAuthorityRecord":
+        """Return the closed not-applicable model authority reference.
+
+        Returns
+        -------
+        ArtifactAuthorityRecord
+            Canonical typed not-applicable checkpoint reference.
+        """
+
+        value = DependencyState.NOT_APPLICABLE.value
+        return cls(
+            state=value,
+            transaction_id=value,
+            committed_event_id=value,
+            authorization_id=value,
+            reconstruction_sha256=value,
+            claim_ids=(),
+        )
+
+    def to_payload(self) -> JsonObject:
+        """Return the canonical model artifact-authority payload.
+
+        Returns
+        -------
+        dict[str, Any]
+            Schema-compatible model checkpoint reference.
+        """
+
+        return {
+            "state": self.state,
+            "transaction_id": self.transaction_id,
+            "committed_event_id": self.committed_event_id,
+            "authorization_id": self.authorization_id,
+            "reconstruction_sha256": self.reconstruction_sha256,
+            "claim_ids": list(self.claim_ids),
+        }
+
+
+@dataclass(frozen=True)
+class ArtifactCheckpointReference:
+    """Canonical typed transaction and claim reference consumed by checkpoint policy."""
+
+    transaction_id: str
+    claim_ids: tuple[str, ...]
+
+    @classmethod
+    def from_authority_payload(cls, payload: Mapping[str, Any]) -> "ArtifactCheckpointReference":
+        """Parse the checkpoint-owned subset of a model authority payload.
+
+        Parameters
+        ----------
+        payload:
+            Model artifact-authority mapping whose local shape guard already passed.
+
+        Returns
+        -------
+        ArtifactCheckpointReference
+            Normalized transaction and claim identities.
+        """
+
+        return cls(
+            transaction_id=str(payload["transaction_id"]),
+            claim_ids=tuple(str(value) for value in payload["claim_ids"]),
+        )
+
+
+@dataclass(frozen=True)
 class StagedArtifact:
     """Private-custody transaction produced before any checker authorization."""
 
@@ -2489,11 +2643,11 @@ def publish_authorized_artifact(
     _atomic_write_immutable(reconstruction_path, document_bytes)
     reconstruction_sha256 = hash_bytes(document_bytes)
     reconstruction_relative = reconstruction_path.resolve().relative_to(repository_root.resolve())
-    reconstruction_anchor = {
-        "path": reconstruction_relative.as_posix(),
-        "sha256": reconstruction_sha256,
-        "claim_ids": [str(claim.claim_id) for claim in claims],
-    }
+    reconstruction_anchor = ReconstructionAnchorRecord(
+        path=reconstruction_relative.as_posix(),
+        sha256=reconstruction_sha256,
+        claim_ids=tuple(str(claim.claim_id) for claim in claims),
+    ).to_payload()
     reconstruction_event = _event_payload(
         transaction_id=staged.transaction_id,
         predecessor_event_id=str(authorization_event["artifact_event_id"]),
@@ -2797,7 +2951,8 @@ def validate_artifact_checkpoint(
         reconstruction = final_event.get("reconstruction")
         if not isinstance(reconstruction, Mapping):
             raise ArtifactCheckpointError("final artifact event lacks reconstruction anchor")
-        relative = _safe_relative_path(str(reconstruction.get("path")))
+        anchor = ReconstructionAnchorRecord.from_payload(reconstruction)
+        relative = _safe_relative_path(anchor.path)
         reconstruction_path = repository_root.resolve() / relative
         expected_path = _reconstruction_path(
             canonical_root.resolve(),
@@ -2810,7 +2965,7 @@ def validate_artifact_checkpoint(
             reconstruction_bytes = reconstruction_path.read_bytes()
         except OSError as exc:
             raise ArtifactCheckpointError("committed reconstruction bytes are missing") from exc
-        if hash_bytes(reconstruction_bytes) != reconstruction.get("sha256"):
+        if hash_bytes(reconstruction_bytes) != anchor.sha256:
             raise ArtifactCheckpointError("committed reconstruction bytes changed")
         try:
             import json
@@ -2823,7 +2978,7 @@ def validate_artifact_checkpoint(
         _validate_reconstruction_document(document, final_event, authorization_event, context)
         _validate_projection_dependencies(document, final_event, context)
         claim_ids = sorted(str(row["claim_id"]) for row in final_event["claims"])
-        if list(reconstruction.get("claim_ids", [])) != claim_ids:
+        if list(anchor.claim_ids) != claim_ids:
             raise ArtifactCheckpointError("reconstruction claim set differs from final event")
         for row in final_event["objects"]:
             obj = _parse_object(row)
@@ -2897,7 +3052,7 @@ def validate_artifact_checkpoint(
             authorization_id=str(final_event["authorization_id"]),
             accepted_gate_id=str(final_event["gate_id"]),
             reconstruction_path=reconstruction_path,
-            reconstruction_sha256=str(reconstruction["sha256"]),
+            reconstruction_sha256=anchor.sha256,
             reconstruction_inputs=ReconstructionInputs(
                 author_result=deepcopy(dict(document["author_result"])),
                 proposal=(
@@ -3301,7 +3456,8 @@ def artifact_reconstruction_paths(
 
     events = _load_events(artifact_ledger_paths)
     paths = {
-        repository_root / _safe_relative_path(str(reconstruction["path"]))
+        repository_root
+        / _safe_relative_path(ReconstructionAnchorRecord.from_payload(reconstruction).path)
         for event in events
         if isinstance((reconstruction := event.get("reconstruction")), Mapping)
     }

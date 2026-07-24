@@ -12,8 +12,10 @@ from pathlib import PurePosixPath
 from typing import Any, Iterable, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.artifact_transactions import (
+    ArtifactAuthorityRecord,
     ArtifactEventKind,
     ArtifactEventLedger,
+    ReconstructionAnchorRecord,
     StagedArtifact,
     append_artifact_authorization,
     derive_artifact_claims,
@@ -2267,14 +2269,7 @@ class CanonicalReducer:
         if not isinstance(authority, Mapping):
             raise ReductionError("model lacks its mandatory artifact authority block")
         if authority.get("state") == DependencyState.NOT_APPLICABLE.value:
-            expected = {
-                "state": DependencyState.NOT_APPLICABLE.value,
-                "transaction_id": DependencyState.NOT_APPLICABLE.value,
-                "committed_event_id": DependencyState.NOT_APPLICABLE.value,
-                "authorization_id": DependencyState.NOT_APPLICABLE.value,
-                "reconstruction_sha256": DependencyState.NOT_APPLICABLE.value,
-                "claim_ids": [],
-            }
+            expected = ArtifactAuthorityRecord.not_applicable().to_payload()
             if dict(authority) != expected:
                 raise ReductionError("not-applicable artifact authority is not closed")
             return {
@@ -2297,10 +2292,11 @@ class CanonicalReducer:
         reconstruction_sha256: object = DependencyState.NOT_APPLICABLE.value
         document: Optional[JsonObject] = None
         if isinstance(reconstruction, Mapping):
-            reconstruction_sha256 = reconstruction.get("sha256")
-            path_value = reconstruction.get("path")
-            if not isinstance(path_value, str):
+            anchor = ReconstructionAnchorRecord.from_payload(reconstruction)
+            reconstruction_sha256 = anchor.sha256
+            if not isinstance(reconstruction.get("path"), str):
                 raise ReductionError("artifact reconstruction lacks its immutable path")
+            path_value = anchor.path
             canonical_root = _production_canonical_root(self.ledger_paths)
             if canonical_root is not None:
                 repository_root = canonical_root.parents[1]
@@ -2313,15 +2309,7 @@ class CanonicalReducer:
                 if hash_bytes(raw) != reconstruction_sha256 or not isinstance(parsed, dict):
                     raise ReductionError("artifact reconstruction digest changed")
                 document = parsed
-        expected_authority: JsonObject = {
-            "state": latest.get("event_kind"),
-            "transaction_id": transaction_id,
-            "committed_event_id": latest.get("artifact_event_id"),
-            "authorization_id": latest.get("authorization_id")
-            or DependencyState.PENDING_UNTRUSTED.value,
-            "reconstruction_sha256": reconstruction_sha256,
-            "claim_ids": list(claims),
-        }
+        expected_authority = ArtifactAuthorityRecord.from_event(latest).to_payload()
         if dict(authority) != expected_authority:
             raise ReductionError("model artifact authority contradicts the latest ledger event")
         return {
@@ -2468,30 +2456,12 @@ class CanonicalReducer:
             if exact_events:
                 events = exact_events
         if not events:
-            candidate["artifact_authority"] = {
-                "state": DependencyState.NOT_APPLICABLE.value,
-                "transaction_id": DependencyState.NOT_APPLICABLE.value,
-                "committed_event_id": DependencyState.NOT_APPLICABLE.value,
-                "authorization_id": DependencyState.NOT_APPLICABLE.value,
-                "reconstruction_sha256": DependencyState.NOT_APPLICABLE.value,
-                "claim_ids": [],
-            }
+            candidate["artifact_authority"] = ArtifactAuthorityRecord.not_applicable().to_payload()
         else:
             latest = events[-1]
-            reconstruction = latest.get("reconstruction")
-            candidate["artifact_authority"] = {
-                "state": latest["event_kind"],
-                "transaction_id": latest["transaction_id"],
-                "committed_event_id": latest["artifact_event_id"],
-                "authorization_id": latest.get("authorization_id")
-                or DependencyState.PENDING_UNTRUSTED.value,
-                "reconstruction_sha256": (
-                    reconstruction.get("sha256")
-                    if isinstance(reconstruction, Mapping)
-                    else DependencyState.NOT_APPLICABLE.value
-                ),
-                "claim_ids": sorted(str(value["claim_id"]) for value in latest.get("claims", [])),
-            }
+            candidate["artifact_authority"] = ArtifactAuthorityRecord.from_event(
+                latest
+            ).to_payload()
         artifact_inputs = self._artifact_authority_inputs(candidate)
         work_id = self._model_work_id(candidate, artifact_inputs)
         meaningful_modes = tuple(
