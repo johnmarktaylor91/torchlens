@@ -120,6 +120,161 @@ class ArtifactInput:
 
 
 @dataclass(frozen=True)
+class ArtifactObjectRecord:
+    """Canonical typed representation of one persisted mirror-object row."""
+
+    value: MirrorObject
+
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, Any]) -> "ArtifactObjectRecord":
+        """Parse and identity-check one persisted mirror-object row.
+
+        Parameters
+        ----------
+        payload:
+            Persisted artifact-event object mapping.
+
+        Returns
+        -------
+        ArtifactObjectRecord
+            Canonical typed object record.
+
+        Raises
+        ------
+        ArtifactBindingError
+            If the claimed object ID is not intrinsic to the row.
+        """
+
+        obj = MirrorObject(
+            object_id=MirrorObjectId(str(payload["object_id"])),
+            mirror_class=str(payload["mirror_class"]),
+            content_sha256=str(payload["content_sha256"]),
+            byte_count=int(payload["byte_count"]),
+            media_type=str(payload["media_type"]),
+            object_key=str(payload["object_key"]),
+        )
+        expected = mirror_object_id(
+            obj.mirror_class,
+            obj.content_sha256,
+            obj.byte_count,
+            obj.media_type,
+            obj.object_key,
+        )
+        if obj.object_id != expected:
+            raise ArtifactBindingError(f"artifact object ID changed: {obj.object_id}")
+        return cls(obj)
+
+    def to_payload(self) -> JsonObject:
+        """Return the canonical intrinsic mirror-object payload.
+
+        Returns
+        -------
+        dict[str, Any]
+            Artifact-event object fields excluding the event-specific custody key.
+        """
+
+        return {
+            "object_id": str(self.value.object_id),
+            "mirror_class": self.value.mirror_class,
+            "content_sha256": self.value.content_sha256,
+            "byte_count": self.value.byte_count,
+            "media_type": self.value.media_type,
+            "object_key": self.value.object_key,
+        }
+
+
+@dataclass(frozen=True)
+class ArtifactClaimRecord:
+    """Canonical typed representation of one persisted artifact-claim row."""
+
+    value: ArtifactClaim
+
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, Any]) -> "ArtifactClaimRecord":
+        """Parse and identity-check one persisted artifact-claim row.
+
+        Parameters
+        ----------
+        payload:
+            Persisted artifact-event claim mapping.
+
+        Returns
+        -------
+        ArtifactClaimRecord
+            Canonical typed claim record.
+
+        Raises
+        ------
+        ArtifactBindingError
+            If the claimed ID is not derived from the complete claim.
+        """
+
+        claim = ArtifactClaim(
+            claim_id=ArtifactClaimId(str(payload["claim_id"])),
+            object_id=MirrorObjectId(str(payload["object_id"])),
+            stable_id=str(payload["stable_id"]),
+            work_id=str(payload["work_id"]),
+            proposal_id=str(payload["proposal_id"]),
+            gate_id=str(payload["gate_id"]),
+            authorization_id=str(payload["authorization_id"]),
+            logical_role=str(payload["logical_role"]),
+            logical_path=str(payload["logical_path"]),
+            source_id=str(payload["source_id"]),
+            origin=str(payload["origin"]),
+            revision=str(payload["revision"]),
+            fetch_recipe_sha256=str(payload["fetch_recipe_sha256"]),
+            evidence_ids=tuple(str(value) for value in payload["evidence_ids"]),
+            license_disposition=str(payload["license_disposition"]),
+        )
+        expected = artifact_claim_id(
+            object_id=claim.object_id,
+            stable_id=claim.stable_id,
+            work_id=claim.work_id,
+            proposal_id=claim.proposal_id,
+            gate_id=claim.gate_id,
+            authorization_id=claim.authorization_id,
+            logical_role=claim.logical_role,
+            logical_path=claim.logical_path,
+            source_id=claim.source_id,
+            origin=claim.origin,
+            revision=claim.revision,
+            fetch_recipe_sha256=claim.fetch_recipe_sha256,
+            evidence_ids=claim.evidence_ids,
+            license_disposition=claim.license_disposition,
+        )
+        if claim.claim_id != expected:
+            raise ArtifactBindingError(f"artifact claim ID changed: {claim.claim_id}")
+        return cls(claim)
+
+    def to_payload(self) -> JsonObject:
+        """Return the canonical artifact-claim payload.
+
+        Returns
+        -------
+        dict[str, Any]
+            Schema-compatible artifact-event claim row.
+        """
+
+        return {
+            "claim_id": str(self.value.claim_id),
+            "object_id": str(self.value.object_id),
+            "stable_id": self.value.stable_id,
+            "work_id": self.value.work_id,
+            "proposal_id": _dependency_value(self.value.proposal_id),
+            "gate_id": _dependency_value(self.value.gate_id),
+            "authorization_id": _dependency_value(self.value.authorization_id),
+            "logical_role": self.value.logical_role,
+            "logical_path": self.value.logical_path,
+            "source_id": self.value.source_id,
+            "origin": self.value.origin,
+            "revision": self.value.revision,
+            "fetch_recipe_sha256": self.value.fetch_recipe_sha256,
+            "evidence_ids": list(self.value.evidence_ids),
+            "license_disposition": self.value.license_disposition,
+        }
+
+
+@dataclass(frozen=True)
 class StagedArtifact:
     """Private-custody transaction produced before any checker authorization."""
 
@@ -454,15 +609,9 @@ def _object_json(obj: MirrorObject, private_custody_key: str) -> JsonObject:
         Schema-compatible object row.
     """
 
-    return {
-        "object_id": str(obj.object_id),
-        "mirror_class": obj.mirror_class,
-        "content_sha256": obj.content_sha256,
-        "byte_count": obj.byte_count,
-        "media_type": obj.media_type,
-        "object_key": obj.object_key,
-        "private_custody_key": private_custody_key,
-    }
+    payload = ArtifactObjectRecord(obj).to_payload()
+    payload["private_custody_key"] = private_custody_key
+    return payload
 
 
 def _claim_json(claim: ArtifactClaim) -> JsonObject:
@@ -479,23 +628,7 @@ def _claim_json(claim: ArtifactClaim) -> JsonObject:
         Schema-compatible claim row.
     """
 
-    return {
-        "claim_id": str(claim.claim_id),
-        "object_id": str(claim.object_id),
-        "stable_id": claim.stable_id,
-        "work_id": claim.work_id,
-        "proposal_id": _dependency_value(claim.proposal_id),
-        "gate_id": _dependency_value(claim.gate_id),
-        "authorization_id": _dependency_value(claim.authorization_id),
-        "logical_role": claim.logical_role,
-        "logical_path": claim.logical_path,
-        "source_id": claim.source_id,
-        "origin": claim.origin,
-        "revision": claim.revision,
-        "fetch_recipe_sha256": claim.fetch_recipe_sha256,
-        "evidence_ids": list(claim.evidence_ids),
-        "license_disposition": claim.license_disposition,
-    }
+    return ArtifactClaimRecord(claim).to_payload()
 
 
 def _parse_object(payload: Mapping[str, Any]) -> MirrorObject:
@@ -517,24 +650,7 @@ def _parse_object(payload: Mapping[str, Any]) -> MirrorObject:
         If the claimed object ID is not intrinsic to the row.
     """
 
-    obj = MirrorObject(
-        object_id=MirrorObjectId(str(payload["object_id"])),
-        mirror_class=str(payload["mirror_class"]),
-        content_sha256=str(payload["content_sha256"]),
-        byte_count=int(payload["byte_count"]),
-        media_type=str(payload["media_type"]),
-        object_key=str(payload["object_key"]),
-    )
-    expected = mirror_object_id(
-        obj.mirror_class,
-        obj.content_sha256,
-        obj.byte_count,
-        obj.media_type,
-        obj.object_key,
-    )
-    if obj.object_id != expected:
-        raise ArtifactBindingError(f"artifact object ID changed: {obj.object_id}")
-    return obj
+    return ArtifactObjectRecord.from_payload(payload).value
 
 
 def _parse_claim(payload: Mapping[str, Any]) -> ArtifactClaim:
@@ -556,42 +672,7 @@ def _parse_claim(payload: Mapping[str, Any]) -> ArtifactClaim:
         If the claimed ID is not derived from the complete claim.
     """
 
-    claim = ArtifactClaim(
-        claim_id=ArtifactClaimId(str(payload["claim_id"])),
-        object_id=MirrorObjectId(str(payload["object_id"])),
-        stable_id=str(payload["stable_id"]),
-        work_id=str(payload["work_id"]),
-        proposal_id=str(payload["proposal_id"]),
-        gate_id=str(payload["gate_id"]),
-        authorization_id=str(payload["authorization_id"]),
-        logical_role=str(payload["logical_role"]),
-        logical_path=str(payload["logical_path"]),
-        source_id=str(payload["source_id"]),
-        origin=str(payload["origin"]),
-        revision=str(payload["revision"]),
-        fetch_recipe_sha256=str(payload["fetch_recipe_sha256"]),
-        evidence_ids=tuple(str(value) for value in payload["evidence_ids"]),
-        license_disposition=str(payload["license_disposition"]),
-    )
-    expected = artifact_claim_id(
-        object_id=claim.object_id,
-        stable_id=claim.stable_id,
-        work_id=claim.work_id,
-        proposal_id=claim.proposal_id,
-        gate_id=claim.gate_id,
-        authorization_id=claim.authorization_id,
-        logical_role=claim.logical_role,
-        logical_path=claim.logical_path,
-        source_id=claim.source_id,
-        origin=claim.origin,
-        revision=claim.revision,
-        fetch_recipe_sha256=claim.fetch_recipe_sha256,
-        evidence_ids=claim.evidence_ids,
-        license_disposition=claim.license_disposition,
-    )
-    if claim.claim_id != expected:
-        raise ArtifactBindingError(f"artifact claim ID changed: {claim.claim_id}")
-    return claim
+    return ArtifactClaimRecord.from_payload(payload).value
 
 
 def _safe_relative_path(value: str) -> Path:
