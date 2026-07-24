@@ -59,6 +59,26 @@ class _SessionBufferStamp:
     held at stamp time) pins the stamped storage alive so its ``data_ptr`` can
     never be recycled during the session: a live-vs-keeper pointer match is
     therefore a true storage-identity proof, not a heuristic.
+
+    DO NOT "OPTIMISE" THE STRONG REFERENCES AWAY (r83 S2). Holding the tensor
+    AND its stamp-time storage roughly DOUBLES buffer-write retention -- one
+    entry per write, measured at ~385 MiB RSS delta over a 100-write stress on
+    a 4 MiB buffer, on top of the O(writes x buffer_size) the write journal
+    already retained. That cost is the price of CORRECTNESS, not an oversight.
+    A weakref-only design would let a rebound-and-freed storage's ``data_ptr``
+    be recycled by its replacement, so the pointer comparison in
+    :func:`session_validated_buffer_address` would produce a FALSE identity
+    match and re-open the r80 F2 launder (a plain-attr buffer ``.data``-rebound
+    to input-derived data mid-forward, silently reported ``VERIFIED``). If a
+    future memory pass must reduce this, the only safe direction is keeping the
+    keeper for the CURRENT live registration per address and letting superseded
+    objects fail validation -- strictly more conservative, at the cost of a
+    possible over-trigger for an op holding a superseded buffer version. Any
+    change here must re-derive the r80 F2 red first.
+
+    Retention is bounded to the session: both inventories and this registry are
+    ``FieldPolicy.DROP`` and are emptied by ``_cleanup_model_session``, verified
+    empty after every capture configuration tested including a raising forward.
     """
 
     tensor: torch.Tensor

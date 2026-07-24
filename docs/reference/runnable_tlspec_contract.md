@@ -362,11 +362,34 @@ structure, re-derives, and requires exact discharge.
   re-root a receiver as internal state: the buffer-source logging gates, the tracker's
   direct-stamp fast path, and the witness state-attribution rungs (escape/state-read
   addressing and the dispatch-origin ledger's `state:` origins). The rung's `label_raw`
-  and `buffer_source` components are session-scoped the same way: they count only when
-  they resolve in the ACTIVE capture's live event index. The ModuleType cleanup blind
-  spot is closed with a shallow module-namespace sweep (deep module recursion stays
-  bounded; deeper stashes are harmless because the belt never trusts an unregistered
-  stamp). Malformed fact encodings stay in the typed lane (r75 L1): a metadata/literal/structure
+  and `buffer_source` components have the SAME per-object belt (r83). Live-event-index
+  membership is TEXT, and label text is deterministic per op-kind + ordinal, so an
+  ordinary op in a later, unrelated capture regenerates the same string: text alone let a
+  tensor carrying a label from an EARLIER capture be accepted as current-session state and
+  spliced into the new DAG as the same-named node (reached by nothing more exotic than a
+  stock `register_forward_hook` activation collector, producing a SAME-INPUT wrong parent
+  bind reported `VERIFIED`). A label component now counts as provenance ONLY when the
+  object's own metadata records that THIS capture session issued it: `set_tensor_label` --
+  the single choke point every label stamp flows through -- writes the monotonic session
+  token alongside the label, so a stamp cannot exist without its anchor and no future stamp
+  site can escape the belt. Tokens are never reused, so an earlier capture's label can never
+  match the active one however the object re-enters. The gate is applied at the two accessors
+  every label consumer reads through, which closes the graph-parent binder, the layout
+  ancestry rooting rung, the dispatch-origin ladder, the host-escape attribution ladder and
+  the replay-template builder together; gating only the two provenance rungs was empirically
+  insufficient. Cleanup is correspondingly inventory-driven rather than reachability-driven:
+  the session enumerates every object it stamped, so a stash the cleanup walk cannot reach
+  (an `nn.Module` value outside the traced tree, an `__slots__` object, a container nested in
+  a `types.ModuleType`, a module-global appended to from a hook, a class attribute) is still
+  cleared -- swept when the next session is installed, since capture cleanup precedes
+  postprocess and postprocess still reads output-tensor labels. That sweep is defence in
+  depth ONLY: an unanchored stamp is not provenance whether or not cleanup ever reached it,
+  which is what makes a future unknown leak vehicle harmless. (This supersedes the r81
+  statement that the ModuleType blind spot was closed by a shallow module-namespace sweep
+  and that deeper stashes were harmless "because the belt never trusts an unregistered
+  stamp": the belt did NOT gate the label components at the time, so deeper stashes were
+  NOT harmless -- that is precisely what r82 broke, three times, from three directions.)
+  Malformed fact encodings stay in the typed lane (r75 L1): a metadata/literal/structure
   fact whose `path`/`position` is not a sequence (int-encoded, or a string that would shred
   into per-character components) refuses `context_field_invalid` at parse -- analysis-only
   with the diagnostic intact, never the generic catch-all -- and the execution-side readers
@@ -676,7 +699,24 @@ followed by a `gc.collect()` before `save(level="runnable")` nondeterministicall
 `unsupported_tensor_constant` (two same-shape+dtype BN params, identity chain dead) or
 `state_unexpected_key` (never-forward-used persistent buffers dropped from the declared
 universe) -- an honest-save over-refusal, never a wrong verdict, now closed. A
-genuinely-unmatched tensor constant still refuses `unsupported_tensor_constant`. r77 F2
+genuinely-unmatched tensor constant still refuses `unsupported_tensor_constant`.
+
+**The recorded buffer address is AUTHORITATIVE (r83).** Postprocess resolves a source
+buffer's address from the address the CAPTURE recorded for that event; the
+equivalence-class -> value -> shape ladder over the registered-buffer initial values may
+only fill a genuinely MISSING address, never override a recorded one. Previously the
+recorded address was discarded whenever it did not name an unassigned REGISTERED buffer,
+so a non-registered tensor source -- a plain `__dict__` attribute or a list element --
+consumed before a same-shaped registered buffer CLAIMED that buffer's address, walked past
+the `address not in buffer_names` refusal, and was bound to the WRONG state at replay under
+`verified` + `COMPLETE` with no diagnostic (a four-line ImageNet normalizer with one
+constant registered and one a plain attribute sufficed). It also corrupted plain,
+save-free public metadata: `trace[...].address` reported a name that was not that tensor's.
+A recorded address that is not a registered buffer now reaches the honest
+`unsupported_tensor_constant` refusal, which is the correct outcome -- a non-registered
+constant is not part of the declared state model. Registered buffers, including nested ones
+and the BatchNorm running-stat / `num_batches_tracked` pre-assignments, resolve to their own
+dotted addresses exactly as before. r77 F2
 closes the NON-TENSOR-STATE leg of the same class: the capture-boundary value snapshot is
 `None` by design for a model whose `state_dict()` carries any non-tensor value
 (`get_extra_state()`, packed/quantized entries), so the dead lane now derives the
@@ -2035,6 +2075,29 @@ of that family's owner records, its witness, its inventory member, and any densi
 the deletion forces. The r69-era dual-use-escape and metadata-read-content edits collapse into
 this single boundary; there are zero OPEN residuals for A/B/C/D.
 
+**Internally CONTRADICTORY artifacts are refused (r83).** Coherent reauthoring is out of
+scope because the reauthored artifact is self-consistent. An artifact that is NOT
+self-consistent is a different case, and is now refused. The callable a load EXECUTES comes
+from `run.callable_registry[].key`, while the same call is named independently by
+`sites[].function_path` and `layer_list[].func_name`/`.func_id.qualname`; nothing reconciled
+them, so editing ONE JSON field (`Tensor.__add__` -> `__sub__`) produced an artifact that ran
+and reported `verified` with different numbers while three other persisted fields still said
+`add`. The execution authority is now reconciled against the name the REHYDRATED trace
+records for the same op, INSIDE the resolver's success sink -- so it fires ONLY for a registry
+key that resolves to a real, signature-compatible callable (the threat: a swap between two
+valid ops that would otherwise silently run), and a definite disagreement refuses
+`semantic_drift` (analysis-only, diagnostic intact, aggregate `ReattachError` on `.run()`). An
+UNRESOLVABLE or signature-incompatible key never reaches the reconciliation -- it keeps the
+resolver's own richer `unresolved_qualname`/`callable_removed`/`signature_drift` readiness and
+`ReattachError`, undisturbed. This is defence in depth against artifact CORRUPTION and partial
+rewrites -- an attacker gains nothing, since capturing the wrong program honestly is the
+in-scope coherent-reauthoring endpoint above. The attestation
+lane already anchored this whenever `include_activations=True` made it eligible; the gap was
+the DEFAULT artifact, whose run is `not_applicable`. The reconciliation compares names only
+where BOTH records state one, and normalizes the operator dunder (the only measured
+divergences are `__neg__`/`neg` and `__pow__`/`pow`); in-place spellings keep their
+distinguishing characters and can never normalize onto their out-of-place siblings.
+
 ### Input-boundary behavioral residuals (r69 -- exactly two)
 
 The r69 input-contract closure leaves EXACTLY TWO documented behavioral residuals on the
@@ -2382,11 +2445,16 @@ vehicle, a SINGLE-capture launder in which a legitimately stamped plain-attr buf
 misattributed the INPUT-derived layout (which r73/r75 closed) INTO this residual's STATE
 exemption -- a rebound stamped receiver now resolves as unknown/unattributed and fails
 closed, while unrebound plain-attr state layout reads keep residual (3) `verified`
-(zero collateral). One defense-in-depth boundary remains documented rather than closed: a
-stale `label_raw` whose text COLLIDES with a same-named event in the active capture would
-pass the live-index membership check (the event index carries no object-identity anchor);
-reaching it requires a stamp that survives the now inventory-complete cleanup AND a label
-collision, and closing it would need per-event object anchoring in the live index. The direct-leaf spelling keeps
+(zero collateral). r83 closes what r81 left documented rather than closed: the boundary
+where a stale `label_raw` whose text COLLIDED with a same-named event in the active capture
+passed the live-index membership check, because the event index carried no object-identity
+anchor. That boundary was NOT merely theoretical -- it was broken three times from three
+directions (a stock `register_forward_hook` collector giving a SAME-INPUT wrong value bind
+at `verified`, a helper-`nn.Module` activation cache laundering an input-derived layout, and
+a `types.ModuleType`-nested list doing the same), and the collision arises naturally between
+two structurally similar models rather than needing to be forged. It is closed by anchoring
+the label to the capture session that ISSUED it, recorded on the object's own metadata by the
+single stamp choke point, so text membership is necessary but never sufficient. The direct-leaf spelling keeps
 its stricter r27/r31 witnessed-fact semantics (`diverged`). (4) object-identity aliasing of a non-canonical state slot through an
 aliasing-polymorphic op, tested via pure Python identity (`y = self.w.contiguous(); y is
 self.w`), is a documented residual (locked r65 ruling): no accessor fires on ANY tensor, so

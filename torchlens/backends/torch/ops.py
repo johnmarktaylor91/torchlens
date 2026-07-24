@@ -28,6 +28,7 @@ from ._tl import (
     get_param_meta,
     get_tensor_label,
     get_tensor_meta,
+    session_meta_is_anchored,
     set_tensor_label,
 )
 from .completeness_witness import internal_scalar_read, record_alias_mutation_candidate
@@ -1812,6 +1813,17 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
       a stale cross-capture object never resolves at all);
     * ``buffer_source`` (a promoted pre-buffer producer label) counts only
       when that producer label resolves in THIS capture's live event index.
+
+    r83 C1 label-rung parity: live-index membership is TEXT, and label text is
+    deterministic per op-kind + ordinal, so an ordinary op in a later unrelated
+    capture regenerates the same string and r81's text-only check accepted a
+    foreign tensor as current-session state. Both label components now
+    additionally require :func:`session_meta_is_anchored` -- the object itself
+    must have been stamped with that exact string during the ACTIVE session --
+    giving the label rung the same per-object belt the param (r79) and buffer
+    ``address`` (r81) rungs already had. Fail-closed: with no session installed,
+    or with an object the session never stamped, the component is not
+    provenance and the break marker stands.
     """
 
     if isinstance(value, torch.nn.Parameter):
@@ -1832,11 +1844,12 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
     live_labels: dict[str, Any] = (
         capture_events.live_index.by_raw_label if capture_events is not None else {}
     )
-    if meta.label_raw is not None and meta.label_raw in live_labels:
+    label_anchored = session_meta_is_anchored(meta)
+    if label_anchored and meta.label_raw is not None and meta.label_raw in live_labels:
         return True
     if meta.address is not None and session_validated_buffer_address(trace, value) is not None:
         return True
-    if meta.buffer_source is not None and meta.buffer_source in live_labels:
+    if label_anchored and meta.buffer_source is not None and meta.buffer_source in live_labels:
         return True
     return False
 

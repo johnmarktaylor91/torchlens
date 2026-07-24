@@ -1276,6 +1276,96 @@ def validate_container_witness_anchor(
         )
 
 
+def _normalized_callable_name(name: str | None) -> str | None:
+    """Return a callable name in the one spelling both records agree on (r83 S3).
+
+    ``sites[].function_path`` (derived from ``layer_list[].func_name``) and
+    ``run.callable_registry[].key.qualname`` are persisted independently and
+    agree verbatim for every op measured across dunder, in-place, method and
+    function dispatch, with two exceptions where the site keeps the operator
+    dunder while the registry records the torch method (``__neg__``/``neg``,
+    ``__pow__``/``pow``). Stripping the operator dunder underscores collapses
+    exactly those, and nothing else: ``__iadd__`` and ``relu_`` keep their
+    distinguishing characters, so an in-place op can never normalize onto its
+    out-of-place sibling.
+
+    Parameters
+    ----------
+    name:
+        Persisted callable name from either record.
+
+    Returns
+    -------
+    str | None
+        Normalized name, or ``None`` when the record states no opinion.
+    """
+
+    if not isinstance(name, str):
+        return None
+    stripped = name.strip()
+    if not stripped or stripped == "none":
+        return None
+    if stripped.startswith("__") and stripped.endswith("__") and len(stripped) > 4:
+        return stripped[2:-2]
+    return stripped
+
+
+def _callable_registry_contradiction(
+    registry_qualname: str,
+    affected_ops: "tuple[str, ...]",
+    recorded_func_names: "Mapping[str, str | None]",
+) -> "tuple[str, str] | None":
+    """Return the first op whose recorded name contradicts the registry name (r83 S3).
+
+    The callable a loaded artifact EXECUTES comes from
+    ``manifest.json -> run.callable_registry[].key``. The SAME call is named
+    independently by ``manifest.json -> sites[].function_path`` and by
+    ``metadata.pkl -> layer_list[].func_name`` / ``.func_id.qualname``. Nothing
+    reconciled them, so editing one JSON field (``Tensor.__add__`` ->
+    ``__sub__``) left an internally SELF-CONTRADICTORY artifact that ran happily
+    and reported ``VERIFIED`` with different numbers -- three other persisted
+    fields still said ``add``.
+
+    Called from the resolver's success sink, so it fires ONLY for a key that
+    RESOLVES to a real, signature-compatible callable -- the S3 threat, a swap
+    between two valid ops that would otherwise silently run. An unresolvable or
+    signature-incompatible key never reaches here, keeping the resolver's own
+    richer readiness/``ReattachError`` path. Compares against the persisted
+    registry qualname (not the resolved one) so a version-alias move never
+    false-refuses, and normalizes the operator dunder so the two measured
+    record-spelling divergences (``__neg__``/``neg``, ``__pow__``/``pow``) are
+    not read as contradictions. A record that states no name (a source op's
+    ``"none"``, a missing label) is no opinion, never a contradiction.
+
+    Parameters
+    ----------
+    registry_qualname:
+        The persisted execution authority for the resolved registry entry.
+    affected_ops:
+        Op labels driven by this registry entry (``"add_1_2:1"`` form).
+    recorded_func_names:
+        Per-op function names implied by the REHYDRATED trace, keyed by layer
+        label (``"add_1_2"``).
+
+    Returns
+    -------
+    tuple[str, str] | None
+        ``(recorded_func_name, op_label)`` for the first contradicting op, or
+        ``None`` when every op that states a name agrees with the authority.
+    """
+
+    authority = _normalized_callable_name(registry_qualname)
+    if authority is None:
+        return None
+    for op_label in affected_ops:
+        raw_recorded = recorded_func_names.get(op_label.split(":")[0])
+        recorded = _normalized_callable_name(raw_recorded)
+        if recorded is None or recorded == authority:
+            continue
+        return str(raw_recorded), op_label
+    return None
+
+
 class DescriptorStructuralBoundError(ValueError):
     """A persisted runnable-descriptor integer failed structural cross-validation (r53 free_1).
 
@@ -1788,7 +1878,21 @@ def attach_sparse_run_readiness(
         _store_readiness(trace, None, report, None)
         return report
 
-    report, attachments = preflight_sparse_run_descriptor(descriptor)
+    # r83 S3: the execution authority (``run.callable_registry``) reconciled
+    # against the name the rehydrated trace independently records for the same
+    # op. A single-field registry edit otherwise leaves a self-contradictory
+    # artifact that runs and reports VERIFIED with different numbers. This is
+    # threaded THROUGH the resolver rather than checked here, so it fires ONLY
+    # for a registry key that RESOLVES to a real callable (the S3 threat: a
+    # swap between two valid ops that silently runs). An UNRESOLVABLE key is
+    # left to the resolver's own richer readiness/``ReattachError`` path.
+    recorded_func_names = {
+        str(getattr(layer, "layer_label", "")): getattr(layer, "func_name", None)
+        for layer in getattr(trace, "layer_list", []) or ()
+    }
+    report, attachments = preflight_sparse_run_descriptor(
+        descriptor, recorded_func_names=recorded_func_names
+    )
     _store_readiness(trace, descriptor, report, attachments)
     return report
 
@@ -1847,6 +1951,8 @@ def _device_capability_diagnostics(
 
 def preflight_sparse_run_descriptor(
     descriptor: SparseRunDescriptor,
+    *,
+    recorded_func_names: Mapping[str, str | None] | None = None,
 ) -> tuple[ReadinessReport, Mapping[str, Callable[..., Any]] | None]:
     """Resolve a parsed descriptor once and return atomic call attachments.
 
@@ -1854,6 +1960,12 @@ def preflight_sparse_run_descriptor(
     ----------
     descriptor:
         Parsed sparse descriptor.
+    recorded_func_names:
+        r83 S3: the op function name the REHYDRATED trace records for each
+        op, keyed by layer label. When provided, a callable that RESOLVES but
+        whose registry key contradicts the recorded name is refused as a
+        self-contradictory (corrupted) artifact. ``None`` (the default, used by
+        synthetic-descriptor callers with no trace) skips the reconciliation.
 
     Returns
     -------
@@ -1921,6 +2033,7 @@ def preflight_sparse_run_descriptor(
                     calls=tuple(
                         call for call in descriptor.calls if call.registry_id == entry.registry_id
                     ),
+                    recorded_func_names=recorded_func_names,
                 )
 
     records = tuple(resolution.record for resolution in resolutions.values())
@@ -1954,6 +2067,7 @@ def _resolve_registry_entry(
     descriptor: SparseRunDescriptor,
     affected_ops: tuple[str, ...],
     calls: tuple[RunnableCallDescriptor, ...],
+    recorded_func_names: Mapping[str, str | None] | None = None,
 ) -> _Resolution:
     """Resolve one unique registry entry through the locked torch ladder."""
 
@@ -1985,6 +2099,7 @@ def _resolve_registry_entry(
             affected_ops=affected_ops,
             calls=calls,
             moved=False,
+            recorded_func_names=recorded_func_names,
         )
 
     if _is_captured_internal_torch_builtin_key(key):
@@ -2035,6 +2150,7 @@ def _resolve_registry_entry(
             affected_ops=affected_ops,
             calls=calls,
             moved=True,
+            recorded_func_names=recorded_func_names,
         )
 
     if (stock_path or _key_display_path(key)) in _REMOVED_TORCH_CALLABLES:
@@ -2078,6 +2194,7 @@ def _resolve_registry_entry(
             affected_ops=affected_ops,
             calls=calls,
             moved=True,
+            recorded_func_names=recorded_func_names,
         )
 
     code = (
@@ -2109,6 +2226,7 @@ def _resolved_callable(
     affected_ops: tuple[str, ...],
     calls: tuple[RunnableCallDescriptor, ...],
     moved: bool,
+    recorded_func_names: Mapping[str, str | None] | None = None,
 ) -> _Resolution:
     """Unwrap and validate one resolved callable before recording success."""
 
@@ -2161,6 +2279,42 @@ def _resolved_callable(
             ),
         )
         return _unavailable_resolution(entry, diagnostic, provenance)
+    # r83 S3: the callable RESOLVED and is signature-compatible -- exactly the
+    # class that would otherwise RUN. Reconcile the execution authority
+    # (``entry.key.qualname``, the persisted registry name) against the name the
+    # rehydrated trace independently records for the SAME op. A single-field
+    # registry edit (``Tensor.__add__`` -> ``__sub__``, both valid, both
+    # signature-compatible) leaves those two contradicting, and the run would
+    # otherwise report VERIFIED with different numbers. An UNRESOLVABLE or
+    # signature-incompatible key never reaches here -- it kept the resolver's
+    # own richer readiness/``ReattachError`` path above. Comparison is against
+    # the persisted key, NOT ``resolved_qualname``, so a legitimate
+    # version-alias move (recorded name == key, resolved elsewhere) never
+    # false-refuses; the operator-dunder normalization collapses the only two
+    # measured spellings that differ between the records.
+    if recorded_func_names is not None:
+        contradiction = _callable_registry_contradiction(
+            entry.key.qualname, affected_ops, recorded_func_names
+        )
+        if contradiction is not None:
+            recorded_name, op_label = contradiction
+            diagnostic = _diagnostic(
+                RunnableErrorCode.SEMANTIC_DRIFT,
+                f"Artifact contradicts itself: run.callable_registry resolves "
+                f"{entry.key.namespace}.{entry.key.qualname!r} for op {op_label!r}, but the "
+                f"artifact independently records that op as {recorded_name!r}. A "
+                f"self-contradictory (corrupted or partially rewritten) artifact is "
+                f"refused rather than run.",
+                descriptor=descriptor,
+                registry_id=entry.registry_id,
+                affected_ops=affected_ops,
+                detection_stage="resolver_registry_coherence",
+                provenance="callable_registry_self_contradiction",
+                details=(("recorded_func_name", str(recorded_name)),),
+            )
+            return _unavailable_resolution(
+                entry, diagnostic, "callable_registry_self_contradiction"
+            )
     diagnostics: tuple[RunnableDiagnostic, ...] = ()
     if moved:
         diagnostics = (
