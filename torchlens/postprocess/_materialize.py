@@ -61,9 +61,12 @@ def materialize_log_from_fields(fields_dict: dict[str, object]) -> "Op":
     # display address but is not backend-native state, so its backend_address
     # stays None). ``Op.__init__`` otherwise defaults ``backend_address`` from
     # ``address`` whenever it is None, which would recouple them; the resolved
-    # value is stashed under an extra key here, popped before construction, and
-    # applied afterwards so the default cannot override it. Popped for EVERY
-    # record so an op/input (registered-only value ``None``) is unaffected.
+    # value is stashed under an extra key by ``_fields_from_event`` and applied
+    # here after construction so the default cannot override it. r85: the extra
+    # key is set ONLY for a BUFFER-addressed record (see ``_fields_from_event``);
+    # an op/input node carries no override and keeps the coupled default, so it
+    # is genuinely unaffected -- the r83 comment claiming EVERY record was popped
+    # (forcing op nodes to None) was FALSE and is corrected there.
     has_backend_override = "_materialized_backend_address" in fields_dict
     backend_address_override = fields_dict.pop("_materialized_backend_address", None)
     op_log = Op(fields_dict)  # type: ignore[arg-type]
@@ -591,12 +594,29 @@ def _fields_from_event(
     fields_dict.update(buffer_write_fields)
     fields_dict.update(module_input_fields)
     fields_dict.update(module_output_fields)
-    # r83 C2: the registered-only backend-native address, decoupled from the
-    # display ``address`` above. ``materialize_log_from_fields`` pops this extra
-    # key before construction and applies it afterwards, so ``Op.__init__``'s
-    # ``backend_address <- address`` default cannot recouple them. ``None`` for
-    # a plain-attribute buffer (not declared state) and for every non-buffer.
-    fields_dict["_materialized_backend_address"] = buffer_address
+    # r83 C2 / r85 (free FINDING-1): the registered-only backend-native address,
+    # decoupled from the display ``address`` above -- but ONLY for a BUFFER-addressed
+    # node. ``materialize_log_from_fields`` pops this extra key before construction
+    # and applies it afterwards, so ``Op.__init__``'s ``backend_address <- address``
+    # default cannot recouple them. A registered buffer keeps its registered address;
+    # a plain-attribute / list-element buffer (recorded display address but NOT
+    # declared state) is pinned to ``None``, which is the whole C2 intent.
+    #
+    # A regular op / activation / input node is NOT a buffer, so it gets NO override
+    # and keeps the ``Op.__init__`` default (``backend_address == address``). The
+    # original r83 code set this key UNCONDITIONALLY, which forced EVERY op node to
+    # ``None`` -- contradicting its own commit message ("an op/input ... is
+    # unaffected") and leaving the model-output layer (built by copying the last op
+    # through a path that keeps the default) reporting the coupled address while the
+    # aliasing op node reported ``None``. Gating on buffer-addressedness makes the
+    # commit's claim TRUE, restores intra-trace consistency (op node and output layer
+    # for the same module agree), and matches every other backend, where an op node
+    # carries a backend-native handle (``jaxpr:``/``uop:``) that the output layer
+    # inherits. Verdicts and replay fingerprints are byte-unchanged: no runnable-load
+    # / param_source / resolver consumer reads an op node's ``backend_address`` (the
+    # only reader is the string-when-present metadata invariant, satisfied either way).
+    if buffer_address is not None or _recorded_buffer_address(event) is not None:
+        fields_dict["_materialized_backend_address"] = buffer_address
     return fields_dict
 
 

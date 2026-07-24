@@ -537,3 +537,90 @@ def test_v6_same_storage_input_strided_rebind_ceils(tmp_path: Path) -> None:
     twin = capture_input.clone().to(memory_format=torch.channels_last)
     with pytest.raises(PathDivergenceError):
         loaded.run(inputs=twin)
+
+
+# --------------------------------------------------------------------------- #
+# backend_address CLEANUP (r85, free FINDING-1 MED).
+#
+# r83's dee9d679 decoupled .backend_address from .address to fix the C2 buffer
+# authority, but set the registered-only override UNCONDITIONALLY -- forcing
+# EVERY op/activation node to None (contra its own commit "op/input ...
+# unaffected") and leaving the model-output layer (built by copying the last op)
+# reporting the coupled address while the aliasing op node reported None. r85
+# applies the override ONLY to buffer-addressed nodes (Option a): an op node
+# keeps backend_address == address (matching every other backend, where an op
+# carries a jaxpr:/uop: handle the output layer inherits), and the C2 buffer
+# decoupling is preserved verbatim.
+# --------------------------------------------------------------------------- #
+
+
+class _ConvBNAddress(nn.Module):
+    """Conv + BatchNorm whose op nodes carry module addresses ('c', 'bn')."""
+
+    def __init__(self) -> None:
+        """Build a conv/BN pair with distinct module addresses."""
+
+        super().__init__()
+        self.c = nn.Conv2d(3, 4, 3, padding=1)
+        self.bn = nn.BatchNorm2d(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the batch-normed convolution (bn is the output-aliased module)."""
+
+        return self.bn(self.c(x))
+
+
+@pytest.mark.smoke
+def test_backend_address_op_node_and_output_layer_agree() -> None:
+    """free FINDING-1: an op node and the output layer for the SAME module agree.
+
+    Pre-fix the batchnorm op node reported ``backend_address=None`` while the
+    output layer aliasing the same ``bn`` module reported ``'bn'`` -- an
+    intra-trace inconsistency on a public field. Post-fix a module-addressed op
+    node keeps ``backend_address == address`` (not ``None``), matching the output
+    layer.
+    """
+
+    torch.manual_seed(0)
+    model = _ConvBNAddress()
+    model.train()
+    model(torch.randn(2, 3, 8, 8))
+    model.eval()
+    log = tl.trace(model, torch.randn(2, 3, 8, 8), capture=_CAPTURE)
+
+    by_type = {layer.layer_type: layer for layer in log}
+    conv = by_type["conv2d"]
+    bn = by_type["batchnorm"]
+    out = by_type["output"]
+
+    # Op nodes keep backend_address coupled to their module address (not None).
+    assert conv.backend_address == conv.address == "c"
+    assert bn.backend_address == bn.address == "bn"
+    # The output layer aliases the bn module and MUST agree with the bn op node.
+    assert out.address == "bn"
+    assert out.backend_address == bn.backend_address == "bn"
+
+
+@pytest.mark.smoke
+def test_backend_address_registered_vs_plain_attr_decoupling_preserved() -> None:
+    """The C2 buffer decoupling is preserved: registered keeps its addr, plain-attr None.
+
+    The r85 op-node fix must NOT disturb the r83 C2 intent -- a registered buffer
+    still reports ``backend_address == address`` and a plain-attribute buffer
+    (display address but not declared state) still reports ``None``.
+    """
+
+    class _MixedBuffers(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.register_buffer("rb", torch.ones(4))
+            self.pa = torch.ones(4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return x + self.rb + self.pa
+
+    torch.manual_seed(0)
+    log = tl.trace(_MixedBuffers(), torch.randn(4), capture=_CAPTURE)
+    by_address = {layer.address: layer for layer in log if getattr(layer, "is_buffer", False)}
+    assert by_address["rb"].backend_address == "rb"  # registered state keeps both
+    assert by_address["pa"].backend_address is None  # plain-attr not declared state
