@@ -28,7 +28,13 @@ from menagerie.crawler.identity import (
     utc_now,
 )
 from menagerie.crawler.models import AppendResult, JsonObject, TailRecoveryEvidence
-from menagerie.crawler.schema import SCHEMA_FILES, PayloadValidationError, validate_payload
+from menagerie.crawler.schema import (
+    SCHEMA_FILES,
+    PayloadValidationError,
+    RequiredFieldProjection,
+    required_field_projection_spec,
+    validate_payload,
+)
 
 _SCHEMA_READ_VERSIONS: dict[str, frozenset[str]] = {
     MODEL_SCHEMA_VERSION: frozenset({MODEL_SCHEMA_VERSION}),
@@ -244,14 +250,33 @@ def _identity_key(record: Mapping[str, Any]) -> tuple[Any, ...]:
     """
 
     version = record.get("schema_version")
-    if version in _MODEL_SCHEMA_VERSIONS:
+    if version == MODEL_SCHEMA_VERSION_V3:
+        identity_fields = required_field_projection_spec(
+            RequiredFieldProjection.MODEL_LEDGER_IDENTITY
+        ).field_order
+        stable_id_field, revision_field = identity_fields
+        revision = record.get(revision_field)
+        if revision is not None:
+            return (version, record.get(stable_id_field), revision)
+        return (version, record.get(stable_id_field), record.get("record_seq"))
+    if version == MODEL_SCHEMA_VERSION:
         revision = record.get("record_revision")
         if revision is not None:
             return (version, record.get("stable_id"), revision)
         return (version, record.get("stable_id"), record.get("record_seq"))
-    if version in _ATTEMPT_SCHEMA_VERSIONS:
+    if version == ATTEMPT_SCHEMA_VERSION_V3:
+        identity_fields = required_field_projection_spec(
+            RequiredFieldProjection.ATTEMPT_LEDGER_IDENTITY
+        ).field_order
+        return (version, *(record.get(field) for field in identity_fields))
+    if version == ATTEMPT_SCHEMA_VERSION:
         return (version, record.get("attempt_id"))
-    if version in _GATE_SCHEMA_VERSIONS:
+    if version == GATE_SCHEMA_VERSION_V3:
+        identity_fields = required_field_projection_spec(
+            RequiredFieldProjection.GATE_LEDGER_IDENTITY
+        ).field_order
+        return (version, *(record.get(field) for field in identity_fields))
+    if version == GATE_SCHEMA_VERSION:
         return (version, record.get("gate_id"))
     if version == ARTIFACT_EVENT_SCHEMA_VERSION:
         return (version, record.get("artifact_event_id"))
