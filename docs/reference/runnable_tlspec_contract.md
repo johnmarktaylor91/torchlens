@@ -2082,11 +2082,16 @@ from `run.callable_registry[].key`, while the same call is named independently b
 `sites[].function_path` and `layer_list[].func_name`/`.func_id.qualname`; nothing reconciled
 them, so editing ONE JSON field (`Tensor.__add__` -> `__sub__`) produced an artifact that ran
 and reported `verified` with different numbers while three other persisted fields still said
-`add`. The execution authority is now reconciled at readiness attach against the name the
-REHYDRATED trace records for the same op, and a definite disagreement refuses
-`context_field_invalid` (analysis-only, diagnostic intact). This is defence in depth against
-artifact CORRUPTION and partial rewrites -- an attacker gains nothing, since capturing the
-wrong program honestly is the in-scope coherent-reauthoring endpoint above. The attestation
+`add`. The execution authority is now reconciled against the name the REHYDRATED trace
+records for the same op, INSIDE the resolver's success sink -- so it fires ONLY for a registry
+key that resolves to a real, signature-compatible callable (the threat: a swap between two
+valid ops that would otherwise silently run), and a definite disagreement refuses
+`semantic_drift` (analysis-only, diagnostic intact, aggregate `ReattachError` on `.run()`). An
+UNRESOLVABLE or signature-incompatible key never reaches the reconciliation -- it keeps the
+resolver's own richer `unresolved_qualname`/`callable_removed`/`signature_drift` readiness and
+`ReattachError`, undisturbed. This is defence in depth against artifact CORRUPTION and partial
+rewrites -- an attacker gains nothing, since capturing the wrong program honestly is the
+in-scope coherent-reauthoring endpoint above. The attestation
 lane already anchored this whenever `include_activations=True` made it eligible; the gap was
 the DEFAULT artifact, whose run is `not_applicable`. The reconciliation compares names only
 where BOTH records state one, and normalizes the operator dunder (the only measured

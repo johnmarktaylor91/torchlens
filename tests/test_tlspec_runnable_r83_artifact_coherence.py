@@ -106,6 +106,14 @@ def test_self_contradictory_callable_registry_is_refused(tmp_path: Path, frm: st
     Pre-fix the three signature-COMPATIBLE swaps all RAN and reported
     ``VERIFIED`` with numerically different output; only the arity-incompatible
     ``F.linear -> F.bilinear`` was caught, and only later, by signature drift.
+
+    The reconciliation lives in the RESOLVER's success sink, so it fires only
+    for a swap that RESOLVES to a real, signature-compatible callable -- and the
+    refusal flows through the resolver's aggregate readiness/``ReattachError``
+    path, exactly like every other resolver refusal (see
+    ``test_unresolvable_key_keeps_the_resolver_reattach_path``). The
+    arity-incompatible ``F.linear -> F.bilinear`` still refuses first via
+    signature drift; its refusal is unchanged.
     """
 
     clean = _save(tmp_path / "clean.tlspec")
@@ -119,7 +127,12 @@ def test_self_contradictory_callable_registry_is_refused(tmp_path: Path, frm: st
 
 @pytest.mark.smoke
 def test_tampered_registry_leaves_a_typed_diagnostic(tmp_path: Path) -> None:
-    """The refusal must carry the typed diagnostic, not just fail opaquely."""
+    """The refusal must carry the typed diagnostic, not just fail opaquely.
+
+    A resolvable-but-contradictory swap surfaces as ``SEMANTIC_DRIFT`` (the
+    resolved callable is semantically different from what the op records),
+    detected at the resolver's registry-coherence stage.
+    """
 
     from torchlens.runnable import ReadinessStatus, RunnableErrorCode
 
@@ -130,8 +143,50 @@ def test_tampered_registry_leaves_a_typed_diagnostic(tmp_path: Path) -> None:
     report = loaded.readiness
     assert report.status is ReadinessStatus.UNAVAILABLE
     codes = {diagnostic.code for diagnostic in report.diagnostics}
-    assert RunnableErrorCode.CONTEXT_FIELD_INVALID in codes
-    assert any("callable_registry" in str(diagnostic.message) for diagnostic in report.diagnostics)
+    assert RunnableErrorCode.SEMANTIC_DRIFT in codes
+    assert any(
+        diagnostic.detection_stage == "resolver_registry_coherence"
+        for diagnostic in report.diagnostics
+    )
+
+
+@pytest.mark.smoke
+def test_unresolvable_key_keeps_the_resolver_reattach_path(tmp_path: Path) -> None:
+    """An UNRESOLVABLE key must keep the resolver's richer aggregate-report path.
+
+    The reconciliation must NOT steal the diagnostic from an unresolvable key
+    (``torch.definitely_absent``): that case is already handled by the resolver
+    with an ``UNRESOLVED_QUALNAME`` diagnostic and a ``ReattachError`` carrying
+    the full aggregate report -- NOT the coarse analysis-only refusal. This pins
+    the distinction the r83 S3 relocation exists to preserve (r83 regression 2).
+    """
+
+    from torchlens.errors import ReattachError
+    from torchlens.runnable import ReadinessStatus, RunnableErrorCode
+
+    clean = _save(tmp_path / "clean.tlspec")
+    tampered = _retarget_registry(
+        clean, tmp_path / "tampered.tlspec", "__add__", "definitely_absent"
+    )
+
+    loaded = tl.load(tampered)
+    report = loaded.readiness
+    assert report.status is ReadinessStatus.UNAVAILABLE
+    # The resolver owns this case with an "unresolvable callable" diagnostic (the
+    # exact code -- UNRESOLVED_QUALNAME vs CALLABLE_REMOVED -- depends on the
+    # namespace ladder rung). What matters is it is NOT the reconciliation's
+    # SEMANTIC_DRIFT, so the reconciliation did not pre-empt the resolver.
+    codes = {diagnostic.code for diagnostic in report.diagnostics}
+    assert RunnableErrorCode.SEMANTIC_DRIFT not in codes, "must not pre-empt the resolver"
+    assert codes & {
+        RunnableErrorCode.UNRESOLVED_QUALNAME,
+        RunnableErrorCode.CALLABLE_REMOVED,
+    }, f"expected a resolver unresolvable-callable diagnostic, got {codes}"
+    # And run() must raise the resolver's ReattachError carrying the full report,
+    # NOT the coarse analysis-only RunCapabilityUnavailableError.
+    with pytest.raises(ReattachError) as captured:
+        loaded.run(inputs=torch.randn(2, 4))
+    assert captured.value.fields["readiness"] is loaded.readiness
 
 
 @pytest.mark.smoke
