@@ -22,24 +22,27 @@ from menagerie.crawler.identity import (
 )
 from menagerie.crawler.schema import (
     OwnedSchemaLeaf,
+    RequiredFieldProjection,
+    SchemaOwner,
     author_gated_schema_paths,
     load_schema,
     owned_schema_leaves,
+    required_field_projection_spec,
 )
 
 
 def _required_external_fields(schema_version: str) -> tuple[str, ...]:
-    """Return schema-required top-level external-metadata fields.
+    """Return Python-owned top-level external-metadata required fields.
 
     Parameters
     ----------
     schema_version:
-        Crawler schema whose ``external_metadata`` definition is inspected.
+        Crawler schema independently checked against the Python projection.
 
     Returns
     -------
     tuple[str, ...]
-        Required external-metadata fields in schema order.
+        Required external-metadata fields in preserved validation order.
     """
 
     schema = load_schema(schema_version)
@@ -56,7 +59,17 @@ def _required_external_fields(schema_version: str) -> tuple[str, ...]:
         raise RuntimeError(f"{schema_version} does not define required external_metadata fields")
     if len(required) != len(set(required)):
         raise RuntimeError(f"{schema_version} duplicates required external_metadata fields")
-    return tuple(required)
+    projection = {
+        MODEL_SCHEMA_VERSION_V3: RequiredFieldProjection.MODEL_EXTERNAL_METADATA,
+        AUTHOR_PROPOSAL_SCHEMA_VERSION_V3: RequiredFieldProjection.AUTHOR_EXTERNAL_METADATA,
+    }.get(schema_version)
+    if projection is None:
+        raise RuntimeError(f"{schema_version} does not define required external_metadata fields")
+    spec = required_field_projection_spec(projection)
+    required_fields = spec.names_for(SchemaOwner.AUTHOR_GATED)
+    if tuple(required) != required_fields or spec.field_order != required_fields:
+        raise RuntimeError(f"{schema_version} does not define required external_metadata fields")
+    return required_fields
 
 
 _MODEL_EXTERNAL_FIELDS = _required_external_fields(MODEL_SCHEMA_VERSION_V3)
@@ -279,10 +292,14 @@ def proposal_fact_block(model: Mapping[str, Any]) -> Mapping[str, Any]:
     required = proposed.get("required") if isinstance(proposed, Mapping) else None
     if not isinstance(required, list) or not all(isinstance(field, str) for field in required):
         raise MetadataValidationError("author-proposal.v3 proposed_facts contract is incomplete")
-    missing = [field for field in required if field not in model]
+    spec = required_field_projection_spec(RequiredFieldProjection.AUTHOR_PROPOSAL_FACT_BLOCK)
+    required_fields = spec.names_for(SchemaOwner.AUTHOR_GATED)
+    if tuple(required) != required_fields or spec.field_order != required_fields:
+        raise MetadataValidationError("author-proposal.v3 proposed_facts contract is incomplete")
+    missing = [field for field in required_fields if field not in model]
     if missing:
         raise MetadataValidationError(f"model lacks proposal fact blocks: {missing}")
-    return {field: model[field] for field in required}
+    return {field: model[field] for field in required_fields}
 
 
 def _owned_instance_leaves(

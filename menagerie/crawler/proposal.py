@@ -22,7 +22,13 @@ from menagerie.crawler.fetcher import cas_path as source_cas_path
 from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.metadata import MANDATORY_EXTERNAL_FIELDS
 from menagerie.crawler.recipe import RecipeError, validate_pretrained_disable_fields
-from menagerie.crawler.schema import PayloadValidationError, validate_payload
+from menagerie.crawler.schema import (
+    PayloadValidationError,
+    RequiredFieldProjection,
+    SchemaOwner,
+    required_field_projection_spec,
+    validate_payload,
+)
 
 DEFAULT_GATED_CLAIMS = frozenset(
     {f"external_metadata.{field}" for field in MANDATORY_EXTERNAL_FIELDS if field != "keywords"}
@@ -33,17 +39,18 @@ DEFAULT_GATED_CLAIMS = frozenset(
         "input_contract",
     }
 )
-VERIFIED_HASH_COMMON_KEYS = frozenset(
-    {
-        "source_manifest",
-        "evidence",
-        "code",
-        "source_to_code_map",
-        "family_template",
-    }
-)
 VERIFIED_HASH_CODE_MANIFEST_KEY = "code_manifest"
-VERIFIED_HASH_PROPOSAL_KEY = "proposal"
+_AUTHOR_VERIFIED_HASH_SPEC = required_field_projection_spec(
+    RequiredFieldProjection.AUTHOR_PROPOSAL_VERIFIED_HASH
+)
+_AUTHOR_VERIFIED_HASH_KEYS = _AUTHOR_VERIFIED_HASH_SPEC.names_for(SchemaOwner.REDUCER_DERIVED)
+VERIFIED_HASH_COMMON_KEYS = frozenset(
+    key for key in _AUTHOR_VERIFIED_HASH_KEYS if key != VERIFIED_HASH_CODE_MANIFEST_KEY
+)
+_GATE_VERIFIED_HASH_SPEC = required_field_projection_spec(
+    RequiredFieldProjection.GATE_VERIFIED_HASH
+)
+VERIFIED_HASH_PROPOSAL_KEY = _GATE_VERIFIED_HASH_SPEC.field_order[-1]
 _FORBIDDEN_CALLS = frozenset({"eval", "exec", "compile"})
 _SLOP_PATTERNS = (
     r"\bcompact\s+(?:stand[- ]?in|substitute|approximation|version)\b",
