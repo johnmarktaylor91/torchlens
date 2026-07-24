@@ -2311,25 +2311,7 @@ def _parse_linux_denial_audit(
         if syscall == "open_by_handle_at":
             checkpoint_paths.append("<open_by_handle_at:undeclared-file-handle>")
             continue
-        if syscall == "mmap":
-            descriptor_path = re.search(r"\b\d+<([^>]+)>", line)
-            descriptor_path_text = descriptor_path.group(1) if descriptor_path is not None else None
-            if (
-                descriptor_path_text is not None
-                and not descriptor_path_text.startswith(_NON_FILE_DESCRIPTOR_PREFIXES)
-                and not _read_path_is_allowed(
-                    descriptor_path_text,
-                    cwd,
-                    write_roots,
-                    allowed_read_paths,
-                    runtime_code_roots,
-                    host_transport_capability=host_transport_capability,
-                    standard_input_asset=standard_input_asset,
-                )
-            ):
-                checkpoint_paths.append(descriptor_path_text)
-            continue
-        if syscall in {"read", "pread64", "readv", "preadv", "preadv2"}:
+        if syscall in {"mmap", "read", "pread64", "readv", "preadv", "preadv2"}:
             descriptor_path = re.search(r"\b\d+<([^>]+)>", line)
             descriptor_path_text = descriptor_path.group(1) if descriptor_path is not None else None
             if (
