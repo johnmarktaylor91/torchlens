@@ -162,7 +162,16 @@ def test_decoration_helpers_are_independent_flags() -> None:
 
 @pytest.mark.smoke
 def test_copy_replacement_meta_preserves_subclass_and_is_shallow_copy() -> None:
-    """copy_replacement_meta should copy the dataclass while preserving subclass."""
+    """copy_replacement_meta copies the logical dataclass while preserving subclass.
+
+    r85: the copy is shallow for every LOGICAL field (label/address/buffer_source/
+    label_session), but the storage-integrity pin (``label_storage``) is
+    intrinsically OBJECT-specific and is re-established to ``dst``'s OWN storage
+    -- a distinct replacement never shares the source's storage, so blindly
+    copying the keeper would spuriously suppress the replacement's label at every
+    consumer. The session anchor still governs staleness, so this never launders
+    a stale label.
+    """
     src = torch.ones(1)
     dst = torch.zeros(1)
     set_tensor_label(src, "src_raw")
@@ -171,7 +180,13 @@ def test_copy_replacement_meta_preserves_subclass_and_is_shallow_copy() -> None:
 
     assert isinstance(dst._tl, TensorMeta)
     assert dst._tl is not src._tl
-    assert dst._tl == src._tl
+    assert dst._tl.label_raw == src._tl.label_raw
+    assert dst._tl.address == src._tl.address
+    assert dst._tl.buffer_source == src._tl.buffer_source
+    assert dst._tl.label_session == src._tl.label_session
+    # The pin references dst's OWN storage, not the source's keeper.
+    assert dst._tl.label_storage is not None
+    assert dst._tl.label_storage.data_ptr() == dst.untyped_storage().data_ptr()
 
 
 @pytest.mark.smoke
