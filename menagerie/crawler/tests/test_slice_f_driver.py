@@ -88,8 +88,14 @@ from menagerie.crawler.envs import (
 from menagerie.crawler.env_lifecycle import (
     DiskRecoveryError,
     EnvironmentProbeError,
+    EnvironmentSolveError,
     ProbeResult,
     expected_probe_names,
+)
+from menagerie.crawler.driver_progress import (
+    _ENVIRONMENT_FAILURE_TRANSITIONS,
+    _EnvironmentFailureTransition,
+    _environment_failure,
 )
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot, load_intake_snapshot
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
@@ -3801,6 +3807,29 @@ def test_environment_failure_terminalizes_intent(tmp_path: Path) -> None:
     models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
     assert {record["status"]["code"] for record in models} == {"failed:environment"}
     assert {record["status"]["reason_code"] for record in models} == {"probe-failed"}
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (EnvironmentProbeError("probe"), ("environment", "probe-failed")),
+        (EnvironmentSolveError("solve"), ("environment", "solve-failed")),
+        (DiskRecoveryError("disk"), ("resource", "disk-floor")),
+        (RuntimeError("build"), ("environment", "build-failed")),
+        (SandboxUnavailableError("sandbox"), ("policy", "sandbox-unavailable-v1")),
+    ],
+)
+def test_environment_failure_transition_table_is_exhaustive(
+    error: Exception, expected: tuple[str, str]
+) -> None:
+    """Every lifecycle outcome maps exactly, with sandbox provenance kept explicit."""
+
+    assert all(
+        isinstance(transition, _EnvironmentFailureTransition)
+        for transition in _ENVIRONMENT_FAILURE_TRANSITIONS
+    )
+    assert _ENVIRONMENT_FAILURE_TRANSITIONS[-1].exception_type is Exception
+    assert _environment_failure(error) == expected
 
 
 def test_environment_medic_retries_before_model_fanout(tmp_path: Path) -> None:

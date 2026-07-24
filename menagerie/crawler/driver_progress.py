@@ -8,6 +8,7 @@ import shlex
 import shutil
 import subprocess
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Mapping, Optional
@@ -41,6 +42,30 @@ from menagerie.crawler.driver_contracts import (
 )
 
 LOGGER = logging.getLogger("menagerie.crawler.driver")
+
+
+@dataclass(frozen=True)
+class _EnvironmentFailureTransition:
+    """Terminal stage and reason selected for one lifecycle exception type."""
+
+    exception_type: type[Exception]
+    stage: str
+    reason_code: str
+
+
+_ENVIRONMENT_FAILURE_TRANSITIONS: tuple[_EnvironmentFailureTransition, ...] = (
+    _EnvironmentFailureTransition(EnvironmentProbeError, "environment", "probe-failed"),
+    _EnvironmentFailureTransition(EnvironmentSolveError, "environment", "solve-failed"),
+    _EnvironmentFailureTransition(DiskRecoveryError, "resource", "disk-floor"),
+    _EnvironmentFailureTransition(Exception, "environment", "build-failed"),
+)
+if tuple(row.exception_type for row in _ENVIRONMENT_FAILURE_TRANSITIONS) != (
+    EnvironmentProbeError,
+    EnvironmentSolveError,
+    DiskRecoveryError,
+    Exception,
+):
+    raise RuntimeError("environment failure transition table is not exhaustive")
 
 
 class CommandNotifier:
@@ -223,15 +248,14 @@ def _framework_phase(item: IntakeItem) -> str:
 def _environment_failure(exc: Exception) -> tuple[str, str]:
     """Map a typed environment-lifecycle exception to its closed failure reason."""
 
+    # Sandbox admission is identified by both type name and defining module. It stays
+    # explicit because reducing that precondition to an exception-class row would weaken it.
     if _is_sandbox_unavailable(exc):
         return "policy", "sandbox-unavailable-v1"
-    if isinstance(exc, EnvironmentProbeError):
-        return "environment", "probe-failed"
-    if isinstance(exc, EnvironmentSolveError):
-        return "environment", "solve-failed"
-    if isinstance(exc, DiskRecoveryError):
-        return "resource", "disk-floor"
-    return "environment", "build-failed"
+    for transition in _ENVIRONMENT_FAILURE_TRANSITIONS:
+        if isinstance(exc, transition.exception_type):
+            return transition.stage, transition.reason_code
+    raise AssertionError("exhaustive environment failure transition table did not match")
 
 
 def _is_sandbox_unavailable(exc: Exception) -> bool:
