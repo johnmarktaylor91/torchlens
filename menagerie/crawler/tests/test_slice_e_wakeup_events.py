@@ -14,7 +14,7 @@ from menagerie.crawler.checkpoint import (
     build_progress_notification_event,
     build_review_signoff_event,
 )
-from menagerie.crawler.constants import OPERATIONAL_EVENT_SCHEMA_VERSION
+from menagerie.crawler.constants import OPERATIONAL_EVENT_SCHEMA_VERSION, OperationalEventKind
 from menagerie.crawler.recordio import JsonlLedger, LedgerConflictError, scan_jsonl
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
 from menagerie.crawler.wakeup import (
@@ -24,7 +24,10 @@ from menagerie.crawler.wakeup import (
     WakeupBackend,
     WakeupConfigurationError,
     WakeupManager,
+    _WAKE_EVENT_TRANSITIONS,
+    _WakeEventTransition,
     build_wake_episode,
+    build_usage_pause_event,
     detect_wakeup_backend,
     reduce_wake_episodes,
     render_wakeup_definition,
@@ -380,6 +383,41 @@ def test_status_renderer_uses_same_operational_reducer(tmp_path: Path) -> None:
     assert episode["reset_observation"] == "guessed"
     assert episode["retry_interval_seconds"] == 900
     assert episode["install_verified"] is True
+
+
+def test_wakeup_event_transition_table_is_exhaustive_and_preserves_diagnostics() -> None:
+    """Every closed event kind has a transition and install errors remain exact."""
+
+    assert set(_WAKE_EVENT_TRANSITIONS) == set(OperationalEventKind)
+    assert all(
+        isinstance(value, _WakeEventTransition) for value in _WAKE_EVENT_TRANSITIONS.values()
+    )
+    episode = build_wake_episode(
+        provider="openai",
+        reset_at=RESET,
+        reset_observation="observed",
+        callback_argv=["python", "resume.py"],
+    )
+    opening = build_usage_pause_event(
+        episode=episode,
+        observed_response="quota exhausted",
+        context=_context(),
+        created_at=NOW,
+    )
+    invalid_install = {
+        "event_id": "invalid-install",
+        "event_kind": OperationalEventKind.WAKEUP_INSTALLED.value,
+        "details": {
+            "episode_id": episode.episode_id,
+            "verified": True,
+            "backend": "invalid-backend",
+        },
+    }
+    with pytest.raises(
+        WakeupConfigurationError,
+        match="unknown wakeup backend in event invalid-install: 'invalid-backend'",
+    ):
+        reduce_wake_episodes([opening, invalid_install])
 
 
 def test_conflicting_episode_open_replay_is_rejected(tmp_path: Path) -> None:

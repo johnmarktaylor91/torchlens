@@ -44,6 +44,78 @@ class WakeupBackend(str, Enum):
     CRON = "cron"
 
 
+class _WakeEventTransition(str, Enum):
+    """Closed reducer transition applied by one operational event kind."""
+
+    OPEN = "open"
+    RESUME = "resume"
+    RESOLVE_COMPLETED = "resolve-completed"
+    RESOLVE_CANCELLED = "resolve-cancelled"
+    INSTALL = "install"
+    INSTALL_FAILED = "install-failed"
+    FIRE = "fire"
+    HEALTH_DEGRADED = "health-degraded"
+    OBSERVE = "observe"
+
+
+class _WakeResolution(str, Enum):
+    """Closed operator resolution accepted by ``resolve_episode``."""
+
+    MANUAL_RESUME = "manual-resume"
+    CAMPAIGN_COMPLETED = "campaign-completed"
+    OPERATOR_CANCELLED = "operator-cancelled"
+
+
+_WAKE_EVENT_TRANSITIONS: dict[OperationalEventKind, _WakeEventTransition] = {
+    OperationalEventKind.USAGE_PAUSE: _WakeEventTransition.OPEN,
+    OperationalEventKind.USAGE_RESUME: _WakeEventTransition.RESUME,
+    OperationalEventKind.WAKEUP: _WakeEventTransition.OBSERVE,
+    OperationalEventKind.CHECKPOINT: _WakeEventTransition.OBSERVE,
+    OperationalEventKind.CAMPAIGN_HEALTH: _WakeEventTransition.OBSERVE,
+    OperationalEventKind.WAKE_NOOP_ALREADY_RUNNING: _WakeEventTransition.FIRE,
+    OperationalEventKind.CHECKPOINT_REVIEW: _WakeEventTransition.OBSERVE,
+    OperationalEventKind.REVIEW_SIGNOFF: _WakeEventTransition.OBSERVE,
+    OperationalEventKind.PROGRESS_NOTIFICATION: _WakeEventTransition.OBSERVE,
+    OperationalEventKind.NOTIFICATION_DELIVERY: _WakeEventTransition.OBSERVE,
+    OperationalEventKind.REQUEUE_GRANT_CONSUMED: _WakeEventTransition.OBSERVE,
+    OperationalEventKind.WORKER_LEASE_OPENED: _WakeEventTransition.OBSERVE,
+    OperationalEventKind.WORKER_LEASE_STARTED: _WakeEventTransition.OBSERVE,
+    OperationalEventKind.WORKER_LEASE_CLOSED: _WakeEventTransition.OBSERVE,
+    OperationalEventKind.WORKER_LEASE_REAPED: _WakeEventTransition.OBSERVE,
+    OperationalEventKind.ORPHAN_WORKER_RECOVERED: _WakeEventTransition.OBSERVE,
+    OperationalEventKind.WAKEUP_INSTALLED: _WakeEventTransition.INSTALL,
+    OperationalEventKind.WAKEUP_REPAIRED: _WakeEventTransition.INSTALL,
+    OperationalEventKind.WAKEUP_FIRED: _WakeEventTransition.FIRE,
+    OperationalEventKind.WAKEUP_DEACTIVATED: _WakeEventTransition.OBSERVE,
+    OperationalEventKind.WAKEUP_HEALTH_DEGRADED: _WakeEventTransition.HEALTH_DEGRADED,
+    OperationalEventKind.WAKEUP_FAILED: _WakeEventTransition.INSTALL_FAILED,
+    OperationalEventKind.CAMPAIGN_COMPLETED: _WakeEventTransition.RESOLVE_COMPLETED,
+    OperationalEventKind.OPERATOR_CANCELLED: _WakeEventTransition.RESOLVE_CANCELLED,
+    OperationalEventKind.WORKER_SHUTDOWN_INTERRUPTED: _WakeEventTransition.OBSERVE,
+}
+if set(_WAKE_EVENT_TRANSITIONS) != set(OperationalEventKind):
+    raise RuntimeError("wakeup event transition table is not exhaustive")
+
+_WAKE_RESOLUTION_TRANSITIONS: dict[
+    _WakeResolution, tuple[OperationalEventKind, OperationalEventStatus]
+] = {
+    _WakeResolution.MANUAL_RESUME: (
+        OperationalEventKind.USAGE_RESUME,
+        OperationalEventStatus.USAGE_RESUMED,
+    ),
+    _WakeResolution.CAMPAIGN_COMPLETED: (
+        OperationalEventKind.CAMPAIGN_COMPLETED,
+        OperationalEventStatus.CAMPAIGN_COMPLETED,
+    ),
+    _WakeResolution.OPERATOR_CANCELLED: (
+        OperationalEventKind.OPERATOR_CANCELLED,
+        OperationalEventStatus.OPERATOR_CANCELLED,
+    ),
+}
+if set(_WAKE_RESOLUTION_TRANSITIONS) != set(_WakeResolution):
+    raise RuntimeError("wakeup resolution transition table is not exhaustive")
+
+
 class WakeupError(RuntimeError):
     """Base class for wake episode failures."""
 
@@ -411,14 +483,17 @@ def reduce_wake_episodes(events: Sequence[Mapping[str, object]]) -> WakeEpisodeP
     backends: dict[str, Optional[WakeupBackend]] = {}
 
     for event in events:
-        event_kind = event.get("event_kind")
+        raw_event_kind = event.get("event_kind")
+        try:
+            event_kind = OperationalEventKind(raw_event_kind)
+        except (TypeError, ValueError):
+            event_kind = None
+        transition = _WAKE_EVENT_TRANSITIONS[event_kind] if event_kind is not None else None
         details = event.get("details")
         if not isinstance(details, Mapping):
             continue
         event_id = str(event.get("event_id", ""))
-        if event_kind == OperationalEventKind.USAGE_PAUSE.value and isinstance(
-            details.get("episode"), Mapping
-        ):
+        if transition is _WakeEventTransition.OPEN and isinstance(details.get("episode"), Mapping):
             episode = _episode_from_payload(details["episode"])
             existing = episodes.get(episode.episode_id)
             if existing is not None and existing != episode:
@@ -442,17 +517,15 @@ def reduce_wake_episodes(events: Sequence[Mapping[str, object]]) -> WakeEpisodeP
             continue
 
         episode_id = details.get("episode_id")
-        if event_kind in {
-            OperationalEventKind.CAMPAIGN_COMPLETED.value,
-            OperationalEventKind.OPERATOR_CANCELLED.value,
+        if transition in {
+            _WakeEventTransition.RESOLVE_COMPLETED,
+            _WakeEventTransition.RESOLVE_CANCELLED,
         }:
             targets = (
                 [str(episode_id)] if isinstance(episode_id, str) and episode_id else list(episodes)
             )
             disposition = (
-                "completed"
-                if event_kind == OperationalEventKind.CAMPAIGN_COMPLETED.value
-                else "cancelled"
+                "completed" if transition is _WakeEventTransition.RESOLVE_COMPLETED else "cancelled"
             )
             for target in targets:
                 if target in episodes:
@@ -463,13 +536,10 @@ def reduce_wake_episodes(events: Sequence[Mapping[str, object]]) -> WakeEpisodeP
         if not isinstance(episode_id, str) or episode_id not in episodes:
             continue
         last_event_ids[episode_id] = event_id
-        if event_kind == OperationalEventKind.USAGE_RESUME.value:
+        if transition is _WakeEventTransition.RESUME:
             dispositions[episode_id] = "resumed"
             terminal_events[episode_id] = event_id
-        elif event_kind in {
-            OperationalEventKind.WAKEUP_INSTALLED.value,
-            OperationalEventKind.WAKEUP_REPAIRED.value,
-        }:
+        elif transition is _WakeEventTransition.INSTALL:
             install_verified[episode_id] = details.get("verified") is True
             backend_value = details.get("backend")
             if isinstance(backend_value, str):
@@ -479,16 +549,13 @@ def reduce_wake_episodes(events: Sequence[Mapping[str, object]]) -> WakeEpisodeP
                     raise WakeupConfigurationError(
                         f"unknown wakeup backend in event {event_id}: {backend_value!r}"
                     ) from exc
-        elif event_kind == OperationalEventKind.WAKEUP_FAILED.value:
+        elif transition is _WakeEventTransition.INSTALL_FAILED:
             install_verified[episode_id] = False
-        elif event_kind in {
-            OperationalEventKind.WAKEUP_FIRED.value,
-            OperationalEventKind.WAKE_NOOP_ALREADY_RUNNING.value,
-        }:
+        elif transition is _WakeEventTransition.FIRE:
             bucket = details.get("time_bucket")
             if isinstance(bucket, int) and bucket >= 0:
                 fire_buckets[episode_id].add(bucket)
-        elif event_kind == OperationalEventKind.WAKEUP_HEALTH_DEGRADED.value:
+        elif transition is _WakeEventTransition.HEALTH_DEGRADED:
             health_degraded[episode_id] = True
 
     states: dict[str, WakeEpisodeState] = {}
@@ -945,24 +1012,11 @@ class WakeupManager:
             episode = projection.episodes[episode_id].episode
         except KeyError as exc:
             raise WakeupConfigurationError(f"unknown wake episode: {episode_id}") from exc
-        event_contract = {
-            "manual-resume": (
-                OperationalEventKind.USAGE_RESUME,
-                OperationalEventStatus.USAGE_RESUMED,
-            ),
-            "campaign-completed": (
-                OperationalEventKind.CAMPAIGN_COMPLETED,
-                OperationalEventStatus.CAMPAIGN_COMPLETED,
-            ),
-            "operator-cancelled": (
-                OperationalEventKind.OPERATOR_CANCELLED,
-                OperationalEventStatus.OPERATOR_CANCELLED,
-            ),
-        }
         try:
-            event_kind, status = event_contract[resolution]
-        except KeyError as exc:
+            transition = _WakeResolution(resolution)
+        except ValueError as exc:
             raise WakeupConfigurationError(f"unknown wake resolution: {resolution}") from exc
+        event_kind, status = _WAKE_RESOLUTION_TRANSITIONS[transition]
         event = _episode_event(
             episode,
             event_kind=event_kind,
