@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Iterable, Optional, Sequence
+from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from menagerie.crawler.authority import ArtifactClaim, MirrorObject
 from menagerie.crawler.identity import hash_bytes, stable_hash
@@ -92,6 +92,28 @@ class LicenseDecision:
     redistribution_class: RedistributionClass
     evidence_ids: tuple[str, ...]
     rationale: str
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "LicenseDecision":
+        """Parse one persisted redistribution decision.
+
+        Parameters
+        ----------
+        payload:
+            Persisted license-decision mapping.
+
+        Returns
+        -------
+        LicenseDecision
+            Canonical typed redistribution decision.
+        """
+
+        return cls(
+            content_sha256=str(payload["content_sha256"]),
+            redistribution_class=RedistributionClass(str(payload["redistribution_class"])),
+            evidence_ids=tuple(str(item) for item in payload.get("evidence_ids", [])),
+            rationale=str(payload["rationale"]),
+        )
 
     def to_dict(self) -> JsonObject:
         """Return a JSON-compatible decision.

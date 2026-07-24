@@ -1441,12 +1441,7 @@ def _licensed_artifact(payload: Mapping[str, Any]) -> LicensedArtifact:
         raise CheckpointValidationError("mirror row requires manifest and decision objects")
     try:
         manifest = ArtifactManifest.from_dict(manifest_raw)
-        decision = LicenseDecision(
-            content_sha256=str(decision_raw["content_sha256"]),
-            redistribution_class=RedistributionClass(str(decision_raw["redistribution_class"])),
-            evidence_ids=tuple(str(item) for item in decision_raw.get("evidence_ids", [])),
-            rationale=str(decision_raw["rationale"]),
-        )
+        decision = LicenseDecision.from_dict(decision_raw)
         staged_path = _normalize_path(Path(str(payload["staged_path"])))
     except (KeyError, TypeError, ValueError) as exc:
         raise CheckpointValidationError(f"invalid licensed mirror artifact: {exc}") from exc

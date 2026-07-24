@@ -15,7 +15,6 @@ from menagerie.crawler.licenses import (
     LicensedArtifact,
     LicenseSweepReport,
     PublicMergeRejected,
-    RedistributionClass,
     pre_public_merge_sweep,
 )
 from menagerie.crawler.mirrors import ArtifactManifest, MirrorStore
@@ -59,12 +58,7 @@ def _licensed_artifact(payload: Mapping[str, Any]) -> LicensedArtifact:
     if not isinstance(manifest_raw, Mapping) or not isinstance(decision_raw, Mapping):
         raise ValueError("artifact manifest and decision must be objects")
     manifest = ArtifactManifest.from_dict(manifest_raw)
-    decision = LicenseDecision(
-        content_sha256=str(decision_raw["content_sha256"]),
-        redistribution_class=RedistributionClass(str(decision_raw["redistribution_class"])),
-        evidence_ids=tuple(str(item) for item in decision_raw.get("evidence_ids", [])),
-        rationale=str(decision_raw["rationale"]),
-    )
+    decision = LicenseDecision.from_dict(decision_raw)
     return LicensedArtifact(Path(str(payload["staged_path"])), manifest, decision)
 
 
