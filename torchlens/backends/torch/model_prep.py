@@ -22,7 +22,9 @@ from torch import nn
 from ... import _state
 from ...fastlog._halt import HaltSignal
 from ._tl import (
+    begin_label_session,
     clear_meta,
+    end_label_session,
     get_buffer_address,
     get_live_tensor_label,
     get_module_meta,
@@ -444,6 +446,13 @@ def _prepare_model_session(
 
     All session-scoped state is cleaned up by ``_cleanup_model_session``.
     """
+    # r83 C1: install this capture's label-anchoring session FIRST, before any
+    # path can stamp a label. A previously installed session is dropped here,
+    # so a label issued by an earlier capture resolves against nothing. The
+    # registry is module-level state in ``_tl`` (not a Trace field): it must be
+    # reachable from ``set_tensor_label`` itself, which is the choke point every
+    # label stamp flows through and which has no Trace in scope.
+    begin_label_session()
     _module_class_metadata_cache.clear()
     _state._dir_cache.clear()
     trace._exhaustive_module_stack = []
@@ -2190,6 +2199,12 @@ def _cleanup_model_session(
             seen.add(id(t))
     if input_objects is not None:
         _clear_session_tensor_metadata(input_objects, seen)
+
+    # r83 C1: retire this capture's label-anchoring session LAST, after every
+    # cleanup pass that consults it. Any label still carried by an object that
+    # outlives the capture is now anchored to a retired session and can never
+    # be accepted as provenance by a later capture, whatever route it escaped by.
+    end_label_session()
 
 
 def _clear_session_tensor_metadata(value: Any, seen: set[int], depth: int = 0) -> None:
