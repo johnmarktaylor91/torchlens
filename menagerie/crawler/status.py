@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
-from menagerie.crawler.constants import SKIPPED_STATUS_CODES, TERMINAL_STATUS_CODES, WORKFLOW_STATES
+from menagerie.crawler.constants import (
+    SKIPPED_STATUS_CODES,
+    TERMINAL_STATUS_CODES,
+    WORKFLOW_STATES,
+    StatusKind,
+)
 from menagerie.crawler.family_templates import family_variant_currency_error
 from menagerie.crawler.models import (
     CompletenessReport,
@@ -22,6 +28,46 @@ class PartitionError(ValueError):
 
 class StatusCompletenessError(ValueError):
     """Raised when a terminal status omits its closed required evidence."""
+
+
+@dataclass(frozen=True)
+class _StatusTransition:
+    """Completeness policy applied after a code/kind pair is validated."""
+
+    requires_failure_evidence: bool
+    forbids_failure_fields: bool
+    expects_terminal_issue: bool
+    requires_run_completeness: bool
+
+
+_STATUS_TRANSITIONS: dict[StatusKind, _StatusTransition] = {
+    StatusKind.RUNS: _StatusTransition(
+        requires_failure_evidence=False,
+        forbids_failure_fields=True,
+        expects_terminal_issue=False,
+        requires_run_completeness=True,
+    ),
+    StatusKind.DEFERRED: _StatusTransition(
+        requires_failure_evidence=False,
+        forbids_failure_fields=True,
+        expects_terminal_issue=True,
+        requires_run_completeness=False,
+    ),
+    StatusKind.SKIPPED: _StatusTransition(
+        requires_failure_evidence=False,
+        forbids_failure_fields=True,
+        expects_terminal_issue=True,
+        requires_run_completeness=False,
+    ),
+    StatusKind.FAILED: _StatusTransition(
+        requires_failure_evidence=True,
+        forbids_failure_fields=False,
+        expects_terminal_issue=True,
+        requires_run_completeness=False,
+    ),
+}
+if set(_STATUS_TRANSITIONS) != set(StatusKind):
+    raise RuntimeError("status transition table is not exhaustive")
 
 
 def wakeup_status(events: Sequence[Mapping[str, Any]]) -> JsonObject:
@@ -191,7 +237,8 @@ def _status_completeness_failures(records: Iterable[Mapping[str, Any]]) -> list[
         if code not in TERMINAL_STATUS_CODES or kind != str(code).split(":", 1)[0]:
             failures.append(f"{stable_id}:invalid-code-kind")
             continue
-        if kind == "failed":
+        transition = _STATUS_TRANSITIONS[StatusKind(kind)]
+        if transition.requires_failure_evidence:
             stage = str(code).split(":", 1)[1]
             if status.get("stage") != stage or not status.get("reason_code"):
                 failures.append(f"{stable_id}:missing-stage-reason")
@@ -203,7 +250,9 @@ def _status_completeness_failures(records: Iterable[Mapping[str, Any]]) -> list[
                 "required"
             ):
                 failures.append(f"{stable_id}:missing-human-review")
-        elif status.get("stage") is not None or status.get("reason_code") is not None:
+        elif transition.forbids_failure_fields and (
+            status.get("stage") is not None or status.get("reason_code") is not None
+        ):
             failures.append(f"{stable_id}:nonfailure-has-failure-fields")
     return failures
 
@@ -468,20 +517,28 @@ def _record_completion_issues(records: Sequence[Mapping[str, Any]]) -> dict[str,
         status = record.get("status", {})
         status_code = str(status.get("code"))
         kind = status.get("kind")
+        try:
+            transition = _STATUS_TRANSITIONS[StatusKind(kind)]
+        except (TypeError, ValueError):
+            transition = None
         if status.get("human_review", {}).get("required") is True:
             issues["human_review_pending"].append(stable_id)
         completeness = record.get("completeness", {})
-        required_true = (*base_required, *run_required) if kind == "runs" else base_required
+        required_true = (
+            (*base_required, *run_required)
+            if transition is not None and transition.requires_run_completeness
+            else base_required
+        )
         for field in required_true:
             if not completeness.get(field, False):
                 issues[field].append(stable_id)
         expected_terminal_issues = (
-            {status_code} if kind in {"failed", "skipped", "deferred"} else set()
+            {status_code} if transition is not None and transition.expects_terminal_issue else set()
         )
         for issue in completeness.get("issues", []):
             if str(issue) not in expected_terminal_issues:
                 issues[f"record:{issue}"].append(stable_id)
-        if kind == "runs":
+        if transition is not None and transition.requires_run_completeness:
             meaningful = set(record.get("modes", {}).get("meaningful_modes", []))
             outcomes = set(record.get("modes", {}).get("per_mode_run", {}))
             if meaningful != outcomes:

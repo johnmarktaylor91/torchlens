@@ -5,7 +5,17 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from menagerie.crawler.status import completeness_report, partition_report
+import pytest
+
+from menagerie.crawler.constants import StatusKind
+from menagerie.crawler.status import (
+    StatusCompletenessError,
+    _STATUS_TRANSITIONS,
+    _StatusTransition,
+    assert_status_completeness,
+    completeness_report,
+    partition_report,
+)
 from menagerie.crawler.tests.conftest import make_model
 
 
@@ -94,3 +104,29 @@ def test_completeness_is_true_only_with_exact_complete_partition() -> None:
     record = deepcopy(record)
     report = completeness_report(["m_complete"], [record])
     assert report.complete
+
+
+def test_status_transition_table_is_exhaustive_and_preserves_invalid_diagnostic() -> None:
+    """Every status kind is ruled and malformed code/kind pairs fail first."""
+
+    assert set(_STATUS_TRANSITIONS) == set(StatusKind)
+    assert all(isinstance(value, _StatusTransition) for value in _STATUS_TRANSITIONS.values())
+    record = _complete_record("m_invalid", "runs")
+    record["status"]["kind"] = "failed"
+    with pytest.raises(
+        StatusCompletenessError,
+        match="terminal status completeness invalid: m_invalid:invalid-code-kind",
+    ):
+        assert_status_completeness([record])
+
+
+def test_status_transition_table_preserves_nonfailure_field_diagnostic() -> None:
+    """A nonfailure transition still rejects failure-only evidence verbatim."""
+
+    record = _complete_record("m_runs", "runs")
+    record["status"]["stage"] = "forward"
+    with pytest.raises(
+        StatusCompletenessError,
+        match="terminal status completeness invalid: m_runs:nonfailure-has-failure-fields",
+    ):
+        assert_status_completeness([record])
