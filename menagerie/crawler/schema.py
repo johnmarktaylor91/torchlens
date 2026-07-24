@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Mapping, MutableSet, Union
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -82,6 +83,88 @@ class SchemaOwner(str, Enum):
     UNTRUSTED_HISTORY = "untrusted-history"
 
 
+class RequiredFieldProjection(str, Enum):
+    """Closed mechanical required-field projections owned by Python policy."""
+
+    MODEL_EXTERNAL_METADATA = "model-external-metadata"
+    AUTHOR_EXTERNAL_METADATA = "author-external-metadata"
+    AUTHOR_PROPOSAL_FACT_BLOCK = "author-proposal-fact-block"
+    AUTHOR_PROPOSAL_VERIFIED_HASH = "author-proposal-verified-hash"
+    GATE_ITEM_BINDING = "gate-item-binding"
+    GATE_VERIFIED_HASH = "gate-verified-hash"
+    MODEL_LEDGER_IDENTITY = "model-ledger-identity"
+    ATTEMPT_LEDGER_IDENTITY = "attempt-ledger-identity"
+    GATE_LEDGER_IDENTITY = "gate-ledger-identity"
+
+
+@dataclass(frozen=True)
+class RequiredField:
+    """One Python-owned required field aligned with an executable schema leaf.
+
+    Parameters
+    ----------
+    name:
+        Consumer-facing field name within its projection.
+    schema_path:
+        Exact normalized leaf path in the independently executable JSON Schema.
+    """
+
+    name: str
+    schema_path: str
+
+
+@dataclass(frozen=True)
+class RequiredFieldProjectionSpec:
+    """One ordered required-field projection keyed by every authority owner.
+
+    Parameters
+    ----------
+    schema_version:
+        Executable schema whose leaves independently constrain the projection.
+    fields_by_owner:
+        Explicit, separately addressable field tuple for every ``SchemaOwner``.
+    field_order:
+        Original consumer validation order, retained independently of ownership
+        grouping so consolidation cannot reorder checks.
+    """
+
+    schema_version: str
+    fields_by_owner: Mapping[SchemaOwner, tuple[RequiredField, ...]]
+    field_order: tuple[str, ...]
+
+    def fields_for(self, owner: SchemaOwner) -> tuple[RequiredField, ...]:
+        """Return the explicitly named required fields for one owner.
+
+        Parameters
+        ----------
+        owner:
+            Closed provenance owner whose projection is requested.
+
+        Returns
+        -------
+        tuple[RequiredField, ...]
+            Required fields owned by ``owner`` in their declared order.
+        """
+
+        return self.fields_by_owner[owner]
+
+    def names_for(self, owner: SchemaOwner) -> tuple[str, ...]:
+        """Return consumer-facing required names for one owner.
+
+        Parameters
+        ----------
+        owner:
+            Closed provenance owner whose field names are requested.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Required field names owned by ``owner``.
+        """
+
+        return tuple(field.name for field in self.fields_for(owner))
+
+
 @dataclass(frozen=True)
 class OwnedSchemaLeaf:
     """One normalized schema leaf and its sole authority owner.
@@ -96,6 +179,207 @@ class OwnedSchemaLeaf:
 
     path: str
     owner: SchemaOwner
+
+
+_EXTERNAL_METADATA_FIELD_NAMES = (
+    "modality",
+    "architecture_class",
+    "domain",
+    "task",
+    "field",
+    "subfield",
+    "paradigm",
+    "lineage",
+    "predecessors",
+    "tags",
+    "keywords",
+    "venue",
+    "family",
+    "era",
+    "year",
+    "country",
+    "authors",
+    "institution",
+    "citation",
+    "license",
+    "key_contribution",
+    "description",
+    "original_framework",
+    "run_framework",
+    "modes",
+)
+_AUTHOR_PROPOSAL_FACT_BLOCK_NAMES = (
+    "identity",
+    "taxonomy",
+    "external_metadata",
+    "website",
+    "people_and_origin",
+    "dates",
+    "citation",
+    "licenses",
+    "source_resolution",
+    "evidence",
+    "implementation",
+    "input_contract",
+    "modes",
+    "fidelity",
+)
+_AUTHOR_PROPOSAL_VERIFIED_HASH_NAMES = (
+    "source_manifest",
+    "evidence",
+    "code",
+    "source_to_code_map",
+    "family_template",
+    "code_manifest",
+)
+_GATE_ITEM_BINDING_FIELD_ORDER = (
+    "work_id",
+    "stable_id",
+    "family_representative_id",
+    "fidelity_identity",
+    "vet_identity",
+    "verified_hashes",
+)
+
+
+def _required_field_projection_spec(
+    schema_version: str,
+    *,
+    author_gated: tuple[RequiredField, ...] = (),
+    worker_observed: tuple[RequiredField, ...] = (),
+    parent_observed: tuple[RequiredField, ...] = (),
+    reducer_derived: tuple[RequiredField, ...] = (),
+    trusted_intake: tuple[RequiredField, ...] = (),
+    untrusted_history: tuple[RequiredField, ...] = (),
+    field_order: tuple[str, ...],
+) -> RequiredFieldProjectionSpec:
+    """Build one immutable owner-explicit required-field projection.
+
+    Parameters
+    ----------
+    schema_version:
+        Independently executable schema aligned with the Python policy.
+    author_gated, worker_observed, parent_observed, reducer_derived:
+        Explicit required fields for the four active provenance owners.
+    trusted_intake, untrusted_history:
+        Explicit required fields for retained intake and categorical legacy history.
+    field_order:
+        Historical consumer validation order.
+
+    Returns
+    -------
+    RequiredFieldProjectionSpec
+        Immutable typed projection with every ``SchemaOwner`` key present.
+
+    Raises
+    ------
+    RuntimeError
+        If a field is duplicated or the ordered names do not exactly cover the
+        owner-specific fields.
+    """
+
+    fields_by_owner = {
+        SchemaOwner.AUTHOR_GATED: author_gated,
+        SchemaOwner.WORKER_OBSERVED: worker_observed,
+        SchemaOwner.PARENT_OBSERVED: parent_observed,
+        SchemaOwner.REDUCER_DERIVED: reducer_derived,
+        SchemaOwner.TRUSTED_INTAKE: trusted_intake,
+        SchemaOwner.UNTRUSTED_HISTORY: untrusted_history,
+    }
+    names = tuple(field.name for owner in SchemaOwner for field in fields_by_owner[owner])
+    if len(names) != len(set(names)):
+        raise RuntimeError(f"{schema_version} required-field projection duplicates names")
+    if len(field_order) != len(set(field_order)) or set(field_order) != set(names):
+        raise RuntimeError(f"{schema_version} required-field projection order is incomplete")
+    return RequiredFieldProjectionSpec(
+        schema_version=schema_version,
+        fields_by_owner=MappingProxyType(fields_by_owner),
+        field_order=field_order,
+    )
+
+
+_MODEL_EXTERNAL_METADATA_FIELDS = tuple(
+    RequiredField(name, f"$.external_metadata.{name}") for name in _EXTERNAL_METADATA_FIELD_NAMES
+)
+_AUTHOR_EXTERNAL_METADATA_FIELDS = tuple(
+    RequiredField(name, f"$.proposed_facts.external_metadata.{name}")
+    for name in _EXTERNAL_METADATA_FIELD_NAMES
+)
+_AUTHOR_PROPOSAL_FACT_BLOCK_FIELDS = tuple(
+    RequiredField(name, f"$.proposed_facts.{name}") for name in _AUTHOR_PROPOSAL_FACT_BLOCK_NAMES
+)
+_AUTHOR_PROPOSAL_VERIFIED_HASH_FIELDS = tuple(
+    RequiredField(name, f"$.verified_hashes.{name}")
+    for name in _AUTHOR_PROPOSAL_VERIFIED_HASH_NAMES
+)
+_GATE_ITEM_REDUCER_BINDING_FIELDS = (
+    RequiredField("work_id", "$.items[].work_id"),
+    RequiredField("fidelity_identity", "$.items[].fidelity_identity"),
+    RequiredField("vet_identity", "$.items[].vet_identity"),
+    RequiredField("verified_hashes", "$.items[].verified_hashes.code"),
+)
+_GATE_ITEM_TRUSTED_BINDING_FIELDS = (
+    RequiredField("stable_id", "$.items[].stable_id"),
+    RequiredField("family_representative_id", "$.items[].family_representative_id"),
+)
+_GATE_VERIFIED_HASH_FIELDS = tuple(
+    RequiredField(name, f"$.items[].verified_hashes.{name}")
+    for name in (*_AUTHOR_PROPOSAL_VERIFIED_HASH_NAMES, "proposal")
+)
+
+REQUIRED_FIELD_PROJECTION_SPECS: Mapping[RequiredFieldProjection, RequiredFieldProjectionSpec] = (
+    MappingProxyType(
+        {
+            RequiredFieldProjection.MODEL_EXTERNAL_METADATA: _required_field_projection_spec(
+                MODEL_SCHEMA_VERSION_V3,
+                author_gated=_MODEL_EXTERNAL_METADATA_FIELDS,
+                field_order=_EXTERNAL_METADATA_FIELD_NAMES,
+            ),
+            RequiredFieldProjection.AUTHOR_EXTERNAL_METADATA: _required_field_projection_spec(
+                AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
+                author_gated=_AUTHOR_EXTERNAL_METADATA_FIELDS,
+                field_order=_EXTERNAL_METADATA_FIELD_NAMES,
+            ),
+            RequiredFieldProjection.AUTHOR_PROPOSAL_FACT_BLOCK: _required_field_projection_spec(
+                AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
+                author_gated=_AUTHOR_PROPOSAL_FACT_BLOCK_FIELDS,
+                field_order=_AUTHOR_PROPOSAL_FACT_BLOCK_NAMES,
+            ),
+            RequiredFieldProjection.AUTHOR_PROPOSAL_VERIFIED_HASH: _required_field_projection_spec(
+                AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
+                reducer_derived=_AUTHOR_PROPOSAL_VERIFIED_HASH_FIELDS,
+                field_order=_AUTHOR_PROPOSAL_VERIFIED_HASH_NAMES,
+            ),
+            RequiredFieldProjection.GATE_ITEM_BINDING: _required_field_projection_spec(
+                GATE_SCHEMA_VERSION_V3,
+                reducer_derived=_GATE_ITEM_REDUCER_BINDING_FIELDS,
+                trusted_intake=_GATE_ITEM_TRUSTED_BINDING_FIELDS,
+                field_order=_GATE_ITEM_BINDING_FIELD_ORDER,
+            ),
+            RequiredFieldProjection.GATE_VERIFIED_HASH: _required_field_projection_spec(
+                GATE_SCHEMA_VERSION_V3,
+                reducer_derived=_GATE_VERIFIED_HASH_FIELDS,
+                field_order=(*_AUTHOR_PROPOSAL_VERIFIED_HASH_NAMES, "proposal"),
+            ),
+            RequiredFieldProjection.MODEL_LEDGER_IDENTITY: _required_field_projection_spec(
+                MODEL_SCHEMA_VERSION_V3,
+                reducer_derived=(RequiredField("record_revision", "$.record_revision"),),
+                trusted_intake=(RequiredField("stable_id", "$.stable_id"),),
+                field_order=("stable_id", "record_revision"),
+            ),
+            RequiredFieldProjection.ATTEMPT_LEDGER_IDENTITY: _required_field_projection_spec(
+                ATTEMPT_SCHEMA_VERSION_V3,
+                reducer_derived=(RequiredField("attempt_id", "$.attempt_id"),),
+                field_order=("attempt_id",),
+            ),
+            RequiredFieldProjection.GATE_LEDGER_IDENTITY: _required_field_projection_spec(
+                GATE_SCHEMA_VERSION_V3,
+                reducer_derived=(RequiredField("gate_id", "$.gate_id"),),
+                field_order=("gate_id",),
+            ),
+        }
+    )
+)
 
 
 @lru_cache(maxsize=None)
@@ -540,6 +824,86 @@ def schema_owner_paths(schema_version: str, owner: SchemaOwner) -> frozenset[str
     return frozenset(
         leaf.path for leaf in owned_schema_leaves(schema_version) if leaf.owner is owner
     )
+
+
+def required_field_projection_spec(
+    projection: RequiredFieldProjection,
+) -> RequiredFieldProjectionSpec:
+    """Return one Python-owned typed required-field projection.
+
+    Parameters
+    ----------
+    projection:
+        Closed projection name.
+
+    Returns
+    -------
+    RequiredFieldProjectionSpec
+        Immutable spec retaining every owner-specific field set and validation order.
+    """
+
+    return REQUIRED_FIELD_PROJECTION_SPECS[projection]
+
+
+def _schema_path_selects(required_path: str, leaf_path: str) -> bool:
+    """Return whether one required property selects a normalized schema leaf.
+
+    Parameters
+    ----------
+    required_path:
+        Exact property path named by Python projection policy.
+    leaf_path:
+        Normalized executable-schema leaf path.
+
+    Returns
+    -------
+    bool
+        True for the property itself or one of its object/collection descendants.
+    """
+
+    return (
+        leaf_path == required_path
+        or leaf_path.startswith(f"{required_path}.")
+        or leaf_path.startswith(f"{required_path}[]")
+    )
+
+
+def validate_required_field_projection_specs() -> None:
+    """Require every Python-owned projection field to match schema ownership.
+
+    The executable schemas remain independent structural validators. This check
+    compares their inert ownership annotations with the Python policy literals;
+    it never constructs or changes the Python spec from schema contents.
+
+    Raises
+    ------
+    SchemaOwnershipError
+        If a required Python field is absent from the schema or assigned to a
+        different provenance owner.
+    """
+
+    for projection, spec in REQUIRED_FIELD_PROJECTION_SPECS.items():
+        paths_by_owner = {
+            owner: schema_owner_paths(spec.schema_version, owner) for owner in SchemaOwner
+        }
+        for owner in SchemaOwner:
+            mismatched: list[str] = []
+            for field in spec.fields_for(owner):
+                selected_by_owner = {
+                    candidate_owner
+                    for candidate_owner, candidate_paths in paths_by_owner.items()
+                    if any(
+                        _schema_path_selects(field.schema_path, candidate_path)
+                        for candidate_path in candidate_paths
+                    )
+                }
+                if selected_by_owner != {owner}:
+                    mismatched.append(field.schema_path)
+            if mismatched:
+                raise SchemaOwnershipError(
+                    f"{projection.value} required-field ownership mismatch for "
+                    f"{owner.value}: {mismatched}"
+                )
 
 
 def author_gated_schema_paths(schema_version: str) -> frozenset[str]:

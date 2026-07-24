@@ -12,14 +12,19 @@ import pytest
 from menagerie.crawler.constants import FAILURE_REASON_CODES, TERMINAL_STATUS_CODES, FailureStage
 from menagerie.crawler.schema import (
     OWNERSHIP_ANNOTATED_SCHEMA_VERSIONS,
+    REQUIRED_FIELD_PROJECTION_SPECS,
     SCHEMA_FILES,
     PayloadValidationError,
+    RequiredFieldProjection,
     SchemaOwnershipError,
+    SchemaOwner,
     author_gated_schema_paths,
     load_schema,
     owned_schema_leaves,
     owned_schema_leaves_from_schema,
+    required_field_projection_spec,
     validate_payload,
+    validate_required_field_projection_specs,
 )
 from menagerie.crawler.tests.conftest import (
     make_attempt,
@@ -213,6 +218,25 @@ def test_v3_schema_leaf_ownership_is_complete_and_exhaustive() -> None:
         assert owned
         assert len({leaf.path for leaf in owned}) == len(owned)
         assert author_gated_schema_paths(schema_version).issubset({leaf.path for leaf in owned})
+
+
+def test_required_field_projection_specs_are_owner_explicit_and_schema_aligned() -> None:
+    """Python-owned field projections retain every owner key and schema parity."""
+
+    assert set(REQUIRED_FIELD_PROJECTION_SPECS) == set(RequiredFieldProjection)
+    for projection in RequiredFieldProjection:
+        spec = required_field_projection_spec(projection)
+        assert set(spec.fields_by_owner) == set(SchemaOwner)
+        assert set(spec.field_order) == {
+            field.name for owner in SchemaOwner for field in spec.fields_for(owner)
+        }
+        assert spec.names_for(SchemaOwner.WORKER_OBSERVED) == tuple(
+            field.name for field in spec.fields_for(SchemaOwner.WORKER_OBSERVED)
+        )
+        assert spec.names_for(SchemaOwner.PARENT_OBSERVED) == tuple(
+            field.name for field in spec.fields_for(SchemaOwner.PARENT_OBSERVED)
+        )
+    validate_required_field_projection_specs()
 
 
 def test_schema_leaf_ownership_rejects_a_new_unclassified_leaf() -> None:
