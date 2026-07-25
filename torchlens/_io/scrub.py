@@ -9,11 +9,12 @@ are dropped or stringified before writing ``metadata.pkl``.
 
 from __future__ import annotations
 
+import copy
 import logging
 import pickle
 from io import BytesIO
 from collections import OrderedDict, defaultdict
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, MutableMapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -182,7 +183,47 @@ def scrub_for_save(
         )
     else:
         scrubbed_state["_io_module_accessor_state"] = None
+    detach_conditional_trace_backrefs(scrubbed_state)
     return scrubbed_state, blob_specs, options.unsupported_tensor_records
+
+
+def detach_conditional_trace_backrefs(value: Any) -> None:
+    """Detach runtime-only conditional-arm trace bindings from scrubbed metadata.
+
+    ``ConditionalAccessor`` predates the portable-state policy system, so recursive
+    scrubbing treats it as an inert metadata value. Each arm nevertheless carries a
+    private ``_trace`` back-reference used by live convenience accessors. Leaving that
+    reference attached serializes the entire live trace a second time and can embed raw
+    tensor storages in ``metadata.pkl`` outside the manifest/blob boundary.
+
+    The scrub product receives shallow copies of the accessor records with only the
+    runtime binding removed. The live trace is never mutated, and load rebinds the copied
+    arms to the rehydrated trace.
+
+    Parameters
+    ----------
+    value:
+        Scrubbed top-level metadata mapping to update in place.
+    """
+
+    from ..data_classes.trace import Conditional, ConditionalAccessor
+
+    if not isinstance(value, MutableMapping):
+        return
+    accessor = value.get("conditionals")
+    if not isinstance(accessor, ConditionalAccessor):
+        return
+    detached: list[Conditional] = []
+    for conditional in accessor.values():
+        detached_arms = []
+        for arm in conditional.arms:
+            arm_copy = copy.copy(arm)
+            arm_copy._trace = None
+            detached_arms.append(arm_copy)
+        conditional_copy = copy.copy(conditional)
+        conditional_copy.arms = detached_arms
+        detached.append(conditional_copy)
+    value["conditionals"] = ConditionalAccessor(detached)
 
 
 def _scrub_value(

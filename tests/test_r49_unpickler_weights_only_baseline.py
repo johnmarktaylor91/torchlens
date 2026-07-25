@@ -48,6 +48,7 @@ from torchlens._io._safe_unpickle import (
     _is_torch_storage_type,
 )
 from torchlens.options import CaptureOptions
+from torchlens.utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 
 _CAP = CaptureOptions(
     intervention_ready=True,
@@ -201,7 +202,10 @@ def test_build_rebind_denied_end_to_end_no_setstate() -> None:
 
     torch.Tensor.__setstate__ = _spy  # type: ignore[method-assign, assignment]
     try:
-        with pytest.raises(pickle.UnpicklingError, match="BUILD applied to a torch"):
+        expected_refusal = (
+            "BUILD applied to a torch" if HAS_SAFE_WEIGHTS_ONLY_LOAD else "CVE-2025-32434"
+        )
+        with pytest.raises(pickle.UnpicklingError, match=expected_refusal):
             SafeBundleUnpickler(io.BytesIO(buf)).load()
     finally:
         torch.Tensor.__setstate__ = original_setstate  # type: ignore[method-assign]
