@@ -1,0 +1,58 @@
+name: Latest Torch Canary
+
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: latest-torch-canary
+  cancel-in-progress: true
+
+jobs:
+  latest-canary:
+    name: Latest Torch canary
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install Graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+
+      - name: Install latest CPU test environment
+        run: |
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,tabular]" \
+            torch \
+            torchvision \
+            "pydot==4.0.1"
+
+      - name: Validate installed environment
+        run: |
+          uv pip check
+          python - <<'PY'
+          import torch
+          import torchvision
+          from torchvision.ops import nms
+
+          boxes = torch.tensor([[0.0, 0.0, 1.0, 1.0]])
+          scores = torch.tensor([1.0])
+          assert nms(boxes, scores, 0.5).tolist() == [0]
+          print(torch.__version__, torchvision.__version__)
+          PY
+
+      - name: Run smoke tests and compatibility coverage
+        run: |
+          pytest tests/ -m smoke --tb=short -q
+          pytest tests/test_torch_compat.py --tb=short -q

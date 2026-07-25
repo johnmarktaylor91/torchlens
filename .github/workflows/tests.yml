@@ -1,8 +1,7 @@
 name: Tests
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
   pull_request:
     branches: [main]
 
@@ -12,32 +11,45 @@ concurrency:
 
 jobs:
   smoke:
-    name: Smoke (torch ${{ matrix.torch }}, py ${{ matrix.python }})
-    runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.experimental }}
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    name: ${{ matrix.track }} (torch ${{ matrix.torch }}, py ${{ matrix.python }})
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        # Cover the declared torch floor (2.1, on both supported pythons),
-        # the current dev baseline, and the newest installable CPU torch as
-        # an early warning signal. Torch 2.1 has no Python 3.12 wheels.
+        # Required rows use exact admitted CPU pairs. Ecosystem drift is isolated
+        # to the separate scheduled/manual latest-canary workflow.
         include:
-          - python: "3.11"
-            torch: "2.1.*"
-            experimental: false
-            pytest: 'pytest tests/ -m smoke tests/test_torch_compat.py -x --tb=short -q'
-          - python: "3.10"
-            torch: "2.1.*"
-            experimental: false
-            pytest: 'pytest tests/ -m smoke tests/test_torch_compat.py -x --tb=short -q'
-          - python: "3.11"
-            torch: "2.8.*"
-            experimental: false
-            pytest: 'pytest tests/ -m "not slow" -x --tb=short -q'
-          - python: "3.11"
-            torch: "latest"
-            experimental: true
-            pytest: 'pytest tests/ -m smoke tests/test_torch_compat.py -x --tb=short -q'
+          - track: floor
+            python: "3.10"
+            torch: "2.1.2+cpu"
+            torchvision: "0.16.2+cpu"
+            scope: smoke
+          - track: floor
+            python: "3.11"
+            torch: "2.1.2+cpu"
+            torchvision: "0.16.2+cpu"
+            scope: smoke
+          - track: canonical
+            python: "3.10"
+            torch: "2.8.0+cpu"
+            torchvision: "0.23.0+cpu"
+            scope: smoke
+          - track: canonical
+            python: "3.11"
+            torch: "2.8.0+cpu"
+            torchvision: "0.23.0+cpu"
+            scope: not-slow
+          - track: newest-admitted
+            python: "3.10"
+            torch: "2.13.0+cpu"
+            torchvision: "0.28.0+cpu"
+            scope: smoke
+          - track: newest-admitted
+            python: "3.11"
+            torch: "2.13.0+cpu"
+            torchvision: "0.28.0+cpu"
+            scope: smoke
     steps:
       - uses: actions/checkout@v4
 
@@ -47,25 +59,52 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
 
-      - name: Install graphviz (system dep -- the `dot` binary used by
-          tests that render visualization output)
+      - name: Install Graphviz
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
 
-      - name: Install torch (${{ matrix.torch }}, CPU wheel)
+      - name: Install exact CPU test environment
+        env:
+          TORCH_VERSION: ${{ matrix.torch }}
+          TORCHVISION_VERSION: ${{ matrix.torchvision }}
         run: |
-          if [ "${{ matrix.torch }}" = "latest" ]; then
-            uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu
-          else
-            uv pip install --system "torch==${{ matrix.torch }}" \
-              --index-url https://download.pytorch.org/whl/cpu
-          fi
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,tabular]" \
+            "torch==${TORCH_VERSION}" \
+            "torchvision==${TORCHVISION_VERSION}" \
+            "pydot==4.0.1"
 
-      - name: Install torchlens (with test extras)
+      - name: Validate installed environment
+        env:
+          TORCH_VERSION: ${{ matrix.torch }}
+          TORCHVISION_VERSION: ${{ matrix.torchvision }}
         run: |
-          uv pip install --system -e ".[dev,tabular,test]"
+          uv pip check
+          python - <<'PY'
+          import os
 
-      - name: Run smoke tests
+          import torch
+          import torchvision
+          from torchvision.ops import nms
+
+          assert torch.__version__ == os.environ["TORCH_VERSION"]
+          assert torchvision.__version__ == os.environ["TORCHVISION_VERSION"]
+          boxes = torch.tensor([[0.0, 0.0, 1.0, 1.0]])
+          scores = torch.tensor([1.0])
+          assert nms(boxes, scores, 0.5).tolist() == [0]
+          print(torch.__version__, torchvision.__version__)
+          PY
+
+      - name: Run smoke tests and compatibility coverage
+        if: matrix.scope == 'smoke'
         run: |
-          ${{ matrix.pytest }}
+          pytest tests/ -m smoke --tb=short -q
+          pytest tests/test_torch_compat.py --tb=short -q
+
+      - name: Run non-slow tests
+        if: matrix.scope == 'not-slow'
+        run: pytest tests/ -m "not slow" --tb=short -q
