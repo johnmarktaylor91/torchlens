@@ -2399,6 +2399,12 @@ class Trace(
             Independently, ``include_activations=True`` archives exactly the
             capture-time ``save=``-selected payloads for inspection and eligible
             byte-exact attestation; those payloads never seed execution.
+            ``include_source`` (default ``True``) controls whether the captured
+            model source code is embedded; set it ``False`` to strip verbatim
+            source, docstrings, and source-file references from a shared
+            ``.tlspec``. Absolute source paths are always relativized to a bare
+            basename, so no ``$HOME`` / username is ever embedded. See
+            :func:`torchlens.save` for the full option list.
 
         Warning
         -------

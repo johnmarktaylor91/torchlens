@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import getpass
 import html
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -235,6 +237,92 @@ def test_code_panel_html_escape(tmp_path: Path) -> None:
     svg = _render_svg_output(log, tmp_path, code_panel=lambda model: "x < y > z & q")
 
     assert "x &lt; y &gt; z &amp; q" in svg
+
+
+def _bundle_metadata_bytes(bundle_path: Path) -> bytes:
+    """Return the concatenated bytes of every pickled metadata file in a bundle.
+
+    Parameters
+    ----------
+    bundle_path:
+        Saved ``.tlspec`` bundle directory.
+
+    Returns
+    -------
+    bytes
+        Raw bytes of every ``*.pkl`` metadata file under the bundle.
+    """
+
+    return b"".join(pkl.read_bytes() for pkl in sorted(bundle_path.rglob("*.pkl")))
+
+
+# Source-body markers that appear only in the model's verbatim source text, not
+# in kept structural metadata (the class name lives in ``model_class_qualname``,
+# so it is deliberately excluded here).
+_SOURCE_BODY_MARKERS = (b"def forward", b"def __init__", b"return self.linear(x).relu()")
+
+
+def test_include_source_false_strips_source_text_and_host_paths(tmp_path: Path) -> None:
+    """``include_source=False`` must embed no source text, ``$HOME``, or username.
+
+    A shared ``.tlspec`` is the portable format, so the opt-out has to remove the
+    verbatim model source entirely and leave no host filesystem PII behind.
+    """
+
+    log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
+    bundle_path = tmp_path / "no_source.tlspec"
+    tl.save(log, bundle_path, include_source=False, overwrite=True)
+
+    raw = _bundle_metadata_bytes(bundle_path)
+    for marker in _SOURCE_BODY_MARKERS:
+        assert marker not in raw, f"source text {marker!r} leaked into stripped bundle"
+    assert os.path.expanduser("~").encode() not in raw
+    assert f"/{getpass.getuser()}/".encode() not in raw
+    assert b"site-packages" not in raw
+
+    # The stripped artifact must still load.
+    tl.load(bundle_path)
+
+
+def test_default_save_keeps_source_but_relativizes_host_paths(tmp_path: Path) -> None:
+    """Default (``include_source=True``) keeps source yet strips absolute paths.
+
+    Path relativization is a pure privacy win applied regardless of the flag, so
+    even a source-embedding bundle must carry no ``$HOME`` / username / absolute
+    layout while the source panel still round-trips through save + load.
+    """
+
+    log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
+    bundle_path = tmp_path / "with_source.tlspec"
+    tl.save(log, bundle_path, overwrite=True)
+
+    raw = _bundle_metadata_bytes(bundle_path)
+    # Source is embedded by default...
+    assert b"return self.linear(x).relu()" in raw
+    # ...but no host filesystem PII is.
+    assert os.path.expanduser("~").encode() not in raw
+    assert f"/{getpass.getuser()}/".encode() not in raw
+    assert b"site-packages" not in raw
+
+    loaded = tl.load(bundle_path)
+    svg = _render_svg_output(loaded, tmp_path, code_panel="forward")
+    assert "def forward" in svg
+    assert "return self.linear(x).relu()" in svg
+
+
+def test_source_stripped_artifact_visualizes_without_crashing(tmp_path: Path) -> None:
+    """A source-stripped bundle must degrade to a placeholder panel, never crash."""
+
+    log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
+    bundle_path = tmp_path / "stripped.tlspec"
+    tl.save(log, bundle_path, include_source=False, overwrite=True)
+    loaded = tl.load(bundle_path)
+
+    # Requesting a source panel on the reloaded, source-stripped trace must not
+    # raise; it renders a "not embedded" placeholder instead of the source.
+    svg = _render_svg_output(loaded, tmp_path, code_panel="forward")
+    assert "not embedded" in svg
+    assert "def forward" not in svg
 
 
 def test_code_panel_truncates_long_source(tmp_path: Path) -> None:

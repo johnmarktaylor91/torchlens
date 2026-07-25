@@ -90,6 +90,7 @@ class _ScrubOptions:
     include_grads: bool
     include_saved_args: bool
     include_rng_states: bool
+    include_source: bool = True
     sparse_runnable: bool = False
     backend_name: str = "torch"
     payload_materialization: bool = True
@@ -104,6 +105,7 @@ def scrub_for_save(
     include_grads: bool = True,
     include_saved_args: bool = False,
     include_rng_states: bool = False,
+    include_source: bool = True,
     backend_name: str | None = None,
     payload_materialization: bool = True,
     sparse_runnable: bool = False,
@@ -124,6 +126,14 @@ def scrub_for_save(
     include_rng_states:
         Whether captured RNG state tensors should be preserved via blob
         references.
+    include_source:
+        Whether captured model source text (the ``_source_code_blob`` class /
+        ``__init__`` / ``forward`` source, per-call ``code_context`` source
+        lines, and captured docstrings) should be embedded. Absolute source
+        paths are always reduced to a bare basename regardless of this flag,
+        so no ``$HOME`` / username / filesystem layout ever reaches the bundle.
+        With ``include_source=False`` the source text, source-file references,
+        and docstrings are dropped entirely.
     backend_name:
         Backend identifier for payload audit records. Defaults to
         ``trace.backend`` when present.
@@ -144,6 +154,7 @@ def scrub_for_save(
         include_grads=include_grads,
         include_saved_args=include_saved_args,
         include_rng_states=include_rng_states,
+        include_source=include_source,
         sparse_runnable=sparse_runnable,
         backend_name=str(backend_name or getattr(trace, "backend", "torch")),
         payload_materialization=payload_materialization,
@@ -294,8 +305,176 @@ def _scrub_value(
             repr(value.activation_transform) if value.activation_transform is not None else None
         )
         scrubbed_state["tlspec_version"] = TLSPEC_VERSION
+        _apply_source_metadata_policy(scrubbed_state, options)
+        _apply_trace_blob_policy(scrubbed_state, options)
+    # ``FuncCallLocation`` is matched by name rather than ``isinstance`` to avoid
+    # an import cycle between ``_io`` and ``data_classes``; it is a unique
+    # internal class with no subclasses.
+    elif type(value).__name__ == "FuncCallLocation":
+        _apply_frame_source_policy(scrubbed_state, options)
+    # ``Module`` logs carry the same per-module class/init/forward source
+    # metadata (docstrings + absolute source files) as the Trace. Dispatch on the
+    # field signature rather than the class so any source-metadata owner is
+    # covered without an ``_io`` -> ``data_classes`` import cycle.
+    elif "class_docstring" in scrubbed_state:
+        _apply_source_metadata_policy(scrubbed_state, options)
 
     return state_restore(scrubbed_obj, scrubbed_state)
+
+
+def _relativize_source_path(path: Any) -> Any:
+    """Reduce a captured source path to its bare basename for portable save.
+
+    Absolute source paths embed the producer's ``$HOME``, OS username, and
+    site-packages / capturing-script filesystem layout -- host details with no
+    portable value (a ``vscode://`` link built from them never resolves on
+    another machine). Reducing every saved source path to its basename removes
+    that host PII while keeping a human-useful filename hint. Handles both POSIX
+    and Windows separators so a bundle produced on either host is scrubbed.
+
+    Parameters
+    ----------
+    path:
+        Candidate source path value.
+
+    Returns
+    -------
+    Any
+        Basename of ``path`` when it is a non-empty string, else ``path``.
+    """
+
+    if not isinstance(path, str) or not path:
+        return path
+    return path.replace("\\", "/").rsplit("/", 1)[-1]
+
+
+def _relativize_source_text(value: Any) -> Any:
+    """Return a source-blob value with its file path reduced to a basename.
+
+    ``_source_code_blob`` values are ``SourceText`` (a ``str`` subclass carrying
+    ``file_path``/``line_number``). A fresh copy is returned so the live Trace's
+    ``SourceText`` objects are never mutated; values without a ``file_path`` are
+    returned unchanged.
+
+    Parameters
+    ----------
+    value:
+        Source-blob value (a ``SourceText`` or plain string).
+
+    Returns
+    -------
+    Any
+        A path-relativized ``SourceText`` copy, or the original value.
+    """
+
+    file_path = getattr(value, "file_path", None)
+    if file_path is None:
+        return value
+    # ``value`` is a ``SourceText`` (only that ``str`` subclass carries
+    # ``file_path``). Reconstruct via ``type(value)`` rather than importing
+    # ``SourceText`` so the save path never pulls in ``visualization.code_panel``
+    # (and its ``graphviz`` import); a plain ``str`` never reaches here.
+    return type(value)(
+        str(value),
+        file_path=_relativize_source_path(file_path),
+        line_number=getattr(value, "line_number", None),
+    )
+
+
+_SOURCE_FILE_FIELDS = ("class_source_file", "init_source_file", "forward_source_file")
+_DOCSTRING_FIELDS = ("class_docstring", "init_docstring", "forward_docstring")
+
+
+def _apply_source_metadata_policy(scrubbed_state: dict[str, Any], options: _ScrubOptions) -> None:
+    """Apply the source-embedding privacy policy to scrubbed source metadata.
+
+    Shared by the ``Trace`` and per-module ``Module`` logs, which both carry
+    ``class``/``init``/``forward`` source-file paths and docstrings. Path
+    relativization is unconditional (a pure privacy win: no host paths,
+    ``$HOME``, or username ever reach the bundle). Docstrings are verbatim source
+    text and are dropped when ``include_source=False``, along with the now-dangling
+    source-file references. Function signatures and source line numbers are
+    structural interface metadata (like a stub) and are retained.
+
+    Parameters
+    ----------
+    scrubbed_state:
+        Scrubbed field state for a Trace or Module log, mutated in place.
+    options:
+        Active scrub options carrying ``include_source``.
+    """
+
+    if options.include_source:
+        for field_name in _SOURCE_FILE_FIELDS:
+            if field_name in scrubbed_state:
+                scrubbed_state[field_name] = _relativize_source_path(scrubbed_state[field_name])
+        return
+
+    for field_name in (*_SOURCE_FILE_FIELDS, *_DOCSTRING_FIELDS):
+        if field_name in scrubbed_state:
+            scrubbed_state[field_name] = None
+
+
+def _apply_trace_blob_policy(scrubbed_state: dict[str, Any], options: _ScrubOptions) -> None:
+    """Apply the source-embedding privacy policy to the Trace source-code blob.
+
+    The ``_source_code_blob`` holds the model's verbatim class / ``__init__`` /
+    ``forward`` source (with absolute ``file_path`` metadata). It is dropped
+    entirely when ``include_source=False``; otherwise every entry is replaced with
+    a fresh, path-relativized ``SourceText`` copy so the live Trace is never
+    mutated and no host path is embedded.
+
+    Parameters
+    ----------
+    scrubbed_state:
+        Scrubbed Trace field state, mutated in place.
+    options:
+        Active scrub options carrying ``include_source``.
+    """
+
+    if not options.include_source:
+        scrubbed_state["_source_code_blob"] = {}
+        return
+    blob = scrubbed_state.get("_source_code_blob")
+    if isinstance(blob, dict):
+        scrubbed_state["_source_code_blob"] = {
+            key: _relativize_source_text(value) for key, value in blob.items()
+        }
+
+
+def _apply_frame_source_policy(scrubbed_state: dict[str, Any], options: _ScrubOptions) -> None:
+    """Apply the source-embedding privacy policy to a scrubbed call-stack frame.
+
+    ``FuncCallLocation`` frames embed both the absolute source ``file`` and the
+    surrounding source lines. The path is always relativized to a basename; with
+    ``include_source=False`` the path and every source-text field are cleared to
+    the canonical "source unavailable" frame state (mirroring
+    ``FuncCallLocation._initialize_no_source_state``), keeping only structural
+    location metadata (line numbers, function name/qualname, signature).
+
+    Parameters
+    ----------
+    scrubbed_state:
+        Scrubbed ``FuncCallLocation`` field state, mutated in place.
+    options:
+        Active scrub options carrying ``include_source``.
+    """
+
+    if options.include_source:
+        if "file" in scrubbed_state:
+            scrubbed_state["file"] = _relativize_source_path(scrubbed_state["file"])
+        return
+
+    scrubbed_state["file"] = ""
+    scrubbed_state["_source_loaded"] = True
+    scrubbed_state["_code_context"] = None
+    scrubbed_state["_source_context"] = "None"
+    scrubbed_state["_code_context_labeled"] = ""
+    scrubbed_state["_call_line"] = ""
+    scrubbed_state["_num_context_lines"] = 0
+    scrubbed_state["_num_context_lines_requested"] = 0
+    scrubbed_state["_func_docstring"] = None
+    scrubbed_state["_frame_func_obj"] = None
 
 
 def _state_items_for_scrub(
