@@ -44,6 +44,7 @@ jobs:
             torchvision: "0.23.0+cpu"
             numpy: numpy
             scope: not-slow
+            render_byte_oracle: "1"
           - track: newest-admitted
             python: "3.10"
             torch: "2.13.0+cpu"
@@ -109,10 +110,14 @@ jobs:
 
       - name: Run smoke tests and compatibility coverage
         if: matrix.scope == 'smoke'
+        env:
+          TORCHLENS_RENDER_BYTE_ORACLE: ${{ matrix.render_byte_oracle }}
         run: |
           pytest tests/ -m smoke --tb=short -q
           pytest tests/test_torch_compat.py --tb=short -q
 
       - name: Run non-slow tests
         if: matrix.scope == 'not-slow'
+        env:
+          TORCHLENS_RENDER_BYTE_ORACLE: ${{ matrix.render_byte_oracle }}
         run: pytest tests/ -m "not slow" --tb=short -q
