@@ -28,6 +28,7 @@ from ._tl import (
     get_param_meta,
     get_tensor_label,
     get_tensor_meta,
+    session_label_storage_intact,
     session_meta_is_anchored,
     set_tensor_label,
 )
@@ -1845,11 +1846,26 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
         capture_events.live_index.by_raw_label if capture_events is not None else {}
     )
     label_anchored = session_meta_is_anchored(meta)
-    if label_anchored and meta.label_raw is not None and meta.label_raw in live_labels:
+    # r85 label-rung STORAGE parity: an anchored label proves current-session
+    # IDENTITY (r83); it counts as provenance only when the object's live storage
+    # is ALSO still the storage it held when labeled (r85). A state-derived
+    # activation whose storage was ``.data=``/``set_``-rebound to input-derived
+    # data after labeling (SOL-1) fails the storage check and leaves the break
+    # marker, instead of replaying the pre-rebind value as a false VERIFIED. An
+    # in-place write into the object's OWN storage keeps the pointer and passes,
+    # so honest journaled/tracked mutation is untouched. The buffer ``address``
+    # rung already carries this storage belt via ``session_validated_buffer_address``
+    # (r81); this closes the same cell on the label/``buffer_source`` rung.
+    label_storage_intact = label_anchored and session_label_storage_intact(meta, value)
+    if label_storage_intact and meta.label_raw is not None and meta.label_raw in live_labels:
         return True
     if meta.address is not None and session_validated_buffer_address(trace, value) is not None:
         return True
-    if label_anchored and meta.buffer_source is not None and meta.buffer_source in live_labels:
+    if (
+        label_storage_intact
+        and meta.buffer_source is not None
+        and meta.buffer_source in live_labels
+    ):
         return True
     return False
 

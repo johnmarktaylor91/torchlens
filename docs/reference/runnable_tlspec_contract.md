@@ -362,7 +362,8 @@ structure, re-derives, and requires exact discharge.
   re-root a receiver as internal state: the buffer-source logging gates, the tracker's
   direct-stamp fast path, and the witness state-attribution rungs (escape/state-read
   addressing and the dispatch-origin ledger's `state:` origins). The rung's `label_raw`
-  and `buffer_source` components have the SAME per-object belt (r83). Live-event-index
+  and `buffer_source` components have the SAME per-object IDENTITY belt (r83) AND the SAME
+  storage-integrity belt (r85, below). Live-event-index
   membership is TEXT, and label text is deterministic per op-kind + ordinal, so an
   ordinary op in a later, unrelated capture regenerates the same string: text alone let a
   tensor carrying a label from an EARLIER capture be accepted as current-session state and
@@ -377,7 +378,25 @@ structure, re-derives, and requires exact discharge.
   every label consumer reads through, which closes the graph-parent binder, the layout
   ancestry rooting rung, the dispatch-origin ladder, the host-escape attribution ladder and
   the replay-template builder together; gating only the two provenance rungs was empirically
-  insufficient. Cleanup is correspondingly inventory-driven rather than reachability-driven:
+  insufficient. r85 completes the STORAGE column on this rung, the label/activation twin of
+  the buffer-address storage belt above: the same `set_tensor_label` choke point records, next
+  to the session token, a STRONG reference to the storage the object holds at stamp time, and
+  the same two accessors plus the provenance predicate accept a current-session label ONLY when
+  the object's LIVE storage still matches that keeper (`data_ptr` + `nbytes` + device). A
+  state-derived activation (e.g. `self.b * 1.0`) whose storage is `.data=`/`set_`-rebound to
+  input-derived data AFTER labeling therefore fails the storage match and is orphaned -- the
+  break marker stands and the run ceils / the save refuses, instead of the pre-rebind value
+  replaying as a false `VERIFIED` on the same captured input. This closes the fourth cell of the
+  {buffer, label} x {identity, storage} matrix (r79 buffer-identity, r81 buffer-storage, r82/r83
+  label-identity, r85 label-storage). The keeper is object-specific, so it draws the SHARP line:
+  an IN-PLACE write into the object's OWN storage (a tracked `copy_`, an EMA `mul_().add_()`, a
+  `buf[:] = ...`) keeps the pointer and stays trusted (honest journaled/tracked mutation is
+  untouched), while only a pointer-swapping `.data=`/`set_` rebind ceils; a same-storage rebind
+  that re-strides to an input layout keeps the pointer and is caught instead by the layout net.
+  For an honest activation the keeper is the tensor's own current storage (zero net retention,
+  released with the tensor -- it never pins the activation graph, so sparse `save=` memory is
+  untouched); an intervention replacement re-pins to its OWN storage while the session token
+  still governs staleness. Cleanup is correspondingly inventory-driven rather than reachability-driven:
   the session enumerates every object it stamped, so a stash the cleanup walk cannot reach
   (an `nn.Module` value outside the traced tree, an `__slots__` object, a container nested in
   a `types.ModuleType`, a module-global appended to from a hook, a class attribute) is still
@@ -2155,7 +2174,13 @@ witnessed — observable writes are caught by whole-storage byte comparison (inc
 sampling), and the only unobservable surface (a raw `data_ptr()` pointer) fails closed to
 `unverifiable`. Parameters and buffers are witnessed identically: a bytes-changed-but-version-static
 storage during the forward is an opaque host write-back (`unverifiable`), while a read-only exposure
-of either stays `verified`.
+of either stays `verified`. A distinct in-scope vehicle is a storage POINTER swap rather than a
+byte write: a state-derived activation (or buffer) whose storage is `.data=`/`set_`-rebound to
+foreign or input-derived storage AFTER it was captured/labeled. The label-rung storage-integrity
+belt (r85) witnesses it -- the rebound receiver no longer matches its stamp-time storage keeper, so
+it is orphaned and the run ceils / the save refuses rather than replaying the pre-rebind value as a
+same-input false `verified` (section 4). An in-place write into the object's OWN storage keeps the
+pointer and stays `verified`; only the pointer-swapping rebind ceils.
 
 State ALIAS topology is part of the declared model (r37): repeated live object identity across
 state names reproduces exactly (one serialized value, one staged allocation per `alias_group`,
@@ -2454,7 +2479,15 @@ at `verified`, a helper-`nn.Module` activation cache laundering an input-derived
 a `types.ModuleType`-nested list doing the same), and the collision arises naturally between
 two structurally similar models rather than needing to be forged. It is closed by anchoring
 the label to the capture session that ISSUED it, recorded on the object's own metadata by the
-single stamp choke point, so text membership is necessary but never sufficient. The direct-leaf spelling keeps
+single stamp choke point, so text membership is necessary but never sufficient. r85 completes
+the LABEL rung's STORAGE cell -- the fourth of the {buffer, label} x {identity, storage} matrix
+(r79 buffer-identity, r81 buffer-storage, r82/r83 label-identity, r85 label-storage): the same
+stamp choke point also pins the object's stamp-time storage, and a current-session label is
+trusted only when the live storage still matches that keeper, so a state-derived activation
+(`self.b * 1.0`) whose storage is `.data=`/`set_`-rebound to input-derived data AFTER labeling is
+orphaned and ceils instead of replaying its pre-rebind value as a same-input false `verified`,
+while an in-place write into the object's OWN storage keeps the pointer and stays `verified`
+(zero collateral). The direct-leaf spelling keeps
 its stricter r27/r31 witnessed-fact semantics (`diverged`). (4) object-identity aliasing of a non-canonical state slot through an
 aliasing-polymorphic op, tested via pure Python identity (`y = self.w.contiguous(); y is
 self.w`), is a documented residual (locked r65 ruling): no accessor fires on ANY tensor, so

@@ -9,6 +9,8 @@ from typing import Any, Iterable, List, Optional, cast
 from torch import nn
 from torch.utils.weak import WeakIdKeyDictionary
 
+from ... import _state
+
 __all__ = [
     "TorchLensMeta",
     "TensorMeta",
@@ -29,6 +31,7 @@ __all__ = [
     "end_label_session",
     "active_label_session_token",
     "session_meta_is_anchored",
+    "session_label_storage_intact",
     "session_labeled_tensors",
     "sweep_retired_label_stamps",
     "clear_tensor_label",
@@ -67,6 +70,22 @@ class TensorMeta(TorchLensMeta):
     # (and, after promotion, ``buffer_source``). The per-object anchor that
     # makes label provenance current-session; see the label-session block below.
     label_session: Optional[int] = None
+    # r85: STRONG reference to the ``UntypedStorage`` the object held when its
+    # label was last stamped by ``set_tensor_label`` -- the label rung's
+    # storage-integrity pin, the activation/label twin of r81's buffer-address
+    # keeper (``_SessionBufferStamp.storage``). The IDENTITY anchor
+    # (``label_session``) proves this is the current-session labeled object; this
+    # pin proves the object's live storage was NOT ``.data=``/``set_``-rebound to
+    # foreign/input-derived storage AFTER it was labeled. Stored on the object's
+    # OWN metadata, so for an HONEST activation it is the SAME storage the tensor
+    # already holds (zero net retention) and it is released the instant the
+    # tensor dies -- it never pins the activation tensor alive, so sparse
+    # ``save=`` memory is untouched (unlike the weak ``_LabelSession.stamped``
+    # inventory, whose weakness is required for exactly that reason). Only a
+    # genuinely rebound (adversarial) object leaves its superseded storage pinned
+    # for the object's lifetime, which is what makes the ``data_ptr`` comparison a
+    # true identity proof rather than a recyclable-pointer heuristic (r81 S2).
+    label_storage: Optional[Any] = None
 
 
 @dataclass
@@ -358,6 +377,114 @@ def session_meta_is_anchored(meta: Optional[TensorMeta]) -> bool:
     return meta.label_session == session.token
 
 
+def _pinned_storage(t: Any) -> Optional[Any]:
+    """Return ``t``'s ``UntypedStorage`` for pinning/validation, else ``None``.
+
+    Read under ``pause_logging`` because ``untyped_storage`` is a WITNESSED
+    host-escape method (``completeness_witness._HOST_ESCAPE_METHODS``): an
+    unpaused read on the owner thread would record a spurious host-escape fact
+    for every labeled activation. Any failure (exotic/meta/fake tensor whose
+    storage cannot be read) returns ``None`` -- the validation below treats a
+    symmetric-inaccessible pair as identity-only, exactly like r81's buffer belt.
+    """
+
+    try:
+        with _state.pause_logging():
+            return t.untyped_storage()
+    except Exception:
+        return None
+
+
+def session_label_storage_intact(meta: Optional[TensorMeta], tensor: Any) -> bool:
+    """Return whether a labeled object's LIVE storage is still its stamp-time storage.
+
+    The STORAGE-INTEGRITY axis of label/activation provenance (r85), the twin of
+    r81's :func:`session_validated_buffer_address` storage check for the buffer
+    ``address`` rung. A label anchor (:func:`session_meta_is_anchored`) proves an
+    object is the current-session labeled producer; this proves that object's
+    storage was not ``.data=``/``set_``-rebound to foreign or input-derived
+    storage between when it was labeled and when it is consumed as an op argument.
+
+    Keying on the storage OBJECT (``data_ptr`` + ``nbytes`` + device) against the
+    STRONG keeper pinned at :func:`set_tensor_label` time is what draws the sharp
+    zero-collateral line: an IN-PLACE write into the object's OWN storage
+    (``copy_``, EMA ``mul_().add_()``, ``buf[:] = ...``) keeps the pointer and
+    PASSES -- it is honest, tracked/journaled state mutation -- while a ``.data=``
+    / ``set_`` rebind swaps the pointer to another storage and FAILS.
+
+    Fail-closed, mirroring r81: a keeper or live storage inaccessible on exactly
+    ONE side is NOT intact (``False``); only the symmetric-inaccessible case
+    (both unreadable) falls back to pure object/anchor identity (``True``).
+
+    Parameters
+    ----------
+    meta : Optional[TensorMeta]
+        Tensor metadata carrying the ``label_storage`` keeper.
+    tensor : Any
+        The live tensor whose storage is being validated.
+
+    Returns
+    -------
+    bool
+        True only when the live storage still matches the stamp-time keeper (or
+        both are symmetrically inaccessible).
+    """
+
+    if meta is None:
+        return False
+    keeper = meta.label_storage
+    live = _pinned_storage(tensor)
+    if keeper is None or live is None:
+        return keeper is None and live is None
+    try:
+        with _state.pause_logging():
+            return bool(
+                live.data_ptr() == keeper.data_ptr()
+                and live.nbytes() == keeper.nbytes()
+                and str(live.device) == str(keeper.device)
+            )
+    except Exception:
+        return False
+
+
+def _session_storage_gate_blocks(meta: TensorMeta, t: Any) -> bool:
+    """Return whether an active capture must reject this label for a STORAGE rebind.
+
+    The STORAGE twin of :func:`_session_gate_blocks` (r85), sharing the same two
+    accessor choke points so the belt stays exhaustive: even a CURRENT-session
+    anchored label is not trusted -- so its object never binds as a graph parent
+    or roots a layout/origin chain -- when the object's LIVE storage was
+    ``.data=``/``set_``-rebound away from the storage it held when labeled. A
+    rebound state-derived activation that kept its label would otherwise be
+    spliced back in as the same-named parent, replaying its pre-rebind value as a
+    false VERIFIED (SOL-1); orphaning it here surfaces the existing break marker.
+
+    Only applies during an active capture: outside one (postprocess, and every
+    read after ``end_label_session``) nothing is gated, so post-capture behaviour
+    is byte-identical to r83. A foreign-session label is already rejected by
+    :func:`_session_gate_blocks`, so only the current-session anchored label
+    reaches the storage validation here. Fail-closed: an anchored label whose
+    storage integrity cannot be proven (asymmetric-inaccessible) is rejected.
+
+    Parameters
+    ----------
+    meta : TensorMeta
+        Tensor metadata carrying the label anchor and storage pin.
+    t : Any
+        The live tensor whose storage is being validated.
+
+    Returns
+    -------
+    bool
+        True when the active capture must not trust this object's label.
+    """
+
+    session = _ACTIVE_LABEL_SESSION
+    if session is None or meta.label_session != session.token:
+        return False
+    return not session_label_storage_intact(meta, t)
+
+
 def get(obj: Any) -> Optional[TorchLensMeta]:
     """Return TorchLens metadata attached to an object.
 
@@ -497,9 +624,19 @@ def set_tensor_label(t: Any, label: str) -> None:
     through (verified: no other site assigns ``TensorMeta.label_raw``), so a
     label can never come into existence without its anchor and no future
     stamp site can silently escape the belt.
+
+    r85: the storage-integrity pin (``label_storage``) is re-established here on
+    EVERY label stamp -- the same choke point -- so a tracked op that (re)labels
+    the object also re-affirms the storage it legitimately produced. Because
+    ``_unattributed_tensor_arg_positions`` reads an op's INPUT provenance BEFORE
+    the output relabel, an untraced ``.data=`` rebind between two tracked ops is
+    still detected on the consuming op (against the PRIOR stamp) before this call
+    re-pins to the post-op storage. A tracked in-place op keeps the pointer, so
+    re-pinning to the same storage is a no-op for honest mutation.
     """
     meta = _ensure_tensor_meta(t)
     meta.label_raw = label
+    meta.label_storage = _pinned_storage(t)
     session = _ACTIVE_LABEL_SESSION
     if session is None:
         # Stamped outside any capture (only reachable from test/tooling code):
@@ -541,11 +678,17 @@ def get_tensor_label(t: Any) -> Optional[str]:
     accepted as current-session state however it re-enters. With no session
     installed (postprocess, and any read after ``end_label_session``) the raw
     label is returned unchanged, so post-capture behaviour is untouched.
+
+    r85: the same choke point also rejects a CURRENT-session anchored label
+    whose object was ``.data=``/``set_``-rebound to foreign/input-derived
+    storage after labeling (:func:`_session_storage_gate_blocks`), so the
+    rebound activation never re-binds as its same-named graph parent and the
+    break marker on the consuming op stands.
     """
     meta = get_tensor_meta(t)
     if meta is None or meta.label_raw is None:
         return None
-    if _session_gate_blocks(meta):
+    if _session_gate_blocks(meta) or _session_storage_gate_blocks(meta, t):
         return None
     return meta.label_raw
 
@@ -722,6 +865,7 @@ def get_label_list(tensors: Iterable[Any]) -> List[str]:
             isinstance(meta, TensorMeta)
             and meta.label_raw is not None
             and not _session_gate_blocks(meta)
+            and not _session_storage_gate_blocks(meta, t)
         ):
             out.append(meta.label_raw)
     return out
@@ -1018,10 +1162,21 @@ def copy_replacement_meta(src: Any, dst: Any) -> None:
     stays stale rather than laundering into a fresh object. The replacement is
     joined to the session inventory only when it is genuinely current-session,
     so cleanup can reach it.
+
+    r85: the STORAGE pin (``label_storage``) is re-established to ``dst``'s OWN
+    storage rather than inheriting the source's keeper -- ``dst`` is a distinct
+    current-session object taking over the label, so its integrity pin must
+    reference the storage it actually holds, or the label would be spuriously
+    suppressed at every consumer (a distinct object never matches the source's
+    storage). This cannot launder a STALE label: the session-token anchor
+    (unchanged by re-pinning) still governs, so a foreign-session source stays
+    rejected regardless of storage.
     """
     src_meta = get(src)
     if src_meta is not None:
         dst._tl = dataclass_replace(cast(Any, src_meta))
+        if isinstance(dst._tl, TensorMeta):
+            dst._tl.label_storage = _pinned_storage(dst)
         session = _ACTIVE_LABEL_SESSION
         if (
             session is not None
