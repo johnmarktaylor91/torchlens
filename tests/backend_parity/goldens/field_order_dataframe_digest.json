@@ -583,6 +583,8 @@
       "_pending_grad_blob_id",
       "_pending_transformed_grad_blob_id",
       "_pending_transformed_out_blob_id",
+      "_projective_field_cache",
+      "_receptive_field_cache",
       "_source_trace_ref",
       "_tracing_finished",
       "activation_memory",
@@ -1193,13 +1195,13 @@
     ]
   },
   "sha256_chunks": [
-    "b3f59ad3",
-    "e31a4e14",
-    "150d2a39",
-    "bc5d1935",
-    "fad011c9",
-    "48976222",
-    "92850fe2",
-    "4837a669"
+    "7943fcae",
+    "c629c3d3",
+    "1904978c",
+    "2dc8ec76",
+    "8849297a",
+    "cdf1f0a4",
+    "51457d98",
+    "469b2a46"
   ]
 }
