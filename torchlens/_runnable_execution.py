@@ -58,7 +58,7 @@ from .utils.rng import (
     snapshot_host_rng,
     uninit_new_call_is_size_form,
 )
-from .utils._torch_compat import tensor_version_or_none
+from .utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
 from .utils.tensor_utils import touched_bytes_relation
 from .runnable import (
     ActivationPayloadLayerDescriptor,
@@ -1626,12 +1626,13 @@ def _bind_runtime_inputs(
                 ),
             )
         )
+        has_named_dims = tensor_has_named_dims(value)
         layout_ok = (
             value.layout == torch.strided
             and not value.is_nested
             and not bool(getattr(value, "is_meta", False))
             and not bool(getattr(value, "is_quantized", False))
-            and not any(name is not None for name in (value.names or ()))
+            and not has_named_dims
             and type(value) in {torch.Tensor, torch.nn.Parameter}
         )
         checks.append(
@@ -1650,7 +1651,7 @@ def _bind_runtime_inputs(
                     ("is_nested", repr(bool(value.is_nested))),
                     ("is_meta", repr(bool(getattr(value, "is_meta", False)))),
                     ("is_quantized", repr(bool(getattr(value, "is_quantized", False)))),
-                    ("named", repr(any(name is not None for name in (value.names or ())))),
+                    ("named", repr(has_named_dims)),
                     ("tensor_class", type(value).__qualname__),
                 ),
             )

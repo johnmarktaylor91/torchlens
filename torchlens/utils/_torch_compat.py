@@ -71,6 +71,7 @@ __all__ = [
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
     "HAS_FX_GRAPH_MODULE",
     "HAS_JIT_BUILTIN_TABLE",
+    "HAS_NAMED_TENSOR_API",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
     "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
@@ -98,6 +99,7 @@ __all__ = [
     "fix_tensor_sequence_slot",
     "mark_torch_capability_missing",
     "resolve_runnable_torch_alias",
+    "tensor_has_named_dims",
 ]
 
 
@@ -584,6 +586,18 @@ def _probe_fx_graph_module() -> bool:
     return _nested_getattr_or_none(torch, ("fx", "GraphModule")) is not None
 
 
+def _probe_named_tensor_api() -> bool:
+    """Return whether native Torch named-tensor inspection/construction exists.
+
+    Returns
+    -------
+    bool
+        Whether the required native named-tensor surface is available.
+    """
+
+    return all(hasattr(torch.Tensor, attr) for attr in ("names", "has_names", "refine_names"))
+
+
 def _probe_dynamo_optimized_module() -> bool:
     """Return whether torch exposes the private Dynamo OptimizedModule type.
 
@@ -704,6 +718,7 @@ HAS_DEVICE_CONTEXT_DISPATCH: bool = _probe_device_context_dispatch()
 HAS_DEVICE_CONSTRUCTORS: bool = _probe_device_constructors()
 HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_accumulate_grad_class()
 HAS_FX_GRAPH_MODULE: bool = _probe_fx_graph_module()
+HAS_NAMED_TENSOR_API: bool = _probe_named_tensor_api()
 HAS_DYNAMO_OPTIMIZED_MODULE: bool = False
 HAS_SAFE_WEIGHTS_ONLY_LOAD: bool = _probe_safe_weights_only_load()
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
@@ -723,6 +738,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_DEVICE_CONSTRUCTORS",
     "HAS_ACCUMULATE_GRAD_CLASS",
     "HAS_FX_GRAPH_MODULE",
+    "HAS_NAMED_TENSOR_API",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
     "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
@@ -786,6 +802,26 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     snapshot = {name: bool(globals()[name]) for name in _CAPABILITY_ATTRS}
     snapshot["AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED"] = bool(AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED)
     return snapshot
+
+
+def tensor_has_named_dims(value: torch.Tensor) -> bool:
+    """Return whether ``value`` has at least one named dimension.
+
+    Parameters
+    ----------
+    value:
+        Native tensor to inspect.
+
+    Returns
+    -------
+    bool
+        Whether at least one dimension has a non-null name.
+    """
+
+    if not HAS_NAMED_TENSOR_API:
+        return False
+    names = getattr(value, "names", None)
+    return bool(names and any(name is not None for name in names))
 
 
 def get_variable_function_names() -> list[str]:

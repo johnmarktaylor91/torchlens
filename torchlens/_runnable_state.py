@@ -16,6 +16,7 @@ import torch
 
 from . import _state
 from .errors import RunCapabilityUnavailableError, RunPreconditionError, StateBindingError
+from .utils._torch_compat import tensor_has_named_dims
 from .utils._torch_symbols import torch_attr
 from .runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
@@ -479,7 +480,7 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
         # be canonical anyway -- leave them UNKNOWN (fail closed at every consumer).
         return signature
     try:
-        signature["has_named_dims"] = bool(value.has_names())
+        signature["has_named_dims"] = tensor_has_named_dims(value)
     except (RuntimeError, TypeError, AttributeError, NotImplementedError):
         pass
     try:
@@ -2476,7 +2477,7 @@ def runnable_tensor_byte_digest(value: torch.Tensor) -> str:
         or bool(getattr(value, "is_meta", False))
         or value.is_nested
         or bool(getattr(value, "is_quantized", False))
-        or any(name is not None for name in (value.names or ()))
+        or tensor_has_named_dims(value)
     ):
         from .errors import RunPreconditionError
 

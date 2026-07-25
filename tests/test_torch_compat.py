@@ -13,6 +13,7 @@ when we cannot install an actual torch-2.1 environment.
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import cast
 import warnings
 
 import pytest
@@ -29,6 +30,17 @@ _HAS_FUNCTORCH_LEVEL_API = (
     getattr(getattr(getattr(torch, "_C", None), "_functorch", None), "maybe_current_level", None)
     is not None
 )
+
+
+class _UnreadableNamesSentinel:
+    """Sentinel that fails if the compatibility helper reads ``names``."""
+
+    @property
+    def names(self) -> tuple[str | None, ...]:
+        """Raise when the named-dimension metadata is inspected."""
+
+        raise AssertionError("names must not be read when the capability is absent")
+
 
 pytestmark = pytest.mark.smoke
 
@@ -308,6 +320,7 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_DEVICE_CONSTRUCTORS": True,
         "HAS_ACCUMULATE_GRAD_CLASS": True,
         "HAS_FX_GRAPH_MODULE": True,
+        "HAS_NAMED_TENSOR_API": tc.HAS_NAMED_TENSOR_API,
         "HAS_DYNAMO_OPTIMIZED_MODULE": True,
         # CVE-2025-32434 fix presence (feature-detected; version-dependent, so mirror
         # the live capability like AUTOCAST rather than hardcoding a boolean).
@@ -327,3 +340,25 @@ def test_torch_capability_snapshot_contract() -> None:
     }
 
     assert snapshot == expected
+
+
+def test_tensor_has_named_dims_reports_native_tensor_names() -> None:
+    """Named-dimension inspection reports ordinary and named tensors accurately."""
+
+    assert tc.tensor_has_named_dims(torch.ones(2, 3)) is False
+    if not tc.HAS_NAMED_TENSOR_API:
+        pytest.skip("native named-tensor API is unavailable")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        named = torch.ones(2, 3).refine_names("batch", "feature")
+    assert tc.tensor_has_named_dims(named) is True
+
+
+def test_tensor_has_named_dims_short_circuits_when_api_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Absent named-tensor support returns false without reading the input."""
+
+    monkeypatch.setattr(tc, "HAS_NAMED_TENSOR_API", False)
+    sentinel = cast(torch.Tensor, _UnreadableNamesSentinel())
+    assert tc.tensor_has_named_dims(sentinel) is False
