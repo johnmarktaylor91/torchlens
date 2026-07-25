@@ -1,6 +1,36 @@
 # CHANGELOG
 
 
+## v2.32.1 (2026-07-25)
+
+### Bug Fixes
+
+- Unblock 2.32.0 release CI (py3.10/torch-2.1 compat, pydot guard, pin ruff, CVE ignore)
+  ([`3aa8e92`](https://github.com/johnmarktaylor91/torchlens/commit/3aa8e9281aad1144e00290a76c7007ee3b896ab4))
+
+The 2.32.0 push went green locally but red across CI's version matrix + whole-repo lint (my pre-push
+  gate was single-env torch2.8/py3.11 + `ruff check torchlens/`). Fixes: - capture/session.py:
+  CaptureSession used @dataclass(slots=True, weakref_slot=True); weakref_slot is py3.11+ only ->
+  broke py3.10. Use a plain (non-slotted) dataclass, which is weakref-able on every supported
+  interpreter, preserving the lifetime-neutral weakref contract. - completeness_witness.py:
+  torch._C.TensorBase (torch>=2.2) is _TensorBase on torch 2.1; the direct access broke the 2.1 leg
+  (and violated the feature-detect rule). Resolve the base class via getattr (mirrors
+  utils/_callable_safety.py), assert-narrowed. - test_rank_render_ir_semantic_goldens.py: guard the
+  pydot import with pytest.importorskip so envs without pydot skip instead of erroring. -
+  .github/workflows/lint.yml: pin ruff==0.15.4 (unpinned 'uv pip install ruff' had drifted to a
+  stricter release flagging 12.6k whole-repo violations; local 0.15.4 is clean). Removes the CI
+  ruff-version-drift fragility. - .github/workflows/quality.yml: ignore the new setuptools CVE
+  PYSEC-2026-3447 in pip-audit (runner-env vuln, same pattern as the existing CVE-2026-3219 ignore).
+
+Local verify (torch2.8/py3.11): mypy 366 files, ruff whole-repo clean, tlspec immunizers r83/r85/r87
+  66/0, pydot test passes. semantic-release will re-release as 2.32.1.
+
+### Code Style
+
+- Auto-format with ruff
+  ([`3193cf8`](https://github.com/johnmarktaylor91/torchlens/commit/3193cf88d2b24b2a6a5d4d883810d1832c36a0c5))
+
+
 ## v2.32.0 (2026-07-25)
 
 ### Bug Fixes
