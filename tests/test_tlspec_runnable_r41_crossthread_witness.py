@@ -253,7 +253,19 @@ _HELD_REF_RECIPES: dict[str, _HeldRecipe] = {
         frozenset({"os.urandom", "random._urandom"}),
     ),
     "numpy.random.default_rng": _HeldRecipe(
-        lambda: np.random.default_rng, lambda f: f(), frozenset({"np.random.default_rng"})
+        lambda: np.random.default_rng,
+        lambda f: f(),
+        # NumPy 1.x enters the held Python factory body, while NumPy 2.x delegates
+        # directly through its bit-generator/OS-entropy internals. Both routes
+        # witness the same non-replayable construction entropy.
+        frozenset(
+            {
+                "np.random.default_rng",
+                "np_bit_generator_randbits",
+                "random._urandom",
+                "os.urandom",
+            }
+        ),
     ),
     # numpy's ``randbits`` alias is a pre-bound ``SystemRandom.getrandbits`` (a Python
     # method emits no ``c_call``), but its draw funnels through the patched

@@ -1553,11 +1553,10 @@ cap value.
 def _call_site_argcount(frame: Any) -> int | None:
     """Decode the positional argument count of a profile-observed ``c_call`` site.
 
-    Reads the caller frame's bytecode at ``f_lasti``. A plain ``CALL`` instruction's
-    oparg IS the exact positional argument count on the pinned interpreter (py3.11;
-    the r41 unit pin goes RED at an interpreter bump so a bytecode change is caught at
-    upgrade time). The monitored implicit-now converters reject keywords, so ``CALL``
-    fully determines arity for every valid call.
+    Reads the caller frame's bytecode at ``f_lasti``. A plain ``CALL`` instruction
+    on Python 3.11+ and ``CALL_FUNCTION`` on Python 3.10 carry the exact positional
+    argument count in their oparg. The monitored implicit-now converters reject
+    keywords, so these opcodes fully determine arity for every valid call.
 
     Parameters
     ----------
@@ -1576,7 +1575,7 @@ def _call_site_argcount(frame: Any) -> int | None:
         lasti = frame.f_lasti
         for instruction in _dis_module.get_instructions(frame.f_code):
             if instruction.offset == lasti:
-                if instruction.opname == "CALL" and instruction.arg is not None:
+                if instruction.opname in {"CALL", "CALL_FUNCTION"} and instruction.arg is not None:
                     return int(instruction.arg)
                 return None
         return None
