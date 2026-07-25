@@ -33,6 +33,19 @@ from menagerie.crawler.proposal import (
 )
 from menagerie.crawler.tests.conftest import bind_handoff_execution, make_author_proposal
 
+import shutil
+import sys
+import zipfile
+from menagerie.crawler.driver import (
+    EnvironmentBinding,
+    _attempt_policy_satisfied,
+    _attempts_from_supervised,
+)
+from menagerie.crawler.identity import compute_recipe_revision
+from menagerie.crawler.policy import detect_os_sandbox
+from menagerie.crawler.tests.conftest import HASH, make_proposed_artifact
+from menagerie.crawler.worker_supervisor import supervise_worker
+
 
 def _ground_proposal(tmp_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build a schema-valid R1 proposal with exact fetched evidence.
@@ -636,3 +649,442 @@ def _author_result(envelope: dict[str, Any], kind: str, payload: dict[str, Any])
         {key: value for key, value in result.items() if key != "result_sha256"}
     )
     return result
+
+
+def _typed_adapter(outside_path: Path) -> str:
+    """Return a model adapter that catches a native denied write and returns a tensor.
+
+    Parameters
+    ----------
+    outside_path:
+        Read-only path targeted from the model's forward method.
+
+    Returns
+    -------
+    str
+        Complete typed adapter source.
+    """
+
+    return f"""from __future__ import annotations
+import ctypes
+import os
+import torch
+
+class CaughtDenial(torch.nn.Module):
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        libc = ctypes.CDLL(None, use_errno=True)
+        descriptor = libc.open({str(outside_path)!r}.encode(), os.O_WRONLY | os.O_CREAT, 0o600)
+        if descriptor >= 0:
+            libc.close(descriptor)
+        return value + 1
+
+def build_model() -> object:
+    return CaughtDenial()
+
+def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[str, object]]:
+    del seed
+    return ((torch.zeros(1, 3, 8, 8, device=device),), {{}})
+"""
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux denial-audit regression")
+def test_caught_os_sandbox_denial_in_flat_v1_cannot_satisfy_run_award(
+    tmp_path: Path,
+) -> None:
+    """A caught denial under legacy flat-v1 execution remains non-awarding."""
+
+    if detect_os_sandbox("Linux") is None or shutil.which("strace") is None:
+        pytest.skip("working Linux sandbox denial broker is unavailable")
+    outside_path = tmp_path.parent / f"{tmp_path.name}-forbidden.bin"
+    outside_path.unlink(missing_ok=True)
+    adapter = tmp_path / "adapter.py"
+    adapter.write_text(_typed_adapter(outside_path), encoding="utf-8")
+    proposal = make_author_proposal("m_caught_denial")
+    scratch = tmp_path / "scratch"
+    receipt_path = scratch / "result" / "receipt.json"
+    request_path = tmp_path / "request.json"
+    expected_revision = compute_recipe_revision(
+        {"recipe_type": "typed-adapter", "path": adapter.name},
+        proposal["source_identity"],
+        adapter_bytes=adapter.read_bytes(),
+    )
+    proposal["recipe_revision"] = expected_revision
+    proposal["proposed_facts"]["implementation"]["recipe_revision"] = expected_revision
+    request_path.write_text(
+        json.dumps(
+            {
+                "stable_id": proposal["stable_id"],
+                "recipe": {
+                    "kind": "typed-adapter",
+                    "path": str(adapter),
+                    "adapter_sha256": hash_bytes(adapter.read_bytes()),
+                },
+                "modality": "vision",
+                "input_spec": {"shape": [1, 3, 8, 8], "dtype": "float32"},
+                "scratch_root": str(scratch),
+                "receipt_path": str(receipt_path),
+                "meaningful_modes": ["eval"],
+                "source_identity": proposal["source_identity"],
+                "recipe_revision": expected_revision,
+                "execution_identity": HASH,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = supervise_worker(
+        request_path,
+        receipt_path,
+        scratch / "supervisor",
+        timeout_seconds=20,
+        rss_limit_bytes=12 * 1024**3,
+    )
+
+    assert result.observation.exit_code == 0
+    assert result.worker_receipt is None
+    assert result.receipt_error == "invalid-receipt:worker-result-envelope"
+    environment = EnvironmentBinding(
+        prefix=tmp_path / "env",
+        python_executable=Path(sys.executable),
+        family="core",
+        target="linux-64",
+        env_generation=HASH,
+        lock_sha256=HASH,
+        resolved_export_sha256=HASH,
+        packages_manifest_sha256=HASH,
+        python_version="3.11",
+        compiler_identity="test-compiler",
+        sdk_identity="test-sdk",
+    )
+    artifact = make_proposed_artifact(proposal, {"sources": []}, tmp_path)
+    attempts = _attempts_from_supervised(
+        artifact,
+        result,
+        environment,
+        HASH,
+        0,
+        20,
+        12 * 1024**3,
+        diagnostics_root=tmp_path / ".crawl-local" / "diagnostics",
+    )
+
+    assert len(attempts) == 1
+    assert attempts[0]["result"] == "failed"
+    assert attempts[0]["stage"] == "runner"
+    assert attempts[0]["error"]["reason_code"] == "protocol-violation"
+    assert _attempt_policy_satisfied(attempts, proposal, 1) is False
+    assert not outside_path.exists()
+
+
+def _add_archive_source(
+    manifest: dict[str, Any], archive_path: Path, members: dict[str, str]
+) -> None:
+    """Append one deliberately mislabeled fetched archive to a source manifest.
+
+    Parameters
+    ----------
+    manifest:
+        Controlled-fetch manifest fixture.
+    archive_path:
+        CAS object path to create.
+    members:
+        Archive member names and text bytes.
+    """
+
+    with zipfile.ZipFile(archive_path, mode="w") as archive:
+        for name, member_text in members.items():
+            archive.writestr(name, member_text)
+    archive_bytes = archive_path.read_bytes()
+    manifest["sources"].append(
+        {
+            "source_id": "archive-source",
+            "url": "https://example.com/supplement.zip",
+            "revision": "v1",
+            "content_sha256": hash_bytes(archive_bytes),
+            "cas_path": str(archive_path),
+            "retrieval_status": "fetched",
+            "role": "introducing-paper",
+            "content_kind": "paper-supplement",
+        }
+    )
+
+
+def test_r4_inventory_uses_fetched_archive_bytes_not_author_labels(tmp_path: Path) -> None:
+    """Code-bearing CAS bytes refuse R4 while a genuine no-code archive still permits it."""
+
+    adapter_code = (
+        "def build_model() -> object:\n"
+        "    return object()\n\n"
+        "def make_dummy_call(seed: int, device: str) -> tuple[tuple[()], dict[str, object]]:\n"
+        "    return (), {}\n"
+    )
+    proposal, manifest = _ground_proposal(tmp_path)
+    _make_r4(proposal, manifest, tmp_path, adapter_code)
+    _add_archive_source(
+        manifest,
+        tmp_path / "source-code.zip",
+        {
+            "upstream/src/example_net.py": (
+                "import torch\n\n"
+                "class ExampleNet(torch.nn.Module):\n"
+                "    def __init__(self) -> None:\n"
+                "        super().__init__()\n"
+                "        self.conv = torch.nn.Conv2d(3, 4, 3)\n\n"
+                "    def forward(self, value: torch.Tensor) -> torch.Tensor:\n"
+                "        return self.conv(value)\n"
+            )
+        },
+    )
+    proposal["proposed_facts"]["source_resolution"]["search_report"]["links_checked"].append(
+        "https://example.com/supplement.zip"
+    )
+
+    with pytest.raises(ProposalValidationError, match="source code is available"):
+        validate_author_proposal(
+            proposal,
+            allowed_model_dir=tmp_path,
+            source_manifest=manifest,
+        )
+
+    no_code_root = tmp_path / "no-code"
+    no_code_root.mkdir()
+    no_code_proposal, no_code_manifest = _ground_proposal(no_code_root)
+    _make_r4(no_code_proposal, no_code_manifest, no_code_root, adapter_code)
+    _add_archive_source(
+        no_code_manifest,
+        no_code_root / "paper-materials.zip",
+        {
+            "README.md": "Architecture equations and prose only.\n",
+            "supplement/metrics.py": "def accuracy(expected, observed):\n    return 1.0\n",
+            "supplement/plotting.c": "void plot_metrics(void) { return; }\n",
+        },
+    )
+    no_code_proposal["proposed_facts"]["source_resolution"]["search_report"][
+        "links_checked"
+    ].append("https://example.com/supplement.zip")
+    report = validate_author_proposal(
+        no_code_proposal,
+        allowed_model_dir=no_code_root,
+        source_manifest=no_code_manifest,
+    )
+
+    assert report.rung.value == "R4_REIMPLEMENT"
+
+
+def _adapter_code() -> str:
+    """Return a minimal typed R4 adapter used by proposal fixtures.
+
+    Returns
+    -------
+    str
+        Complete staged adapter source.
+    """
+
+    return (
+        "def build_model() -> object:\n"
+        "    return object()\n\n"
+        "def make_dummy_call(seed: int, device: str) -> "
+        "tuple[tuple[()], dict[str, object]]:\n"
+        "    return (), {}\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "source_code",
+    [
+        (
+            "import flax.linen as nn\n"
+            "import jax\n"
+            "import jax.numpy as jnp\n\n"
+            "class ExampleNetArchitecture(nn.Module):\n"
+            "    @nn.compact\n"
+            "    def __call__(self, value):\n"
+            "        scanned, _ = jax.lax.scan(custom_step, value, value)\n"
+            "        return jnp.einsum('...d,df->...f', scanned, custom_weights())\n"
+        ),
+        (
+            "import paddle\n\n"
+            "class ExampleNetArchitecture(CustomPaddleBase):\n"
+            "    def forward(self, value):\n"
+            "        mixed = custom_paddle_stage(value)\n"
+            "        return paddle.add(mixed, value)\n"
+        ),
+        (
+            "import torch\n\n"
+            "def example_net_architecture(value, weights):\n"
+            "    mixed = custom_channel_mix(value, weights)\n"
+            "    return torch.einsum('bcd,ce->bed', mixed, weights)\n"
+        ),
+    ],
+    ids=("jax-flax", "paddle", "custom-functional-pytorch"),
+)
+def test_framework_neutral_implementation_bytes_refuse_r4(tmp_path: Path, source_code: str) -> None:
+    """JAX/Flax, Paddle, and custom-functional model sources all block R4.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated model and CAS directory.
+    source_code:
+        Exact framework-specific upstream implementation bytes.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _make_r4(proposal, manifest, tmp_path, _adapter_code())
+    _add_archive_source(
+        manifest,
+        tmp_path / "implementation.zip",
+        {"upstream/src/example_net.py": source_code},
+    )
+
+    with pytest.raises(ProposalValidationError, match="source code is available"):
+        validate_author_proposal(
+            proposal,
+            allowed_model_dir=tmp_path,
+            source_manifest=manifest,
+        )
+
+
+def test_irrelevant_code_archive_still_permits_r4(tmp_path: Path) -> None:
+    """Metrics and plotting files do not masquerade as model implementations."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _make_r4(proposal, manifest, tmp_path, _adapter_code())
+    _add_archive_source(
+        manifest,
+        tmp_path / "paper-materials.zip",
+        {
+            "supplement/metrics.py": (
+                "def example_net_accuracy(expected, observed):\n"
+                "    return (expected == observed).mean()\n"
+            ),
+            "supplement/plotting.c": "void plot_example_net_metrics(void) { return; }\n",
+        },
+    )
+
+    report = validate_author_proposal(
+        proposal,
+        allowed_model_dir=tmp_path,
+        source_manifest=manifest,
+    )
+
+    assert report.rung.value == "R4_REIMPLEMENT"
+
+
+def test_split_registry_to_model_symbol_refuses_r4(tmp_path: Path) -> None:
+    """Identity-bearing config linked to a separate executable model blocks R4."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _make_r4(proposal, manifest, tmp_path, _adapter_code())
+    _add_archive_source(
+        manifest,
+        tmp_path / "split-implementation.zip",
+        {
+            "configs/model.py": (
+                "from src.net import Net\n\nMODEL_REGISTRY = {'ExampleNet': Net}\n"
+            ),
+            "src/net.py": (
+                "class Net:\n"
+                "    def forward(self, value):\n"
+                "        hidden = self.encoder(value)\n"
+                "        return self.decoder(hidden)\n"
+            ),
+        },
+    )
+
+    with pytest.raises(ProposalValidationError, match="source code is available"):
+        validate_author_proposal(
+            proposal,
+            allowed_model_dir=tmp_path,
+            source_manifest=manifest,
+        )
+
+
+def test_unrelated_linked_generic_helper_does_not_block_r4(tmp_path: Path) -> None:
+    """A generic forward helper with only a prose identity mention is not an implementation."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _make_r4(proposal, manifest, tmp_path, _adapter_code())
+    _add_archive_source(
+        manifest,
+        tmp_path / "generic-helper.zip",
+        {
+            "utils/helper.py": (
+                "# Used by the ExampleNet documentation build.\n"
+                "class Helper:\n"
+                "    def forward(self, value):\n"
+                "        return normalize(value)\n"
+            )
+        },
+    )
+
+    report = validate_author_proposal(
+        proposal,
+        allowed_model_dir=tmp_path,
+        source_manifest=manifest,
+    )
+    assert report.rung.value == "R4_REIMPLEMENT"
+
+
+def test_large_notebook_is_streamed_and_structurally_inspected(tmp_path: Path) -> None:
+    """A model notebook above the former 8 MiB cap still blocks source-free R4."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _make_r4(proposal, manifest, tmp_path, _adapter_code())
+    notebook = {
+        "cells": [
+            {"cell_type": "markdown", "source": ["x" * (8 * 1024**2 + 1)]},
+            {
+                "cell_type": "code",
+                "source": [
+                    "class ExampleNet:\n",
+                    "    def forward(self, value):\n",
+                    "        hidden = self.encoder(value)\n",
+                    "        return self.decoder(hidden)\n",
+                ],
+            },
+        ],
+        "metadata": {},
+        "nbformat": 4,
+        "nbformat_minor": 5,
+    }
+    _add_archive_source(
+        manifest,
+        tmp_path / "large-notebook.zip",
+        {"notebooks/example_net.ipynb": json.dumps(notebook)},
+    )
+
+    with pytest.raises(ProposalValidationError, match="source code is available"):
+        validate_author_proposal(
+            proposal,
+            allowed_model_dir=tmp_path,
+            source_manifest=manifest,
+        )
+
+
+@pytest.mark.parametrize("missing_proof", ["negative-attempt", "bounded-report"])
+def test_r4_requires_explicit_bounded_negative_proof(tmp_path: Path, missing_proof: str) -> None:
+    """R4 fails unless higher-rung absence and a bounded search are explicit.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated model and CAS directory.
+    missing_proof:
+        Negative-proof component removed from the otherwise valid fixture.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _make_r4(proposal, manifest, tmp_path, _adapter_code())
+    resolution = proposal["proposed_facts"]["source_resolution"]
+    if missing_proof == "negative-attempt":
+        resolution["attempted_rungs"][1]["result"] = "not-reached"
+    else:
+        resolution["search_report"]["queries"] = []
+
+    with pytest.raises(ProposalValidationError, match="explicit negative proof|bounded search"):
+        validate_author_proposal(
+            proposal,
+            allowed_model_dir=tmp_path,
+            source_manifest=manifest,
+        )
