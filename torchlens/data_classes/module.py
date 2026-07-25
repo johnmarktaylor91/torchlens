@@ -64,6 +64,7 @@ if TYPE_CHECKING:
     from .param import ParamAccessor
     from .trace import Trace
     from ..ir.container import ContainerSpec
+    from ..receptive_field._view import ReceptiveFieldView
     from .prehook import ModuleInputSnapshot, PreHookEffect
 
 
@@ -1077,6 +1078,47 @@ class ModuleCall:
         """Saved output tensors for this module call."""
 
         return self._output_values("out")
+
+    @property
+    def receptive_field(self) -> "ReceptiveFieldView":
+        """Return the receptive field of this call's only output operation.
+
+        Raises
+        ------
+        MultiOutputModuleError
+            If this call has zero or multiple output operations.
+        """
+
+        if len(self.output_ops) != 1:
+            from ..intervention.errors import MultiOutputModuleError
+
+            candidates = ", ".join(
+                f"module_call.output_ops[{index}]={label!r}"
+                for index, label in enumerate(self.output_ops)
+            )
+            raise MultiOutputModuleError(
+                f"ModuleCall {self.call_label!r} has {len(self.output_ops)} output ops; "
+                f"select one candidate explicitly: {candidates or 'none'}."
+            )
+        trace = self._source_trace
+        if trace is None:
+            raise RuntimeError("ModuleCall not bound to a Trace")
+        return trace.ops[self.output_ops[0]].receptive_field
+
+    @property
+    def projective_field(self) -> "ReceptiveFieldView":
+        """Return the projective field of this call's only output operation."""
+
+        if len(self.output_ops) != 1:
+            from ..intervention.errors import MultiOutputModuleError
+
+            raise MultiOutputModuleError(
+                f"ModuleCall {self.call_label!r} has {len(self.output_ops)} output ops."
+            )
+        trace = self._source_trace
+        if trace is None:
+            raise RuntimeError("ModuleCall not bound to a Trace")
+        return trace.ops[self.output_ops[0]].projective_field
 
     @property
     def facets(self) -> Any:
@@ -2286,6 +2328,38 @@ class Module:
                 f"Module '{self.address}' has {self.num_calls} calls; use module.calls[N]."
             )
         return self.ops[0]
+
+    @property
+    def receptive_field(self) -> "ReceptiveFieldView":
+        """Return the only call's receptive field or reject call ambiguity.
+
+        Raises
+        ------
+        AmbiguousCallError
+            If this module has zero or multiple executed calls.
+        """
+
+        if self.num_calls != 1 or len(self.calls) != 1:
+            from ..receptive_field._errors import AmbiguousCallError
+
+            calls = ", ".join(f"module.calls[{index}]" for index in self.calls.keys())
+            raise AmbiguousCallError(
+                f"Module {self.address!r} has {self.num_calls} calls: {calls}."
+            )
+        return self.calls[0].receptive_field
+
+    @property
+    def projective_field(self) -> "ReceptiveFieldView":
+        """Return the only call's projective field or reject call ambiguity."""
+
+        if self.num_calls != 1 or len(self.calls) != 1:
+            from ..receptive_field._errors import AmbiguousCallError
+
+            calls = ", ".join(f"module.calls[{index}]" for index in self.calls.keys())
+            raise AmbiguousCallError(
+                f"Module {self.address!r} has {self.num_calls} calls: {calls}."
+            )
+        return self.calls[0].projective_field
 
     @property
     def calls(self) -> ModuleCallAccessor:

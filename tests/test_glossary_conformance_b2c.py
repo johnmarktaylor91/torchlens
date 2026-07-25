@@ -1,10 +1,14 @@
 """Focused coverage for glossary-conformance phase B2c structural fields."""
 
+from pathlib import Path
+import re
+
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens.receptive_field as receptive_field
 from torchlens.options import CaptureOptions
 
 
@@ -103,3 +107,51 @@ def test_trace_layers_to_save_public_view() -> None:
     assert selected_trace.layers_to_save
     assert all(isinstance(label, str) for label in selected_trace.layers_to_save)
     assert all(label in selected_trace.op_labels for label in selected_trace.layers_to_save)
+
+
+@pytest.mark.smoke
+def test_receptive_field_docs_conform_to_public_surface() -> None:
+    """Keep documented RF names in lockstep and reject stale shorthand names."""
+
+    root = Path(__file__).resolve().parents[1]
+    documented_paths = (
+        root / "README.md",
+        root / "CLAUDE.md",
+        root / "AGENTS.md",
+        root / "docs" / "receptive_projective_fields.md",
+        root / "notebooks" / "audit" / "17_receptive_projective_fields.ipynb",
+    )
+    documented = "\n".join(path.read_text(encoding="utf-8") for path in documented_paths)
+
+    required_names = (
+        *receptive_field.__all__,
+        "tl.receptive_field",
+        "receptive_field",
+        "projective_field",
+        "receptive_fields",
+        "projective_fields",
+        ".at()",
+        ".gradient()",
+        ".check()",
+        ".show()",
+        "source=",
+        "direction=",
+        "target=",
+        "cross_validate",
+        "verify",
+        'scope="receptive_field"',
+        "ReceptiveFieldStatus",
+    )
+    missing = [name for name in required_names if name not in documented]
+    assert not missing, f"RF public names missing from docs: {missing}"
+
+    stale_patterns = (
+        r"\btl\.rf\b",
+        r"\bget_receptive_field\b",
+        r"\bget_projective_field\b",
+        r"\bProjectiveField(?:Box|View|Gradient)?\b",
+        r"\bRFStatus\b",
+        r"\bop\.projective\b(?!_field)",
+    )
+    stale = [pattern for pattern in stale_patterns if re.search(pattern, documented)]
+    assert not stale, f"stale or invented RF names documented: {stale}"

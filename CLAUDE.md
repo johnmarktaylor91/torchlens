@@ -76,6 +76,21 @@ print(tl.report.explain(log))
 log.draw(order_siblings=True)  # default: verified sibling ordering for dot/unrolled graphs
 log.draw(collapse="auto", show_containers=False)  # readability-targeted module overview
 print(log.module_collapse_order[:10])
+
+# Influence geometry is lazy: the first property access solves the captured DAG.
+op = log["relu_1_2"]
+rf = op.receptive_field
+box = rf.at((10, 10))
+unit = rf.center_unit(batch_index=0)
+gradient = rf.gradient(unit)
+check = rf.check(unit)
+overlay = rf.show(unit, gradient=True)
+projective = op.projective_field.at((10, 10))
+layer_to_layer = op.receptive_field.at((10, 10), source=log.input_ops[0])
+table = log.receptive_fields(level="layer")
+outgoing = log.projective_fields(level="layer")
+validated = tl.receptive_field.verify(log, units="center")
+# tl.validate(model, x, scope="receptive_field") samples the same RF tripwire.
 ```
 
 Use the unified predicate surface for selective capture, windowed saves, interventions, and
@@ -163,6 +178,9 @@ print(tl.compat.report(model, x).to_markdown())
   schema v2 is backend-aware; non-torch preview bundles may be audit-only or metadata-only.
 - `torchlens.debug` owns power-user diagnostics such as `bisect_nan` and `hot_path`;
   the submodule is imported as `tl.debug` and is deliberately not in `__all__`.
+- `tl.receptive_field` is a lazy power-user submodule. `Op`, `Layer`, `ModuleCall`, and
+  `Module` expose `receptive_field` and `projective_field` views; `Trace` exposes the matching
+  `receptive_fields()` and `projective_fields()` tables.
 - `torchlens.bridge` contains optional adapters for Captum, HF, SHAP, SAE Lens, LIT,
   profiler, and related tools.
 - Appliance packages `notebook` and `neuro` reserve extras boundaries and enforce

@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## Unreleased
+
+### Features
+
+- **receptive-field**: Add receptive and projective influence geometry, including geometric
+  descriptors, empirical gradient probes, cross-validation, tables, and visual audit helpers.
+
 
 ## v2.31.0 (2026-07-10)
 
