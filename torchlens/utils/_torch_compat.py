@@ -137,7 +137,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         "linear",
         "private_to_public:_C._nn.linear->torch.nn.functional.linear",
         (2, 1),
-        (2, 12),
+        (2, 13),
     ),
     RunnableTorchAlias(
         "_C._nn.linear",
@@ -145,7 +145,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         "linear",
         "private_to_public:_C._nn.linear->torch.nn.functional.linear",
         (2, 1),
-        (2, 12),
+        (2, 13),
     ),
     RunnableTorchAlias(
         "torch._VF.linear",
@@ -211,7 +211,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         None,
         "private_to_public:_C._linalg.linalg_*->torch.linalg.*",
         (2, 1),
-        (2, 12),
+        (2, 13),
         "linalg_",
     ),
     RunnableTorchAlias(
