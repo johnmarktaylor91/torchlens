@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 import torch as _torch
 from torch import nn as _nn
 
-__version__ = "2.32.1"
+__version__ = "2.32.2"
 
 from .captured_run import ActivationLookup, CapturedRun
 from ._errors import AmbiguousOpLookupError

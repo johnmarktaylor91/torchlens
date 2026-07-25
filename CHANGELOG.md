@@ -1,6 +1,24 @@
 # CHANGELOG
 
 
+## v2.32.2 (2026-07-25)
+
+### Bug Fixes
+
+- **ci**: Stop Lint auto-pushing to main (race) + guard 2nd pydot import
+  ([`89d9e5c`](https://github.com/johnmarktaylor91/torchlens/commit/89d9e5c25d4bc16ea4fcdb65e0ebc4627eff6642))
+
+Two release-pipeline fixes after 2.32.1: - .github/workflows/lint.yml: the Lint job ran 'ruff format
+  . + ruff check --fix .' then committed 'style: auto-format' and git push'd to main. That push
+  races with the Release workflow's push (both trigger on push to main) -> cascaded release runs + a
+  rejected push. Make Lint a pure CHECK gate (ruff format --check . + ruff check .), no commit, no
+  push. Format/lint locally before pushing. Keeps ruff==0.15.4 pin. -
+  tests/test_viz_render_identity_oracle.py: second unguarded 'import pydot' (pydot is a test-only
+  DOT parser, not a torchlens runtime dep, and not in the CI test extras) -> guarded with
+  pytest.importorskip like test_rank_render_ir_semantic_goldens.py. This was the collection error
+  failing ALL smoke legs (masking the torch-2.1/py3.10 matrix results).
+
+
 ## v2.32.1 (2026-07-25)
 
 ### Bug Fixes
