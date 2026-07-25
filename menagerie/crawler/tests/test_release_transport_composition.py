@@ -12,7 +12,7 @@ import menagerie.crawler.policy as policy_module
 import menagerie.crawler.worker_supervisor as supervisor_module
 from menagerie.crawler.tests import test_anti_substitution_inventories as structural
 from menagerie.crawler.tests.conftest import RealEnvironmentFixture
-from menagerie.crawler.tests.test_round21_environment_matrix_composition import (
+from menagerie.crawler.tests.test_release_environment_matrix_composition import (
     _adapter_source,
     _assert_award,
     _run_composition,
@@ -101,7 +101,7 @@ def _successful_worker_transport_reads(
     return frozenset(observed)
 
 
-def test_round21_closed_transport_capability_awards_and_rejects_unlisted_library(
+def test_closed_transport_capability_awards_and_rejects_unlisted_library(
     tmp_path: Path,
     real_environment_fixture: RealEnvironmentFixture,
 ) -> None:

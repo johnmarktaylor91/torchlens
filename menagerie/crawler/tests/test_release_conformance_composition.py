@@ -30,40 +30,40 @@ _REVERSIONS_TOOL_PATH = _CRAWLER_ROOT / "tools/round21_reversions.py"
 _PROOF_PREFIX = "menagerie/crawler/tests/"
 
 P01 = (
-    "menagerie/crawler/tests/test_round21_preclusion_composition.py::"
-    "test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
+    "menagerie/crawler/tests/test_release_preclusion_composition.py::"
+    "test_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
 )
 P02 = (
-    "menagerie/crawler/tests/test_round21_fingerprint_composition.py::"
-    "test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
+    "menagerie/crawler/tests/test_release_fingerprint_composition.py::"
+    "test_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
 )
 P03 = (
-    "menagerie/crawler/tests/test_round21_scale_composition.py::"
-    "test_round21_pass_and_spawn_validation_walks_are_constant_bounded"
+    "menagerie/crawler/tests/test_release_scale_composition.py::"
+    "test_pass_and_spawn_validation_walks_are_constant_bounded"
 )
 P07 = (
-    "menagerie/crawler/tests/test_round21_transport_composition.py::"
-    "test_round21_closed_transport_capability_awards_and_rejects_unlisted_library"
+    "menagerie/crawler/tests/test_release_transport_composition.py::"
+    "test_closed_transport_capability_awards_and_rejects_unlisted_library"
 )
 P08 = (
-    "menagerie/crawler/tests/test_round21_cache_rebind_composition.py::"
-    "test_round21_mismatched_rebind_preserves_active_authority_and_awards"
+    "menagerie/crawler/tests/test_release_cache_rebind_composition.py::"
+    "test_mismatched_rebind_preserves_active_authority_and_awards"
 )
 P09 = (
-    "menagerie/crawler/tests/test_round21_ci_composition.py::"
-    "test_round21_linux_committed_lock_provenance_awards_in_ci"
+    "menagerie/crawler/tests/test_release_ci_composition.py::"
+    "test_linux_committed_lock_provenance_awards_in_ci"
 )
 P10 = (
-    "menagerie/crawler/tests/test_round21_ci_composition.py::"
-    "test_round21_macos_committed_lock_seatbelt_award_and_denial"
+    "menagerie/crawler/tests/test_release_ci_composition.py::"
+    "test_macos_committed_lock_seatbelt_award_and_denial"
 )
 P11 = (
-    "menagerie/crawler/tests/test_round21_conformance_composition.py::"
-    "test_round21_conformance_registry_is_total_and_executed"
+    "menagerie/crawler/tests/test_release_conformance_composition.py::"
+    "test_conformance_registry_is_total_and_executed"
 )
 P11_CI = (
-    "menagerie/crawler/tests/test_round21_conformance_composition.py::"
-    "test_round21_ci_attestations_cover_registry_without_skip"
+    "menagerie/crawler/tests/test_release_conformance_composition.py::"
+    "test_ci_attestations_cover_registry_without_skip"
 )
 P12_NONE = (
     "menagerie/crawler/tests/test_award_worker_result_composition.py::"
@@ -111,8 +111,8 @@ P27 = (
 )
 P20 = (P12_NONE, P12_STAT)
 T01 = (
-    "menagerie/crawler/tests/test_round21_preclusion_composition.py::"
-    "test_round21_tripwire_catches_python_evasion"
+    "menagerie/crawler/tests/test_release_preclusion_composition.py::"
+    "test_tripwire_catches_python_evasion"
 )
 T02 = (
     "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
@@ -139,8 +139,8 @@ T05_MACOS = (
     "test_macos_release_registry_is_exact"
 )
 T06 = (
-    "menagerie/crawler/tests/test_round21_conformance_composition.py::"
-    "test_round21_conformance_registry_is_total_and_executed"
+    "menagerie/crawler/tests/test_release_conformance_composition.py::"
+    "test_conformance_registry_is_total_and_executed"
 )
 
 ENVIRONMENT_IDS = frozenset(f"E{index:02d}" for index in range(1, 14))
@@ -189,8 +189,8 @@ def _node_for_environment(cell_id: str) -> str:
     """Return the expanded P04 node for one environment matrix cell."""
 
     return (
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::"
-        f"test_round21_environment_unit_matrix[{cell_id}]"
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::"
+        f"test_environment_authority_unit_matrix[{cell_id}]"
     )
 
 
@@ -198,8 +198,8 @@ def _node_for_shutdown(cell_id: str) -> str:
     """Return the expanded P05 node for one shutdown matrix cell."""
 
     return (
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::"
-        f"test_round21_shutdown_matrix[{cell_id}]"
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::"
+        f"test_shutdown_matrix[{cell_id}]"
     )
 
 
@@ -207,8 +207,8 @@ def _node_for_handoff(cell_id: str) -> str:
     """Return the expanded P06 node for one handoff matrix cell."""
 
     return (
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
-        f"test_round21_handoff_authority_identity_matrix[{cell_id}]"
+        "menagerie/crawler/tests/test_release_handoff_authority_composition.py::"
+        f"test_handoff_authority_identity_matrix[{cell_id}]"
     )
 
 
@@ -835,7 +835,7 @@ def _attestation_paths() -> tuple[Path, Path, Path]:
 
 
 @pytest.mark.round21_linux_real
-def test_round21_conformance_registry_is_total_and_executed(
+def test_conformance_registry_is_total_and_executed(
     tmp_path: Path,
     real_environment_fixture: RealEnvironmentFixture,
 ) -> None:
@@ -871,7 +871,7 @@ def test_round21_conformance_registry_is_total_and_executed(
     assert "round21-linux-release-attestation" in workflow
     assert "round21-macos-release-attestation" in workflow
     assert "round21-reversion-attestation" in workflow
-    assert "test_round21_ci_attestations_cover_registry_without_skip" in workflow
+    assert "test_ci_attestations_cover_registry_without_skip" in workflow
     conformance_job = _workflow_job_block(workflow, "crawler-round21-conformance")
     assert 'MENAGERIE_RELEASE_GATE: "1"' in conformance_job
     assert "MENAGERIE_LINUX_RELEASE_ATTESTATION" in conformance_job
@@ -938,7 +938,7 @@ def test_round21_conformance_registry_is_total_and_executed(
     os.environ.get("MENAGERIE_RELEASE_GATE") != "1",
     reason="release-gate-only",
 )
-def test_round21_ci_attestations_cover_registry_without_skip() -> None:
+def test_ci_attestations_cover_registry_without_skip() -> None:
     """Both host attestations and the reversion result must cover VS11 without skips."""
 
     payload = _registry_payload()

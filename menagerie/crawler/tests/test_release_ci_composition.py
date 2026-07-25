@@ -98,7 +98,7 @@ def _probe_contract() -> IntentProbes:
     reason="release-gate-only",
 )
 @pytest.mark.round21_linux_real
-def test_round21_linux_committed_lock_provenance_awards_in_ci(
+def test_linux_committed_lock_provenance_awards_in_ci(
     tmp_path: Path,
     request: pytest.FixtureRequest,
 ) -> None:
@@ -149,7 +149,7 @@ def test_round21_linux_committed_lock_provenance_awards_in_ci(
 
 
 @pytest.mark.round21_macos_real
-def test_round21_macos_committed_lock_seatbelt_award_and_denial(
+def test_macos_committed_lock_seatbelt_award_and_denial(
     tmp_path: Path,
     request: pytest.FixtureRequest,
 ) -> None:

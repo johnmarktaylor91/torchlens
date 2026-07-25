@@ -116,7 +116,7 @@ def test_composition():
 )
 
 
-def test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge(
+def test_preclusion_real_v3_path_has_no_substitutable_fixture_edge(
     tmp_path: Path,
     real_environment_fixture: RealEnvironmentFixture,
 ) -> None:
@@ -163,7 +163,7 @@ def test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge(
 
 
 @pytest.mark.parametrize(("evasion_class", "source"), _EVASION_CASES)
-def test_round21_tripwire_catches_python_evasion(
+def test_tripwire_catches_python_evasion(
     evasion_class: str,
     source: str,
 ) -> None:
@@ -192,7 +192,7 @@ def test_round21_tripwire_catches_python_evasion(
         }
 
 
-def test_round21_tripwire_catches_deleted_ci_node() -> None:
+def test_tripwire_catches_deleted_ci_node() -> None:
     """Deleting one required real node from CI must be a located substitution error."""
 
     workflow = structural._WORKFLOW_PATH.read_text(encoding="utf-8")  # noqa: SLF001

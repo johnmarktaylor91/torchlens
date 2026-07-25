@@ -401,7 +401,7 @@ def _assert_shutdown_partition(
     _ROUND21_SHUTDOWN_MATRIX,
     ids=[cell_id for cell_id, _scenario in _ROUND21_SHUTDOWN_MATRIX],
 )
-def test_round21_shutdown_matrix(
+def test_shutdown_matrix(
     cell_id: str,
     scenario: _ShutdownScenario,
     tmp_path: Path,

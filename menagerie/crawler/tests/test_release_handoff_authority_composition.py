@@ -309,7 +309,7 @@ _ROUND21_HANDOFF_AUTHORITY_MATRIX: tuple[
     _ROUND21_HANDOFF_AUTHORITY_MATRIX,
     ids=[cell_id for cell_id, _proof in _ROUND21_HANDOFF_AUTHORITY_MATRIX],
 )
-def test_round21_handoff_authority_identity_matrix(
+def test_handoff_authority_identity_matrix(
     cell_id: str,
     proof: Callable[[Path, RealEnvironmentFixture], None],
     tmp_path: Path,

@@ -310,5 +310,5 @@ jobs:
       - name: Prove registry totality and host pass/not-skip coverage
         run: |
           python -m pytest -q \
-            menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_ci_attestations_cover_registry_without_skip \
+            menagerie/crawler/tests/test_release_conformance_composition.py::test_ci_attestations_cover_registry_without_skip \
             -x --tb=short

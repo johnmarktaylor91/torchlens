@@ -288,16 +288,16 @@ VS4_LANDING_MANIFEST: dict[str, Any] = {
 
 ROUND21_VS1_PROOF_REGISTRY: dict[str, str] = {
     "P01": (
-        "menagerie/crawler/tests/test_round21_preclusion_composition.py::"
-        "test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
+        "menagerie/crawler/tests/test_release_preclusion_composition.py::"
+        "test_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
     ),
     "T01": (
-        "menagerie/crawler/tests/test_round21_preclusion_composition.py::"
-        "test_round21_tripwire_catches_python_evasion"
+        "menagerie/crawler/tests/test_release_preclusion_composition.py::"
+        "test_tripwire_catches_python_evasion"
     ),
     "T01-CI": (
-        "menagerie/crawler/tests/test_round21_preclusion_composition.py::"
-        "test_round21_tripwire_catches_deleted_ci_node"
+        "menagerie/crawler/tests/test_release_preclusion_composition.py::"
+        "test_tripwire_catches_deleted_ci_node"
     ),
     "T02": (
         "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
@@ -308,16 +308,16 @@ ROUND21_VS1_PROOF_REGISTRY: dict[str, str] = {
 ROUND21_VS2_PROOF_REGISTRY: dict[str, str] = {
     **ROUND21_VS1_PROOF_REGISTRY,
     "P02": (
-        "menagerie/crawler/tests/test_round21_fingerprint_composition.py::"
-        "test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
+        "menagerie/crawler/tests/test_release_fingerprint_composition.py::"
+        "test_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
     ),
 }
 
 ROUND21_VS3_PROOF_REGISTRY: dict[str, str] = {
     **ROUND21_VS2_PROOF_REGISTRY,
     "P03": (
-        "menagerie/crawler/tests/test_round21_scale_composition.py::"
-        "test_round21_pass_and_spawn_validation_walks_are_constant_bounded"
+        "menagerie/crawler/tests/test_release_scale_composition.py::"
+        "test_pass_and_spawn_validation_walks_are_constant_bounded"
     ),
     "T03": (
         "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
@@ -328,8 +328,8 @@ ROUND21_VS3_PROOF_REGISTRY: dict[str, str] = {
 ROUND21_VS4_PROOF_REGISTRY: dict[str, str] = {
     **ROUND21_VS3_PROOF_REGISTRY,
     "P04": (
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::"
-        "test_round21_environment_unit_matrix"
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::"
+        "test_environment_authority_unit_matrix"
     ),
     "P12": _ROUND17_CI_NODES[0],
     "P13": _ROUND19_RELEASE_NODE_INVENTORY["interpreter"],
@@ -344,40 +344,39 @@ ROUND21_VS4_PROOF_REGISTRY: dict[str, str] = {
 ROUND21_VS5_PROOF_REGISTRY: dict[str, str] = {
     **ROUND21_VS4_PROOF_REGISTRY,
     "P05": (
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::"
-        "test_round21_shutdown_matrix"
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix"
     ),
 }
 
 ROUND21_VS6_PROOF_REGISTRY: dict[str, str] = {
     **ROUND21_VS5_PROOF_REGISTRY,
     "P06": (
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
-        "test_round21_handoff_authority_identity_matrix"
+        "menagerie/crawler/tests/test_release_handoff_authority_composition.py::"
+        "test_handoff_authority_identity_matrix"
     ),
 }
 
 ROUND21_VS7_PROOF_REGISTRY: dict[str, str] = {
     **ROUND21_VS6_PROOF_REGISTRY,
     "P07": (
-        "menagerie/crawler/tests/test_round21_transport_composition.py::"
-        "test_round21_closed_transport_capability_awards_and_rejects_unlisted_library"
+        "menagerie/crawler/tests/test_release_transport_composition.py::"
+        "test_closed_transport_capability_awards_and_rejects_unlisted_library"
     ),
 }
 
 ROUND21_VS8_PROOF_REGISTRY: dict[str, str] = {
     **ROUND21_VS7_PROOF_REGISTRY,
     "P08": (
-        "menagerie/crawler/tests/test_round21_cache_rebind_composition.py::"
-        "test_round21_mismatched_rebind_preserves_active_authority_and_awards"
+        "menagerie/crawler/tests/test_release_cache_rebind_composition.py::"
+        "test_mismatched_rebind_preserves_active_authority_and_awards"
     ),
 }
 
 ROUND21_VS9_PROOF_REGISTRY: dict[str, str] = {
     **ROUND21_VS8_PROOF_REGISTRY,
     "P09": (
-        "menagerie/crawler/tests/test_round21_ci_composition.py::"
-        "test_round21_linux_committed_lock_provenance_awards_in_ci"
+        "menagerie/crawler/tests/test_release_ci_composition.py::"
+        "test_linux_committed_lock_provenance_awards_in_ci"
     ),
     "T04": (
         "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
@@ -392,8 +391,8 @@ ROUND21_VS9_PROOF_REGISTRY: dict[str, str] = {
 ROUND21_VS10_PROOF_REGISTRY: dict[str, str] = {
     **ROUND21_VS9_PROOF_REGISTRY,
     "P10": (
-        "menagerie/crawler/tests/test_round21_ci_composition.py::"
-        "test_round21_macos_committed_lock_seatbelt_award_and_denial"
+        "menagerie/crawler/tests/test_release_ci_composition.py::"
+        "test_macos_committed_lock_seatbelt_award_and_denial"
     ),
     "T04-mac": (
         "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
@@ -408,12 +407,12 @@ ROUND21_VS10_PROOF_REGISTRY: dict[str, str] = {
 ROUND21_VS11_PROOF_REGISTRY: dict[str, str] = {
     **ROUND21_VS10_PROOF_REGISTRY,
     "P11": (
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::"
-        "test_round21_conformance_registry_is_total_and_executed"
+        "menagerie/crawler/tests/test_release_conformance_composition.py::"
+        "test_conformance_registry_is_total_and_executed"
     ),
     "P11-CI": (
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::"
-        "test_round21_ci_attestations_cover_registry_without_skip"
+        "menagerie/crawler/tests/test_release_conformance_composition.py::"
+        "test_ci_attestations_cover_registry_without_skip"
     ),
     "P27": (
         "menagerie/crawler/tests/test_slice_f_driver.py::"
@@ -1927,7 +1926,7 @@ def test_conformance_workflow_and_reversion_inventory_is_exact() -> None:
     assert "round21-linux-release-attestation" in workflow
     assert "round21-macos-release-attestation" in workflow
     assert "round21-reversion-attestation" in workflow
-    assert "test_round21_ci_attestations_cover_registry_without_skip" in workflow
+    assert "test_ci_attestations_cover_registry_without_skip" in workflow
     assert "continue-on-error: true" not in workflow
     assert "|| true" not in workflow
     assert "if-no-files-found: error" in workflow
@@ -1955,36 +1954,36 @@ def test_conformance_workflow_and_reversion_inventory_is_exact() -> None:
     cases_by_id = {case["reversion_id"]: case for case in payload["cases"]}
     assert all("proof_nodes" in case and "proof_node" not in case for case in cases_by_id.values())
     assert cases_by_id["D02"]["proof_nodes"] == [
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::"
-        "test_round21_environment_unit_matrix[E02]",
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::"
-        "test_round21_environment_unit_matrix[E03]",
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::"
+        "test_environment_authority_unit_matrix[E02]",
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::"
+        "test_environment_authority_unit_matrix[E03]",
     ]
     assert cases_by_id["D17"]["proof_nodes"] == [
-        "menagerie/crawler/tests/test_round21_transport_composition.py::"
-        "test_round21_closed_transport_capability_awards_and_rejects_unlisted_library"
+        "menagerie/crawler/tests/test_release_transport_composition.py::"
+        "test_closed_transport_capability_awards_and_rejects_unlisted_library"
     ]
     assert cases_by_id["D18"]["proof_nodes"] == [
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
-        "test_round21_handoff_authority_identity_matrix[H02]"
+        "menagerie/crawler/tests/test_release_handoff_authority_composition.py::"
+        "test_handoff_authority_identity_matrix[H02]"
     ]
     assert cases_by_id["D19"]["proof_nodes"] == [
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
-        "test_round21_handoff_authority_identity_matrix[H03]",
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
-        "test_round21_handoff_authority_identity_matrix[H04]",
+        "menagerie/crawler/tests/test_release_handoff_authority_composition.py::"
+        "test_handoff_authority_identity_matrix[H03]",
+        "menagerie/crawler/tests/test_release_handoff_authority_composition.py::"
+        "test_handoff_authority_identity_matrix[H04]",
     ]
     assert cases_by_id["D07"]["proof_nodes"] == [
-        "menagerie/crawler/tests/test_round21_preclusion_composition.py::"
-        "test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::"
-        "test_round21_linux_committed_lock_provenance_awards_in_ci",
+        "menagerie/crawler/tests/test_release_preclusion_composition.py::"
+        "test_preclusion_real_v3_path_has_no_substitutable_fixture_edge",
+        "menagerie/crawler/tests/test_release_ci_composition.py::"
+        "test_linux_committed_lock_provenance_awards_in_ci",
     ]
     assert cases_by_id["D21"]["proof_nodes"] == [
         "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
         "test_linux_release_artifacts_and_provisioning_are_real",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::"
-        "test_round21_linux_committed_lock_provenance_awards_in_ci",
+        "menagerie/crawler/tests/test_release_ci_composition.py::"
+        "test_linux_committed_lock_provenance_awards_in_ci",
     ]
     assert cases_by_id["D22"]["proof_nodes"] == [
         "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
@@ -2003,17 +2002,15 @@ def test_conformance_workflow_and_reversion_inventory_is_exact() -> None:
         "test_linux_code_less_deferral_fails_visibly_without_failed_source"
     ]
     assert cases_by_id["D28"]["proof_nodes"] == [
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::"
-        "test_round21_conformance_registry_is_total_and_executed"
+        "menagerie/crawler/tests/test_release_conformance_composition.py::"
+        "test_conformance_registry_is_total_and_executed"
     ]
     assert all(
-        "test_round21_ci_attestations_cover_registry_without_skip"
-        not in "\n".join(case["proof_nodes"])
+        "test_ci_attestations_cover_registry_without_skip" not in "\n".join(case["proof_nodes"])
         for case in cases_by_id.values()
     )
     assert all(
-        "test_round21_conformance_registry_is_total_and_executed"
-        not in "\n".join(case["proof_nodes"])
+        "test_conformance_registry_is_total_and_executed" not in "\n".join(case["proof_nodes"])
         for reversion_id, case in cases_by_id.items()
         if reversion_id != "D28"
     )

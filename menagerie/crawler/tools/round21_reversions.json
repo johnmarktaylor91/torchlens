@@ -8,7 +8,7 @@
         "'awards_runs': False"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E11]",
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E11]",
         "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
         "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
@@ -22,8 +22,8 @@
         "DID NOT RAISE"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E02]",
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E03]"
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E02]",
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E03]"
       ],
       "reversion_id": "D02",
       "semantic_reversion": "omit content seal from generation"
@@ -34,7 +34,7 @@
         "content seal"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E02]"
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E02]"
       ],
       "reversion_id": "D03",
       "semantic_reversion": "use conda-meta alone as seal"
@@ -46,8 +46,8 @@
         "static import is outside sealed environment and exact inventory"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E04]",
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E08]"
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E04]",
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E08]"
       ],
       "reversion_id": "D04",
       "semantic_reversion": "grant post-seal bytes"
@@ -58,7 +58,7 @@
         "DID NOT RAISE"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E09]"
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E09]"
       ],
       "reversion_id": "D05",
       "semantic_reversion": "weaken internal/external symlink binding"
@@ -70,8 +70,8 @@
         "assert attempt[\"result\"] == \"failed\""
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E12]",
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E13]"
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E12]",
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E13]"
       ],
       "reversion_id": "D06",
       "semantic_reversion": "treat packaged checkpoints as runtime"
@@ -83,8 +83,8 @@
         "assert fixture.binding.python_executable == fixture.prefix / \"bin/python\""
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci"
+        "menagerie/crawler/tests/test_release_preclusion_composition.py::test_preclusion_real_v3_path_has_no_substitutable_fixture_edge",
+        "menagerie/crawler/tests/test_release_ci_composition.py::test_linux_committed_lock_provenance_awards_in_ci"
       ],
       "reversion_id": "D07",
       "semantic_reversion": "restore sys.executable or parallel interpreter"
@@ -108,7 +108,7 @@
         "runtime-root"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
+        "menagerie/crawler/tests/test_release_preclusion_composition.py::test_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "reversion_id": "D09",
       "semantic_reversion": "each substitution evasion"
@@ -119,7 +119,7 @@
         "runtime-root"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
+        "menagerie/crawler/tests/test_release_preclusion_composition.py::test_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "reversion_id": "D10",
       "semantic_reversion": "reintroduce live legacy root/fake result/hand binding"
@@ -130,7 +130,7 @@
         "_compile_worker_read_manifest"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
+        "menagerie/crawler/tests/test_release_preclusion_composition.py::test_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "reversion_id": "D11",
       "semantic_reversion": "remove transitive fixture/composition/CI scope"
@@ -141,7 +141,7 @@
         "DID NOT RAISE"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_fingerprint_composition.py::test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
+        "menagerie/crawler/tests/test_release_fingerprint_composition.py::test_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
       ],
       "reversion_id": "D12",
       "semantic_reversion": "omit ctime/inode/external fingerprint trigger"
@@ -152,7 +152,7 @@
         "content seal"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_fingerprint_composition.py::test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
+        "menagerie/crawler/tests/test_release_fingerprint_composition.py::test_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
       ],
       "reversion_id": "D13",
       "semantic_reversion": "quarantine byte-identical hardlink clone churn"
@@ -163,7 +163,7 @@
         "failed:environment"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_scale_composition.py::test_round21_pass_and_spawn_validation_walks_are_constant_bounded"
+        "menagerie/crawler/tests/test_release_scale_composition.py::test_pass_and_spawn_validation_walks_are_constant_bounded"
       ],
       "reversion_id": "D14",
       "semantic_reversion": "rewalk per model/consumer or reuse pass token for spawn"
@@ -186,19 +186,19 @@
         "post-award-commit"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S01]",
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S02]",
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S03]",
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S04]",
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S05]",
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S06]",
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S07]",
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S08]",
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S09]",
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S10]",
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S11]",
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S12]",
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S13]"
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S01]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S02]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S03]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S04]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S05]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S06]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S07]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S08]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S09]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S10]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S11]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S12]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S13]"
       ],
       "reversion_id": "D15",
       "semantic_reversion": "delete shutdown guard or admit later work"
@@ -209,7 +209,7 @@
         "assert publication < append < post_award_hook < post_award_guard"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S11]"
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S11]"
       ],
       "reversion_id": "D16",
       "semantic_reversion": "insert shutdown check inside atomic publication"
@@ -220,7 +220,7 @@
         "assert not True"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_transport_composition.py::test_round21_closed_transport_capability_awards_and_rejects_unlisted_library"
+        "menagerie/crawler/tests/test_release_transport_composition.py::test_closed_transport_capability_awards_and_rejects_unlisted_library"
       ],
       "reversion_id": "D17",
       "semantic_reversion": "restore root/suffix transport grant"
@@ -231,7 +231,7 @@
         "DID NOT RAISE"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H02]"
+        "menagerie/crawler/tests/test_release_handoff_authority_composition.py::test_handoff_authority_identity_matrix[H02]"
       ],
       "reversion_id": "D18",
       "semantic_reversion": "retain mismatched artifact transaction"
@@ -243,8 +243,8 @@
         "duplicate or invalid artifact event ID"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H03]",
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H04]"
+        "menagerie/crawler/tests/test_release_handoff_authority_composition.py::test_handoff_authority_identity_matrix[H03]",
+        "menagerie/crawler/tests/test_release_handoff_authority_composition.py::test_handoff_authority_identity_matrix[H04]"
       ],
       "reversion_id": "D19",
       "semantic_reversion": "accept zero/multiple handoff finals or old-root fallback"
@@ -255,7 +255,7 @@
         "environment authority cache association is invalid"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_cache_rebind_composition.py::test_round21_mismatched_rebind_preserves_active_authority_and_awards"
+        "menagerie/crawler/tests/test_release_cache_rebind_composition.py::test_mismatched_rebind_preserves_active_authority_and_awards"
       ],
       "reversion_id": "D20",
       "semantic_reversion": "invalidate active cache on rejected rebind"
@@ -268,7 +268,7 @@
       ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_linux_release_artifacts_and_provisioning_are_real",
-        "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci"
+        "menagerie/crawler/tests/test_release_ci_composition.py::test_linux_committed_lock_provenance_awards_in_ci"
       ],
       "reversion_id": "D21",
       "semantic_reversion": "delete/corrupt either lock/export/probe contract"
@@ -345,7 +345,7 @@
         "conformance registry clause IDs changed"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed"
+        "menagerie/crawler/tests/test_release_conformance_composition.py::test_conformance_registry_is_total_and_executed"
       ],
       "reversion_id": "D28",
       "semantic_reversion": "delete clause/finding/invariant/matrix registry record"

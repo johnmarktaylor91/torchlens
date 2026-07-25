@@ -23,12 +23,12 @@ non-proof-bearing records. The fields mean:
 - `real_prefix` and `shipped_compiler`: always `true`.
 - `deliberate_reversion_ids`: D01-D29 mutations that must make a named gate red.
 
-`menagerie/crawler/tests/test_round21_conformance_composition.py` is the
-executable reader. `test_round21_conformance_registry_is_total_and_executed`
+`menagerie/crawler/tests/test_release_conformance_composition.py` is the
+executable reader. `test_conformance_registry_is_total_and_executed`
 asserts the checked-in JSON is exactly the extracted normative set, every record
 has a real node, every node collects with its expanded parameters, every node is
 inside the VS1 anti-substitution scan, and the required exact ID sets are
-present. `test_round21_ci_attestations_cover_registry_without_skip` consumes the
+present. `test_ci_attestations_cover_registry_without_skip` consumes the
 Linux and macOS release attestations plus the deliberate-reversion result and
 requires every applicable node to have passed with no skipped, xfailed, failed,
 or uncollected nodes.

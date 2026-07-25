@@ -182,7 +182,7 @@ def _assert_spawn_validation_catches_post_pass_mutation(
     assert cache.lstat_tree_walks == 2 * cache.full_seals + cache.cheap_tree_walks
 
 
-def test_round21_pass_and_spawn_validation_walks_are_constant_bounded(
+def test_pass_and_spawn_validation_walks_are_constant_bounded(
     tmp_path: Path,
     isolated_real_environment_fixture: RealEnvironmentFixture,
 ) -> None:
@@ -265,7 +265,7 @@ def test_round21_pass_and_spawn_validation_walks_are_constant_bounded(
     _assert_spawn_validation_catches_post_pass_mutation(tmp_path, isolated_fixture)
 
 
-def test_round21_real_environment_fixture_full_seals_are_session_bounded(
+def test_real_environment_fixture_full_seals_are_session_bounded(
     real_environment_fixture: RealEnvironmentFixture,
     real_environment_seal_counter: RealEnvironmentSealCounter,
 ) -> None:

@@ -29,8 +29,8 @@ _STATUS_PATH = Path("menagerie/crawler/status.py")
 _WORKER_PATH = Path("menagerie/crawler/worker.py")
 _ENV_LIFECYCLE_PATH = Path("menagerie/crawler/env_lifecycle.py")
 _CONFORMANCE_NODE = (
-    "menagerie/crawler/tests/test_round21_conformance_composition.py::"
-    "test_round21_conformance_registry_is_total_and_executed"
+    "menagerie/crawler/tests/test_release_conformance_composition.py::"
+    "test_conformance_registry_is_total_and_executed"
 )
 _WORKFLOW_INVENTORY_NODE = (
     "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
@@ -51,8 +51,8 @@ def _node_for_environment(cell_id: str) -> str:
     """Return the expanded P04 environment-matrix pytest node."""
 
     return (
-        "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::"
-        f"test_round21_environment_unit_matrix[{cell_id}]"
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::"
+        f"test_environment_authority_unit_matrix[{cell_id}]"
     )
 
 
@@ -60,8 +60,8 @@ def _node_for_shutdown(cell_id: str) -> str:
     """Return the expanded P05 shutdown-matrix pytest node."""
 
     return (
-        "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::"
-        f"test_round21_shutdown_matrix[{cell_id}]"
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::"
+        f"test_shutdown_matrix[{cell_id}]"
     )
 
 
@@ -69,42 +69,42 @@ def _node_for_handoff(cell_id: str) -> str:
     """Return the expanded P06 handoff-matrix pytest node."""
 
     return (
-        "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::"
-        f"test_round21_handoff_authority_identity_matrix[{cell_id}]"
+        "menagerie/crawler/tests/test_release_handoff_authority_composition.py::"
+        f"test_handoff_authority_identity_matrix[{cell_id}]"
     )
 
 
 _P01 = (
-    "menagerie/crawler/tests/test_round21_preclusion_composition.py::"
-    "test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
+    "menagerie/crawler/tests/test_release_preclusion_composition.py::"
+    "test_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
 )
 _T01 = (
-    "menagerie/crawler/tests/test_round21_preclusion_composition.py::"
-    "test_round21_tripwire_catches_python_evasion"
+    "menagerie/crawler/tests/test_release_preclusion_composition.py::"
+    "test_tripwire_catches_python_evasion"
 )
 _P02 = (
-    "menagerie/crawler/tests/test_round21_fingerprint_composition.py::"
-    "test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
+    "menagerie/crawler/tests/test_release_fingerprint_composition.py::"
+    "test_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
 )
 _P03 = (
-    "menagerie/crawler/tests/test_round21_scale_composition.py::"
-    "test_round21_pass_and_spawn_validation_walks_are_constant_bounded"
+    "menagerie/crawler/tests/test_release_scale_composition.py::"
+    "test_pass_and_spawn_validation_walks_are_constant_bounded"
 )
 _P07 = (
-    "menagerie/crawler/tests/test_round21_transport_composition.py::"
-    "test_round21_closed_transport_capability_awards_and_rejects_unlisted_library"
+    "menagerie/crawler/tests/test_release_transport_composition.py::"
+    "test_closed_transport_capability_awards_and_rejects_unlisted_library"
 )
 _P08 = (
-    "menagerie/crawler/tests/test_round21_cache_rebind_composition.py::"
-    "test_round21_mismatched_rebind_preserves_active_authority_and_awards"
+    "menagerie/crawler/tests/test_release_cache_rebind_composition.py::"
+    "test_mismatched_rebind_preserves_active_authority_and_awards"
 )
 _P09 = (
-    "menagerie/crawler/tests/test_round21_ci_composition.py::"
-    "test_round21_linux_committed_lock_provenance_awards_in_ci"
+    "menagerie/crawler/tests/test_release_ci_composition.py::"
+    "test_linux_committed_lock_provenance_awards_in_ci"
 )
 _P10 = (
-    "menagerie/crawler/tests/test_round21_ci_composition.py::"
-    "test_round21_macos_committed_lock_seatbelt_award_and_denial"
+    "menagerie/crawler/tests/test_release_ci_composition.py::"
+    "test_macos_committed_lock_seatbelt_award_and_denial"
 )
 _P12_NONE = (
     "menagerie/crawler/tests/test_award_worker_result_composition.py::"

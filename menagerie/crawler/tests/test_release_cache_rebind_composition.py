@@ -9,7 +9,7 @@ import pytest
 from menagerie.crawler.authority import AuthorityDerivationError, EnvironmentAuthorityCache
 from menagerie.crawler.tests import test_anti_substitution_inventories as structural
 from menagerie.crawler.tests.conftest import RealEnvironmentFixture
-from menagerie.crawler.tests.test_round21_environment_matrix_composition import (
+from menagerie.crawler.tests.test_release_environment_matrix_composition import (
     _adapter_source,
     _assert_award,
     _run_composition,
@@ -46,7 +46,7 @@ def _cache_counters(cache: EnvironmentAuthorityCache) -> dict[str, int]:
     }
 
 
-def test_round21_mismatched_rebind_preserves_active_authority_and_awards(
+def test_mismatched_rebind_preserves_active_authority_and_awards(
     tmp_path: Path,
     real_environment_fixture: RealEnvironmentFixture,
 ) -> None:

@@ -225,7 +225,7 @@ def _bind_clone(
     return authority
 
 
-def test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone(
+def test_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone(
     tmp_path: Path,
     isolated_real_environment_fixture: RealEnvironmentFixture,
 ) -> None:

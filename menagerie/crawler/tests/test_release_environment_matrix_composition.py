@@ -936,7 +936,7 @@ _ROUND21_ENVIRONMENT_MATRIX = tuple(
     _ROUND21_ENVIRONMENT_MATRIX,
     ids=[cell_id for cell_id, _proof in _ROUND21_ENVIRONMENT_MATRIX],
 )
-def test_round21_environment_unit_matrix(
+def test_environment_authority_unit_matrix(
     cell_id: str,
     proof: EnvironmentProof,
     tmp_path: Path,
