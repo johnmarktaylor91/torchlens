@@ -1,6 +1,29 @@
 # CHANGELOG
 
 
+## v2.32.3 (2026-07-25)
+
+### Bug Fixes
+
+- **ci**: Install full [test] extra in smoke + pin mypy/ruff (unblock matrix, stop tooling drift)
+  ([`1b9f677`](https://github.com/johnmarktaylor91/torchlens/commit/1b9f677ce9fe282cd679b7e50f456ce1f3b9e4d0))
+
+After 2.32.2, all smoke matrix legs still failed at COLLECTION -- the smoke job installed only
+  .[dev,tabular], but merged rf/viz test files import heavy deps unguarded (torchvision in
+  test_rf_remediation_rules.py, etc.), and pytest imports every test module during collection. And
+  Quality/mypy failed because CI installed an unpinned mypy that flags Tensor.names (torch-stub
+  drift), which local mypy 2.1.0 passes.
+
+- .github/workflows/tests.yml: smoke installs .[dev,tabular,test] so torchvision/
+  timm/transformers/pydot are present -> collection succeeds -> the matrix actually runs (finally
+  verifying the torch-2.1 / py3.10 package fixes shipped in 2.32.1, previously masked by collection
+  errors). Heavier/slower smoke, deliberately. - pyproject.toml: pin ruff==0.15.4 + mypy==2.1.0 in
+  the dev extra (one source of truth; stops the CI tooling-version drift that produced the
+  24k-ruff-error and Tensor.names-mypy failures); add pydot to the test extra.
+
+Local: mypy 2.1.0 clean (366 files), pyproject parses. semantic-release -> 2.32.3.
+
+
 ## v2.32.2 (2026-07-25)
 
 ### Bug Fixes
