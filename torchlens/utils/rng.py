@@ -55,7 +55,13 @@ try:  # ``resource`` is POSIX-only; feature-detected for the clock family.
 except ImportError:  # pragma: no cover - non-POSIX platforms
     _resource_module = None  # type: ignore[assignment]
 
-from ._torch_compat import autocast_get_dtype, autocast_is_enabled
+from ._torch_compat import (
+    HAS_GENERATOR_CLONE_STATE,
+    HAS_GENERATOR_GRAPHSAFE_GET_STATE,
+    HAS_GENERATOR_GRAPHSAFE_SET_STATE,
+    autocast_get_dtype,
+    autocast_is_enabled,
+)
 from .hashing import seed_barcode_rng
 from .tensor_utils import _is_cuda_available
 
@@ -958,7 +964,7 @@ class GeneratorMethodRow:
     note: str
 
 
-GENERATOR_METHOD_TABLE: tuple[GeneratorMethodRow, ...] = (
+_GENERATOR_METHOD_ROWS: tuple[GeneratorMethodRow, ...] = (
     GeneratorMethodRow(
         "seed",
         "host_scalar",
@@ -1057,7 +1063,19 @@ GENERATOR_METHOD_TABLE: tuple[GeneratorMethodRow, ...] = (
         "non-callable getset attribute (never emits a c_call); inert metadata",
     ),
 )
-"""The authoritative all-receiver ``torch.Generator`` method table (r67 C1)."""
+
+_OPTIONAL_GENERATOR_METHOD_CAPABILITIES: dict[str, bool] = {
+    "clone_state": HAS_GENERATOR_CLONE_STATE,
+    "graphsafe_get_state": HAS_GENERATOR_GRAPHSAFE_GET_STATE,
+    "graphsafe_set_state": HAS_GENERATOR_GRAPHSAFE_SET_STATE,
+}
+
+GENERATOR_METHOD_TABLE: tuple[GeneratorMethodRow, ...] = tuple(
+    row
+    for row in _GENERATOR_METHOD_ROWS
+    if _OPTIONAL_GENERATOR_METHOD_CAPABILITIES.get(row.method, True)
+)
+"""The live-surface all-receiver ``torch.Generator`` method table (r67 C1)."""
 
 _GENERATOR_METHOD_ROWS_BY_NAME: dict[str, GeneratorMethodRow] = {
     row.method: row for row in GENERATOR_METHOD_TABLE

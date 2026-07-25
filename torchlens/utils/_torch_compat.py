@@ -70,6 +70,9 @@ __all__ = [
     "HAS_FUNCTORCH_LEVEL_API",
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
     "HAS_FX_GRAPH_MODULE",
+    "HAS_GENERATOR_CLONE_STATE",
+    "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
+    "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
     "HAS_JIT_BUILTIN_TABLE",
     "HAS_NAMED_TENSOR_API",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
@@ -751,6 +754,9 @@ HAS_FX_GRAPH_MODULE: bool = _probe_fx_graph_module()
 HAS_NAMED_TENSOR_API: bool = _probe_named_tensor_api()
 HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
 HAS_DYNAMO_OPTIMIZED_MODULE: bool = False
+HAS_GENERATOR_CLONE_STATE: bool = hasattr(torch.Generator, "clone_state")
+HAS_GENERATOR_GRAPHSAFE_GET_STATE: bool = hasattr(torch.Generator, "graphsafe_get_state")
+HAS_GENERATOR_GRAPHSAFE_SET_STATE: bool = hasattr(torch.Generator, "graphsafe_set_state")
 HAS_SAFE_WEIGHTS_ONLY_LOAD: bool = _probe_safe_weights_only_load()
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
@@ -772,6 +778,9 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_NAMED_TENSOR_API",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
+    "HAS_GENERATOR_CLONE_STATE",
+    "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
+    "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
     "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
     "HAS_FLOAT32_MATMUL_PRECISION",

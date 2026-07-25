@@ -56,6 +56,7 @@ from torchlens.runnable import (
     PathFaithfulness,
     WitnessCompleteness,
 )
+from torchlens.utils._torch_compat import HAS_GENERATOR_CLONE_STATE
 from torchlens.utils.rng import (
     _DEFAULT_GENERATOR_HOLDER_MODULES,
     _TORCH_RNG_DEVICE_SPEC,
@@ -560,6 +561,10 @@ def test_private_generator_initial_seed_is_ceiled_not_replayable() -> None:
 
 
 @pytest.mark.smoke
+@pytest.mark.skipif(
+    not HAS_GENERATOR_CLONE_STATE,
+    reason="torch.Generator.clone_state is absent on this supported torch runtime",
+)
 def test_clone_state_return_closure_ceils_the_second_read() -> None:
     """r66 corr1-1: ``default.clone_state().initial_seed()`` cannot escape.
 
