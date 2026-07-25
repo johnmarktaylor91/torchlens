@@ -15,7 +15,6 @@ from menagerie.crawler.constants import (
     AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
     AUTHOR_PROMPT_NAME,
     AUTHOR_RESULT_SCHEMA_VERSION,
-    GATE_SCHEMA_VERSION_V3,
 )
 from menagerie.crawler.identity import fsync_directory, hash_bytes, stable_hash
 from menagerie.crawler.models import JsonObject
@@ -230,79 +229,6 @@ def build_author_envelope(
         "required_proposal_schema": AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
     }
     return {**body, "envelope_sha256": stable_hash(body)}
-
-
-def build_author_repair_envelope(
-    *,
-    context: AuthorityContext,
-    previous_result: AuthorResult,
-    gate: Mapping[str, Any],
-    generation: int,
-    work_id: str,
-    created_at: str,
-    untrusted_hints: Mapping[str, Any],
-    source_manifest: Mapping[str, Any],
-    allowed_model_dir: Union[str, Path],
-    output_path: Union[str, Path],
-) -> JsonObject:
-    """Build one bounded repair request bound to an exact rejected v3 gate item.
-
-    Parameters
-    ----------
-    context:
-        Current mandatory authority context.
-    previous_result:
-        Exact preceding author result in the same campaign.
-    gate:
-        Exact v3 checker gate containing the rejected item and repair findings.
-    generation:
-        Positive one-based repair generation.
-    work_id:
-        Fresh work identity for the repaired result.
-    created_at, untrusted_hints, source_manifest, allowed_model_dir, output_path:
-        Base author-envelope inputs for the new generation.
-
-    Returns
-    -------
-    dict[str, Any]
-        V3 author envelope with exact prior-result and gate bindings.
-    """
-
-    if generation < 1:
-        raise AuthorDispatchError("author repair generation must be positive")
-    binding = previous_result.binding
-    if work_id == binding.work_id:
-        raise AuthorDispatchError("author repair must issue a fresh work identity")
-    try:
-        validate_payload(gate, GATE_SCHEMA_VERSION_V3)
-    except PayloadValidationError as exc:
-        raise AuthorDispatchError(str(exc)) from exc
-    item = _gate_item_for_result(gate, binding)
-    if not _gate_item_requires_repair(item):
-        raise AuthorDispatchError("accepted checker item cannot authorize an author repair")
-    envelope = build_author_envelope(
-        context=context,
-        work_id=work_id,
-        stable_id=binding.stable_id,
-        campaign_id=binding.campaign_id,
-        created_at=created_at,
-        untrusted_hints=untrusted_hints,
-        source_manifest=source_manifest,
-        allowed_model_dir=allowed_model_dir,
-        output_path=output_path,
-    )
-    envelope["repair"] = {
-        "generation": generation,
-        "prior_result_id": binding.result_id,
-        "prior_result_sha256": binding.result_sha256,
-        "gate_id": gate["gate_id"],
-        "gate_item_sha256": stable_hash(item),
-        "required_repairs": deepcopy(list(item.get("required_repairs", []))),
-    }
-    envelope["envelope_sha256"] = stable_hash(
-        {key: value for key, value in envelope.items() if key != "envelope_sha256"}
-    )
-    return envelope
 
 
 def validate_author_result(
@@ -659,41 +585,6 @@ def _source_manifest_identity(source_manifest: Mapping[str, Any]) -> str:
     if explicit is not None:
         return str(explicit)
     return stable_hash(source_manifest.get("sources", []))
-
-
-def _gate_item_for_result(
-    gate: Mapping[str, Any], binding: AuthorResultBinding
-) -> Mapping[str, Any]:
-    """Resolve the unique gate item for one exact author result."""
-
-    items = gate.get("items")
-    if not isinstance(items, list):
-        raise AuthorDispatchError("repair gate items are missing")
-    matches = [
-        item
-        for item in items
-        if isinstance(item, Mapping)
-        and item.get("stable_id") == binding.stable_id
-        and item.get("campaign_root_work_id") == binding.campaign_id
-    ]
-    if len(matches) != 1:
-        raise AuthorDispatchError("repair gate does not identify exactly one campaign item")
-    return matches[0]
-
-
-def _gate_item_requires_repair(item: Mapping[str, Any]) -> bool:
-    """Return whether a v3 checker item is visibly non-accepted."""
-
-    terminal = item.get("terminal_disposition")
-    if isinstance(terminal, Mapping):
-        return terminal.get("verdict") != "accepted"
-    fidelity = item.get("fidelity")
-    fidelity_failed = (
-        isinstance(fidelity, Mapping)
-        and fidelity.get("required") is True
-        and (fidelity.get("verdict") not in {"match", "minor-drift"})
-    )
-    return item.get("verdict") != "accurate" or fidelity_failed
 
 
 def _nonempty_unique_strings(value: object, field: str) -> tuple[str, ...]:

@@ -60,10 +60,13 @@ _PROTOCOL_VERSIONS = {
 }
 _DEAD_SYMBOLS = {
     "_driver_deferral_attempt",
+    "_gate_item_for_result",
+    "_gate_item_requires_repair",
     "store_licensed_artifact",
     "_supervise_environment_worker",
     "_validate_terminal_evidence",
     "validate_reconstruction_source_binding",
+    "build_author_repair_envelope",
 }
 _DEAD_OPTIONS = {"--scheduled-wake"}
 _SENSITIVE_EDGE_COUNTS = Counter(
