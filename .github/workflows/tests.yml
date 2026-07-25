@@ -24,31 +24,37 @@ jobs:
             python: "3.10"
             torch: "2.1.2+cpu"
             torchvision: "0.16.2+cpu"
+            numpy: "numpy==1.26.4"
             scope: smoke
           - track: floor
             python: "3.11"
             torch: "2.1.2+cpu"
             torchvision: "0.16.2+cpu"
+            numpy: "numpy==1.26.4"
             scope: smoke
           - track: canonical
             python: "3.10"
             torch: "2.8.0+cpu"
             torchvision: "0.23.0+cpu"
+            numpy: numpy
             scope: smoke
           - track: canonical
             python: "3.11"
             torch: "2.8.0+cpu"
             torchvision: "0.23.0+cpu"
+            numpy: numpy
             scope: not-slow
           - track: newest-admitted
             python: "3.10"
             torch: "2.13.0+cpu"
             torchvision: "0.28.0+cpu"
+            numpy: numpy
             scope: smoke
           - track: newest-admitted
             python: "3.11"
             torch: "2.13.0+cpu"
             torchvision: "0.28.0+cpu"
+            numpy: numpy
             scope: smoke
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +74,7 @@ jobs:
         env:
           TORCH_VERSION: ${{ matrix.torch }}
           TORCHVISION_VERSION: ${{ matrix.torchvision }}
+          NUMPY_SPEC: ${{ matrix.numpy }}
         run: |
           uv pip install --system \
             --index-url https://download.pytorch.org/whl/cpu \
@@ -76,6 +83,7 @@ jobs:
             -e ".[dev,tabular]" \
             "torch==${TORCH_VERSION}" \
             "torchvision==${TORCHVISION_VERSION}" \
+            "${NUMPY_SPEC}" \
             "pydot==4.0.1"
 
       - name: Validate installed environment
