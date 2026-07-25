@@ -5,6 +5,15 @@
 
 ### Bug Fixes
 
+- **capture**: Avoid torch 2.1 storage weakref segfault
+  ([`7420a39`](https://github.com/johnmarktaylor91/torchlens/commit/7420a39dbf55303787d595a9cebf3f440de30b15))
+
+Torch 2.1 returns ephemeral UntypedStorage wrappers whose deallocator can leave WeakKeyDictionary
+  refs dangling. The runnable completeness witness then crashed CPython while releasing its
+  storage-origin map at capture teardown.\n\nFeature-detect retained storage wrappers and keep an
+  identity-safe strong origin registry for the active forward on affected runtimes; preserve weak
+  keys on modern torch.
+
 - **ci**: Install full [test] extra in smoke + pin mypy/ruff (unblock matrix, stop tooling drift)
   ([`1b9f677`](https://github.com/johnmarktaylor91/torchlens/commit/1b9f677ce9fe282cd679b7e50f456ce1f3b9e4d0))
 
@@ -22,6 +31,91 @@ After 2.32.2, all smoke matrix legs still failed at COLLECTION -- the smoke job 
   24k-ruff-error and Tensor.names-mypy failures); add pydot to the test extra.
 
 Local: mypy 2.1.0 clean (366 files), pyproject parses. semantic-release -> 2.32.3.
+
+- **compat**: Derive generator table from live torch
+  ([`b0b24d8`](https://github.com/johnmarktaylor91/torchlens/commit/b0b24d84b84c2ba99580cec22cc313e51292afa2))
+
+- **compat**: Guard removed named tensor APIs
+  ([`db7471c`](https://github.com/johnmarktaylor91/torchlens/commit/db7471c76a62aee95c5c6aa390c3d96ce18d3b07))
+
+- **io**: Keep conditional trace tensors out of metadata
+  ([`cdd5baf`](https://github.com/johnmarktaylor91/torchlens/commit/cdd5baf9f190981b4f03fedbbfec2bae4c0c4049))
+
+- **receptive_field**: Map BatchNorm channel parents
+  ([`31dd15b`](https://github.com/johnmarktaylor91/torchlens/commit/31dd15bd9a691a9bb1587f39f0a2e76ddc010252))
+
+Training BatchNorm applies one full-dependence rule to activation and channel-vector parents.
+  Projective transposition needs the vector parents' sole axis mapped to the output channel axis;
+  without it, the full-rule passthrough became UNKNOWN and tripped the well-formed-state assertion.
+  Record parent-specific full axes and axis maps so the solve remains exact instead of suppressing
+  the validation tripwire.
+
+- **runnable**: Normalize torch 2.13 private callable aliases
+  ([`bfe11d8`](https://github.com/johnmarktaylor91/torchlens/commit/bfe11d8431698b5b26e28c7b291c82832910cf70))
+
+- **runnable**: Support NumPy 2 and Python 3.10 RNG witnesses
+  ([`a4f1485`](https://github.com/johnmarktaylor91/torchlens/commit/a4f1485608b5286f4600e56595e151fd9e5b6ef6))
+
+### Chores
+
+- **dev**: Pin pip-audit 2.10.1
+  ([`66f99db`](https://github.com/johnmarktaylor91/torchlens/commit/66f99db711ba992b195bbd4f86b0982d616a841b))
+
+### Continuous Integration
+
+- **quality**: Pin Torch 2.13 type-check environment
+  ([`68fc838`](https://github.com/johnmarktaylor91/torchlens/commit/68fc8384ec284352ee71f8dbf4a1e6139cad613d))
+
+- **release**: Gate publishing on reusable suites
+  ([`e15daf1`](https://github.com/johnmarktaylor91/torchlens/commit/e15daf1aea33e2e38e462785a898a263a1620bf7))
+
+- **tests**: Pin CPU matrix and add latest canary
+  ([`17ef3af`](https://github.com/johnmarktaylor91/torchlens/commit/17ef3af72bb8dc35f1231118fa887e543c78dc1c))
+
+- **tests**: Pin NumPy below 2 on floor legs
+  ([`1cf44da`](https://github.com/johnmarktaylor91/torchlens/commit/1cf44da6e90feeb547ed7b953f7dab914a8b28a2))
+
+- **tests**: Run canonical py3.11 leg on smoke like the rest of the matrix
+  ([`b538324`](https://github.com/johnmarktaylor91/torchlens/commit/b538324c276e8829e6bf8c865f7bdb6e8fd93447))
+
+The full-suite 'not slow' gate on the canonical leg surfaced a pre-existing backlog of latent
+  not-slow failures on main (CI has always run smoke only), including an infinite-loop hang in the
+  viz collapse-optimizer. Characterizing and fixing that suite is a separate initiative; the
+  reproducible matrix repair ships on the smoke baseline the project has always used. The canonical
+  render env (torch 2.8 / py3.11) still runs the byte-exact render oracle.
+
+### Testing
+
+- **compat**: Feature-detect torch 2.1 API surface
+  ([`12bb14d`](https://github.com/johnmarktaylor91/torchlens/commit/12bb14d9877ad38063856478e837962b12dfc336))
+
+- **compat**: Gate version-sensitive fixtures
+  ([`e5df4ec`](https://github.com/johnmarktaylor91/torchlens/commit/e5df4ec6bf2f51375c4f5d11f0b788452b55c909))
+
+- **runnable**: Accept torch seed overflow error variants
+  ([`9a25361`](https://github.com/johnmarktaylor91/torchlens/commit/9a25361b1bdade0748430c2130710e69aee949c3))
+
+- **runnable**: Assert zero-element linear warnings
+  ([`f22999b`](https://github.com/johnmarktaylor91/torchlens/commit/f22999bf43c5f2af459ec54d0008d7d0860f33c3))
+
+- **runnable**: Support str enums on Python 3.10
+  ([`cfe4a44`](https://github.com/johnmarktaylor91/torchlens/commit/cfe4a445f63032e8657bfb04a36fbecf63f1a1a1))
+
+- **security**: Handle absent operator.call on Python 3.10
+  ([`f74f5c2`](https://github.com/johnmarktaylor91/torchlens/commit/f74f5c278b444e1441bf00977145d43e4c58719b))
+
+- **viz**: Normalize Python 3.10 profiling qualnames
+  ([`40f2c10`](https://github.com/johnmarktaylor91/torchlens/commit/40f2c1027760dfa0cf798649d0b93ab966b1550f))
+
+- **viz**: Refresh render-identity oracle golden for pydot-guard line shift
+  ([`d5d8704`](https://github.com/johnmarktaylor91/torchlens/commit/d5d87042f3856cbfda11bfb4f8f5489f4facda2e))
+
+Refresh the benign source-line shift (:45->:46) introduced by the 89d9e5c2 pydot importorskip guard;
+  there is no semantic rendering change, and the test was skipped without pydot so the drift stayed
+  latent until the matrix installed pydot.
+
+- **viz**: Scope byte oracle to canonical CI
+  ([`44c8147`](https://github.com/johnmarktaylor91/torchlens/commit/44c8147dbaa0e6e100d4ff1eee0bec4095b87a04))
 
 
 ## v2.32.2 (2026-07-25)
@@ -65,16 +159,6 @@ The 2.32.0 push went green locally but red across CI's version matrix + whole-re
 
 Local verify (torch2.8/py3.11): mypy 366 files, ruff whole-repo clean, tlspec immunizers r83/r85/r87
   66/0, pydot test passes. semantic-release will re-release as 2.32.1.
-
-### Code Style
-
-- Auto-format with ruff
-  ([`3193cf8`](https://github.com/johnmarktaylor91/torchlens/commit/3193cf88d2b24b2a6a5d4d883810d1832c36a0c5))
-
-
-## v2.32.0 (2026-07-25)
-
-### Bug Fixes
 
 - **backward**: Preserve refresh grad selection
   ([`bbbc930`](https://github.com/johnmarktaylor91/torchlens/commit/bbbc930e64d9695eb56f1180bc8c7eba891ee06d))
@@ -3565,6 +3649,11 @@ The viewer/paper/llm empty stub packages were removed in 'chore: remove empty st
   notebook + neuro remain as import-gated appliances, matching torchlens/CLAUDE.md).
   state_of_torchlens.md still listed all five as shipped stubs; correct the appliance table to the
   two that actually ship and note the removal.
+
+### Code Style
+
+- Auto-format with ruff
+  ([`3193cf8`](https://github.com/johnmarktaylor91/torchlens/commit/3193cf88d2b24b2a6a5d4d883810d1832c36a0c5))
 
 ### Documentation
 
