@@ -56,7 +56,7 @@ import torch._ops as _torch_ops  # r47 hon2_1: enumerate the ``torch.ops.*`` __c
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 from torch.utils._python_dispatch import TorchDispatchMode
 
-from ...utils._torch_compat import tensor_version_or_none
+from ...utils._torch_compat import HAS_CACHED_UNTYPED_STORAGE_WRAPPER, tensor_version_or_none
 from ...utils._torch_symbols import torch_attr
 from ...utils._callable_safety import private_c_forward_op_module_names
 from ... import _state
@@ -275,15 +275,81 @@ class _WitnessState:
     writeback_watch: list[tuple[torch.Tensor, int | None, torch.Tensor]] = field(
         default_factory=list
     )
-    # r67 C3: capture-scoped WEAK storage-origin map -- storage handle object ->
+    # r67 C3: capture-scoped storage-origin map -- storage handle object ->
     # ("input", site) | ("state", frozenset[str]) | ("other", None). Populated by the
     # pre-index (known state/input storages) and by every bridge return; consulted by the
     # storage accessor wrappers so a handle acquired ANYWHERE this forward attributes its
-    # actual reads. ``None`` until the wrappers arm.
-    storage_origins: "weakref.WeakKeyDictionary[Any, tuple[str, Any]] | None" = None
+    # actual reads. Uses weak keys when torch retains safe untyped-storage wrappers and
+    # identity-keyed strong entries on older torch whose ephemeral storage weakrefs can dangle.
+    # ``None`` until the wrappers arm.
+    storage_origins: "_StorageOriginRegistry | None" = None
     # r67 C3: lazy ptr -> full state-name-set index (params + buffers, alias groups merged)
     # backing the origin resolver's pointer fallback. Built once per forward on first use.
     storage_state_ptr_names: "dict[int, frozenset[str]] | None" = None
+
+
+class _StorageOriginRegistry:
+    """Identity registry for capture-scoped storage-handle origins.
+
+    Parameters
+    ----------
+    weak_keys:
+        Use weak storage keys when the runtime retains a safe untyped-storage wrapper.
+        Otherwise retain handles strongly for this forward so neither dangling weakrefs
+        nor object-id reuse can corrupt attribution.
+    """
+
+    def __init__(self, *, weak_keys: bool) -> None:
+        """Initialize an empty storage-origin registry.
+
+        Parameters
+        ----------
+        weak_keys:
+            Whether storage handles are safe to hold through weak references.
+        """
+
+        self._weak: "weakref.WeakKeyDictionary[Any, tuple[str, Any]] | None" = (
+            weakref.WeakKeyDictionary() if weak_keys else None
+        )
+        self._strong: "dict[int, tuple[Any, tuple[str, Any]]]" = {}
+
+    def get(self, handle: Any) -> "tuple[str, Any] | None":
+        """Return the origin registered for ``handle`` by object identity.
+
+        Parameters
+        ----------
+        handle:
+            Typed or untyped torch storage handle.
+
+        Returns
+        -------
+        tuple[str, Any] | None
+            Registered origin, or ``None`` when the handle is unknown.
+        """
+
+        if self._weak is not None:
+            return self._weak.get(handle)
+        entry = self._strong.get(id(handle))
+        if entry is None or entry[0] is not handle:
+            return None
+        return entry[1]
+
+    def register(self, handle: Any, origin: "tuple[str, Any]") -> None:
+        """Register ``handle`` once without weakening identity guarantees.
+
+        Parameters
+        ----------
+        handle:
+            Typed or untyped torch storage handle.
+        origin:
+            Storage origin classification for the active capture.
+        """
+
+        if self._weak is not None:
+            if self._weak.get(handle) is None:
+                self._weak[handle] = origin
+            return
+        self._strong.setdefault(id(handle), (handle, origin))
 
 
 HOST_ESCAPE_OPERATORS = frozenset(
@@ -1650,8 +1716,7 @@ def _register_storage_handle_origin(
         if handle is None:
             continue
         try:
-            if origins.get(handle) is None:
-                origins[handle] = origin
+            origins.register(handle, origin)
         except TypeError:
             # Unhashable/unweakrefable exotic handle: the pointer fallback still resolves
             # it, and an unresolvable accessor fails closed -- never silently unrecorded.
@@ -5102,7 +5167,7 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
     # wrap-required row downgrades the capture to INCOMPLETE (a silent skip would be a
     # silent storage-spelling witness gap). Feature-absent members on this torch are
     # skipped (classified absent, not failed).
-    state.storage_origins = weakref.WeakKeyDictionary()
+    state.storage_origins = _StorageOriginRegistry(weak_keys=HAS_CACHED_UNTYPED_STORAGE_WRAPPER)
     storage_member_restore: list[tuple[Any, str, bool, Any]] = []
     for storage_cls in _STORAGE_RAW_POINTER_TARGETS():
         rows = STORAGE_METADATA_ACCESSOR_DISPOSITIONS.get(storage_cls.__name__, {})

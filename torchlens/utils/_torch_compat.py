@@ -74,6 +74,7 @@ __all__ = [
     "HAS_NAMED_TENSOR_API",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
     "HAS_SAFE_WEIGHTS_ONLY_LOAD",
+    "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
     "HAS_TORCH_FUNC",
     "HAS_TORCH_VF",
@@ -598,6 +599,35 @@ def _probe_named_tensor_api() -> bool:
     return all(hasattr(torch.Tensor, attr) for attr in ("names", "has_names", "refine_names"))
 
 
+def _probe_cached_untyped_storage_wrapper() -> bool:
+    """Return whether a tensor retains one stable untyped-storage Python wrapper.
+
+    Torch 2.1 creates a fresh ``UntypedStorage`` wrapper on every
+    ``Tensor.untyped_storage()`` call. Its wrapper destructor can leave a
+    ``weakref.ref`` pointing at freed memory, so placing an ephemeral handle in a
+    ``WeakKeyDictionary`` can later segfault CPython while clearing the weakref.
+    Newer torch retains one wrapper on the tensor, which makes weak-key storage
+    registries safe for the tensor's lifetime.
+
+    The probe deliberately compares two live handles instead of constructing a
+    weakref: exercising the broken weakref destructor would itself corrupt the
+    interpreter on an unsupported runtime.
+
+    Returns
+    -------
+    bool
+        ``True`` when repeated calls return the same retained wrapper.
+    """
+
+    try:
+        tensor = torch.empty(0)
+        first = tensor.untyped_storage()
+        second = tensor.untyped_storage()
+    except (AttributeError, RuntimeError, TypeError):
+        return False
+    return first is second
+
+
 def _probe_dynamo_optimized_module() -> bool:
     """Return whether torch exposes the private Dynamo OptimizedModule type.
 
@@ -719,6 +749,7 @@ HAS_DEVICE_CONSTRUCTORS: bool = _probe_device_constructors()
 HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_accumulate_grad_class()
 HAS_FX_GRAPH_MODULE: bool = _probe_fx_graph_module()
 HAS_NAMED_TENSOR_API: bool = _probe_named_tensor_api()
+HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
 HAS_DYNAMO_OPTIMIZED_MODULE: bool = False
 HAS_SAFE_WEIGHTS_ONLY_LOAD: bool = _probe_safe_weights_only_load()
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
@@ -739,6 +770,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_ACCUMULATE_GRAD_CLASS",
     "HAS_FX_GRAPH_MODULE",
     "HAS_NAMED_TENSOR_API",
+    "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
     "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",

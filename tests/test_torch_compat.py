@@ -149,6 +149,16 @@ def test_capability_attrs_cover_all_has_flags() -> None:
     assert set(tc._CAPABILITY_ATTRS) == has_flags  # noqa: SLF001
 
 
+def test_untyped_storage_wrapper_cache_probe_matches_runtime() -> None:
+    """Storage weak-key safety capability follows live wrapper identity behavior."""
+
+    tensor = torch.empty(0)
+    first = tensor.untyped_storage()
+    second = tensor.untyped_storage()
+
+    assert tc.HAS_CACHED_UNTYPED_STORAGE_WRAPPER is (first is second)
+
+
 def test_variable_functions_absence_falls_back_to_torch_all(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -321,6 +331,7 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_ACCUMULATE_GRAD_CLASS": True,
         "HAS_FX_GRAPH_MODULE": True,
         "HAS_NAMED_TENSOR_API": tc.HAS_NAMED_TENSOR_API,
+        "HAS_CACHED_UNTYPED_STORAGE_WRAPPER": tc.HAS_CACHED_UNTYPED_STORAGE_WRAPPER,
         "HAS_DYNAMO_OPTIMIZED_MODULE": True,
         # CVE-2025-32434 fix presence (feature-detected; version-dependent, so mirror
         # the live capability like AUTOCAST rather than hardcoding a boolean).
