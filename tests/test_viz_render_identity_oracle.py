@@ -934,6 +934,33 @@ def _digest_chunks(record: dict[str, Any]) -> list[str]:
 _BYTE_ORACLE_ENV = "TORCHLENS_RENDER_BYTE_ORACLE"
 
 
+def _normalize_environment_value(value: Any) -> Any:
+    """Normalize known interpreter-sensitive render metadata.
+
+    Python 3.11 added ``code.co_qualname``. Profiling metadata can therefore render
+    ``OracleCNN.forward`` on Python 3.11 but only ``forward`` on Python 3.10 even
+    though both records identify the same function and render structure.
+
+    Parameters
+    ----------
+    value:
+        Nested render-oracle value.
+
+    Returns
+    -------
+    Any
+        Recursively normalized value for cross-environment structural comparison.
+    """
+
+    if isinstance(value, dict):
+        return {key: _normalize_environment_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_environment_value(item) for item in value]
+    if isinstance(value, str):
+        return re.sub(r"fn=(?:[A-Za-z_]\w*\.)+([A-Za-z_]\w*)", r"fn=\1", value)
+    return value
+
+
 def _environment_invariant_record(record: dict[str, Any]) -> dict[str, Any]:
     """Return structural and semantic oracle data without byte-sensitive DOT.
 
@@ -948,7 +975,7 @@ def _environment_invariant_record(record: dict[str, Any]) -> dict[str, Any]:
         Record containing environment-invariant render data.
     """
 
-    return {
+    invariant = {
         "schema_version": record["schema_version"],
         "cases": {
             name: {key: value for key, value in case.items() if key != "dot"}
@@ -959,6 +986,7 @@ def _environment_invariant_record(record: dict[str, Any]) -> dict[str, Any]:
             for name, render in record["backward_combined"].items()
         },
     }
+    return _normalize_environment_value(invariant)
 
 
 @pytest.mark.smoke
