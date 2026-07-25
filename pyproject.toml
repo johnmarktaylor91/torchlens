@@ -89,7 +89,7 @@ all-stretch = [
     "torchshow~=0.5",
     "lovely-tensors~=0.1.18",
 ]
-dev = ["ruff==0.15.4", "pytest", "pytest-cov", "mypy==2.1.0", "pip-audit", "pre-commit"]
+dev = ["ruff==0.15.4", "pytest", "pytest-cov", "mypy==2.1.0", "pip-audit==2.10.1", "pre-commit"]
 io = ["pyarrow"]
 test = [
     "lightning",

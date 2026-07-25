@@ -212,7 +212,8 @@ def test_r39_pure_forward_surface_not_over_denied() -> None:
     assert is_pure_forward_callable(torch.Tensor.is_set_to)
     assert is_pure_forward_callable(torch.get_rng_state)
     assert is_pure_forward_callable(torch.initial_seed)
-    assert is_pure_forward_callable(torch.Tensor.module_load)
+    if hasattr(torch.Tensor, "module_load"):
+        assert is_pure_forward_callable(torch.Tensor.module_load)
     # The r26 denials still hold (no regression).
     assert not is_pure_forward_callable(torch.Tensor.apply_)
     assert not is_pure_forward_callable(torch.Tensor.map_)

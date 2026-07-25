@@ -5,12 +5,30 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
+  lint:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/lint.yml
+
+  tests:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/tests.yml
+
+  quality:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/quality.yml
+
   release:
-    runs-on: ubuntu-latest
+    needs: [lint, tests, quality]
+    permissions:
+      contents: write
+      id-token: write
+    runs-on: ubuntu-24.04
     concurrency: release
     # Belt-and-suspenders with the `[skip ci]` token in the release commit
     # message: never run a release on the bot's own release commit, so a missing
@@ -50,7 +68,7 @@ jobs:
           git config lfs.locksverify false
 
       - name: Install dependencies
-        run: pip install "python-semantic-release>=9,<10"
+        run: pip install "python-semantic-release==9.21.1"
 
       - name: Semantic Release
         id: release

@@ -123,7 +123,8 @@ def test_r35_no_float_torch_equal_in_runnable_modules() -> None:
 def test_r35_zero_fan_in_linear_runs_random_init(tmp_path: Path) -> None:
     """corr2_3 repro: ``nn.Linear(0, 2)`` random fallback completes typed."""
 
-    model = nn.Linear(0, 2).eval()
+    with pytest.warns(UserWarning, match="Initializing zero-element tensors is a no-op"):
+        model = nn.Linear(0, 2).eval()
     x = torch.randn(3, 0)
     trace = _capture(model, x)
     path = tmp_path / "zerofan.tlspec"
@@ -133,7 +134,8 @@ def test_r35_zero_fan_in_linear_runs_random_init(tmp_path: Path) -> None:
     # Weight is (2, 0): the output is exactly the bias broadcast over the batch.
     assert result.output.shape == (3, 2)
 
-    fresh = nn.Linear(0, 2)
+    with pytest.warns(UserWarning, match="Initializing zero-element tensors is a no-op"):
+        fresh = nn.Linear(0, 2)
     with torch.no_grad():
         fresh.bias.zero_()  # N1-a bias policy is zeros
     assert torch.equal(result.output, fresh(x))

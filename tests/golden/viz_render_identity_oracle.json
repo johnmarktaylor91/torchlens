@@ -5297,7 +5297,7 @@
           "collapsed_node_spec_fn": [],
           "node_spec_fn": []
         },
-        "dot": "// Computational graph for the feedforward sweep\ndigraph OracleCNN {\n\tgraph [bgcolor=white label=<<FONT COLOR='black'><B>OracleCNN</B><br align='left'/>5 tensors total (1.5 KB)<br align='left'/>20 params (all trainable, 80 B)<br align='left'/></FONT>> labeljust=left labelloc=t ordering=out rankdir=BT]\n\tnode [ordering=out]\n\tinput_1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>input_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 1, 8, 8), 256 B</TD></TR><TR><TD ALIGN=\"CENTER\">@input.x</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=256B</TD></TR><TR><TD ALIGN=\"CENTER\">fn=none</TD></TR></TABLE>> color=black fillcolor=\"#98FB98\" fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\tinput_1 -> conv2d_1_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tconv2d_1_1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>conv2d_1_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 8, 8), 512 B</TD></TR><TR><TD ALIGN=\"CENTER\">in_channels=1, out_channels=2, kernel_size=(3, 3), padding=(1, 1)</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (2, 1, 3, 3) \u00b7 bias (2,)</TD></TR><TR><TD ALIGN=\"CENTER\">@conv</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=512B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:45</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>> color=black fillcolor=\"#D9D9D9\" fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\tconv2d_1_1 -> relu_1_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\trelu_1_2 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>relu_1_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 8, 8), 512 B</TD></TR><TR><TD ALIGN=\"CENTER\">@relu</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=512B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:45</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>> color=black fillcolor=white fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\trelu_1_2 -> maxpool2d_1_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tmaxpool2d_1_3 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>maxpool2d_1_3</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 4, 4), 128 B</TD></TR><TR><TD ALIGN=\"CENTER\">kernel_size=2, stride=2</TD></TR><TR><TD ALIGN=\"CENTER\">@pool</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=128B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:45</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>> color=black fillcolor=white fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\tmaxpool2d_1_3 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\toutput_1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>output_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 4, 4), 128 B</TD></TR><TR><TD ALIGN=\"CENTER\">@output</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=128B</TD></TR><TR><TD ALIGN=\"CENTER\">fn=none</TD></TR></TABLE>> color=black fillcolor=\"#ff9999\" fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\t{\n\t\trank=sink\n\t\toutput_1\n\t}\n}\n",
+        "dot": "// Computational graph for the feedforward sweep\ndigraph OracleCNN {\n\tgraph [bgcolor=white label=<<FONT COLOR='black'><B>OracleCNN</B><br align='left'/>5 tensors total (1.5 KB)<br align='left'/>20 params (all trainable, 80 B)<br align='left'/></FONT>> labeljust=left labelloc=t ordering=out rankdir=BT]\n\tnode [ordering=out]\n\tinput_1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>input_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 1, 8, 8), 256 B</TD></TR><TR><TD ALIGN=\"CENTER\">@input.x</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=256B</TD></TR><TR><TD ALIGN=\"CENTER\">fn=none</TD></TR></TABLE>> color=black fillcolor=\"#98FB98\" fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\tinput_1 -> conv2d_1_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tconv2d_1_1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>conv2d_1_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 8, 8), 512 B</TD></TR><TR><TD ALIGN=\"CENTER\">in_channels=1, out_channels=2, kernel_size=(3, 3), padding=(1, 1)</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (2, 1, 3, 3) \u00b7 bias (2,)</TD></TR><TR><TD ALIGN=\"CENTER\">@conv</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=512B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:46</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>> color=black fillcolor=\"#D9D9D9\" fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\tconv2d_1_1 -> relu_1_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\trelu_1_2 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>relu_1_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 8, 8), 512 B</TD></TR><TR><TD ALIGN=\"CENTER\">@relu</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=512B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:46</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>> color=black fillcolor=white fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\trelu_1_2 -> maxpool2d_1_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\tmaxpool2d_1_3 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>maxpool2d_1_3</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 4, 4), 128 B</TD></TR><TR><TD ALIGN=\"CENTER\">kernel_size=2, stride=2</TD></TR><TR><TD ALIGN=\"CENTER\">@pool</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=128B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:46</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>> color=black fillcolor=white fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\tmaxpool2d_1_3 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]\n\toutput_1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>output_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 4, 4), 128 B</TD></TR><TR><TD ALIGN=\"CENTER\">@output</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=128B</TD></TR><TR><TD ALIGN=\"CENTER\">fn=none</TD></TR></TABLE>> color=black fillcolor=\"#ff9999\" fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\t{\n\t\trank=sink\n\t\toutput_1\n\t}\n}\n",
         "plans": {
           "0.25": "CollapsePlan(total=5, raw_op=5)",
           "0.75": "CollapsePlan(total=5, raw_op=5)",
@@ -5416,13 +5416,13 @@
                 "color": "black",
                 "fillcolor": "#D9D9D9",
                 "fontcolor": "black",
-                "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>conv2d_1_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 8, 8), 512 B</TD></TR><TR><TD ALIGN=\"CENTER\">in_channels=1, out_channels=2, kernel_size=(3, 3), padding=(1, 1)</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (2, 1, 3, 3) \u00b7 bias (2,)</TD></TR><TR><TD ALIGN=\"CENTER\">@conv</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=512B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:45</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>>",
+                "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>conv2d_1_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 8, 8), 512 B</TD></TR><TR><TD ALIGN=\"CENTER\">in_channels=1, out_channels=2, kernel_size=(3, 3), padding=(1, 1)</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (2, 1, 3, 3) \u00b7 bias (2,)</TD></TR><TR><TD ALIGN=\"CENTER\">@conv</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=512B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:46</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>>",
                 "ordering": "out",
                 "shape": "box",
                 "style": "filled,solid"
               },
               "kind": "raw_op",
-              "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>conv2d_1_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 8, 8), 512 B</TD></TR><TR><TD ALIGN=\"CENTER\">in_channels=1, out_channels=2, kernel_size=(3, 3), padding=(1, 1)</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (2, 1, 3, 3) \u00b7 bias (2,)</TD></TR><TR><TD ALIGN=\"CENTER\">@conv</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=512B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:45</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>>",
+              "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>conv2d_1_1</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 8, 8), 512 B</TD></TR><TR><TD ALIGN=\"CENTER\">in_channels=1, out_channels=2, kernel_size=(3, 3), padding=(1, 1)</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (2, 1, 3, 3) \u00b7 bias (2,)</TD></TR><TR><TD ALIGN=\"CENTER\">@conv</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=512B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:46</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>>",
               "name": "conv2d_1_1",
               "ordinal": 1,
               "region": [
@@ -5434,13 +5434,13 @@
                 "color": "black",
                 "fillcolor": "white",
                 "fontcolor": "black",
-                "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>relu_1_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 8, 8), 512 B</TD></TR><TR><TD ALIGN=\"CENTER\">@relu</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=512B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:45</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>>",
+                "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>relu_1_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 8, 8), 512 B</TD></TR><TR><TD ALIGN=\"CENTER\">@relu</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=512B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:46</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>>",
                 "ordering": "out",
                 "shape": "box",
                 "style": "filled,solid"
               },
               "kind": "raw_op",
-              "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>relu_1_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 8, 8), 512 B</TD></TR><TR><TD ALIGN=\"CENTER\">@relu</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=512B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:45</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>>",
+              "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>relu_1_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 8, 8), 512 B</TD></TR><TR><TD ALIGN=\"CENTER\">@relu</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=512B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:46</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>>",
               "name": "relu_1_2",
               "ordinal": 2,
               "region": [
@@ -5452,13 +5452,13 @@
                 "color": "black",
                 "fillcolor": "white",
                 "fontcolor": "black",
-                "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>maxpool2d_1_3</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 4, 4), 128 B</TD></TR><TR><TD ALIGN=\"CENTER\">kernel_size=2, stride=2</TD></TR><TR><TD ALIGN=\"CENTER\">@pool</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=128B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:45</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>>",
+                "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>maxpool2d_1_3</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 4, 4), 128 B</TD></TR><TR><TD ALIGN=\"CENTER\">kernel_size=2, stride=2</TD></TR><TR><TD ALIGN=\"CENTER\">@pool</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=128B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:46</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>>",
                 "ordering": "out",
                 "shape": "box",
                 "style": "filled,solid"
               },
               "kind": "raw_op",
-              "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>maxpool2d_1_3</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 4, 4), 128 B</TD></TR><TR><TD ALIGN=\"CENTER\">kernel_size=2, stride=2</TD></TR><TR><TD ALIGN=\"CENTER\">@pool</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=128B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:45</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>>",
+              "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>maxpool2d_1_3</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2, 4, 4), 128 B</TD></TR><TR><TD ALIGN=\"CENTER\">kernel_size=2, stride=2</TD></TR><TR><TD ALIGN=\"CENTER\">@pool</TD></TR><TR><TD ALIGN=\"CENTER\">t=0.00 ns</TD></TR><TR><TD ALIGN=\"CENTER\">out=128B</TD></TR><TR><TD ALIGN=\"CENTER\">call=test_viz_render_identity_oracle.py:46</TD></TR><TR><TD ALIGN=\"CENTER\">fn=OracleCNN.forward</TD></TR></TABLE>>",
               "name": "maxpool2d_1_3",
               "ordinal": 3,
               "region": [
@@ -9862,13 +9862,13 @@
     "schema_version": 1
   },
   "sha256_chunks": [
-    "2344996b",
-    "2c3dcc38",
-    "32e59c73",
-    "e3aeba28",
-    "c95957f2",
-    "f2d0d8e9",
-    "b1f4088d",
-    "d5f3a4c3"
+    "ad8d78f1",
+    "769950d3",
+    "09fbc00c",
+    "83722a6c",
+    "031c7e60",
+    "01701abf",
+    "3690524d",
+    "b865c05e"
   ]
 }

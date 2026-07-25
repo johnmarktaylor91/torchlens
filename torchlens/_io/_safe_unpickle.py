@@ -70,11 +70,12 @@ Allowlist policy (fail-closed):
   *safe* wrapper that restricts the target object to the enumerated torch C
   callable-holder classes, which structurally blocks the classic
   ``getattr(obj, "__globals__")`` pivot to ``eval`` / ``exec``.
-* ``torch.storage._load_from_bytes`` legitimately reconstructs small embedded
-  tensors (e.g. a control-flow predicate value) but internally calls
-  ``torch.load`` with the *unsafe* default, i.e. a nested unrestricted unpickler.
-  It is admitted only through a wrapper that forces ``weights_only=True`` so the
-  nested load routes through torch's own restricted unpickler.
+* ``torch.storage._load_from_bytes`` reconstructs tensors embedded by legacy
+  metadata (current bundles route every tensor through manifest-bound blobs) but
+  internally calls ``torch.load`` with the *unsafe* default, i.e. a nested
+  unrestricted unpickler. It is admitted only through a wrapper that forces
+  ``weights_only=True`` so the nested load routes through torch's own restricted
+  unpickler.
 
 If a future legitimate class is not yet covered, loading it fails closed with a
 clear error; we NEVER admit a code-exec gadget to make a load succeed.
@@ -91,10 +92,10 @@ CONSTRUCTION from pickle-supplied args is DENIED. Two layers enforce it:
 (``_is_torch_storage_type`` -- including ``torch.storage.{Typed,Untyped}Storage``,
 which torch's OWN baseline hands back as the real, constructable classes, and every
 legacy ``torch.<dtype>Storage``). Constructing a storage allocates raw memory
-(``UntypedStorage(N)`` -> a multi-GiB alloc DoS), and ``.tlspec`` NEVER needs one --
-tensor payloads travel as ``BlobRef``s and any embedded storage routes through the
-wrapped ``("torch.storage", "_load_from_bytes")`` path (a SEPARATE nested
-``weights_only`` VM). (2) ``SafeBundleUnpickler`` is a pure-Python
+(``UntypedStorage(N)`` -> a multi-GiB alloc DoS), and current ``.tlspec`` metadata
+never needs one -- tensor payloads travel as ``BlobRef``s. A legacy embedded storage
+routes through the wrapped ``("torch.storage", "_load_from_bytes")`` path (a separate
+nested ``weights_only`` VM). (2) ``SafeBundleUnpickler`` is a pure-Python
 ``pickle._Unpickler`` whose rebuilt opcode ``dispatch`` gates BUILD / REDUCE / NEWOBJ /
 NEWOBJ_EX to baseline discipline: a BUILD may not apply a ``__setstate__`` /
 storage-rebind to a torch Tensor / Storage / Parameter (the ``find_class``-invisible

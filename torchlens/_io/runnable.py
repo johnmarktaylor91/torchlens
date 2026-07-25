@@ -986,26 +986,10 @@ def detach_sparse_core_nested_trace_backrefs(value: Any) -> None:
     OTHER stray tensor still fails :func:`assert_sparse_core_has_no_tensor_payload`.
     """
 
-    import copy as _copy
+    from .scrub import detach_conditional_trace_backrefs
 
-    from ..data_classes.trace import Conditional, ConditionalAccessor
-
-    if not isinstance(value, MutableMapping):
-        return
-    accessor = value.get("conditionals")
-    if not isinstance(accessor, ConditionalAccessor):
-        return
-    detached: list[Conditional] = []
-    for conditional in accessor.values():
-        detached_arms = []
-        for arm in conditional.arms:
-            arm_copy = _copy.copy(arm)
-            arm_copy._trace = None
-            detached_arms.append(arm_copy)
-        conditional_copy = _copy.copy(conditional)
-        conditional_copy.arms = detached_arms
-        detached.append(conditional_copy)
-    value["conditionals"] = ConditionalAccessor(detached)
+    if isinstance(value, MutableMapping):
+        detach_conditional_trace_backrefs(value)
 
 
 def assert_sparse_core_has_no_tensor_payload(value: Any) -> None:

@@ -38,7 +38,7 @@ from types import ModuleType
 import pytest
 
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
-from torchlens.intervention.errors import UntrustedCallableError
+from torchlens.intervention.errors import ReplayPreconditionError, UntrustedCallableError
 from torchlens.intervention.resolver import resolve_function_registry_key, resolve_import_ref
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.utils._callable_safety import is_denied_operator_gadget
@@ -105,7 +105,10 @@ def trusted_evilmod():
 def test_detector_flags_operator_gadget(name: str) -> None:
     """The operator-gadget detector flags generic gadgets / mutators (DENY)."""
 
-    gadget = getattr(operator, name)
+    gadget = getattr(operator, name, None)
+    if gadget is None:
+        assert name == "call"
+        return
     assert is_denied_operator_gadget(gadget) is True
 
 
@@ -137,15 +140,16 @@ def test_detector_ignores_non_operator_callables() -> None:
 def test_resolver_denies_operator_gadget_via_dotted_walk(trusted_evilmod, name: str) -> None:
     """A dotted qualname walking off a trusted module into an operator gadget is denied."""
 
+    expected_error = UntrustedCallableError if hasattr(operator, name) else ReplayPreconditionError
     key = FunctionRegistryKey(
         namespace="custom",
         qualname=f"operator.{name}",
         dispatch_kind="function",
         import_path=f"{trusted_evilmod}:operator.{name}",
     )
-    with pytest.raises(UntrustedCallableError):
+    with pytest.raises(expected_error):
         resolve_function_registry_key(key, trust_custom_callables=True)
-    with pytest.raises(UntrustedCallableError):
+    with pytest.raises(expected_error):
         resolve_function_registry_key(key, allowed_custom_callable_modules={trusted_evilmod})
 
 
@@ -167,12 +171,13 @@ def test_resolver_allows_pure_operator_via_dotted_walk(trusted_evilmod) -> None:
 def test_resolver_denies_operator_gadget_direct_ref(name: str) -> None:
     """``operator:<gadget>`` (routed to the fixed root) is denied under any trust."""
 
+    expected_error = UntrustedCallableError if hasattr(operator, name) else ReplayPreconditionError
     path = f"operator:{name}"
-    with pytest.raises(UntrustedCallableError):
+    with pytest.raises(expected_error):
         resolve_import_ref(path)
-    with pytest.raises(UntrustedCallableError):
+    with pytest.raises(expected_error):
         resolve_import_ref(path, trust_custom_callables=True)
-    with pytest.raises(UntrustedCallableError):
+    with pytest.raises(expected_error):
         resolve_import_ref(path, allowed_custom_callable_modules={"operator"})
 
 
@@ -181,10 +186,11 @@ def test_resolver_denies_operator_gadget_direct_ref(name: str) -> None:
 def test_resolver_denies_underscore_operator_gadget(name: str) -> None:
     """``_operator:<gadget>`` now routes to the fixed root and is denied under trust."""
 
+    expected_error = UntrustedCallableError if hasattr(operator, name) else ReplayPreconditionError
     path = f"_operator:{name}"
-    with pytest.raises(UntrustedCallableError):
+    with pytest.raises(expected_error):
         resolve_import_ref(path, trust_custom_callables=True)
-    with pytest.raises(UntrustedCallableError):
+    with pytest.raises(expected_error):
         resolve_import_ref(path, allowed_custom_callable_modules={"_operator"})
 
 

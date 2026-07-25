@@ -370,6 +370,17 @@ _KNOWN_NON_FORWARD_FLIP_SET: tuple[tuple[str, str], ...] = (
     ("torch.Tensor", "symeig"),
 )
 
+_OPTIONAL_FUNCTIONALIZATION_FLIP_SET = frozenset(
+    {
+        ("torch", "_functionalize_enable_reapply_views"),
+        ("torch", "_functionalize_sync"),
+        ("torch", "_functionalize_replace"),
+        ("torch", "_functionalize_commit_update"),
+        ("torch", "_functionalize_unsafe_set"),
+        ("torch", "_functionalize_mark_mutation_hidden_from_autograd"),
+    }
+)
+
 
 @pytest.mark.smoke
 @pytest.mark.parametrize("namespace,qualname", _KNOWN_NON_FORWARD_FLIP_SET)
@@ -388,8 +399,14 @@ def test_immunizer_known_flip_set_denied(namespace: str, qualname: str) -> None:
 def test_immunizer_flip_set_is_non_vacuous() -> None:
     """The frozen flip-set overwhelmingly resolves on this torch (guards vacuity)."""
 
-    present = sum(1 for ns, q in _KNOWN_NON_FORWARD_FLIP_SET if _resolve_attr(ns, q) is not None)
-    assert present >= len(_KNOWN_NON_FORWARD_FLIP_SET) - 3
+    absent = {
+        (namespace, qualname)
+        for namespace, qualname in _KNOWN_NON_FORWARD_FLIP_SET
+        if _resolve_attr(namespace, qualname) is None
+    }
+    assert absent <= _OPTIONAL_FUNCTIONALIZATION_FLIP_SET, (
+        f"unexpected non-forward flip-set absences: {sorted(absent)}"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -494,7 +511,16 @@ def test_safe_tensor_property_getters_admitted() -> None:
 _SECE_DENIED_REFS = [
     "torch:_enable_functionalization",
     "torch:_disable_functionalization",
-    "torch:_functionalize_enable_reapply_views",
+    pytest.param(
+        "torch:_functionalize_enable_reapply_views",
+        marks=pytest.mark.skipif(
+            not hasattr(torch, "_functionalize_enable_reapply_views"),
+            reason=(
+                "torch._functionalize_enable_reapply_views is absent on this "
+                "supported torch runtime"
+            ),
+        ),
+    ),
     "torch.Tensor:share_memory_",
 ]
 
@@ -530,7 +556,7 @@ def test_legit_and_residual_resolve_at_resolver() -> None:
 def test_prior_round_controls_still_denied() -> None:
     """All prior-round denials remain refused (no regression from the r43 inversion)."""
 
-    for obj in (
+    controls = [
         torch.load,
         torch.save,
         torch.from_file,
@@ -544,13 +570,15 @@ def test_prior_round_controls_still_denied() -> None:
         torch.set_default_dtype,
         torch.manual_seed,
         torch.set_num_threads,
-        torch.cond,
-        torch.while_loop,
         torch.compile,
         torch.autocast_increment_nesting,
         torch.clear_autocast_cache,
         torch.nn.functional.handle_torch_function,
-    ):
+    ]
+    controls.extend(
+        obj for name in ("cond", "while_loop") if (obj := getattr(torch, name, None)) is not None
+    )
+    for obj in controls:
         assert not is_pure_forward_callable(obj)
 
 

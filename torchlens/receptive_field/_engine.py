@@ -490,6 +490,30 @@ def _passthrough_axis_map(op: Op, parent: Op, result: _RuleResult) -> Mapping[in
 
     parent_rank = len(parent.shape)
     child_rank = len(op.shape)
+    raw_axis_maps = result.values.get("parent_to_child_axes")
+    if isinstance(raw_axis_maps, Mapping):
+        parent_references = (parent.label, parent.layer_label, parent._layer_label_raw)
+        raw_axis_map = next(
+            (
+                raw_axis_maps[reference]
+                for reference in parent_references
+                if reference in raw_axis_maps
+            ),
+            raw_axis_maps.get("default"),
+        )
+        if isinstance(raw_axis_map, Mapping):
+            try:
+                axis_map = {
+                    int(parent_axis): int(child_axis)
+                    for parent_axis, child_axis in raw_axis_map.items()
+                }
+            except (TypeError, ValueError):
+                axis_map = {}
+            if all(
+                0 <= parent_axis < parent_rank and 0 <= child_axis < child_rank
+                for parent_axis, child_axis in axis_map.items()
+            ) and (axis_map or not raw_axis_map):
+                return axis_map
     concat_axis = result.values.get("concatenate_axis")
     if isinstance(concat_axis, int) and bool(result.values.get("stack", False)):
         return {

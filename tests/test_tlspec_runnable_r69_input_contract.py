@@ -31,6 +31,7 @@ import enum
 import inspect
 import math
 import struct
+import sys
 import warnings
 from decimal import Decimal
 from pathlib import Path
@@ -98,8 +99,15 @@ class _Flags(enum.IntFlag):
     ON = 1
 
 
-class _StrMode(enum.StrEnum):
-    FAST = "fast"
+if sys.version_info >= (3, 11):
+
+    class _StrMode(enum.StrEnum):
+        FAST = "fast"
+
+else:
+
+    class _StrMode(str, enum.Enum):
+        FAST = "fast"
 
 
 class _FloatMode(float, enum.Enum):

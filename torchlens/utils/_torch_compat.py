@@ -70,9 +70,14 @@ __all__ = [
     "HAS_FUNCTORCH_LEVEL_API",
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
     "HAS_FX_GRAPH_MODULE",
+    "HAS_GENERATOR_CLONE_STATE",
+    "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
+    "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
     "HAS_JIT_BUILTIN_TABLE",
+    "HAS_NAMED_TENSOR_API",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
     "HAS_SAFE_WEIGHTS_ONLY_LOAD",
+    "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
     "HAS_TORCH_FUNC",
     "HAS_TORCH_VF",
@@ -98,6 +103,7 @@ __all__ = [
     "fix_tensor_sequence_slot",
     "mark_torch_capability_missing",
     "resolve_runnable_torch_alias",
+    "tensor_has_named_dims",
 ]
 
 
@@ -135,7 +141,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         "linear",
         "private_to_public:_C._nn.linear->torch.nn.functional.linear",
         (2, 1),
-        (2, 12),
+        (2, 13),
     ),
     RunnableTorchAlias(
         "_C._nn.linear",
@@ -143,7 +149,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         "linear",
         "private_to_public:_C._nn.linear->torch.nn.functional.linear",
         (2, 1),
-        (2, 12),
+        (2, 13),
     ),
     RunnableTorchAlias(
         "torch._VF.linear",
@@ -209,7 +215,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         None,
         "private_to_public:_C._linalg.linalg_*->torch.linalg.*",
         (2, 1),
-        (2, 12),
+        (2, 13),
         "linalg_",
     ),
     RunnableTorchAlias(
@@ -584,6 +590,47 @@ def _probe_fx_graph_module() -> bool:
     return _nested_getattr_or_none(torch, ("fx", "GraphModule")) is not None
 
 
+def _probe_named_tensor_api() -> bool:
+    """Return whether native Torch named-tensor inspection/construction exists.
+
+    Returns
+    -------
+    bool
+        Whether the required native named-tensor surface is available.
+    """
+
+    return all(hasattr(torch.Tensor, attr) for attr in ("names", "has_names", "refine_names"))
+
+
+def _probe_cached_untyped_storage_wrapper() -> bool:
+    """Return whether a tensor retains one stable untyped-storage Python wrapper.
+
+    Torch 2.1 creates a fresh ``UntypedStorage`` wrapper on every
+    ``Tensor.untyped_storage()`` call. Its wrapper destructor can leave a
+    ``weakref.ref`` pointing at freed memory, so placing an ephemeral handle in a
+    ``WeakKeyDictionary`` can later segfault CPython while clearing the weakref.
+    Newer torch retains one wrapper on the tensor, which makes weak-key storage
+    registries safe for the tensor's lifetime.
+
+    The probe deliberately compares two live handles instead of constructing a
+    weakref: exercising the broken weakref destructor would itself corrupt the
+    interpreter on an unsupported runtime.
+
+    Returns
+    -------
+    bool
+        ``True`` when repeated calls return the same retained wrapper.
+    """
+
+    try:
+        tensor = torch.empty(0)
+        first = tensor.untyped_storage()
+        second = tensor.untyped_storage()
+    except (AttributeError, RuntimeError, TypeError):
+        return False
+    return first is second
+
+
 def _probe_dynamo_optimized_module() -> bool:
     """Return whether torch exposes the private Dynamo OptimizedModule type.
 
@@ -704,7 +751,12 @@ HAS_DEVICE_CONTEXT_DISPATCH: bool = _probe_device_context_dispatch()
 HAS_DEVICE_CONSTRUCTORS: bool = _probe_device_constructors()
 HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_accumulate_grad_class()
 HAS_FX_GRAPH_MODULE: bool = _probe_fx_graph_module()
+HAS_NAMED_TENSOR_API: bool = _probe_named_tensor_api()
+HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
 HAS_DYNAMO_OPTIMIZED_MODULE: bool = False
+HAS_GENERATOR_CLONE_STATE: bool = hasattr(torch.Generator, "clone_state")
+HAS_GENERATOR_GRAPHSAFE_GET_STATE: bool = hasattr(torch.Generator, "graphsafe_get_state")
+HAS_GENERATOR_GRAPHSAFE_SET_STATE: bool = hasattr(torch.Generator, "graphsafe_set_state")
 HAS_SAFE_WEIGHTS_ONLY_LOAD: bool = _probe_safe_weights_only_load()
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
@@ -723,7 +775,12 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_DEVICE_CONSTRUCTORS",
     "HAS_ACCUMULATE_GRAD_CLASS",
     "HAS_FX_GRAPH_MODULE",
+    "HAS_NAMED_TENSOR_API",
+    "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
+    "HAS_GENERATOR_CLONE_STATE",
+    "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
+    "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
     "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
     "HAS_FLOAT32_MATMUL_PRECISION",
@@ -786,6 +843,26 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     snapshot = {name: bool(globals()[name]) for name in _CAPABILITY_ATTRS}
     snapshot["AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED"] = bool(AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED)
     return snapshot
+
+
+def tensor_has_named_dims(value: torch.Tensor) -> bool:
+    """Return whether ``value`` has at least one named dimension.
+
+    Parameters
+    ----------
+    value:
+        Native tensor to inspect.
+
+    Returns
+    -------
+    bool
+        Whether at least one dimension has a non-null name.
+    """
+
+    if not HAS_NAMED_TENSOR_API:
+        return False
+    names = getattr(value, "names", None)
+    return bool(names and any(name is not None for name in names))
 
 
 def get_variable_function_names() -> list[str]:

@@ -134,8 +134,10 @@ def test_r79_validate_run_seed_guard_boundaries() -> None:
     state_before = generator.get_state()
     generator.manual_seed(TORCH_MANUAL_SEED_MIN)
     generator.manual_seed(TORCH_MANUAL_SEED_MAX)
-    with pytest.raises(RuntimeError):
+    # torch 2.1-2.12 report pybind overflow as RuntimeError; torch 2.13 uses
+    # ValueError. Both prove the value lies outside the native accepted range.
+    with pytest.raises((RuntimeError, ValueError)):
         generator.manual_seed(TORCH_MANUAL_SEED_MAX + 1)
-    with pytest.raises(RuntimeError):
+    with pytest.raises((RuntimeError, ValueError)):
         generator.manual_seed(TORCH_MANUAL_SEED_MIN - 1)
     generator.set_state(state_before)

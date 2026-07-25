@@ -6,6 +6,12 @@
         "target_qualname": "linear"
     },
     {
+        "recorded_version": "2.13.0",
+        "source": "torch._C._nn.linear",
+        "target_namespace": "torch.nn.functional",
+        "target_qualname": "linear"
+    },
+    {
         "recorded_version": "2.3.1",
         "source": "torch._C._nn.gelu",
         "target_namespace": "torch.nn.functional",
@@ -76,6 +82,12 @@
         "source": "torch._C._linalg.linalg_svd",
         "target_namespace": "torch.linalg",
         "target_qualname": "svd"
+    },
+    {
+        "recorded_version": "2.13.0",
+        "source": "torch._C._linalg.linalg_cholesky",
+        "target_namespace": "torch.linalg",
+        "target_qualname": "cholesky"
     },
     {
         "recorded_version": "2.7.1",

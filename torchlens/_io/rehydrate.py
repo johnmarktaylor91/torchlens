@@ -160,9 +160,29 @@ def rehydrate_trace(
             module_accessor_state._pass_dict,
         )
 
+    _bind_conditional_arms(trace)
     _set_payload_load_status(trace, manifest_index, payload_statuses)
     _restore_trace_state_order(trace, portable_key_order)
     return trace
+
+
+def _bind_conditional_arms(trace: Trace) -> None:
+    """Bind loaded conditional-arm convenience accessors to their owning trace.
+
+    Parameters
+    ----------
+    trace:
+        Rehydrated trace whose runtime-only conditional bindings should be restored.
+    """
+
+    from ..data_classes.trace import ConditionalAccessor
+
+    accessor = getattr(trace, "conditionals", None)
+    if not isinstance(accessor, ConditionalAccessor):
+        return
+    for conditional in accessor.values():
+        for arm_index, arm in enumerate(conditional.arms):
+            arm._bind(trace, conditional.id, arm_index)
 
 
 def _rehydrate_small_raw_images(value: Any) -> Any:

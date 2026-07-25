@@ -12,6 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.receptive_field import _engine, _query, _rules
+from torchlens.receptive_field._engine_forward import solve_projective
 from torchlens.receptive_field._types import ReceptiveFieldStatus
 
 
@@ -112,6 +113,21 @@ def test_batch_norm_mode_matrix(
 
     assert descriptor.status is status
     assert descriptor.batch_coupled is batch_coupled
+
+
+def test_training_batch_norm_projective_maps_channel_vector_parents() -> None:
+    """Map affine BatchNorm vectors onto the channel axis without tainting the solve."""
+
+    trace = tl.trace(nn.BatchNorm2d(2).train(), torch.randn(3, 2, 4, 4))
+    batch_norm = _op(trace, "batch_norm")
+    solution = solve_projective(trace, trace.output_ops)
+
+    for parent_reference in batch_norm.parents:
+        parent = trace.layer_dict_all_keys[parent_reference]
+        state = solution.states[(parent.label, trace.output_ops[0].io_role)]
+        descriptor = solution.descriptors[(parent.label, trace.output_ops[0].io_role)]
+        assert state.axes is not None
+        assert descriptor.layout.axis_kinds == ("full", "pointwise", "full", "full")
 
 
 def test_group_and_current_stat_instance_norm_globalize_normalized_axes() -> None:

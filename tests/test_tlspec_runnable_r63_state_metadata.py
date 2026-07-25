@@ -48,6 +48,7 @@ from torchlens.errors import (
 )
 from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness
+from torchlens.utils._torch_compat import HAS_NAMED_TENSOR_API
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -348,11 +349,12 @@ class _CountingSubclass(torch.Tensor):
 
 def _exotic_sources() -> dict[str, torch.Tensor]:
     sources: dict[str, torch.Tensor] = {
-        "named": _named_source(),
         "sparse_coo": torch.ones(2, 3).to_sparse(),
         "sparse_csr": torch.ones(2, 3).to_sparse_csr(),
         "subclass": torch.ones(2, 3).as_subclass(_CountingSubclass),
     }
+    if HAS_NAMED_TENSOR_API:
+        sources["named"] = _named_source()
     try:
         sources["quantized"] = torch.quantize_per_tensor(torch.ones(2, 3), 0.1, 0, torch.qint8)
     except (RuntimeError, NotImplementedError):
@@ -371,6 +373,7 @@ def _exotic_sources() -> dict[str, torch.Tensor]:
 
 
 @pytest.mark.smoke
+@pytest.mark.skipif(not HAS_NAMED_TENSOR_API, reason="native named-tensor API is unavailable")
 def test_r63_named_user_state_refuses_before_staging(tmp_path: Path) -> None:
     """Named source into an unnamed capture refuses at bind (Sol's 321-vs-3.0 repro class).
 
@@ -520,6 +523,7 @@ class NamedControlNoTensorOp(nn.Module):
         return x + 321.0 if self.w.names == ("out", "in") else x + 3.0
 
 
+@pytest.mark.skipif(not HAS_NAMED_TENSOR_API, reason="native named-tensor API is unavailable")
 def test_r63_named_control_capture_never_verified(tmp_path: Path) -> None:
     """The named-as-control capture stays honestly non-VERIFIED, never a false VERIFIED.
 

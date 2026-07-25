@@ -197,8 +197,20 @@ _GLOBAL_MUTATOR_REFS = [
     "torch:_cufft_set_plan_cache_max_size",
 ]
 _CALLABLE_INVOKE_REFS = [
-    "torch:cond",
-    "torch:while_loop",
+    pytest.param(
+        "torch:cond",
+        marks=pytest.mark.skipif(
+            not hasattr(torch, "cond"),
+            reason="torch.cond is absent on this supported torch runtime",
+        ),
+    ),
+    pytest.param(
+        "torch:while_loop",
+        marks=pytest.mark.skipif(
+            not hasattr(torch, "while_loop"),
+            reason="torch.while_loop is absent on this supported torch runtime",
+        ),
+    ),
     "torch.nn.functional:handle_torch_function",
     "torch.nn.functional:triplet_margin_with_distance_loss",
     "torch:_check_with",
@@ -305,7 +317,13 @@ _MUTATOR_LOOKALIKE_PURE_REFS = [
     "torch.Tensor:_autocast_to_reduced_precision",
     # Autocast / cuFFT-plan-cache GETTERS (pure reads) stay resolvable.
     "torch:is_autocast_enabled",
-    "torch:get_autocast_dtype",
+    pytest.param(
+        "torch:get_autocast_dtype",
+        marks=pytest.mark.skipif(
+            not hasattr(torch, "get_autocast_dtype"),
+            reason="torch.get_autocast_dtype is absent on this supported torch runtime",
+        ),
+    ),
     "torch:_cufft_get_plan_cache_size",
     "torch:_cufft_get_plan_cache_max_size",
 ]
@@ -342,7 +360,8 @@ def test_secE_r40_pure_forward_surface_resolves() -> None:
     assert is_pure_forward_callable(torch.Tensor.is_set_to)
     assert is_pure_forward_callable(torch.get_rng_state)
     assert is_pure_forward_callable(torch.initial_seed)
-    assert is_pure_forward_callable(torch.Tensor.module_load)
+    if hasattr(torch.Tensor, "module_load"):
+        assert is_pure_forward_callable(torch.Tensor.module_load)
 
 
 # --------------------------------------------------------------------------- #

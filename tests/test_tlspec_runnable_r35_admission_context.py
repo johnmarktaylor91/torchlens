@@ -20,6 +20,7 @@ from torchlens.runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
 )
+from torchlens.utils._torch_compat import HAS_NAMED_TENSOR_API
 
 pytestmark = pytest.mark.smoke
 
@@ -57,15 +58,15 @@ def _save(model: nn.Module, args: Any, path: Path, **save_kwargs: Any) -> Path:
 
 def _exotic_inputs() -> dict[str, torch.Tensor]:
     dense = torch.randn(2, 3)
-    named = torch.randn(2, 3)
-    named = named.refine_names("rows", "cols")
-    return {
+    inputs = {
         "meta": torch.empty(2, 3, device="meta"),
         "sparse_coo": dense.to_sparse(),
         "sparse_csr": dense.to_sparse_csr(),
-        "named": named,
         "nested": torch.nested.nested_tensor([torch.randn(3), torch.randn(3)]),
     }
+    if HAS_NAMED_TENSOR_API:
+        inputs["named"] = torch.randn(2, 3).refine_names("rows", "cols")
+    return inputs
 
 
 @pytest.mark.parametrize("kind", sorted(_exotic_inputs()))
