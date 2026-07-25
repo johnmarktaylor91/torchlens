@@ -191,6 +191,7 @@ def save(
     include_rng_states: bool = False,
     include_weights: bool = False,
     include_activations: bool = False,
+    include_source: bool = True,
     strict: bool = True,
     overwrite: bool = False,
 ) -> None:
@@ -222,6 +223,19 @@ def save(
         Whether a runnable save should archive exactly the ``save=``-selected
         ``out``/``transformed_out`` payloads for offline inspection and eligible
         original-input, real-state numeric attestation. The payloads never seed execution.
+    include_source:
+        Whether the captured model source code is embedded in the bundle
+        (default ``True``). The source blob powers the ``draw(code_panel=...)``
+        source panels, so it is kept by default. A ``.tlspec`` is the portable,
+        shareable format, so this defaults ``True`` embeds the model's verbatim
+        class / ``__init__`` / ``forward`` source, per-call ``code_context``
+        source lines, and captured docstrings. Set ``include_source=False`` to
+        strip all of that from a shared bundle; source panels on the reloaded
+        trace then degrade to a "source not embedded" placeholder instead of
+        rendering code. Regardless of this flag, absolute source paths
+        (``$HOME``, OS username, site-packages / capturing-script layout) are
+        always reduced to a bare basename, so no host filesystem PII is ever
+        embedded. Applies at every save ``level``.
     strict:
         Whether unsupported tensors should abort the save instead of being skipped.
     overwrite:
@@ -348,6 +362,7 @@ def save(
             include_grads=include_grads,
             include_saved_args=include_saved_args,
             include_rng_states=include_rng_states,
+            include_source=include_source,
             sparse_runnable=sparse_run_descriptor is not None,
         )
         if sparse_run_descriptor is not None:
@@ -2280,6 +2295,7 @@ def _scrub_trace_for_bundle(
     include_grads: bool,
     include_saved_args: bool,
     include_rng_states: bool,
+    include_source: bool = True,
     sparse_runnable: bool = False,
 ) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
     """Scrub a model log while excluding transient load-only private attrs.
@@ -2296,6 +2312,9 @@ def _scrub_trace_for_bundle(
         Whether nested captured args should be blobified.
     include_rng_states:
         Whether nested RNG states should be blobified.
+    include_source:
+        Whether captured model source text and docstrings are embedded; absolute
+        source paths are relativized to basenames regardless.
     sparse_runnable:
         Whether all sparse-core tensor payload families must be dropped.
 
@@ -2324,6 +2343,7 @@ def _scrub_trace_for_bundle(
             include_grads=include_grads,
             include_saved_args=include_saved_args,
             include_rng_states=include_rng_states,
+            include_source=include_source,
             sparse_runnable=sparse_runnable,
             backend_name=str(getattr(trace, "backend", "torch")),
             payload_materialization=get_backend_spec(

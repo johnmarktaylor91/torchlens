@@ -2560,6 +2560,33 @@ run completes and its output contract is lossless. Inexecutable input divergence
 (named parameters plus persistent buffers), not only trainable weights. Activations mean exactly the
 already-retained capture-time `save=` selection, not a second selector.
 
+### Source-code embedding and `include_source` (privacy disclosure)
+
+A `.tlspec` is the portable, shareable format (menagerie snapshots, paper artifacts, bug reports,
+model-zoo entries). By default it embeds the traced model's **verbatim source code** -- the whole
+class body (including class-level constants), `__init__`/`forward` source, docstrings, and per-call
+`code_context` source lines. This powers the `Trace.draw(code_panel=...)` source panels, so it is
+kept by default. Because it is a shareable artifact, this disclosure is explicit: a default save
+ships the model source.
+
+`include_source: bool = True` on `tl.save`/`Trace.save` is the opt-out. It applies at **every** save
+`level` (audit, executable_with_callables, portable, runnable) because the source blob and
+`code_context` are backend-neutral metadata scrubbed on the one shared serialization path.
+
+- `include_source=False` -- drops the `_source_code_blob`, per-call `code_context` source text, and
+  captured docstrings entirely; the shared bundle carries no model source. A load-then-visualize
+  with `draw(code_panel=...)` degrades to a "source not embedded" placeholder panel and never
+  crashes.
+- **Absolute source paths are always relativized to a bare basename**, regardless of
+  `include_source`. Captured `file_path` / `class_source_file` / `init_source_file` /
+  `forward_source_file` / `code_context[].file` otherwise embed the producer's `$HOME`, OS username,
+  and site-packages / capturing-script filesystem layout -- host PII with no portable value (a
+  `vscode://` link built from another host's absolute path never resolves). This basename reduction
+  is a pure privacy win applied on the save side only; the live in-memory `Trace` keeps full absolute
+  paths for the producer's own tooling.
+- Function signatures and source line numbers are structural interface metadata (like a type stub)
+  and are retained even when source text is stripped.
+
 The complete implementation includes `load_state_dict`, transient state sources, initializer
 reporting, `run`, `RunResult`, transactional run forks, sparse input/call/output reconstruction,
 three-state `path_faithfulness`, strict divergence rollback, monotonically poisoned opt-in results,
