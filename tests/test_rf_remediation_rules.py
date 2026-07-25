@@ -9,7 +9,6 @@ import pytest
 import torch
 import torch.nn.functional as functional
 from torch import nn
-from torchvision.models.resnet import BasicBlock
 
 import torchlens as tl
 from torchlens.capture.arg_positions import _normalize_func_name
@@ -19,6 +18,9 @@ from torchlens.receptive_field._types import (
     ReceptiveFieldStatus,
     ReceptiveFieldValidationStatus,
 )
+
+resnet = pytest.importorskip("torchvision.models.resnet")
+BasicBlock = resnet.BasicBlock
 
 
 _PACK: dict[str, object] | None = None
