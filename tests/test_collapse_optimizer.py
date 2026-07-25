@@ -45,8 +45,8 @@ from torchlens.visualization.collapse_plan import (
     RenderContext,
     RepeatFold,
     SegmentDescriptor,
+    collapse_plan_for_trace,
     count,
-    plan_from_v1,
 )
 from torchlens.visualization._render_common import format_collapsed_module_contents
 
@@ -471,7 +471,7 @@ def test_float_collapse_level_validation_and_endpoints() -> None:
     trace = _trace(UniformStack(depth=6), torch.randn(2, 8))
     context = RenderContext()
     try:
-        none_plan = plan_from_v1(trace, None, None, context)
+        none_plan = collapse_plan_for_trace(trace, None, None, context)
         max_result = select_collapse_plan(trace, context, mode="max")
 
         with pytest.raises(ValueError, match=r"\[0\.0, 1\.0\]"):
@@ -532,7 +532,7 @@ def test_float_collapse_schedule_monotone_and_nested(
     context = RenderContext()
     try:
         schedule = trace.collapse_schedule(context)
-        none_plan = plan_from_v1(trace, None, None, context)
+        none_plan = collapse_plan_for_trace(trace, None, None, context)
         max_plan = select_collapse_plan(trace, context, mode="max").plan
 
         sampled = [schedule.at(index / 10.0) for index in range(11)]
@@ -560,7 +560,7 @@ def test_rolled_v2_memo_separates_digest_identical_different_num_calls(
         context = RenderContext(vis_mode="rolled")
         collapse_fn = resolve_collapse_fn(trace, "auto", "rolled", context=context)
         result = getattr(collapse_fn, "_torchlens_v2_result")
-        rendered_plan = plan_from_v1(trace, collapse_fn, result.repeat_folds, context)
+        rendered_plan = collapse_plan_for_trace(trace, collapse_fn, result.repeat_folds, context)
 
         assert not result.declined
         assert trace.modules["short"].num_calls == 3
@@ -576,7 +576,7 @@ def test_rolled_v2_gru_auto_is_non_noop(monkeypatch: pytest.MonkeyPatch) -> None
     trace = _trace(GRUWrapper(), torch.randn(1, 6, 8))
     try:
         context = RenderContext(vis_mode="rolled")
-        none_count = count(plan_from_v1(trace, None, None, context))
+        none_count = count(collapse_plan_for_trace(trace, None, None, context))
         collapse_fn = resolve_collapse_fn(trace, "auto", "rolled", context=context)
         result = getattr(collapse_fn, "_torchlens_v2_result")
 
@@ -700,7 +700,7 @@ def test_v2_plan_parity_and_determinism(monkeypatch: pytest.MonkeyPatch) -> None
         collapse_fn = resolve_collapse_fn(trace, "auto", "unrolled", context=context)
         folds = resolve_repeat_folds(trace, collapse_fn, context=context)
         result = getattr(collapse_fn, "_torchlens_v2_result")
-        rendered_plan = plan_from_v1(trace, collapse_fn, folds, context)
+        rendered_plan = collapse_plan_for_trace(trace, collapse_fn, folds, context)
         second = select_collapse_plan(trace, context)
 
         assert result.visible_count == count(result.plan)

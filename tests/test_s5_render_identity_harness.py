@@ -17,7 +17,7 @@ from torchlens.visualization.collapse_plan import RenderContext
 from torchlens.visualization.render_ir import (
     RenderIR,
     RenderIREdge,
-    RenderIRCluster,
+    RenderIRRegion,
     build_render_ir,
     projected_antiparallel_endpoint_pairs,
 )
@@ -203,13 +203,14 @@ def _assert_ir_shape(trace: tl.Trace) -> None:
     assert isinstance(render_ir, RenderIR)
     assert render_ir.nodes
     assert render_ir.edges
-    assert render_ir.clusters
-    assert len(render_ir.nodes) == len(render_ir.node_emissions)
+    assert render_ir.regions
     assert all(node.name for node in render_ir.nodes)
     assert all(isinstance(edge, RenderIREdge) for edge in render_ir.edges)
-    assert all(isinstance(cluster, RenderIRCluster) for cluster in render_ir.clusters)
+    assert all(isinstance(region, RenderIRRegion) for region in render_ir.regions)
     assert {node.kind for node in render_ir.nodes}.issuperset({"raw_op"})
-    assert {edge.projection_reason for edge in render_ir.edges}.issuperset({"direct"})
+    assert {edge.projection_reason for edge in render_ir.edges}.issubset(
+        {"direct", "source_projected", "target_projected", "both_projected", "run_fold_ellipsis"}
+    )
 
 
 def test_s5_projected_antiparallel_pairs_require_projected_edges() -> None:
@@ -256,8 +257,7 @@ def test_s5_projected_antiparallel_pairs_require_projected_edges() -> None:
                 projection_reason="both_projected",
             ),
         ),
-        clusters=(),
-        node_emissions=(),
+        regions=(),
     )
 
     assert projected_antiparallel_endpoint_pairs(render_ir) == frozenset(

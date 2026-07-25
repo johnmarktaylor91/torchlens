@@ -33,8 +33,8 @@ from torchlens.visualization.collapse_plan import (
     OpSegment,
     RawOp,
     RenderContext,
+    collapse_plan_for_trace,
     count,
-    plan_from_v1,
 )
 from torchlens.visualization._render_edges import _collapsed_module_should_show_remainder
 from torchlens.visualization._render_common import format_collapsed_module_contents
@@ -1190,7 +1190,7 @@ def _assert_plan_svg_parity(
     plan_count = (
         count(v2_plan)
         if v2_plan is not None
-        else count(plan_from_v1(trace, collapse_fn, folds, context))
+        else count(collapse_plan_for_trace(trace, collapse_fn, folds, context))
     )
     out = tmp_path / name
     trace.draw(
@@ -2285,7 +2285,7 @@ def test_v2_auto_uses_op_segments_as_over_band_last_resort(
     trace = _trace(DistinctFunctionalChain(), torch.randn(1, 8))
     try:
         context = RenderContext()
-        full_count = count(plan_from_v1(trace, None, None, context))
+        full_count = count(collapse_plan_for_trace(trace, None, None, context))
         result = select_collapse_plan(trace, context, mode="auto")
 
         assert full_count > 40

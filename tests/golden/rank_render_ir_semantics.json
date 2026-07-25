@@ -1,0 +1,21 @@
+{
+  "nodes": [
+    {"name": "input_1", "shape": "oval", "style": "filled,solid", "fillcolor": "#98FB98"},
+    {"name": "linear_1_1", "shape": "box", "style": "filled,solid", "fillcolor": "#D9D9D9"},
+    {"name": "linear_2_3", "shape": "box", "style": "filled,solid", "fillcolor": "#D9D9D9"},
+    {"name": "output_1", "shape": "oval", "style": "filled,solid", "fillcolor": "#ff9999"},
+    {"name": "relu_1_2", "shape": "box", "style": "filled,solid", "fillcolor": "white"}
+  ],
+  "edges": [
+    {"source": "input_1", "target": "linear_1_1", "style": "solid", "color": "black", "arrowsize": ".7"},
+    {"source": "linear_1_1", "target": "relu_1_2", "style": "solid", "color": "black", "arrowsize": ".7"},
+    {"source": "linear_2_3", "target": "output_1", "style": "solid", "color": "black", "arrowsize": ".7"},
+    {"source": "relu_1_2", "target": "linear_2_3", "style": "solid", "color": "black", "arrowsize": ".7"}
+  ],
+  "regions": [
+    {"name": "cluster_heads_a\\\"b_0_pass1", "style": "filled,solid", "penwidth": "3.5"},
+    {"name": "cluster_heads_a\\\"b_1_pass1", "style": "filled,solid", "penwidth": "3.5"},
+    {"name": "cluster_heads_a\\\"b_2_pass1", "style": "filled,solid", "penwidth": "3.5"},
+    {"name": "cluster_heads_a\\\"b_pass1", "style": "filled,solid", "penwidth": "5.0"}
+  ]
+}

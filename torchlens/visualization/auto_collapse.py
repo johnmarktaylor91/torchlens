@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._literals import CollapseLiteral, FoldRepeatsLiteral, VisModeLiteral
-from .collapse_plan import RenderContext, count, plan_from_v1
+from .collapse_plan import RenderContext, collapse_plan_for_trace, count
 
 if TYPE_CHECKING:
     from ..data_classes.module import Module
@@ -465,7 +465,9 @@ def resolve_repeat_folds(
     v2_repeat_folds = getattr(collapse_fn, "_torchlens_v2_repeat_folds", None)
     if fold_repeats is None and v2_repeat_folds is not None:
         return dict(v2_repeat_folds)
-    projected_count = count(plan_from_v1(trace, render_collapse_fn, None, resolved_context))
+    projected_count = count(
+        collapse_plan_for_trace(trace, render_collapse_fn, None, resolved_context)
+    )
     if fold_repeats is None and projected_count <= _readable_band_high(trace):
         _assert_plan_count(
             trace,
@@ -546,7 +548,7 @@ def resolve_repeat_folds(
             break
     if fold_repeats is True:
         projected_count = count(
-            plan_from_v1(trace, render_collapse_fn, folds_by_address, resolved_context)
+            collapse_plan_for_trace(trace, render_collapse_fn, folds_by_address, resolved_context)
         )
     _assert_plan_count(
         trace,
@@ -2658,7 +2660,7 @@ def _assert_plan_count(
         Incrementally maintained rendered node count.
     """
 
-    planned_count = count(plan_from_v1(trace, collapse_fn, repeat_folds, context))
+    planned_count = count(collapse_plan_for_trace(trace, collapse_fn, repeat_folds, context))
     if running_count == planned_count:
         return
     message = (
@@ -2726,15 +2728,11 @@ def _run_fold_hidden_member_contributions(
         module address. Boundary nodes with no module ancestry are excluded.
     """
 
-    from .rendering import rendered_node_universe_from_v1
+    from .node_universe import build_node_universe
+    from .source_graph import build_source_graph
 
     contributions: dict[str, int] = defaultdict(int)
-    emissions = rendered_node_universe_from_v1(
-        trace,
-        collapse_fn=collapse_fn,
-        repeat_folds=None,
-        context=context,
-    )
+    emissions = build_node_universe(build_source_graph(trace, context), collapse_fn, None).emissions
     for emission in emissions:
         if emission.kind in {"hidden_run_member", "run_fold_ellipsis"}:
             continue
