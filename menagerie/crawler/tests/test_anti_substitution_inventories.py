@@ -33,9 +33,9 @@ from menagerie.crawler.tests.conftest import (
     make_supervised_worker_result_v3,
     make_worker_result_v3_mapping,
 )
-from menagerie.crawler.tests.test_round17_vs1_v3_composition import VS1_LANDING_MANIFEST
-from menagerie.crawler.tests.test_round17_vs2_shutdown_composition import VS2_LANDING_MANIFEST
-from menagerie.crawler.tests.test_round17_vs3_authority_composition import VS3_LANDING_MANIFEST
+from menagerie.crawler.tests.test_award_worker_result_composition import VS1_LANDING_MANIFEST
+from menagerie.crawler.tests.test_boundary_shutdown_composition import VS2_LANDING_MANIFEST
+from menagerie.crawler.tests.test_compiler_os_authority_composition import VS3_LANDING_MANIFEST
 from menagerie.crawler.worker_supervisor import SupervisorObservation
 
 
@@ -74,9 +74,9 @@ _SENSITIVE_EDGE_COUNTS = Counter(
 )
 _SENSITIVE_SUFFIXES = frozenset(suffix for _owner, suffix in _SENSITIVE_EDGE_COUNTS)
 _ROUND17_CI_NODES = (
-    "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::"
+    "menagerie/crawler/tests/test_award_worker_result_composition.py::"
     "test_real_v3_worker_result_awards_through_driver_and_reducer",
-    "menagerie/crawler/tests/test_round17_vs2_shutdown_composition.py::"
+    "menagerie/crawler/tests/test_boundary_shutdown_composition.py::"
     "test_signal_after_real_forward_publishes_and_awards_nothing_then_resumes",
     "menagerie/crawler/tests/test_slice_f_driver.py::"
     "test_linux_handoff_attempts_both_deferred_statuses_and_supersedes",
@@ -84,38 +84,38 @@ _ROUND17_CI_NODES = (
 _ROUND19_RELEASE_NODE_INVENTORY = {
     "golden": _ROUND17_CI_NODES[0],
     "interpreter": (
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+        "menagerie/crawler/tests/test_environment_authority_composition.py::"
         "test_outside_selected_interpreter_is_rejected_at_binding"
     ),
     "linux-denial": (
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+        "menagerie/crawler/tests/test_environment_authority_composition.py::"
         "test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package"
     ),
     "shutdown": _ROUND17_CI_NODES[1],
     "clean-clone": _ROUND17_CI_NODES[2],
     "unverifiable": (
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::"
         "test_real_unhashable_output_awards_runs_with_unverifiable_modes"
     ),
     "dry-run-run-resume": (
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::"
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::"
         "test_documented_dry_run_and_resume_use_real_environment"
     ),
     "dry-run-false-complete": (
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::"
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::"
         "test_dry_run_all_source_failure_is_acceptance_error"
     ),
     "cache": (
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+        "menagerie/crawler/tests/test_environment_authority_composition.py::"
         "test_real_multi_model_cache_closes_currentness_and_quarantines_mutation"
     ),
-    "structural": "menagerie/crawler/tests/test_round17_structural_inventories.py",
+    "structural": "menagerie/crawler/tests/test_anti_substitution_inventories.py",
     "macos-positive-negative": (
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+        "menagerie/crawler/tests/test_environment_authority_composition.py::"
         "test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package"
     ),
     "macos-profile": (
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+        "menagerie/crawler/tests/test_environment_authority_composition.py::"
         "test_macos_v3_profile_has_one_fresh_literal_prefix_and_exact_outside_members"
     ),
 }
@@ -202,14 +202,14 @@ def _registered_composition_roots() -> dict[Path, tuple[str, ...]]:
     """
 
     default_paths = (
-        (VS1_LANDING_MANIFEST, _CRAWLER_ROOT / "tests" / "test_round17_vs1_v3_composition.py"),
+        (VS1_LANDING_MANIFEST, _CRAWLER_ROOT / "tests" / "test_award_worker_result_composition.py"),
         (
             VS2_LANDING_MANIFEST,
-            _CRAWLER_ROOT / "tests" / "test_round17_vs2_shutdown_composition.py",
+            _CRAWLER_ROOT / "tests" / "test_boundary_shutdown_composition.py",
         ),
         (
             VS3_LANDING_MANIFEST,
-            _CRAWLER_ROOT / "tests" / "test_round17_vs3_authority_composition.py",
+            _CRAWLER_ROOT / "tests" / "test_compiler_os_authority_composition.py",
         ),
     )
     grouped: dict[Path, set[str]] = {}
@@ -282,7 +282,7 @@ VS4_LANDING_MANIFEST: dict[str, Any] = {
         "test_attempt_schema_consumers_and_producers_have_exact_parity",
         "test_protocol_literal_inventory_has_only_reviewed_comparison_owners",
         "test_synthetic_worker_result_factory_matches_production_protocol_shapes",
-        "test_round17_real_compositions_are_explicitly_selected_in_ci",
+        "test_real_compositions_are_explicitly_selected_in_ci",
     ),
 }
 
@@ -300,7 +300,7 @@ ROUND21_VS1_PROOF_REGISTRY: dict[str, str] = {
         "test_round21_tripwire_catches_deleted_ci_node"
     ),
     "T02": (
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
         "test_legacy_manifest_v1_is_quarantined_from_every_live_import_graph"
     ),
 }
@@ -320,8 +320,8 @@ ROUND21_VS3_PROOF_REGISTRY: dict[str, str] = {
         "test_round21_pass_and_spawn_validation_walks_are_constant_bounded"
     ),
     "T03": (
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-        "test_round21_verification_tree_walk_inventory_is_closed"
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+        "test_verification_tree_walk_inventory_is_closed"
     ),
 }
 
@@ -336,7 +336,7 @@ ROUND21_VS4_PROOF_REGISTRY: dict[str, str] = {
     "P14": _ROUND19_RELEASE_NODE_INVENTORY["linux-denial"],
     "P17": _ROUND19_RELEASE_NODE_INVENTORY["unverifiable"],
     "P19": (
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+        "menagerie/crawler/tests/test_environment_authority_composition.py::"
         "test_manifest_v3_rejects_changed_interpreter_association"
     ),
 }
@@ -380,12 +380,12 @@ ROUND21_VS9_PROOF_REGISTRY: dict[str, str] = {
         "test_round21_linux_committed_lock_provenance_awards_in_ci"
     ),
     "T04": (
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-        "test_round21_linux_release_artifacts_and_provisioning_are_real"
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+        "test_linux_release_artifacts_and_provisioning_are_real"
     ),
     "T05": (
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-        "test_round21_linux_release_registry_is_exact"
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+        "test_linux_release_registry_is_exact"
     ),
 }
 
@@ -396,12 +396,12 @@ ROUND21_VS10_PROOF_REGISTRY: dict[str, str] = {
         "test_round21_macos_committed_lock_seatbelt_award_and_denial"
     ),
     "T04-mac": (
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-        "test_round21_macos_release_artifacts_and_provisioning_are_real"
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+        "test_macos_release_artifacts_and_provisioning_are_real"
     ),
     "T05-mac": (
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-        "test_round21_macos_release_registry_is_exact"
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+        "test_macos_release_registry_is_exact"
     ),
 }
 
@@ -423,7 +423,7 @@ ROUND21_VS11_PROOF_REGISTRY: dict[str, str] = {
 }
 
 
-def test_round21_verification_tree_walk_inventory_is_closed() -> None:
+def test_verification_tree_walk_inventory_is_closed() -> None:
     """Every complete prefix walk and v3 reuse site stays explicitly registered."""
 
     authority_source = _source(authority_module)
@@ -833,7 +833,7 @@ class _SubstitutionAnalyzer:
         if (
             helper_name is not None
             and helper_name not in stack
-            and self.source_path.name != "test_round17_structural_inventories.py"
+            and self.source_path.name != "test_anti_substitution_inventories.py"
             and isinstance(helper, (ast.FunctionDef, ast.AsyncFunctionDef))
         ):
             bound = dict(self.module_values)
@@ -861,7 +861,7 @@ class _SubstitutionAnalyzer:
         folded = self._value(node, values).text
         if (
             folded == "runtime-root"
-            and self.source_path.name != "test_round17_structural_inventories.py"
+            and self.source_path.name != "test_anti_substitution_inventories.py"
         ):
             self._add_error(stack, "runtime-root", "legacy-root")
         if isinstance(node, ast.Call):
@@ -1590,12 +1590,12 @@ def test_award_identity_closure_names_live_symbols_and_no_dead_symbols() -> None
             assert symbol not in _DEAD_SYMBOLS
 
 
-def test_round17_real_composition_sources_are_not_fake_substitutes() -> None:
+def test_real_composition_sources_are_not_fake_substitutes() -> None:
     """Permanent adjudication probes must retain their production composition seams."""
 
-    import menagerie.crawler.tests.test_round17_vs1_v3_composition as vs1_module
-    import menagerie.crawler.tests.test_round17_vs2_shutdown_composition as vs2_module
-    import menagerie.crawler.tests.test_round19_vs6_dry_run_composition as vs6_module
+    import menagerie.crawler.tests.test_award_worker_result_composition as vs1_module
+    import menagerie.crawler.tests.test_boundary_shutdown_composition as vs2_module
+    import menagerie.crawler.tests.test_execution_dry_run_composition as vs6_module
     import menagerie.crawler.tests.test_slice_f_driver as driver_tests
 
     golden = inspect.getsource(
@@ -1654,7 +1654,7 @@ def test_real_compositions_cannot_substitute_execution_boundaries() -> None:
     assert _COMPOSITION_SOURCES == _composition_source_paths()
     assert _CRAWLER_ROOT / "tests" / "conftest.py" in _COMPOSITION_SOURCES
     assert (
-        _CRAWLER_ROOT / "tests" / "test_round17_vs3_authority_composition.py"
+        _CRAWLER_ROOT / "tests" / "test_compiler_os_authority_composition.py"
         in _COMPOSITION_SOURCES
     )
     assert _composition_scope_errors() == ()
@@ -1703,7 +1703,7 @@ def test_legacy_manifest_v1_is_quarantined_from_every_live_import_graph() -> Non
     assert 'runtime_support if kind == "runtime-root"' not in supervisor_source
 
 
-def test_round17_real_compositions_are_explicitly_selected_in_ci() -> None:
+def test_real_compositions_are_explicitly_selected_in_ci() -> None:
     """The always-on Linux CI lane must select the exact release marker."""
 
     workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -1718,7 +1718,7 @@ def test_round17_real_compositions_are_explicitly_selected_in_ci() -> None:
     assert "not slow" not in crawler_job
 
 
-def test_round19_supported_host_release_gate_inventory_is_exact() -> None:
+def test_supported_host_release_gate_inventory_is_exact() -> None:
     """Both mandatory host jobs select the closed permanent proof inventory."""
 
     workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -1760,7 +1760,7 @@ def test_round19_supported_host_release_gate_inventory_is_exact() -> None:
         assert "pytest.skip" not in job
 
 
-def test_round21_linux_release_artifacts_and_provisioning_are_real() -> None:
+def test_linux_release_artifacts_and_provisioning_are_real() -> None:
     """T04 requires every workflow-named Linux lock-family artifact to exist and parse."""
 
     lock_path = _CRAWLER_ROOT / "envs" / "locks" / "round19-linux-64.lock"
@@ -1795,7 +1795,7 @@ def test_round21_linux_release_artifacts_and_provisioning_are_real() -> None:
     assert "if-no-files-found: error" in linux_job
 
 
-def test_round21_macos_release_artifacts_and_provisioning_are_real() -> None:
+def test_macos_release_artifacts_and_provisioning_are_real() -> None:
     """T04 requires every workflow-named macOS lock-family artifact to exist and parse."""
 
     lock_path = _CRAWLER_ROOT / "envs" / "locks" / "round19-osx-arm64.lock"
@@ -1842,7 +1842,7 @@ def test_round21_macos_release_artifacts_and_provisioning_are_real() -> None:
     assert "if-no-files-found: error" in macos_job
 
 
-def test_round21_linux_release_registry_is_exact() -> None:
+def test_linux_release_registry_is_exact() -> None:
     """T05 requires the committed marker registry to name expanded existing nodes."""
 
     registry_path = _CRAWLER_ROOT / "tests" / "round21_linux_real_nodes.json"
@@ -1878,7 +1878,7 @@ def test_round21_linux_release_registry_is_exact() -> None:
     assert all(node.startswith("menagerie/crawler/tests/") and "::test_" in node for node in nodes)
 
 
-def test_round21_macos_release_registry_is_exact() -> None:
+def test_macos_release_registry_is_exact() -> None:
     """T05 requires the committed macOS marker registry to name expanded existing nodes."""
 
     registry_path = _CRAWLER_ROOT / "tests" / "round21_macos_real_nodes.json"
@@ -1918,7 +1918,7 @@ def test_round21_macos_release_registry_is_exact() -> None:
     assert all(node.startswith("menagerie/crawler/tests/") and "::test_" in node for node in nodes)
 
 
-def test_round21_conformance_workflow_and_reversion_inventory_is_exact() -> None:
+def test_conformance_workflow_and_reversion_inventory_is_exact() -> None:
     """VS11 requires final fan-in CI and an exact deliberate-reversion matrix."""
 
     workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -1981,22 +1981,22 @@ def test_round21_conformance_workflow_and_reversion_inventory_is_exact() -> None
         "test_round21_linux_committed_lock_provenance_awards_in_ci",
     ]
     assert cases_by_id["D21"]["proof_nodes"] == [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-        "test_round21_linux_release_artifacts_and_provisioning_are_real",
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+        "test_linux_release_artifacts_and_provisioning_are_real",
         "menagerie/crawler/tests/test_round21_ci_composition.py::"
         "test_round21_linux_committed_lock_provenance_awards_in_ci",
     ]
     assert cases_by_id["D22"]["proof_nodes"] == [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-        "test_round21_conformance_workflow_and_reversion_inventory_is_exact"
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+        "test_conformance_workflow_and_reversion_inventory_is_exact"
     ]
     assert cases_by_id["D23"]["proof_nodes"] == [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-        "test_round19_supported_host_release_gate_inventory_is_exact"
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+        "test_supported_host_release_gate_inventory_is_exact"
     ]
     assert cases_by_id["D24"]["proof_nodes"] == [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-        "test_round19_supported_host_release_gate_inventory_is_exact"
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+        "test_supported_host_release_gate_inventory_is_exact"
     ]
     assert cases_by_id["D27"]["proof_nodes"] == [
         "menagerie/crawler/tests/test_slice_f_driver.py::"
@@ -2053,15 +2053,15 @@ def test_round21_conformance_workflow_and_reversion_inventory_is_exact() -> None
     (
         (
             VS1_LANDING_MANIFEST,
-            _CRAWLER_ROOT / "tests" / "test_round17_vs1_v3_composition.py",
+            _CRAWLER_ROOT / "tests" / "test_award_worker_result_composition.py",
         ),
         (
             VS2_LANDING_MANIFEST,
-            _CRAWLER_ROOT / "tests" / "test_round17_vs2_shutdown_composition.py",
+            _CRAWLER_ROOT / "tests" / "test_boundary_shutdown_composition.py",
         ),
         (
             VS3_LANDING_MANIFEST,
-            _CRAWLER_ROOT / "tests" / "test_round17_vs3_authority_composition.py",
+            _CRAWLER_ROOT / "tests" / "test_compiler_os_authority_composition.py",
         ),
         (VS4_LANDING_MANIFEST, Path(__file__)),
     ),

@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from menagerie.crawler.tests.conftest import RealEnvironmentFixture
-from menagerie.crawler.tests.test_round19_environment_authority_composition import (
+from menagerie.crawler.tests.test_environment_authority_composition import (
     _run_host_denial_composition,
 )
 
@@ -39,11 +39,11 @@ VS3_LANDING_MANIFEST: dict[str, Any] = {
         ),
     },
     "real_composition_nodes": (
-        "menagerie/crawler/tests/test_round17_vs3_authority_composition.py::"
+        "menagerie/crawler/tests/test_compiler_os_authority_composition.py::"
         "test_manifest_v3_real_os_policy_denies_undeclared_root_member",
         "menagerie/crawler/tests/test_slice_f_driver.py::"
         "test_linux_handoff_attempts_both_deferred_statuses_and_supersedes",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::"
         "test_real_v3_worker_result_awards_through_driver_and_reducer",
         "menagerie/crawler/tests/test_reducer.py::"
         "test_deferred_terminal_positive_capability_probe_is_persisted_and_admitted",

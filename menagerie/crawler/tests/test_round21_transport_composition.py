@@ -10,7 +10,7 @@ import pytest
 
 import menagerie.crawler.policy as policy_module
 import menagerie.crawler.worker_supervisor as supervisor_module
-from menagerie.crawler.tests import test_round17_structural_inventories as structural
+from menagerie.crawler.tests import test_anti_substitution_inventories as structural
 from menagerie.crawler.tests.conftest import RealEnvironmentFixture
 from menagerie.crawler.tests.test_round21_environment_matrix_composition import (
     _adapter_source,

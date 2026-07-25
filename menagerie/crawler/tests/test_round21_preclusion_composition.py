@@ -12,8 +12,8 @@ import menagerie.crawler.driver as driver_module
 import menagerie.crawler.policy as policy_module
 import menagerie.crawler.worker_supervisor as supervisor_module
 from menagerie.crawler.tests.conftest import RealEnvironmentFixture
-from menagerie.crawler.tests import test_round17_structural_inventories as structural
-from menagerie.crawler.tests.test_round19_environment_authority_composition import (
+from menagerie.crawler.tests import test_anti_substitution_inventories as structural
+from menagerie.crawler.tests.test_environment_authority_composition import (
     _run_host_denial_composition,
 )
 
@@ -133,7 +133,7 @@ def test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge(
     scope = set(structural._COMPOSITION_SOURCES)  # noqa: SLF001
     required = {
         _TEST_ROOT / "conftest.py",
-        _TEST_ROOT / "test_round17_vs3_authority_composition.py",
+        _TEST_ROOT / "test_compiler_os_authority_composition.py",
         *sorted(_TEST_ROOT.glob("test_*composition*.py")),
     }
     assert required <= scope

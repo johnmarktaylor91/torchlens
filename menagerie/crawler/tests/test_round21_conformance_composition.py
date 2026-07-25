@@ -14,8 +14,8 @@ from typing import Any, Iterable, Mapping, Sequence
 import pytest
 
 from menagerie.crawler.tests.conftest import RealEnvironmentFixture
-from menagerie.crawler.tests import test_round17_structural_inventories as structural
-from menagerie.crawler.tests.test_round19_environment_authority_composition import (
+from menagerie.crawler.tests import test_anti_substitution_inventories as structural
+from menagerie.crawler.tests.test_environment_authority_composition import (
     _run_host_denial_composition,
 )
 
@@ -66,23 +66,23 @@ P11_CI = (
     "test_round21_ci_attestations_cover_registry_without_skip"
 )
 P12_NONE = (
-    "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::"
+    "menagerie/crawler/tests/test_award_worker_result_composition.py::"
     "test_real_v3_worker_result_awards_through_driver_and_reducer[none]"
 )
 P12_STAT = (
-    "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::"
+    "menagerie/crawler/tests/test_award_worker_result_composition.py::"
     "test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
 )
 P13 = (
-    "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+    "menagerie/crawler/tests/test_environment_authority_composition.py::"
     "test_outside_selected_interpreter_is_rejected_at_binding"
 )
 P14 = (
-    "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+    "menagerie/crawler/tests/test_environment_authority_composition.py::"
     "test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package"
 )
 P15 = (
-    "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+    "menagerie/crawler/tests/test_environment_authority_composition.py::"
     "test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package"
 )
 P16 = (
@@ -90,19 +90,19 @@ P16 = (
     "test_linux_handoff_attempts_both_deferred_statuses_and_supersedes"
 )
 P17 = (
-    "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::"
+    "menagerie/crawler/tests/test_award_worker_result_composition.py::"
     "test_real_unhashable_output_awards_runs_with_unverifiable_modes"
 )
 P18A = (
-    "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::"
+    "menagerie/crawler/tests/test_execution_dry_run_composition.py::"
     "test_documented_dry_run_and_resume_use_real_environment"
 )
 P18B = (
-    "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::"
+    "menagerie/crawler/tests/test_execution_dry_run_composition.py::"
     "test_dry_run_all_source_failure_is_acceptance_error"
 )
 P19 = (
-    "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+    "menagerie/crawler/tests/test_environment_authority_composition.py::"
     "test_manifest_v3_rejects_changed_interpreter_association"
 )
 P27 = (
@@ -115,28 +115,28 @@ T01 = (
     "test_round21_tripwire_catches_python_evasion"
 )
 T02 = (
-    "menagerie/crawler/tests/test_round17_structural_inventories.py::"
+    "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
     "test_legacy_manifest_v1_is_quarantined_from_every_live_import_graph"
 )
 T03 = (
-    "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-    "test_round21_verification_tree_walk_inventory_is_closed"
+    "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+    "test_verification_tree_walk_inventory_is_closed"
 )
 T04_LINUX = (
-    "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-    "test_round21_linux_release_artifacts_and_provisioning_are_real"
+    "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+    "test_linux_release_artifacts_and_provisioning_are_real"
 )
 T04_MACOS = (
-    "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-    "test_round21_macos_release_artifacts_and_provisioning_are_real"
+    "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+    "test_macos_release_artifacts_and_provisioning_are_real"
 )
 T05_LINUX = (
-    "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-    "test_round21_linux_release_registry_is_exact"
+    "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+    "test_linux_release_registry_is_exact"
 )
 T05_MACOS = (
-    "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-    "test_round21_macos_release_registry_is_exact"
+    "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+    "test_macos_release_registry_is_exact"
 )
 T06 = (
     "menagerie/crawler/tests/test_round21_conformance_composition.py::"
@@ -880,7 +880,7 @@ def test_round21_conformance_registry_is_total_and_executed(
     assert all(
         node in linux_nodes | macos_nodes | {P11, P11_CI}
         for node in all_real_nodes
-        if not node.startswith("menagerie/crawler/tests/test_round17_structural_inventories.py")
+        if not node.startswith("menagerie/crawler/tests/test_anti_substitution_inventories.py")
     )
 
     clause_ids = frozenset(observed_by_id)

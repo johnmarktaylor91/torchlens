@@ -33,16 +33,16 @@ _CONFORMANCE_NODE = (
     "test_round21_conformance_registry_is_total_and_executed"
 )
 _WORKFLOW_INVENTORY_NODE = (
-    "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-    "test_round21_conformance_workflow_and_reversion_inventory_is_exact"
+    "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+    "test_conformance_workflow_and_reversion_inventory_is_exact"
 )
 _HOST_RELEASE_INVENTORY_NODE = (
-    "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-    "test_round19_supported_host_release_gate_inventory_is_exact"
+    "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+    "test_supported_host_release_gate_inventory_is_exact"
 )
 _LINUX_RELEASE_ARTIFACTS_NODE = (
-    "menagerie/crawler/tests/test_round17_structural_inventories.py::"
-    "test_round21_linux_release_artifacts_and_provisioning_are_real"
+    "menagerie/crawler/tests/test_anti_substitution_inventories.py::"
+    "test_linux_release_artifacts_and_provisioning_are_real"
 )
 _CASE_TIMEOUT_SECONDS = 900
 
@@ -107,23 +107,23 @@ _P10 = (
     "test_round21_macos_committed_lock_seatbelt_award_and_denial"
 )
 _P12_NONE = (
-    "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::"
+    "menagerie/crawler/tests/test_award_worker_result_composition.py::"
     "test_real_v3_worker_result_awards_through_driver_and_reducer[none]"
 )
 _P12_STAT = (
-    "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::"
+    "menagerie/crawler/tests/test_award_worker_result_composition.py::"
     "test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
 )
 _P13 = (
-    "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+    "menagerie/crawler/tests/test_environment_authority_composition.py::"
     "test_outside_selected_interpreter_is_rejected_at_binding"
 )
 _P14 = (
-    "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+    "menagerie/crawler/tests/test_environment_authority_composition.py::"
     "test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package"
 )
 _P15 = (
-    "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+    "menagerie/crawler/tests/test_environment_authority_composition.py::"
     "test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package"
 )
 _P16 = (
@@ -131,19 +131,19 @@ _P16 = (
     "test_linux_handoff_attempts_both_deferred_statuses_and_supersedes"
 )
 _P17 = (
-    "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::"
+    "menagerie/crawler/tests/test_award_worker_result_composition.py::"
     "test_real_unhashable_output_awards_runs_with_unverifiable_modes"
 )
 _P18A = (
-    "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::"
+    "menagerie/crawler/tests/test_execution_dry_run_composition.py::"
     "test_documented_dry_run_and_resume_use_real_environment"
 )
 _P18B = (
-    "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::"
+    "menagerie/crawler/tests/test_execution_dry_run_composition.py::"
     "test_dry_run_all_source_failure_is_acceptance_error"
 )
 _P19 = (
-    "menagerie/crawler/tests/test_round19_environment_authority_composition.py::"
+    "menagerie/crawler/tests/test_environment_authority_composition.py::"
     "test_manifest_v3_rejects_changed_interpreter_association"
 )
 _P27 = (

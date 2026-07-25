@@ -30,7 +30,7 @@ from menagerie.crawler.envs import EnvironmentIntent, LockArtifacts
 from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.recordio import scan_jsonl
 from menagerie.crawler.reducer import CanonicalReducer
-from menagerie.crawler.tests import test_round17_structural_inventories as structural
+from menagerie.crawler.tests import test_anti_substitution_inventories as structural
 from menagerie.crawler.tests.conftest import (
     RealEnvironmentFixture,
     RealEnvironmentFixtureFactory,
@@ -38,7 +38,7 @@ from menagerie.crawler.tests.conftest import (
     _copy_up_real_environment_member,
     hardlink_bytes,
 )
-from menagerie.crawler.tests.test_round19_environment_authority_composition import (
+from menagerie.crawler.tests.test_environment_authority_composition import (
     _typed_artifact,
 )
 from menagerie.crawler.tests.test_slice_f_driver import (

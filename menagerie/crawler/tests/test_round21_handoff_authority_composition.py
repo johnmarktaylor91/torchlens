@@ -22,7 +22,7 @@ from menagerie.crawler.driver import (
 from menagerie.crawler.identity import canonical_json_bytes
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import CanonicalReducer
-from menagerie.crawler.tests import test_round17_structural_inventories as structural
+from menagerie.crawler.tests import test_anti_substitution_inventories as structural
 from menagerie.crawler.tests.conftest import RealEnvironmentFixture
 from menagerie.crawler.tests.test_slice_f_driver import (
     BothDeferredRealAuthor,

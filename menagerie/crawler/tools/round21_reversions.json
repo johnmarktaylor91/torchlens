@@ -9,8 +9,8 @@
       ],
       "proof_nodes": [
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E11]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
       "reversion_id": "D01",
       "semantic_reversion": "restore hardlink or startup-.pth filtering"
@@ -96,8 +96,8 @@
         "DID NOT RAISE"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association"
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association"
       ],
       "reversion_id": "D08",
       "semantic_reversion": "allow outside/mismatched selected interpreter"
@@ -267,7 +267,7 @@
         "Extra items in the right set"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_linux_release_artifacts_and_provisioning_are_real",
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_linux_release_artifacts_and_provisioning_are_real",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci"
       ],
       "reversion_id": "D21",
@@ -279,7 +279,7 @@
         "MENAGERIE_RELEASE_GATE"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_conformance_workflow_and_reversion_inventory_is_exact"
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_conformance_workflow_and_reversion_inventory_is_exact"
       ],
       "reversion_id": "D22",
       "semantic_reversion": "remove workflow proof node or permit skip/xfail"
@@ -290,7 +290,7 @@
         "strace"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round19_supported_host_release_gate_inventory_is_exact"
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_supported_host_release_gate_inventory_is_exact"
       ],
       "reversion_id": "D23",
       "semantic_reversion": "remove Linux bwrap/strace or denial audit"
@@ -301,7 +301,7 @@
         "command -v log"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round19_supported_host_release_gate_inventory_is_exact"
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_supported_host_release_gate_inventory_is_exact"
       ],
       "reversion_id": "D24",
       "semantic_reversion": "replace macOS denial with profile-only proof"
@@ -312,7 +312,7 @@
         "unverifiable"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
       ],
       "reversion_id": "D25",
       "semantic_reversion": "drop nullable evidence or misclassify mode"
@@ -323,7 +323,7 @@
         "assert failed.returncode == EXIT_ERROR"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
       ],
       "reversion_id": "D26",
       "semantic_reversion": "restore dry-run false-complete/signature mismatch"
@@ -359,10 +359,10 @@
         "receipt_error"
       ],
       "proof_nodes": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_slice_f_driver.py::test_linux_handoff_attempts_both_deferred_statuses_and_supersedes",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
       ],
       "reversion_id": "D29",
       "semantic_reversion": "regress receipt/spawn/writer/schema preservation"

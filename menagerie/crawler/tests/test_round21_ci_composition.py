@@ -17,7 +17,7 @@ from menagerie.crawler.env_lifecycle import (
 )
 from menagerie.crawler.envs import ExportCheck, IntentProbes
 from menagerie.crawler.identity import hash_bytes
-from menagerie.crawler.tests.test_round19_environment_authority_composition import (
+from menagerie.crawler.tests.test_environment_authority_composition import (
     _run_host_denial_composition,
     test_macos_v3_profile_has_one_fresh_literal_prefix_and_exact_outside_members,
 )

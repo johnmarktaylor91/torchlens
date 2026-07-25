@@ -21,8 +21,8 @@ from menagerie.crawler.tests.conftest import (
     _copy_up_real_environment_member,
     hardlink_clone_tree,
 )
-from menagerie.crawler.tests import test_round17_structural_inventories as structural
-from menagerie.crawler.tests.test_round19_environment_authority_composition import (
+from menagerie.crawler.tests import test_anti_substitution_inventories as structural
+from menagerie.crawler.tests.test_environment_authority_composition import (
     _run_host_denial_composition,
 )
 

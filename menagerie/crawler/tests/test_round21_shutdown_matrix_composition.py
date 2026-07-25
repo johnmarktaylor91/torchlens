@@ -18,13 +18,13 @@ import menagerie.crawler.worker_supervisor as supervisor_module
 from menagerie.crawler.driver import SupervisedForwardLane
 from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.recordio import scan_jsonl
-from menagerie.crawler.tests import test_round17_structural_inventories as structural
+from menagerie.crawler.tests import test_anti_substitution_inventories as structural
 from menagerie.crawler.tests.conftest import (
     RealEnvironmentFixture,
     RealEnvironmentLane,
     real_environment_registry,
 )
-from menagerie.crawler.tests.test_round17_vs2_shutdown_composition import TinyAdapterAuthor
+from menagerie.crawler.tests.test_boundary_shutdown_composition import TinyAdapterAuthor
 from menagerie.crawler.tests.test_slice_f_driver import FakeChecker, _driver, _paths, _snapshot
 
 

@@ -11,8 +11,8 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E11]"
       ],
       "real_prefix": true,
@@ -150,8 +150,8 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding"
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -417,8 +417,8 @@
       "shipped_compiler": true,
       "source_locator": "UNIFIED.md T06 deliberate-reversion table",
       "structural_node_ids": [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_linux_release_artifacts_and_provisioning_are_real",
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_macos_release_artifacts_and_provisioning_are_real",
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_linux_release_artifacts_and_provisioning_are_real",
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_macos_release_artifacts_and_provisioning_are_real",
         "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed"
       ]
     },
@@ -438,8 +438,8 @@
       "shipped_compiler": true,
       "source_locator": "UNIFIED.md T06 deliberate-reversion table",
       "structural_node_ids": [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_linux_release_artifacts_and_provisioning_are_real",
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_macos_release_artifacts_and_provisioning_are_real",
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_linux_release_artifacts_and_provisioning_are_real",
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_macos_release_artifacts_and_provisioning_are_real",
         "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed"
       ]
     },
@@ -453,14 +453,14 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
       "source_locator": "UNIFIED.md T06 deliberate-reversion table",
       "structural_node_ids": [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_linux_release_artifacts_and_provisioning_are_real",
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_linux_release_artifacts_and_provisioning_are_real",
         "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed"
       ]
     },
@@ -474,14 +474,14 @@
       "host": "both",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
       "source_locator": "UNIFIED.md T06 deliberate-reversion table",
       "structural_node_ids": [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_macos_release_artifacts_and_provisioning_are_real",
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_macos_release_artifacts_and_provisioning_are_real",
         "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed"
       ]
     },
@@ -495,7 +495,7 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -514,7 +514,7 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -571,9 +571,9 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_slice_f_driver.py::test_linux_handoff_attempts_both_deferred_statuses_and_supersedes"
       ],
       "real_prefix": true,
@@ -815,8 +815,8 @@
       "shipped_compiler": true,
       "source_locator": "UNIFIED.md \u00a71.2 autonomous path versus optional fallback",
       "structural_node_ids": [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_linux_release_artifacts_and_provisioning_are_real",
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_round21_macos_release_artifacts_and_provisioning_are_real"
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_linux_release_artifacts_and_provisioning_are_real",
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_macos_release_artifacts_and_provisioning_are_real"
       ]
     },
     {
@@ -1705,10 +1705,10 @@
         "I15-01"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -1749,8 +1749,8 @@
         "I15-03"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
@@ -1770,8 +1770,8 @@
         "I15-04"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge",
         "menagerie/crawler/tests/test_round21_transport_composition.py::test_round21_closed_transport_capability_awards_and_rejects_unlisted_library"
@@ -1849,8 +1849,8 @@
         "I15-08"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error",
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error",
         "menagerie/crawler/tests/test_round21_fingerprint_composition.py::test_round21_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone",
         "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H01]",
         "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H02]",
@@ -1885,8 +1885,8 @@
         "I15-09"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S01]",
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S02]",
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S03]",
@@ -1938,8 +1938,8 @@
         "I15-11"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge",
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S01]",
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S02]",
@@ -1990,9 +1990,9 @@
         "I15-13"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -2030,7 +2030,7 @@
       "shipped_compiler": true,
       "source_locator": "UNIFIED.md \u00a76.3 Round-19 \u00a715 invariant",
       "structural_node_ids": [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_legacy_manifest_v1_is_quarantined_from_every_live_import_graph",
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_legacy_manifest_v1_is_quarantined_from_every_live_import_graph",
         "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_tripwire_catches_python_evasion"
       ]
@@ -2045,7 +2045,7 @@
         "I15-15"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E01]",
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E02]",
         "menagerie/crawler/tests/test_round21_environment_matrix_composition.py::test_round21_environment_unit_matrix[E03]",
@@ -2219,8 +2219,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -2254,8 +2254,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -2288,8 +2288,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -2322,8 +2322,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -2356,9 +2356,9 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -2391,8 +2391,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -2425,7 +2425,7 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment"
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -2458,7 +2458,7 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -2491,8 +2491,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -2682,7 +2682,7 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S01]",
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S02]",
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S03]",
@@ -2757,8 +2757,8 @@
         "LP-2.01"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -2778,8 +2778,8 @@
         "LP-2.02"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -2799,8 +2799,8 @@
         "LP-2.03"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -2820,8 +2820,8 @@
         "LP-2.04"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -2841,8 +2841,8 @@
         "LP-2.05"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -2862,8 +2862,8 @@
         "LP-2.06"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -2883,8 +2883,8 @@
         "LP-2.07"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -2904,8 +2904,8 @@
         "LP-2.08"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -2925,8 +2925,8 @@
         "LP-2.09"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -2946,8 +2946,8 @@
         "LP-2.10"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -2967,8 +2967,8 @@
         "LP-2.11"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -2988,8 +2988,8 @@
         "LP-2.12"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3009,8 +3009,8 @@
         "LP-2.13"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3030,8 +3030,8 @@
         "LP-2.14"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3051,8 +3051,8 @@
         "LP-2.15"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3072,8 +3072,8 @@
         "LP-2.16"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3093,8 +3093,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3130,8 +3130,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3167,8 +3167,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3204,8 +3204,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3241,8 +3241,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3278,8 +3278,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3315,8 +3315,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3352,8 +3352,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3389,8 +3389,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3426,8 +3426,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3463,8 +3463,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3500,8 +3500,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3537,8 +3537,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3574,8 +3574,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3611,8 +3611,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3648,8 +3648,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3685,8 +3685,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3722,8 +3722,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3759,8 +3759,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3796,8 +3796,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3833,8 +3833,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3870,8 +3870,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3907,8 +3907,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3944,8 +3944,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -3981,8 +3981,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -4018,8 +4018,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -4055,8 +4055,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -4092,8 +4092,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -4129,8 +4129,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -4166,8 +4166,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -4203,8 +4203,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -4237,8 +4237,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H01]",
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S08]"
       ],
@@ -4273,9 +4273,9 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -4308,7 +4308,7 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -4341,8 +4341,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge",
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S01]",
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S02]",
@@ -4389,8 +4389,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -4457,8 +4457,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -4543,8 +4543,8 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -4603,8 +4603,8 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -4623,8 +4623,8 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci"
       ],
       "real_prefix": true,
@@ -4683,8 +4683,8 @@
       "host": "linux",
       "invariant_ids": [],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed",
         "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H01]"
       ],
@@ -4792,8 +4792,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial",
         "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_ci_attestations_cover_registry_without_skip"
@@ -4829,7 +4829,7 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -4862,8 +4862,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -4931,8 +4931,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -5033,8 +5033,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -5067,8 +5067,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci"
       ],
       "real_prefix": true,
@@ -5169,8 +5169,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_conformance_composition.py::test_round21_conformance_registry_is_total_and_executed",
         "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H01]"
       ],
@@ -5428,8 +5428,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
@@ -5532,7 +5532,7 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial"
       ],
       "real_prefix": true,
@@ -6409,8 +6409,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
@@ -6549,10 +6549,10 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -6668,8 +6668,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial"
       ],
@@ -6704,7 +6704,7 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -6737,8 +6737,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
       ],
       "real_prefix": true,
       "shipped_compiler": true,
@@ -6854,8 +6854,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial"
       ],
@@ -6935,8 +6935,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_linux_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_macos_real_compiler_denies_caught_undeclared_repo_read_and_awards_package",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
       ],
       "real_prefix": true,
@@ -6970,8 +6970,8 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association",
-        "menagerie/crawler/tests/test_round19_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_linux_committed_lock_provenance_awards_in_ci",
         "menagerie/crawler/tests/test_round21_ci_composition.py::test_round21_macos_committed_lock_seatbelt_award_and_denial",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
@@ -7007,9 +7007,9 @@
         "LP-2.17"
       ],
       "real_node_ids": [
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
-        "menagerie/crawler/tests/test_round17_vs1_v3_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
-        "menagerie/crawler/tests/test_round19_vs6_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_documented_dry_run_and_resume_use_real_environment",
         "menagerie/crawler/tests/test_round21_handoff_authority_composition.py::test_round21_handoff_authority_identity_matrix[H01]",
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S01]",
         "menagerie/crawler/tests/test_round21_shutdown_matrix_composition.py::test_round21_shutdown_matrix[S02]",
@@ -7062,7 +7062,7 @@
       "shipped_compiler": true,
       "source_locator": "UNIFIED.md \u00a76.2 Round-19 plan clause",
       "structural_node_ids": [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_legacy_manifest_v1_is_quarantined_from_every_live_import_graph",
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_legacy_manifest_v1_is_quarantined_from_every_live_import_graph",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_tripwire_catches_python_evasion"
       ]
     },
@@ -7098,7 +7098,7 @@
       "shipped_compiler": true,
       "source_locator": "UNIFIED.md \u00a76.2 Round-19 plan clause",
       "structural_node_ids": [
-        "menagerie/crawler/tests/test_round17_structural_inventories.py::test_legacy_manifest_v1_is_quarantined_from_every_live_import_graph",
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_legacy_manifest_v1_is_quarantined_from_every_live_import_graph",
         "menagerie/crawler/tests/test_round21_preclusion_composition.py::test_round21_tripwire_catches_python_evasion"
       ]
     },

@@ -20,7 +20,7 @@ from menagerie.crawler.driver import SupervisedForwardLane, bind_materialized_en
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.intake import create_intake_snapshot
 from menagerie.crawler.recordio import scan_jsonl
-from menagerie.crawler.tests import test_round17_structural_inventories as structural
+from menagerie.crawler.tests import test_anti_substitution_inventories as structural
 from menagerie.crawler.tests.conftest import (
     RealEnvironmentFixture,
     RealEnvironmentLane,
