@@ -615,8 +615,46 @@ def _fields_from_event(
     # inherits. Verdicts and replay fingerprints are byte-unchanged: no runnable-load
     # / param_source / resolver consumer reads an op node's ``backend_address`` (the
     # only reader is the string-when-present metadata invariant, satisfied either way).
-    if buffer_address is not None or _recorded_buffer_address(event) is not None:
+    recorded_buffer_address = _recorded_buffer_address(event)
+    if buffer_address is not None:
         fields_dict["_materialized_backend_address"] = buffer_address
+    elif recorded_buffer_address is not None:
+        # A buffer-addressed node whose registered address was NOT claimed from
+        # the one-claim pool in ``_buffer_addresses_by_label``. Two disjoint kinds
+        # land here:
+        #   1. the WRITE-SIDE node of a REGISTERED buffer whose READ-SIDE sibling
+        #      already claimed the address (any in-place ``add_``/``copy_``/
+        #      ``mul_``, every BatchNorm/InstanceNorm running-stat) -- the read and
+        #      write node share one equivalence class, so the write node's recorded
+        #      address is that SAME registered buffer's name; and
+        #   2. a plain-attribute / list-element buffer that is not declared state at
+        #      all (its recorded address is its own display path, e.g. ``child.q``).
+        #
+        # r87: kind 1 must report the SAME registered ``backend_address`` as its
+        # read-side node -- r85's Option-a rule is "a registered buffer keeps its
+        # registered address" and intra-trace consistency was the fix's stated goal;
+        # previously the write node fell through to ``buffer_address`` (None). The
+        # discriminator is REGISTERED-ness -- does the recorded address genuinely
+        # name a buffer in the model's declared-state universe
+        # (``trace._buffer_initial_values``, the SAME set the runnable preflight
+        # refuses against, ``_io/runnable.py``) -- NOT pool-membership. This is
+        # never a heuristic borrow: the address used is the node's OWN recorded
+        # address, and only when it is registered.
+        #
+        # kind 2 stays None -- the whole r83 C2 intent (a non-registered tensor is
+        # outside the declared state universe, so it has a display address but no
+        # backend-native one). A foreign tensor whose recorded display address is
+        # not in the registered universe therefore never receives a registered
+        # ``backend_address``, so C2's silent wrong-bind cannot be re-opened; and
+        # because ``backend_address`` is verdict-neutral (no runnable-load /
+        # param_source / resolver consumer reads it -- only the string-when-present
+        # metadata invariant does), this clause moves no verdict and no replay
+        # fingerprint. The display ``address`` and the save binding that DRIVE the
+        # C2 refusal are resolved above and are untouched here.
+        if recorded_buffer_address in _registered_buffer_names(trace):
+            fields_dict["_materialized_backend_address"] = recorded_buffer_address
+        else:
+            fields_dict["_materialized_backend_address"] = None
     return fields_dict
 
 
@@ -924,6 +962,32 @@ def _buffer_addresses_by_label(trace: "Trace", op_events: list[OpEvent]) -> dict
             ]
             unmatched_address_names.discard(address)
     return by_label
+
+
+def _registered_buffer_names(trace: "Trace") -> set[str]:
+    """Return the names of the model's declared registered-buffer universe.
+
+    These are the keys of ``trace._buffer_initial_values`` -- the persistent
+    registered buffers captured at forward time -- which is precisely the set the
+    runnable preflight refuses an address against (``_io/runnable.py``). Using it
+    as the ``backend_address`` discriminator (r87) makes "is this recorded address
+    a genuine registered buffer?" mean exactly what it means everywhere else in
+    the runnable system, so a registered buffer's write-side node keeps its
+    address while a non-registered plain-attribute / list-element tensor stays
+    ``None`` (r83 C2), with no heuristic borrow.
+
+    Parameters
+    ----------
+    trace
+        Trace carrying the capture-time registered-buffer value snapshots.
+
+    Returns
+    -------
+    set[str]
+        The registered-buffer address names, empty when none were captured.
+    """
+
+    return set(getattr(trace, "_buffer_initial_values", {}) or {})
 
 
 def _recorded_buffer_address(event: OpEvent) -> str | None:
