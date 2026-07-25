@@ -147,6 +147,24 @@ def _stub_call() -> Any:
     return types.SimpleNamespace(call_id="call:test", op_labels=("op:1",))
 
 
+def _one_hot_fake_projection_supported() -> bool:
+    """Return whether live FakeTensor projects explicit-width ``one_hot`` outputs."""
+
+    mode_cls = _fake_tensor_mode_class()
+    if mode_cls is None:
+        return False
+    try:
+        with mode_cls(allow_non_fake_inputs=True) as mode:
+            fake = rex._tree_to_fake(mode, torch.tensor([0, 1, 2, 3]))
+            projected = F.one_hot(fake, num_classes=4)
+    except Exception:  # noqa: BLE001 -- capability probe; any fake failure means absent.
+        return False
+    return tuple(projected.shape) == (4, 4)
+
+
+_ONE_HOT_FAKE_PROJECTION_SUPPORTED = _one_hot_fake_projection_supported()
+
+
 # --------------------------------------------------------------------------- #
 # (a) the projection engine is available and closes the class                  #
 # --------------------------------------------------------------------------- #
@@ -257,7 +275,14 @@ def test_numeric_literal_bomb_refused_op_agnostically(
     replacement: Any,
 ) -> None:
     """Each broad-sample op, literal-tampered huge, refuses at ``op_allocation_preflight``
-    with NO allocation -- proving the projection ran for it WITHOUT any op-name allowlist."""
+    when the live FakeTensor surface supports its projection.
+
+    Torch runtimes whose FakeTensor ``one_hot`` implementation still raises a
+    data-dependent-output exception fail open by design, then re-type the real
+    allocator refusal at ``op_allocation_execution``. The exception is feature-detected
+    and scoped to that single operator; every projectable case still proves the
+    enumeration-free preflight ran before allocation.
+    """
 
     bundle = _build(tmp_path, f"{name}.tlspec", factory(), x)
     mutated = _tamper_literal(bundle, kind, sentinel, replacement)
@@ -266,8 +291,16 @@ def test_numeric_literal_bomb_refused_op_agnostically(
         loaded = tl.load(str(bundle))
         with pytest.raises(RunCapabilityUnavailableError) as caught:
             loaded.run(inputs=x.clone())
-    assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
-    assert int(caught.value.fields["required_bytes"]) > int(caught.value.fields["available_bytes"])
+    expected_stage = (
+        "op_allocation_preflight"
+        if name != "one_hot" or _ONE_HOT_FAKE_PROJECTION_SUPPORTED
+        else "op_allocation_execution"
+    )
+    assert caught.value.fields.get("detection_stage") == expected_stage
+    if expected_stage == "op_allocation_preflight":
+        assert int(caught.value.fields["required_bytes"]) > int(
+            caught.value.fields["available_bytes"]
+        )
 
 
 class _Fold(nn.Module):
