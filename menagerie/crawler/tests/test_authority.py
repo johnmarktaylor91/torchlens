@@ -55,7 +55,7 @@ STARTED = "2026-07-16T12:00:00Z"
 FINISHED = "2026-07-16T12:00:01Z"
 
 
-def test_round15_phase_zero_shared_contract_shapes_are_exact() -> None:
+def test_phase_zero_shared_contract_shapes_are_exact() -> None:
     """Freeze the cross-workstream shapes before any producer wires them."""
 
     assert tuple(field.name for field in fields(RuntimeMember)) == (

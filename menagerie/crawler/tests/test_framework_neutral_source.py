@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from menagerie.crawler.proposal import ProposalValidationError, validate_author_proposal
-from menagerie.crawler.tests.test_round2_fixr_sandbox_and_r4 import _add_archive_source
+from menagerie.crawler.tests.test_sandbox_award_and_source_inventory import _add_archive_source
 from menagerie.crawler.tests.test_slice_d_proposal_author import _ground_proposal, _make_r4
 
 
