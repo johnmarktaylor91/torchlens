@@ -17,12 +17,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import pydot
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+
+pydot = pytest.importorskip("pydot")
 
 _GOLDEN_PATH = Path(__file__).parent / "golden" / "viz_render_identity_oracle.json"
 _UPDATE_ENV = "TORCHLENS_UPDATE_VIZ_RENDER_ORACLE"
