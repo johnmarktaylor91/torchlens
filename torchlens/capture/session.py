@@ -122,7 +122,11 @@ class _CleanupEntry:
     completed: bool = False
 
 
-@dataclass(slots=True, weakref_slot=True)
+# A plain (non-slotted) dataclass stays weakref-able on every supported
+# interpreter -- ``weakref_slot=True`` needs py3.11+, and the lifetime-neutral
+# weakref contract only requires that ``CaptureSession`` be weakref-able, which
+# ``__dict__``/``__weakref__`` provide here without a version-specific slots combo.
+@dataclass
 class CaptureSession:
     """The only mutable owner of one capture run's new spine state.
 

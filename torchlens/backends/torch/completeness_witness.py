@@ -2140,7 +2140,11 @@ it); a freed-then-reused address has only dead weakrefs and never matches. Meta/
 # ``calls_through_public_patches=[]``). ``TensorBase.untyped_storage`` is NOT patched (the belt
 # shadows ``torch.Tensor`` only), and ``UntypedStorage.data_ptr`` IS patched per-forward, so both
 # originals must be snapshotted here.
-_ORIG_TENSORBASE_UNTYPED_STORAGE = torch._C.TensorBase.untyped_storage
+# ``torch._C.TensorBase`` (torch >= 2.2) vs ``torch._C._TensorBase`` (torch 2.1):
+# feature-detect the base class rather than parse the version.
+_TENSORBASE_CLS = getattr(torch._C, "TensorBase", None) or getattr(torch._C, "_TensorBase", None)
+assert _TENSORBASE_CLS is not None, "torch >= 2.1 exposes torch._C.TensorBase / _TensorBase"
+_ORIG_TENSORBASE_UNTYPED_STORAGE = _TENSORBASE_CLS.untyped_storage
 _ORIG_UNTYPED_STORAGE_DATA_PTR = torch.UntypedStorage.data_ptr
 # r67 C3: the true-original byte-count accessor, for TorchLens's OWN base-geometry reads
 # (origin resolution, input nbytes fact) -- bypasses the per-forward storage accessor

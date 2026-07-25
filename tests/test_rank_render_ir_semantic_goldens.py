@@ -6,12 +6,14 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pydot
 import pytest
 import torch
+
 import torchlens as tl
 
 from test_render_dotid_cert10 import _ModuleDictQuoteKeyModel
+
+pydot = pytest.importorskip("pydot")
 
 _GOLDEN = Path(__file__).parent / "golden" / "rank_render_ir_semantics.json"
 

@@ -35,7 +35,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
 
-      - run: uv pip install --system ruff
+      - run: uv pip install --system ruff==0.15.4
 
       - name: Ruff format
         run: ruff format .
