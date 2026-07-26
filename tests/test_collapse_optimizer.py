@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import multiprocessing
 import os
 from pathlib import Path
+import queue
 import time
 from types import ModuleType
 from typing import Any
@@ -354,6 +356,43 @@ class WidthTwoResidualModel(torch.nn.Module):
         return self.out(self.block(x))
 
 
+class DenseFanUnit(torch.nn.Module):
+    """Small unit consuming all earlier dense-stack features."""
+
+    def __init__(self, input_width: int, growth_width: int = 4) -> None:
+        """Initialize the dense fan-in unit."""
+
+        super().__init__()
+        self.linear = torch.nn.Linear(input_width, growth_width)
+        self.relu = torch.nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Project and activate concatenated earlier features."""
+
+        return self.relu(self.linear(x))
+
+
+class DenseFanStack(torch.nn.Module):
+    """Compact dense-connectivity reproducer for collapse containment."""
+
+    def __init__(self, depth: int = 18, width: int = 4) -> None:
+        """Initialize a nested stack with growing dense fan-in."""
+
+        super().__init__()
+        self.units = torch.nn.ModuleList(
+            DenseFanUnit(width * (index + 1), width) for index in range(depth)
+        )
+        self.out = torch.nn.Linear(width * (depth + 1), width)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run every unit from the concatenation of all earlier features."""
+
+        features = [x]
+        for unit in self.units:
+            features.append(unit(torch.cat(features, dim=-1)))
+        return self.out(torch.cat(features, dim=-1))
+
+
 def _trace(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
     """Trace a model in eval mode."""
 
@@ -488,6 +527,52 @@ def _require_transformers() -> ModuleType:
     """Import transformers or skip the calling test."""
 
     return pytest.importorskip("transformers")
+
+
+def _collapse_containment_child(trace: tl.Trace, result_queue: Any) -> None:
+    """Run the dense collapse reproducer inside a spawned child process.
+
+    Parameters
+    ----------
+    trace:
+        Parent-captured trace for the child to optimize.
+    result_queue:
+        Multiprocessing queue used to return a success or failure payload.
+    """
+
+    try:
+        torch.set_num_threads(2)
+        context = RenderContext()
+        _clear_collapse_caches(trace)
+        max_result = select_collapse_plan(trace, context, mode="max")
+        schedule = collapse_schedule(trace, context)
+        if not max_result.plan.nodes or not schedule.steps:
+            raise AssertionError("collapse containment produced an empty plan or schedule")
+        if schedule.steps[-1].plan != max_result.plan:
+            raise AssertionError("collapse schedule endpoint differs from the max plan")
+        previous_count = schedule.steps[0].visible_count
+        previous_addresses = schedule.steps[0].collapsed_addresses
+        for step in schedule.steps[1:]:
+            if step.visible_count > previous_count:
+                raise AssertionError("collapse schedule visible counts are not monotone")
+            if not previous_addresses <= step.collapsed_addresses:
+                raise AssertionError("collapse schedule addresses are not nested")
+            previous_count = step.visible_count
+            previous_addresses = step.collapsed_addresses
+        result_queue.put(
+            (
+                "ok",
+                {
+                    "max_visible_count": max_result.visible_count,
+                    "num_ops": len(trace.ops),
+                    "num_steps": len(schedule.steps),
+                },
+            )
+        )
+    except BaseException as exc:
+        result_queue.put(("error", f"{type(exc).__name__}: {exc}"))
+    finally:
+        trace.cleanup()
 
 
 @pytest.mark.parametrize(
@@ -648,6 +733,46 @@ def test_relationship_resolver_preserves_ambiguity_error() -> None:
 
         relationship_owner.children[0] = original_child
     finally:
+        trace.cleanup()
+
+
+@pytest.mark.heavy
+@pytest.mark.serial
+def test_collapse_dense_fan_schedule_spawn_containment() -> None:
+    """Dense max planning and scheduling cannot hang the parent test process."""
+
+    context = multiprocessing.get_context("spawn")
+    result_queue = context.Queue()
+    trace = _trace(DenseFanStack(depth=18), torch.randn(2, 4))
+    process = context.Process(target=_collapse_containment_child, args=(trace, result_queue))
+    timed_out = False
+    try:
+        process.start()
+        process.join(20)
+        timed_out = process.is_alive()
+        if timed_out:
+            process.terminate()
+            process.join(2)
+            if process.is_alive():
+                process.kill()
+                process.join(2)
+
+        assert not timed_out, "spawned dense collapse exceeded the 20-second containment deadline"
+        assert process.exitcode == 0
+        try:
+            status, payload = result_queue.get(timeout=2)
+        except queue.Empty:
+            pytest.fail("spawned dense collapse exited without a result payload")
+        assert status == "ok", payload
+        assert payload["num_ops"] > 0
+        assert payload["num_steps"] > 0
+        assert payload["max_visible_count"] > 0
+    finally:
+        if process.is_alive():
+            process.terminate()
+            process.join(2)
+        result_queue.close()
+        result_queue.join_thread()
         trace.cleanup()
 
 
