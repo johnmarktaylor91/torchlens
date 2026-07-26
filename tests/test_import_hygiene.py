@@ -72,8 +72,8 @@ assert collisions == {
     "data_classes": [], "debug": [], "examples": [],
     "experimental": ["dagua", "node_styles"], "export": [],
     "fastlog": ["dry_run", "recover"], "intervention": ["replay", "rerun", "sites"],
-    "hash": [], "io": [], "partial": [], "report": [], "repgeom": [], "stats": [],
-    "user_funcs": [], "validation": [], "viz": [],
+    "hash": [], "io": [], "partial": [], "report": [], "repgeom": [],
+    "receptive_field": ["rules"], "stats": [], "user_funcs": [], "validation": [], "viz": [],
 }
 
 """
