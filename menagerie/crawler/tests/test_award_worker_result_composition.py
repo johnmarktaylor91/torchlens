@@ -372,10 +372,14 @@ def test_real_unhashable_output_awards_runs_with_unverifiable_modes(
 def test_driver_has_no_direct_supervised_worker_receipt_reads() -> None:
     """Every driver semantic consumer must use the central typed projection."""
 
+    driver_source = driver_module.__file__
+    receipts_source = driver_receipts_module.__file__
+    assert driver_source is not None
+    assert receipts_source is not None
     direct_reads = [
         node
-        for module in (driver_module, driver_receipts_module)
-        for node in ast.walk(ast.parse(Path(module.__file__).read_text(encoding="utf-8")))
+        for source in (driver_source, receipts_source)
+        for node in ast.walk(ast.parse(Path(source).read_text(encoding="utf-8")))
         if isinstance(node, ast.Attribute) and node.attr == "worker_receipt"
     ]
     assert direct_reads == []
@@ -384,6 +388,10 @@ def test_driver_has_no_direct_supervised_worker_receipt_reads() -> None:
 def test_live_protocol_comparisons_stay_in_worker_supervisor() -> None:
     """Driver code must not branch on nested or outer live protocol literals."""
 
+    driver_source = driver_module.__file__
+    receipts_source = driver_receipts_module.__file__
+    assert driver_source is not None
+    assert receipts_source is not None
     versions = {
         "menagerie.crawler.worker-result.v3",
         "menagerie.crawler.worker-receipt.v1",
@@ -391,8 +399,8 @@ def test_live_protocol_comparisons_stay_in_worker_supervisor() -> None:
     }
     compared_literals = {
         value.value
-        for module in (driver_module, driver_receipts_module)
-        for node in ast.walk(ast.parse(Path(module.__file__).read_text(encoding="utf-8")))
+        for source in (driver_source, receipts_source)
+        for node in ast.walk(ast.parse(Path(source).read_text(encoding="utf-8")))
         if isinstance(node, ast.Compare)
         for value in (node.left, *node.comparators)
         if isinstance(value, ast.Constant) and isinstance(value.value, str)

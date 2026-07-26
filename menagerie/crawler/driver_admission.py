@@ -930,6 +930,8 @@ def build_command_environment_lane(
 class AdmissionEnvironmentMixin:
     """Admission, environment, and execution workflow methods for the driver."""
 
+    _authority_context: Optional[AuthorityContext]
+
     if TYPE_CHECKING:
 
         def __getattr__(self, name: str) -> Any:

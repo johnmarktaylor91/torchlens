@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TypedDict
+
 import pytest
 
 from menagerie.crawler.effort import (
@@ -16,6 +18,14 @@ from menagerie.crawler.effort import (
     _EffortTransition,
     fingerprint_root_cause,
 )
+
+
+class _EffortIncrements(TypedDict):
+    """Typed keyword increments accepted by ``EffortTracker.consume``."""
+
+    attempts: int
+    seconds: float
+    bytes_used: int
 
 
 def test_stage_cap_failure_is_typed_and_recorded_at_actual_stage() -> None:
@@ -72,7 +82,7 @@ def test_explicit_grant_extends_only_its_stage_cap() -> None:
     ],
 )
 def test_effort_transition_table_is_exhaustive_and_preserves_diagnostic_order(
-    increments: dict[str, int | float], metric: str
+    increments: _EffortIncrements, metric: str
 ) -> None:
     """Every budget dimension is ruled and the first exceeded cap stays exact."""
 
