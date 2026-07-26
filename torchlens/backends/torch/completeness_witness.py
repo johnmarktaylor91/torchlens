@@ -61,7 +61,12 @@ from ...utils._torch_symbols import torch_attr
 from ...utils._callable_safety import private_c_forward_op_module_names
 from ... import _state
 from ..._errors import TorchLensCaptureGapWarning
-from ._tl import get_buffer_address, get_tensor_label, get_tensor_meta
+from ._tl import (
+    get_buffer_address,
+    get_tensor_label,
+    get_tensor_meta,
+    session_meta_is_anchored,
+)
 from .buffer_writes import session_validated_buffer_address
 from .escape_detection import ExpectedOriginalToken, _active_token
 
@@ -2273,9 +2278,15 @@ def _nonowner_touch_is_captured(state: "_WitnessState", tensor: Any) -> bool:
     if not isinstance(tensor, torch.Tensor):
         return False
     trace = state.trace
-    if isinstance(get_tensor_label(tensor), str):
-        return True
     meta = get_tensor_meta(tensor)
+    # This path must remain observer-free: get_tensor_label() also validates the
+    # live storage, which calls the patched untyped_storage() host-escape surface.
+    # On a non-owner thread that wrapper re-enters this predicate indefinitely.
+    # The current-session object anchor is sufficient for captured membership:
+    # even a storage-rebound captured object must still trip the cross-thread
+    # ceiling, while a stale label from an earlier capture remains rejected.
+    if meta is not None and isinstance(meta.label_raw, str) and session_meta_is_anchored(meta):
+        return True
     if meta is not None and getattr(meta, "address", None) is not None:
         return True
     if get_buffer_address(tensor) is not None:
