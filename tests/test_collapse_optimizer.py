@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 import os
 from pathlib import Path
 import time
 from types import ModuleType
+from typing import Any
 
 import pytest
 import torch
 
 import torchlens as tl
+import torchlens.visualization.auto_collapse as auto_collapse
+from torchlens.data_classes._trace_accessors import TraceOpAccessor
 from torchlens.visualization.auto_collapse import (
+    _resolve_relationship_op,
     analyze_collapse,
     resolve_collapse_fn,
     resolve_repeat_folds,
@@ -24,6 +28,7 @@ from torchlens.visualization.collapse_optimizer import (
     _FrontierPoint,
     _OptimizerState,
     _RESULT_CACHE,
+    _SCHEDULE_CACHE,
     _branch_salience,
     _child_address_map,
     _eligible_module_box,
@@ -367,6 +372,70 @@ def _plan_signature(plan: CollapsePlan) -> tuple[str, ...]:
     return tuple(repr(node) for node in plan.nodes)
 
 
+def _clear_collapse_caches(trace: tl.Trace) -> None:
+    """Clear analysis and optimizer caches for one trace.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose next collapse operation must be uncached.
+    """
+
+    auto_collapse._ANALYSIS_CACHE.pop(trace, None)
+    auto_collapse._OP_ADJACENCY_INDEX_CACHE.pop(trace, None)
+    _RESULT_CACHE.pop(trace, None)
+    _SCHEDULE_CACHE.pop(trace, None)
+
+
+def _add_unambiguous_accessor_fallback_collision(trace: tl.Trace) -> str:
+    """Add one relationship-form collision that preserves accessor resolution.
+
+    Parameters
+    ----------
+    trace:
+        Recurrent trace to modify for fallback coverage.
+
+    Returns
+    -------
+    str
+        The colliding relationship label.
+    """
+
+    input_op = next(op for op in trace.ops if op.is_input)
+    collision_op = next(op for op in trace.ops if not op.is_input and not op.is_output)
+    collision_op._label_raw = input_op.layer_label
+    return str(input_op.layer_label)
+
+
+def _assert_relationship_resolution_matches_accessor(trace: tl.Trace) -> None:
+    """Assert internal relationship resolution is identical to the public accessor.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose stored parent and child labels are being checked.
+    """
+
+    labels = {
+        label
+        for op in trace.ops
+        for label in (*getattr(op, "parents", ()), *getattr(op, "children", ()))
+    }
+    for label in labels:
+        try:
+            expected = trace.ops[label]
+        except Exception as expected_error:
+            try:
+                _resolve_relationship_op(trace, label)
+            except Exception as actual_error:
+                assert type(actual_error) is type(expected_error)
+                assert str(actual_error) == str(expected_error)
+            else:
+                pytest.fail(f"relationship resolver accepted accessor error label {label!r}")
+        else:
+            assert _resolve_relationship_op(trace, label) is expected
+
+
 def _landmark_swallow_count(trace: tl.Trace, result: object) -> int:
     """Return selected boxes or child segments with hard landmark blockers."""
 
@@ -419,6 +488,167 @@ def _require_transformers() -> ModuleType:
     """Import transformers or skip the calling test."""
 
     return pytest.importorskip("transformers")
+
+
+@pytest.mark.parametrize(
+    ("builder", "x"),
+    (
+        (lambda: UniformStack(depth=12), torch.randn(2, 8)),
+        (lambda: UniqueWideFanModel(width=4), torch.randn(1, 4, 8, 8)),
+    ),
+)
+def test_collapse_adjacency_index_avoids_feed_forward_fuzzy_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+    builder: Callable[[], torch.nn.Module],
+    x: torch.Tensor,
+) -> None:
+    """Canonical analysis and rolled schedules never enter fuzzy Op lookup.
+
+    Parameters
+    ----------
+    monkeypatch:
+        Pytest patch helper.
+    builder:
+        Feed-forward model factory.
+    x:
+        Example model input.
+    """
+
+    analysis_trace = _trace(builder(), x)
+    schedule_trace = _trace(builder(), x)
+
+    def reject_fuzzy_lookup(self: TraceOpAccessor, key: str) -> Any:
+        """Fail if canonical collapse work enters fuzzy Op lookup."""
+
+        _ = self
+        raise AssertionError(f"unexpected fuzzy Op lookup for {key!r}")
+
+    try:
+        _clear_collapse_caches(analysis_trace)
+        monkeypatch.setattr(TraceOpAccessor, "_resolve_substring", reject_fuzzy_lookup)
+        analysis = analyze_collapse(analysis_trace)
+        assert analysis.signals
+        assert analysis.child_flow_graphs
+
+        _clear_collapse_caches(schedule_trace)
+        schedule = collapse_schedule(schedule_trace, RenderContext(vis_mode="rolled"))
+        assert schedule.steps
+        assert schedule.steps[-1].plan.nodes
+    finally:
+        analysis_trace.cleanup()
+        schedule_trace.cleanup()
+
+
+def test_collapse_adjacency_index_build_and_visit_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Index construction is once-per-trace and relationship work has a derived bound.
+
+    Parameters
+    ----------
+    monkeypatch:
+        Pytest patch helper.
+    """
+
+    trace = _trace(UniformStack(depth=12), torch.randn(2, 8))
+    original_index = auto_collapse._op_adjacency_index
+    original_resolver = auto_collapse._resolve_relationship_op
+    counts = {"index_builds": 0, "relationship_visits": 0}
+
+    def counted_index(target: tl.Trace) -> Mapping[str, str]:
+        """Count cache-miss index constructions."""
+
+        if target not in auto_collapse._OP_ADJACENCY_INDEX_CACHE:
+            counts["index_builds"] += 1
+        return original_index(target)
+
+    def counted_resolver(target: tl.Trace, label: str) -> Any:
+        """Count relationship-resolution visits."""
+
+        counts["relationship_visits"] += 1
+        return original_resolver(target, label)
+
+    def reject_fuzzy_lookup(self: TraceOpAccessor, key: str) -> Any:
+        """Fail if an ordinary relationship label requires fuzzy lookup."""
+
+        _ = self
+        raise AssertionError(f"unexpected fuzzy Op lookup for {key!r}")
+
+    try:
+        _clear_collapse_caches(trace)
+        monkeypatch.setattr(auto_collapse, "_op_adjacency_index", counted_index)
+        monkeypatch.setattr(auto_collapse, "_resolve_relationship_op", counted_resolver)
+        monkeypatch.setattr(TraceOpAccessor, "_resolve_substring", reject_fuzzy_lookup)
+        analysis = analyze_collapse(trace)
+
+        stored_references = sum(len(op.parents) + len(op.children) for op in trace.ops)
+        hierarchy_multiplier = (
+            max(
+                (int(getattr(module, "address_depth", 0)) for module in trace.modules),
+                default=0,
+            )
+            + 1
+        )
+        assert analysis.signals
+        assert counts["index_builds"] == 1
+        assert 0 < counts["relationship_visits"] <= stored_references * hierarchy_multiplier
+    finally:
+        trace.cleanup()
+
+
+def test_recurrent_relationship_fallback_is_bounded_and_equivalent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A colliding recurrent label takes the bounded compatibility fallback.
+
+    Parameters
+    ----------
+    monkeypatch:
+        Pytest patch helper.
+    """
+
+    trace = _trace(UnevenReusedSiblings(), torch.randn(2, 4))
+    fallback_label = _add_unambiguous_accessor_fallback_collision(trace)
+    original = TraceOpAccessor._resolve_substring
+    fuzzy_labels: list[str] = []
+
+    def count_fuzzy_lookup(self: TraceOpAccessor, key: str) -> Any:
+        """Count and delegate compatibility fallback lookups."""
+
+        fuzzy_labels.append(key)
+        return original(self, key)
+
+    try:
+        _clear_collapse_caches(trace)
+        monkeypatch.setattr(TraceOpAccessor, "_resolve_substring", count_fuzzy_lookup)
+        analysis = analyze_collapse(trace)
+
+        assert analysis.signals
+        assert 0 < len(fuzzy_labels) <= 4
+        assert set(fuzzy_labels) == {fallback_label}
+        _assert_relationship_resolution_matches_accessor(trace)
+    finally:
+        trace.cleanup()
+
+
+def test_relationship_resolver_preserves_ambiguity_error() -> None:
+    """A genuinely ambiguous recurrent relationship keeps the accessor error."""
+
+    trace = _trace(UnevenReusedSiblings(), torch.randn(2, 4))
+    try:
+        recurrent_op = next(
+            op for op in trace.ops if len(trace.ops.resolve_all(op.layer_label)) > 1
+        )
+        relationship_owner = next(op for op in trace.ops if op.children)
+        original_child = relationship_owner.children[0]
+        relationship_owner.children[0] = recurrent_op.layer_label
+        auto_collapse._OP_ADJACENCY_INDEX_CACHE.pop(trace, None)
+
+        _assert_relationship_resolution_matches_accessor(trace)
+
+        relationship_owner.children[0] = original_child
+    finally:
+        trace.cleanup()
 
 
 def test_role_components_connect_uniform_siblings() -> None:
