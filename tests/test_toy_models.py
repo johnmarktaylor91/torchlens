@@ -2633,6 +2633,7 @@ def test_selective_ssm():
     )
 
 
+@pytest.mark.slow
 def test_stacked_ssm():
     model = example_models.StackedSSM()
     x = torch.randint(0, 100, (2, 10))
