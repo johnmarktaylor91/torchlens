@@ -961,7 +961,8 @@ def _parameter_mutation_output_for_logging(
     if not was_inplace or not _is_unregistered_parameter(trace, source):
         return value
     with _state.pause_logging():
-        tensor = value.detach().clone()
+        plain_value = value.as_subclass(torch.Tensor)
+        tensor = safe_copy(plain_value, detach_tensor=True)
         tensor.requires_grad_(value.requires_grad)
     return tensor
 

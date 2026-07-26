@@ -14,7 +14,6 @@ from fractions import Fraction
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from .._io import FieldPolicy
 from ..capture.arg_positions import _normalize_func_name
 from ._engine_descriptor import _descriptor
 from ._engine_geometry import (
@@ -86,7 +85,6 @@ def solve(trace: Trace) -> _ReceptiveFieldSolution:
         while both the rule-registry epoch and structural graph revision remain unchanged.
     """
 
-    _ensure_trace_cache_policy(trace)
     epoch = _rf_rules_epoch()
     graph_revision = _graph_revision(trace)
     cached = trace.__dict__.get("_receptive_field_solution")
@@ -126,7 +124,6 @@ def solve_from(trace: Trace, source: Op) -> _ReceptiveFieldSolution:
     if source.source_trace is not trace or not _operation_is_live(source):
         raise ValueError("Receptive-field source operation does not belong to the supplied trace.")
 
-    _ensure_trace_cache_policy(trace)
     epoch = _rf_rules_epoch()
     graph_revision = _graph_revision(trace)
     cache = trace.__dict__.get("_rf_source_solutions")
@@ -147,19 +144,6 @@ def solve_from(trace: Trace, source: Op) -> _ReceptiveFieldSolution:
     while len(cache) > _SOURCE_SOLUTION_CACHE_SIZE:
         cache.popitem(last=False)
     return solution
-
-
-def _ensure_trace_cache_policy(trace: Trace) -> None:
-    """Declare the dynamically owned trace cache as runtime-only portable state.
-
-    Parameters
-    ----------
-    trace:
-        Trace class whose portable state policy owns the runtime cache.
-    """
-
-    type(trace).PORTABLE_STATE_SPEC.setdefault("_receptive_field_solution", FieldPolicy.DROP)
-    type(trace).PORTABLE_STATE_SPEC.setdefault("_rf_source_solutions", FieldPolicy.DROP)
 
 
 def lookup(trace: Trace, op: Op | str) -> Mapping[str, ReceptiveField]:

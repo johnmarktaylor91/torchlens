@@ -65,6 +65,7 @@ from ._tl import (
     get_buffer_address,
     get_tensor_label,
     get_tensor_meta,
+    is_tensor_data_alias,
     session_meta_is_anchored,
 )
 from .buffer_writes import session_validated_buffer_address
@@ -3307,9 +3308,24 @@ def _register_dispatch_result_origins(
 
 
 def _resolved_dispatch_origins(
-    trace: Any, source: torch.Tensor
+    trace: Any,
+    source: torch.Tensor,
+    *,
+    prefer_ledger: bool = False,
 ) -> tuple[set[str], set[str]] | None:
     """Resolve an unlabelled escape source to positive (labels, state names), or ``None``.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace owning the dispatch-origin ledger.
+    source:
+        Tensor whose value origins must be resolved.
+    prefer_ledger:
+        Whether to consult the dispatch ledger before the tensor's own label.
+        ``Tensor.data`` aliases use this route because their canonical detach
+        label represents the getter, while the ledger names the semantic base
+        producer required by the host-escape witness.
 
     Returns ``None`` -- the caller MUST fail closed -- when the source's propagated
     origin set contains ``unknown`` (an operand the census could not attribute),
@@ -3322,8 +3338,15 @@ def _resolved_dispatch_origins(
     it needs no witness.
     """
 
-    with _state.pause_logging(), internal_scalar_read():
-        origins = _operand_origins(trace, source)
+    origins: frozenset[str] | None = None
+    if prefer_ledger:
+        registry = _DISPATCH_TENSOR_ORIGINS.get(trace)
+        entry = registry.get(source) if registry is not None else None
+        if entry is not None:
+            origins = entry[0]
+    if origins is None:
+        with _state.pause_logging(), internal_scalar_read():
+            origins = _operand_origins(trace, source)
     if _ORIGIN_UNKNOWN in origins or _ORIGIN_RNG in origins or _ORIGIN_UNINIT in origins:
         return None
     labels = {
@@ -3377,7 +3400,13 @@ def _record_escape_source_tensor(
     if _escape_source_is_torchlens_internal():
         return
     is_bool = source.dtype is torch.bool
-    label = get_tensor_label(source)
+    # ``Tensor.data`` is captured as a canonical detach node so ordinary tensor
+    # replay retains a graph edge. For a host escape, however, the alias is not
+    # the semantic value source: resolve its dispatch origins exactly like the
+    # historical unlabelled ``.data`` object so the witness attributes the base
+    # producer rather than the synthetic getter node.
+    data_alias = is_tensor_data_alias(source)
+    label = None if data_alias else get_tensor_label(source)
     if not isinstance(label, str):
         # An UNLABELLED escape source (a ``.data`` alias, a raw-dispatch product):
         # r37 INV-1 single-exit attribution ladder. Every rung is a POSITIVE
@@ -3407,7 +3436,11 @@ def _record_escape_source_tensor(
         # and state names (param/buffer sources -> PASS A digest). Multi-element and
         # scalar sources resolve identically -- no arity assumption anywhere.
         # Owner-thread only (resolution flips the global logging toggle).
-        resolved = _resolved_dispatch_origins(trace, source) if resolve_origins else None
+        resolved = (
+            _resolved_dispatch_origins(trace, source, prefer_ledger=data_alias)
+            if resolve_origins
+            else None
+        )
         if resolved is not None:
             origin_labels, origin_states = resolved
             if origin_labels:

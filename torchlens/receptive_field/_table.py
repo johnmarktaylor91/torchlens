@@ -316,6 +316,11 @@ def build_rf_profile(
     if sort_by is not None and sort_by not in columns:
         raise ValueError(f"sort_by must be one of: {', '.join(columns)}.")
     frame = pd.DataFrame(rows, columns=columns)
+    semantic_columns = ["status", "alignment", "layout"]
+    if resolved_direction is ReceptiveFieldDirection.PROJECTIVE:
+        semantic_columns.append("projective_direction")
+    for column in semantic_columns:
+        frame[column] = pd.Series((row[column] for row in rows), dtype=object)
     if sort_by is not None:
         frame = frame.sort_values(sort_by, ascending=ascending, na_position="last", kind="stable")
     frame = frame.reset_index(drop=True)

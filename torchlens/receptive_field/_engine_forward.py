@@ -9,7 +9,6 @@ from fractions import Fraction
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from .._io import FieldPolicy
 from ._engine import (
     _concatenation_offsets,
     _graph_revision,
@@ -83,7 +82,6 @@ def solve_projective(trace: Trace, target_ops: Iterable[Op | str]) -> _Projectiv
 
     targets = _canonical_targets(trace, target_ops)
     target_labels = tuple(target.label for target in targets)
-    _ensure_trace_cache_policy(trace)
     epoch = _rf_rules_epoch()
     revision = _graph_revision(trace)
     cache = trace.__dict__.get("_rf_target_solutions")
@@ -143,12 +141,6 @@ def _canonical_targets(trace: Trace, target_ops: Iterable[Op | str]) -> tuple[Op
     if len(keys) != len(set(keys)):
         raise ValueError("Projective targets must have distinct result keys.")
     return targets
-
-
-def _ensure_trace_cache_policy(trace: Trace) -> None:
-    """Declare the target-set solution cache as runtime-only portable state."""
-
-    type(trace).PORTABLE_STATE_SPEC.setdefault("_rf_target_solutions", FieldPolicy.DROP)
 
 
 def _solve_projective_uncached(
