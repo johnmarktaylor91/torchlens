@@ -137,6 +137,13 @@ def _numpy_rng_methods_need_frame_digest() -> bool:
 _NUMPY_RNG_METHODS_NEED_FRAME_DIGEST = _numpy_rng_methods_need_frame_digest()
 """Whether NumPy RNG draws need the profiled-frame state-digest fallback."""
 
+_NUMPY_FRAME_DIGEST_INTERNAL_PATH_PREFIXES = (
+    f"{_os_module.path.dirname(_os_module.path.dirname(__file__))}{_os_module.sep}",
+    f"{_os_module.path.dirname(np.__file__)}{_os_module.sep}",
+    f"{_os_module.path.dirname(torch.__file__)}{_os_module.sep}",
+)
+"""Package roots whose internal frames cannot originate user-owned NumPy RNG draws."""
+
 
 def aten_qualname_is_seeded_rng(namespace: str | None, qualname: str | None) -> bool:
     """Return whether a captured callable maps to a seeded ATen RNG operator.
@@ -1821,6 +1828,7 @@ class host_nondeterminism_monitor:
         # preserving the no-method-name invariant.
         self._numpy_frame_rng_states: dict[int, list[tuple[Any, str]]] = {}
         self._numpy_global_name_cache: dict[tuple[int, int], tuple[str, ...]] = {}
+        self._numpy_frame_digest_scope_cache: dict[CodeType, bool] = {}
         # r49 hon1_1: re-entrancy depth for monitor-INTERNAL probes. While > 0 the monitor is
         # reading through its OWN inventory probe (owner-thread, ``__enter__``-scoped, BEFORE the
         # user forward runs), so any channel a probe transitively touches must NOT be marked as a
@@ -2094,6 +2102,36 @@ class host_nondeterminism_monitor:
             return ()
         return tuple(instance_dict.values())
 
+    def _numpy_frame_needs_rng_snapshot(self, code: CodeType) -> bool:
+        """Return whether a code object's frames need the NumPy RNG digest.
+
+        Torch, TorchLens, and NumPy package frames are implementation frames: a
+        user-owned NumPy RNG draw originates in the calling user frame, which remains
+        fully snapshotted, or in a user callback, which receives its own profile
+        ``call`` event. Caching by code object makes the per-call decision an identity
+        lookup after the first invocation without trusting mutable module metadata.
+
+        Parameters
+        ----------
+        code:
+            Code object for the entering Python frame.
+
+        Returns
+        -------
+        bool
+            Whether the frame may originate a user-owned NumPy RNG draw.
+        """
+
+        cached = self._numpy_frame_digest_scope_cache.get(code)
+        if cached is not None:
+            return cached
+        filename = code.co_filename
+        needs_snapshot = not any(
+            filename.startswith(prefix) for prefix in _NUMPY_FRAME_DIGEST_INTERNAL_PATH_PREFIXES
+        )
+        self._numpy_frame_digest_scope_cache[code] = needs_snapshot
+        return needs_snapshot
+
     def _snapshot_numpy_frame_rngs(self, frame: FrameType) -> None:
         """Snapshot NumPy RNG receivers inertly reachable from a Python frame.
 
@@ -2113,6 +2151,8 @@ class host_nondeterminism_monitor:
         """
 
         if not _NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
+            return
+        if not self._numpy_frame_needs_rng_snapshot(frame.f_code):
             return
         cache_key = (id(frame.f_code), id(frame.f_globals))
         global_names = self._numpy_global_name_cache.get(cache_key)
