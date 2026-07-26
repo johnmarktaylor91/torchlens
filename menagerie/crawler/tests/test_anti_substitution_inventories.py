@@ -67,6 +67,8 @@ _DEAD_SYMBOLS = {
     "_validate_terminal_evidence",
     "validate_reconstruction_source_binding",
     "build_author_repair_envelope",
+    "collect_executable_closure",
+    "compile_execution_read_manifest_from_closure",
     "compare_identity_sets",
     "filter_funnel",
     "is_legacy_untrusted",
