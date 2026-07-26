@@ -512,29 +512,6 @@ def validate_payload(payload: Mapping[str, Any], schema_version: Union[str, None
         raise PayloadValidationError(message) from exc
 
 
-def is_valid_payload(payload: Mapping[str, Any], schema_version: Union[str, None] = None) -> bool:
-    """Return whether a payload passes strict schema validation.
-
-    Parameters
-    ----------
-    payload:
-        JSON-like mapping to validate.
-    schema_version:
-        Optional expected schema version.
-
-    Returns
-    -------
-    bool
-        True only for a fully valid payload.
-    """
-
-    try:
-        validate_payload(payload, schema_version)
-    except PayloadValidationError:
-        return False
-    return True
-
-
 def is_legacy_untrusted(payload: Mapping[str, Any]) -> bool:
     """Return whether a historical row is categorically unusable as v3 authority.
 
