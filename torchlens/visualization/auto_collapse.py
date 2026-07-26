@@ -206,6 +206,72 @@ class CollapseAnalysis:
 
 
 _ANALYSIS_CACHE: weakref.WeakKeyDictionary[Any, CollapseAnalysis] = weakref.WeakKeyDictionary()
+_OP_ADJACENCY_INDEX_CACHE: weakref.WeakKeyDictionary[Any, Mapping[str, str]] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _op_adjacency_index(trace: "Trace") -> Mapping[str, str]:
+    """Return unambiguous relationship labels mapped to canonical Op labels.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose operation relationships are being indexed.
+
+    Returns
+    -------
+    Mapping[str, str]
+        Unambiguous accessor label forms mapped to canonical operation labels.
+    """
+
+    cached = _OP_ADJACENCY_INDEX_CACHE.get(trace)
+    if cached is not None:
+        return cached
+    unique_ops: dict[str, Op] = {}
+    ambiguous_forms: set[str] = set()
+    for op in trace.ops:
+        forms = (
+            op.label,
+            op.label_short,
+            op._label_raw,
+            op.raw_label,
+            op.layer_label,
+            op.layer_label_short,
+        )
+        for form in forms:
+            if not form:
+                continue
+            existing = unique_ops.get(form)
+            if existing is None:
+                unique_ops[form] = op
+            elif existing is not op:
+                ambiguous_forms.add(form)
+    index = {form: op.label for form, op in unique_ops.items() if form not in ambiguous_forms}
+    _OP_ADJACENCY_INDEX_CACHE[trace] = index
+    return index
+
+
+def _resolve_relationship_op(trace: "Trace", label: str) -> "Op":
+    """Resolve a parent/child relationship label without changing accessor semantics.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the operation relationship.
+    label:
+        Label stored in an operation's ``parents`` or ``children`` collection.
+
+    Returns
+    -------
+    Op
+        The same operation returned by the public trace accessor.
+    """
+
+    canonical_label = _op_adjacency_index(trace).get(label)
+    if canonical_label is None:
+        return cast("Op", trace.ops[label])
+    return cast("Op", trace.ops[canonical_label])
 
 
 def analyze_collapse(trace: "Trace") -> CollapseAnalysis:
@@ -712,7 +778,7 @@ def _synthetic_child_condensed_flow_graph(
     for op in trace.ops:
         source = owner_by_label.get(op.label)
         for child_label in getattr(op, "children", ()) or ():
-            child_op = cast("Op", trace.ops[child_label])
+            child_op = _resolve_relationship_op(trace, child_label)
             target_label = child_op.label
             if not _is_forward_dataflow_edge(trace, op.label, target_label):
                 continue
@@ -1743,7 +1809,7 @@ def _compute_signal_skeleton(trace: "Trace") -> dict[str, ModuleCollapseSignals]
         for child_label in parent.children:
             child = op_by_label.get(child_label)
             if child is None:
-                child = cast("Op", trace.ops[child_label])
+                child = _resolve_relationship_op(trace, child_label)
                 op_by_label[child_label] = child
                 op_by_label[child.label] = child
                 stack_by_label[child.label] = _module_address_stack(child)
@@ -2054,7 +2120,7 @@ def _condensed_edges(
         op = cast("Op", trace.ops[label])
         source = _condensed_owner_for_op(label, parent, flow_children, child_sets)
         for parent_label in getattr(op, "parents", ()) or ():
-            parent_op = cast("Op", trace.ops[parent_label])
+            parent_op = _resolve_relationship_op(trace, parent_label)
             normalized_parent_label = parent_op.label
             if normalized_parent_label in parent_subtree:
                 continue
@@ -2062,7 +2128,7 @@ def _condensed_edges(
                 continue
             edges.add((f"external_source:{normalized_parent_label}", source))
         for child_label in getattr(op, "children", ()) or ():
-            child = cast("Op", trace.ops[child_label])
+            child = _resolve_relationship_op(trace, child_label)
             normalized_child_label = child.label
             if not _is_forward_dataflow_edge(trace, label, normalized_child_label):
                 continue
@@ -2334,7 +2400,7 @@ def _has_external_parent(trace: "Trace", op: "Op", subtree: set[str]) -> bool:
     """Return whether an operation has a non-buffer parent outside ``subtree``."""
 
     for parent_label in getattr(op, "parents", ()) or ():
-        parent = cast("Op", trace.ops[parent_label])
+        parent = _resolve_relationship_op(trace, parent_label)
         if parent.label not in subtree and not getattr(parent, "is_buffer", False):
             return True
     return False
@@ -2344,7 +2410,7 @@ def _has_external_child(trace: "Trace", op: "Op", subtree: set[str]) -> bool:
     """Return whether an operation has a non-buffer child outside ``subtree``."""
 
     for child_label in getattr(op, "children", ()) or ():
-        child = cast("Op", trace.ops[child_label])
+        child = _resolve_relationship_op(trace, child_label)
         if child.label not in subtree and not getattr(child, "is_buffer", False):
             return True
     return False
@@ -2404,7 +2470,7 @@ def _count_passthrough_edges(
         has_internal_parent = False
         has_input_parent = False
         for parent_label in op.parents:
-            parent = cast("Op", trace.ops[parent_label])
+            parent = _resolve_relationship_op(trace, parent_label)
             if parent.label in subtree:
                 has_internal_parent = True
             elif _base_label(parent.label) in input_layers:
