@@ -12,7 +12,7 @@ from typing import Any, Iterable, Mapping, Optional, Sequence
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 from menagerie.crawler.constants import STABLE_ID_DIGEST_CHARS
-from menagerie.crawler.models import IdentitySet, StalenessReport
+from menagerie.crawler.models import StalenessReport
 
 _HASH_PREFIX = "sha256:"
 
@@ -445,41 +445,6 @@ def compute_execution_identity(
     """
 
     return stable_hash(locals())
-
-
-def compare_identity_sets(previous: IdentitySet, current: IdentitySet) -> StalenessReport:
-    """Propagate exact identity changes to their dependent facts.
-
-    Parameters
-    ----------
-    previous, current:
-        Previously accepted and newly computed identity sets.
-
-    Returns
-    -------
-    StalenessReport
-        Changed identities and dependent attempt/gate facts.
-    """
-
-    stale: set[str] = set()
-    for name in (
-        "source",
-        "evidence",
-        "recipe",
-        "environment",
-        "fidelity",
-        "vet",
-        "execution",
-    ):
-        if getattr(previous, name) != getattr(current, name):
-            stale.add(name)
-    if stale & {"source", "evidence", "fidelity"}:
-        stale.add("fidelity_verdict")
-    if stale & {"source", "evidence", "vet"}:
-        stale.add("accuracy_gate")
-    if stale & {"recipe", "environment", "execution"}:
-        stale.update({"attempts", "run_status"})
-    return StalenessReport(frozenset(stale))
 
 
 def stale_dependencies(changed_inputs: Iterable[str]) -> StalenessReport:

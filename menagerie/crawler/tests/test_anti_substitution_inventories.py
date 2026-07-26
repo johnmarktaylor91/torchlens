@@ -67,6 +67,7 @@ _DEAD_SYMBOLS = {
     "_validate_terminal_evidence",
     "validate_reconstruction_source_binding",
     "build_author_repair_envelope",
+    "compare_identity_sets",
 }
 _DEAD_OPTIONS = {"--scheduled-wake"}
 _SENSITIVE_EDGE_COUNTS = Counter(
