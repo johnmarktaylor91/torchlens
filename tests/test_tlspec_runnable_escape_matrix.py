@@ -907,7 +907,11 @@ def test_r14_c3_storage_rebind_op_is_refused_at_save(
     name: str, factory: Callable[[], nn.Module], tmp_path: Path
 ) -> None:
     """set_/resize_ fail closed at SAVE with a typed diagnostic (no run-time crash)."""
-    trace = tl.trace(factory(), _R14_X.clone(), capture=_CAPTURE)
+    if name == "set_":
+        with pytest.warns(UserWarning, match="no graph/source provenance"):
+            trace = tl.trace(factory(), _R14_X.clone(), capture=_CAPTURE)
+    else:
+        trace = tl.trace(factory(), _R14_X.clone(), capture=_CAPTURE)
     with pytest.raises(RunnablePreflightError) as excinfo:
         trace.save(tmp_path / "storage_rebind.tlspec", level="runnable")
     diagnostics = excinfo.value.fields["diagnostics"]
