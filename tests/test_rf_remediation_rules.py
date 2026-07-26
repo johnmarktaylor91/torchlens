@@ -13,6 +13,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.capture.arg_positions import _normalize_func_name
 from torchlens.receptive_field import _rules
+from torchlens.receptive_field._engine_forward import solve_projective
 from torchlens.receptive_field._rules import ReceptiveFieldRuleContext, _RuleResult
 from torchlens.receptive_field._types import (
     ReceptiveFieldStatus,
@@ -407,6 +408,52 @@ def test_middle_axis_reduction_uses_surviving_axis_map() -> None:
     assert tuple(axis.output_axis for axis in descriptor.axes) == (0, 1, None, 2)
     result = reduction.receptive_field.check((0, 3, 2))  # type: ignore[union-attr]
     assert result.status is ReceptiveFieldValidationStatus.PASS
+
+
+def test_positional_reduction_dimension_uses_surviving_axis_map() -> None:
+    """Read positional reduction dimensions when builtin signatures omit ``dim``."""
+
+    class PositionalReduction(nn.Module):
+        """Reduction passing the dimension as an unnamed positional argument."""
+
+        def forward(self, value: torch.Tensor) -> torch.Tensor:
+            """Sum over the trailing axis."""
+
+            return value.sum(-1)
+
+    trace = _trace(
+        PositionalReduction(),
+        torch.ones(2, 3, 4, requires_grad=True),
+    )
+    reduction = _op(trace, "sum")
+    descriptor = reduction.receptive_field._descriptor()  # type: ignore[union-attr]
+
+    assert descriptor.axes is not None
+    assert tuple(axis.output_axis for axis in descriptor.axes) == (0, 1, None)
+
+
+def test_rank_changing_full_rule_does_not_require_passthrough_map() -> None:
+    """Globalize every contracted axis without inventing a rank-change map."""
+
+    class RankChangingEinsum(nn.Module):
+        """Einsum reducing two matrix axes into one batch axis."""
+
+        def forward(self, value: torch.Tensor) -> torch.Tensor:
+            """Take a batched matrix trace."""
+
+            return torch.einsum("bii->b", value)
+
+    trace = _trace(
+        RankChangingEinsum(),
+        torch.ones(2, 3, 3, requires_grad=True),
+    )
+    einsum = _op(trace, "einsum")
+    descriptor = einsum.receptive_field._descriptor()  # type: ignore[union-attr]
+
+    assert descriptor.axes is not None
+    assert all(axis.kind == "full" for axis in descriptor.axes)
+    projective = solve_projective(trace, trace.output_ops)  # type: ignore[union-attr]
+    assert all(state.axes is not None for state in projective.states.values())
 
 
 class _PointwiseChain(nn.Module):

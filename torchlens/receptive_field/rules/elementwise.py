@@ -91,7 +91,7 @@ def reduction(context: ReceptiveFieldRuleContext) -> _RuleResult:
     """Mark reduced parent axes as exact whole-extent dependencies."""
 
     rank = len(context.in_shapes[0]) if context.in_shapes else len(context.out_shape)
-    raw = context.arg("dim", context.cfg("dim", None))
+    raw = context.arg("dim", context.arg(0, context.cfg("dim", None)))
     if raw is None:
         axes = tuple(range(rank))
     else:

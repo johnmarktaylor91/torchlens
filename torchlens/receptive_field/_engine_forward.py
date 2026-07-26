@@ -628,6 +628,20 @@ def _transpose_full(
         notes,
         child_to_parent=child_to_parent,
     )
+    if passthrough.axes is None and all(axis.output_axis is None for axis in state.axes):
+        passthrough = replace(state, notes=notes, rule=rule_name)
+    elif passthrough.axes is None and selected == set(range(parent_rank)):
+        axes = tuple(
+            replace(
+                axis,
+                geometry=_Full(exact=exact),
+                output_axis=None,
+                kind="full",
+                provenance=child.label,
+            )
+            for axis in state.axes
+        )
+        return replace(state, axes=axes, notes=notes, rule=rule_name)
     assert passthrough.axes is not None
     axes: list[_AxisState] = []
     batch_axis = passthrough.batch_axis
