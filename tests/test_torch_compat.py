@@ -332,6 +332,9 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_FX_GRAPH_MODULE": True,
         "HAS_NAMED_TENSOR_API": tc.HAS_NAMED_TENSOR_API,
         "HAS_CACHED_UNTYPED_STORAGE_WRAPPER": tc.HAS_CACHED_UNTYPED_STORAGE_WRAPPER,
+        "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE": (
+            tc.HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
+        ),
         "HAS_DYNAMO_OPTIMIZED_MODULE": True,
         "HAS_GENERATOR_CLONE_STATE": hasattr(torch.Generator, "clone_state"),
         "HAS_GENERATOR_GRAPHSAFE_GET_STATE": hasattr(torch.Generator, "graphsafe_get_state"),

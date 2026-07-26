@@ -44,6 +44,7 @@ from ._tl import (
 from ...data_classes.internal_types import FuncExecutionContext
 from ...utils.introspection import get_vars_of_type_from_obj, nested_getattr
 from ...utils._torch_compat import (
+    HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE,
     get_current_function_mode_stack,
     get_device_constructors,
     get_device_context_type,
@@ -961,7 +962,10 @@ def _parameter_mutation_output_for_logging(
     if not was_inplace or not _is_unregistered_parameter(trace, source):
         return value
     with _state.pause_logging():
-        plain_value = value.as_subclass(torch.Tensor)
+        if HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE:
+            plain_value = value.as_subclass(torch.Tensor)
+        else:
+            plain_value = torch.ops.aten.detach.default(value)
         tensor = safe_copy(plain_value, detach_tensor=True)
         tensor.requires_grad_(value.requires_grad)
     return tensor
