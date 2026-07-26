@@ -295,6 +295,40 @@ def test_spatial_cat_projective_offsets_route_into_target_segments() -> None:
     assert result.status is ReceptiveFieldValidationStatus.PASS
 
 
+class _EmptyTensorConcatenation(nn.Module):
+    """Prepend PyTorch's rank-one empty-tensor concatenation sentinel."""
+
+    def __init__(self) -> None:
+        """Create a windowed branch whose output is concatenated."""
+
+        super().__init__()
+        self.conv = nn.Conv2d(1, 1, 3, padding=1, bias=False)
+        _fill_convolutions(self)
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Concatenate a rank-one empty tensor without changing the input extent."""
+
+        value = self.conv(value)
+        empty = torch.empty((0,), dtype=value.dtype, device=value.device)
+        return torch.cat((empty, value), dim=2)
+
+
+def test_cat_rank_one_empty_tensor_contributes_zero_extent() -> None:
+    """Treat PyTorch's rank-one empty concat sentinel as a zero-width segment."""
+
+    trace = _trace(
+        _EmptyTensorConcatenation(),
+        torch.ones(1, 1, 8, 8, requires_grad=True),
+    )
+    target = _op(trace, "cat")
+    box = target.receptive_field.at((4, 4))  # type: ignore[union-attr]
+
+    assert tuple(target.shape) == (1, 1, 8, 8)  # type: ignore[union-attr]
+    assert (box.axes[2].clipped_start, box.axes[2].clipped_stop) == (3, 6)
+    result = target.receptive_field.check((0, 0, 4, 4))  # type: ignore[union-attr]
+    assert result.status is ReceptiveFieldValidationStatus.PASS
+
+
 class _StructuralChain(nn.Module):
     """Convolution followed by exact permutation and singleton reshape operations."""
 

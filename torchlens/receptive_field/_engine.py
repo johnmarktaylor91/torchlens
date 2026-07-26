@@ -557,8 +557,12 @@ def _concatenation_offsets(op: Op, parent: Op, result: _RuleResult) -> tuple[int
     for label, shape in zip(op.parents, op.input_shapes, strict=False):
         if label in parent_references:
             starts.append(offset)
-        if shape is not None:
-            offset += int(shape[raw_axis])
+        if shape is None:
+            continue
+        # torch.cat accepts a one-dimensional empty tensor at any concat axis.
+        if tuple(shape) == (0,):
+            continue
+        offset += int(shape[raw_axis])
     return tuple(starts)
 
 
