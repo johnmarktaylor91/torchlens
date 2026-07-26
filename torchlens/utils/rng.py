@@ -38,6 +38,7 @@ from types import (
     CodeType,
     FrameType,
     FunctionType,
+    GetSetDescriptorType,
     MemberDescriptorType,
     MethodType,
     MethodWrapperType,
@@ -1816,9 +1817,10 @@ class host_nondeterminism_monitor:
         # NumPy 2.x binds Generator/RandomState Cython callables as Python methods
         # that emit no profile ``c_call`` event. The feature-detected fallback
         # snapshots only RNG receivers directly referenced by each profiled Python
-        # frame and compares them at return, preserving the no-method-name invariant.
+        # frame or one inert holder edge below them and compares them at return,
+        # preserving the no-method-name invariant.
         self._numpy_frame_rng_states: dict[int, list[tuple[Any, str]]] = {}
-        self._numpy_global_rng_cache: dict[tuple[int, int], tuple[Any, ...]] = {}
+        self._numpy_global_name_cache: dict[tuple[int, int], tuple[str, ...]] = {}
         # r49 hon1_1: re-entrancy depth for monitor-INTERNAL probes. While > 0 the monitor is
         # reading through its OWN inventory probe (owner-thread, ``__enter__``-scoped, BEFORE the
         # user forward runs), so any channel a probe transitively touches must NOT be marked as a
@@ -2011,15 +2013,98 @@ class host_nondeterminism_monitor:
         channel, disposition = mark
         self._mark_disposition(channel, disposition)
 
+    @staticmethod
+    def _numpy_frame_candidate_children(value: Any) -> tuple[Any, ...]:
+        """Return one inert holder edge below a profiled-frame value.
+
+        Exact built-in container types are read through their concrete C
+        implementations, so a hostile subclass cannot execute an overridden iterator.
+        Plain-object attributes are read only through a concrete getset descriptor for
+        the instance ``__dict__``; a property or other hostile descriptor named
+        ``__dict__`` makes the value a leaf. Callable receivers remain gated by
+        :func:`_numpy_rng_receiver`, which reads ``__self__`` only after an exact
+        built-in-bound-callable or ``MethodType`` check.
+
+        Parameters
+        ----------
+        value:
+            Candidate frame local or referenced global.
+
+        Returns
+        -------
+        tuple[Any, ...]
+            Immediate inert children that may themselves be concrete NumPy RNG
+            receivers.
+        """
+
+        value_type = type(value)
+        if value_type is dict:
+            return (*dict.keys(value), *dict.values(value))
+        if value_type in (list, tuple, set, frozenset):
+            return tuple(value)
+        if isinstance(
+            value,
+            (
+                type,
+                ModuleType,
+                FunctionType,
+                BuiltinFunctionType,
+                MethodType,
+                MethodWrapperType,
+                np.ndarray,
+                np.generic,
+                torch.Tensor,
+                torch.nn.Module,
+            ),
+        ):
+            return ()
+        try:
+            module = type.__dict__["__module__"].__get__(value_type)
+        except Exception:
+            return ()
+        if not isinstance(module, str):
+            return ()
+        module_root = module.split(".", 1)[0]
+        if module_root in _CUSTOM_HOLDER_SKIP_MODULES or module_root in _STDLIB_CLASS_LEAF_MODULES:
+            return ()
+        instance_dict_getter = None
+        try:
+            mro = type.__dict__["__mro__"].__get__(value_type)
+        except Exception:
+            return ()
+        for klass in mro:
+            try:
+                class_dict = type.__dict__["__dict__"].__get__(klass)
+            except Exception:
+                return ()
+            descriptor = class_dict.get("__dict__")
+            if descriptor is None:
+                continue
+            if not isinstance(descriptor, GetSetDescriptorType):
+                return ()
+            instance_dict_getter = descriptor
+            break
+        if instance_dict_getter is None:
+            return ()
+        try:
+            instance_dict = instance_dict_getter.__get__(value, value_type)
+        except (AttributeError, TypeError, ValueError):
+            return ()
+        if not isinstance(instance_dict, dict):
+            return ()
+        return tuple(instance_dict.values())
+
     def _snapshot_numpy_frame_rngs(self, frame: FrameType) -> None:
-        """Snapshot NumPy RNG receivers directly referenced by a Python frame.
+        """Snapshot NumPy RNG receivers inertly reachable from a Python frame.
 
         This fallback is active only for the feature-detected NumPy Cython method
-        shape that emits no profile ``c_call`` event. Global lookup is restricted to
-        names referenced by the frame's code object, and closure lookup to declared
-        free variables, so this never walks a shared module namespace or materializes
-        every frame local. Global receivers are cached per code/globals identity to
-        keep the profile hook cheap across TorchLens's high call volume.
+        shape that emits no profile ``c_call`` event. It covers every materialized
+        fast local directly plus globals named by the frame's code object, descending
+        one inert edge below those globals through exact built-in containers or a
+        plain-object ``__dict__``. It never walks a shared module namespace or invokes
+        user attribute/iteration hooks. Referenced global names, rather than resolved
+        objects, are cached per code/globals identity so a rebound global cannot evade
+        a later snapshot.
 
         Parameters
         ----------
@@ -2030,28 +2115,31 @@ class host_nondeterminism_monitor:
         if not _NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
             return
         cache_key = (id(frame.f_code), id(frame.f_globals))
-        global_holders = self._numpy_global_rng_cache.get(cache_key)
-        if global_holders is None:
-            global_candidates = (
-                frame.f_globals[name] for name in frame.f_code.co_names if name in frame.f_globals
-            )
-            holders: list[Any] = []
-            for candidate in global_candidates:
-                receiver = _numpy_rng_receiver(candidate)
-                holder = receiver if receiver is not None else candidate
-                if isinstance(holder, _NUMPY_RNG_INSTANCE_TYPES):
-                    holders.append(holder)
-            global_holders = tuple(holders)
-            self._numpy_global_rng_cache[cache_key] = global_holders
-        candidates = list(global_holders)
-        if frame.f_code.co_freevars:
-            frame_locals = frame.f_locals
-            candidates.extend(
-                frame_locals[name] for name in frame.f_code.co_freevars if name in frame_locals
-            )
+        global_names = self._numpy_global_name_cache.get(cache_key)
+        if global_names is None:
+            global_names = tuple(frame.f_code.co_names)
+            self._numpy_global_name_cache[cache_key] = global_names
+        global_candidates = [
+            frame.f_globals[name] for name in global_names if name in frame.f_globals
+        ]
         snapshots: list[tuple[Any, str]] = []
         seen_ids: set[int] = set()
-        for candidate in candidates:
+        for candidate in global_candidates:
+            for reachable in (candidate, *self._numpy_frame_candidate_children(candidate)):
+                receiver = _numpy_rng_receiver(reachable)
+                holder = receiver if receiver is not None else reachable
+                if (
+                    id(holder) in seen_ids
+                    or id(holder) in self._exempt_ids
+                    or not isinstance(holder, _NUMPY_RNG_INSTANCE_TYPES)
+                ):
+                    continue
+                seen_ids.add(id(holder))
+                try:
+                    snapshots.append((holder, self._digest_rng_instance(holder)))
+                except Exception:
+                    self._flag_uncertain("profile_rng_state_read_failed")
+        for candidate in frame.f_locals.values():
             receiver = _numpy_rng_receiver(candidate)
             holder = receiver if receiver is not None else candidate
             if (
