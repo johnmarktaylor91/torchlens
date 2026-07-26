@@ -200,6 +200,8 @@ class CaptureSession:
         self.module_state.clear()
         self.history_state.clear()
         self.builders.clear()
+        self.projection_facts.clear()
+        self._sealed_core = None
         self.cleanup_stack.clear()
         self.activation_escrow.clear()
         self.gradient_reference_escrow.clear()
