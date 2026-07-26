@@ -11,15 +11,17 @@ from torchlens.validation import invariants
 
 
 # The pre-refactor sequences below are the dispatch-parity baseline. cert10
-# ADDED two checks (pass_count_consistency for torch and
-# backend_neutral_graph_topology for non-torch) without dropping or reordering
-# any pre-refactor check; the expected sequences include those additions.
+# ADDED three checks (receptive_field_metadata for every backend,
+# pass_count_consistency for torch, and backend_neutral_graph_topology for
+# non-torch) without dropping or reordering any pre-refactor check; the expected
+# sequences include those additions.
 PRE_REFACTOR_TORCH_SEQUENCE = (
     "backend_identity_invariants",
     "trace_self_consistency",
     "region_replay_provenance",
     "backward_graph_invariants",
     "backend_neutral_accessor_refs",
+    "receptive_field_metadata",
     "special_layer_lists",
     "graph_topology",
     "edge_use_parent_arg_consistency",
@@ -50,6 +52,7 @@ PRE_REFACTOR_NON_TORCH_SEQUENCE = (
     "region_replay_provenance",
     "non_torch_backward_inert",
     "backend_neutral_accessor_refs",
+    "receptive_field_metadata",
     "backend_neutral_module_mode_invariants",
     "backend_neutral_graph_topology",
     "graph_ordering",
