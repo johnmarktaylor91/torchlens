@@ -260,14 +260,12 @@ def test_direct_aten_call_trips_non_vacuous_witness() -> None:
 
 @pytest.mark.smoke
 def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> None:
-    """A genuine raw replacement hook's untraceable dispatch is tagged per-event.
+    """A raw replacement hook's dispatches belong to its explicit boundary Op.
 
     A raw ``register_forward_hook`` output replacement runs inside the torchlens
-    ``wrapped_hook`` frame. Its raw-aten call (unowned) and python-wrapped call
-    (an accounted owner orphaned out of the trace) must both carry
-    ``in_replacement_hook=True`` so the validation census can excuse ONLY genuine
-    replacement construction. This pins the frame-detection signal: a rename of
-    the ``wrapped_hook`` bracket would surface here first.
+    ``wrapped_hook`` frame. Its raw-aten construction must be owned by the hook
+    token and accounted by the synthesized ``intervention_replacement`` boundary,
+    while nested Python-wrapped construction remains independently accounted.
     """
 
     class _Mlp(nn.Module):
@@ -285,38 +283,52 @@ def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> No
     wrap_torch(patch_policy="scoped", completeness_witness=True)
     model = _Mlp().eval()
     model.relu.register_forward_hook(_replacement_hook)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         trace = tl.trace(model, torch.randn(3, 4))
 
-    # The raw-aten replacement call is unowned AND tagged as replacement construction.
-    unowned = [d for d in trace.completeness_diagnostics if d["reason"] == "unowned_dispatch"]
-    assert unowned, "expected the raw replacement aten call to be recorded as unowned"
-    assert all(d["in_replacement_hook"] is True for d in unowned)
-    # The python-wrapped construction owner (torch.tensor) is orphaned yet tagged.
-    hooked_owners = [
-        d for d in trace.completeness_decompositions if d.get("in_replacement_hook") is True
+    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert trace.capture_verified is True
+    assert trace.completeness_witness_verified is True
+    assert trace.completeness_witness_unaccounted_count == 0
+    assert trace.completeness_diagnostics == []
+    hook_owners = [
+        row
+        for row in trace.completeness_decompositions
+        if row["owner_wrapper"] == "module_forward_hook:user"
     ]
-    assert hooked_owners, "expected a wrapped replacement owner tagged in_replacement_hook"
+    assert len(hook_owners) == 1
+    assert hook_owners[0]["capture_accounted"] is True
+    assert hook_owners[0]["in_replacement_hook"] is True
+    assert "aten.mul.Tensor" in hook_owners[0]["aten_ops"]
+    assert any(
+        op.func_name == "intervention_replacement" and op.intervention_replaced for op in trace.ops
+    )
 
 
 @pytest.mark.smoke
-def test_direct_aten_call_in_submodule_still_trips_witness() -> None:
-    """Accounting fixes do not dull a direct-aten tripwire in a child module."""
+def test_direct_aten_submodule_output_is_owned_by_internal_source() -> None:
+    """A child module's untraceable output is owned by its internal-source boundary."""
 
     wrap_torch(patch_policy="scoped", completeness_witness=True)
-    with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         trace = tl.trace(_DirectAtenSubmoduleGapModel(), torch.randn(4))
 
-    assert trace.completeness_witness_verified is False
-    assert trace.completeness_witness_unaccounted_count == 1
-    report = trace.completeness_diagnostics[0]
-    assert report["operator"] == "aten.relu.default"
-    assert report["reason"] == "owner_not_captured"
-    assert report["file"] == __file__
-    assert isinstance(report["line"], int)
-    assert report["line"] > 0
-    assert report["function"] == "forward"
+    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert trace.capture_verified is True
+    assert trace.completeness_witness_verified is True
+    assert trace.completeness_witness_unaccounted_count == 0
+    assert trace.completeness_diagnostics == []
+    module_owners = [
+        row
+        for row in trace.completeness_decompositions
+        if row["owner_wrapper"] == "module_forward:exhaustive"
+        and "aten.relu.default" in row["aten_ops"]
+    ]
+    assert len(module_owners) == 1
+    assert module_owners[0]["capture_accounted"] is True
+    assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
 
 
 @pytest.mark.smoke

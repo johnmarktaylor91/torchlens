@@ -26,7 +26,11 @@ from torchlens.validation import (
     get_validation_diagnostics,
     validate_forward_pass,
 )
-from torchlens.errors import MetadataInvariantError, TraceNotReproducibleWarning
+from torchlens.errors import (
+    MetadataInvariantError,
+    TorchLensCaptureGapWarning,
+    TraceNotReproducibleWarning,
+)
 from torchlens.fastlog import RecordContext
 from torchlens.options import SaveOptions
 from torchlens.validation import check_metadata_invariants
@@ -66,6 +70,23 @@ from torchlens.utils.tensor_utils import tensor_nanequal
 
 _TEST_FORWARD_GLOBAL_TENSOR: torch.Tensor | None = None
 _TEST_FORWARD_GLOBAL_PAYLOAD: dict[str, torch.Tensor] | None = None
+
+
+def _assert_validation_capture_is_clean(model: nn.Module, x: torch.Tensor) -> None:
+    """Assert forward validation completes without a completeness-witness gap.
+
+    Parameters
+    ----------
+    model:
+        Module whose validation capture should be complete.
+    x:
+        Tensor passed as the module's sole positional input.
+    """
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert validate_forward_pass(model, [x], input_kwargs={})
+    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
 
 
 class _StaleLabelConstantModel(nn.Module):
@@ -6480,7 +6501,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates_depth_zero() -> None
         check_metadata_invariants(log)
     finally:
         log.cleanup()
-    assert validate_forward_pass(model, [x], input_kwargs={})
+    _assert_validation_capture_is_clean(model, x)
 
 
 def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth() -> None:
@@ -6529,7 +6550,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
         check_metadata_invariants(log)
     finally:
         log.cleanup()
-    assert validate_forward_pass(model, [x], input_kwargs={})
+    _assert_validation_capture_is_clean(model, x)
 
 
 def test_plain_trace_noop_hook_untraceable_exit_is_internal_source() -> None:
@@ -6559,7 +6580,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source() -> None:
         check_metadata_invariants(log)
     finally:
         log.cleanup()
-    assert validate_forward_pass(model, [x], input_kwargs={})
+    _assert_validation_capture_is_clean(model, x)
 
 
 def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
