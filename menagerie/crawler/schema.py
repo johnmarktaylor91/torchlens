@@ -24,7 +24,6 @@ from menagerie.crawler.constants import (
     AUTHOR_RESULT_SCHEMA_VERSION_V3,
     GATE_SCHEMA_VERSION,
     GATE_SCHEMA_VERSION_V3,
-    LEGACY_UNTRUSTED_SCHEMA_VERSIONS,
     MODEL_SCHEMA_VERSION,
     MODEL_SCHEMA_VERSION_V3,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
@@ -510,24 +509,6 @@ def validate_payload(payload: Mapping[str, Any], schema_version: Union[str, None
         else:
             message = str(exc)
         raise PayloadValidationError(message) from exc
-
-
-def is_legacy_untrusted(payload: Mapping[str, Any]) -> bool:
-    """Return whether a historical row is categorically unusable as v3 authority.
-
-    Parameters
-    ----------
-    payload:
-        Persisted crawler row.
-
-    Returns
-    -------
-    bool
-        True for immutable v2 attempt/model/gate/proposal history. No adapter may
-        synthesize missing v3 proof material for such a row.
-    """
-
-    return payload.get("schema_version") in LEGACY_UNTRUSTED_SCHEMA_VERSIONS
 
 
 def schema_leaf_paths(schema: Mapping[str, Any]) -> frozenset[str]:
