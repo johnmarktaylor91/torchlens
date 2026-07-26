@@ -15,7 +15,6 @@ from menagerie.crawler.constants import (
 from menagerie.crawler.family_templates import family_variant_currency_error
 from menagerie.crawler.models import (
     CompletenessReport,
-    FunnelQuery,
     JsonObject,
     PartitionReport,
 )
@@ -255,46 +254,6 @@ def _status_completeness_failures(records: Iterable[Mapping[str, Any]]) -> list[
         ):
             failures.append(f"{stable_id}:nonfailure-has-failure-fields")
     return failures
-
-
-def filter_funnel(
-    current_records: Iterable[Mapping[str, Any]] | Mapping[str, Mapping[str, Any]],
-    query: FunnelQuery,
-) -> list[JsonObject]:
-    """Filter current records by exact framework/rung/status/flag criteria.
-
-    Parameters
-    ----------
-    current_records:
-        Current model revisions.
-    query:
-        Exact optional filters.
-
-    Returns
-    -------
-    list[dict[str, Any]]
-        Matching records in stable-ID order.
-    """
-
-    matching: list[JsonObject] = []
-    required_flags = set(query.flags)
-    for record_mapping in _records(current_records):
-        record = dict(record_mapping)
-        if query.framework is not None and (
-            record.get("implementation", {}).get("run_framework") != query.framework
-        ):
-            continue
-        if query.rung is not None and record.get("source_resolution", {}).get("rung") != query.rung:
-            continue
-        if (
-            query.status_code is not None
-            and record.get("status", {}).get("code") != query.status_code
-        ):
-            continue
-        if not required_flags.issubset(set(record.get("flags", []))):
-            continue
-        matching.append(record)
-    return sorted(matching, key=lambda record: str(record["stable_id"]))
 
 
 def funnel_counts(

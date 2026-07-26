@@ -68,6 +68,7 @@ _DEAD_SYMBOLS = {
     "validate_reconstruction_source_binding",
     "build_author_repair_envelope",
     "compare_identity_sets",
+    "filter_funnel",
     "is_legacy_untrusted",
     "is_valid_payload",
 }
