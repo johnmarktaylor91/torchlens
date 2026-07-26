@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 from collections import Counter
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,12 @@ from typing import Any, Iterable, Mapping, Sequence
 
 import pytest
 
+from menagerie.crawler.conformance import (
+    ConformanceCatalogError,
+    ConformanceErrorCode,
+    expand_conformance_catalog,
+    load_conformance_catalog,
+)
 from menagerie.crawler.tests.conftest import RealEnvironmentFixture
 from menagerie.crawler.tests import test_anti_substitution_inventories as structural
 from menagerie.crawler.tests.test_environment_authority_composition import (
@@ -28,6 +35,9 @@ _LINUX_NODES_PATH = _CRAWLER_ROOT / "tests/round21_linux_real_nodes.json"
 _MACOS_NODES_PATH = _CRAWLER_ROOT / "tests/round21_macos_real_nodes.json"
 _REVERSIONS_TOOL_PATH = _CRAWLER_ROOT / "tools/round21_reversions.py"
 _PROOF_PREFIX = "menagerie/crawler/tests/"
+_FROZEN_EXPANSION_SHA256 = (
+    "4092cbf28cfdeaa3302ce9e2ee08aa832f9fc9e8cf6e75f45543e5f1e1214353"  # pragma: allowlist secret
+)
 
 P01 = (
     "menagerie/crawler/tests/test_release_preclusion_composition.py::"
@@ -676,15 +686,56 @@ def _load_json_mapping(path: Path) -> Mapping[str, Any]:
 
 
 def _registry_payload() -> Mapping[str, Any]:
-    """Load and minimally validate the public conformance registry envelope."""
+    """Load and fully validate the public compact conformance registry."""
 
-    payload = _load_json_mapping(_REGISTRY_PATH)
-    assert payload["schema_version"] == "menagerie.crawler.round21-conformance.v1"
-    assert payload["status"] == "complete"
-    assert payload["no_waivers"] is True
-    records = payload["records"]
-    assert isinstance(records, list) and records
-    return payload
+    return load_conformance_catalog(_REGISTRY_PATH).to_mapping()
+
+
+def _assert_compact_expansion_matches_frozen_oracle() -> None:
+    """Assert deterministic expansion against the independent frozen registry bytes."""
+
+    expected_payload = {
+        "no_waivers": True,
+        "records": list(_expected_registry_records()),
+        "schema_version": "menagerie.crawler.round21-conformance.v1",
+        "status": "complete",
+    }
+    expected = (json.dumps(expected_payload, indent=2, sort_keys=True) + "\n").encode()
+    expanded = expand_conformance_catalog(_REGISTRY_PATH)
+
+    assert expanded == expected
+    assert hashlib.sha256(expanded).hexdigest() == _FROZEN_EXPANSION_SHA256
+    assert len(_expected_registry_records()) == 278
+
+
+def _assert_compact_loader_fails_closed(
+    tmp_path: Path,
+) -> None:
+    """Assert typed rejection of malformed, partial, duplicate, and incomplete inputs."""
+
+    invalid_documents = (
+        ("malformed", "{", ConformanceErrorCode.INVALID_JSON),
+        ("partial", "{}", ConformanceErrorCode.MISSING_FIELD),
+        (
+            "duplicate-key",
+            '{"schema_version":"first","schema_version":"second"}',
+            ConformanceErrorCode.DUPLICATE_KEY,
+        ),
+    )
+    for name, content, expected_code in invalid_documents:
+        catalog = tmp_path / f"{name}.json"
+        catalog.write_text(content, encoding="utf-8")
+        with pytest.raises(ConformanceCatalogError) as exc_info:
+            load_conformance_catalog(catalog)
+        assert exc_info.value.code is expected_code
+
+    payload = json.loads(_REGISTRY_PATH.read_text(encoding="utf-8"))
+    payload["records"][0].pop()
+    catalog = tmp_path / "missing-record-field.json"
+    catalog.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ConformanceCatalogError) as exc_info:
+        load_conformance_catalog(catalog)
+    assert exc_info.value.code is ConformanceErrorCode.MISSING_FIELD
 
 
 def _records_by_id(payload: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
@@ -847,6 +898,8 @@ def test_conformance_registry_is_total_and_executed(
     observed_by_id = _records_by_id(payload)
     assert set(observed_by_id) == set(expected_by_id), "conformance registry clause IDs changed"
     assert observed_by_id == expected_by_id
+    _assert_compact_expansion_matches_frozen_oracle()
+    _assert_compact_loader_fails_closed(tmp_path)
 
     sandbox = "bubblewrap" if sys.platform == "linux" else "sandbox-exec"
     _run_host_denial_composition(tmp_path, real_environment_fixture, expected_sandbox=sandbox)
