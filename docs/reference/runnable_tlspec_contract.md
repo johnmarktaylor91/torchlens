@@ -328,7 +328,10 @@ structure, re-derives, and requires exact discharge.
   unlabeled receivers -- `.data` destroys both the label and `_base`, and LAUNDERS ancestry
   transitively through every downstream op). Current capture additionally records the
   getter's real `aten.detach` dispatch as the canonical replayable `Tensor.detach` op, so
-  ordinary downstream consumption preserves graph ancestry; the r75 ladder remains the
+  ordinary downstream read consumption preserves graph ancestry. Capture separately propagates
+  data-alias provenance through storage-sharing views: any later in-place write through that
+  lineage produces an explicit coverage gap and ceilings replay to `unverifiable`; the read node
+  can never launder the unsafe write surface into a verified path. The r75 ladder remains the
   defense-in-depth path for legacy/unattributed aliases. A receiver resolves through its own label ONLY
   when its traced parent chain carries no `unattributed_tensor_args` break, else through the
   dispatch-origin ledger's leaf origins, else live captured-storage identity, else the
@@ -2450,8 +2453,11 @@ now resolves through the ancestry-integrity check + dispatch-origin-ledger leaf 
 live captured-storage identity, and otherwise FAILS CLOSED to `unverifiable` -- the layout
 consumer follows the same single-exit positive ladder as escape-source attribution, never a
 silent no-record. Current captures also represent the C getter itself as a canonical detach
-op, preventing ordinary direct consumers from losing ancestry in the first place without
-making the unsafe descriptor a runnable callable. r77 closes the last vehicle INTO that ladder: wrapping the intermediate in
+op, preventing ordinary direct read consumers from losing ancestry in the first place without
+making the unsafe descriptor a runnable callable. Data-alias provenance remains distinct from
+the replay callable and propagates only across storage-sharing outputs, so a direct or view-mediated
+in-place write still produces an `unmodelled_host_write` gap and ceilings faithfulness to
+`unverifiable`. r77 closes the last vehicle INTO that ladder: wrapping the intermediate in
 a fresh `nn.Parameter` used to satisfy the known-provenance check by bare type, suppressing
 the ancestry-break marker the ladder keys on; provenance now requires the prep-stamped
 parameter address (or tensor metadata), so a receiver whose provenance is not

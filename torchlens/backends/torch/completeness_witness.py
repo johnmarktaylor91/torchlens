@@ -2125,6 +2125,46 @@ def record_pruned_alias_mutation_source(trace: Any, label: str) -> None:
     labels.add(label)
 
 
+_DATA_ALIAS_MUTATION_TRACES: "weakref.WeakSet[Any]" = weakref.WeakSet()
+"""Traces containing a successful write through a ``Tensor.data`` alias lineage.
+
+The ``Tensor.data`` getter is captured as a canonical detach op so read-only consumers retain
+replay provenance. That graph node must not launder the descriptor's unsafe write semantics:
+an in-place receiver reached directly from ``.data`` or through a storage-sharing view remains
+an untracked escape surface and ceilings runnable faithfulness to ``unverifiable``.
+"""
+
+
+def data_alias_mutation_detected(trace: Any) -> bool:
+    """Return whether capture observed a write through a ``Tensor.data`` alias.
+
+    Parameters
+    ----------
+    trace : Any
+        Capture trace to inspect.
+
+    Returns
+    -------
+    bool
+        ``True`` when a successful receiver mutation targeted a data-alias
+        tensor or storage-sharing view derived from one.
+    """
+
+    return trace in _DATA_ALIAS_MUTATION_TRACES
+
+
+def record_data_alias_mutation(trace: Any) -> None:
+    """Record a successful write through a ``Tensor.data`` alias.
+
+    Parameters
+    ----------
+    trace : Any
+        Active capture trace whose runnable proof must be ceilinged.
+    """
+
+    _DATA_ALIAS_MUTATION_TRACES.add(trace)
+
+
 _HOST_ESCAPE_MUTABLE_WRITEBACK: "weakref.WeakSet[Any]" = weakref.WeakSet()
 """Traces where a host WRITE-BACK through a mutable zero-copy alias was detected.
 

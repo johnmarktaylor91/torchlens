@@ -35,7 +35,9 @@ from ...data_classes.func_call_location import FuncCallLocation
 from ._tl import (
     get_param_meta,
     get_tensor_label,
+    is_tensor_data_alias,
     is_decorated_function,
+    mark_tensor_data_alias,
     mark_decorated_function,
     set_tensor_label,
 )
@@ -58,6 +60,7 @@ from ...utils.hashing import make_random_barcode
 from ...utils.arg_handling import copy_arg_tree
 from ...utils.tensor_utils import print_override, safe_copy
 from .ops import (
+    _is_inplace_augmented_assignment_dunder,
     _walk_output_tensors_with_paths,
     apply_live_hooks_to_outputs,
     log_function_output_tensors,
@@ -78,11 +81,14 @@ from .escape_detection import (
 from .completeness_witness import (
     CompletenessWitnessMode,
     completeness_scope_for_wrapper,
+    internal_scalar_read,
     observe_nonowner_operands,
+    record_data_alias_mutation,
     record_host_string_escape_source,
     record_uncaptured_owner_callsite,
     string_escape_is_owner_thread,
 )
+from .aliasing import _tensors_alias
 from .sources import log_source_tensor
 
 if TYPE_CHECKING:
@@ -992,6 +998,57 @@ def _canonical_capture_callable(
     return cast(Callable[..., Any], original_detach), "detach"
 
 
+def _func_mutates_receiver(func_name: str) -> bool:
+    """Return whether a wrapped function mutates its first tensor argument.
+
+    Parameters
+    ----------
+    func_name : str
+        TorchLens wrapper name for the callable.
+
+    Returns
+    -------
+    bool
+        ``True`` for in-place methods, augmented-assignment dunders, and
+        setter-style tensor operations.
+    """
+
+    return (
+        _is_inplace_augmented_assignment_dunder(func_name)
+        or func_name in {"__setitem__", "__delitem__"}
+        or (func_name.endswith("_") and not func_name.startswith("__"))
+    )
+
+
+def _propagate_data_alias_provenance(
+    func_name: str,
+    data_alias_inputs: tuple[torch.Tensor, ...],
+    output_tensors: list[torch.Tensor],
+) -> None:
+    """Propagate ``Tensor.data`` provenance through storage-sharing outputs.
+
+    Parameters
+    ----------
+    func_name : str
+        Original wrapped callable name before replay canonicalization.
+    data_alias_inputs : tuple[torch.Tensor, ...]
+        Input tensors already known to descend from ``Tensor.data``.
+    output_tensors : list[torch.Tensor]
+        Live output tensors after capture labels have been assigned.
+    """
+
+    if func_name == "data":
+        for output in output_tensors:
+            mark_tensor_data_alias(output)
+        return
+    if not data_alias_inputs:
+        return
+    with internal_scalar_read():
+        for output in output_tensors:
+            if any(_tensors_alias(output, source) for source in data_alias_inputs):
+                mark_tensor_data_alias(output)
+
+
 def _register_inplace_live_grad_hook(trace: Any, tensor: Any, raw_label: str) -> None:
     """Hook the live in-place result so its gradient is captured under ``raw_label``.
 
@@ -1142,6 +1199,15 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         # Inline tensor extraction — avoids BFS crawl for the common case
         # where args are flat tensors. Falls back to BFS only for nested containers.
         arg_tensorlike = _collect_tensor_args(args, kwargs)
+        data_alias_inputs = tuple(
+            tensor for tensor in arg_tensorlike if is_tensor_data_alias(tensor)
+        )
+        mutates_data_alias = bool(
+            args
+            and isinstance(args[0], torch.Tensor)
+            and is_tensor_data_alias(args[0])
+            and _func_mutates_receiver(func_name)
+        )
 
         # Register buffer tensors on first encounter. Buffers are tagged with
         # _tl.address during model prep but don't get _tl.label_raw
@@ -1238,6 +1304,8 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                 out_orig = func(*args, **kwargs)
         finally:
             _nvtx_range_pop(nvtx_pushed)
+        if mutates_data_alias:
+            record_data_alias_mutation(trace)
         return_value = out_orig
         exec_ctx = FuncExecutionContext(
             time_elapsed=time.time() - capture_start_time,
@@ -1337,6 +1405,12 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                     is_bottom_level_func,
                     func_call_id,
                 )
+
+            _propagate_data_alias_provenance(
+                func_name,
+                data_alias_inputs,
+                output_tensors,
+            )
 
             # Same-object returns are logged against out_orig (a safe_copy with
             # the op's new label). When Python object identity is preserved we

@@ -569,11 +569,12 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # a false VERIFIED with the mutation gone. An in-place op on a LABELLED alias is graph-
         # connected (replayed) and is never recorded, so a normal model stays VERIFIED.
         _gap(WitnessGapKind.PRUNED_ALIAS_MUTATION, "capture")
-    if saw_unmodelled_host_write:
-        # A surviving in-place op with a removed receiver came from a host alias such as
-        # ``buffer.data.add_(1.0)``. The sparse recipe can keep running by reconnecting the receiver
-        # to the cooked parent, but the original host write bypassed the ordinary labelled tensor
-        # path, so the descriptor cannot honestly prove full path fidelity.
+    if saw_unmodelled_host_write or _has_data_alias_mutation(trace):
+        # A surviving in-place op came from an unsafe host alias. This includes the historical
+        # removed-receiver shape (``buffer.data.add_(1.0)``) and the current canonical getter
+        # shape, where ``.data`` is represented as a detach op but its alias lineage is tracked
+        # separately. The sparse recipe may replay the graph, but a write through ``.data`` still
+        # bypasses the ordinary labelled-tensor contract, so full path fidelity is unprovable.
         _gap(WitnessGapKind.UNMODELLED_HOST_WRITE, "capture")
     ledger_facts = _runnable_ledger_facts_for_trace(trace)
     if ledger_facts:
@@ -2501,6 +2502,25 @@ def _has_pruned_alias_mutation(trace: Any) -> bool:
     from ..backends.torch.completeness_witness import pruned_alias_mutation_source_labels
 
     return bool(pruned_alias_mutation_source_labels(trace))
+
+
+def _has_data_alias_mutation(trace: Any) -> bool:
+    """Return whether capture observed a write through ``Tensor.data``.
+
+    Parameters
+    ----------
+    trace : Any
+        Capture trace being converted to a runnable descriptor.
+
+    Returns
+    -------
+    bool
+        ``True`` when the canonical getter's alias lineage was mutated.
+    """
+
+    from ..backends.torch.completeness_witness import data_alias_mutation_detected
+
+    return data_alias_mutation_detected(trace)
 
 
 def _has_forward_value_override_intervention(trace: Any) -> bool:

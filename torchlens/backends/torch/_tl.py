@@ -24,6 +24,8 @@ __all__ = [
     "get_tensor_meta",
     "set_tensor_label",
     "get_tensor_label",
+    "mark_tensor_data_alias",
+    "is_tensor_data_alias",
     "raw_tensor_label",
     "get_live_tensor_label",
     "get_live_label_list",
@@ -86,6 +88,11 @@ class TensorMeta(TorchLensMeta):
     # for the object's lifetime, which is what makes the ``data_ptr`` comparison a
     # true identity proof rather than a recyclable-pointer heuristic (r81 S2).
     label_storage: Optional[Any] = None
+    # Capture-local provenance for tensors returned by ``Tensor.data`` and
+    # storage-sharing aliases/views derived from them. The getter is represented
+    # as a canonical detach op, but a later write through this alias family must
+    # still ceiling runnable faithfulness.
+    data_alias: bool = False
 
 
 @dataclass
@@ -693,6 +700,38 @@ def get_tensor_label(t: Any) -> Optional[str]:
     return meta.label_raw
 
 
+def mark_tensor_data_alias(t: Any) -> None:
+    """Mark a tensor as originating from the unsafe ``Tensor.data`` surface.
+
+    Parameters
+    ----------
+    t : Any
+        Tensor-like object returned by ``Tensor.data`` or a storage-sharing
+        alias/view derived from it.
+    """
+
+    _ensure_tensor_meta(t).data_alias = True
+
+
+def is_tensor_data_alias(t: Any) -> bool:
+    """Return whether a tensor is a current-capture ``Tensor.data`` alias.
+
+    Parameters
+    ----------
+    t : Any
+        Tensor-like object to inspect.
+
+    Returns
+    -------
+    bool
+        ``True`` only when the object carries data-alias provenance and a
+        current-session capture label.
+    """
+
+    meta = get_tensor_meta(t)
+    return bool(meta is not None and meta.data_alias and get_tensor_label(t) is not None)
+
+
 def raw_tensor_label(t: Any) -> Optional[str]:
     """Return a tensor's raw capture label WITHOUT the session-anchor gate.
 
@@ -783,6 +822,7 @@ def clear_tensor_label(t: Any) -> None:
     meta = get_tensor_meta(t)
     if meta is not None:
         meta.label_raw = None
+        meta.data_alias = False
 
 
 def promote_label_to_buffer_source_and_clear_label(t: Any) -> None:
@@ -797,6 +837,7 @@ def promote_label_to_buffer_source_and_clear_label(t: Any) -> None:
     if meta is not None and meta.label_raw is not None:
         meta.buffer_source = meta.label_raw
         meta.label_raw = None
+        meta.data_alias = False
 
 
 def set_buffer_address(t: Any, address: str) -> None:
