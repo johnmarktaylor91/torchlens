@@ -5,13 +5,14 @@ from __future__ import annotations
 import torch
 
 import torchlens as tl
+import torchlens.utils as utils
 
 
 def test_trace_streaming_on_iterable_inputs() -> None:
     """Capture iterable inputs into one stacked root log."""
 
     model = torch.nn.Linear(2, 2)
-    traces = tl.utils.trace_streaming(
+    traces = utils.trace_streaming(
         model,
         [torch.ones(1, 2), torch.zeros(1, 2)],
         layers_to_save="none",

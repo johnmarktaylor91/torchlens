@@ -79,6 +79,14 @@ def _layer_by_func(log, func_substring: str):
     return log[labels[0]]
 
 
+def _output_parent(log: tl.Trace, output_index: int) -> tl.Op:
+    """Return the sole captured parent of one model-output node."""
+
+    output_op = log.output_ops[output_index]
+    assert len(output_op.parents) == 1
+    return log.ops[output_op.parents[0]]
+
+
 def _warm_torchlens_wrapping() -> None:
     """Establish local wrapper state before exercising meta factory injection."""
     tl.trace(_CpuFactoryModel(), torch.randn(2, 4))
@@ -138,14 +146,13 @@ def test_meta_factory_output_metadata_with_selective_save() -> None:
     log = tl.trace(model, torch.randn(2, 4), save=tl.func("mul"))
 
     assert model.seen_devices == ["meta"]
-    zeros_layer = _layer_by_func(log, "zeros")
-    assert zeros_layer.func_name == "zeros"
+    factory_layer = _output_parent(log, 1)
     # Shape/dtype come from the post-injection meta tensor: torch.zeros(3, 4)
     # under the meta context (a CPU tensor would have identical shape only if
     # injection worked — device parity is asserted via seen_devices above).
-    assert zeros_layer.shape == (3, 4)
-    assert zeros_layer.dtype == torch.float32
-    assert not zeros_layer.has_saved_activation
+    assert factory_layer.shape == (3, 4)
+    assert factory_layer.dtype == torch.float32
+    assert not factory_layer.has_saved_activation
 
 
 def test_meta_factory_as_model_output_full_save() -> None:
@@ -159,10 +166,10 @@ def test_meta_factory_as_model_output_full_save() -> None:
     log = tl.trace(model, torch.randn(2, 4))
 
     assert model.seen_devices == ["meta"]
-    zeros_layer = _layer_by_func(log, "zeros")
+    factory_layer = _output_parent(log, 1)
     # Captured metadata records the post-injection device.
-    assert zeros_layer.out.device.type == "meta"
-    assert zeros_layer.shape == (3, 4)
+    assert factory_layer.out.device.type == "meta"
+    assert factory_layer.shape == (3, 4)
 
 
 @pytest.mark.smoke
@@ -174,9 +181,9 @@ def test_cpu_default_unaffected_under_active_logging() -> None:
     log = tl.trace(model, x)
 
     assert model.seen_devices == ["cpu"]
-    zeros_layer = _layer_by_func(log, "zeros")
-    assert zeros_layer.out.device.type == "cpu"
-    assert torch.equal(zeros_layer.out, torch.zeros(3, 4))
+    factory_layer = _output_parent(log, 1)
+    assert factory_layer.out.device.type == "cpu"
+    assert torch.equal(factory_layer.out, torch.zeros(3, 4))
 
 
 def test_meta_device_context_fast_path_with_torch_wrapped() -> None:
