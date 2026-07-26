@@ -191,6 +191,7 @@ class ExpectedOriginalToken:
     call_barcode: object | None = None
     census_scope: Literal["owned", "expected_opaque"] = "owned"
     capture_accounted: bool | None = None
+    capture_accounted_outputs: dict[int, tuple[torch.Tensor, str]] = field(default_factory=dict)
     capture_callsite: tuple[str, int, str] | None = None
 
 
@@ -395,6 +396,7 @@ def mark_expected_original_accounted(
     token: ExpectedOriginalToken | None,
     *,
     captured: bool,
+    boundary_outputs: tuple[tuple[torch.Tensor, str], ...] = (),
 ) -> None:
     """Record whether a token's dispatch interval became a captured leaf.
 
@@ -404,10 +406,17 @@ def mark_expected_original_accounted(
         Token returned by :func:`expected_original_call`, if diagnostics were armed.
     captured:
         Whether the wrapper passed the shared barcode leaf test and emitted tensor ops.
+    boundary_outputs:
+        Exact output tensors and raw labels represented by synthesized boundary Ops.
+        When non-empty, completeness accounting is limited per dispatch to non-mutating
+        opaque output construction owned by the boundary-backed token.
     """
 
     if token is not None:
         token.capture_accounted = captured
+        token.capture_accounted_outputs = {
+            id(tensor): (tensor, raw_label) for tensor, raw_label in boundary_outputs
+        }
 
 
 def _active_token() -> ExpectedOriginalToken | None:

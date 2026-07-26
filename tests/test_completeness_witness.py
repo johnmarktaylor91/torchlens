@@ -101,6 +101,57 @@ class _DirectAtenSubmoduleGapModel(nn.Module):
         return torch.sigmoid(self.child(x))
 
 
+class _DirectAtenIntermediateChild(nn.Module):
+    """Use an unwrapped intermediate but return a separately traced output."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a traced sigmoid of an unwrapped relu intermediate."""
+
+        escaped = torch.ops.aten.relu.default(x)
+        return torch.sigmoid(escaped)
+
+
+class _DirectAtenIntermediateSubmoduleGapModel(nn.Module):
+    """Expose a child-level raw dispatch not owned by an output boundary."""
+
+    def __init__(self) -> None:
+        """Create the child module."""
+
+        super().__init__()
+        self.child = _DirectAtenIntermediateChild()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the child whose direct aten intermediate remains unaccounted."""
+
+        return self.child(x).add(1)
+
+
+class _MutatingDirectAtenOutputChild(nn.Module):
+    """Mutate a traced value before returning a separate untraceable raw output."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return raw relu output after an observable unwrapped in-place mutation."""
+
+        y = x + 1
+        torch.ops.aten.mul_.Tensor(y, 2)
+        return torch.ops.aten.relu.default(y)
+
+
+class _MutatingDirectAtenOutputSubmoduleModel(nn.Module):
+    """Consume the ATTACK4 child output in a represented parent operation."""
+
+    def __init__(self) -> None:
+        """Create the mutating child module."""
+
+        super().__init__()
+        self.child = _MutatingDirectAtenOutputChild()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the child and consume its boundary output."""
+
+        return torch.sigmoid(self.child(x))
+
+
 class _LinearCompositeModel(nn.Module):
     """Exercise a Python-level linear call with a multi-aten decomposition."""
 
@@ -328,6 +379,61 @@ def test_direct_aten_submodule_output_is_owned_by_internal_source() -> None:
     ]
     assert len(module_owners) == 1
     assert module_owners[0]["capture_accounted"] is True
+    assert len(module_owners[0]["capture_accounted_boundary_labels"]) == 1
+    assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
+
+
+@pytest.mark.smoke
+def test_direct_aten_child_intermediate_still_trips_witness() -> None:
+    """A child raw dispatch not represented by its output boundary fails closed."""
+
+    wrap_torch(patch_policy="scoped", completeness_witness=True)
+    with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
+        trace = tl.trace(_DirectAtenIntermediateSubmoduleGapModel(), torch.randn(4))
+
+    assert trace.capture_verified is False
+    assert trace.completeness_witness_verified is False
+    assert trace.completeness_witness_unaccounted_count == 1
+    report = trace.completeness_diagnostics[0]
+    assert report["operator"] == "aten.relu.default"
+    assert report["reason"] == "owner_not_captured"
+    assert report["mutates"] is False
+    assert report["file"] == __file__
+    assert isinstance(report["line"], int)
+    assert report["line"] > 0
+    assert report["function"] == "forward"
+
+
+@pytest.mark.smoke
+def test_untraceable_child_output_does_not_mask_observable_mutation() -> None:
+    """ATTACK4 mutation remains unaccounted beside an owned output boundary."""
+
+    wrap_torch(patch_policy="scoped", completeness_witness=True)
+    with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
+        trace = tl.trace(_MutatingDirectAtenOutputSubmoduleModel(), torch.randn(4))
+
+    assert trace.capture_verified is False
+    assert trace.completeness_witness_verified is False
+    assert trace.completeness_witness_unaccounted_count == 1
+    mutating = [
+        report
+        for report in trace.completeness_diagnostics
+        if report["operator"] == "aten.mul_.Tensor"
+    ]
+    assert len(mutating) == 1
+    assert mutating[0]["reason"] == "owner_not_captured"
+    assert mutating[0]["mutates"] is True
+    assert mutating[0]["in_replacement_hook"] is False
+    child_owners = [
+        row
+        for row in trace.completeness_decompositions
+        if row["owner_wrapper"] == "module_forward:exhaustive"
+        and "aten.mul_.Tensor" in row["aten_ops"]
+        and "aten.relu.default" in row["aten_ops"]
+    ]
+    assert len(child_owners) == 1
+    assert child_owners[0]["capture_accounted"] is True
+    assert len(child_owners[0]["capture_accounted_boundary_labels"]) == 1
     assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
 
 

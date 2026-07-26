@@ -3819,6 +3819,35 @@ def _dispatch_result_holds_tensor(result: Any) -> bool:
     return False
 
 
+def _event_is_capture_accounted(event: _DispatchEvent) -> bool:
+    """Return whether the event is represented by its owner's captured artifact.
+
+    Ordinary wrapped operations account for their complete aten decomposition. A token
+    credited by synthesized boundary Ops is narrower: it accounts for the non-mutating
+    opaque output construction represented by those exact boundary tensors and raw labels,
+    but never for a mutating dispatch. Mutations always remain visible because a
+    functionless boundary cannot attest their side effects on existing graph values.
+
+    Parameters
+    ----------
+    event:
+        Dispatcher event being finalized.
+
+    Returns
+    -------
+    bool
+        Whether this exact event has a captured representation.
+    """
+
+    owner = event.owner
+    if owner is None or owner.capture_accounted is not True:
+        return False
+    boundary_outputs = owner.capture_accounted_outputs
+    if not boundary_outputs:
+        return True
+    return not event.mutates
+
+
 _RUNNABLE_LEDGER_FACTS: "weakref.WeakKeyDictionary[Any, list[dict[str, Any]]]" = (
     weakref.WeakKeyDictionary()
 )
@@ -3926,7 +3955,7 @@ def _finalize_runnable_ledger(state: _WitnessState) -> None:
     facts: list[dict[str, Any]] = []
     for event in state.events:
         owner = event.owner
-        owner_accounted = owner is not None and owner.capture_accounted is True
+        owner_accounted = _event_is_capture_accounted(event)
         audited_opaque = owner is not None and _is_expected_opaque_dispatch(event.operator, owner)
         # ``_operator_name`` yields overload-qualified names (``aten.equal.default``);
         # the allowlists hold overload-stripped base names.
@@ -5532,7 +5561,7 @@ def _finalize_census(state: _WitnessState) -> None:
         if owner is not None and _is_expected_opaque_dispatch(event.operator, owner):
             expected_opaque_count += 1
             continue
-        if owner is not None and owner.capture_accounted is True:
+        if _event_is_capture_accounted(event):
             accounted_count += 1
             continue
         reason = "unowned_dispatch" if owner is None else "owner_not_captured"
@@ -5584,6 +5613,9 @@ def _finalize_census(state: _WitnessState) -> None:
                 "owner_func_call_id": owner.func_call_id,
                 "owner_barcode": _barcode_text(owner.call_barcode),
                 "capture_accounted": owner.capture_accounted,
+                "capture_accounted_boundary_labels": tuple(
+                    raw_label for _, raw_label in owner.capture_accounted_outputs.values()
+                ),
                 "scope": owner_scope,
                 "aten_ops": tuple(operators),
                 "in_replacement_hook": owner_in_replacement_hook.get(id(owner), False),
