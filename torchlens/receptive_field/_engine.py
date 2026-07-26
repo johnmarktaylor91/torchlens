@@ -771,7 +771,7 @@ def _apply_full(
         parent_to_child=parent_to_child,
     )
     if passthrough.axes is None and selected == set(range(parent_rank)):
-        axes = tuple(
+        fallback_axes = tuple(
             replace(
                 axis,
                 geometry=_Full(exact=exact),
@@ -783,7 +783,7 @@ def _apply_full(
             else axis
             for axis in state.axes
         )
-        return replace(state, axes=axes, notes=notes, rule=rule_name)
+        return replace(state, axes=fallback_axes, notes=notes, rule=rule_name)
     assert passthrough.axes is not None
     axes = []
     for old_axis, mapped_axis in zip(state.axes, passthrough.axes):
