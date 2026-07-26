@@ -168,6 +168,65 @@ class _LinearCompositeModel(nn.Module):
         return F.linear(x, self.weight, self.bias)
 
 
+class _DynamicParameterInitializationModel(nn.Module):
+    """Create and initialize a temporary module during the captured forward."""
+
+    def __init__(self) -> None:
+        """Create stable prepared state for the represented output path."""
+
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(4, 4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Use stable inputs after constructing a dead temporary Linear module."""
+
+        nn.Linear(4, 4)
+        return x @ self.weight
+
+
+class _RegisteredParameterMutationModel(nn.Module):
+    """Mutate prepared model state during the captured forward."""
+
+    def __init__(self) -> None:
+        """Create the registered parameter that must remain a witnessed gap."""
+
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(4, 4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Mutate the registered parameter before consuming it."""
+
+        with torch.no_grad():
+            self.weight.uniform_()
+        return x @ self.weight
+
+
+class _MidForwardAutogradGradModel(nn.Module):
+    """Execute a separately captured autograd pass inside the forward."""
+
+    def __init__(self) -> None:
+        """Create the parameter differentiated by the inner pass."""
+
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(4, 4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Differentiate an inner loss and consume the resulting gradient."""
+
+        inner = (x @ self.weight).square().mean()
+        (gradient,) = torch.autograd.grad(inner, self.weight, create_graph=True)
+        return x @ (self.weight - 0.01 * gradient)
+
+
+class _DataPropertyModel(nn.Module):
+    """Read Tensor.data before a represented tensor operation."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a sigmoid of the captured detach-like property result."""
+
+        return torch.sigmoid(x.data)
+
+
 class _VmapBoundaryModel(nn.Module):
     """Exercise a documented torch.func transform boundary."""
 
@@ -628,6 +687,7 @@ def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
         "torch_func:__bool__:logged",
         "torch_func:__float__:logged",
         "torch_func:__int__:logged",
+        "autograd:grad",
     }
     scalar_rows = [row for row in AUDITED_COMPLETENESS_BOUNDARIES if row.operator is not None]
     assert {row.wrapper_name for row in scalar_rows} == {
@@ -638,6 +698,66 @@ def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
     }
     assert {row.operator for row in scalar_rows} == {"aten._local_scalar_dense.default"}
     assert all(row.reason for row in AUDITED_COMPLETENESS_BOUNDARIES)
+
+
+@pytest.mark.smoke
+def test_dynamic_parameter_initializers_are_captured_without_hiding_state_mutations() -> None:
+    """Capture temporary Parameter initialization while registered-state writes fail closed."""
+
+    wrap_torch(patch_policy="scoped", completeness_witness=True)
+    temporary_trace = tl.trace(_DynamicParameterInitializationModel(), torch.randn(2, 4))
+
+    initializer_rows = [
+        row
+        for row in temporary_trace.completeness_decompositions
+        if row["owner_func_name"] == "uniform_"
+    ]
+    assert len(initializer_rows) == 2
+    assert all(row["capture_accounted"] is True for row in initializer_rows)
+    assert temporary_trace.completeness_diagnostics == []
+    assert temporary_trace.capture_verified is True
+
+    with pytest.warns(TorchLensCaptureGapWarning, match="aten.uniform_"):
+        state_trace = tl.trace(_RegisteredParameterMutationModel(), torch.randn(2, 4))
+
+    assert state_trace.capture_verified is False
+    assert [
+        (row["operator"], row["reason"], row["mutates"])
+        for row in state_trace.completeness_diagnostics
+    ] == [("aten.uniform_.default", "owner_not_captured", True)]
+
+
+@pytest.mark.smoke
+def test_mid_forward_autograd_grad_is_an_exact_backward_boundary() -> None:
+    """Exclude only engine dispatches represented by the captured backward pass."""
+
+    wrap_torch(patch_policy="scoped", completeness_witness=True)
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        trace = tl.trace(_MidForwardAutogradGradModel(), torch.randn(2, 4))
+
+    boundary_rows = [
+        row for row in trace.completeness_decompositions if row["owner_wrapper"] == "autograd:grad"
+    ]
+    assert len(boundary_rows) == 1
+    assert boundary_rows[0]["scope"] == "expected_opaque"
+    assert boundary_rows[0]["aten_ops"]
+    assert trace.num_backward_passes == 1
+    assert trace.completeness_diagnostics == []
+    assert trace.capture_verified is True
+
+
+@pytest.mark.smoke
+def test_tensor_data_getter_dispatch_is_captured() -> None:
+    """Represent the C-level data getter's detach dispatch as an ordinary op."""
+
+    wrap_torch(patch_policy="scoped", completeness_witness=True)
+    trace = tl.trace(_DataPropertyModel(), torch.randn(4))
+
+    detach_ops = [op for op in trace.ops if op.func_name == "detach"]
+    assert len(detach_ops) == 1
+    assert detach_ops[0].parents == ["input_1"]
+    assert trace.completeness_diagnostics == []
+    assert trace.capture_verified is True
 
 
 def test_is_mutating_operator_reads_schema_not_name() -> None:

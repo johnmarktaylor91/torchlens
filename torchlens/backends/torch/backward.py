@@ -2618,8 +2618,15 @@ def install_autograd_wrappers() -> None:
 
         def run() -> Any:
             """Invoke the original autograd grad function."""
-            if _state._escape_detector_mode == "shadow":
-                with expected_original_call(original, "autograd:grad"):
+            if (
+                _state._escape_detector_mode == "shadow"
+                or _state._completeness_witness_mode == "shadow"
+            ):
+                with expected_original_call(
+                    original,
+                    "autograd:grad",
+                    census_scope="expected_opaque",
+                ):
                     return original(*args, **kwargs)
             return original(*args, **kwargs)
 

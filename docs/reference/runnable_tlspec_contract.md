@@ -326,7 +326,10 @@ structure, re-derives, and requires exact discharge.
   envelope/`metadata_reads` fact-name equality. r75 makes the attribution FAIL-CLOSED BY
   CONSTRUCTION over the whole receiver class (the r73 spelling-only net fail-opened on
   unlabeled receivers -- `.data` destroys both the label and `_base`, and LAUNDERS ancestry
-  transitively through every downstream op): a receiver resolves through its own label ONLY
+  transitively through every downstream op). Current capture additionally records the
+  getter's real `aten.detach` dispatch as the canonical replayable `Tensor.detach` op, so
+  ordinary downstream consumption preserves graph ancestry; the r75 ladder remains the
+  defense-in-depth path for legacy/unattributed aliases. A receiver resolves through its own label ONLY
   when its traced parent chain carries no `unattributed_tensor_args` break, else through the
   dispatch-origin ledger's leaf origins, else live captured-storage identity, else the
   `_INPUT_METADATA_VIEW_READ` completeness downgrade (`unverifiable`) -- never a silent
@@ -2446,7 +2449,9 @@ intermediate (label-less, `_base`-less, and ancestry-laundering for everything d
 now resolves through the ancestry-integrity check + dispatch-origin-ledger leaf origins +
 live captured-storage identity, and otherwise FAILS CLOSED to `unverifiable` -- the layout
 consumer follows the same single-exit positive ladder as escape-source attribution, never a
-silent no-record. r77 closes the last vehicle INTO that ladder: wrapping the intermediate in
+silent no-record. Current captures also represent the C getter itself as a canonical detach
+op, preventing ordinary direct consumers from losing ancestry in the first place without
+making the unsafe descriptor a runnable callable. r77 closes the last vehicle INTO that ladder: wrapping the intermediate in
 a fresh `nn.Parameter` used to satisfy the known-provenance check by bare type, suppressing
 the ancestry-break marker the ladder keys on; provenance now requires the prep-stamped
 parameter address (or tensor metadata), so a receiver whose provenance is not

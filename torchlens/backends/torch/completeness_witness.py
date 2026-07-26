@@ -73,7 +73,7 @@ from .escape_detection import ExpectedOriginalToken, _active_token
 CompletenessWitnessMode = Literal["off", "shadow"]
 """Supported dispatcher-witness rollout modes."""
 
-MAX_AUDITED_COMPLETENESS_BOUNDARIES = 8
+MAX_AUDITED_COMPLETENESS_BOUNDARIES = 9
 """Hard budget preventing expected-opaque wrapper scopes from growing unchecked."""
 
 
@@ -126,6 +126,14 @@ AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
         wrapper_name="torch_func:__int__:logged",
         operator="aten._local_scalar_dense.default",
         reason="int(tensor) extracts a Python int, which is intentionally not an op output",
+    ),
+    AuditedCompletenessBoundary(
+        wrapper_name="autograd:grad",
+        operator=None,
+        reason=(
+            "torch.autograd.grad executes a separately captured backward pass; its engine "
+            "dispatches are not forward operations"
+        ),
     ),
 )
 """Reviewable exact expected-opaque rows; additions require a regression test and reason."""

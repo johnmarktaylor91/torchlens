@@ -33,6 +33,7 @@ from ... import _state
 from ...constants import get_orig_torch_funcs
 from ...data_classes.func_call_location import FuncCallLocation
 from ._tl import (
+    get_param_meta,
     get_tensor_label,
     is_decorated_function,
     mark_decorated_function,
@@ -884,6 +885,113 @@ def _collect_output_tensors(out: Any) -> list[torch.Tensor]:
     )
 
 
+def _is_unregistered_parameter(trace: Any, value: Any) -> bool:
+    """Return whether ``value`` is a Parameter outside the prepared model state.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace carrying the current-session parameter registry.
+    value:
+        Candidate operation output.
+
+    Returns
+    -------
+    bool
+        ``True`` for a Parameter that is not the exact prepared parameter object
+        recorded at its stamped address in this capture.
+    """
+
+    if not isinstance(value, torch.nn.Parameter):
+        return False
+    meta = get_param_meta(value)
+    address = None if meta is None else meta.param_address
+    if not address:
+        return True
+    param_logs = getattr(trace, "param_logs", None)
+    if param_logs is None or address not in param_logs:
+        return True
+    return getattr(param_logs[address], "_param_ref", None) is not value
+
+
+def _parameter_mutation_output_for_logging(
+    trace: Any,
+    value: Any,
+    *,
+    source: Any,
+    was_inplace: bool,
+) -> Any:
+    """Convert an unregistered Parameter mutation result into a loggable Tensor.
+
+    PyTorch constructs module Parameters from ordinary factory tensors, and the
+    conversion intentionally drops TorchLens tensor labels. Initializers such as
+    ``uniform_`` then return the new Parameter itself. Parameter outputs are normally
+    excluded because prepared model state remains a source rather than an op output,
+    but that rule also dropped real initialization ops for modules created inside
+    ``forward``.
+
+    Only unregistered Parameters are converted. Mutations of prepared model state
+    remain excluded and therefore remain visible to the completeness tripwire instead
+    of being laundered into a disconnected op.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    value:
+        Safe-copied operation output.
+    source:
+        Live same-object return whose current-session registration is authoritative.
+    was_inplace:
+        Whether the wrapped callable has an in-place mutation signature.
+
+    Returns
+    -------
+    Any
+        A plain Tensor snapshot for capture-local Parameter mutations; otherwise
+        ``value`` unchanged.
+    """
+
+    if not was_inplace or not _is_unregistered_parameter(trace, source):
+        return value
+    with _state.pause_logging():
+        tensor = value.detach().clone()
+        tensor.requires_grad_(value.requires_grad)
+    return tensor
+
+
+def _canonical_capture_callable(
+    func: Callable[..., Any],
+    func_name: str,
+) -> tuple[Callable[..., Any], str]:
+    """Return the replay-safe callable identity for one wrapped operation.
+
+    ``Tensor.data`` is a C descriptor whose getter dispatches ``aten.detach`` and
+    returns the same storage-sharing, autograd-detached value as ``Tensor.detach``.
+    Record that operation under the canonical detach callable so live validation
+    and portable replay agree without admitting the unsafe ``data`` descriptor
+    through the callable resolver.
+
+    Parameters
+    ----------
+    func:
+        Original wrapped callable.
+    func_name:
+        TorchLens name associated with the wrapped namespace entry.
+
+    Returns
+    -------
+    tuple[Callable[..., Any], str]
+        Callable and operation name to persist for capture/replay.
+    """
+
+    if func_name != "data":
+        return func, func_name
+    decorated_detach = torch.Tensor.detach
+    original_detach = _state._decorated_to_orig.get(id(decorated_detach), decorated_detach)
+    return cast(Callable[..., Any], original_detach), "detach"
+
+
 def _register_inplace_live_grad_hook(trace: Any, tensor: Any, raw_label: str) -> None:
     """Hook the live in-place result so its gradient is captured under ``raw_label``.
 
@@ -1167,12 +1275,19 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             # Create a distinct tensor object for logging — otherwise attaching
             # _tl.label_raw on the output would clobber the input's label.
             out_orig = safe_copy(out_orig)
+            out_orig = _parameter_mutation_output_for_logging(
+                trace,
+                out_orig,
+                source=args[0],
+                was_inplace=was_inplace,
+            )
 
+        capture_func, capture_func_name = _canonical_capture_callable(func, func_name)
         out_before_hooks = out_orig
         out_orig = apply_live_hooks_to_outputs(
             trace,
-            func,
-            func_name,
+            capture_func,
+            capture_func_name,
             args,
             kwargs,
             out_orig,
@@ -1197,8 +1312,8 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                 with _state.pause_logging():
                     call_emitted_op = log_function_output_tensors(
                         trace,
-                        func,
-                        func_name,
+                        capture_func,
+                        capture_func_name,
                         args,
                         kwargs,
                         arg_copies,
@@ -1211,8 +1326,8 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             else:
                 call_emitted_op = log_function_output_tensors(
                     trace,
-                    func,
-                    func_name,
+                    capture_func,
+                    capture_func_name,
                     args,
                     kwargs,
                     arg_copies,
@@ -1267,7 +1382,12 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         elif output_tensors:
             producer_label = get_tensor_label(output_tensors[0])
         if is_bottom_level_func:
-            record_op_buffer_writes(trace, func_name, buffer_snapshots, producer_label)
+            record_op_buffer_writes(
+                trace,
+                capture_func_name,
+                buffer_snapshots,
+                producer_label,
+            )
 
         if out_orig is not out_before_hooks:
             return out_orig

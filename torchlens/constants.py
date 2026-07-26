@@ -1027,6 +1027,7 @@ IGNORED_FUNCS = [
     ("torch.Tensor", "unflatten"),
     ("torch.Tensor", "real"),
     ("torch.Tensor", "imag"),
+    ("torch.Tensor", "data"),
     ("torch.Tensor", "T"),
     ("torch.Tensor", "mT"),
     ("torch.Tensor", "H"),
