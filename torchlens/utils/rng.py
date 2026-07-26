@@ -39,6 +39,7 @@ from types import (
     FrameType,
     FunctionType,
     MemberDescriptorType,
+    MethodType,
     MethodWrapperType,
     ModuleType,
     TracebackType,
@@ -69,6 +70,71 @@ _AUTOCAST_DEVICES = ("cpu", "cuda")
 _T = TypeVar("_T")
 
 _SEEDED_RNG_NAMESPACES = frozenset({"torch", "torch.Tensor", "torch.nn.functional"})
+
+_NUMPY_RNG_INSTANCE_TYPES: tuple[type, ...] = (
+    np.random.Generator,
+    np.random.RandomState,
+    np.random.BitGenerator,
+)
+"""Public NumPy RNG receiver types covered by the host-nondeterminism witness."""
+
+
+def _numpy_rng_receiver(value: Any) -> Any | None:
+    """Return the NumPy RNG receiver bound to ``value``, when present.
+
+    Parameters
+    ----------
+    value:
+        Candidate bound callable.
+
+    Returns
+    -------
+    Any or None
+        The owning NumPy RNG instance, or ``None`` when ``value`` is not bound
+        to a public NumPy RNG type.
+    """
+
+    if not isinstance(value, (BuiltinFunctionType, MethodType)):
+        return None
+    receiver = value.__self__
+    return receiver if isinstance(receiver, _NUMPY_RNG_INSTANCE_TYPES) else None
+
+
+def _numpy_rng_methods_need_frame_digest() -> bool:
+    """Feature-detect NumPy RNG methods that do not emit profile ``c_call`` events.
+
+    NumPy 1.x binds its public RNG C methods as ``BuiltinFunctionType`` objects,
+    which the existing receiver-profile classifier observes directly. NumPy 2.x
+    binds Cython callables as Python ``MethodType`` objects; those calls do not
+    emit ``c_call`` events. Inspecting the public class surfaces avoids version
+    parsing and draw-method name enumeration.
+
+    Returns
+    -------
+    bool
+        Whether any public NumPy RNG receiver surface uses Python method binding.
+    """
+
+    probes = (
+        np.random.Generator(np.random.PCG64(0)),
+        np.random.RandomState(0),
+    )
+    for probe in probes:
+        for descriptor in vars(type(probe)).values():
+            descriptor_get = getattr(descriptor, "__get__", None)
+            if not callable(descriptor_get):
+                continue
+            try:
+                bound = descriptor_get(probe, type(probe))
+            except (AttributeError, TypeError, ValueError):
+                continue
+            if isinstance(bound, MethodType) and _numpy_rng_receiver(bound) is probe:
+                return True
+    return False
+
+
+_NUMPY_RNG_METHODS_NEED_FRAME_DIGEST = _numpy_rng_methods_need_frame_digest()
+"""Whether NumPy RNG draws need the profiled-frame state-digest fallback."""
 
 
 def aten_qualname_is_seeded_rng(namespace: str | None, qualname: str | None) -> bool:
@@ -1747,6 +1813,12 @@ class host_nondeterminism_monitor:
         # r41 hon2_1: idents of threads hooked by the in-window threading profile hook,
         # consumed by the escape belt's 3-class thread gate via ``_ACTIVE_MONITOR``.
         self._in_window_thread_idents: set[int] = set()
+        # NumPy 2.x binds Generator/RandomState Cython callables as Python methods
+        # that emit no profile ``c_call`` event. The feature-detected fallback
+        # snapshots only RNG receivers directly referenced by each profiled Python
+        # frame and compares them at return, preserving the no-method-name invariant.
+        self._numpy_frame_rng_states: dict[int, list[tuple[Any, str]]] = {}
+        self._numpy_global_rng_cache: dict[tuple[int, int], tuple[Any, ...]] = {}
         # r49 hon1_1: re-entrancy depth for monitor-INTERNAL probes. While > 0 the monitor is
         # reading through its OWN inventory probe (owner-thread, ``__enter__``-scoped, BEFORE the
         # user forward runs), so any channel a probe transitively touches must NOT be marked as a
@@ -1939,6 +2011,83 @@ class host_nondeterminism_monitor:
         channel, disposition = mark
         self._mark_disposition(channel, disposition)
 
+    def _snapshot_numpy_frame_rngs(self, frame: FrameType) -> None:
+        """Snapshot NumPy RNG receivers directly referenced by a Python frame.
+
+        This fallback is active only for the feature-detected NumPy Cython method
+        shape that emits no profile ``c_call`` event. Global lookup is restricted to
+        names referenced by the frame's code object, and closure lookup to declared
+        free variables, so this never walks a shared module namespace or materializes
+        every frame local. Global receivers are cached per code/globals identity to
+        keep the profile hook cheap across TorchLens's high call volume.
+
+        Parameters
+        ----------
+        frame:
+            Python frame entering under the profile hook.
+        """
+
+        if not _NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
+            return
+        cache_key = (id(frame.f_code), id(frame.f_globals))
+        global_holders = self._numpy_global_rng_cache.get(cache_key)
+        if global_holders is None:
+            global_candidates = (
+                frame.f_globals[name] for name in frame.f_code.co_names if name in frame.f_globals
+            )
+            holders: list[Any] = []
+            for candidate in global_candidates:
+                receiver = _numpy_rng_receiver(candidate)
+                holder = receiver if receiver is not None else candidate
+                if isinstance(holder, _NUMPY_RNG_INSTANCE_TYPES):
+                    holders.append(holder)
+            global_holders = tuple(holders)
+            self._numpy_global_rng_cache[cache_key] = global_holders
+        candidates = list(global_holders)
+        if frame.f_code.co_freevars:
+            frame_locals = frame.f_locals
+            candidates.extend(
+                frame_locals[name] for name in frame.f_code.co_freevars if name in frame_locals
+            )
+        snapshots: list[tuple[Any, str]] = []
+        seen_ids: set[int] = set()
+        for candidate in candidates:
+            receiver = _numpy_rng_receiver(candidate)
+            holder = receiver if receiver is not None else candidate
+            if (
+                id(holder) in seen_ids
+                or id(holder) in self._exempt_ids
+                or not isinstance(holder, _NUMPY_RNG_INSTANCE_TYPES)
+            ):
+                continue
+            seen_ids.add(id(holder))
+            try:
+                snapshots.append((holder, self._digest_rng_instance(holder)))
+            except Exception:
+                self._flag_uncertain("profile_rng_state_read_failed")
+        if snapshots:
+            self._numpy_frame_rng_states[id(frame)] = snapshots
+
+    def _compare_numpy_frame_rngs(self, frame: FrameType) -> None:
+        """Mark a NumPy RNG receiver whose state changed within a profiled frame.
+
+        Parameters
+        ----------
+        frame:
+            Python frame returning under the profile hook.
+        """
+
+        snapshots = self._numpy_frame_rng_states.pop(id(frame), ())
+        for holder, before in snapshots:
+            try:
+                changed = self._digest_rng_instance(holder) != before
+            except Exception:
+                self._flag_uncertain("profile_rng_state_read_failed")
+                continue
+            if changed:
+                self._mark("c_rng_instance_draw")
+                return
+
     def _classify_c_call(self, frame: Any, arg: Any) -> None:
         # r41 hon1_1: held-reference identity FIRST. A pre-window ``from time import
         # time`` alias calls the ORIGINAL builtin, bypassing the module-attr patch; the
@@ -2001,13 +2150,7 @@ class host_nondeterminism_monitor:
         # numpy instance draws + bare ``_random.Random`` draws (receiver typing -- no
         # draw-method NAME enumeration, so new draw methods need no detector edit).
         if id(receiver) not in self._exempt_ids and isinstance(
-            receiver,
-            (
-                _c_random_module.Random,
-                np.random.Generator,
-                np.random.RandomState,
-                np.random.BitGenerator,
-            ),
+            receiver, (_c_random_module.Random, *_NUMPY_RNG_INSTANCE_TYPES)
         ):
             self._mark("c_rng_instance_draw")
             return
@@ -2070,10 +2213,13 @@ class host_nondeterminism_monitor:
                 if event == "c_call":
                     self._classify_c_call(frame, arg)
                 elif event == "call":
+                    self._snapshot_numpy_frame_rngs(frame)
                     # r65 CLUSTER Z: held-reference torch RNG spellings are Python
                     # functions -- classified by code identity on ``call`` events (the
                     # r41 builtin-identity layer only ever sees ``c_call``).
                     self._classify_call(frame)
+                elif event == "return":
+                    self._compare_numpy_frame_rngs(frame)
             except Exception:
                 self._flag_uncertain("profile_classifier_error")
             if predecessor is not None:
@@ -2333,6 +2479,13 @@ class host_nondeterminism_monitor:
         must stay generically walked.
         """
 
+        numpy_receiver = _numpy_rng_receiver(value)
+        if numpy_receiver is not None:
+            if id(numpy_receiver) in shared_namespace_ids or isinstance(
+                numpy_receiver, _AMBIENT_BRIDGE_LEAF_TYPES
+            ):
+                return []
+            return [numpy_receiver]
         if isinstance(value, (BuiltinFunctionType, MethodWrapperType)):
             receiver = getattr(value, "__self__", None)
             if (
