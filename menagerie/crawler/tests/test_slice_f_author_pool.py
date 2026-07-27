@@ -46,6 +46,15 @@ from menagerie.crawler.capability_probe import (
     derive_challenge,
     validate_capability_evidence,
 )
+from menagerie.crawler.constants import (
+    AUTHOR_MAX_FETCH_TARGETS,
+    AUTHOR_MAX_TOOL_CALLS,
+    AUTHOR_SESSION_WALL_SECONDS,
+)
+from menagerie.crawler.driver_admission import (
+    _AUTHOR_JOB_VERSION,
+    author_queue_directories as engine_author_queue_directories,
+)
 from menagerie.crawler.identity import hash_bytes, stable_hash
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -271,31 +280,19 @@ def test_queue_layout_matches_the_lane_contract() -> None:
     assert paths["failure"] == Path("/queue/signals/author-abc.failure.json")
 
 
-def test_queue_layout_agrees_with_the_engine_lane_when_present() -> None:
-    """When ``QueueAuthorLane`` is merged in, both halves must agree byte-for-byte.
+def test_queue_layout_agrees_with_the_engine_lane() -> None:
+    """The merged engine and pool halves must agree byte-for-byte."""
 
-    The protocol module is deliberately free of driver imports so the pool and the
-    operator wrappers can be used without the scheduler. That independence is only safe
-    if drift is detectable, so this cross-check activates automatically the moment the
-    engine-side lane is present.
-    """
-
-    engine = pytest.importorskip("menagerie.crawler.driver_admission")
-    if not hasattr(engine, "author_queue_directories"):
-        pytest.skip("QueueAuthorLane is not present on this branch")
-    assert engine.author_queue_directories(Path("/q")) == author_queue_directories(Path("/q"))
-    assert engine._AUTHOR_JOB_VERSION == AUTHOR_JOB_VERSION
+    assert engine_author_queue_directories(Path("/q")) == author_queue_directories(Path("/q"))
+    assert _AUTHOR_JOB_VERSION == AUTHOR_JOB_VERSION
 
 
-def test_default_grant_agrees_with_engine_constants_when_present() -> None:
+def test_default_grant_agrees_with_engine_constants() -> None:
     """The wrapper's default grant must not drift from the engine's LP-13.2 ceiling."""
 
-    constants = pytest.importorskip("menagerie.crawler.constants")
-    if not hasattr(constants, "AUTHOR_MAX_TOOL_CALLS"):
-        pytest.skip("author effort constants are not present on this branch")
-    assert DEFAULT_EFFORT_GRANT.tool_calls == constants.AUTHOR_MAX_TOOL_CALLS
-    assert DEFAULT_EFFORT_GRANT.fetch_targets == constants.AUTHOR_MAX_FETCH_TARGETS
-    assert DEFAULT_EFFORT_GRANT.wall_seconds == float(constants.AUTHOR_SESSION_WALL_SECONDS)
+    assert DEFAULT_EFFORT_GRANT.tool_calls == AUTHOR_MAX_TOOL_CALLS
+    assert DEFAULT_EFFORT_GRANT.fetch_targets == AUTHOR_MAX_FETCH_TARGETS
+    assert DEFAULT_EFFORT_GRANT.wall_seconds == float(AUTHOR_SESSION_WALL_SECONDS)
 
 
 def test_every_published_file_echoes_the_attempt_nonce(tmp_path: Path) -> None:

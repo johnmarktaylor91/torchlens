@@ -160,10 +160,11 @@ Repository = "https://github.com/johnmarktaylor91/torchlens"
 
 
 [tool.setuptools.packages.find]
-include = ["torchlens*"]
+include = ["torchlens*", "menagerie*"]
 
 [tool.setuptools.package-data]
 torchlens = ["autoroute/data/*.json", "autoroute/data/*.md", "schemas/*.json"]
+menagerie = ["crawler/prompts/pool/*"]
 
 [tool.pytest.ini_options]
 markers = [

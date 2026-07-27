@@ -38,11 +38,18 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
+from menagerie.crawler.constants import (
+    AUTHOR_MAX_FETCH_TARGETS,
+    AUTHOR_MAX_TOOL_CALLS,
+    AUTHOR_SESSION_WALL_SECONDS,
+    USAGE_LIMIT_PROVIDERS,
+)
 from menagerie.crawler.identity import (
     atomic_replace_bytes,
     canonical_json_bytes,
     fsync_directory,
     hash_bytes,
+    stable_hash,
     utc_now,
 )
 from menagerie.crawler.models import JsonObject
@@ -58,9 +65,6 @@ AUTHOR_FAILURE_VERSION = "menagerie.crawler.author-queue-failure.v1"
 #: ``author`` are the two stages of one model's authoring; ``capability-probe`` is the
 #: doctor's nonce-bound proof that the author path has live web grounding.
 AUTHOR_JOB_KINDS = ("source-request", "author", "capability-probe")
-
-#: Closed usage-limit provider vocabulary accepted by the wakeup layer.
-USAGE_LIMIT_PROVIDERS = frozenset({"anthropic", "openai"})
 
 #: Operator-protocol exit codes (``PLAN_RECONCILED`` section 3.0).
 EXIT_OK = 0
@@ -141,11 +145,13 @@ class EffortGrant:
 
 
 #: ``PLAN.md`` LP-13.2 author-session ceiling, used when a job is enqueued by the operator
-#: wrapper rather than by the lane. These are the same three numbers the engine publishes;
-#: ``test_slice_f_author_pool`` cross-checks them against
-#: ``menagerie.crawler.constants`` whenever that module declares them, so the two cannot
-#: drift apart silently.
-DEFAULT_EFFORT_GRANT = EffortGrant(tool_calls=30, fetch_targets=20, wall_seconds=30 * 60.0)
+#: wrapper rather than by the lane. The values come directly from the engine constants so
+#: the two enqueue paths cannot drift.
+DEFAULT_EFFORT_GRANT = EffortGrant(
+    tool_calls=AUTHOR_MAX_TOOL_CALLS,
+    fetch_targets=AUTHOR_MAX_FETCH_TARGETS,
+    wall_seconds=float(AUTHOR_SESSION_WALL_SECONDS),
+)
 
 
 @dataclass(frozen=True)
@@ -434,6 +440,95 @@ def job_paths(queue_root: Path, job_id: str) -> dict[str, Path]:
         "backoff": directories["signals"] / f"{job_id}.backoff.json",
         "failure": directories["signals"] / f"{job_id}.failure.json",
     }
+
+
+def author_job_id(kind: str, work_id: str, request_sha256: str) -> str:
+    """Return the deterministic filesystem-safe job identity.
+
+    Parameters
+    ----------
+    kind, work_id, request_sha256:
+        Round-trip label, work generation, and exact request digest.
+
+    Returns
+    -------
+    str
+        ``<kind>-<digest>`` identity, stable across retries of one request.
+    """
+
+    digest = stable_hash({"kind": kind, "work_id": work_id, "request": request_sha256})
+    return f"{kind}-{digest.removeprefix('sha256:')[:24]}"
+
+
+def build_job_descriptor(
+    *,
+    queue_root: Path,
+    kind: str,
+    stable_id: str,
+    work_id: str,
+    request_path: Path,
+    required_output_path: Path,
+    effort_grant: EffortGrant,
+    stall_timeout_seconds: float,
+    attempt_nonce: str,
+    author_model: Optional[str],
+    campaign_id: Optional[str],
+    enqueued_at: str,
+) -> JsonObject:
+    """Build the canonical pending-job wire payload.
+
+    Parameters
+    ----------
+    queue_root:
+        Campaign-local author-queue root.
+    kind, stable_id, work_id:
+        Round-trip label and trusted model/work identities.
+    request_path, required_output_path:
+        Request envelope and the exact result publication path.
+    effort_grant:
+        Per-session effort budget published to the pool.
+    stall_timeout_seconds:
+        Outer lane deadline.
+    attempt_nonce:
+        Per-attempt nonce every pool-published file must echo.
+    author_model, campaign_id:
+        Frozen campaign bindings when available.
+    enqueued_at:
+        Lane-side enqueue timestamp.
+
+    Returns
+    -------
+    dict[str, Any]
+        Complete descriptor including its self-check digest.
+    """
+
+    resolved_request_path = Path(request_path).resolve()
+    request_sha256 = hash_bytes(resolved_request_path.read_bytes())
+    job_id = author_job_id(kind, work_id, request_sha256)
+    paths = job_paths(Path(queue_root).resolve(), job_id)
+    job: JsonObject = {
+        "envelope_version": AUTHOR_JOB_VERSION,
+        "job_id": job_id,
+        "attempt_nonce": attempt_nonce,
+        "kind": kind,
+        "stable_id": stable_id,
+        "work_id": work_id,
+        "author_model": author_model,
+        "campaign_id": campaign_id,
+        "request_path": str(resolved_request_path),
+        "request_sha256": request_sha256,
+        "required_output_path": str(Path(required_output_path).resolve()),
+        "receipt_path": str(paths["receipt"]),
+        "backoff_path": str(paths["backoff"]),
+        "failure_path": str(paths["failure"]),
+        "claim_path": str(paths["claim"]),
+        "effort_grant": effort_grant.to_dict(),
+        "stall_timeout_seconds": float(stall_timeout_seconds),
+        "enqueued_at": enqueued_at,
+    }
+    job["job_sha256"] = stable_hash(job)
+    QueueJob.from_mapping(job)
+    return job
 
 
 def write_json_atomic(path: Path, payload: Mapping[str, Any]) -> Path:
