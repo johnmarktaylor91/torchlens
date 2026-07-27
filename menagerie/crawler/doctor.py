@@ -18,6 +18,7 @@ from typing import Callable, Mapping, Protocol, Sequence
 
 from menagerie.crawler.checkpoint import CRAWLER_BRANCH
 from menagerie.crawler.driver_progress import _resolve_notify_command
+from menagerie.crawler.execution_lock import global_execution_flock_path
 from menagerie.crawler.identity import canonical_json_bytes
 from menagerie.crawler.policy import (
     ExecutionPolicy,
@@ -380,7 +381,7 @@ class SystemDoctorProbes:
     def worker_slot_available(self) -> bool:
         """Probe the cross-campaign worker execution slot."""
 
-        return _lock_available(self.config.runtime_root / "locks" / "execution.flock")
+        return _lock_available(global_execution_flock_path())
 
     def dynamic_disk_reserve_bytes(self) -> int:
         """Subtract current crawler runtime occupancy from filesystem free space."""

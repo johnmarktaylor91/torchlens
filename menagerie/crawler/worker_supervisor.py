@@ -39,6 +39,10 @@ from menagerie.crawler.constants import (
     STDIO_TAIL_MAX_CHARS,
     FailureStage,
 )
+from menagerie.crawler.execution_lock import (
+    acquire_global_execution_flock,
+    release_global_execution_flock,
+)
 from menagerie.crawler.identity import (
     atomic_replace_bytes,
     canonical_json_bytes,
@@ -659,7 +663,11 @@ class WorkerLeaseHandle:
     lease:
         Exact durable lease metadata.
     lock_path, record_path:
-        Kernel lock and fsynced local metadata paths.
+        Campaign-local kernel lock and fsynced local metadata paths.
+    global_lock_path, global_lock_fd:
+        Cross-campaign execution lock and its inherited descriptor. ``None`` is
+        reserved for direct unit-level lease callers; production workers always
+        carry both.
     lock_fd:
         Open locked descriptor transferred to the child at spawn.
     lifecycle_read_fd, lifecycle_write_fd:
@@ -670,6 +678,8 @@ class WorkerLeaseHandle:
     lease: WorkerLease
     lock_path: Path
     record_path: Path
+    global_lock_path: Optional[Path]
+    global_lock_fd: Optional[int]
     lock_fd: Optional[int]
     lifecycle_read_fd: Optional[int]
     lifecycle_write_fd: Optional[int]
@@ -902,6 +912,7 @@ def open_worker_lease(
     record_path: Path,
     lease: WorkerLease,
     *,
+    global_lock_path: Optional[Path] = None,
     on_lock_acquired: Optional[Callable[[WorkerLease], None]] = None,
 ) -> WorkerLeaseHandle:
     """Acquire the single-execution kernel lock and persist its exact lease.
@@ -912,6 +923,9 @@ def open_worker_lease(
         Worker kernel-lock and durable local metadata paths.
     lease:
         Frozen pre-spawn lease with child identity fields unset.
+    global_lock_path:
+        Host-global execution flock acquired before the campaign-local lease.
+        Production callers must provide the shared path.
     on_lock_acquired:
         Single-writer callback invoked while the kernel lock is held but before
         the lease record is fsynced. The driver uses this exact boundary to append
@@ -938,31 +952,42 @@ def open_worker_lease(
         raise ValueError("new worker lease must not contain child identity")
     if lease.boot_id != current_boot_id():
         raise ValueError("new worker lease boot identity is stale")
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    global_descriptor = (
+        acquire_global_execution_flock(global_lock_path)
+        if global_lock_path is not None
+        else None
+    )
+    descriptor: Optional[int] = None
+    read_fd: Optional[int] = None
+    write_fd: Optional[int] = None
     try:
-        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError as exc:
-        os.close(descriptor)
-        raise RuntimeError("worker lock is already held") from exc
-    if on_lock_acquired is not None:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
         try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError("worker lock is already held") from exc
+        if on_lock_acquired is not None:
             on_lock_acquired(lease)
-        except Exception:
-            os.close(descriptor)
-            raise
-    read_fd, write_fd = os.pipe()
-    try:
+        read_fd, write_fd = os.pipe()
         _atomic_write_worker_lease(record_path, lease)
-    except Exception:
-        os.close(read_fd)
-        os.close(write_fd)
-        os.close(descriptor)
+    except BaseException:
+        if read_fd is not None and write_fd is not None:
+            os.close(read_fd)
+            os.close(write_fd)
+        if descriptor is not None:
+            os.close(descriptor)
+        release_global_execution_flock(global_descriptor)
         raise
+    assert descriptor is not None
+    assert read_fd is not None
+    assert write_fd is not None
     return WorkerLeaseHandle(
         lease=lease,
         lock_path=lock_path,
         record_path=record_path,
+        global_lock_path=global_lock_path,
+        global_lock_fd=global_descriptor,
         lock_fd=descriptor,
         lifecycle_read_fd=read_fd,
         lifecycle_write_fd=write_fd,
@@ -979,7 +1004,12 @@ def clear_worker_lease(handle: WorkerLeaseHandle) -> None:
         already been appended by the single writer.
     """
 
-    for attribute in ("lifecycle_read_fd", "lifecycle_write_fd", "lock_fd"):
+    for attribute in (
+        "lifecycle_read_fd",
+        "lifecycle_write_fd",
+        "lock_fd",
+        "global_lock_fd",
+    ):
         descriptor = getattr(handle, attribute)
         if descriptor is not None:
             try:
@@ -3238,9 +3268,14 @@ def run_isolated_subprocess(
     if worker_lease_handle is not None:
         if worker_lease_handle.lock_fd is None or worker_lease_handle.lifecycle_read_fd is None:
             raise ValueError("worker lease descriptors are already closed")
-        inherited_fds = (
-            worker_lease_handle.lock_fd,
-            worker_lease_handle.lifecycle_read_fd,
+        inherited_fds = tuple(
+            descriptor
+            for descriptor in (
+                worker_lease_handle.lock_fd,
+                worker_lease_handle.lifecycle_read_fd,
+                worker_lease_handle.global_lock_fd,
+            )
+            if descriptor is not None
         )
         safe_environment[_WORKER_LOCK_FD_ENV] = str(worker_lease_handle.lock_fd)
         safe_environment[_LIFECYCLE_FD_ENV] = str(worker_lease_handle.lifecycle_read_fd)
@@ -3372,6 +3407,9 @@ def run_isolated_subprocess(
                 if worker_lease_handle.lock_fd is not None:
                     os.close(worker_lease_handle.lock_fd)
                     worker_lease_handle.lock_fd = None
+                if worker_lease_handle.global_lock_fd is not None:
+                    os.close(worker_lease_handle.global_lock_fd)
+                    worker_lease_handle.global_lock_fd = None
                 if worker_lease_handle.lifecycle_read_fd is not None:
                     os.close(worker_lease_handle.lifecycle_read_fd)
                     worker_lease_handle.lifecycle_read_fd = None

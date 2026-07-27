@@ -29,6 +29,7 @@ from menagerie.crawler.author_dispatch import (
 )
 from menagerie.crawler.authority import AuthorityContext
 from menagerie.crawler.checker_dispatch import classify_checker_response
+from menagerie.crawler.cli import EXIT_OPERATOR_OUTAGE, main as cli_main
 from menagerie.crawler.constants import (
     AUTHOR_MAX_FETCH_TARGETS,
     AUTHOR_MAX_TOOL_CALLS,
@@ -343,6 +344,11 @@ def test_queue_stall_is_retryable_infrastructure_not_a_model_failure(tmp_path: P
         _dispatch_source_request(lane, item, tmp_path / "work")
 
     assert isinstance(raised.value, RetryableOperatorError)
+    markers = tuple((queue_root / "watchdog").glob("*.stall.json"))
+    assert len(markers) == 1
+    marker = json.loads(markers[0].read_text(encoding="utf-8"))
+    assert marker["stable_id"] == item.stable_id
+    assert marker["claimed"] is False
     driver = _driver(tmp_path, _snapshot(tmp_path, count=1))
     assert driver._is_infrastructure_error(raised.value) is True  # noqa: SLF001
 
@@ -814,6 +820,57 @@ def test_injected_transient_author_fault_never_becomes_a_permanent_failure(
     statuses = [record["status"]["code"] for record in scan_jsonl(paths.ledgers.models)]
     assert statuses
     assert "failed:source" not in statuses
+
+
+class StalledAuthor(AuthorLane):
+    """Always report a dead managing-session queue."""
+
+    def author(
+        self,
+        item: WorkItem,
+        work_root: Path,
+        config: DriverConfig,
+        context: AuthorityContext,
+    ) -> AuthorArtifact:
+        """Raise retryable infrastructure without producing model authority."""
+
+        del item, work_root, config, context
+        raise AuthorQueueStalled("author queue stalled beyond 45 minutes")
+
+
+def test_exhausted_queue_stall_surfaces_as_campaign_infrastructure(
+    tmp_path: Path,
+) -> None:
+    """Two bounded transport attempts never turn the stalled model into a failure."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    paths = _paths(tmp_path, snapshot)
+
+    with pytest.raises(AuthorQueueStalled):
+        _driver(tmp_path, snapshot, author=StalledAuthor()).run()
+
+    assert scan_jsonl(paths.ledgers.models) == []
+    state = json.loads(paths.driver_state.read_text(encoding="utf-8"))
+    assert state["status"] == "retryable:infrastructure"
+
+
+def test_cli_maps_queue_stall_to_operator_outage_exit(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The supervisor receives exit 6 for a dead managing session."""
+
+    driver = _driver(tmp_path, _snapshot(tmp_path, count=1), author=StalledAuthor())
+
+    assert (
+        cli_main(
+            ["--repo-root", str(tmp_path), "run"],
+            driver_factory=lambda _args: driver,
+        )
+        == EXIT_OPERATOR_OUTAGE
+    )
+    error = json.loads(capsys.readouterr().err)
+    assert error["status"] == "retryable-infrastructure"
 
 
 class CapExhaustedAuthor(AuthorLane):

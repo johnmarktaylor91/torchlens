@@ -61,7 +61,17 @@ DEFAULT_FORWARD_TIMEOUT_SECONDS = 300
 MAX_FORWARD_TIMEOUT_SECONDS = 1_800
 DEFAULT_NOTIFY_TIMEOUT_SECONDS = 5
 DEFAULT_REVIEW_CHECKPOINT_MODELS = 1_000
-DEFAULT_PROGRESS_NOTIFICATION_MILESTONES = (2_000, 3_000, 5_000, 10_000, 15_000, 20_000)
+DEFAULT_PROGRESS_NOTIFICATION_MILESTONES = (
+    900,
+    950,
+    1_000,
+    2_000,
+    3_000,
+    5_000,
+    10_000,
+    15_000,
+    20_000,
+)
 
 # `PLAN.md` LP-13.2 author-session effort ceiling. The pool enforces the tool-call
 # and wall budgets because it is the only boundary that observes Agent-tool events;
@@ -448,6 +458,7 @@ class OperationalEventStatus(StrEnum):
     CHECKPOINT_FAILED = "checkpoint-failed"
     HEALTHY = "healthy"
     RUNNER_FAILED = "failed:runner"
+    RETRYABLE_INFRASTRUCTURE = "retryable:infrastructure"
     CHECKPOINT_REVIEW_PAUSED = "paused:checkpoint-review"
     REVIEW_SIGNED_OFF = "resumed:checkpoint-review"
     PROGRESS_NOTIFIED = "progress-notified"

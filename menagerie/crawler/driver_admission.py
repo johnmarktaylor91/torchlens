@@ -1064,12 +1064,41 @@ class QueueAuthorLane(_AuthorLaneBase):
                 return
             if self._monotonic() >= deadline:
                 claimed = paths["claim"].is_file()
+                self._record_queue_stall(job, claimed=claimed)
                 raise AuthorQueueStalled(
                     f"author queue job {job['job_id']} for {job['stable_id']} produced no "
                     f"result within {self.stall_timeout_seconds:g}s "
                     f"({'claimed but unfinished' if claimed else 'never claimed'})"
                 )
             self._sleep(self.poll_interval_seconds)
+
+    def _record_queue_stall(self, job: Mapping[str, Any], *, claimed: bool) -> None:
+        """Persist one nonce-bound watchdog fact before retry cleanup.
+
+        Parameters
+        ----------
+        job:
+            Exact queue descriptor that crossed its deadline.
+        claimed:
+            Whether the managing session had claimed the job.
+        """
+
+        marker = {
+            "format": "menagerie.crawler.author-queue-stall.v1",
+            "job_id": str(job["job_id"]),
+            "attempt_nonce": str(job["attempt_nonce"]),
+            "stable_id": str(job["stable_id"]),
+            "enqueued_at": str(job["enqueued_at"]),
+            "detected_at": self._clock(),
+            "stall_timeout_seconds": self.stall_timeout_seconds,
+            "claimed": claimed,
+        }
+        path = (
+            self.queue_root
+            / "watchdog"
+            / f"{job['job_id']}-{job['attempt_nonce']}.stall.json"
+        )
+        _write_json_atomic(path, marker)
 
     def _matched_signal(self, path: Path, job: Mapping[str, Any]) -> Optional[JsonObject]:
         """Read one pool-published file if it belongs to this attempt.
@@ -2199,6 +2228,8 @@ class AdmissionEnvironmentMixin:
                 raise AuthorUsagePause(
                     self._pause_for_usage(backoff.signal, operational, len(work))
                 ) from backoff
+            except RetryableOperatorError:
+                raise
             except Exception as exc:  # noqa: BLE001 -- author failure belongs to this model
                 # PLAN.md LP-13.2: cap exhaustion is `failed:<actual-stage>` with
                 # `effort-cap-exhausted`, distinct from an unresolved identity.
@@ -2632,6 +2663,8 @@ class AdmissionEnvironmentMixin:
                     # reset time, not a failed repair. `_ensure_gates` already returns a
                     # usage-pause reason, so route it the same way as a checker backoff.
                     return self._pause_for_usage(backoff.signal, operational, len(work))
+                except RetryableOperatorError:
+                    raise
                 except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
                     reason = (
                         "protocol-violation"
@@ -2678,6 +2711,8 @@ class AdmissionEnvironmentMixin:
                         ),
                         admission=("checker", items_by_id[batch_ids[0]]),
                     )
+                except RetryableOperatorError:
+                    raise
                 except Exception as exc:  # noqa: BLE001 -- checker failure is per batch item
                     for stable_id in batch_ids:
                         item = items_by_id[stable_id]
@@ -2872,6 +2907,8 @@ class AdmissionEnvironmentMixin:
                         # reset time, not a failed repair. `_ensure_gates` already returns a
                         # usage-pause reason, so route it the same way as a checker backoff.
                         return self._pause_for_usage(backoff.signal, operational, len(work))
+                    except RetryableOperatorError:
+                        raise
                     except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
                         reason = (
                             "protocol-violation"
@@ -2913,6 +2950,8 @@ class AdmissionEnvironmentMixin:
                                 ),
                                 admission=("checker", item),
                             )
+                        except RetryableOperatorError:
+                            raise
                         except Exception as exc:  # noqa: BLE001 -- model-local checker failure
                             infrastructure = self._is_infrastructure_error(exc)
                             stage = "runner" if infrastructure else "accuracy-gate"
@@ -3038,6 +3077,8 @@ class AdmissionEnvironmentMixin:
                             # reset time, not a failed repair. `_ensure_gates` already returns a
                             # usage-pause reason, so route it the same way as a checker backoff.
                             return self._pause_for_usage(backoff.signal, operational, len(work))
+                        except RetryableOperatorError:
+                            raise
                         except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
                             reason = (
                                 "protocol-violation"
@@ -3083,6 +3124,8 @@ class AdmissionEnvironmentMixin:
                         ),
                         admission=("checker", item),
                     )
+                except RetryableOperatorError:
+                    raise
                 except Exception as exc:  # noqa: BLE001 -- checker failure belongs to this model
                     infrastructure = self._is_infrastructure_error(exc)
                     stage = "runner" if infrastructure else "fidelity"

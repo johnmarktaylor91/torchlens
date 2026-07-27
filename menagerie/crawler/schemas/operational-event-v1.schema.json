@@ -88,6 +88,7 @@
         "checkpoint-failed",
         "healthy",
         "failed:runner",
+        "retryable:infrastructure",
         "paused:checkpoint-review",
         "resumed:checkpoint-review",
         "progress-notified",

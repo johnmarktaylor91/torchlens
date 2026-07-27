@@ -12,7 +12,7 @@ import platform
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping, Optional, Protocol, Sequence
+from typing import Any, Callable, Mapping, Optional, Protocol, Sequence, TypeAlias
 
 from menagerie.crawler.artifact_transactions import (
     StagedArtifact,
@@ -265,6 +265,8 @@ class DriverConfig:
     checker_version: str = "current"
     only_status: Optional[str] = None
     campaign_config_path: Optional[Path] = None
+    campaign_id: Optional[str] = None
+    author_queue_root: Optional[Path] = None
     run_repair_max: int = 2
     invocation_origin: InvocationOrigin = InvocationOrigin.ORDINARY_RUN
     wake_episode_id: Optional[str] = None
@@ -293,6 +295,10 @@ class DriverConfig:
             raise ValueError("run_repair_max cannot be negative")
         if self.campaign_config_path is not None and not self.campaign_config_path.is_absolute():
             raise ValueError("campaign_config_path must be absolute")
+        if self.campaign_id is not None and not self.campaign_id:
+            raise ValueError("campaign_id cannot be empty")
+        if self.author_queue_root is not None and not self.author_queue_root.is_absolute():
+            raise ValueError("author_queue_root must be absolute")
         if not isinstance(self.invocation_origin, InvocationOrigin):
             raise ValueError("invocation_origin must be a closed InvocationOrigin")
         if (
@@ -470,7 +476,7 @@ class EnvironmentBinding:
     environment_authority_cache: Optional[EnvironmentAuthorityCache] = None
 
 
-UsageBackoffSignal = CheckerBackoffSignal | AuthorBackoffSignal
+UsageBackoffSignal: TypeAlias = CheckerBackoffSignal | AuthorBackoffSignal
 """Either lane's typed provider pause signal, routed through one pause path."""
 
 

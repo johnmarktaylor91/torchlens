@@ -12,7 +12,7 @@ from typing import Any, Mapping, Optional, Sequence
 
 from menagerie.crawler.identity import canonical_json_bytes, stable_hash
 
-CAMPAIGN_CONFIG_FORMAT = "menagerie.crawler.campaign-config.v1"
+CAMPAIGN_CONFIG_FORMAT = "menagerie.crawler.campaign-config.v2"
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,7 @@ class CampaignConfig:
     intake_root: Path
     target: str
     run_id: str
+    author_queue_root: Optional[Path]
     author_command: tuple[str, ...]
     checker_command: tuple[str, ...]
     environment_command: tuple[str, ...]
@@ -49,6 +50,9 @@ class CampaignConfig:
             "intake_root": str(self.intake_root),
             "target": self.target,
             "run_id": self.run_id,
+            "author_queue_root": (
+                str(self.author_queue_root) if self.author_queue_root is not None else None
+            ),
             "author_command": list(self.author_command),
             "checker_command": list(self.checker_command),
             "environment_command": list(self.environment_command),
@@ -86,6 +90,7 @@ class CampaignConfig:
             "intake_root",
             "target",
             "run_id",
+            "author_queue_root",
             "author_command",
             "checker_command",
             "environment_command",
@@ -120,6 +125,7 @@ class CampaignConfig:
         phase = value.get("phase")
         only_status = value.get("only_status")
         run_id = value.get("run_id")
+        raw_author_queue = value.get("author_queue_root")
         if target not in {"osx-arm64", "linux-x86_64-cuda"}:
             raise ValueError("campaign config target is invalid")
         if phase not in {None, "pytorch", "native-tail"}:
@@ -137,11 +143,17 @@ class CampaignConfig:
         intake_root = _absolute_path(value.get("intake_root"), "intake root")
         public_mirror = _absolute_path(mirrors.get("public"), "public mirror")
         private_mirror = _absolute_path(mirrors.get("private"), "private mirror")
+        author_queue_root = (
+            None
+            if raw_author_queue is None
+            else _absolute_path(raw_author_queue, "author queue root")
+        )
         return cls(
             repo_root=repo_root,
             intake_root=intake_root,
             target=target,
             run_id=run_id,
+            author_queue_root=author_queue_root,
             author_command=author,
             checker_command=checker,
             environment_command=environment,

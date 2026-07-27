@@ -39,6 +39,7 @@ from menagerie.crawler.identity import (
     stable_hash,
     utc_now,
 )
+from menagerie.crawler.execution_lock import global_execution_flock_path
 from menagerie.crawler.metadata import (
     input_signature_matches_contract,
 )
@@ -213,6 +214,7 @@ class SupervisedForwardLane:
         self.timeout_seconds = timeout_seconds
         self.rss_limit_bytes = rss_limit_bytes
         self.cwd = cwd
+        self.execution_flock_path = global_execution_flock_path().resolve()
 
     def forward(
         self,
@@ -379,6 +381,7 @@ class SupervisedForwardLane:
                         lock_path,
                         lease_path,
                         lease,
+                        global_lock_path=self.execution_flock_path,
                         on_lock_acquired=on_opened,
                     )
 
@@ -392,19 +395,29 @@ class SupervisedForwardLane:
                                 value,
                             )
 
-                    result = supervise_worker(
-                        request_path,
-                        receipt_path,
-                        root / "supervisor",
-                        timeout_seconds=effective_timeout,
-                        rss_limit_bytes=self.rss_limit_bytes,
-                        cwd=self.cwd,
-                        execution_read_manifest=manifest,
-                        worker_lease_handle=handle,
-                        shutdown_event=shutdown,
-                        on_lease_started=on_started,
-                        verification_token=spawn_verification,
-                    )
+                    try:
+                        result = supervise_worker(
+                            request_path,
+                            receipt_path,
+                            root / "supervisor",
+                            timeout_seconds=effective_timeout,
+                            rss_limit_bytes=self.rss_limit_bytes,
+                            cwd=self.cwd,
+                            execution_read_manifest=manifest,
+                            worker_lease_handle=handle,
+                            shutdown_event=shutdown,
+                            on_lease_started=on_started,
+                            verification_token=spawn_verification,
+                        )
+                    except BaseException:
+                        if lifecycle_event is not None:
+                            lifecycle_event(
+                                OperationalEventKind.WORKER_LEASE_CLOSED.value,
+                                OperationalEventStatus.WORKER_LEASE_CLOSED.value,
+                                handle.lease,
+                            )
+                        clear_worker_lease(handle)
+                        raise
                 if result.observation.shutdown_requested:
                     if lifecycle_event is not None:
                         lifecycle_event(

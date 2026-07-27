@@ -25,9 +25,15 @@ not become true. R3/R4 forward observations remain blocked until fidelity is cur
 checker usage limits record the provider, exact reset time, queued counts, and current environment.
 The configured recurring wake episode reacquires the same lock until a durable resume, completion,
 cancellation, or supersession fact resolves it, then removes its scheduler projection.
+Production wake callbacks enter through `tools/crawler_supervisor.sh`, so a post-reset run keeps the
+same outer liveness and queue-stall watchdog. The reset-time episode remains the only component that
+decides when to resume; the persistent launchd agent does not race it.
 
 At the blocking 1000-model review, ordinary resume remains paused. After JMT signs off, use:
 
 ```bash
 python -m menagerie.crawler resume --intake "$INTAKE" --target osx-arm64 --after-review
 ```
+
+This checkpoint belongs only to `c1-mech`. The other three campaign configs are accepted only with
+`--review-checkpoint-at 0`, and are launched after this sign-off.

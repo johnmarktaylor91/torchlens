@@ -52,6 +52,7 @@ from menagerie.crawler.driver import (
     default_driver_paths,
     utc_now,
 )
+from menagerie.crawler.driver_contracts import RetryableOperatorError
 from menagerie.crawler.envs import load_environment_registry
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot, load_intake_snapshot
 from menagerie.crawler.partitioner import (
@@ -247,6 +248,19 @@ def main(
             file=sys.stderr,
         )
         return EXIT_OPERATOR_OUTAGE
+    except RetryableOperatorError as exc:
+        print(
+            json.dumps(
+                {
+                    "status": "retryable-infrastructure",
+                    "detail": str(exc),
+                    "exception_type": f"{type(exc).__module__}.{type(exc).__qualname__}",
+                },
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+        return EXIT_OPERATOR_OUTAGE
     except (CheckpointError, DriverError, OSError, ValueError) as exc:
         print(f"crawler error: {exc}", file=sys.stderr)
         return EXIT_ERROR
@@ -293,7 +307,7 @@ def _add_driver_config_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--progress-milestones",
         type=_positive_csv,
-        default=(2000, 3000, 5000, 10000, 15000, 20000),
+        default=(900, 950, 1000, 2000, 3000, 5000, 10000, 15000, 20000),
         metavar="N,N,...",
     )
     parser.add_argument("--notify-command")
@@ -555,6 +569,7 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
     paths = default_driver_paths(args.repo_root.resolve(), args.intake.resolve())
     snapshot = load_intake_snapshot(args.intake.resolve())
     campaign_binding = _optional_campaign_binding(args.repo_root.resolve(), snapshot)
+    _validate_campaign_launch_policy(args, campaign_binding)
     default_config = DriverConfig()
     config = DriverConfig(
         target=args.target,
@@ -575,6 +590,10 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
         ),
         only_status=getattr(args, "only_status", None),
         campaign_config_path=campaign_config_path,
+        campaign_id=(
+            campaign_binding.spec.campaign_id if campaign_binding is not None else None
+        ),
+        author_queue_root=author_queue_root,
         invocation_origin=(
             InvocationOrigin.WAKE_CALLBACK
             if getattr(args, "wake_episode_id", None) is not None
@@ -597,7 +616,10 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
         checker=CommandCheckerLane(checker_command),
         forward=SupervisedForwardLane(cwd=args.repo_root.resolve()),
         environments=build_command_environment_lane(environment_command, paths.runtime_root),
-        notifier=CommandNotifier(config.notify_command),
+        notifier=CommandNotifier(
+            config.notify_command,
+            receipt_root=paths.runtime_root / "notification-receipts",
+        ),
         clock=utc_now,
     )
     return CrawlerDriver(paths, config, dependencies)
@@ -663,6 +685,7 @@ def _load_or_persist_campaign_config(args: argparse.Namespace) -> Path:
         intake_root=intake_root,
         target=args.target,
         run_id=args.run_id,
+        author_queue_root=_optional_author_queue_root(args),
         author_command=author,
         checker_command=checker,
         environment_command=environment,
@@ -692,6 +715,9 @@ def _apply_campaign_config(args: argparse.Namespace, config: CampaignConfig) -> 
     args.intake = config.intake_root
     args.target = config.target
     args.run_id = config.run_id
+    args.author_queue = (
+        str(config.author_queue_root) if config.author_queue_root is not None else None
+    )
     args.author_command = shlex.join(config.author_command)
     args.checker_command = shlex.join(config.checker_command)
     args.environment_command = shlex.join(config.environment_command)
@@ -704,6 +730,44 @@ def _apply_campaign_config(args: argparse.Namespace, config: CampaignConfig) -> 
     args.only_status = config.only_status
     os.environ["MENAGERIE_PUBLIC_MIRROR"] = str(config.public_mirror)
     os.environ["MENAGERIE_PRIVATE_MIRROR"] = str(config.private_mirror)
+
+
+def _validate_campaign_launch_policy(
+    args: argparse.Namespace,
+    binding: Optional[CampaignBinding],
+) -> None:
+    """Enforce the four-campaign checkpoint and advance-notification contract.
+
+    Parameters
+    ----------
+    args:
+        Fully restored launch arguments.
+    binding:
+        Exact manifest binding, when the intake belongs to the production partition.
+
+    Raises
+    ------
+    OperatorOutageError
+        If a production campaign would launch with the wrong human gate or silently
+        approach C1's checkpoint.
+    """
+
+    if binding is None:
+        return
+    expected_review = binding.spec.review_checkpoint_at
+    if args.review_checkpoint_at != expected_review:
+        raise OperatorOutageError(
+            f"{binding.spec.campaign_id} requires --review-checkpoint-at {expected_review}"
+        )
+    if binding.spec.campaign_id != "c1-mech":
+        return
+    required = {900, 950, 1000}
+    missing = sorted(required - set(args.progress_milestones))
+    if missing:
+        raise OperatorOutageError(
+            "c1-mech requires durable progress notifications at 900,950,1000; "
+            f"missing {missing}"
+        )
 
 
 def _required_absolute_environment_path(name: str) -> Path:
