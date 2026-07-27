@@ -125,6 +125,14 @@ jobs:
   crawler-round21-linux-release:
     name: Crawler Round 21 Linux committed-lock release proofs
     runs-on: ubuntu-latest
+    # Opt-in real/self-hosted runner gate. This Linux release proof runs a real
+    # bubblewrap-sandboxed composition (build from the committed lock, execute the
+    # model, emit a pass attestation). GitHub's hosted ubuntu runners cannot run
+    # that composition faithfully, so it is gated on the repository variable
+    # MENAGERIE_RELEASE_RUNNERS. Set it to 'true' only where real/self-hosted
+    # release runners are configured; until then this job -- and the reversion +
+    # conformance jobs that need it -- skip, while torchlens core CI still runs.
+    if: ${{ vars.MENAGERIE_RELEASE_RUNNERS == 'true' }}
     env:
       MENAGERIE_RELEASE_GATE: "1"
       MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-linux-64.lock
@@ -210,14 +218,13 @@ jobs:
   crawler-round21-macos-release:
     name: Crawler Round 21 macOS committed-lock Seatbelt release proofs
     runs-on: macos-14-xlarge
-    # Opt-in Apple-Silicon release runner. GitHub does not provision
-    # macos-14-xlarge for this repo by default, so the macOS Seatbelt attestation
-    # (and the cross-host conformance gate that consumes its artifact) is gated on
-    # the repository variable MENAGERIE_MACOS_RUNNER. Set it to 'true' once a
-    # macos-14-xlarge runner is available to enable both jobs. Until then this
-    # skips, the conformance job auto-skips via its needs edge, and the Linux
-    # release proof + deliberate reversions still run on every PR.
-    if: ${{ vars.MENAGERIE_MACOS_RUNNER == 'true' }}
+    # Opt-in real/self-hosted runner gate (shared with the Linux release proof via
+    # MENAGERIE_RELEASE_RUNNERS). GitHub does not provision the macos-14-xlarge
+    # Apple-Silicon runner for this repo, and the Seatbelt attestation needs a real
+    # macOS host, so this is gated. Set MENAGERIE_RELEASE_RUNNERS='true' (with a
+    # provisioned Apple-Silicon runner) to enable it plus the cross-host
+    # conformance gate that consumes its artifact.
+    if: ${{ vars.MENAGERIE_RELEASE_RUNNERS == 'true' }}
     env:
       MENAGERIE_RELEASE_GATE: "1"
       MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-osx-arm64.lock
