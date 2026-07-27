@@ -1,6 +1,150 @@
 # CHANGELOG
 
 
+## v2.33.0 (2026-07-27)
+
+### Bug Fixes
+
+- **ci**: Enable unprivileged userns so bwrap sandbox works on ubuntu-24.04
+  ([`afe3e0a`](https://github.com/johnmarktaylor91/torchlens/commit/afe3e0a89915b97e1db6964e68ac8137c5dcb07a))
+
+The crawler Linux release-proof + deliberate-reversion jobs build a real bubblewrap sandbox
+  (detect_os_sandbox -> _probe_bubblewrap launches a live namespace). GitHub's ubuntu-24.04 hosted
+  runners restrict unprivileged user namespaces via AppArmor, so an installed bwrap still fails the
+  probe and the release-gate fixture fails closed with "required host sandbox/audit tools are
+  unavailable" -- even though `command -v bwrap` passes.
+
+Re-enable unprivileged userns (both the ubuntu-24.04 AppArmor knob and the legacy clone knob) right
+  after installing bubblewrap, guarded with `|| true` so it is a harmless no-op on runner images
+  that lack the sysctl. This does not weaken the gate: the test still requires a working bwrap
+  sandbox; it only lets the hosted runner provide one (the local cert host already permits userns).
+
+- **ci**: Exclude tests/crawler from the core smoke matrix
+  ([`67de360`](https://github.com/johnmarktaylor91/torchlens/commit/67de3604133b50e0fdb4a8ddd8adea67f1c67785))
+
+tests/crawler/ is part of the separate menagerie-crawler corpus: its support module imports
+  menagerie.crawler.*, which hard-requires jsonschema (a crawler-only dependency the core matrix
+  does not install -- the dedicated crawler-round21-* jobs pip-install it under a full conda env).
+  Under `pytest tests/ -m smoke` pytest imports those modules during collection and dies with
+  ModuleNotFoundError: jsonschema (exit 2), before -m smoke ever deselects them.
+
+Exclude tests/crawler from the core run with --ignore, exactly as tests/test_menagerie_*.py is
+  treated -- the crawler is a separate corpus with its own CI legs. No smoke coverage is lost: no
+  tests/crawler test is smoke-marked (all are deselected). The crawler's real certification runs in
+  the crawler-round21-* jobs against menagerie/crawler/tests.
+
+- **ci**: Gate macOS release attestation behind an opt-in runner variable
+  ([`6bd2d62`](https://github.com/johnmarktaylor91/torchlens/commit/6bd2d62a5ce0292f7b825efb9e1b8305d41170bc))
+
+GitHub does not provision the macos-14-xlarge Apple-Silicon runner for this repo by default, so
+  crawler-round21-macos-release failed at runner assignment and, via its needs edges, cascaded
+  skips/failures onto deliberate-reversions and conformance.
+
+Gate crawler-round21-macos-release on the repository variable MENAGERIE_MACOS_RUNNER (== 'true').
+  When it is unset the macOS job skips, and crawler-round21-conformance -- which still needs the
+  macOS job for its cross-host attestation artifact -- auto-skips via the skipped-need edge (no
+  false pass: the conformance test asserting no host is skipped is a tripwire and is not weakened).
+  deliberate-reversions no longer needs the macOS job, so the Linux release proof + the D01-D29
+  reversions still run on every PR. Set MENAGERIE_MACOS_RUNNER=true once an Apple-Silicon runner
+  exists to re-enable the full cross-host gate with correct ordering.
+
+- **ci**: Gate the Linux release proof on the opt-in real-runner variable too
+  ([`571b7b7`](https://github.com/johnmarktaylor91/torchlens/commit/571b7b7ef5b5c84e9ef74ffa594745d966a96729))
+
+The crawler release-proof legs are real-host attestations (Linux bwrap real composition, macOS
+  Seatbelt) that GitHub's hosted runners cannot run faithfully: after enabling userns the Linux leg
+  still fails the real award composition on a hosted runner, and no Apple-Silicon runner is
+  provisioned. Torchlens is certified for these on real/self-hosted hosts (the local release cert),
+  and the crawler is excluded from the published wheel, so these legs must not gate the hosted-CI
+  signal.
+
+Gate crawler-round21-linux-release on the same opt-in repository variable as the macOS leg
+  (MENAGERIE_RELEASE_RUNNERS). With it unset both release proofs skip, and deliberate-reversions +
+  conformance auto-skip via their needs edges, leaving the torchlens core matrix as the hosted-CI
+  gate. Set MENAGERIE_RELEASE_RUNNERS ='true' where real/self-hosted release runners are configured
+  to re-enable the full cross-host release-proof + conformance suite.
+
+- **ci**: Resolve round21 runner-temp paths in a step, not job env
+  ([`1ad6f99`](https://github.com/johnmarktaylor91/torchlens/commit/1ad6f99c068e2c4ada296e59c79fbf75d4491644))
+
+The crawler round21 release/attestation jobs referenced ${{ runner.temp }} inside their job-level
+  env: blocks. The runner context is not available at job-env scope (only inside steps), so GitHub
+  rejected tests.yml at parse time ("workflow file issue") -- failing the ENTIRE Tests workflow,
+  smoke matrix included, in 0s and never reporting the required test checks.
+
+Move each runner-temp-based path out of job env into an early bash step that writes the resolved
+  value to $GITHUB_ENV (where $RUNNER_TEMP is a real shell var). Semantics are unchanged: every path
+  still lives under the runner temp dir, and the valid step-level ${{ runner.temp }} upload/download
+  references already match. These legs only run in GitHub CI, so local certification never exercised
+  the schema.
+
+- **crawler**: Roster assumes nothing built -- strip all build-state claims
+  ([`fe7b3ce`](https://github.com/johnmarktaylor91/torchlens/commit/fe7b3ce31ce690a89b5633569e98c036994fc68a))
+
+The crawler starts from scratch and validates/builds every model itself, trusting no prior result
+  (the legacy catalog carries known errors, incl. rows whose recipe was quarantined). So the roster
+  must not imply any model is already built or validated.
+
+Strip crawl_status and every build-state/validity field (recipe, verification_expectation, verified,
+  input_is_real, input*, legacy, deferral, added_wave, notes, framework_hint) from all 28,482 rows.
+  Keep only model identity (name/zoo/variant), findability (aliases), neutral browse/routing
+  metadata (family/domain/era), and neutral build HINTS the crawler may use but need not trust
+  (source_url, triage_class). Every row is now an equal model-to-crawl-from-scratch; intake still
+  loads 28,490 items.
+
+- **menagerie**: Drop case-colliding classics alias stubs
+  ([`79a638e`](https://github.com/johnmarktaylor91/torchlens/commit/79a638e1f7455d7e6222e719cb2df872dabd9e5b))
+
+Cloning on a case-insensitive filesystem (macOS) warned that GraphCast.py/graphcast.py,
+  Octo_base.py/octo_base.py, and Octo_small.py/octo_small.py collide, leaving only one of each pair
+  in the working tree. The capitalized files were thin alias stubs re-exporting from the real
+  lowercase modules, and those real modules already register the capitalized names in their own
+  MENAGERIE_ENTRIES (graphcast.py -> "GraphCast"; octo_base.py -> "Octo_base", "Octo_small").
+  Nothing imports the capitalized module paths.
+
+Delete the three redundant alias stubs. The classics registry is unchanged (5149 entries;
+  GraphCast/Octo_base/Octo_small still resolve via the real modules), and a clone no longer
+  collides.
+
+### Chores
+
+- **crawler**: Scrub personal solver path from osx-arm64 provenance
+  ([`2d6cae4`](https://github.com/johnmarktaylor91/torchlens/commit/2d6cae4cc8c4ec6d2aacd8c8ba6ad2dada9bc70d))
+
+Replace the personal absolute interpreter path (/home/jtaylor/anaconda3/envs/condalock/bin/python)
+  in the osx-arm64 lock provenance with a non-personal generic (condalock/bin/python), and make the
+  provenance validator assert the conda-lock invocation signature ("<python> -m conda_lock") without
+  pinning the solver's host-specific interpreter path. Metadata-only: not in the lock/resolved
+  bytes, so the anti-substitution lock/export/spec SHAs are unaffected.
+
+### Features
+
+- **crawler**: Seed the intake with the full ~28.5k found-model roster
+  ([`f2d24fc`](https://github.com/johnmarktaylor91/torchlens/commit/f2d24fcf38cedf29d0f3d9aa6e60fe4123090a74))
+
+The crawler intake read only master_catalog.jsonl (7,699 BUILT models), so a crawl would process a
+  fraction of what the exhaustive Fable discovery sweep actually found. The finished harvest
+  reconciliation (nothing-lost audit, 0 unaccounted of 21,892 rows) established ~28,454 unique named
+  families: A 7,699 built (master_catalog.jsonl) C 4,891 built (menagerie.classics registry, never
+  in the jsonl) B 15,892 to-build (combined_build_queue.tsv net-new: SOURCE_AVAILABLE / REIMPLEMENT
+  / UNTRIAGED) Those cohorts lived in gitignored .research working files + the classics registry and
+  were never folded into the crawler's intake -- the harvest->crawler migration paused before wiring
+  them in.
+
+Add menagerie/data/crawl_roster.jsonl: the deduped (normalized-name) union of all three cohorts,
+  28,482 rows, each carrying the intake-required name+zoo (+ variant, source_url, framework_hint,
+  triage_class, crawl_status, and preserved findable aliases from alias_ledger.tsv). To-build rows
+  get a framework-derived zoo (discovered-pytorch/-tensorflow/...) so _framework routing stays
+  correct; the built-only master_catalog.jsonl is left untouched (its recipe-bearing rows remain the
+  menagerie build-catalog).
+
+Wire `intake --all-existing` to prefer crawl_roster.jsonl when present (fall back to
+  master_catalog.jsonl), so the documented kickoff seeds the full roster. Verified: `intake
+  --all-existing` -> 28,490 items (roster + deferred), all with valid stable IDs; intake unit tests
+  green. crawl_roster.jsonl is excluded from the large-file and secret-scan hooks like the other
+  data catalogs.
+
+
 ## v2.32.4 (2026-07-27)
 
 ### Bug Fixes
@@ -387,6 +531,245 @@ Regression: tests/semantic/test_facets.py (3 previously-failing) pass; new
 
 - **capture**: Type core projection facts
   ([`5f10e55`](https://github.com/johnmarktaylor91/torchlens/commit/5f10e551a60aba6beeeba87ebc41e3dc2c069904))
+
+- **crawler**: Break driver/driver_models/driver_admission import cycle from C08 extraction
+  ([`9e36eaa`](https://github.com/johnmarktaylor91/torchlens/commit/9e36eaafc34a204056158a160ddbbfdca128c740))
+
+- **crawler**: Canonical durable operational state + reconstruction validation
+  (H196,H231,M1321,M304)
+  ([`82b9927`](https://github.com/johnmarktaylor91/torchlens/commit/82b9927ea409fed3d2e23856f389cfa0fac40bb2))
+
+H196: checkpoint milestone and review policy identities under canonical records, keyed by intake
+  snapshot, and mirror review signoff before disposable runtime state.\n\nH231: persist requeue
+  grants and consumption bindings canonically; validate grant bytes, exact superseded parent,
+  generation, and new-work identity on append and replay.\n\nM1321: share side-effect-free
+  marker/proposal/intake/source/code reconstruction validation between checkpoint staging and driver
+  rehydration.\n\nM304: require status.supersedes_revision to be null on first revision and exactly
+  equal parent_revision thereafter, including reducer rebuild validation. The state rebuild fixture
+  now supplies the required public lineage binding instead of relying on the prior invalid null
+  value.
+
+- **crawler**: Don't inherit release-attestation env in conformance node enumeration
+  ([`8d79df2`](https://github.com/johnmarktaylor91/torchlens/commit/8d79df20c5c634f1e4827bf615537409f613c13f))
+
+_collect_node_ids runs a nested pytest --collect-only that enumerates node ids without running any
+  tests, so it is not a release-attestation run. It previously inherited
+  MENAGERIE_RELEASE_ATTESTATION, causing the conftest pytest_sessionfinish release hook to fail the
+  enumeration closed (zero passed release nodes) and the outer check=True subprocess to raise. Strip
+  that env var from the enumeration subprocess only; the attestation hook and all real attestation
+  runs are unchanged. Pre-existing defect (blame 86ec42e9b) exposed by the native-attestation
+  certification path.
+
+- **crawler**: Make usage-limit wake episodes renewable
+  ([`b30f85b`](https://github.com/johnmarktaylor91/torchlens/commit/b30f85b7bb2e8c9b43babf4aa28b465da0602b5b))
+
+- **crawler**: Resolve 4 mypy type regressions caught by final cert
+  ([`455b1af`](https://github.com/johnmarktaylor91/torchlens/commit/455b1af2177c4f95c8a114b5c34b9496b0a968da))
+
+- **crawler**: Restore PLAN §13 + runs non-goals deleted by C04 slim; fix stale §5.1 citations
+  (cross-lab review)
+  ([`a5cd194`](https://github.com/johnmarktaylor91/torchlens/commit/a5cd19445848a1be9942ae7e086e6b20ede06aef))
+
+- **crawler**: Round-11 env exactness from created prefix + reconstruction canonical-anchoring +
+  append-order license + unconditional intake source verify + env-teardown quarantine
+  (A-02,C-02,C-03,C-05,C-06)
+  ([`5b9b796`](https://github.com/johnmarktaylor91/torchlens/commit/5b9b796ef6224cd8069e2e30026b68cfc5a2a5e3))
+
+- **crawler**: Round-11 family-variant authority -- reducer computes template/completeness +
+  verifies variant derivation + supersession-stale currency (H-1,A-04,A-05,A-06)
+  ([`520d872`](https://github.com/johnmarktaylor91/torchlens/commit/520d8729ed3177d1d2030918d8f63078bb328061))
+
+- **crawler**: Round-11 redact driver-originated failure diagnostics + snapshot-id one-shot identity
+  + idempotent wake-noop (C-01,C-07,A-09)
+  ([`7e016d0`](https://github.com/johnmarktaylor91/torchlens/commit/7e016d0e8492206be9883cac8cee1041a2b72252))
+
+- **crawler**: Round-11 transitive-AST award closure (globals+imports, behavior-normalized) +
+  detected-mode coverage enforcement (A-07,A-08,A-03)
+  ([`44677c2`](https://github.com/johnmarktaylor91/torchlens/commit/44677c268c64eccc281afc9dc272c24734e85fef))
+
+- **crawler**: Round-12 complete mode-repair route + quarantine work-identity + env-observation in
+  award closure + observed-fact verification + pending-backoff anchor
+  (H-02,H-03,H-05,H-06,F1,F4,family-H1)
+  ([`b7211df`](https://github.com/johnmarktaylor91/torchlens/commit/b7211dff5e5b63eabea1546f8ad7a0f470ec24b3))
+
+- **crawler**: Round-12 macOS denial-telemetry lifetime/integrity fail-closed + read-allowlist class
+  + wake-noop ledger-lock retry (F2,F3,S2,M-01)
+  ([`a8d4d75`](https://github.com/johnmarktaylor91/torchlens/commit/a8d4d75caafc08be97c1b25e1b1ff73d2dd94db0))
+
+- **crawler**: Round-12 ROOT -- unified dependency-currency projection + checkpoint semantic-replay
+  + reconstruction-anchor unification (H-01,H-04,C-H01..C-H05)
+  ([`149eb1f`](https://github.com/johnmarktaylor91/torchlens/commit/149eb1f26ae8aacaebe5920dc0f1c9cd66ef034f))
+
+- **crawler**: Round-13 closed authorized-artifact license map (CRIT) + gated family-variant
+  reconstruction + restricted-private mirror lane + snapshot-id promotion identity
+  (R12-C-01,C-03,C-04,C-05)
+  ([`45a9f60`](https://github.com/johnmarktaylor91/torchlens/commit/45a9f604df824299feade39ccf46f04f0395ec26))
+
+- **crawler**: Round-13 host-invariant replay + terminal-lane re-admission + evidence-required
+  terminal + closure authority + dependency-current family currency
+  ([`b3efbd2`](https://github.com/johnmarktaylor91/torchlens/commit/b3efbd25cedd228fdd67a3c40e5945bb3d1ee1de))
+
+- **crawler**: Round-13 reconciliation -- allow implementation.declared_timeout_seconds in schema
+  (timeout lane)
+  ([`232a9e7`](https://github.com/johnmarktaylor91/torchlens/commit/232a9e7f6d1a79079d6fce86ebbc16b3adc72915))
+
+- **crawler**: Round-13 reducer-authoritative cold-forward + deterministic 2% confirmation + runtime
+  read-allowlist + forward-observation + subprocess/macOS mediums
+  ([`270bf25`](https://github.com/johnmarktaylor91/torchlens/commit/270bf256772a22bf153a559d49eb24c01ee097c2))
+
+- **crawler**: Round-13 scope license manifest-completeness to promoted artifacts (non-run terminals
+  checkpointable; CRIT rigor intact)
+  ([`5e9fc23`](https://github.com/johnmarktaylor91/torchlens/commit/5e9fc238d8af3561adb382b65a260b596db127b7))
+
+- **crawler**: Round-17 VS1 -- consume real worker-result.v3 so a healthy worker awards a run
+  (SOL-R16-01 CRITICAL)
+  ([`dbbf592`](https://github.com/johnmarktaylor91/torchlens/commit/dbbf59229b0424461e730d0fb1392af3d24d237b))
+
+- **crawler**: Round-17 VS2 -- guard the shutdown pre-award/pre-publish boundary so an interrupted
+  slot awards nothing (SOL-R16-03)
+  ([`3945ada`](https://github.com/johnmarktaylor91/torchlens/commit/3945ada47c5bbacaa69b16d5f8c285b8a4272392))
+
+- **crawler**: Round-17 VS3 -- bundled authority epoch: exact-member enforcement + identity, durable
+  deferred handoff resume, attempt evidence representability, dead producer (SOL-R16-02/04/05/06,
+  F4)
+  ([`a807559`](https://github.com/johnmarktaylor91/torchlens/commit/a80755928cc24b133127c8055079788fac6c5600))
+
+- **crawler**: Round-19 VS1 -- EnvironmentAuthority (digest-sealed prefix awards on real conda),
+  manifest-derived interpreter, de-patched real-compiler compositions + anti-substitution tripwire
+  (C1/C2 CRITICAL, H1)
+  ([`6df2b72`](https://github.com/johnmarktaylor91/torchlens/commit/6df2b72bd148b0ce2b014fe01df8d70dd7e12876))
+
+- **crawler**: Round-21 -- cheap isolated clones for mutating real-composition tests on non-reflink
+  (ext4) filesystems (no 18GB full-copy per mutator; disk bounded; mutation-detection unchanged)
+  ([`3c5c099`](https://github.com/johnmarktaylor91/torchlens/commit/3c5c0996d8a50bee736f5c2e97b9be26ddeea5a5))
+
+- **crawler**: Round-21 -- clean-clone handoff award materializes its ledger dir on first append
+  (cross-slice ordering fix; canonical-only transfer + identity guards unchanged)
+  ([`765c015`](https://github.com/johnmarktaylor91/torchlens/commit/765c015ba0ccc8650ecad1a91123ebd7a6fb1eb6))
+
+- **crawler**: Round-21 -- copy-up cache mutation is genuinely quarantined (multi-model currentness
+  test bounds its artifact transaction; no weakened invariant)
+  ([`9c6e441`](https://github.com/johnmarktaylor91/torchlens/commit/9c6e44162d95c5f3633aba7abc4dfe494c27ab69))
+
+- **crawler**: Round-21 -- retained-artifact authority fix so test_real_multi_model_cache passes to
+  completion (retained-artifact-authority-mismatch root-caused; integrity check unchanged, not
+  weakened)
+  ([`57b20dd`](https://github.com/johnmarktaylor91/torchlens/commit/57b20dd7e50adfe4016c3b74dc025bcd74c2b2f6))
+
+- **crawler**: Round-21 VS10 -- genuine cross-solved osx-arm64 lock (+provenance),
+  non-self-attesting mac fixture, required hosted macos-14 Seatbelt release CI (fail-closed
+  never-skip) + attestation, structural inventory requires mac lock files, P10 host-guarded; no
+  fabricated locks, no weakened checks
+  ([`781a319`](https://github.com/johnmarktaylor91/torchlens/commit/781a3196785a5fbe27e3ee56390f46f53ba166d5))
+
+- **crawler**: Round-21 VS11 -- permanent conformance-completeness registry (total
+  clause/finding/invariant->real-node map, no waivers) + D01-D29 deliberate-reversion gates +
+  two-host pass/not-skip attestation; P11/P11-CI; VS11 last
+  ([`86ec42e`](https://github.com/johnmarktaylor91/torchlens/commit/86ec42e9b458a1b4f0de17d9f5e7fa3c2a48ee43))
+
+- **crawler**: Round-21 VS11 followup -- release-gate-skip P11-CI attestation test (skips in normal
+  runs, fail-closes under MENAGERIE_RELEASE_GATE like VS9's CI proof); no weakened checks
+  ([`2a2860e`](https://github.com/johnmarktaylor91/torchlens/commit/2a2860e404377c0df5be99eed4c2ccaad44db227))
+
+- **crawler**: Round-21 VS3 followup -- conform structural cache-owner pin to the bounded
+  cache.verify(authority, verification_token) call (guarantee preserved: currentness validates
+  against the one lifecycle-owned cache via the shared per-pass token)
+  ([`09fd746`](https://github.com/johnmarktaylor91/torchlens/commit/09fd74677205a4bedb50c703897c3fe9552118de))
+
+- **crawler**: Round-21 VS3b -- session seal is now actually shared (one base seal reused by all
+  read-only real compositions; mutators isolated; bounded-seal counter passes)
+  ([`828533e`](https://github.com/johnmarktaylor91/torchlens/commit/828533e7bd1b1f0a017de94d75b4d4d51234e8d1))
+
+- **crawler**: Round-21 VS6 -- handoff prior-artifact identity guard (_terminalize) + zero/ambiguous
+  final-event fail-closed (_assert_persisted_handoff_authority_available); H01-H04 clean-clone
+  identity matrix
+  ([`070ca37`](https://github.com/johnmarktaylor91/torchlens/commit/070ca37701871e558977ea542126be24525f6d43))
+
+- **crawler**: Round-21 VS6 followup -- handoff identity guard consumes the single final projection
+  (no second resolve_final_artifact_transaction; one-final-projection invariant restored; F09 guard
+  unchanged)
+  ([`77be86f`](https://github.com/johnmarktaylor91/torchlens/commit/77be86f2598f1248fef1e8c3acb1e30c3b26e2d4))
+
+- **crawler**: Round-21 VS7 -- closed named host-transport capability shared by bwrap mount + parent
+  strace audit (no blanket /lib,/usr/lib allowance; unlisted host library not blessed); P07 real
+  Linux proof
+  ([`af20485`](https://github.com/johnmarktaylor91/torchlens/commit/af2048591adcbe8da27bec21b74dd2b390b1d5d2))
+
+- **crawler**: Round-21 VS8 -- mismatched EnvironmentAuthorityCache.bind fails without invalidating
+  the active good authority (no forced re-seal; real award still succeeds); P08 real proof
+  ([`af8f2ea`](https://github.com/johnmarktaylor91/torchlens/commit/af8f2eac205bfd2b685f3763a2360977a289d6bc))
+
+- **crawler**: Round-21 VS9 -- committed real linux-64 lock (+provenance), non-self-attesting
+  fixture, lock-provisioned always-on Linux release CI that actually runs the real compositions +
+  pass attestation; structural inventory requires the lock files exist
+  ([`bf4ca6d`](https://github.com/johnmarktaylor91/torchlens/commit/bf4ca6d32c021321bed50a49619c4d6e1f7edcb6))
+
+- **crawler**: Round-21 VS9 followup -- reconcile 5 regressions (allow real provenance-backed
+  committed locks, register round21-release spec, release-gate-skip the CI proof, conform CI-node
+  tripwire + sandbox exit code); no weakened checks
+  ([`53d6819`](https://github.com/johnmarktaylor91/torchlens/commit/53d68194faa9ba37ad139aa3dae41f9cb6052540))
+
+- **crawler**: Round-22 -- all 29 deliberate reversions genuinely red their mapped nodes for the
+  registered reason (fix3 all-nodes/orphan-kill/D08 base + D01/D02/D04/D05/D09/D19/D25/D29
+  mutation-or-trim fixes); clean isolated full matrix status=passed 29/29 stable; seal tripwire
+  unchanged
+  ([`22896b8`](https://github.com/johnmarktaylor91/torchlens/commit/22896b894f9af832b4a4bdaa717e400ba950fb35))
+
+- **crawler**: Round-22 -- restore the linux lock-provenance regression test to D07 and D21 mutant
+  kill-sets (lost coverage; test genuinely fails on both mutants) + registry sync; full mutation
+  harness status=passed 29/29 stable
+  ([`2cf3eef`](https://github.com/johnmarktaylor91/torchlens/commit/2cf3eefb4a868ad6e97b832736588781122c07ce))
+
+- **crawler**: Round-22 -- reversion runner genuinely satisfiable
+  ([`d7fd43b`](https://github.com/johnmarktaylor91/torchlens/commit/d7fd43b33630fb8adc19a30dbc00eeff925d91b7))
+
+- **crawler**: Round-22 CI gates run conformance attestations
+  ([`0ff4d5c`](https://github.com/johnmarktaylor91/torchlens/commit/0ff4d5cd09e01ea077e7d13a4d895148fa074bfa))
+
+- **crawler**: Round-22 real deliberate reversion teeth
+  ([`9866973`](https://github.com/johnmarktaylor91/torchlens/commit/98669730c336f72505a5121420ec583643028783))
+
+- **crawler**: Round-7 run-award regressions + award correctness (H1,H3,H4,H5,M6,M7)
+  ([`5a78c7f`](https://github.com/johnmarktaylor91/torchlens/commit/5a78c7f2578d8ebe4740d0b6f85b8c75f20e680e))
+
+- **crawler**: Round-9 checkpoint append-only + reconstruction txn + env-lock + license +
+  clean-clone signoff (C-01..C-08,F12)
+  ([`5616eec`](https://github.com/johnmarktaylor91/torchlens/commit/5616eecf25ebcb8ebd948d749adbd613a8095b61))
+
+- **crawler**: Round-9 complete transitive award closure + precise runner identity + author-prompt
+  staleness (#2,#3,#6/F7)
+  ([`4465b5b`](https://github.com/johnmarktaylor91/torchlens/commit/4465b5b9752a454f5b28f831d8b5a09ca8edac9a))
+
+- **crawler**: Round-9 merge reconciliation -- timing fields optional in schema + award-closure
+  includes parent-success-attestation
+  ([`a253581`](https://github.com/johnmarktaylor91/torchlens/commit/a253581dbdeef951519cf847cd340699822441e3))
+
+- **crawler**: Round-9 model-local terminalize-and-continue + env medic + cache resilience
+  (#4,#5,F6,F8,F10,F11,F14)
+  ([`72c74d2`](https://github.com/johnmarktaylor91/torchlens/commit/72c74d25daefb8d27820c2258d340849edfd8247))
+
+- **crawler**: Round-9 receipt attestation + run-award authority + isolation (CRIT #1/F1, F2, F5,
+  isolation, macOS telemetry, F16/F17/F18/F19)
+  ([`c386d7d`](https://github.com/johnmarktaylor91/torchlens/commit/c386d7dbfa5290b7f41abee446302b4a332a5384))
+
+- **crawler**: Round-9 redact externally-controlled record text to local diagnostics + safe
+  completion marker (C-07 seam)
+  ([`c0264ea`](https://github.com/johnmarktaylor91/torchlens/commit/c0264ea1422fcf17aa2e2c9754cc9f739e36aa23))
+
+- **crawler**: Round-9 restore real run-award -- diagnostics sidecar campaign-local in relocated
+  roots (e2e)
+  ([`7db900d`](https://github.com/johnmarktaylor91/torchlens/commit/7db900d44a7b42ca637bffcfdbf2b5ba585d103e))
+
+- **crawler**: Round-9 wave2 -- legacy audit-class forces current fidelity gate + pending-metadata
+  run award (C-04, F13)
+  ([`015d912`](https://github.com/johnmarktaylor91/torchlens/commit/015d9125c86c897f5deccdb4fa284f9c16f15720))
+
+- **crawler**: Round-9 wave2 -- root-path dtype exemption + R4 fetched-candidate coverage + keywords
+  user-search-terms (F3, R4-withheld, keywords)
+  ([`286ca51`](https://github.com/johnmarktaylor91/torchlens/commit/286ca516f24fc37c1ab98f07db8b1d77d1bfc2f9))
+
+- **crawler**: Type-dependent checker verified_hashes key contract incl code_manifest (H2)
+  ([`b4220be`](https://github.com/johnmarktaylor91/torchlens/commit/b4220bef55316747de8504283d4ba5214a85f5d3))
 
 - **intervention**: Close tlspec resolver RCE via resolved-__module__ identity check
   ([`e77e55c`](https://github.com/johnmarktaylor91/torchlens/commit/e77e55ce30a43db609429c0f73ce8fbf4dff7640))
@@ -965,6 +1348,94 @@ Reconstruct both kinds WITHOUT invoking constructor code: cls.__new__(cls) (gate
 - **ir**: Non-invoking static type resolution (closes lazy-import gadget) + fail-closed custom-init
   lossiness
   ([`6ab3eb9`](https://github.com/johnmarktaylor91/torchlens/commit/6ab3eb97e4985ea7bd649f28748e6f8bb80a47a0))
+
+- **menagerie-crawler**: Anti-slop depth -- exhaustive mandatory-metadata gate, verified evidence
+  support, generic-family structural tripwire, R2 source-byte binding, broadened approximation +
+  citation checks
+  ([`8ff81fa`](https://github.com/johnmarktaylor91/torchlens/commit/8ff81fad3e3356615e3e81ffbe8ea8a852304b46))
+
+- **menagerie-crawler**: Checkpoint CLI runs the real fail-closed gated transaction (derives
+  artifact set, validates branch/partition/views/mirrors/licenses, allowlist-only, never pushes)
+  ([`d03a3a3`](https://github.com/johnmarktaylor91/torchlens/commit/d03a3a339bc32108a1ea4652624bc553efc6b74a))
+
+- **menagerie-crawler**: Checkpoint license-sweeps every candidate path (no restricted bytes public)
+  + validates current prefix/progress with terminal-failure release-eligibility (per-env cadence),
+  full completion reserved for final release
+  ([`2ad5c83`](https://github.com/johnmarktaylor91/torchlens/commit/2ad5c83eeec3a0613683483919d41bc726e82e6a))
+
+- **menagerie-crawler**: Driver control-flow -- per-model failure/skip/defer terminalization, no
+  false-complete, bounded gate repair, idempotent resume seq, notifier timeout + canonical
+  milestones
+  ([`642f5a6`](https://github.com/johnmarktaylor91/torchlens/commit/642f5a6f7fe1dbd98204ed31d0b2283c859f32ef))
+
+- **menagerie-crawler**: Enforce checker rung_check verdict as a block-at-write anti-slop gate
+  (reimplement-when-source-exists can no longer be accepted/awarded)
+  ([`952da04`](https://github.com/johnmarktaylor91/torchlens/commit/952da049650a257f072034a52d40ffccb3d2eade))
+
+- **menagerie-crawler**: Enforce worker offline isolation at the OS boundary (macOS sandbox-exec /
+  Linux bwrap-unshare), fail-closed when unavailable, Python checks as secondary audit
+  ([`6d303c9`](https://github.com/johnmarktaylor91/torchlens/commit/6d303c9ed5dd248111d6e0f78cb2a9851753dc90))
+
+- **menagerie-crawler**: Identity-tight resume + real run-award proof
+  (dummy-call/mode-detect/receipt+exit/cold-signature), real env interpreter + lock-byte hashes,
+  author-fetch evidence handshake, reducer anti-slop identity tightness
+  ([`34217d4`](https://github.com/johnmarktaylor91/torchlens/commit/34217d49230a34083082d8c27d3d5b8795f405fd))
+
+- **menagerie-crawler**: Reconcile completion semantics -- clean terminal failure/skip/defer does
+  not block 'complete'; 'terminal-partition-complete' reserved for genuine pending campaign work
+  ([`e8e1e47`](https://github.com/johnmarktaylor91/torchlens/commit/e8e1e474b23ba2b728af74b7b9cabd06d9846e08))
+
+- **menagerie-crawler**: Round-2 driver/reducer correctness -- metadata-batch tail policy, lineage
+  repair bound, real crawl-complete gate, full R1 dummy-call, complete-receipt run award,
+  checker-prompt identity freshness, honest failure-lane env facts, exhaustive authored-fact gate,
+  sandbox-unavailable terminal, cached-artifact terminalization
+  ([`c285ca1`](https://github.com/johnmarktaylor91/torchlens/commit/c285ca1b4feecaadd92c039fec96e9c349ab5c5f))
+
+- **menagerie-crawler**: Round-3 driver/reducer -- metadata tail drains, R3/R4 pre-fidelity
+  terminalization, checker-prompt cache invalidation, observed env-generation facts, human requeue
+  consumption, durable notify outbox
+  ([`704073a`](https://github.com/johnmarktaylor91/torchlens/commit/704073a59ca708ed03cb4584afc90074a0a44715))
+
+- **menagerie-crawler**: Round-3 run-award/isolation -- verified adapter bytes, default-deny weight
+  reads + validated disable fields, tamper-proof parent-owned denial telemetry, R4 relevance-based
+  source-exists
+  ([`b2b02c9`](https://github.com/johnmarktaylor91/torchlens/commit/b2b02c9751cafc2560f7a6ad2d04cb31b5b57f4b))
+
+- **menagerie-crawler**: Round-4 A -- checker request binds proposal digest, metadata pause no
+  longer blocks R1/R2 forwards, canonical modes before recipe identity (no gated-fact mutation),
+  checkpoint promotes locks+code, observed adapter-digest comparison
+  ([`065dbdd`](https://github.com/johnmarktaylor91/torchlens/commit/065dbdd482de46adffd6d165f13e0c778a070284))
+
+- **menagerie-crawler**: Round-4 B -- Linux default-deny reads (minimal fs namespace/Landlock),
+  macOS caught-denial fail-closed via parent-owned audited channel
+  ([`1e2ad72`](https://github.com/johnmarktaylor91/torchlens/commit/1e2ad723784b4d869a6f8b64ae6b1ec76da29c80))
+
+- **menagerie-crawler**: Round-4 C -- R4 source-exists uses framework-neutral implementation
+  evidence (catches JAX/Flax/Paddle/custom), retains irrelevant-code allowance + CAS byte binding
+  ([`88c92c1`](https://github.com/johnmarktaylor91/torchlens/commit/88c92c1d59a95939f059316c5bd7728a8b241432))
+
+- **menagerie-crawler**: Round-5 ISO -- separate namespace mounts from data-read allowlist; poison
+  undeclared data reads inside env prefix/repo (no hidden-weight run)
+  ([`7e67dfe`](https://github.com/johnmarktaylor91/torchlens/commit/7e67dfece7479d2cbc063222e4f7723f8eefcd65))
+
+- **menagerie-crawler**: Round-5 MAIN -- reproducible checkpoints (canonical
+  code/reconstruction/license txn), full runner-closure staleness, deferred Linux handoff,
+  whole-archive R4 detection, cache-read blocking, planned sandbox-unavailable taxonomy
+  ([`ef92649`](https://github.com/johnmarktaylor91/torchlens/commit/ef926495c0621faff016cf35157cf419fd7da1fc))
+
+- **menagerie-crawler**: Round-6 EXEC -- fresh subprocess per (cold_index,mode) with fixed input
+  seed, read-poison only on successful undeclared reads
+  ([`e421855`](https://github.com/johnmarktaylor91/torchlens/commit/e4218553f94c31c4cd9cfa2b9f158ae5d9a14643))
+
+- **menagerie-crawler**: Round-6 MAIN2 -- recursive model-code closure identity, deferred
+  reconstruction envelope, per-path promotion licensing, embedded-excerpt checkpoint sweep, locked
+  checkpoint transaction, compositional runner closure, neutral failed-row facts, crash-atomic
+  promotion
+  ([`164b7a8`](https://github.com/johnmarktaylor91/torchlens/commit/164b7a8f8cb6990f7f4b723cef7f3bc451afbf42))
+
+- **menagerie-crawler**: Sandbox denial audit poisons caught-denial receipts, real env-interpreter
+  signals sandbox-unavailable, R4 source-exists refusal inspects fetched CAS bytes not author label
+  ([`6e248b5`](https://github.com/johnmarktaylor91/torchlens/commit/6e248b53d12b9f7892b85a5f79b2e5cb245c4d54))
 
 - **rf**: Auto-install built-in rule pack on production path + deterministic registry lifecycle
   ([`2fafe0a`](https://github.com/johnmarktaylor91/torchlens/commit/2fafe0ae0166f9552b8b41d7c314b640ae2bd209))
@@ -3780,6 +4251,9 @@ Tests: carve-out narrowness (still fires on plain-capture dispatched-but-dropped
 Stage reports are private working notes (harvested to .research); gitignore the root-anchored
   pattern so dispatched agents can write them without leaking onto the public repo.
 
+- **crawler**: Strip round-14 internal implementation manifest from tree
+  ([`8211efb`](https://github.com/johnmarktaylor91/torchlens/commit/8211efb733a3ba62f6bbdb8519425d50f1c062fe))
+
 - **docs**: Drop removed viewer/paper/llm appliances from state_of_torchlens
   ([`dd14154`](https://github.com/johnmarktaylor91/torchlens/commit/dd141543252b1a4d4dcf3baff5bbfd19e05e9f34))
 
@@ -3804,6 +4278,25 @@ The viewer/paper/llm empty stub packages were removed in 'chore: remove empty st
 
 - **io**: Document runnable activation payloads
   ([`cd02cd9`](https://github.com/johnmarktaylor91/torchlens/commit/cd02cd909e627dd4feae39fd9540787e18730f79))
+
+- **menagerie-crawler**: Canonical PLAN + implementation manifest for the get-every-model-to-run
+  crawler
+  ([`4e1394f`](https://github.com/johnmarktaylor91/torchlens/commit/4e1394fda4519153b6f935506e08d30af790494f))
+
+Converged Fable+Sol design + JMT rulings: two-driver (deterministic run-authority + Claude author +
+  Codex gate), source-rung ladder R1-R5, model.v2/attempt.v2/gate.v2 append-only schemas, partition
+  invariant, retro-audit of the untrustworthy inherited catalog, thick conda envs (no hard cap),
+  mandatory per-model source link, cross-model block-at-write accuracy gate (metadata batched
+  10-20/call, fidelity per-model), train/eval mode capture, one-time website-grade metadata
+  (citation/year/country/license), web-enabled author + offline execution, autonomous usage-limit
+  self-wake, Fork-1A mirroring.
+
+- **menagerie-crawler**: Finalize plan -- exhaustive external metadata, demarcation, standard inputs
+  ([`62f06a8`](https://github.com/johnmarktaylor91/torchlens/commit/62f06a8606f7d71e0dbd59437c561ae62bb2a86c))
+
+- **menagerie-crawler**: Per-field schema descriptions + SCHEMA_REFERENCE data dictionary; split R5
+  skip (insufficient/no-description/not-a-real-NN) with verbatim vague-text capture
+  ([`97995a7`](https://github.com/johnmarktaylor91/torchlens/commit/97995a7a626ec98d9f9dc95e1c80e2ede5edafc6))
 
 - **rf**: Document verify() return types ReceptiveFieldVerification + EmpiricalAdjointCheck
   ([`dcab482`](https://github.com/johnmarktaylor91/torchlens/commit/dcab482460109f6f7615711832fd9d91db0ec0a9))
@@ -3935,6 +4428,45 @@ Contract (the spec) moves in one change with the code: section 5 gains the state
 
 ### Features
 
+- **crawler**: Add ledger-backed artifact transactions
+  ([`9080dff`](https://github.com/johnmarktaylor91/torchlens/commit/9080dff57ce95e17a6aaa92efa30bdbb3da763dd))
+
+- **crawler**: Add round-15 authority producers
+  ([`693afa9`](https://github.com/johnmarktaylor91/torchlens/commit/693afa9fe12a3be0b2fbd9edbb484356b86a4c3a))
+
+- **crawler**: Add round-15 authority producers
+  ([`bd6e594`](https://github.com/johnmarktaylor91/torchlens/commit/bd6e594883be4e5f05948b5505d210981fb53f23))
+
+- **crawler**: Enforce authored ownership and family authority
+  ([`4352674`](https://github.com/johnmarktaylor91/torchlens/commit/4352674e596c46065161283923095af5ffd3cd16))
+
+- **crawler**: Establish replayable evidence authority kernel
+  ([`8170411`](https://github.com/johnmarktaylor91/torchlens/commit/8170411f64d3c92c11cff5aa635f8d4f62106d82))
+
+- **crawler**: Harden worker security lifecycle
+  ([`61d5a13`](https://github.com/johnmarktaylor91/torchlens/commit/61d5a1334f07ab5fe4310782684e64e552a0a333))
+
+- **crawler**: Round-14 phase-0 interface freeze -- unified authority/artifact/capability/lifecycle
+  contract (schema v3 + frozen kernel signatures)
+  ([`5eced1d`](https://github.com/johnmarktaylor91/torchlens/commit/5eced1d7421d3526ddde104bb714317d5d1973d5))
+
+- **crawler**: Round-14 phase-2 integrate unified spine into reducer/driver -- activate
+  authority/artifact/capability/lifecycle v3, remove v2 dead paths
+  ([`36cd8d3`](https://github.com/johnmarktaylor91/torchlens/commit/36cd8d3e8c43febd86931374be298ed4b0ab8bed))
+
+- **crawler**: Round-15 phase-0 freeze -- exec-manifest-v2 +
+  shutdown/invocation-origin/artifact-projection contracts + delete input_contract.code_path from v3
+  schema
+  ([`a740d77`](https://github.com/johnmarktaylor91/torchlens/commit/a740d779ae33e1d0d4879834531d98f5aa8f02e4))
+
+- **crawler**: Round-15 phase-2 integrate hubs -- reconstruction consumer, executable closure,
+  graceful shutdown, failure-branch authority, wake resolution, dead-path removal
+  ([`b6bb6bc`](https://github.com/johnmarktaylor91/torchlens/commit/b6bb6bcfd3ef5662e7ebddbd1047feba841e96b3))
+
+- **crawler**: Round-9 wave2 -- wire family-variant templating (representative-once, mechanical
+  variant line, supersession-current) [F15/Option A]
+  ([`dc85873`](https://github.com/johnmarktaylor91/torchlens/commit/dc8587397eee97bd7757174b1b678a2455f1a0b7))
+
 - **io**: Add include_source opt-out for .tlspec source embedding + always relativize source paths
   ([`a5975fe`](https://github.com/johnmarktaylor91/torchlens/commit/a5975fe2cba63255817e8dabcb90f00dc0495750))
 
@@ -3964,6 +4496,40 @@ A shipped .tlspec (the portable, shareable format) embedded the model's verbatim
 
 - **io**: Add runnable weight payloads
   ([`40920a7`](https://github.com/johnmarktaylor91/torchlens/commit/40920a7c7b09a582caef5faed965d6173ed8dcce))
+
+- **menagerie-crawler**: Accuracy-gate external_metadata.keywords like tags (website
+  search/wordcloud aid)
+  ([`0d6f91e`](https://github.com/johnmarktaylor91/torchlens/commit/0d6f91e58272f571c1a449f5581ec95c083a0ea0))
+
+- **menagerie-crawler**: Slice A -- schemas, identity, append-only ledger, reducer, status core
+  ([`a37d3a8`](https://github.com/johnmarktaylor91/torchlens/commit/a37d3a8ed0308a72d76c540432dc3e4af4125352))
+
+- **menagerie-crawler**: Slice B -- untrusted-legacy intake, offline-policy worker (both modes),
+  standard inputs by modality, native forward-adapter, subprocess isolation
+  ([`253ea1f`](https://github.com/johnmarktaylor91/torchlens/commit/253ea1ff63ffb4f423e12376f0a68edd1700edb7))
+
+- **menagerie-crawler**: Slice C -- env intent registry + eleven thick conda intents + probes,
+  sequential exact-lock lifecycle (target-solved locks, no fabricated hashes), intent routing with
+  evidenced arm64/CUDA deferral
+  ([`5b8c982`](https://github.com/johnmarktaylor91/torchlens/commit/5b8c9821ee4c47bff0add5d99848ead9e1b73d07))
+
+- **menagerie-crawler**: Slice D -- controlled fetch/CAS, evidence grounding, anti-slop proposal +
+  block-at-write metadata gate, five-way fidelity, family templates, frozen author/checker prompts
+  ([`e122d46`](https://github.com/johnmarktaylor91/torchlens/commit/e122d464f20ec158a86faa1669778f45d4cdcbc7))
+
+- **menagerie-crawler**: Slice E -- effort caps/fingerprints, hash-addressed mirrors, license
+  redistribution + private-byte sweep, idempotent usage-reset wakeups, never-push allowlisted
+  checkpoints, retro-audit waves; add checkpoint-review/review-signoff/progress-notification events
+  ([`67e5989`](https://github.com/johnmarktaylor91/torchlens/commit/67e59891e49ef451a0069947b037cbad404d958f))
+
+- **menagerie-crawler**: Slice F -- single-writer driver (phase order, sequential env lifecycle,
+  driver-only run award, resumable), CLI + doctor preflight, __main__; 1k review-checkpoint pause +
+  non-blocking milestone pings
+  ([`b05bb3d`](https://github.com/johnmarktaylor91/torchlens/commit/b05bb3d159cdc8056bc3a06bdf6bd70552d4b42b))
+
+- **menagerie-crawler**: Slice G -- requeue/license-sweep/rebuild-views/verify-prompts tools +
+  QUICKSTART/SETUP/RUN/RESUME/TEARDOWN/LINUX_SWEEP procedures + records/mirrors READMEs + gitignore
+  ([`b7c5031`](https://github.com/johnmarktaylor91/torchlens/commit/b7c5031282cdc2662593e183c03702f15d8e2a67))
 
 - **rf**: _path.py + seed-predicate engine refactor (behavior-equivalent) + solve_from + source
   cache (T14)
@@ -4163,6 +4729,153 @@ Kernel + OpObservation routing (exhaustive/predicate/fast) with intervene-before
 - **capture**: Source materialization sidecars from ledgers
   ([`03a7ce0`](https://github.com/johnmarktaylor91/torchlens/commit/03a7ce04e54709c274afe64c7b243be02599db83))
 
+- **crawler**: E1 C01 -- remove verified-dead private helpers
+  ([`b3a5ae1`](https://github.com/johnmarktaylor91/torchlens/commit/b3a5ae10fd245d0d0ac644d4a806238232b4da8d))
+
+- **crawler**: E1 C03 -- centralize UTC timestamps
+  ([`629ca5c`](https://github.com/johnmarktaylor91/torchlens/commit/629ca5cad8edea5134747adab96deb0e8e579f30))
+
+- **crawler**: E1 C03 -- share canonical primitives
+  ([`2e07121`](https://github.com/johnmarktaylor91/torchlens/commit/2e071212e160cf61f4c613bea6cbd077625bfea6))
+
+- **crawler**: E1 C04 -- slim contract representations
+  ([`3b7171e`](https://github.com/johnmarktaylor91/torchlens/commit/3b7171e1e918f2bd93041d45ffb39aa316d26f63))
+
+- **crawler**: E1 C06 -- factor attempt schema definitions
+  ([`ab2ff2c`](https://github.com/johnmarktaylor91/torchlens/commit/ab2ff2c95306c135ac285280d23c71008a39b090))
+
+- **crawler**: E1 C06 -- factor author-proposal schema definitions
+  ([`710737e`](https://github.com/johnmarktaylor91/torchlens/commit/710737e905dac16af9d1699c4a423a25d8704205))
+
+- **crawler**: E1 C06 -- factor gate schema definitions
+  ([`8986fe6`](https://github.com/johnmarktaylor91/torchlens/commit/8986fe678c663b8f2ba47f2a25c52ea52f3dc0de))
+
+- **crawler**: E1 C06 -- factor model schema definitions
+  ([`50a1a87`](https://github.com/johnmarktaylor91/torchlens/commit/50a1a872071cf5fed0ef6e371a1b2d6f639f3d73))
+
+- **crawler**: E2 C08 -- admission environment extraction
+  ([`45291ba`](https://github.com/johnmarktaylor91/torchlens/commit/45291badd092ae8bc2aecb3e8f80bf9522019c64))
+
+- **crawler**: E2 C08 -- admission environment simplification
+  ([`bc57534`](https://github.com/johnmarktaylor91/torchlens/commit/bc57534928a27e440549b8cb4784bc7061f3aa3c))
+
+- **crawler**: E2 C08 -- admission prompt projection simplification
+  ([`4951c44`](https://github.com/johnmarktaylor91/torchlens/commit/4951c44182fd908d2894d676875fa4cf996bc2d3))
+
+- **crawler**: E2 C08 -- contracts config extraction
+  ([`5d62f05`](https://github.com/johnmarktaylor91/torchlens/commit/5d62f05ef620bfc10fb8061d3046cfdb27421561))
+
+- **crawler**: E2 C08 -- contracts config simplification
+  ([`ca2e8ee`](https://github.com/johnmarktaylor91/torchlens/commit/ca2e8ee11c34c9db9ef1d050730e6f87acbdef07))
+
+- **crawler**: E2 C08 -- orchestration facade extraction
+  ([`8f0195f`](https://github.com/johnmarktaylor91/torchlens/commit/8f0195f0607ae71a3781ac7de0c79670ef2e9606))
+
+- **crawler**: E2 C08 -- progress IO extraction
+  ([`fc1f6f2`](https://github.com/johnmarktaylor91/torchlens/commit/fc1f6f261ced33b3a001c356b511b3aa2686591a))
+
+- **crawler**: E2 C08 -- progress IO simplification
+  ([`4c660f8`](https://github.com/johnmarktaylor91/torchlens/commit/4c660f880a60716b21b87410d73c5f1a654de3ba))
+
+- **crawler**: E2 C08 -- receipt boundary extraction
+  ([`9bd42b0`](https://github.com/johnmarktaylor91/torchlens/commit/9bd42b0db6c860a716eaf235975cfa691184a85e))
+
+- **crawler**: E2 C08 -- receipt boundary simplification
+  ([`2338aeb`](https://github.com/johnmarktaylor91/torchlens/commit/2338aeb8185fccc5b45566dbd072d3ef30e851c5))
+
+- **crawler**: E2 C08 -- receipt facade projection simplification
+  ([`ae92c5e`](https://github.com/johnmarktaylor91/torchlens/commit/ae92c5e2d346295d9816e0a8c2ea96a90246cdd8))
+
+- **crawler**: E2 C08 -- run terminal models extraction
+  ([`aa81155`](https://github.com/johnmarktaylor91/torchlens/commit/aa81155791063d1b043e894b76e9f9d037821f66))
+
+- **crawler**: E2 C08 -- run terminal models simplification
+  ([`5fa873f`](https://github.com/johnmarktaylor91/torchlens/commit/5fa873fec8a94526fc087a1aceafa5b11876e9d1))
+
+- **crawler**: E2 C09 -- execution validation typed pipeline
+  ([`87fdaa6`](https://github.com/johnmarktaylor91/torchlens/commit/87fdaa6819f50df0d1b89e1ef86e5206ddee825f))
+
+- **crawler**: E2 C09 -- gate validation typed pipeline
+  ([`b763737`](https://github.com/johnmarktaylor91/torchlens/commit/b7637371d95d5b13a46afc33e392d35ac989e858))
+
+- **crawler**: E2 C09 -- model authority typed pipeline
+  ([`fcfe16a`](https://github.com/johnmarktaylor91/torchlens/commit/fcfe16a22838b2be5a1f61d7dfcbb6d1613a80a5))
+
+- **crawler**: E2 C09 -- terminal proof typed pipeline
+  ([`cced7ea`](https://github.com/johnmarktaylor91/torchlens/commit/cced7eab7574d396641f416cba4bd424e655758e))
+
+- **crawler**: E2 C10 -- artifact mirror records canonical parse/normalize
+  ([`20af7fd`](https://github.com/johnmarktaylor91/torchlens/commit/20af7fddfac46d28963498dbe58a7928103ce6c5))
+
+- **crawler**: E2 C10 -- license records canonical parse/normalize
+  ([`a6020ba`](https://github.com/johnmarktaylor91/torchlens/commit/a6020ba1397f4bc4a6f7f6dc1cd5d2889f05cb96))
+
+- **crawler**: E2 C10 -- reconstruction checkpoint records canonical parse/normalize
+  ([`1dc730b`](https://github.com/johnmarktaylor91/torchlens/commit/1dc730bdb7e2a089a8b2fa8ac6c5fabdf94dc784))
+
+- **crawler**: E2 C11 -- proposal gate metadata typed required-field projection
+  ([`0cb8925`](https://github.com/johnmarktaylor91/torchlens/commit/0cb89259969e3b44f782dc22a6302169f8737ee2))
+
+- **crawler**: E2 C11 -- recordio typed required-field projection
+  ([`799378b`](https://github.com/johnmarktaylor91/torchlens/commit/799378b8ecb1f4142ffd6415bc5e6d7352e428ba))
+
+- **crawler**: E2 C11 -- schema typed required-field projection
+  ([`d60877d`](https://github.com/johnmarktaylor91/torchlens/commit/d60877d704c3635e75d5365f80bbab7daa772acb))
+
+- **crawler**: E2 C12 -- effort transition table
+  ([`1202cd0`](https://github.com/johnmarktaylor91/torchlens/commit/1202cd00cf84a828cb021a67e139c64892ee7795))
+
+- **crawler**: E2 C12 -- environment transition table
+  ([`4bab3e1`](https://github.com/johnmarktaylor91/torchlens/commit/4bab3e1676fe1504a124838df5129316d3fea338))
+
+- **crawler**: E2 C12 -- status transition table
+  ([`9fa0ed8`](https://github.com/johnmarktaylor91/torchlens/commit/9fa0ed819dcb923870edad5e3359b7c0217d0ae7))
+
+- **crawler**: E2 C12 -- wakeup transition table
+  ([`163a749`](https://github.com/johnmarktaylor91/torchlens/commit/163a749cc3b894ac083689ede7c8eb0555916ed3))
+
+- **crawler**: E2 C13 -- share descriptor-read denial parsing scaffolding
+  ([`75d38b8`](https://github.com/johnmarktaylor91/torchlens/commit/75d38b87b3a1c255e98a09221290a5c286118f5b))
+
+- **crawler**: E3 C14 -- rename canary observation resource tests to invariant names
+  ([`2149801`](https://github.com/johnmarktaylor91/torchlens/commit/2149801de887564f35f985bd19d14498b815d5bc))
+
+- **crawler**: E3 C14 -- rename clean invariant tests to invariant names
+  ([`971e953`](https://github.com/johnmarktaylor91/torchlens/commit/971e95366051addd1b14598e98a3974400249bf6))
+
+- **crawler**: E3 C14 -- rename composition invariant tests to invariant names
+  ([`9208354`](https://github.com/johnmarktaylor91/torchlens/commit/92083540abd9067634ab61c19588416ccfa45df7))
+
+- **crawler**: E3 C14 -- rename release invariant tests to invariant names
+  ([`12ee9a1`](https://github.com/johnmarktaylor91/torchlens/commit/12ee9a138cd9ed224f36b14434aac9fe4634a4b2))
+
+- **crawler**: E4 C15 -- fold regression tests into invariant suites (move)
+  ([`2f9e632`](https://github.com/johnmarktaylor91/torchlens/commit/2f9e6323a8310135147093807e50604800cddcad))
+
+- **crawler**: E4 C16 -- extract anti-substitution analyzer
+  ([`71cb5c9`](https://github.com/johnmarktaylor91/torchlens/commit/71cb5c92671898d332cb53a8ed60dfad685a7b55))
+
+- **crawler**: E5 C02 -- remove dead build_author_repair_envelope (identity epoch)
+  ([`c53501d`](https://github.com/johnmarktaylor91/torchlens/commit/c53501dfe1b74e727c0e26ab02a9798e74eb9fbd))
+
+- **crawler**: E5 C02 -- remove dead closure-compiler pair (identity epoch)
+  ([`46cdb69`](https://github.com/johnmarktaylor91/torchlens/commit/46cdb69d7b9e293ee2ebd3f917124cc2f7e5ec9b))
+
+- **crawler**: E5 C02 -- remove dead compare_identity_sets (identity epoch)
+  ([`b902ae8`](https://github.com/johnmarktaylor91/torchlens/commit/b902ae8704d44f9f166d471ab6d1c40ed5f61a08))
+
+- **crawler**: E5 C02 -- remove dead filter_funnel (identity epoch)
+  ([`86d2fa4`](https://github.com/johnmarktaylor91/torchlens/commit/86d2fa49f0232b1849a43e2308063ffe3785b162))
+
+- **crawler**: E5 C02 -- remove dead is_legacy_untrusted (identity epoch)
+  ([`32d5c4a`](https://github.com/johnmarktaylor91/torchlens/commit/32d5c4a8a00a27b8311daec0f2ba77f9056c3876))
+
+- **crawler**: E5 C02 -- remove dead is_valid_payload (identity epoch)
+  ([`eb27f54`](https://github.com/johnmarktaylor91/torchlens/commit/eb27f5442efabee505e760b510839646043af84e))
+
+- **crawler**: E6 C17 -- normalize conformance to compact catalog + typed loader
+  ([`04c8bf3`](https://github.com/johnmarktaylor91/torchlens/commit/04c8bf3610c9fa32e2a3e31d43cd19b7c1c5c7f8))
+
 - **runnable**: Rely on field policy for state cleanup
   ([`d7270e8`](https://github.com/johnmarktaylor91/torchlens/commit/d7270e8c4e8355719bb8ffd85293baa71aeef9a8))
 
@@ -4220,6 +4933,78 @@ Kernel + OpObservation routing (exhaustive/predicate/fast) with intervene-before
 - **compat**: Register HAS_FILL_UNINITIALIZED_MEMORY in capability-snapshot contract (r53 lockstep)
   ([`7213102`](https://github.com/johnmarktaylor91/torchlens/commit/7213102205a937b8810d620470bc074e146dd437))
 
+- **crawler**: E1 C07 -- script checker and forward outcomes
+  ([`872fb54`](https://github.com/johnmarktaylor91/torchlens/commit/872fb54686738b663281a831d2e5ea70db442254))
+
+- **crawler**: E1 C07 -- script synthetic author outcomes
+  ([`d6e0038`](https://github.com/johnmarktaylor91/torchlens/commit/d6e003847317ff2d41bf19aab004412de27757bb))
+
+- **crawler**: E1 C07 -- share real-environment hardlink helpers
+  ([`6df15ee`](https://github.com/johnmarktaylor91/torchlens/commit/6df15ee2847c2f1f7096a99ae93c9b10e6e21d40))
+
+- **crawler**: E1 C07 -- share typed adapter patches
+  ([`08ead47`](https://github.com/johnmarktaylor91/torchlens/commit/08ead475578d2000c34429750f5818ccfd493e63))
+
+- **crawler**: Round-15 phase-3 attack-regression coverage -- A-02/A-04/A-05/A-06/M-01/M3 rejection
+  branches + F-8 event-kind integrity + meta-test
+  ([`1f50651`](https://github.com/johnmarktaylor91/torchlens/commit/1f50651b4add125971af4d385b84a8036b70e90a))
+
+- **crawler**: Round-17 VS4 -- structural tripwires + schema-consumer parity + real-composition
+  probes as permanent CI (SOL-R16-07)
+  ([`a15c8c6`](https://github.com/johnmarktaylor91/torchlens/commit/a15c8c640b814a8777a8522e55503104b9cfa34e))
+
+- **crawler**: Round-19 VS2 -- complete shutdown admission matrix (pre-author/checker/publication
+  arms award nothing) on the real compiler
+  ([`e0fee23`](https://github.com/johnmarktaylor91/torchlens/commit/e0fee239946308d273c6f9a7ba6a7921bc8f23c4))
+
+- **crawler**: Round-19 VS3 -- true clean-clone handoff (canonical-only transfer, deleted source
+  root, third no-op) on the real compiler
+  ([`d915804`](https://github.com/johnmarktaylor91/torchlens/commit/d915804730d998d66b3459f38fa2feb00af711b8))
+
+- **crawler**: Round-19 VS4 -- supported-host enforcement (real Linux bwrap denial composition,
+  macOS Seatbelt profile + fail-closed release jobs) on the real compiler
+  ([`0824eed`](https://github.com/johnmarktaylor91/torchlens/commit/0824eedfda44856a0f2150dce0c3bdac1007b5cb))
+
+- **crawler**: Round-19 VS5 -- real unhashable-output run yields unverifiable (nullable digest
+  preserved, no fabricated hash) on the real compiler
+  ([`857eca1`](https://github.com/johnmarktaylor91/torchlens/commit/857eca1e9845f2b719d0c072fcd2db5a137aaafd))
+
+- **crawler**: Round-19 VS6 -- honest acceptance dry-run (real subprocess run/resume, author
+  authority signature, all-source-failure is nonzero) on the real compiler
+  ([`8c1ac2b`](https://github.com/johnmarktaylor91/torchlens/commit/8c1ac2b27e9fd43f2e4f6519af5fc9fe23557f9b))
+
+- **crawler**: Round-19 VS7 -- measured cache closure (one seal + cheap validations + zero extra
+  hashes; non-conda mutation quarantines) on the real compiler
+  ([`d58278a`](https://github.com/johnmarktaylor91/torchlens/commit/d58278a17f3ed4f2b86c9fe665ed1f35e52514e4))
+
+- **crawler**: Round-21 VS1 -- §8.3-complete transitive anti-substitution tripwire (fixture graph +
+  all comp files + all evasion self-proofs), legacy-root audit-only quarantine, license-lane
+  de-patch
+  ([`33c7f46`](https://github.com/johnmarktaylor91/torchlens/commit/33c7f4649cac5a0b04283c9298fb61307eb33163))
+
+- **crawler**: Round-21 VS2 -- field-complete cheap fingerprint (ctime_ns + inode/device triggers,
+  whole-§3.5 audit) with hardlink clone-churn re-baseline; stat-preserving mutation stales, clone
+  does not
+  ([`91cd92d`](https://github.com/johnmarktaylor91/torchlens/commit/91cd92dcfc1a642a829fea6025040370152f86d1))
+
+- **crawler**: Round-21 VS3 -- bound authority/currentness prefix walks to one per pass + one per
+  spawn (counter-proved, staleness preserved) across all verification sites
+  ([`16741d0`](https://github.com/johnmarktaylor91/torchlens/commit/16741d0c0630cced01704d9e6d5213303d73ff05))
+
+- **crawler**: Round-21 VS3b -- session-scoped shared real-env seal (read-only tests reuse one 18GB
+  seal; mutating tests keep isolated clones); bounded-seal counter; full real suite ~6-9x faster
+  ([`5451d88`](https://github.com/johnmarktaylor91/torchlens/commit/5451d887e664efa74aff7300501bf7d39dd5a33e))
+
+- **crawler**: Round-21 VS4 -- exhaustive registry-derived environment-unit proof matrix E01-E13
+  (package/conda-meta mutation, post-seal addition, sealed dynamic import, real-prefix symlink
+  escape, in-prefix checkpoint poison) as real compositions
+  ([`ff0d136`](https://github.com/johnmarktaylor91/torchlens/commit/ff0d1361950fc9d8b2ff806e3a6a6407d66f4a8a))
+
+- **crawler**: Round-21 VS5 -- exhaustive S01-S13 shutdown/admission/atomicity matrix (incl
+  post-entry both-durable atomic-publication arm) with real license lane, no _license_decisions
+  patch
+  ([`85a8495`](https://github.com/johnmarktaylor91/torchlens/commit/85a84950047abf8dede8be7fce1ecdd56738db51))
+
 - **intervention**: Consolidate relative l1 mismatch pin
   ([`49d10a3`](https://github.com/johnmarktaylor91/torchlens/commit/49d10a38270245a2f0dd01ad98faefe1dc73ac68))
 
@@ -4242,6 +5027,14 @@ The r45 gate fix wraps .mH as a decorated capture op (like .H/.T/.mT); .mH is a 
 
 - **io**: Trust unified callable specs explicitly
   ([`cc6cadd`](https://github.com/johnmarktaylor91/torchlens/commit/cc6cadd737753b9c0c0170a3b960c6a284b6121f))
+
+- **menagerie-crawler**: Reconcile ISO read-audit fail-closed test to R6-M3 policy-stage
+  sandbox-unavailable taxonomy
+  ([`a14d561`](https://github.com/johnmarktaylor91/torchlens/commit/a14d5619c617d93e59d2ca90a0a1814aba823c3c))
+
+- **menagerie-crawler**: Slice H -- end-to-end dry-run on real tiny models (real forward, faked
+  LLM+env), static-boundary + release-gate acceptance suite
+  ([`65496c3`](https://github.com/johnmarktaylor91/torchlens/commit/65496c39f2065578abddc2b224c8033716f662f4))
 
 - **rf**: End-to-end integration gate (T22)
   ([`370a087`](https://github.com/johnmarktaylor91/torchlens/commit/370a087165ec49ab09e802dde4863e8835064ae6))
