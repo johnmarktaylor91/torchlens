@@ -46,7 +46,7 @@
   "schema_version": "menagerie.crawler.release-lock-provenance.v1",
   "solver": {
     "command": [
-      "/home/jtaylor/anaconda3/envs/condalock/bin/python",
+      "condalock/bin/python",
       "-m",
       "conda_lock",
       "lock",

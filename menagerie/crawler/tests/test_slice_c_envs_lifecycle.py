@@ -201,12 +201,9 @@ def _release_lock_provenance_errors(env_root: Path) -> tuple[str, ...]:
             or spec_path not in solver_command
             or (
                 solver_command[:3] != ["conda", "env", "create"]
-                and solver_command[:3]
-                != [
-                    "/home/jtaylor/anaconda3/envs/condalock/bin/python",
-                    "-m",
-                    "conda_lock",
-                ]
+                # Validate the conda-lock invocation signature ("<python> -m conda_lock")
+                # without pinning the solver's absolute interpreter path (host-specific).
+                and solver_command[1:3] != ["-m", "conda_lock"]
             )
         ):
             errors.append(f"{lock_path}:solver-command-not-bound")
