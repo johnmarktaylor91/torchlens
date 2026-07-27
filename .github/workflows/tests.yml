@@ -122,10 +122,14 @@ jobs:
     env:
       MENAGERIE_RELEASE_GATE: "1"
       MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-linux-64.lock
-      MENAGERIE_REAL_ENV_PREFIX: ${{ runner.temp }}/round21-linux-prefix
-      MENAGERIE_RELEASE_ATTESTATION: ${{ runner.temp }}/round21-linux-attestation.json
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve round21 runner-temp attestation paths
+        shell: bash
+        run: |
+          echo "MENAGERIE_REAL_ENV_PREFIX=$RUNNER_TEMP/round21-linux-prefix" >> "$GITHUB_ENV"
+          echo "MENAGERIE_RELEASE_ATTESTATION=$RUNNER_TEMP/round21-linux-attestation.json" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v5
         with:
@@ -195,10 +199,14 @@ jobs:
     env:
       MENAGERIE_RELEASE_GATE: "1"
       MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-osx-arm64.lock
-      MENAGERIE_REAL_ENV_PREFIX: ${{ runner.temp }}/round21-macos-prefix
-      MENAGERIE_RELEASE_ATTESTATION: ${{ runner.temp }}/round21-macos-attestation.json
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve round21 runner-temp attestation paths
+        shell: bash
+        run: |
+          echo "MENAGERIE_REAL_ENV_PREFIX=$RUNNER_TEMP/round21-macos-prefix" >> "$GITHUB_ENV"
+          echo "MENAGERIE_RELEASE_ATTESTATION=$RUNNER_TEMP/round21-macos-attestation.json" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v5
         with:
@@ -272,9 +280,13 @@ jobs:
     env:
       MENAGERIE_RELEASE_GATE: "1"
       MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-linux-64.lock
-      MENAGERIE_REAL_ENV_PREFIX: ${{ runner.temp }}/round21-reversion-prefix
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve round21 runner-temp attestation paths
+        shell: bash
+        run: |
+          echo "MENAGERIE_REAL_ENV_PREFIX=$RUNNER_TEMP/round21-reversion-prefix" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v5
         with:
@@ -324,11 +336,15 @@ jobs:
       - crawler-round21-deliberate-reversions
     env:
       MENAGERIE_RELEASE_GATE: "1"
-      MENAGERIE_LINUX_RELEASE_ATTESTATION: ${{ runner.temp }}/round21-attestations/linux/round21-linux-attestation.json
-      MENAGERIE_MACOS_RELEASE_ATTESTATION: ${{ runner.temp }}/round21-attestations/macos/round21-macos-attestation.json
-      MENAGERIE_REVERSION_ATTESTATION: ${{ runner.temp }}/round21-attestations/reversions/round21-reversion-attestation.json
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve round21 runner-temp attestation paths
+        shell: bash
+        run: |
+          echo "MENAGERIE_LINUX_RELEASE_ATTESTATION=$RUNNER_TEMP/round21-attestations/linux/round21-linux-attestation.json" >> "$GITHUB_ENV"
+          echo "MENAGERIE_MACOS_RELEASE_ATTESTATION=$RUNNER_TEMP/round21-attestations/macos/round21-macos-attestation.json" >> "$GITHUB_ENV"
+          echo "MENAGERIE_REVERSION_ATTESTATION=$RUNNER_TEMP/round21-attestations/reversions/round21-reversion-attestation.json" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v5
         with:
