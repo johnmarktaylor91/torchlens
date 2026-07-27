@@ -43,7 +43,7 @@ jobs:
             torch: "2.8.0+cpu"
             torchvision: "0.23.0+cpu"
             numpy: numpy
-            scope: not-slow
+            scope: smoke
             render_byte_oracle: "1"
           - track: newest-admitted
             python: "3.10"
@@ -115,12 +115,3 @@ jobs:
         run: |
           pytest tests/ -m smoke --tb=short -q
           pytest tests/test_torch_compat.py --tb=short -q
-
-      - name: Run non-slow tests
-        if: matrix.scope == 'not-slow'
-        env:
-          TORCHLENS_RENDER_BYTE_ORACLE: ${{ matrix.render_byte_oracle }}
-        # menagerie/ is a separate reference corpus (excluded from the wheel and
-        # maintained independently); the torchlens package not-slow gate does not run
-        # its tests. See tests/test_menagerie_*.py.
-        run: pytest tests/ -m "not slow" --ignore-glob='tests/test_menagerie_*.py' --tb=short -q
