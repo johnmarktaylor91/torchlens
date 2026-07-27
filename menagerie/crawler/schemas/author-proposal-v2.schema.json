@@ -1,0 +1,358 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/author-proposal-v2.schema.json",
+  "title": "Menagerie crawler staged author proposal v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "proposal_id",
+    "proposal_sha256",
+    "work_id",
+    "stable_id",
+    "created_at",
+    "author",
+    "source_identity",
+    "evidence_identity",
+    "recipe_revision",
+    "fidelity_identity",
+    "vet_identity",
+    "verified_hashes",
+    "proposed_facts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "menagerie.crawler.author-proposal.v2",
+      "description": "Mandatory versioned schema identifier."
+    },
+    "proposal_id": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Mandatory immutable author-proposal identifier."
+    },
+    "proposal_sha256": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory hash of the complete proposal."
+    },
+    "work_id": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Mandatory deterministic work identifier."
+    },
+    "stable_id": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Mandatory stable model identifier."
+    },
+    "created_at": {
+      "$ref": "#/$defs/timestamp",
+      "description": "Mandatory UTC creation timestamp."
+    },
+    "author": {
+      "$ref": "#/$defs/author",
+      "description": "Mandatory author model identity."
+    },
+    "source_identity": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory source identity."
+    },
+    "evidence_identity": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory evidence identity."
+    },
+    "recipe_revision": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory recipe revision."
+    },
+    "fidelity_identity": {
+      "$ref": "#/$defs/nullable_hash",
+      "description": "Mandatory fidelity identity."
+    },
+    "vet_identity": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory vet identity."
+    },
+    "verified_hashes": {
+      "$ref": "#/$defs/verified_hashes",
+      "description": "Mandatory verified hashes."
+    },
+    "proposed_facts": {
+      "$ref": "#/$defs/proposed_facts",
+      "description": "Mandatory proposed source-read facts."
+    }
+  },
+  "$defs": {
+    "hash": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/author-proposal-common.schema.json#/$defs/hash"
+    },
+    "nullable_hash": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/author-proposal-common.schema.json#/$defs/nullable_hash"
+    },
+    "timestamp": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/author-proposal-common.schema.json#/$defs/timestamp"
+    },
+    "nonempty_string": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/author-proposal-common.schema.json#/$defs/nonempty_string"
+    },
+    "nullable_string": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/author-proposal-common.schema.json#/$defs/nullable_string"
+    },
+    "string_array": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/author-proposal-common.schema.json#/$defs/string_array"
+    },
+    "author": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/author-proposal-common.schema.json#/$defs/author"
+    },
+    "verified_hashes": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/author-proposal-common.schema.json#/$defs/verified_hashes"
+    },
+    "identity": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/author-proposal-common.schema.json#/$defs/identity"
+    },
+    "taxonomy": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/author-proposal-common.schema.json#/$defs/taxonomy"
+    },
+    "external_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modality",
+        "architecture_class",
+        "domain",
+        "task",
+        "field",
+        "subfield",
+        "paradigm",
+        "lineage",
+        "predecessors",
+        "tags",
+        "keywords",
+        "venue",
+        "family",
+        "era",
+        "year",
+        "country",
+        "authors",
+        "institution",
+        "citation",
+        "license",
+        "key_contribution",
+        "description",
+        "original_framework",
+        "run_framework",
+        "modes"
+      ],
+      "properties": {
+        "modality": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory modality."
+        },
+        "architecture_class": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory architecture class."
+        },
+        "domain": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory domain."
+        },
+        "task": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory task."
+        },
+        "field": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory field."
+        },
+        "subfield": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory subfield."
+        },
+        "paradigm": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory paradigm."
+        },
+        "lineage": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory lineage."
+        },
+        "predecessors": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory predecessors."
+        },
+        "tags": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory tags."
+        },
+        "keywords": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory non-empty English user search terms. These are relevance-checked model/family/task/domain aliases and phrases, not verbatim-source quotations."
+        },
+        "venue": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory venue."
+        },
+        "family": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory family."
+        },
+        "era": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory era."
+        },
+        "year": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory year."
+        },
+        "country": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory country."
+        },
+        "authors": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory authors."
+        },
+        "institution": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory institution."
+        },
+        "citation": {
+          "$ref": "model-v2.schema.json#/$defs/citation",
+          "description": "Best-effort gated citation metadata."
+        },
+        "license": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory license."
+        },
+        "key_contribution": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory key contribution."
+        },
+        "description": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory description."
+        },
+        "original_framework": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory original framework."
+        },
+        "run_framework": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory run framework."
+        },
+        "modes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "meaningful_modes",
+            "train_eval_divergence"
+          ],
+          "properties": {
+            "meaningful_modes": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "enum": [
+                  "train",
+                  "eval"
+                ]
+              },
+              "uniqueItems": true,
+              "description": "Mandatory meaningful modes."
+            },
+            "train_eval_divergence": {
+              "enum": [
+                "none",
+                "statistical",
+                "structural"
+              ],
+              "description": "Mandatory train eval divergence."
+            }
+          },
+          "description": "Mandatory meaningful runtime-mode record."
+        }
+      }
+    },
+    "proposed_facts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "taxonomy",
+        "external_metadata",
+        "website",
+        "people_and_origin",
+        "dates",
+        "citation",
+        "licenses",
+        "source_resolution",
+        "evidence",
+        "implementation",
+        "input_contract",
+        "modes",
+        "fidelity"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/identity",
+          "description": "Mandatory canonical model identity."
+        },
+        "taxonomy": {
+          "$ref": "#/$defs/taxonomy",
+          "description": "Best-effort gated architecture taxonomy."
+        },
+        "external_metadata": {
+          "$ref": "#/$defs/external_metadata",
+          "description": "Best-effort gated externally sourced catalog metadata."
+        },
+        "website": {
+          "$ref": "model-v2.schema.json#/$defs/website",
+          "description": "Best-effort presentation metadata for the catalog page."
+        },
+        "people_and_origin": {
+          "$ref": "model-v2.schema.json#/$defs/people_and_origin",
+          "description": "Best-effort gated people and origin metadata."
+        },
+        "dates": {
+          "$ref": "model-v2.schema.json#/$defs/dates",
+          "description": "Best-effort gated publication-date metadata."
+        },
+        "citation": {
+          "$ref": "model-v2.schema.json#/$defs/citation",
+          "description": "Best-effort gated citation metadata."
+        },
+        "licenses": {
+          "$ref": "model-v2.schema.json#/$defs/licenses",
+          "description": "Best-effort gated source-license metadata."
+        },
+        "source_resolution": {
+          "$ref": "model-v2.schema.json#/$defs/source_resolution",
+          "description": "Mandatory selected source rung and search record."
+        },
+        "evidence": {
+          "$ref": "model-v2.schema.json#/$defs/evidence",
+          "description": "Mandatory literal evidence and coverage record."
+        },
+        "implementation": {
+          "$ref": "model-v2.schema.json#/$defs/implementation",
+          "description": "Mandatory executable implementation recipe."
+        },
+        "input_contract": {
+          "$ref": "model-v2.schema.json#/$defs/input_contract",
+          "description": "Mandatory source-valid dummy-input contract."
+        },
+        "modes": {
+          "$ref": "model-v2.schema.json#/$defs/modes",
+          "description": "Mandatory meaningful runtime-mode record."
+        },
+        "fidelity": {
+          "$ref": "model-v2.schema.json#/$defs/fidelity",
+          "description": "Mandatory implementation-fidelity gate state."
+        }
+      }
+    }
+  }
+}

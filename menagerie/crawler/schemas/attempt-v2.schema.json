@@ -1,0 +1,523 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/attempt-v2.schema.json",
+  "title": "Menagerie crawler immutable attempt v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "attempt_id",
+    "ledger_seq",
+    "payload_sha256",
+    "work_id",
+    "stable_id",
+    "attempt_no",
+    "parent_attempt_id",
+    "actor",
+    "stage",
+    "mode",
+    "started_at",
+    "finished_at",
+    "result",
+    "attempted_rungs",
+    "retries",
+    "identities",
+    "environment",
+    "host",
+    "invocation",
+    "worker_receipt",
+    "supervisor_observation",
+    "policy_observation",
+    "error",
+    "defer_evidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "menagerie.crawler.attempt.v2",
+      "description": "Mandatory versioned schema identifier."
+    },
+    "attempt_id": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Mandatory immutable attempt identifier."
+    },
+    "ledger_seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Mandatory monotonic ledger sequence."
+    },
+    "payload_sha256": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory hash of the complete ledger payload."
+    },
+    "work_id": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Mandatory deterministic work identifier."
+    },
+    "stable_id": {
+      "$ref": "#/$defs/nullable_string",
+      "description": "Mandatory stable model identifier."
+    },
+    "attempt_no": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Mandatory ordinal attempt number."
+    },
+    "parent_attempt_id": {
+      "$ref": "#/$defs/nullable_string",
+      "description": "Best-effort parent attempt identifier."
+    },
+    "actor": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Mandatory producing actor."
+    },
+    "stage": {
+      "$ref": "#/$defs/stage",
+      "description": "Mandatory processing or failure stage."
+    },
+    "mode": {
+      "oneOf": [
+        {
+          "enum": [
+            "train",
+            "eval"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Mandatory mode."
+    },
+    "started_at": {
+      "$ref": "#/$defs/timestamp",
+      "description": "Mandatory UTC start timestamp."
+    },
+    "finished_at": {
+      "$ref": "#/$defs/timestamp",
+      "description": "Mandatory UTC completion timestamp."
+    },
+    "result": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "observed"
+      ],
+      "description": "Mandatory immutable attempt outcome."
+    },
+    "attempted_rungs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rung"
+      },
+      "uniqueItems": true,
+      "description": "Mandatory attempted rungs."
+    },
+    "retries": {
+      "$ref": "#/$defs/retries",
+      "description": "Mandatory retries."
+    },
+    "identities": {
+      "$ref": "#/$defs/identities",
+      "description": "Mandatory identities."
+    },
+    "environment": {
+      "$ref": "#/$defs/environment",
+      "description": "Mandatory environment."
+    },
+    "host": {
+      "$ref": "#/$defs/host",
+      "description": "Mandatory host."
+    },
+    "invocation": {
+      "$ref": "#/$defs/invocation",
+      "description": "Mandatory invocation."
+    },
+    "worker_receipt": {
+      "$ref": "#/$defs/worker_receipt",
+      "description": "Mandatory worker receipt."
+    },
+    "supervisor_observation": {
+      "$ref": "#/$defs/supervisor_observation",
+      "description": "Mandatory supervisor observation."
+    },
+    "policy_observation": {
+      "$ref": "#/$defs/policy_observation",
+      "description": "Mandatory policy observation."
+    },
+    "error": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/error"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Mandatory error."
+    },
+    "defer_evidence": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/defer_evidence"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Mandatory defer evidence."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "forward",
+            "description": "Mandatory processing or failure stage."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "train",
+              "eval"
+            ],
+            "description": "Best-effort mode."
+          },
+          "invocation": {
+            "properties": {
+              "mode": {
+                "enum": [
+                  "train",
+                  "eval"
+                ],
+                "description": "Best-effort mode."
+              }
+            },
+            "description": "Best-effort invocation."
+          },
+          "worker_receipt": {
+            "properties": {
+              "mode": {
+                "enum": [
+                  "train",
+                  "eval"
+                ],
+                "description": "Best-effort mode."
+              }
+            },
+            "description": "Best-effort worker receipt."
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "mode": {
+            "type": "null",
+            "description": "Best-effort mode."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "failed",
+            "description": "Mandatory immutable attempt outcome."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "$ref": "#/$defs/error",
+            "description": "Best-effort error."
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "hash": {
+      "$ref": "attempt-common.schema.json#/$defs/hash"
+    },
+    "nullable_hash": {
+      "$ref": "attempt-common.schema.json#/$defs/nullable_hash"
+    },
+    "timestamp": {
+      "$ref": "attempt-common.schema.json#/$defs/timestamp"
+    },
+    "nonempty_string": {
+      "$ref": "attempt-common.schema.json#/$defs/nonempty_string"
+    },
+    "nullable_string": {
+      "$ref": "attempt-common.schema.json#/$defs/nullable_string"
+    },
+    "redacted_text": {
+      "$ref": "attempt-common.schema.json#/$defs/redacted_text"
+    },
+    "string_array": {
+      "$ref": "attempt-common.schema.json#/$defs/string_array"
+    },
+    "stage": {
+      "$ref": "attempt-common.schema.json#/$defs/stage"
+    },
+    "reason_code": {
+      "$ref": "attempt-common.schema.json#/$defs/reason_code"
+    },
+    "rung": {
+      "$ref": "attempt-common.schema.json#/$defs/rung"
+    },
+    "retries": {
+      "$ref": "attempt-common.schema.json#/$defs/retries"
+    },
+    "identities": {
+      "$ref": "attempt-common.schema.json#/$defs/identities"
+    },
+    "environment": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/observed_environment"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "observed_environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "target",
+        "env_id",
+        "lock_sha256",
+        "resolved_export_sha256",
+        "python",
+        "packages_manifest_sha256",
+        "compiler_identity",
+        "sdk_identity"
+      ],
+      "properties": {
+        "family": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory family."
+        },
+        "target": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory target."
+        },
+        "env_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory env id."
+        },
+        "lock_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory lock sha256."
+        },
+        "resolved_export_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory resolved export sha256."
+        },
+        "python": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory python."
+        },
+        "packages_manifest_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory packages manifest sha256."
+        },
+        "compiler_identity": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory compiler identity."
+        },
+        "sdk_identity": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory sdk identity."
+        }
+      }
+    },
+    "host": {
+      "$ref": "attempt-common.schema.json#/$defs/host"
+    },
+    "invocation": {
+      "$ref": "attempt-common.schema.json#/$defs/invocation"
+    },
+    "input_kind": {
+      "$ref": "attempt-common.schema.json#/$defs/input_kind"
+    },
+    "worker_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "present",
+        "receipt_sha256",
+        "observed_recipe_revision",
+        "observed_adapter_sha256",
+        "observed_code_manifest_sha256",
+        "observed_input_asset_sha256",
+        "constructor_started",
+        "constructor_completed",
+        "input_completed",
+        "forward_started",
+        "forward_completed",
+        "mode",
+        "input_signature",
+        "output_signature",
+        "input_kind",
+        "input_asset",
+        "input_note",
+        "parameter_count_total",
+        "parameter_count_trainable",
+        "native_framework",
+        "delegated_method"
+      ],
+      "properties": {
+        "present": {
+          "type": "boolean",
+          "description": "Mandatory present."
+        },
+        "receipt_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory receipt sha256."
+        },
+        "observed_recipe_revision": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Worker-observed recipe revision, required for parent comparison."
+        },
+        "observed_adapter_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Worker-observed typed-adapter digest, or null for declarative recipes."
+        },
+        "observed_code_manifest_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Worker-observed digest over the recursive code_manifest bytes, or null when the recipe has no code manifest."
+        },
+        "observed_input_asset_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Worker-observed digest of the materialized standard input asset, or null when no standard asset was selected."
+        },
+        "constructor_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Worker-observed model-construction wall seconds, or null when the constructor did not complete."
+        },
+        "forward_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Worker-observed forward wall seconds for this mode, or null when the forward did not run."
+        },
+        "constructor_started": {
+          "type": "boolean",
+          "description": "Mandatory constructor started."
+        },
+        "constructor_completed": {
+          "type": "boolean",
+          "description": "Mandatory constructor completed."
+        },
+        "input_completed": {
+          "type": "boolean",
+          "description": "Mandatory input completed."
+        },
+        "forward_started": {
+          "type": "boolean",
+          "description": "Mandatory forward started."
+        },
+        "forward_completed": {
+          "type": "boolean",
+          "description": "Mandatory forward completed."
+        },
+        "mode": {
+          "oneOf": [
+            {
+              "enum": [
+                "train",
+                "eval"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory mode."
+        },
+        "input_signature": {
+          "description": "Mandatory input signature."
+        },
+        "output_signature": {
+          "description": "Mandatory output signature."
+        },
+        "input_kind": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/input_kind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory input kind."
+        },
+        "input_asset": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory input asset."
+        },
+        "input_note": {
+          "type": "string",
+          "description": "Mandatory input note."
+        },
+        "parameter_count_total": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory parameter count total."
+        },
+        "parameter_count_trainable": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory parameter count trainable."
+        },
+        "native_framework": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory native framework."
+        },
+        "delegated_method": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory delegated method."
+        }
+      }
+    },
+    "supervisor_observation": {
+      "$ref": "attempt-common.schema.json#/$defs/supervisor_observation"
+    },
+    "policy_observation": {
+      "$ref": "attempt-common.schema.json#/$defs/policy_observation"
+    },
+    "error": {
+      "$ref": "attempt-common.schema.json#/$defs/error"
+    },
+    "defer_evidence": {
+      "$ref": "attempt-common.schema.json#/$defs/defer_evidence"
+    }
+  }
+}

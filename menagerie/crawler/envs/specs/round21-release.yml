@@ -1,0 +1,11 @@
+{
+  "name": "menagerie-round21-release",
+  "channels": ["conda-forge", "nodefaults"],
+  "dependencies": [
+    "python=3.11.11",
+    "pytorch=2.5.1=cpu_generic*",
+    "numpy=2.1.3",
+    "pytest=8.3.5",
+    "jsonschema=4.23.0"
+  ]
+}

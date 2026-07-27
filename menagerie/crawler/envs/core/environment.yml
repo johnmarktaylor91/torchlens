@@ -1,0 +1,5 @@
+{
+  "name": "menagerie-core",
+  "channels": ["pytorch", "conda-forge", "nodefaults"],
+  "dependencies": ["python>=3.11,<3.13", "pytorch>=2.3", "torchvision", "timm", "transformers", "diffusers", "huggingface_hub", "safetensors", "accelerate", "einops", "scipy", "pillow"]
+}

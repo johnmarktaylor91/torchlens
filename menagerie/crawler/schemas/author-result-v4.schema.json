@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/author-result-v4.schema.json",
+  "title": "Menagerie crawler typed author result v4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "result_id", "result_sha256", "kind", "stable_id", "work_id",
+    "campaign_id", "created_at", "author_identity", "prompt_identity",
+    "dispatcher_identity", "source_manifest_identity", "intake_snapshot_id",
+    "intake_snapshot_sha256", "intake_item_sha256", "payload"
+  ],
+  "properties": {
+    "schema_version": {"const": "menagerie.crawler.author-result.v4", "description": "Current typed author-result discriminator."},
+    "result_id": {"$ref": "author-result-v3.schema.json#/$defs/nonempty_string", "description": "Immutable typed result identity."},
+    "result_sha256": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Digest of the complete typed result."},
+    "kind": {"enum": ["PROPOSED", "DEFER_RECOMMENDATION", "SKIP_RECOMMENDATION", "BLOCKED"], "description": "Closed advisory result arm."},
+    "stable_id": {"$ref": "author-result-v3.schema.json#/$defs/nonempty_string", "description": "Trusted stable model identity."},
+    "work_id": {"$ref": "author-result-v3.schema.json#/$defs/nonempty_string", "description": "Exact work-generation identity."},
+    "campaign_id": {"$ref": "author-result-v3.schema.json#/$defs/nonempty_string", "description": "Exact author campaign identity."},
+    "created_at": {"$ref": "author-result-v3.schema.json#/$defs/timestamp", "description": "UTC result creation timestamp."},
+    "author_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Exact author model identity."},
+    "prompt_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Exact frozen prompt identity."},
+    "dispatcher_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Exact dispatcher closure identity."},
+    "source_manifest_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Exact frozen source-manifest identity."},
+    "intake_snapshot_id": {"$ref": "author-result-v3.schema.json#/$defs/nonempty_string", "description": "Exact intake snapshot identity."},
+    "intake_snapshot_sha256": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Digest of the active intake snapshot."},
+    "intake_item_sha256": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Digest of the trusted intake item."},
+    "payload": {
+      "oneOf": [
+        {"$ref": "author-result-v3.schema.json#/$defs/proposed_payload"},
+        {"$ref": "#/$defs/defer_payload"},
+        {"$ref": "author-result-v3.schema.json#/$defs/skip_payload"},
+        {"$ref": "author-result-v3.schema.json#/$defs/blocked_payload"}
+      ],
+      "description": "Closed arm-specific result payload."
+    }
+  },
+  "$defs": {
+    "handoff_execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proposal", "proposal_sha256", "code_manifest_identity",
+        "source_manifest_identity", "handoff_sha256"
+      ],
+      "properties": {
+        "proposal": {
+          "$ref": "author-proposal-v3.schema.json",
+          "description": "Complete executable proposal retained separately from the terminal arm."
+        },
+        "proposal_sha256": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Digest of the complete handoff proposal."},
+        "code_manifest_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Digest of the proposal code manifest."},
+        "source_manifest_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Exact terminal source-manifest identity."},
+        "handoff_sha256": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Digest of all preceding handoff fields."}
+      }
+    },
+    "defer_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "arm", "platform", "source_ids", "evidence_ids", "evidence_identity",
+        "license_identity", "handoff_execution", "recommendation_sha256"
+      ],
+      "properties": {
+        "arm": {"const": "DEFER_RECOMMENDATION", "description": "Platform-deferral arm discriminator."},
+        "platform": {"enum": ["cuda", "x86"], "description": "Closed target platform capability."},
+        "source_ids": {"$ref": "author-result-v3.schema.json#/$defs/string_array", "description": "Exact supporting source identities."},
+        "evidence_ids": {"$ref": "author-result-v3.schema.json#/$defs/string_array", "description": "Exact supporting evidence identities."},
+        "evidence_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Exact evidence-pack identity."},
+        "license_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Exact license disposition identity."},
+        "handoff_execution": {"$ref": "#/$defs/handoff_execution", "description": "Separately authenticated executable handoff authority."},
+        "recommendation_sha256": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Digest of the complete recommendation payload."}
+      }
+    }
+  },
+  "x-authority-ownership-base": "menagerie.crawler.author-result.v3",
+  "x-authority-ownership-prefix-copies": {
+    "$.payload.proposal": "$.payload.handoff_execution.proposal"
+  },
+  "x-authority-ownership": {
+    "$.payload.handoff_execution.code_manifest_identity": "author-gated",
+    "$.payload.handoff_execution.handoff_sha256": "author-gated",
+    "$.payload.handoff_execution.proposal_sha256": "author-gated",
+    "$.payload.handoff_execution.source_manifest_identity": "author-gated"
+  }
+}

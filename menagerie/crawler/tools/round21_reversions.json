@@ -1,0 +1,403 @@
+{
+  "cases": [
+    {
+      "expected_reason": "checkpoint_or_weight_read_attempted",
+      "expected_reasons": [
+        "checkpoint_or_weight_read_attempted",
+        "'awards_runs': False",
+        "'awards_runs': False"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E11]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]"
+      ],
+      "reversion_id": "D01",
+      "semantic_reversion": "restore hardlink or startup-.pth filtering"
+    },
+    {
+      "expected_reason": "environment generation omits or rewrites the content seal",
+      "expected_reasons": [
+        "environment generation omits or rewrites the content seal",
+        "DID NOT RAISE"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E02]",
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E03]"
+      ],
+      "reversion_id": "D02",
+      "semantic_reversion": "omit content seal from generation"
+    },
+    {
+      "expected_reason": "content seal",
+      "expected_reasons": [
+        "content seal"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E02]"
+      ],
+      "reversion_id": "D03",
+      "semantic_reversion": "use conda-meta alone as seal"
+    },
+    {
+      "expected_reason": "DID NOT RAISE",
+      "expected_reasons": [
+        "DID NOT RAISE",
+        "static import is outside sealed environment and exact inventory"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E04]",
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E08]"
+      ],
+      "reversion_id": "D04",
+      "semantic_reversion": "grant post-seal bytes"
+    },
+    {
+      "expected_reason": "DID NOT RAISE",
+      "expected_reasons": [
+        "DID NOT RAISE"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E09]"
+      ],
+      "reversion_id": "D05",
+      "semantic_reversion": "weaken internal/external symlink binding"
+    },
+    {
+      "expected_reason": "assert attempt[\"result\"] == \"failed\"",
+      "expected_reasons": [
+        "assert attempt[\"result\"] == \"failed\"",
+        "assert attempt[\"result\"] == \"failed\""
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E12]",
+        "menagerie/crawler/tests/test_release_environment_matrix_composition.py::test_environment_authority_unit_matrix[E13]"
+      ],
+      "reversion_id": "D06",
+      "semantic_reversion": "treat packaged checkpoints as runtime"
+    },
+    {
+      "expected_reason": "selected interpreter is missing from worker argv",
+      "expected_reasons": [
+        "selected interpreter is missing from worker argv",
+        "assert fixture.binding.python_executable == fixture.prefix / \"bin/python\""
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_preclusion_composition.py::test_preclusion_real_v3_path_has_no_substitutable_fixture_edge",
+        "menagerie/crawler/tests/test_release_ci_composition.py::test_linux_committed_lock_provenance_awards_in_ci"
+      ],
+      "reversion_id": "D07",
+      "semantic_reversion": "restore sys.executable or parallel interpreter"
+    },
+    {
+      "expected_reason": "selected interpreter is absent from the content seal",
+      "expected_reasons": [
+        "selected interpreter is absent from the content seal",
+        "DID NOT RAISE"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_outside_selected_interpreter_is_rejected_at_binding",
+        "menagerie/crawler/tests/test_environment_authority_composition.py::test_manifest_v3_rejects_changed_interpreter_association"
+      ],
+      "reversion_id": "D08",
+      "semantic_reversion": "allow outside/mismatched selected interpreter"
+    },
+    {
+      "expected_reason": "runtime-root",
+      "expected_reasons": [
+        "runtime-root"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_preclusion_composition.py::test_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
+      ],
+      "reversion_id": "D09",
+      "semantic_reversion": "each substitution evasion"
+    },
+    {
+      "expected_reason": "runtime-root",
+      "expected_reasons": [
+        "runtime-root"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_preclusion_composition.py::test_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
+      ],
+      "reversion_id": "D10",
+      "semantic_reversion": "reintroduce live legacy root/fake result/hand binding"
+    },
+    {
+      "expected_reason": "_compile_worker_read_manifest",
+      "expected_reasons": [
+        "_compile_worker_read_manifest"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_preclusion_composition.py::test_preclusion_real_v3_path_has_no_substitutable_fixture_edge"
+      ],
+      "reversion_id": "D11",
+      "semantic_reversion": "remove transitive fixture/composition/CI scope"
+    },
+    {
+      "expected_reason": "DID NOT RAISE",
+      "expected_reasons": [
+        "DID NOT RAISE"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_fingerprint_composition.py::test_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
+      ],
+      "reversion_id": "D12",
+      "semantic_reversion": "omit ctime/inode/external fingerprint trigger"
+    },
+    {
+      "expected_reason": "content seal",
+      "expected_reasons": [
+        "content seal"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_fingerprint_composition.py::test_cheap_fingerprint_catches_stat_preserved_mutation_without_false_staling_clone"
+      ],
+      "reversion_id": "D13",
+      "semantic_reversion": "quarantine byte-identical hardlink clone churn"
+    },
+    {
+      "expected_reason": "failed:environment",
+      "expected_reasons": [
+        "failed:environment"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_scale_composition.py::test_pass_and_spawn_validation_walks_are_constant_bounded"
+      ],
+      "reversion_id": "D14",
+      "semantic_reversion": "rewalk per model/consumer or reuse pass token for spawn"
+    },
+    {
+      "expected_reason": "post-award-commit",
+      "expected_reasons": [
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit",
+        "post-award-commit"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S01]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S02]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S03]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S04]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S05]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S06]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S07]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S08]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S09]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S10]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S11]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S12]",
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S13]"
+      ],
+      "reversion_id": "D15",
+      "semantic_reversion": "delete shutdown guard or admit later work"
+    },
+    {
+      "expected_reason": "assert publication < append < post_award_hook < post_award_guard",
+      "expected_reasons": [
+        "assert publication < append < post_award_hook < post_award_guard"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_shutdown_matrix_composition.py::test_shutdown_matrix[S11]"
+      ],
+      "reversion_id": "D16",
+      "semantic_reversion": "insert shutdown check inside atomic publication"
+    },
+    {
+      "expected_reason": "assert not True",
+      "expected_reasons": [
+        "assert not True"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_transport_composition.py::test_closed_transport_capability_awards_and_rejects_unlisted_library"
+      ],
+      "reversion_id": "D17",
+      "semantic_reversion": "restore root/suffix transport grant"
+    },
+    {
+      "expected_reason": "DID NOT RAISE",
+      "expected_reasons": [
+        "DID NOT RAISE"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_handoff_authority_composition.py::test_handoff_authority_identity_matrix[H02]"
+      ],
+      "reversion_id": "D18",
+      "semantic_reversion": "retain mismatched artifact transaction"
+    },
+    {
+      "expected_reason": "terminal partition invalid",
+      "expected_reasons": [
+        "terminal partition invalid",
+        "duplicate or invalid artifact event ID"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_handoff_authority_composition.py::test_handoff_authority_identity_matrix[H03]",
+        "menagerie/crawler/tests/test_release_handoff_authority_composition.py::test_handoff_authority_identity_matrix[H04]"
+      ],
+      "reversion_id": "D19",
+      "semantic_reversion": "accept zero/multiple handoff finals or old-root fallback"
+    },
+    {
+      "expected_reason": "environment authority cache association is invalid",
+      "expected_reasons": [
+        "environment authority cache association is invalid"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_cache_rebind_composition.py::test_mismatched_rebind_preserves_active_authority_and_awards"
+      ],
+      "reversion_id": "D20",
+      "semantic_reversion": "invalidate active cache on rejected rebind"
+    },
+    {
+      "expected_reason": "Extra items in the right set",
+      "expected_reasons": [
+        "Extra items in the right set",
+        "Extra items in the right set"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_linux_release_artifacts_and_provisioning_are_real",
+        "menagerie/crawler/tests/test_release_ci_composition.py::test_linux_committed_lock_provenance_awards_in_ci"
+      ],
+      "reversion_id": "D21",
+      "semantic_reversion": "delete/corrupt either lock/export/probe contract"
+    },
+    {
+      "expected_reason": "MENAGERIE_RELEASE_GATE",
+      "expected_reasons": [
+        "MENAGERIE_RELEASE_GATE"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_conformance_workflow_and_reversion_inventory_is_exact"
+      ],
+      "reversion_id": "D22",
+      "semantic_reversion": "remove workflow proof node or permit skip/xfail"
+    },
+    {
+      "expected_reason": "strace",
+      "expected_reasons": [
+        "strace"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_supported_host_release_gate_inventory_is_exact"
+      ],
+      "reversion_id": "D23",
+      "semantic_reversion": "remove Linux bwrap/strace or denial audit"
+    },
+    {
+      "expected_reason": "command -v log",
+      "expected_reasons": [
+        "command -v log"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_anti_substitution_inventories.py::test_supported_host_release_gate_inventory_is_exact"
+      ],
+      "reversion_id": "D24",
+      "semantic_reversion": "replace macOS denial with profile-only proof"
+    },
+    {
+      "expected_reason": "unverifiable",
+      "expected_reasons": [
+        "unverifiable"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
+      ],
+      "reversion_id": "D25",
+      "semantic_reversion": "drop nullable evidence or misclassify mode"
+    },
+    {
+      "expected_reason": "assert failed.returncode == EXIT_ERROR",
+      "expected_reasons": [
+        "assert failed.returncode == EXIT_ERROR"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_execution_dry_run_composition.py::test_dry_run_all_source_failure_is_acceptance_error"
+      ],
+      "reversion_id": "D26",
+      "semantic_reversion": "restore dry-run false-complete/signature mismatch"
+    },
+    {
+      "expected_reason": "menagerie.crawler.status.PartitionError",
+      "expected_reasons": [
+        "menagerie.crawler.status.PartitionError"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_slice_f_driver.py::test_linux_code_less_deferral_fails_visibly_without_failed_source"
+      ],
+      "reversion_id": "D27",
+      "semantic_reversion": "restore source/CAS/cache/fetch fallback"
+    },
+    {
+      "expected_reason": "conformance registry clause IDs changed",
+      "expected_reasons": [
+        "conformance registry clause IDs changed"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_release_conformance_composition.py::test_conformance_registry_is_total_and_executed"
+      ],
+      "reversion_id": "D28",
+      "semantic_reversion": "delete clause/finding/invariant/matrix registry record"
+    },
+    {
+      "expected_reason": "receipt_error",
+      "expected_reasons": [
+        "receipt_error",
+        "receipt_error",
+        "terminal-partition-complete",
+        "receipt_error"
+      ],
+      "proof_nodes": [
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[none]",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_v3_worker_result_awards_through_driver_and_reducer[statistical]",
+        "menagerie/crawler/tests/test_slice_f_driver.py::test_linux_handoff_attempts_both_deferred_statuses_and_supersedes",
+        "menagerie/crawler/tests/test_award_worker_result_composition.py::test_real_unhashable_output_awards_runs_with_unverifiable_modes"
+      ],
+      "reversion_id": "D29",
+      "semantic_reversion": "regress receipt/spawn/writer/schema preservation"
+    }
+  ],
+  "deliberate_reversion_ids": [
+    "D01",
+    "D02",
+    "D03",
+    "D04",
+    "D05",
+    "D06",
+    "D07",
+    "D08",
+    "D09",
+    "D10",
+    "D11",
+    "D12",
+    "D13",
+    "D14",
+    "D15",
+    "D16",
+    "D17",
+    "D18",
+    "D19",
+    "D20",
+    "D21",
+    "D22",
+    "D23",
+    "D24",
+    "D25",
+    "D26",
+    "D27",
+    "D28",
+    "D29"
+  ],
+  "schema_version": "menagerie.crawler.round21-reversion-matrix.v1"
+}

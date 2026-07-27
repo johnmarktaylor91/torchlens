@@ -1,0 +1,524 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/gate-v3.schema.json",
+  "title": "Menagerie crawler immutable checker gate v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "gate_id",
+    "ledger_seq",
+    "payload_sha256",
+    "gate_kind",
+    "batch_size",
+    "gate_round",
+    "gate_identity",
+    "checker",
+    "items",
+    "result_envelope_sha256",
+    "author_result_schema_identity",
+    "dispatcher_identity"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "menagerie.crawler.gate.v3",
+      "description": "Mandatory current checker-gate discriminator; v2 gates are legacy-untrusted."
+    },
+    "gate_id": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Mandatory immutable gate identifier."
+    },
+    "ledger_seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Mandatory monotonic ledger sequence."
+    },
+    "payload_sha256": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory hash of the complete ledger payload."
+    },
+    "gate_kind": {
+      "enum": [
+        "metadata_batch",
+        "fidelity",
+        "terminal_disposition"
+      ],
+      "description": "Mandatory checker gate kind."
+    },
+    "batch_size": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "description": "Mandatory number of items in this gate."
+    },
+    "gate_round": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Mandatory checker repair round."
+    },
+    "gate_identity": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory hash binding the gate inputs and checker."
+    },
+    "checker": {
+      "$ref": "#/$defs/checker",
+      "description": "Mandatory checker identity and timing."
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      },
+      "description": "Mandatory gate verdict items."
+    },
+    "result_envelope_sha256": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory result envelope sha256."
+    },
+    "author_result_schema_identity": {
+      "$ref": "#/$defs/hash",
+      "description": "Exact author-result schema closure checked by this gate."
+    },
+    "dispatcher_identity": {
+      "$ref": "#/$defs/hash",
+      "description": "Versioned checker dispatcher closure identity."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "gate_kind": {
+            "const": "metadata_batch",
+            "description": "Mandatory checker gate kind."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "batch_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Mandatory number of items in this gate."
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/item"
+                },
+                {
+                  "properties": {
+                    "fidelity": {
+                      "properties": {
+                        "required": {
+                          "const": false,
+                          "description": "Best-effort required."
+                        },
+                        "verdict": {
+                          "const": "not-applicable",
+                          "description": "Mandatory checker verdict."
+                        }
+                      },
+                      "description": "Mandatory implementation-fidelity gate state."
+                    }
+                  }
+                }
+              ]
+            },
+            "description": "Mandatory gate verdict items."
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "batch_size": {
+            "const": 1,
+            "description": "Mandatory number of items in this gate."
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "$ref": "#/$defs/item"
+            },
+            "description": "Mandatory gate verdict items."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "gate_kind": {
+            "const": "terminal_disposition",
+            "description": "Select the terminal-disposition checker contract."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "batch_size": {
+            "const": 1,
+            "description": "Terminal disposition gates are per model."
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/item"
+                },
+                {
+                  "properties": {
+                    "terminal_disposition": {
+                      "$ref": "#/$defs/terminal_disposition",
+                      "description": "Mandatory checked terminal recommendation."
+                    }
+                  }
+                }
+              ]
+            },
+            "description": "Single exact terminal recommendation verdict."
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "terminal_disposition": {
+                  "type": "null",
+                  "description": "Nonterminal gates carry no terminal recommendation."
+                }
+              }
+            },
+            "description": "Nonterminal checker items."
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "hash": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/hash"
+    },
+    "nullable_hash": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/nullable_hash"
+    },
+    "timestamp": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/timestamp"
+    },
+    "nonempty_string": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/nonempty_string"
+    },
+    "nullable_string": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/nullable_string"
+    },
+    "string_array": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/string_array"
+    },
+    "accuracy_verdict": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/accuracy_verdict"
+    },
+    "rung": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/rung"
+    },
+    "checker": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/checker"
+    },
+    "verified_hashes": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/verified_hashes"
+    },
+    "integrity": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/integrity"
+    },
+    "field_check": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/field_check"
+    },
+    "material_check": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/material_check"
+    },
+    "fidelity": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/fidelity"
+    },
+    "rung_check": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/rung_check"
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "work_id",
+        "campaign_root_work_id",
+        "stable_id",
+        "family_representative_id",
+        "fidelity_identity",
+        "vet_identity",
+        "verified_hashes",
+        "integrity",
+        "verdict",
+        "field_checks",
+        "fidelity",
+        "rung_check",
+        "unsupported_claims",
+        "required_repairs",
+        "confidence",
+        "terminal_disposition"
+      ],
+      "properties": {
+        "work_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory deterministic work identifier."
+        },
+        "campaign_root_work_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Stable campaign/root-work lineage across repaired proposals."
+        },
+        "stable_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory stable model identifier."
+        },
+        "family_representative_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory family representative id."
+        },
+        "fidelity_identity": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory fidelity identity."
+        },
+        "vet_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory vet identity."
+        },
+        "verified_hashes": {
+          "$ref": "#/$defs/verified_hashes",
+          "description": "Mandatory verified hashes."
+        },
+        "integrity": {
+          "$ref": "#/$defs/integrity",
+          "description": "Mandatory integrity."
+        },
+        "verdict": {
+          "$ref": "#/$defs/accuracy_verdict",
+          "description": "Mandatory checker verdict."
+        },
+        "field_checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field_check"
+          },
+          "description": "Mandatory per-field accuracy findings."
+        },
+        "fidelity": {
+          "$ref": "#/$defs/fidelity",
+          "description": "Mandatory implementation-fidelity gate state."
+        },
+        "rung_check": {
+          "$ref": "#/$defs/rung_check",
+          "description": "Mandatory rung check."
+        },
+        "unsupported_claims": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory unsupported claims."
+        },
+        "required_repairs": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory repairs required before acceptance."
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "description": "Mandatory checker confidence level."
+        },
+        "terminal_disposition": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/terminal_disposition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Closed checked terminal recommendation, or null for nonterminal gate kinds."
+        }
+      }
+    },
+    "terminal_disposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "author_result_id",
+        "author_result_sha256",
+        "handoff_proposal_id",
+        "handoff_sha256",
+        "kind",
+        "predicate",
+        "verdict",
+        "source_manifest_identity",
+        "source_ids",
+        "evidence_identity",
+        "evidence_ids",
+        "license_identity",
+        "findings"
+      ],
+      "properties": {
+        "author_result_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Exact typed author-result identity under review."
+        },
+        "author_result_sha256": {
+          "$ref": "#/$defs/hash",
+          "description": "Digest of the exact typed author-result bytes."
+        },
+        "handoff_proposal_id": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Executable handoff proposal identity for a platform deferral."
+        },
+        "handoff_sha256": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Digest of the complete executable handoff bundle."
+        },
+        "kind": {
+          "enum": [
+            "DEFER_RECOMMENDATION",
+            "SKIP_RECOMMENDATION",
+            "BLOCKED"
+          ],
+          "description": "Exact advisory result arm under review."
+        },
+        "predicate": {
+          "enum": [
+            "needs-cuda",
+            "needs-x86",
+            "insufficient-description",
+            "no-description",
+            "not-a-real-NN",
+            "blocked-prerequisite"
+          ],
+          "description": "Closed terminal predicate independently checked."
+        },
+        "verdict": {
+          "enum": [
+            "accepted",
+            "rejected",
+            "cannot-verify"
+          ],
+          "description": "Independent terminal-disposition checker verdict."
+        },
+        "source_manifest_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact frozen source-manifest identity checked."
+        },
+        "source_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Exact source identity set checked for the predicate."
+        },
+        "evidence_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact evidence-pack identity checked."
+        },
+        "evidence_ids": {
+          "$ref": "#/$defs/string_array",
+          "description": "Exact evidence excerpts resolving the predicate."
+        },
+        "license_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Exact license disposition identity checked."
+        },
+        "findings": {
+          "$ref": "#/$defs/string_array",
+          "description": "Closed checker findings for rejected or unverifiable recommendations."
+        }
+      }
+    }
+  },
+  "x-authority-ownership": {
+    "$.author_result_schema_identity": "reducer-derived",
+    "$.batch_size": "reducer-derived",
+    "$.checker.finished_at": "reducer-derived",
+    "$.checker.model": "reducer-derived",
+    "$.checker.prompt_sha256": "reducer-derived",
+    "$.checker.provider": "reducer-derived",
+    "$.checker.started_at": "reducer-derived",
+    "$.checker.version": "reducer-derived",
+    "$.dispatcher_identity": "reducer-derived",
+    "$.gate_id": "reducer-derived",
+    "$.gate_identity": "reducer-derived",
+    "$.gate_kind": "reducer-derived",
+    "$.gate_round": "reducer-derived",
+    "$.items[].campaign_root_work_id": "trusted-intake",
+    "$.items[].confidence": "reducer-derived",
+    "$.items[].family_representative_id": "trusted-intake",
+    "$.items[].fidelity.contradictions[]": "author-gated",
+    "$.items[].fidelity.material_checks[].category": "author-gated",
+    "$.items[].fidelity.material_checks[].code_locator": "author-gated",
+    "$.items[].fidelity.material_checks[].code_path": "author-gated",
+    "$.items[].fidelity.material_checks[].evidence_ids[]": "author-gated",
+    "$.items[].fidelity.material_checks[].reason": "author-gated",
+    "$.items[].fidelity.material_checks[].source_id": "author-gated",
+    "$.items[].fidelity.material_checks[].source_locator": "author-gated",
+    "$.items[].fidelity.material_checks[].verdict": "author-gated",
+    "$.items[].fidelity.omissions[]": "author-gated",
+    "$.items[].fidelity.permanent_scar": "author-gated",
+    "$.items[].fidelity.required": "author-gated",
+    "$.items[].fidelity.unsupported_choices[]": "author-gated",
+    "$.items[].fidelity.verdict": "author-gated",
+    "$.items[].fidelity_identity": "reducer-derived",
+    "$.items[].field_checks[].checked_source_ids[]": "author-gated",
+    "$.items[].field_checks[].evidence_ids[]": "author-gated",
+    "$.items[].field_checks[].field": "author-gated",
+    "$.items[].field_checks[].reason": "author-gated",
+    "$.items[].field_checks[].required_repair": "author-gated",
+    "$.items[].field_checks[].verdict": "author-gated",
+    "$.items[].integrity.excerpt_discrepancies[]": "reducer-derived",
+    "$.items[].integrity.hash_mismatches[]": "reducer-derived",
+    "$.items[].integrity.locator_failures[]": "reducer-derived",
+    "$.items[].integrity.verdict": "reducer-derived",
+    "$.items[].required_repairs[]": "reducer-derived",
+    "$.items[].rung_check.findings[]": "author-gated",
+    "$.items[].rung_check.highest_applicable": "author-gated",
+    "$.items[].rung_check.selected_rung": "author-gated",
+    "$.items[].rung_check.verdict": "author-gated",
+    "$.items[].stable_id": "trusted-intake",
+    "$.items[].terminal_disposition.author_result_id": "author-gated",
+    "$.items[].terminal_disposition.author_result_sha256": "author-gated",
+    "$.items[].terminal_disposition.handoff_proposal_id": "author-gated",
+    "$.items[].terminal_disposition.handoff_sha256": "author-gated",
+    "$.items[].terminal_disposition.evidence_identity": "author-gated",
+    "$.items[].terminal_disposition.evidence_ids[]": "author-gated",
+    "$.items[].terminal_disposition.findings[]": "author-gated",
+    "$.items[].terminal_disposition.kind": "author-gated",
+    "$.items[].terminal_disposition.license_identity": "author-gated",
+    "$.items[].terminal_disposition.predicate": "author-gated",
+    "$.items[].terminal_disposition.source_ids[]": "author-gated",
+    "$.items[].terminal_disposition.source_manifest_identity": "author-gated",
+    "$.items[].terminal_disposition.verdict": "author-gated",
+    "$.items[].unsupported_claims[]": "reducer-derived",
+    "$.items[].verdict": "reducer-derived",
+    "$.items[].verified_hashes.code": "reducer-derived",
+    "$.items[].verified_hashes.code_manifest": "reducer-derived",
+    "$.items[].verified_hashes.evidence": "reducer-derived",
+    "$.items[].verified_hashes.family_template": "reducer-derived",
+    "$.items[].verified_hashes.proposal": "reducer-derived",
+    "$.items[].verified_hashes.source_manifest": "reducer-derived",
+    "$.items[].verified_hashes.source_to_code_map": "reducer-derived",
+    "$.items[].vet_identity": "reducer-derived",
+    "$.items[].work_id": "reducer-derived",
+    "$.ledger_seq": "reducer-derived",
+    "$.payload_sha256": "reducer-derived",
+    "$.result_envelope_sha256": "reducer-derived",
+    "$.schema_version": "reducer-derived"
+  }
+}

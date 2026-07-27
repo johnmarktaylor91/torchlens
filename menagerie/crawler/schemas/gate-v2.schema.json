@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/gate-v2.schema.json",
+  "title": "Menagerie crawler immutable checker gate v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "gate_id",
+    "ledger_seq",
+    "payload_sha256",
+    "gate_kind",
+    "batch_size",
+    "gate_round",
+    "gate_identity",
+    "checker",
+    "items",
+    "result_envelope_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "menagerie.crawler.gate.v2",
+      "description": "Mandatory versioned schema identifier."
+    },
+    "gate_id": {
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Mandatory immutable gate identifier."
+    },
+    "ledger_seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Mandatory monotonic ledger sequence."
+    },
+    "payload_sha256": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory hash of the complete ledger payload."
+    },
+    "gate_kind": {
+      "enum": [
+        "metadata_batch",
+        "fidelity"
+      ],
+      "description": "Mandatory checker gate kind."
+    },
+    "batch_size": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "description": "Mandatory number of items in this gate."
+    },
+    "gate_round": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Mandatory checker repair round."
+    },
+    "gate_identity": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory hash binding the gate inputs and checker."
+    },
+    "checker": {
+      "$ref": "#/$defs/checker",
+      "description": "Mandatory checker identity and timing."
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      },
+      "description": "Mandatory gate verdict items."
+    },
+    "result_envelope_sha256": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory result envelope sha256."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "gate_kind": {
+            "const": "metadata_batch",
+            "description": "Mandatory checker gate kind."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "batch_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Mandatory number of items in this gate."
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/item"
+                },
+                {
+                  "properties": {
+                    "fidelity": {
+                      "properties": {
+                        "required": {
+                          "const": false,
+                          "description": "Best-effort required."
+                        },
+                        "verdict": {
+                          "const": "not-applicable",
+                          "description": "Mandatory checker verdict."
+                        }
+                      },
+                      "description": "Mandatory implementation-fidelity gate state."
+                    }
+                  }
+                }
+              ]
+            },
+            "description": "Mandatory gate verdict items."
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "batch_size": {
+            "const": 1,
+            "description": "Mandatory number of items in this gate."
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "$ref": "#/$defs/item"
+            },
+            "description": "Mandatory gate verdict items."
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "hash": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/hash"
+    },
+    "nullable_hash": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/nullable_hash"
+    },
+    "timestamp": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/timestamp"
+    },
+    "nonempty_string": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/nonempty_string"
+    },
+    "nullable_string": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/nullable_string"
+    },
+    "string_array": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/string_array"
+    },
+    "accuracy_verdict": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/accuracy_verdict"
+    },
+    "rung": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/rung"
+    },
+    "checker": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/checker"
+    },
+    "verified_hashes": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/verified_hashes"
+    },
+    "integrity": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/integrity"
+    },
+    "field_check": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/field_check"
+    },
+    "material_check": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/material_check"
+    },
+    "fidelity": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/fidelity"
+    },
+    "rung_check": {
+      "$ref": "https://torchlens.org/schemas/menagerie/crawler/gate-common.schema.json#/$defs/rung_check"
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "work_id",
+        "campaign_root_work_id",
+        "stable_id",
+        "family_representative_id",
+        "fidelity_identity",
+        "vet_identity",
+        "verified_hashes",
+        "integrity",
+        "verdict",
+        "field_checks",
+        "fidelity",
+        "rung_check",
+        "unsupported_claims",
+        "required_repairs",
+        "confidence"
+      ],
+      "properties": {
+        "work_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory deterministic work identifier."
+        },
+        "campaign_root_work_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Stable campaign/root-work lineage across repaired proposals."
+        },
+        "stable_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory stable model identifier."
+        },
+        "family_representative_id": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory family representative id."
+        },
+        "fidelity_identity": {
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Mandatory fidelity identity."
+        },
+        "vet_identity": {
+          "$ref": "#/$defs/hash",
+          "description": "Mandatory vet identity."
+        },
+        "verified_hashes": {
+          "$ref": "#/$defs/verified_hashes",
+          "description": "Mandatory verified hashes."
+        },
+        "integrity": {
+          "$ref": "#/$defs/integrity",
+          "description": "Mandatory integrity."
+        },
+        "verdict": {
+          "$ref": "#/$defs/accuracy_verdict",
+          "description": "Mandatory checker verdict."
+        },
+        "field_checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field_check"
+          },
+          "description": "Mandatory per-field accuracy findings."
+        },
+        "fidelity": {
+          "$ref": "#/$defs/fidelity",
+          "description": "Mandatory implementation-fidelity gate state."
+        },
+        "rung_check": {
+          "$ref": "#/$defs/rung_check",
+          "description": "Mandatory rung check."
+        },
+        "unsupported_claims": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory unsupported claims."
+        },
+        "required_repairs": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory repairs required before acceptance."
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "description": "Mandatory checker confidence level."
+        }
+      }
+    }
+  }
+}

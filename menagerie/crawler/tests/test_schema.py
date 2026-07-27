@@ -1,0 +1,303 @@
+"""Executable crawler schema contract tests."""
+
+from __future__ import annotations
+
+from copy import deepcopy
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from menagerie.crawler.constants import FAILURE_REASON_CODES, TERMINAL_STATUS_CODES, FailureStage
+from menagerie.crawler.schema import (
+    OWNERSHIP_ANNOTATED_SCHEMA_VERSIONS,
+    REQUIRED_FIELD_PROJECTION_SPECS,
+    SCHEMA_FILES,
+    PayloadValidationError,
+    RequiredFieldProjection,
+    SchemaOwnershipError,
+    SchemaOwner,
+    author_gated_schema_paths,
+    load_schema,
+    owned_schema_leaves,
+    owned_schema_leaves_from_schema,
+    required_field_projection_spec,
+    validate_payload,
+    validate_required_field_projection_specs,
+)
+from menagerie.crawler.tests.conftest import (
+    make_attempt,
+    make_author_proposal,
+    make_gate,
+    make_model,
+    make_operational_event,
+    make_shutdown_interruption_event,
+)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        make_model(accepted=True),
+        make_model(accepted=False),
+        make_attempt(),
+        make_gate(),
+        make_gate(["m_example"], gate_kind="fidelity", fidelity_identity="sha256:" + "a" * 64),
+        make_author_proposal(),
+        make_operational_event(),
+        make_shutdown_interruption_event(),
+    ],
+)
+def test_representative_records_validate(payload: dict[str, Any]) -> None:
+    """Every representative full schema record validates.
+
+    Parameters
+    ----------
+    payload:
+        Full schema payload under test.
+    """
+
+    validate_payload(payload)
+
+
+def test_sandbox_unavailability_uses_planned_policy_stage() -> None:
+    """Sandbox absence adds a versioned reason without expanding public failure stages."""
+
+    assert "sandbox-unavailable" not in {stage.value for stage in FailureStage}
+    assert "failed:sandbox-unavailable" not in TERMINAL_STATUS_CODES
+    assert "sandbox-unavailable-v1" in FAILURE_REASON_CODES["policy"]
+
+
+def test_unknown_fields_are_rejected(valid_model: dict[str, Any]) -> None:
+    """Unknown fields fail at both root and nested typed objects.
+
+    Parameters
+    ----------
+    valid_model:
+        Valid accepted model fixture.
+    """
+
+    root_unknown = deepcopy(valid_model)
+    root_unknown["surprise"] = True
+    nested_unknown = deepcopy(valid_model)
+    nested_unknown["external_metadata"]["surprise"] = True
+    with pytest.raises(PayloadValidationError):
+        validate_payload(root_unknown)
+    with pytest.raises(PayloadValidationError):
+        validate_payload(nested_unknown)
+
+
+@pytest.mark.parametrize("value", [None, "adapter.py"])
+def test_v3_input_contract_code_path_presence_is_rejected(value: object) -> None:
+    """Null and string forms of the deleted v3 executable-path leaf both reject.
+
+    Parameters
+    ----------
+    value:
+        Legacy input-contract value whose presence must fail closed.
+    """
+
+    model = make_model(accepted=True)
+    model["input_contract"]["code_path"] = value
+    proposal = make_author_proposal()
+    proposal["proposed_facts"]["input_contract"]["code_path"] = value
+    with pytest.raises(PayloadValidationError):
+        validate_payload(model)
+    with pytest.raises(PayloadValidationError):
+        validate_payload(proposal)
+
+
+def test_missing_mandatory_fields_are_rejected(valid_model: dict[str, Any]) -> None:
+    """Missing mandatory fields fail strict validation.
+
+    Parameters
+    ----------
+    valid_model:
+        Valid accepted model fixture.
+    """
+
+    malformed = deepcopy(valid_model)
+    del malformed["external_metadata"]["architecture_class"]
+    with pytest.raises(PayloadValidationError):
+        validate_payload(malformed)
+
+
+def test_authored_blocks_are_atomic(valid_model: dict[str, Any]) -> None:
+    """Accepted metadata cannot be null and pending metadata cannot be populated.
+
+    Parameters
+    ----------
+    valid_model:
+        Valid accepted model fixture.
+    """
+
+    accepted_with_null = deepcopy(valid_model)
+    accepted_with_null["website"] = None
+    pending_with_text = deepcopy(valid_model)
+    pending_with_text["authored_metadata_state"] = "pending"
+    with pytest.raises(PayloadValidationError):
+        validate_payload(accepted_with_null)
+    with pytest.raises(PayloadValidationError):
+        validate_payload(pending_with_text)
+
+
+def test_metadata_gate_final_tail_size_is_enforced() -> None:
+    """Metadata gates permit a final one-item tail but never an empty result."""
+
+    validate_payload(make_gate(["m_tail"]))
+    undersized = make_gate([])
+    with pytest.raises(PayloadValidationError):
+        validate_payload(undersized)
+
+
+def test_forward_attempt_requires_mode() -> None:
+    """A meaningful forward attempt cannot omit its runtime mode."""
+
+    malformed = make_attempt(mode=None)
+    with pytest.raises(PayloadValidationError):
+        validate_payload(malformed)
+
+
+def test_schema_properties_have_nonempty_descriptions() -> None:
+    """Every declared schema property carries a non-empty self-documenting description.
+
+    Returns
+    -------
+    None
+        The assertion validates all crawler schemas.
+    """
+
+    def assert_descriptions(node: object, path: str = "$") -> None:
+        """Recursively assert descriptions for every JSON Schema property.
+
+        Parameters
+        ----------
+        node:
+            JSON-compatible schema node.
+        path:
+            Human-readable node location for assertion failures.
+
+        Returns
+        -------
+        None
+            Raises when a property is undocumented.
+        """
+
+        if isinstance(node, dict):
+            properties = node.get("properties")
+            if isinstance(properties, dict):
+                for name, property_schema in properties.items():
+                    assert isinstance(property_schema, dict)
+                    assert property_schema.get("description", "").strip(), f"{path}.{name}"
+                    assert_descriptions(property_schema, f"{path}.{name}")
+            for key, value in node.items():
+                if key not in {"properties", "description"}:
+                    assert_descriptions(value, f"{path}.{key}")
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                assert_descriptions(value, f"{path}[{index}]")
+
+    schema_root = Path(__file__).parents[1] / "schemas"
+    for schema_path in schema_root.glob("*.json"):
+        assert_descriptions(json.loads(schema_path.read_text()), schema_path.name)
+
+
+def test_all_bundled_schema_contracts_load() -> None:
+    """Every registered v2/v3 and event schema is a valid Draft 2020-12 schema."""
+
+    for schema_version in SCHEMA_FILES:
+        assert load_schema(schema_version)["properties"]["schema_version"]
+
+
+def test_v3_schema_leaf_ownership_is_complete_and_exhaustive() -> None:
+    """Every normalized v3 leaf has exactly one schema-declared authority owner."""
+
+    for schema_version in OWNERSHIP_ANNOTATED_SCHEMA_VERSIONS:
+        owned = owned_schema_leaves(schema_version)
+        assert owned
+        assert len({leaf.path for leaf in owned}) == len(owned)
+        assert author_gated_schema_paths(schema_version).issubset({leaf.path for leaf in owned})
+
+
+def test_required_field_projection_specs_are_owner_explicit_and_schema_aligned() -> None:
+    """Python-owned field projections retain every owner key and schema parity."""
+
+    assert set(REQUIRED_FIELD_PROJECTION_SPECS) == set(RequiredFieldProjection)
+    for projection in RequiredFieldProjection:
+        spec = required_field_projection_spec(projection)
+        assert set(spec.fields_by_owner) == set(SchemaOwner)
+        assert set(spec.field_order) == {
+            field.name for owner in SchemaOwner for field in spec.fields_for(owner)
+        }
+        assert spec.names_for(SchemaOwner.WORKER_OBSERVED) == tuple(
+            field.name for field in spec.fields_for(SchemaOwner.WORKER_OBSERVED)
+        )
+        assert spec.names_for(SchemaOwner.PARENT_OBSERVED) == tuple(
+            field.name for field in spec.fields_for(SchemaOwner.PARENT_OBSERVED)
+        )
+    validate_required_field_projection_specs()
+
+
+def test_schema_leaf_ownership_rejects_a_new_unclassified_leaf() -> None:
+    """A newly allowed nested leaf cannot ship without an explicit owner annotation."""
+
+    schema = deepcopy(load_schema("menagerie.crawler.author-result.v3"))
+    payload_schema = schema["$defs"]["blocked_payload"]
+    payload_schema["properties"]["unclassified_canary"] = {
+        "type": "string",
+        "description": "Synthetic CI canary that deliberately has no authority owner.",
+    }
+    with pytest.raises(SchemaOwnershipError, match="missing"):
+        owned_schema_leaves_from_schema(schema)
+
+
+def test_split_skip_reasons_require_vague_text_and_sufficiency_gap(
+    valid_model: dict[str, Any],
+) -> None:
+    """The three skip terminals retain the ruled evidence distinctions.
+
+    Parameters
+    ----------
+    valid_model:
+        Complete accepted model fixture.
+
+    Returns
+    -------
+    None
+        The assertion validates all three terminal skip paths.
+    """
+
+    skip_codes = {
+        "skipped:insufficient-description",
+        "skipped:no-description",
+        "skipped:not-a-real-NN",
+    }
+    assert skip_codes.issubset(TERMINAL_STATUS_CODES)
+
+    for code in skip_codes - {"skipped:insufficient-description"}:
+        record = deepcopy(valid_model)
+        record["status"]["kind"] = "skipped"
+        record["status"]["code"] = code
+        validate_payload(record)
+
+    insufficient = deepcopy(valid_model)
+    insufficient["status"]["kind"] = "skipped"
+    insufficient["status"]["code"] = "skipped:insufficient-description"
+    insufficient["source_resolution"]["rung"] = "R5_SKIP"
+    insufficient["source_resolution"]["sufficiency_gap"] = (
+        "concept described but no layer configs/dims/connectivity"
+    )
+    insufficient["evidence"]["excerpts"][0]["text"] = "A novel neural architecture for vision."
+    insufficient["evidence"]["excerpts"][0]["disposition"] = "insufficient-for-faithful-reimpl"
+    validate_payload(insufficient)
+
+    missing_gap = deepcopy(insufficient)
+    missing_gap["source_resolution"]["sufficiency_gap"] = None
+    with pytest.raises(PayloadValidationError):
+        validate_payload(missing_gap)
+
+    missing_vague_excerpt = deepcopy(insufficient)
+    missing_vague_excerpt["evidence"]["excerpts"][0]["disposition"] = "supporting"
+    with pytest.raises(PayloadValidationError):
+        validate_payload(missing_vague_excerpt)

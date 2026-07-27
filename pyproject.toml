@@ -148,6 +148,8 @@ markers = [
     "backend_tinygrad: marks tests that require the optional tinygrad backend runtime",
     "backend_paddle: marks tests that require the optional paddle backend runtime",
     "tf_backend: marks tests that require the optional TensorFlow backend runtime",
+    "round21_linux_real: exact committed-lock Linux release proof inventory",
+    "round21_macos_real: exact committed-lock macOS release proof inventory",
 ]
 addopts = "-m 'not rare'"
 xfail_strict = true

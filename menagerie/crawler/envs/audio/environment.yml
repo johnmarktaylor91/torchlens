@@ -1,0 +1,5 @@
+{
+  "name": "menagerie-audio",
+  "channels": ["pytorch", "conda-forge", "nodefaults"],
+  "dependencies": ["python>=3.11,<3.13", "pytorch>=2.3", "torchaudio", "librosa", "speechbrain", "soundfile", "soxr", "ffmpeg", "transformers", "sentencepiece", "einops"]
+}

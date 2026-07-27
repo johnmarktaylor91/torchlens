@@ -1,0 +1,5 @@
+{
+  "name": "menagerie-paddle-arm64",
+  "channels": ["conda-forge", "nodefaults"],
+  "dependencies": ["python>=3.11,<3.13", "paddlepaddle>=3.0", "numpy", "scipy", "pillow", "opencv", "protobuf", "einops"]
+}

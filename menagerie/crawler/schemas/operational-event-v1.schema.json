@@ -1,0 +1,449 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/operational-event-v1.schema.json",
+  "title": "Menagerie crawler operational event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "ledger_seq",
+    "payload_sha256",
+    "created_at",
+    "event_kind",
+    "status",
+    "provider",
+    "observed_response",
+    "reset_at",
+    "queued_work_counts",
+    "current_environment",
+    "run_id",
+    "machine_id",
+    "details"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "menagerie.crawler.operational-event.v1",
+      "description": "Mandatory versioned schema identifier."
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Mandatory immutable operational-event identifier."
+    },
+    "ledger_seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Mandatory monotonic ledger sequence."
+    },
+    "payload_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Mandatory hash of the complete ledger payload."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$",
+      "description": "Mandatory UTC creation timestamp."
+    },
+    "event_kind": {
+      "enum": [
+        "usage-pause",
+        "usage-resume",
+        "wakeup",
+        "checkpoint",
+        "campaign-health",
+        "wake-noop-already-running",
+        "checkpoint-review",
+        "review-signoff",
+        "progress-notification",
+        "notification-delivery",
+        "requeue-grant-consumed",
+        "worker-lease-opened",
+        "worker-lease-started",
+        "worker-lease-closed",
+        "worker-lease-reaped",
+        "orphan-worker-recovered",
+        "wakeup-installed",
+        "wakeup-repaired",
+        "wakeup-fired",
+        "wakeup-deactivated",
+        "wakeup-health-degraded",
+        "wakeup-failed",
+        "campaign-completed",
+        "operator-cancelled",
+        "worker-shutdown-interrupted"
+      ],
+      "description": "Mandatory operational event kind."
+    },
+    "status": {
+      "enum": [
+        "paused:usage-limit",
+        "resumed:usage-limit",
+        "wakeup-scheduled",
+        "wakeup-fired",
+        "wake-noop-already-running",
+        "checkpoint-complete",
+        "checkpoint-failed",
+        "healthy",
+        "failed:runner",
+        "paused:checkpoint-review",
+        "resumed:checkpoint-review",
+        "progress-notified",
+        "progress-recorded",
+        "notification-delivered",
+        "notification-failed",
+        "requeue-grant-consumed",
+        "worker-lease-open",
+        "worker-lease-active",
+        "worker-lease-closed",
+        "worker-lease-reaped",
+        "orphan-worker-recovered",
+        "wakeup-installed",
+        "wakeup-repaired",
+        "wakeup-deactivated",
+        "wakeup-health-degraded",
+        "wakeup-failed",
+        "campaign-completed",
+        "operator-cancelled",
+        "paused:terminated",
+        "interrupted:shutdown"
+      ],
+      "description": "Mandatory closed current disposition."
+    },
+    "provider": {
+      "oneOf": [
+        {
+          "enum": [
+            "anthropic",
+            "openai"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort provider associated with the event."
+    },
+    "observed_response": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort observed provider response."
+    },
+    "reset_at": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort scheduled provider reset time."
+    },
+    "queued_work_counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "description": "Mandatory queued work counts."
+    },
+    "current_environment": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Mandatory current environment."
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Mandatory run id."
+    },
+    "machine_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Mandatory machine id."
+    },
+    "details": {
+      "type": "object",
+      "description": "Mandatory structured event details."
+    },
+    "models_completed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Terminal-model count reached at a review or progress event."
+    },
+    "funnel_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runs",
+        "deferred",
+        "skipped",
+        "failed"
+      ],
+      "properties": {
+        "runs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current runs count."
+        },
+        "deferred": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current deferred count."
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current skipped count."
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current failed count."
+        }
+      },
+      "description": "Exact four-bucket terminal funnel snapshot."
+    },
+    "report_path": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Review report path presented for human sign-off."
+    },
+    "approved_by_note": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-supplied note identifying the review approval."
+    },
+    "resume_after": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Completed-model review checkpoint cleared by the sign-off."
+    },
+    "milestone": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Non-blocking completed-model milestone being reported."
+    }
+  },
+  "$defs": {
+    "shutdown_interruption_details": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "invocation_id",
+        "admission_boundary",
+        "stable_id",
+        "work_id",
+        "execution_identity",
+        "request_identity",
+        "lease_id",
+        "child_pid",
+        "child_start_token",
+        "child_pgid",
+        "signal",
+        "parent_observation",
+        "partial_receipt"
+      ],
+      "properties": {
+        "invocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exact idempotency identity of the interrupted invocation."
+        },
+        "admission_boundary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Named admission boundary at which shutdown was observed."
+        },
+        "stable_id": {
+          "type": ["string", "null"],
+          "description": "Model identity when work had been selected, otherwise null."
+        },
+        "work_id": {
+          "type": ["string", "null"],
+          "description": "Work identity when work had been selected, otherwise null."
+        },
+        "execution_identity": {
+          "oneOf": [
+            {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            {"type": "null"}
+          ],
+          "description": "Execution identity when compilation reached that boundary."
+        },
+        "request_identity": {
+          "oneOf": [
+            {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            {"type": "null"}
+          ],
+          "description": "Exact worker-request digest when request bytes existed."
+        },
+        "lease_id": {
+          "type": ["string", "null"],
+          "description": "Exact worker lease identity when a lease had opened."
+        },
+        "child_pid": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Parent-observed child process id when a child existed."
+        },
+        "child_start_token": {
+          "type": ["string", "null"],
+          "description": "Kernel child-start identity when a child existed."
+        },
+        "child_pgid": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Parent-observed child process-group id when available."
+        },
+        "signal": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Signal number observed for a drained child, otherwise null."
+        },
+        "parent_observation": {
+          "type": ["object", "null"],
+          "description": "Complete parent supervisor observation when a child was drained."
+        },
+        "partial_receipt": {
+          "type": ["object", "null"],
+          "description": "Non-awarding partial worker receipt retained only for diagnostics."
+        }
+      },
+      "description": "Exact operational-only shutdown interruption fact."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_kind": {
+            "const": "checkpoint-review",
+            "description": "Select the checkpoint-review event contract."
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "models_completed",
+          "funnel_snapshot",
+          "report_path"
+        ],
+        "properties": {
+          "status": {
+            "const": "paused:checkpoint-review",
+            "description": "Checkpoint review always blocks pending sign-off."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_kind": {
+            "const": "review-signoff",
+            "description": "Select the review-signoff event contract."
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "approved_by_note",
+          "resume_after"
+        ],
+        "properties": {
+          "status": {
+            "const": "resumed:checkpoint-review",
+            "description": "Review sign-off clears a blocking review checkpoint."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_kind": {
+            "const": "progress-notification",
+            "description": "Select the progress-notification event contract."
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "models_completed",
+          "milestone",
+          "funnel_snapshot"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "progress-notified",
+              "progress-recorded"
+            ],
+            "description": "Progress milestone identity is informational and non-blocking."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_kind": {
+            "const": "notification-delivery",
+            "description": "Select the best-effort notification delivery contract."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "enum": [
+              "notification-delivered",
+              "notification-failed"
+            ],
+            "description": "Delivery is recorded separately from notification identity."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_kind": {
+            "const": "worker-shutdown-interrupted",
+            "description": "Select the operational-only worker shutdown contract."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "interrupted:shutdown",
+            "description": "A completed interruption remains ordinarily resumable."
+          },
+          "details": {
+            "$ref": "#/$defs/shutdown_interruption_details",
+            "description": "Exact operational-only shutdown interruption fact."
+          }
+        }
+      }
+    }
+  ]
+}

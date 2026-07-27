@@ -1,0 +1,1902 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/model-v3.schema.json",
+  "title": "Menagerie crawler model revision v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "stable_id",
+    "record_seq",
+    "record_revision",
+    "parent_revision",
+    "created_at",
+    "revised_by",
+    "authored_metadata_state",
+    "intake",
+    "identity",
+    "taxonomy",
+    "external_metadata",
+    "website",
+    "people_and_origin",
+    "dates",
+    "citation",
+    "licenses",
+    "source_resolution",
+    "evidence",
+    "implementation",
+    "input_contract",
+    "observed",
+    "modes",
+    "fidelity",
+    "accuracy_gate",
+    "execution",
+    "status",
+    "provenance",
+    "budget",
+    "flags",
+    "notes",
+    "scar_history",
+    "completeness",
+    "dependency_vector",
+    "artifact_authority",
+    "family_authority"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "menagerie.crawler.model.v3",
+      "description": "Mandatory current model contract discriminator; v2 revisions remain legacy-untrusted history."
+    },
+    "stable_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Mandatory stable model identifier."
+    },
+    "record_seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Mandatory monotonic model-ledger sequence."
+    },
+    "record_revision": {
+      "$ref": "#/$defs/hash",
+      "description": "Mandatory hash of this model revision."
+    },
+    "parent_revision": {
+      "$ref": "#/$defs/nullable_hash",
+      "description": "Best-effort hash of the superseded model revision."
+    },
+    "created_at": {
+      "$ref": "#/$defs/timestamp",
+      "description": "Mandatory UTC creation timestamp."
+    },
+    "revised_by": {
+      "$ref": "#/$defs/revised_by",
+      "description": "Mandatory actor that produced this revision."
+    },
+    "authored_metadata_state": {
+      "enum": [
+        "pending",
+        "accepted",
+        "failed"
+      ],
+      "description": "Mandatory acceptance state for source-read metadata."
+    },
+    "family_variant_derivation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/family_variant_derivation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Reducer-verifiable mechanical family recipe specialization proof."
+    },
+    "intake": {
+      "$ref": "#/$defs/intake",
+      "description": "Mandatory preserved intake provenance."
+    },
+    "identity": {
+      "$ref": "#/$defs/identity",
+      "description": "Mandatory canonical model identity."
+    },
+    "taxonomy": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/taxonomy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort gated architecture taxonomy."
+    },
+    "external_metadata": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/external_metadata"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort gated externally sourced catalog metadata."
+    },
+    "website": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/website"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort presentation metadata for the catalog page."
+    },
+    "people_and_origin": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/people_and_origin"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort gated people and origin metadata."
+    },
+    "dates": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/dates"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort gated publication-date metadata."
+    },
+    "citation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/citation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort gated citation metadata."
+    },
+    "licenses": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/licenses"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Best-effort gated source-license metadata."
+    },
+    "source_resolution": {
+      "$ref": "#/$defs/source_resolution",
+      "description": "Mandatory selected source rung and search record."
+    },
+    "evidence": {
+      "$ref": "#/$defs/evidence",
+      "description": "Mandatory literal evidence and coverage record."
+    },
+    "implementation": {
+      "$ref": "#/$defs/implementation",
+      "description": "Mandatory executable implementation recipe."
+    },
+    "input_contract": {
+      "$ref": "#/$defs/input_contract",
+      "description": "Mandatory source-valid dummy-input contract."
+    },
+    "observed": {
+      "$ref": "#/$defs/observed",
+      "description": "Mandatory best-effort observed runtime facts."
+    },
+    "modes": {
+      "$ref": "#/$defs/modes",
+      "description": "Mandatory meaningful runtime-mode record."
+    },
+    "fidelity": {
+      "$ref": "#/$defs/fidelity",
+      "description": "Mandatory implementation-fidelity gate state."
+    },
+    "accuracy_gate": {
+      "$ref": "#/$defs/accuracy_gate",
+      "description": "Mandatory metadata-accuracy gate state."
+    },
+    "execution": {
+      "$ref": "#/$defs/execution",
+      "description": "Mandatory execution identity and currentness state."
+    },
+    "status": {
+      "$ref": "#/$defs/status",
+      "description": "Mandatory closed current disposition."
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance",
+      "description": "Mandatory production provenance."
+    },
+    "budget": {
+      "$ref": "#/$defs/budget",
+      "description": "Mandatory bounded-work budget accounting."
+    },
+    "flags": {
+      "$ref": "#/$defs/string_array",
+      "description": "Mandatory machine-readable record flags."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Mandatory free-form record notes."
+    },
+    "scar_history": {
+      "$ref": "#/$defs/string_array",
+      "description": "Mandatory immutable history of accepted deviations."
+    },
+    "completeness": {
+      "$ref": "#/$defs/completeness",
+      "description": "Mandatory release-completeness checks."
+    },
+    "untrusted_attempt": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "proposal_sha256",
+            "proposal"
+          ],
+          "properties": {
+            "proposal_sha256": {
+              "$ref": "#/$defs/hash",
+              "description": "Hash of the retained unaccepted author proposal."
+            },
+            "proposal": {
+              "type": "object",
+              "description": "Raw author proposal retained only as untrusted attempt evidence."
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Explicitly untrusted authored attempt facts excluded from authority fields."
+    },
+    "dependency_vector": {
+      "$ref": "#/$defs/dependency_vector",
+      "description": "Mandatory closed reducer-derived stage-sensitive dependency vector."
+    },
+    "artifact_authority": {
+      "$ref": "#/$defs/artifact_authority",
+      "description": "Mandatory reference to independent append-only artifact transaction authority."
+    },
+    "family_authority": {
+      "$ref": "#/$defs/family_authority",
+      "description": "Mandatory trusted-intake family binding retained on every status."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "properties": {
+              "kind": {
+                "const": "runs",
+                "description": "Select successful run terminal records."
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "description": "Select the terminal status contract."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "modes": {
+            "properties": {
+              "per_mode_run": {
+                "minProperties": 1,
+                "description": "Successful runs require at least one mode receipt."
+              }
+            },
+            "description": "Successful run mode receipts."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "website": {
+            "type": "object",
+            "description": "Select structural size-variant website records.",
+            "properties": {
+              "kind": {
+                "const": "size-variant-template",
+                "description": "Require the structural family-variant kind."
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        },
+        "required": [
+          "website"
+        ]
+      },
+      "then": {
+        "required": [
+          "family_variant_derivation"
+        ],
+        "properties": {
+          "family_variant_derivation": {
+            "$ref": "#/$defs/family_variant_derivation",
+            "description": "Require the exact reducer-verifiable derivation proof."
+          },
+          "completeness": {
+            "description": "Bind structural variants to computed family validity.",
+            "properties": {
+              "family_template_valid": {
+                "const": true,
+                "description": "Structural variants cannot disable family validation."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "properties": {
+              "code": {
+                "const": "skipped:insufficient-description",
+                "description": "Mandatory closed status code."
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "description": "Mandatory closed current disposition."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source_resolution": {
+            "properties": {
+              "sufficiency_gap": {
+                "$ref": "#/$defs/nonempty_string",
+                "description": "Mandatory for insufficient-description skips; names missing implementation detail."
+              }
+            },
+            "required": [
+              "sufficiency_gap"
+            ],
+            "description": "Mandatory selected source rung and search record."
+          },
+          "evidence": {
+            "properties": {
+              "excerpts": {
+                "contains": {
+                  "properties": {
+                    "disposition": {
+                      "const": "insufficient-for-faithful-reimpl",
+                      "description": "Mandatory excerpt role, including insufficient reimplementation evidence."
+                    }
+                  },
+                  "required": [
+                    "disposition"
+                  ]
+                },
+                "description": "Mandatory literal source excerpts."
+              }
+            },
+            "description": "Mandatory literal evidence and coverage record."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "authored_metadata_state": {
+            "const": "accepted",
+            "description": "Mandatory acceptance state for source-read metadata."
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "taxonomy": {
+            "$ref": "#/$defs/taxonomy",
+            "description": "Best-effort gated architecture taxonomy."
+          },
+          "external_metadata": {
+            "$ref": "#/$defs/external_metadata",
+            "description": "Best-effort gated externally sourced catalog metadata."
+          },
+          "website": {
+            "$ref": "#/$defs/website",
+            "description": "Best-effort presentation metadata for the catalog page."
+          },
+          "people_and_origin": {
+            "$ref": "#/$defs/people_and_origin",
+            "description": "Best-effort gated people and origin metadata."
+          },
+          "dates": {
+            "$ref": "#/$defs/dates",
+            "description": "Best-effort gated publication-date metadata."
+          },
+          "citation": {
+            "$ref": "#/$defs/citation",
+            "description": "Best-effort gated citation metadata."
+          },
+          "licenses": {
+            "$ref": "#/$defs/licenses",
+            "description": "Best-effort gated source-license metadata."
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "taxonomy": {
+            "type": "null",
+            "description": "Best-effort gated architecture taxonomy."
+          },
+          "external_metadata": {
+            "type": "null",
+            "description": "Best-effort gated externally sourced catalog metadata."
+          },
+          "website": {
+            "type": "null",
+            "description": "Best-effort presentation metadata for the catalog page."
+          },
+          "people_and_origin": {
+            "type": "null",
+            "description": "Best-effort gated people and origin metadata."
+          },
+          "dates": {
+            "type": "null",
+            "description": "Best-effort gated publication-date metadata."
+          },
+          "citation": {
+            "type": "null",
+            "description": "Best-effort gated citation metadata."
+          },
+          "licenses": {
+            "type": "null",
+            "description": "Best-effort gated source-license metadata."
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "hash": {
+      "$ref": "model-common.schema.json#/$defs/hash"
+    },
+    "nullable_hash": {
+      "$ref": "model-common.schema.json#/$defs/nullable_hash"
+    },
+    "timestamp": {
+      "$ref": "model-common.schema.json#/$defs/timestamp"
+    },
+    "date": {
+      "$ref": "model-common.schema.json#/$defs/date"
+    },
+    "nonempty_string": {
+      "$ref": "model-common.schema.json#/$defs/nonempty_string"
+    },
+    "nullable_string": {
+      "$ref": "model-common.schema.json#/$defs/nullable_string"
+    },
+    "string_array": {
+      "$ref": "model-common.schema.json#/$defs/string_array"
+    },
+    "nonempty_string_array": {
+      "$ref": "model-common.schema.json#/$defs/nonempty_string_array"
+    },
+    "revised_by": {
+      "$ref": "model-common.schema.json#/$defs/revised_by"
+    },
+    "intake": {
+      "$ref": "model-common.schema.json#/$defs/intake"
+    },
+    "identity": {
+      "$ref": "model-common.schema.json#/$defs/identity"
+    },
+    "taxonomy": {
+      "$ref": "model-common.schema.json#/$defs/taxonomy"
+    },
+    "citation": {
+      "$ref": "model-common.schema.json#/$defs/citation"
+    },
+    "external_metadata_modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "meaningful_modes",
+        "train_eval_divergence"
+      ],
+      "properties": {
+        "meaningful_modes": {
+          "$ref": "#/$defs/mode_array",
+          "description": "Mandatory meaningful modes."
+        },
+        "train_eval_divergence": {
+          "enum": [
+            "none",
+            "statistical",
+            "structural",
+            "unverifiable",
+            "not-applicable"
+          ],
+          "description": "Mandatory train eval divergence."
+        }
+      }
+    },
+    "external_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modality",
+        "architecture_class",
+        "domain",
+        "task",
+        "field",
+        "subfield",
+        "paradigm",
+        "lineage",
+        "predecessors",
+        "tags",
+        "keywords",
+        "venue",
+        "family",
+        "era",
+        "year",
+        "country",
+        "authors",
+        "institution",
+        "citation",
+        "license",
+        "key_contribution",
+        "description",
+        "original_framework",
+        "run_framework",
+        "modes"
+      ],
+      "properties": {
+        "modality": {
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Mandatory modality."
+        },
+        "architecture_class": {
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Mandatory architecture class."
+        },
+        "domain": {
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Mandatory domain."
+        },
+        "task": {
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Mandatory task."
+        },
+        "field": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory field."
+        },
+        "subfield": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory subfield."
+        },
+        "paradigm": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory paradigm."
+        },
+        "lineage": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory lineage."
+        },
+        "predecessors": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory predecessors."
+        },
+        "tags": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory tags."
+        },
+        "keywords": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory non-empty English user search terms. These are relevance-checked model/family/task/domain aliases and phrases, not verbatim-source quotations."
+        },
+        "venue": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory venue."
+        },
+        "family": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory family."
+        },
+        "era": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory era."
+        },
+        "year": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1800,
+              "maximum": 3000
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory year."
+        },
+        "country": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory country."
+        },
+        "authors": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory authors."
+        },
+        "institution": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory institution."
+        },
+        "citation": {
+          "$ref": "#/$defs/citation",
+          "description": "Best-effort gated citation metadata."
+        },
+        "license": {
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory license."
+        },
+        "key_contribution": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory key contribution."
+        },
+        "description": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory description."
+        },
+        "original_framework": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory original framework."
+        },
+        "run_framework": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory run framework."
+        },
+        "modes": {
+          "$ref": "#/$defs/external_metadata_modes",
+          "description": "Mandatory meaningful runtime-mode record."
+        }
+      }
+    },
+    "website": {
+      "$ref": "model-common.schema.json#/$defs/website"
+    },
+    "people_and_origin": {
+      "$ref": "model-common.schema.json#/$defs/people_and_origin"
+    },
+    "dates": {
+      "$ref": "model-common.schema.json#/$defs/dates"
+    },
+    "licenses": {
+      "$ref": "model-common.schema.json#/$defs/licenses"
+    },
+    "source_resolution": {
+      "$ref": "model-common.schema.json#/$defs/source_resolution"
+    },
+    "rung": {
+      "$ref": "model-common.schema.json#/$defs/rung"
+    },
+    "attempted_rung": {
+      "$ref": "model-common.schema.json#/$defs/attempted_rung"
+    },
+    "search_report": {
+      "$ref": "model-common.schema.json#/$defs/search_report"
+    },
+    "source": {
+      "$ref": "model-common.schema.json#/$defs/source"
+    },
+    "evidence": {
+      "$ref": "model-common.schema.json#/$defs/evidence"
+    },
+    "excerpt": {
+      "$ref": "model-common.schema.json#/$defs/excerpt"
+    },
+    "implementation": {
+      "$ref": "model-common.schema.json#/$defs/implementation"
+    },
+    "library_recipe": {
+      "$ref": "model-common.schema.json#/$defs/library_recipe"
+    },
+    "upstream_file": {
+      "$ref": "model-common.schema.json#/$defs/upstream_file"
+    },
+    "patch": {
+      "$ref": "model-common.schema.json#/$defs/patch"
+    },
+    "source_to_code": {
+      "$ref": "model-common.schema.json#/$defs/source_to_code"
+    },
+    "declared_choice": {
+      "$ref": "model-common.schema.json#/$defs/declared_choice"
+    },
+    "initialization": {
+      "$ref": "model-common.schema.json#/$defs/initialization"
+    },
+    "input_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "builder_symbol",
+        "seed",
+        "semantic_description",
+        "source_basis",
+        "smallest_valid_probe_rationale",
+        "args",
+        "kwargs",
+        "non_tensor_values",
+        "masks_state_and_control",
+        "expected_output_semantics"
+      ],
+      "properties": {
+        "builder_symbol": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory builder symbol."
+        },
+        "seed": {
+          "type": "integer",
+          "description": "Mandatory seed."
+        },
+        "semantic_description": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory semantic description."
+        },
+        "source_basis": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory source basis."
+        },
+        "smallest_valid_probe_rationale": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory smallest valid probe rationale."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/input_leaf"
+          },
+          "description": "Mandatory args."
+        },
+        "kwargs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/input_leaf"
+          },
+          "description": "Mandatory kwargs."
+        },
+        "non_tensor_values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/non_tensor_value"
+          },
+          "description": "Mandatory non tensor values."
+        },
+        "masks_state_and_control": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory masks state and control."
+        },
+        "expected_output_semantics": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory expected output semantics."
+        }
+      }
+    },
+    "shape_dimension": {
+      "$ref": "model-common.schema.json#/$defs/shape_dimension"
+    },
+    "input_leaf": {
+      "$ref": "model-common.schema.json#/$defs/input_leaf"
+    },
+    "non_tensor_value": {
+      "$ref": "model-common.schema.json#/$defs/non_tensor_value"
+    },
+    "output_signature": {
+      "$ref": "model-common.schema.json#/$defs/output_signature"
+    },
+    "output_leaf": {
+      "$ref": "model-common.schema.json#/$defs/output_leaf"
+    },
+    "input_kind": {
+      "$ref": "model-common.schema.json#/$defs/input_kind"
+    },
+    "observed": {
+      "$ref": "model-common.schema.json#/$defs/observed"
+    },
+    "mode_array": {
+      "$ref": "model-common.schema.json#/$defs/mode_array"
+    },
+    "mode_run": {
+      "$ref": "model-common.schema.json#/$defs/mode_run"
+    },
+    "modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "meaningful_modes",
+        "per_mode_run",
+        "train_eval_divergence",
+        "divergence_evidence"
+      ],
+      "properties": {
+        "meaningful_modes": {
+          "$ref": "#/$defs/mode_array",
+          "description": "Mandatory meaningful modes."
+        },
+        "per_mode_run": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "train": {
+              "$ref": "#/$defs/mode_run",
+              "description": "Best-effort train."
+            },
+            "eval": {
+              "$ref": "#/$defs/mode_run",
+              "description": "Best-effort eval."
+            }
+          },
+          "description": "Mandatory per mode run."
+        },
+        "train_eval_divergence": {
+          "enum": [
+            "none",
+            "statistical",
+            "structural",
+            "unverifiable",
+            "not-applicable"
+          ],
+          "description": "Mandatory train eval divergence."
+        },
+        "divergence_evidence": {
+          "type": "string",
+          "description": "Mandatory divergence evidence."
+        }
+      }
+    },
+    "fidelity": {
+      "$ref": "model-common.schema.json#/$defs/fidelity"
+    },
+    "accuracy_gate": {
+      "$ref": "model-common.schema.json#/$defs/accuracy_gate"
+    },
+    "execution": {
+      "$ref": "model-common.schema.json#/$defs/execution"
+    },
+    "failure_stage": {
+      "$ref": "model-common.schema.json#/$defs/failure_stage"
+    },
+    "status_code": {
+      "$ref": "model-common.schema.json#/$defs/status_code"
+    },
+    "retry_counts": {
+      "$ref": "model-common.schema.json#/$defs/retry_counts"
+    },
+    "human_review": {
+      "$ref": "model-common.schema.json#/$defs/human_review"
+    },
+    "status": {
+      "$ref": "model-common.schema.json#/$defs/status"
+    },
+    "provenance": {
+      "$ref": "model-common.schema.json#/$defs/provenance"
+    },
+    "budget": {
+      "$ref": "model-common.schema.json#/$defs/budget"
+    },
+    "family_variant_derivation": {
+      "$ref": "model-common.schema.json#/$defs/family_variant_derivation"
+    },
+    "completeness": {
+      "$ref": "model-common.schema.json#/$defs/completeness"
+    },
+    "dependency_vector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intake_snapshot_id",
+        "intake_snapshot_sha256",
+        "intake_item_sha256",
+        "author_result_schema_identity",
+        "author_dispatcher_identity",
+        "author_prompt_identity",
+        "checker_prompt_identity",
+        "terminal_rule_identity",
+        "status_proof_identity",
+        "source_manifest_identity",
+        "proposal_identity",
+        "author_result_identity",
+        "checker_gate_identity",
+        "recipe_revision",
+        "runner_identity",
+        "award_closure_identity",
+        "environment_generation",
+        "artifact_transaction_id",
+        "representative_revision",
+        "publication_policy_identity",
+        "accepted_attempt_ids",
+        "artifact_claim_ids"
+      ],
+      "properties": {
+        "intake_snapshot_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis intake_snapshot_id."
+        },
+        "intake_snapshot_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis intake_snapshot_sha256."
+        },
+        "intake_item_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis intake_item_sha256."
+        },
+        "author_result_schema_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis author_result_schema_identity."
+        },
+        "author_dispatcher_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis author_dispatcher_identity."
+        },
+        "author_prompt_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis author_prompt_identity."
+        },
+        "checker_prompt_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis checker_prompt_identity."
+        },
+        "terminal_rule_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis terminal_rule_identity."
+        },
+        "status_proof_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis status_proof_identity."
+        },
+        "source_manifest_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis source_manifest_identity."
+        },
+        "proposal_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis proposal_identity."
+        },
+        "author_result_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis author_result_identity."
+        },
+        "checker_gate_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis checker_gate_identity."
+        },
+        "recipe_revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis recipe_revision."
+        },
+        "runner_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis runner_identity."
+        },
+        "award_closure_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis award_closure_identity."
+        },
+        "environment_generation": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis environment_generation."
+        },
+        "artifact_transaction_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis artifact_transaction_id."
+        },
+        "representative_revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis representative_revision."
+        },
+        "publication_policy_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact identity or typed state for dependency axis publication_policy_identity."
+        },
+        "accepted_attempt_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonempty_string"
+          },
+          "uniqueItems": true,
+          "description": "Exact accepted attempt identities participating in this revision."
+        },
+        "artifact_claim_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonempty_string"
+          },
+          "uniqueItems": true,
+          "description": "Exact artifact claims participating in this revision."
+        }
+      }
+    },
+    "artifact_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "transaction_id",
+        "committed_event_id",
+        "authorization_id",
+        "reconstruction_sha256",
+        "claim_ids"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "not-applicable",
+            "staged-private",
+            "terminal-authorized",
+            "publication-authorized",
+            "reconstruction-committed",
+            "published",
+            "private-committed"
+          ],
+          "description": "Exact artifact transaction state named by the model revision."
+        },
+        "transaction_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Deterministic artifact transaction identity or typed state."
+        },
+        "committed_event_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact committed artifact-event identity or typed state."
+        },
+        "authorization_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact reducer publication authorization identity or typed state."
+        },
+        "reconstruction_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact immutable reconstruction digest or typed state."
+        },
+        "claim_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonempty_string"
+          },
+          "uniqueItems": true,
+          "description": "Complete selected artifact claim set."
+        }
+      }
+    },
+    "family_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binding_state",
+        "representative_stable_id",
+        "representative_revision",
+        "representative_gate_id",
+        "representative_proposal_id",
+        "variant_token",
+        "template_source_revision",
+        "derivation_rule_identity"
+      ],
+      "properties": {
+        "binding_state": {
+          "enum": [
+            "ordinary",
+            "variant"
+          ],
+          "description": "Trusted intake family branch selected before record inspection."
+        },
+        "representative_stable_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Trusted representative stable identity or not-applicable state."
+        },
+        "representative_revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact representative revision or typed state."
+        },
+        "representative_gate_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact representative checker gate or typed state."
+        },
+        "representative_proposal_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact representative proposal or typed state."
+        },
+        "variant_token": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Trusted variant token or not-applicable state."
+        },
+        "template_source_revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Exact template source revision or typed state."
+        },
+        "derivation_rule_identity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "enum": [
+                "not-applicable",
+                "pending-untrusted"
+              ]
+            }
+          ],
+          "description": "Versioned family derivation closure or typed state."
+        }
+      }
+    }
+  },
+  "x-authority-ownership": {
+    "$.accuracy_gate.checker_model": "reducer-derived",
+    "$.accuracy_gate.checker_version": "reducer-derived",
+    "$.accuracy_gate.current": "reducer-derived",
+    "$.accuracy_gate.gate_id": "reducer-derived",
+    "$.accuracy_gate.prompt_sha256": "reducer-derived",
+    "$.accuracy_gate.required": "reducer-derived",
+    "$.accuracy_gate.verdict": "reducer-derived",
+    "$.accuracy_gate.vet_identity": "reducer-derived",
+    "$.artifact_authority.authorization_id": "reducer-derived",
+    "$.artifact_authority.claim_ids[]": "reducer-derived",
+    "$.artifact_authority.committed_event_id": "reducer-derived",
+    "$.artifact_authority.reconstruction_sha256": "reducer-derived",
+    "$.artifact_authority.state": "reducer-derived",
+    "$.artifact_authority.transaction_id": "reducer-derived",
+    "$.authored_metadata_state": "reducer-derived",
+    "$.budget.author_sessions_max": "reducer-derived",
+    "$.budget.author_sessions_used": "reducer-derived",
+    "$.budget.explicit_grants[]": "reducer-derived",
+    "$.budget.gate_rounds_used": "reducer-derived",
+    "$.budget.run_revisions_used": "reducer-derived",
+    "$.citation.arxiv_id": "author-gated",
+    "$.citation.authors[]": "author-gated",
+    "$.citation.bibtex": "author-gated",
+    "$.citation.doi": "author-gated",
+    "$.citation.openreview_id": "author-gated",
+    "$.citation.source_evidence_ids[]": "author-gated",
+    "$.citation.status": "author-gated",
+    "$.citation.title": "author-gated",
+    "$.citation.url": "author-gated",
+    "$.citation.venue": "author-gated",
+    "$.citation.year": "author-gated",
+    "$.completeness.accuracy_gate_current": "reducer-derived",
+    "$.completeness.evidence_coverage_complete": "reducer-derived",
+    "$.completeness.execution_current": "reducer-derived",
+    "$.completeness.family_template_valid": "reducer-derived",
+    "$.completeness.issues[]": "reducer-derived",
+    "$.completeness.mandatory_source_present": "reducer-derived",
+    "$.completeness.release_eligible": "reducer-derived",
+    "$.completeness.required_fidelity_current": "reducer-derived",
+    "$.completeness.schema_valid": "reducer-derived",
+    "$.completeness.source_read_fields_complete": "reducer-derived",
+    "$.created_at": "reducer-derived",
+    "$.dates.first_public_date": "author-gated",
+    "$.dates.first_public_date_basis": "author-gated",
+    "$.dates.year": "author-gated",
+    "$.dates.year_basis": "author-gated",
+    "$.dependency_vector.accepted_attempt_ids[]": "reducer-derived",
+    "$.dependency_vector.artifact_claim_ids[]": "reducer-derived",
+    "$.dependency_vector.artifact_transaction_id": "reducer-derived",
+    "$.dependency_vector.author_dispatcher_identity": "reducer-derived",
+    "$.dependency_vector.author_prompt_identity": "reducer-derived",
+    "$.dependency_vector.author_result_identity": "reducer-derived",
+    "$.dependency_vector.author_result_schema_identity": "reducer-derived",
+    "$.dependency_vector.award_closure_identity": "reducer-derived",
+    "$.dependency_vector.checker_gate_identity": "reducer-derived",
+    "$.dependency_vector.checker_prompt_identity": "reducer-derived",
+    "$.dependency_vector.environment_generation": "reducer-derived",
+    "$.dependency_vector.intake_item_sha256": "reducer-derived",
+    "$.dependency_vector.intake_snapshot_id": "reducer-derived",
+    "$.dependency_vector.intake_snapshot_sha256": "reducer-derived",
+    "$.dependency_vector.proposal_identity": "reducer-derived",
+    "$.dependency_vector.publication_policy_identity": "reducer-derived",
+    "$.dependency_vector.recipe_revision": "reducer-derived",
+    "$.dependency_vector.representative_revision": "reducer-derived",
+    "$.dependency_vector.runner_identity": "reducer-derived",
+    "$.dependency_vector.source_manifest_identity": "reducer-derived",
+    "$.dependency_vector.status_proof_identity": "reducer-derived",
+    "$.dependency_vector.terminal_rule_identity": "reducer-derived",
+    "$.evidence.coverage.all_agent_fields_have_support": "author-gated",
+    "$.evidence.coverage.family_grounding_complete": "author-gated",
+    "$.evidence.coverage.missing_support[]": "author-gated",
+    "$.evidence.evidence_identity": "author-gated",
+    "$.evidence.excerpts[].disposition": "author-gated",
+    "$.evidence.excerpts[].evidence_id": "author-gated",
+    "$.evidence.excerpts[].family_level": "author-gated",
+    "$.evidence.excerpts[].license_disposition": "author-gated",
+    "$.evidence.excerpts[].locator": "author-gated",
+    "$.evidence.excerpts[].source_id": "author-gated",
+    "$.evidence.excerpts[].supports[]": "author-gated",
+    "$.evidence.excerpts[].text": "author-gated",
+    "$.evidence.excerpts[].text_sha256": "author-gated",
+    "$.evidence.family_grounding_path": "author-gated",
+    "$.execution.accepted_attempt_ids[]": "reducer-derived",
+    "$.execution.checkpoint_accessed": "reducer-derived",
+    "$.execution.confirmation_policy": "reducer-derived",
+    "$.execution.current": "reducer-derived",
+    "$.execution.env_generation": "reducer-derived",
+    "$.execution.environment_id": "reducer-derived",
+    "$.execution.execution_identity": "reducer-derived",
+    "$.execution.last_verified_at": "reducer-derived",
+    "$.execution.network_attempted": "reducer-derived",
+    "$.external_metadata.architecture_class[]": "author-gated",
+    "$.external_metadata.authors[]": "author-gated",
+    "$.external_metadata.citation.arxiv_id": "author-gated",
+    "$.external_metadata.citation.authors[]": "author-gated",
+    "$.external_metadata.citation.bibtex": "author-gated",
+    "$.external_metadata.citation.doi": "author-gated",
+    "$.external_metadata.citation.openreview_id": "author-gated",
+    "$.external_metadata.citation.source_evidence_ids[]": "author-gated",
+    "$.external_metadata.citation.status": "author-gated",
+    "$.external_metadata.citation.title": "author-gated",
+    "$.external_metadata.citation.url": "author-gated",
+    "$.external_metadata.citation.venue": "author-gated",
+    "$.external_metadata.citation.year": "author-gated",
+    "$.external_metadata.country": "author-gated",
+    "$.external_metadata.description": "author-gated",
+    "$.external_metadata.domain[]": "author-gated",
+    "$.external_metadata.era": "author-gated",
+    "$.external_metadata.family": "author-gated",
+    "$.external_metadata.field": "author-gated",
+    "$.external_metadata.institution[]": "author-gated",
+    "$.external_metadata.key_contribution": "author-gated",
+    "$.external_metadata.keywords[]": "author-gated",
+    "$.external_metadata.license": "author-gated",
+    "$.external_metadata.lineage[]": "author-gated",
+    "$.external_metadata.modality[]": "author-gated",
+    "$.external_metadata.modes.meaningful_modes[]": "author-gated",
+    "$.external_metadata.modes.train_eval_divergence": "author-gated",
+    "$.external_metadata.original_framework": "author-gated",
+    "$.external_metadata.paradigm[]": "author-gated",
+    "$.external_metadata.predecessors[]": "author-gated",
+    "$.external_metadata.run_framework": "author-gated",
+    "$.external_metadata.subfield": "author-gated",
+    "$.external_metadata.tags[]": "author-gated",
+    "$.external_metadata.task[]": "author-gated",
+    "$.external_metadata.venue": "author-gated",
+    "$.external_metadata.year": "author-gated",
+    "$.family_authority.binding_state": "trusted-intake",
+    "$.family_authority.derivation_rule_identity": "trusted-intake",
+    "$.family_authority.representative_gate_id": "trusted-intake",
+    "$.family_authority.representative_proposal_id": "trusted-intake",
+    "$.family_authority.representative_revision": "trusted-intake",
+    "$.family_authority.representative_stable_id": "trusted-intake",
+    "$.family_authority.template_source_revision": "trusted-intake",
+    "$.family_authority.variant_token": "trusted-intake",
+    "$.family_variant_derivation.allowed_input_delta": "reducer-derived",
+    "$.family_variant_derivation.allowed_recipe_delta.new_value": "reducer-derived",
+    "$.family_variant_derivation.allowed_recipe_delta.path[]": "reducer-derived",
+    "$.family_variant_derivation.allowed_recipe_delta.previous_value": "reducer-derived",
+    "$.family_variant_derivation.representative_library_recipe.artifact_sha256": "reducer-derived",
+    "$.family_variant_derivation.representative_library_recipe.distribution": "reducer-derived",
+    "$.family_variant_derivation.representative_library_recipe.kwargs": "reducer-derived",
+    "$.family_variant_derivation.representative_library_recipe.module": "reducer-derived",
+    "$.family_variant_derivation.representative_library_recipe.pretrained_disable_fields[]": "reducer-derived",
+    "$.family_variant_derivation.representative_library_recipe.symbol": "reducer-derived",
+    "$.family_variant_derivation.representative_library_recipe.version": "reducer-derived",
+    "$.family_variant_derivation.representative_recipe_revision": "reducer-derived",
+    "$.family_variant_derivation.selector_rule.key": "reducer-derived",
+    "$.family_variant_derivation.selector_rule.kind": "reducer-derived",
+    "$.family_variant_derivation.template_source_model_id": "reducer-derived",
+    "$.family_variant_derivation.template_source_revision": "reducer-derived",
+    "$.family_variant_derivation.variant_token": "reducer-derived",
+    "$.fidelity.current": "author-gated",
+    "$.fidelity.deviations[]": "author-gated",
+    "$.fidelity.fidelity_identity": "author-gated",
+    "$.fidelity.gate_id": "author-gated",
+    "$.fidelity.permanent_scar": "author-gated",
+    "$.fidelity.reason": "author-gated",
+    "$.fidelity.required": "author-gated",
+    "$.fidelity.verdict": "author-gated",
+    "$.flags[]": "reducer-derived",
+    "$.identity.acronym": "author-gated",
+    "$.identity.alias_of": "author-gated",
+    "$.identity.aliases[]": "author-gated",
+    "$.identity.canonical_name": "author-gated",
+    "$.identity.duplicate_of": "author-gated",
+    "$.identity.family_representative_id": "trusted-intake",
+    "$.identity.variant": "trusted-intake",
+    "$.identity.variant_scope": "trusted-intake",
+    "$.implementation.builder_symbol": "author-gated",
+    "$.implementation.code_manifest[].path": "author-gated",
+    "$.implementation.code_manifest[].sha256": "author-gated",
+    "$.implementation.code_path": "author-gated",
+    "$.implementation.code_sha256": "author-gated",
+    "$.implementation.declared_choices[].evidence_ids[]": "author-gated",
+    "$.implementation.declared_choices[].field": "author-gated",
+    "$.implementation.declared_choices[].material": "author-gated",
+    "$.implementation.declared_choices[].rationale": "author-gated",
+    "$.implementation.declared_choices[].source_status": "author-gated",
+    "$.implementation.declared_choices[].value": "author-gated",
+    "$.implementation.declared_timeout_seconds": "author-gated",
+    "$.implementation.device_policy": "author-gated",
+    "$.implementation.dummy_call_symbol": "author-gated",
+    "$.implementation.initialization.policy": "author-gated",
+    "$.implementation.initialization.pretrained_disabled": "author-gated",
+    "$.implementation.initialization.source_specified_choices[]": "author-gated",
+    "$.implementation.library_recipe.artifact_sha256": "author-gated",
+    "$.implementation.library_recipe.distribution": "author-gated",
+    "$.implementation.library_recipe.kwargs": "author-gated",
+    "$.implementation.library_recipe.module": "author-gated",
+    "$.implementation.library_recipe.pretrained_disable_fields[]": "author-gated",
+    "$.implementation.library_recipe.symbol": "author-gated",
+    "$.implementation.library_recipe.version": "author-gated",
+    "$.implementation.mode": "author-gated",
+    "$.implementation.native_call_method": "author-gated",
+    "$.implementation.native_object_type": "author-gated",
+    "$.implementation.original_framework": "author-gated",
+    "$.implementation.patches[].classification": "author-gated",
+    "$.implementation.patches[].evidence_ids[]": "author-gated",
+    "$.implementation.patches[].path": "author-gated",
+    "$.implementation.patches[].rationale": "author-gated",
+    "$.implementation.patches[].semantic": "author-gated",
+    "$.implementation.patches[].sha256": "author-gated",
+    "$.implementation.recipe_revision": "author-gated",
+    "$.implementation.recipe_type": "author-gated",
+    "$.implementation.required_construct_asset": "author-gated",
+    "$.implementation.run_framework": "author-gated",
+    "$.implementation.source_to_code_map[].code_locator": "author-gated",
+    "$.implementation.source_to_code_map[].code_path": "author-gated",
+    "$.implementation.source_to_code_map[].disposition": "author-gated",
+    "$.implementation.source_to_code_map[].evidence_ids[]": "author-gated",
+    "$.implementation.source_to_code_map[].material_item": "author-gated",
+    "$.implementation.source_to_code_map[].source_id": "author-gated",
+    "$.implementation.source_to_code_map[].source_locator": "author-gated",
+    "$.implementation.torchlens_import_static_check": "author-gated",
+    "$.implementation.transparent_forward_adapter": "author-gated",
+    "$.implementation.upstream_files[].path": "author-gated",
+    "$.implementation.upstream_files[].sha256": "author-gated",
+    "$.implementation.upstream_files[].source_id": "author-gated",
+    "$.implementation.upstream_files[].use": "author-gated",
+    "$.input_contract.args[].constraints[]": "author-gated",
+    "$.input_contract.args[].device_policy": "author-gated",
+    "$.input_contract.args[].distribution": "author-gated",
+    "$.input_contract.args[].dtype": "author-gated",
+    "$.input_contract.args[].kind": "author-gated",
+    "$.input_contract.args[].path": "author-gated",
+    "$.input_contract.args[].semantic_role": "author-gated",
+    "$.input_contract.args[].shape[]": "author-gated",
+    "$.input_contract.args[].source_evidence_ids[]": "author-gated",
+    "$.input_contract.builder_symbol": "author-gated",
+    "$.input_contract.expected_output_semantics": "author-gated",
+    "$.input_contract.kwargs[].constraints[]": "author-gated",
+    "$.input_contract.kwargs[].device_policy": "author-gated",
+    "$.input_contract.kwargs[].distribution": "author-gated",
+    "$.input_contract.kwargs[].dtype": "author-gated",
+    "$.input_contract.kwargs[].kind": "author-gated",
+    "$.input_contract.kwargs[].path": "author-gated",
+    "$.input_contract.kwargs[].semantic_role": "author-gated",
+    "$.input_contract.kwargs[].shape[]": "author-gated",
+    "$.input_contract.kwargs[].source_evidence_ids[]": "author-gated",
+    "$.input_contract.masks_state_and_control[]": "author-gated",
+    "$.input_contract.non_tensor_values[].constraints[]": "author-gated",
+    "$.input_contract.non_tensor_values[].path": "author-gated",
+    "$.input_contract.non_tensor_values[].semantic_role": "author-gated",
+    "$.input_contract.non_tensor_values[].source_evidence_ids[]": "author-gated",
+    "$.input_contract.non_tensor_values[].type": "author-gated",
+    "$.input_contract.non_tensor_values[].value": "author-gated",
+    "$.input_contract.seed": "author-gated",
+    "$.input_contract.semantic_description": "author-gated",
+    "$.input_contract.smallest_valid_probe_rationale": "author-gated",
+    "$.input_contract.source_basis[]": "author-gated",
+    "$.intake.discovery_sources[]": "untrusted-history",
+    "$.intake.legacy_claims_untrusted": "untrusted-history",
+    "$.intake.legacy_module_sha256": "untrusted-history",
+    "$.intake.legacy_recipe_sha256": "untrusted-history",
+    "$.intake.legacy_row_sha256": "untrusted-history",
+    "$.intake.preserved_legacy_flags[]": "untrusted-history",
+    "$.intake.snapshot_id": "trusted-intake",
+    "$.intake.snapshot_sha256": "trusted-intake",
+    "$.licenses.code.evidence_ids[]": "author-gated",
+    "$.licenses.code.locator": "author-gated",
+    "$.licenses.code.source_id": "author-gated",
+    "$.licenses.code.spdx": "author-gated",
+    "$.licenses.code.status": "author-gated",
+    "$.licenses.data.evidence_ids[]": "author-gated",
+    "$.licenses.data.source_id": "author-gated",
+    "$.licenses.data.spdx": "author-gated",
+    "$.licenses.data.status": "author-gated",
+    "$.licenses.paper_text.source_id": "author-gated",
+    "$.licenses.paper_text.status": "author-gated",
+    "$.licenses.redistribution_class": "author-gated",
+    "$.licenses.source_dispositions[].evidence_ids[]": "author-gated",
+    "$.licenses.source_dispositions[].locator": "author-gated",
+    "$.licenses.source_dispositions[].source_id": "author-gated",
+    "$.licenses.source_dispositions[].spdx": "author-gated",
+    "$.licenses.source_dispositions[].status": "author-gated",
+    "$.licenses.weights.status": "author-gated",
+    "$.modes.divergence_evidence": "reducer-derived",
+    "$.modes.meaningful_modes[]": "author-gated",
+    "$.modes.per_mode_run.eval.attempt_id": "reducer-derived",
+    "$.modes.per_mode_run.eval.status": "reducer-derived",
+    "$.modes.per_mode_run.train.attempt_id": "reducer-derived",
+    "$.modes.per_mode_run.train.status": "reducer-derived",
+    "$.modes.train_eval_divergence": "reducer-derived",
+    "$.notes": "untrusted-history",
+    "$.observed.constructor_seconds": "worker-observed",
+    "$.observed.delegated_method": "worker-observed",
+    "$.observed.forward_seconds": "worker-observed",
+    "$.observed.input_asset": "worker-observed",
+    "$.observed.input_kind": "worker-observed",
+    "$.observed.input_note": "worker-observed",
+    "$.observed.measurement_attempt_ids[]": "worker-observed",
+    "$.observed.native_framework": "worker-observed",
+    "$.observed.output_signature.leaves[].device": "worker-observed",
+    "$.observed.output_signature.leaves[].dtype": "worker-observed",
+    "$.observed.output_signature.leaves[].kind": "worker-observed",
+    "$.observed.output_signature.leaves[].path": "worker-observed",
+    "$.observed.output_signature.leaves[].python_type": "worker-observed",
+    "$.observed.output_signature.leaves[].shape[]": "worker-observed",
+    "$.observed.output_signature.tree": "worker-observed",
+    "$.observed.parameter_count_total": "worker-observed",
+    "$.observed.parameter_count_trainable": "worker-observed",
+    "$.observed.peak_rss_bytes": "worker-observed",
+    "$.observed.snippet": "worker-observed",
+    "$.observed.snippet_sha256": "worker-observed",
+    "$.parent_revision": "reducer-derived",
+    "$.people_and_origin.authors[]": "author-gated",
+    "$.people_and_origin.country_basis": "author-gated",
+    "$.people_and_origin.country_confidence": "author-gated",
+    "$.people_and_origin.country_note": "author-gated",
+    "$.people_and_origin.institutions[]": "author-gated",
+    "$.people_and_origin.labs[]": "author-gated",
+    "$.people_and_origin.origin_countries[]": "author-gated",
+    "$.provenance.author_model": "reducer-derived",
+    "$.provenance.author_prompt_sha256": "reducer-derived",
+    "$.provenance.author_version": "reducer-derived",
+    "$.provenance.checker_model": "reducer-derived",
+    "$.provenance.checker_version": "reducer-derived",
+    "$.provenance.machine_id": "reducer-derived",
+    "$.provenance.producer_run_id": "reducer-derived",
+    "$.record_revision": "reducer-derived",
+    "$.record_seq": "reducer-derived",
+    "$.revised_by.actor": "reducer-derived",
+    "$.revised_by.model": "reducer-derived",
+    "$.revised_by.version": "reducer-derived",
+    "$.scar_history[]": "untrusted-history",
+    "$.schema_version": "reducer-derived",
+    "$.source_resolution.attempted_rungs[].evidence_ids[]": "author-gated",
+    "$.source_resolution.attempted_rungs[].reason_code": "author-gated",
+    "$.source_resolution.attempted_rungs[].result": "author-gated",
+    "$.source_resolution.attempted_rungs[].rung": "author-gated",
+    "$.source_resolution.decision": "author-gated",
+    "$.source_resolution.mandatory_link_status": "author-gated",
+    "$.source_resolution.primary_source_id": "author-gated",
+    "$.source_resolution.rung": "author-gated",
+    "$.source_resolution.rung_evidence": "author-gated",
+    "$.source_resolution.search_report.archives_checked[]": "author-gated",
+    "$.source_resolution.search_report.conclusion": "author-gated",
+    "$.source_resolution.search_report.finished_at": "author-gated",
+    "$.source_resolution.search_report.languages_checked[]": "author-gated",
+    "$.source_resolution.search_report.links_checked[]": "author-gated",
+    "$.source_resolution.search_report.places_checked[]": "author-gated",
+    "$.source_resolution.search_report.queries[]": "author-gated",
+    "$.source_resolution.search_report.started_at": "author-gated",
+    "$.source_resolution.searched_at": "author-gated",
+    "$.source_resolution.sources[].byte_count": "author-gated",
+    "$.source_resolution.sources[].content_sha256": "author-gated",
+    "$.source_resolution.sources[].fetch_recipe": "author-gated",
+    "$.source_resolution.sources[].kind": "author-gated",
+    "$.source_resolution.sources[].locator": "author-gated",
+    "$.source_resolution.sources[].media_type": "author-gated",
+    "$.source_resolution.sources[].mirror_class": "author-gated",
+    "$.source_resolution.sources[].mirror_digest": "author-gated",
+    "$.source_resolution.sources[].retrieved_at": "author-gated",
+    "$.source_resolution.sources[].revision": "author-gated",
+    "$.source_resolution.sources[].revision_kind": "author-gated",
+    "$.source_resolution.sources[].role": "author-gated",
+    "$.source_resolution.sources[].source_id": "author-gated",
+    "$.source_resolution.sources[].url": "author-gated",
+    "$.source_resolution.sufficiency_gap": "author-gated",
+    "$.stable_id": "trusted-intake",
+    "$.status.attempt_ids[]": "reducer-derived",
+    "$.status.attempted_rungs[]": "reducer-derived",
+    "$.status.code": "reducer-derived",
+    "$.status.detail": "reducer-derived",
+    "$.status.environment": "reducer-derived",
+    "$.status.human_review.queue": "reducer-derived",
+    "$.status.human_review.reason": "reducer-derived",
+    "$.status.human_review.requested_at": "reducer-derived",
+    "$.status.human_review.required": "reducer-derived",
+    "$.status.kind": "reducer-derived",
+    "$.status.no_traceback_reason": "reducer-derived",
+    "$.status.reason_code": "reducer-derived",
+    "$.status.retries.author": "reducer-derived",
+    "$.status.retries.constructor": "reducer-derived",
+    "$.status.retries.environment": "reducer-derived",
+    "$.status.retries.evidence": "reducer-derived",
+    "$.status.retries.fetch": "reducer-derived",
+    "$.status.retries.fidelity": "reducer-derived",
+    "$.status.retries.forward": "reducer-derived",
+    "$.status.retries.gate": "reducer-derived",
+    "$.status.retries.import": "reducer-derived",
+    "$.status.retries.input": "reducer-derived",
+    "$.status.retries.source": "reducer-derived",
+    "$.status.root_cause_fingerprint": "reducer-derived",
+    "$.status.stage": "reducer-derived",
+    "$.status.supersedes_revision": "reducer-derived",
+    "$.status.timestamp": "reducer-derived",
+    "$.status.traceback.content_sha256": "reducer-derived",
+    "$.status.traceback.diagnostic_key": "reducer-derived",
+    "$.status.traceback.local_path": "reducer-derived",
+    "$.status.traceback.redaction": "reducer-derived",
+    "$.status.traceback.stream_sha256": "reducer-derived",
+    "$.taxonomy.architecture_tags[]": "author-gated",
+    "$.taxonomy.domains[]": "author-gated",
+    "$.taxonomy.era": "author-gated",
+    "$.taxonomy.family": "author-gated",
+    "$.taxonomy.modalities[]": "author-gated",
+    "$.taxonomy.novel_ops[]": "author-gated",
+    "$.taxonomy.tasks[]": "author-gated",
+    "$.untrusted_attempt.proposal": "untrusted-history",
+    "$.untrusted_attempt.proposal_sha256": "untrusted-history",
+    "$.website.description": "author-gated",
+    "$.website.family_grounding_id": "author-gated",
+    "$.website.key_contribution": "author-gated",
+    "$.website.kind": "author-gated",
+    "$.website.tagline": "author-gated",
+    "$.website.template_hash": "author-gated",
+    "$.website.template_source_model_id": "author-gated",
+    "$.website.variant_parameter_input_line": "author-gated",
+    "$.website.voice_version": "author-gated"
+  }
+}

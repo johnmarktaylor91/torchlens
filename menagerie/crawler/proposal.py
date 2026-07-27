@@ -1,0 +1,2196 @@
+"""Staged author-proposal validation and deterministic anti-slop gates."""
+
+from __future__ import annotations
+
+import ast
+import hashlib
+import re
+import tarfile
+import zipfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Iterable, Mapping, Optional, Sequence, Union
+
+from menagerie.crawler.constants import AUTHOR_PROPOSAL_SCHEMA_VERSION_V3, SourceRung
+from menagerie.crawler.evidence import (
+    EvidenceValidationError,
+    evidence_ids,
+    fetched_sources_for_checked_links,
+    validate_evidence,
+)
+from menagerie.crawler.fetcher import cas_path as source_cas_path
+from menagerie.crawler.identity import hash_bytes
+from menagerie.crawler.metadata import MANDATORY_EXTERNAL_FIELDS
+from menagerie.crawler.recipe import RecipeError, validate_pretrained_disable_fields
+from menagerie.crawler.schema import (
+    PayloadValidationError,
+    RequiredFieldProjection,
+    SchemaOwner,
+    required_field_projection_spec,
+    validate_payload,
+)
+
+DEFAULT_GATED_CLAIMS = frozenset(
+    {f"external_metadata.{field}" for field in MANDATORY_EXTERNAL_FIELDS if field != "keywords"}
+    | {
+        "external_metadata.description",
+        "source_resolution.rung",
+        "taxonomy",
+        "input_contract",
+    }
+)
+VERIFIED_HASH_CODE_MANIFEST_KEY = "code_manifest"
+_AUTHOR_VERIFIED_HASH_SPEC = required_field_projection_spec(
+    RequiredFieldProjection.AUTHOR_PROPOSAL_VERIFIED_HASH
+)
+_AUTHOR_VERIFIED_HASH_KEYS = _AUTHOR_VERIFIED_HASH_SPEC.names_for(SchemaOwner.REDUCER_DERIVED)
+VERIFIED_HASH_COMMON_KEYS = frozenset(
+    key for key in _AUTHOR_VERIFIED_HASH_KEYS if key != VERIFIED_HASH_CODE_MANIFEST_KEY
+)
+_GATE_VERIFIED_HASH_SPEC = required_field_projection_spec(
+    RequiredFieldProjection.GATE_VERIFIED_HASH
+)
+VERIFIED_HASH_PROPOSAL_KEY = _GATE_VERIFIED_HASH_SPEC.field_order[-1]
+_FORBIDDEN_CALLS = frozenset({"eval", "exec", "compile"})
+_SLOP_PATTERNS = (
+    r"\bcompact\s+(?:stand[- ]?in|substitute|approximation|version)\b",
+    r"\bgeneric\s+(?:stand[- ]?in|substitute|implementation|version)\b",
+    r"\b(?:knowingly\s+)?simplif(?:ied|ication)\b",
+    r"\b(?:rough(?:ly)?\s+)?approximat(?:e|ed|ion)\b",
+    r"\btoy\s+(?:model|implementation|version|replica|example)\b",
+    r"\b(?:stand[- ]?in|placeholder|mock|surrogate|proxy)\b",
+    r"\b(?:minimal|lightweight|reduced)\s+(?:facsimile|imitation|replica|substitute)\b",
+    r"\brepresentative\s+(?:approximation|substitute|implementation)\b",
+)
+_SUPPORT_ALIASES = {
+    "citation": "external_metadata.citation",
+    "country": "external_metadata.country",
+    "license": "external_metadata.license",
+    "year": "external_metadata.year",
+}
+_GENERIC_MODEL_CALLS = frozenset(
+    {
+        "AdaptiveAvgPool1d",
+        "AdaptiveAvgPool2d",
+        "AvgPool1d",
+        "AvgPool2d",
+        "BatchNorm1d",
+        "BatchNorm2d",
+        "Conv1d",
+        "Conv2d",
+        "Dropout",
+        "Flatten",
+        "GELU",
+        "LayerNorm",
+        "Linear",
+        "MaxPool1d",
+        "MaxPool2d",
+        "ReLU",
+        "Sequential",
+        "Sigmoid",
+        "Softmax",
+        "Tanh",
+    }
+)
+_GENERIC_FAMILY_NAMES = frozenset(
+    {"feedforward", "mlp", "multilayer perceptron", "sequential", "simple neural network"}
+)
+_SUPPORT_STOPWORDS = frozenset(
+    {
+        "about",
+        "after",
+        "also",
+        "architecture",
+        "based",
+        "from",
+        "into",
+        "model",
+        "network",
+        "source",
+        "that",
+        "their",
+        "this",
+        "using",
+        "with",
+    }
+)
+_WRITE_METHODS = frozenset(
+    {"write_text", "write_bytes", "touch", "mkdir", "rename", "replace", "unlink", "rmdir"}
+)
+_IMPLEMENTATION_SOURCE_SUFFIXES = frozenset(
+    {
+        ".c",
+        ".cc",
+        ".cpp",
+        ".cu",
+        ".cuh",
+        ".cxx",
+        ".go",
+        ".h",
+        ".hh",
+        ".hpp",
+        ".hxx",
+        ".ipynb",
+        ".java",
+        ".jl",
+        ".js",
+        ".kt",
+        ".lua",
+        ".m",
+        ".mm",
+        ".py",
+        ".pyx",
+        ".r",
+        ".rs",
+        ".scala",
+        ".swift",
+        ".ts",
+    }
+)
+_NON_IMPLEMENTATION_CODE_NAMES = frozenset(
+    {
+        "__init__.py",
+        "conftest.py",
+        "setup.py",
+        "version.py",
+    }
+)
+_NON_IMPLEMENTATION_SOURCE_STEMS = frozenset({"metric", "metrics", "plot", "plots", "plotting"})
+_NON_IMPLEMENTATION_SOURCE_DIRS = frozenset({".github", "ci", "doc", "docs", "test", "tests"})
+_MODEL_ENTRY_METHODS = frozenset({"__call__", "apply", "call", "forward"})
+_MAX_STREAM_INVENTORY_BYTES = 64 * 1024**2
+
+
+@dataclass(frozen=True)
+class _InventoryMember:
+    """One implementation-role archive member and its structural links."""
+
+    name: str
+    text: str
+    linked: bool
+    structured: bool
+    defined_symbols: frozenset[str]
+    referenced_symbols: frozenset[str]
+    imported_modules: frozenset[str]
+
+
+class ProposalValidationError(ValueError):
+    """Raised when a staged proposal fails schema, grounding, or anti-slop checks."""
+
+
+@dataclass(frozen=True)
+class ProposalValidationReport:
+    """Summary of a fully validated staged proposal.
+
+    Parameters
+    ----------
+    stable_id:
+        Validated model identity.
+    rung:
+        Validated source-ladder rung.
+    code_path:
+        Validated staged code path, if applicable.
+    supported_claims:
+        Claim categories backed by literal excerpts.
+    """
+
+    stable_id: str
+    rung: SourceRung
+    code_path: Optional[Path]
+    supported_claims: frozenset[str]
+
+
+def validate_author_proposal(
+    proposal: Mapping[str, Any],
+    *,
+    allowed_model_dir: Union[str, Path],
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+    required_claims: Optional[Iterable[str]] = None,
+    cas_root: Union[str, Path, None] = None,
+    expected_schema_version: str = AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
+) -> ProposalValidationReport:
+    """Validate one complete author proposal without modifying it.
+
+    Parameters
+    ----------
+    proposal:
+        Complete ``author-proposal.v3`` object.
+    allowed_model_dir:
+        Only directory in which staged typed code may reside or write.
+    source_manifest:
+        Exact controlled-fetch source manifests.
+    required_claims:
+        Optional gated claim categories. The default enforces the plan's core
+        externally-authored categories.
+    cas_root:
+        Optional source CAS root.
+    expected_schema_version:
+        Exact current proposal discriminator required by the caller.
+
+    Returns
+    -------
+    ProposalValidationReport
+        Immutable validation summary.
+
+    Raises
+    ------
+    ProposalValidationError
+        If schema, evidence, code, rung, link, or anti-slop validation fails.
+    """
+
+    try:
+        validate_payload(proposal, expected_schema_version)
+    except PayloadValidationError as exc:
+        raise ProposalValidationError(str(exc)) from exc
+    _validate_verified_hash_keys(proposal)
+    facts = _mapping(proposal.get("proposed_facts"), "proposed_facts")
+    resolution = _mapping(facts.get("source_resolution"), "source_resolution")
+    try:
+        rung = SourceRung(str(resolution.get("rung")))
+    except ValueError as exc:
+        raise ProposalValidationError("source_resolution.rung is not canonical") from exc
+    _validate_mandatory_source_link(resolution)
+    _validate_description(facts)
+    evidence = _mapping(facts.get("evidence"), "evidence")
+    claims = set(required_claims if required_claims is not None else DEFAULT_GATED_CLAIMS)
+    if _citation_is_present(facts):
+        claims.add("external_metadata.citation")
+    try:
+        evidence_report = validate_evidence(
+            evidence,
+            source_manifest,
+            claims,
+            cas_root=cas_root,
+            require_family_grounding=True,
+        )
+    except EvidenceValidationError as exc:
+        raise ProposalValidationError(str(exc)) from exc
+    _validate_claim_support(facts, evidence, claims)
+    known_evidence = evidence_ids(evidence)
+    _validate_citation(facts, known_evidence)
+    _validate_citation_consistency(facts)
+    implementation = _mapping(facts.get("implementation"), "implementation")
+    allowed_dir = Path(allowed_model_dir).resolve()
+    _validate_author_read_grants(facts, allowed_dir)
+    code_path = _validate_code(implementation, rung, allowed_dir)
+    _validate_source_ladder(
+        rung,
+        facts,
+        resolution,
+        implementation,
+        evidence,
+        known_evidence,
+        source_manifest,
+        cas_root,
+    )
+    code_paths = resolve_model_code_closure(code_path, allowed_dir) if code_path is not None else ()
+    _validate_structural_slop(facts, code_paths)
+    _validate_anti_slop(facts)
+    return ProposalValidationReport(
+        stable_id=str(proposal["stable_id"]),
+        rung=rung,
+        code_path=code_path,
+        supported_claims=evidence_report.supported_claims,
+    )
+
+
+def required_verified_hash_keys(
+    proposal: Mapping[str, Any], *, include_proposal: bool = False
+) -> frozenset[str]:
+    """Return the exact verified-hash keys required for a proposal type.
+
+    Parameters
+    ----------
+    proposal:
+        Proposal whose implementation determines whether recursive model code
+        must be bound.
+    include_proposal:
+        Whether to include the checker-only digest of the complete proposal.
+
+    Returns
+    -------
+    frozenset[str]
+        Exact key set for a declarative or typed proposal binding.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the proposal does not expose an unambiguous implementation type.
+    """
+
+    facts = proposal.get("proposed_facts")
+    implementation = facts.get("implementation") if isinstance(facts, Mapping) else None
+    if not isinstance(implementation, Mapping):
+        raise ProposalValidationError("proposal implementation is incomplete")
+    code_path = implementation.get("code_path")
+    if code_path is not None and (not isinstance(code_path, str) or not code_path.strip()):
+        raise ProposalValidationError("implementation.code_path must be null or non-empty")
+    keys = set(VERIFIED_HASH_COMMON_KEYS)
+    if isinstance(code_path, str):
+        keys.add(VERIFIED_HASH_CODE_MANIFEST_KEY)
+    if include_proposal:
+        keys.add(VERIFIED_HASH_PROPOSAL_KEY)
+    return frozenset(keys)
+
+
+def _validate_verified_hash_keys(proposal: Mapping[str, Any]) -> None:
+    """Validate the proposal-side exact verified-hash key binding.
+
+    Parameters
+    ----------
+    proposal:
+        Complete author proposal.
+
+    Raises
+    ------
+    ProposalValidationError
+        If typed code lacks a recursive manifest digest or declarative code
+        carries one.
+    """
+
+    verified_hashes = proposal.get("verified_hashes")
+    required_keys = required_verified_hash_keys(proposal)
+    if not isinstance(verified_hashes, Mapping) or set(verified_hashes) != required_keys:
+        raise ProposalValidationError(
+            "verified_hashes must bind the exact declarative or typed proposal artifact pack"
+        )
+
+
+def _validate_mandatory_source_link(resolution: Mapping[str, Any]) -> None:
+    """Validate the public primary-link invariant.
+
+    Parameters
+    ----------
+    resolution:
+        Source-resolution block.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the primary source link is absent or inconsistent.
+    """
+
+    if resolution.get("mandatory_link_status") != "ok":
+        raise ProposalValidationError("mandatory source link is not satisfied")
+    primary_id = resolution.get("primary_source_id")
+    sources = resolution.get("sources")
+    if not isinstance(primary_id, str) or not primary_id or not isinstance(sources, list):
+        raise ProposalValidationError("primary source identity is missing")
+    primary = next(
+        (
+            source
+            for source in sources
+            if isinstance(source, Mapping) and source.get("source_id") == primary_id
+        ),
+        None,
+    )
+    if primary is None:
+        raise ProposalValidationError("primary_source_id does not name a declared source")
+    url = primary.get("url")
+    if not isinstance(url, str) or not url.startswith(("https://", "http://")):
+        raise ProposalValidationError("primary source must have an exact public URL")
+
+
+def _validate_description(facts: Mapping[str, Any]) -> None:
+    """Reject absent or whitespace-only authored descriptions.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Raises
+    ------
+    ProposalValidationError
+        If external or website description is empty.
+    """
+
+    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
+    website = _mapping(facts.get("website"), "website")
+    for field, value in (
+        ("external_metadata.description", metadata.get("description")),
+        ("website.description", website.get("description")),
+    ):
+        if not isinstance(value, str) or not value.strip():
+            raise ProposalValidationError(f"{field} must be non-empty")
+
+
+def _citation_is_present(facts: Mapping[str, Any]) -> bool:
+    """Return whether the proposal asserts an introducing citation.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Returns
+    -------
+    bool
+        True for a present citation.
+    """
+
+    citation = facts.get("citation")
+    return isinstance(citation, Mapping) and citation.get("status") == "present"
+
+
+def _validate_citation(facts: Mapping[str, Any], known_evidence: frozenset[str]) -> None:
+    """Reject fabricated or evidence-free citation claims.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+    known_evidence:
+        Literal evidence identifiers.
+
+    Raises
+    ------
+    ProposalValidationError
+        If a present citation lacks a source, identity, or valid evidence.
+    """
+
+    citation = _mapping(facts.get("citation"), "citation")
+    if citation.get("status") != "present":
+        return
+    if not all(
+        isinstance(citation.get(field), str) and str(citation[field]).strip()
+        for field in ("title", "url")
+    ):
+        raise ProposalValidationError("present citation must name a title and public URL")
+    cited_ids = citation.get("source_evidence_ids")
+    if not isinstance(cited_ids, list) or not cited_ids or not set(cited_ids) <= known_evidence:
+        raise ProposalValidationError("citation references missing or fabricated evidence")
+
+
+def _validate_citation_consistency(facts: Mapping[str, Any]) -> None:
+    """Require the public citation to equal the accuracy-gated metadata citation.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the top-level and external-metadata citation blocks diverge.
+    """
+
+    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
+    external_citation = _mapping(metadata.get("citation"), "external_metadata.citation")
+    citation = _mapping(facts.get("citation"), "citation")
+    if external_citation != citation:
+        raise ProposalValidationError(
+            "top-level citation differs from accuracy-checked external_metadata.citation"
+        )
+
+
+def _validate_claim_support(
+    facts: Mapping[str, Any], evidence: Mapping[str, Any], required_claims: Iterable[str]
+) -> None:
+    """Verify that each evidence label is substantively bound to its proposed value.
+
+    Parameters
+    ----------
+    facts:
+        Complete proposed fact tree.
+    evidence:
+        Literal evidence block already verified against source bytes.
+    required_claims:
+        Claim paths requiring deterministic content support.
+
+    Raises
+    ------
+    ProposalValidationError
+        If a required label has no excerpt whose text supports the proposed value.
+    """
+
+    excerpts = evidence.get("excerpts")
+    if not isinstance(excerpts, list):
+        raise ProposalValidationError("evidence.excerpts must be a list")
+    support_texts: dict[str, list[str]] = {}
+    for excerpt in excerpts:
+        if not isinstance(excerpt, Mapping):
+            continue
+        text = excerpt.get("text")
+        supports = excerpt.get("supports")
+        if not isinstance(text, str) or not isinstance(supports, list):
+            continue
+        for support in supports:
+            if isinstance(support, str):
+                canonical = _SUPPORT_ALIASES.get(support, support)
+                support_texts.setdefault(canonical, []).append(text)
+
+    unsupported: list[str] = []
+    for claim in required_claims:
+        canonical = _SUPPORT_ALIASES.get(claim, claim)
+        texts = support_texts.get(canonical, [])
+        value = _claim_value(facts, canonical)
+        if not texts or not _text_supports_claim(canonical, value, "\n".join(texts)):
+            unsupported.append(canonical)
+    if unsupported:
+        raise ProposalValidationError(
+            "evidence excerpts do not substantively support claimed values: "
+            f"{sorted(set(unsupported))}"
+        )
+
+
+def _claim_value(facts: Mapping[str, Any], claim: str) -> object:
+    """Resolve a supported claim path into the proposed fact tree.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+    claim:
+        Dot-separated claim path or supported aggregate category.
+
+    Returns
+    -------
+    object
+        Proposed value for deterministic excerpt comparison.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the claim does not name a proposed value.
+    """
+
+    value: object = facts
+    for part in claim.split("."):
+        if not isinstance(value, Mapping) or part not in value:
+            raise ProposalValidationError(f"gated evidence claim does not name a fact: {claim}")
+        value = value[part]
+    return value
+
+
+def _text_supports_claim(claim: str, value: object, text: str) -> bool:
+    """Return whether literal excerpt text supports a proposed claim value.
+
+    Parameters
+    ----------
+    claim:
+        Canonical claim path.
+    value:
+        Proposed value at that path.
+    text:
+        Combined literal excerpts explicitly bound to the claim.
+
+    Returns
+    -------
+    bool
+        True when deterministic value-bearing tokens occur in the excerpt text.
+    """
+
+    normalized_text = _normalize_support_text(text)
+    if claim == "source_resolution.rung":
+        rung_terms = {
+            SourceRung.LIBRARY.value: ("library", "package", "registry", "official"),
+            SourceRung.VENDOR.value: ("upstream", "repository", "official", "source code"),
+            SourceRung.PORT.value: ("port", "translation", "source code"),
+            SourceRung.REIMPLEMENT.value: ("layer", "equation", "architecture", "forward"),
+            SourceRung.SKIP.value: ("insufficient", "unavailable", "not found", "search"),
+        }
+        return any(term in normalized_text for term in rung_terms.get(str(value), ()))
+    if value is None or value == []:
+        return True
+    if claim.endswith((".description", ".key_contribution")):
+        expected = _significant_tokens(str(value))
+        overlap = expected & set(normalized_text.split())
+        return len(overlap) >= min(2, len(expected)) if expected else False
+    if claim == "taxonomy":
+        family = value.get("family") if isinstance(value, Mapping) else None
+        if isinstance(family, str) and _normalize_support_text(family) not in normalized_text:
+            return False
+        return _matches_any_scalar(value, normalized_text, excluded={family})
+    if claim == "input_contract":
+        if not isinstance(value, Mapping):
+            return False
+        semantic_values = [
+            value.get("semantic_description"),
+            value.get("expected_output_semantics"),
+            *(
+                item.get("semantic_role")
+                for key in ("args", "kwargs", "non_tensor_values")
+                for item in value.get(key, [])
+                if isinstance(item, Mapping)
+            ),
+        ]
+        return _matches_any_scalar(semantic_values, normalized_text)
+    if claim.endswith(".citation") and isinstance(value, Mapping):
+        title = value.get("title")
+        year = value.get("year")
+        return _scalar_matches(title, normalized_text) and _scalar_matches(year, normalized_text)
+    if claim.endswith(".modes") and isinstance(value, Mapping):
+        return _matches_any_scalar(value.get("meaningful_modes"), normalized_text)
+    scalars = _positive_scalars(value)
+    return all(_scalar_matches(scalar, normalized_text) for scalar in scalars)
+
+
+def _matches_any_scalar(
+    value: object, normalized_text: str, *, excluded: set[object] | None = None
+) -> bool:
+    """Return whether any positive scalar value occurs in normalized excerpt text.
+
+    Parameters
+    ----------
+    value:
+        Nested value whose positive scalar leaves are candidates.
+    normalized_text:
+        Lowercase whitespace-normalized excerpt text.
+    excluded:
+        Optional scalar values not considered for the match.
+
+    Returns
+    -------
+    bool
+        True when at least one candidate scalar is represented.
+    """
+
+    excluded_values = excluded or set()
+    scalars = [scalar for scalar in _positive_scalars(value) if scalar not in excluded_values]
+    return not scalars or any(_scalar_matches(scalar, normalized_text) for scalar in scalars)
+
+
+def _positive_scalars(value: object) -> list[object]:
+    """Flatten positive JSON-like leaves used for evidence comparison.
+
+    Parameters
+    ----------
+    value:
+        Proposed scalar, sequence, or mapping.
+
+    Returns
+    -------
+    list[object]
+        Non-null, non-empty string and numeric leaves.
+    """
+
+    if isinstance(value, Mapping):
+        return [scalar for child in value.values() for scalar in _positive_scalars(child)]
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return [scalar for child in value for scalar in _positive_scalars(child)]
+    if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+        return [value] if str(value).strip() else []
+    return []
+
+
+def _scalar_matches(value: object, normalized_text: str) -> bool:
+    """Return whether one proposed scalar is represented in excerpt text.
+
+    Parameters
+    ----------
+    value:
+        Proposed scalar value.
+    normalized_text:
+        Lowercase whitespace-normalized excerpt text.
+
+    Returns
+    -------
+    bool
+        True when the scalar or its significant tokens occur.
+    """
+
+    if value is None:
+        return True
+    normalized_value = _normalize_support_text(str(value))
+    if not normalized_value:
+        return True
+    if f" {normalized_value} " in f" {normalized_text} ":
+        return True
+    tokens = _significant_tokens(normalized_value)
+    return bool(tokens) and tokens <= set(normalized_text.split())
+
+
+def _significant_tokens(value: str) -> set[str]:
+    """Return distinctive lowercase tokens suitable for evidence matching.
+
+    Parameters
+    ----------
+    value:
+        Proposed or excerpt text.
+
+    Returns
+    -------
+    set[str]
+        Tokens longer than three characters after generic-word removal.
+    """
+
+    return {
+        token
+        for token in _normalize_support_text(value).split()
+        if (len(token) > 3 or token.isdigit()) and token not in _SUPPORT_STOPWORDS
+    }
+
+
+def _normalize_support_text(value: str) -> str:
+    """Normalize text for conservative deterministic token comparison.
+
+    Parameters
+    ----------
+    value:
+        Text to normalize.
+
+    Returns
+    -------
+    str
+        Lowercase alphanumeric tokens separated by single spaces.
+    """
+
+    return " ".join(re.findall(r"[a-z0-9]+", value.lower()))
+
+
+def _validate_code(
+    implementation: Mapping[str, Any], rung: SourceRung, allowed_dir: Path
+) -> Optional[Path]:
+    """Validate staged typed code, path isolation, and forbidden execution APIs.
+
+    Parameters
+    ----------
+    implementation:
+        Proposed implementation block.
+    rung:
+        Selected source rung.
+    allowed_dir:
+        Resolved model sandbox directory.
+
+    Returns
+    -------
+    pathlib.Path | None
+        Resolved code path for typed-code rungs.
+
+    Raises
+    ------
+    ProposalValidationError
+        If code is missing, outside the sandbox, untyped, or unsafe.
+    """
+
+    code_value = implementation.get("code_path")
+    if rung in {SourceRung.LIBRARY, SourceRung.SKIP}:
+        if rung is SourceRung.LIBRARY and code_value is not None:
+            raise ProposalValidationError(
+                "R1_LIBRARY must use a declarative recipe, not staged code"
+            )
+        return None
+    if not isinstance(code_value, str) or not code_value.strip():
+        raise ProposalValidationError(f"{rung.value} requires a staged code_path")
+    candidate = Path(code_value)
+    if candidate.is_absolute():
+        raise ProposalValidationError(
+            "implementation.code_path escapes repository-relative proposal identity"
+        )
+    resolved = (allowed_dir / candidate).resolve()
+    if not resolved.is_relative_to(allowed_dir):
+        raise ProposalValidationError("implementation.code_path escapes the model sandbox")
+    patches = implementation.get("patches", [])
+    if not isinstance(patches, list):
+        raise ProposalValidationError("implementation.patches must be a list")
+    for patch in patches:
+        if not isinstance(patch, Mapping) or not isinstance(patch.get("path"), str):
+            raise ProposalValidationError("implementation patch requires a relative path")
+        patch_path = Path(str(patch["path"]))
+        if patch_path.is_absolute():
+            raise ProposalValidationError(
+                "implementation patch paths must be repository-relative before proposal identity"
+            )
+        if not (allowed_dir / patch_path).resolve().is_relative_to(allowed_dir):
+            raise ProposalValidationError("implementation patch path escapes the model sandbox")
+    try:
+        code = resolved.read_bytes()
+    except OSError as exc:
+        raise ProposalValidationError(f"cannot read staged code_path {resolved}: {exc}") from exc
+    expected_hash = implementation.get("code_sha256")
+    if expected_hash != hash_bytes(code):
+        raise ProposalValidationError("implementation.code_sha256 does not match staged bytes")
+    for member in resolve_model_code_closure(resolved, allowed_dir):
+        try:
+            tree = ast.parse(member.read_text(encoding="utf-8"), filename=str(member))
+        except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+            raise ProposalValidationError(
+                f"staged model-code member is not valid UTF-8 Python: {exc}"
+            ) from exc
+        _validate_typed_functions(tree)
+        _validate_calls_and_writes(tree, allowed_dir)
+    return resolved
+
+
+def _validate_author_read_grants(facts: Mapping[str, Any], allowed_dir: Path) -> None:
+    """Reject author-controlled filesystem grants before proposal acceptance.
+
+    Parameters
+    ----------
+    facts:
+        Complete authored fact tree.
+    allowed_dir:
+        Resolved model-local staging directory.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the deleted input code-path leaf is present, or a builder symbol, scalar
+        path value, or source CAS locator could grant access outside the model-local
+        regular-file boundary.
+    """
+
+    input_contract = _mapping(facts.get("input_contract"), "input_contract")
+    if "code_path" in input_contract:
+        raise ProposalValidationError("v3 input_contract forbids code_path presence")
+    builder_symbol = input_contract.get("builder_symbol")
+    if not isinstance(builder_symbol, str) or not re.fullmatch(
+        r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*", builder_symbol
+    ):
+        raise ProposalValidationError("input_contract.builder_symbol must be a dotted symbol")
+    non_tensor_values = input_contract.get("non_tensor_values")
+    if not isinstance(non_tensor_values, list):
+        raise ProposalValidationError("input_contract.non_tensor_values must be a list")
+    for leaf in non_tensor_values:
+        if not isinstance(leaf, Mapping):
+            raise ProposalValidationError("input_contract non-tensor leaf must be an object")
+        value = leaf.get("value")
+        if isinstance(value, str):
+            possible_path = Path(value)
+            if possible_path.is_absolute() or ".." in possible_path.parts:
+                raise ProposalValidationError(
+                    "input_contract.non_tensor_values cannot carry absolute or escaping paths"
+                )
+            value_type = str(leaf.get("type", "")).casefold().replace("_", "-")
+            if value_type in {"file", "file-path", "filepath", "path", "pathlib.path"}:
+                resolved_value = (allowed_dir / possible_path).resolve()
+                if not resolved_value.is_relative_to(allowed_dir) or not resolved_value.is_file():
+                    raise ProposalValidationError(
+                        "path-valued input_contract.non_tensor_values must name a model-local "
+                        "regular file"
+                    )
+    resolution = _mapping(facts.get("source_resolution"), "source_resolution")
+    sources = resolution.get("sources")
+    if not isinstance(sources, list):
+        raise ProposalValidationError("source_resolution.sources must be a list")
+    if any(isinstance(source, Mapping) and "cas_path" in source for source in sources):
+        raise ProposalValidationError(
+            "source_resolution.sources cannot carry author-controlled CAS paths"
+        )
+
+
+def resolve_model_code_closure(code_path: Path, allowed_dir: Path) -> tuple[Path, ...]:
+    """Resolve the closed recursive model-local Python import manifest.
+
+    Parameters
+    ----------
+    code_path:
+        Accepted adapter or port entry point.
+    allowed_dir:
+        Model-local root that every closure member must remain below.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Entry point and recursively imported local Python modules, sorted by
+        repository-relative path.
+
+    Raises
+    ------
+    ProposalValidationError
+        If a member escapes the model root or cannot be parsed.
+    """
+
+    root = allowed_dir.resolve()
+    entry = code_path.resolve()
+    if not entry.is_relative_to(root) or not entry.is_file():
+        raise ProposalValidationError("model-code entry point escapes the model sandbox")
+    pending = [entry]
+    members: set[Path] = set()
+    while pending:
+        member = pending.pop()
+        if member in members:
+            continue
+        try:
+            tree = ast.parse(member.read_text(encoding="utf-8"), filename=str(member))
+        except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+            raise ProposalValidationError(f"cannot resolve model-code imports: {exc}") from exc
+        members.add(member)
+        for imported in _local_import_paths(tree, member, root):
+            if imported not in members:
+                pending.append(imported)
+    return tuple(sorted(members, key=lambda path: path.relative_to(root).as_posix()))
+
+
+def model_code_manifest(code_path: Path, allowed_dir: Path) -> tuple[dict[str, str], ...]:
+    """Return the path-and-digest manifest for a closed model-code import graph.
+
+    Parameters
+    ----------
+    code_path, allowed_dir:
+        Entry point and model-local root accepted by
+        :func:`resolve_model_code_closure`.
+
+    Returns
+    -------
+    tuple[dict[str, str], ...]
+        Canonically ordered relative paths and exact byte digests.
+    """
+
+    root = allowed_dir.resolve()
+    return tuple(
+        {
+            "path": path.relative_to(root).as_posix(),
+            "sha256": hash_bytes(path.read_bytes()),
+        }
+        for path in resolve_model_code_closure(code_path, root)
+    )
+
+
+def _local_import_paths(tree: ast.AST, member: Path, root: Path) -> tuple[Path, ...]:
+    """Resolve statically named imports that refer to model-local Python files.
+
+    Parameters
+    ----------
+    tree:
+        Parsed closure member.
+    member:
+        Absolute path of that member.
+    root:
+        Closed model-local import root.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Existing local modules and package initializers referenced by the AST.
+    """
+
+    resolved: set[Path] = set()
+    for node in ast.walk(tree):
+        candidates: list[tuple[str, int]] = []
+        if isinstance(node, ast.Import):
+            candidates.extend((alias.name, 0) for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            candidates.append((module, node.level))
+            candidates.extend(
+                (
+                    f"{module}.{alias.name}" if module else alias.name,
+                    node.level,
+                )
+                for alias in node.names
+                if alias.name != "*"
+            )
+        for module, level in candidates:
+            resolved.update(_resolve_local_module(module, level, member, root))
+    return tuple(sorted(resolved, key=lambda path: path.relative_to(root).as_posix()))
+
+
+def _resolve_local_module(module: str, level: int, member: Path, root: Path) -> tuple[Path, ...]:
+    """Resolve one import name to local module/package files when present.
+
+    Parameters
+    ----------
+    module, level:
+        Static import name and relative-import level from the AST.
+    member:
+        Importing closure member.
+    root:
+        Closed model-local root.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Package initializer chain plus the imported module, or an empty tuple
+        for an external dependency.
+    """
+
+    if level:
+        base = member.parent
+        for _ in range(level - 1):
+            base = base.parent
+        if not base.is_relative_to(root):
+            raise ProposalValidationError("relative model-code import escapes the model sandbox")
+    else:
+        base = root
+    parts = tuple(part for part in module.split(".") if part)
+    candidate = base.joinpath(*parts) if parts else base
+    target: Optional[Path] = None
+    if candidate.with_suffix(".py").is_file():
+        target = candidate.with_suffix(".py").resolve()
+    elif (candidate / "__init__.py").is_file():
+        target = (candidate / "__init__.py").resolve()
+    if target is None:
+        return ()
+    if not target.is_relative_to(root):
+        raise ProposalValidationError("model-code import escapes the model sandbox")
+    initializers: list[Path] = []
+    current = target.parent
+    while current != root and current.is_relative_to(root):
+        initializer = current / "__init__.py"
+        if initializer.is_file():
+            initializers.append(initializer.resolve())
+        current = current.parent
+    return tuple(dict.fromkeys((*reversed(initializers), target)))
+
+
+def _validate_typed_functions(tree: ast.AST) -> None:
+    """Require annotations on every staged function and method.
+
+    Parameters
+    ----------
+    tree:
+        Parsed staged Python module.
+
+    Raises
+    ------
+    ProposalValidationError
+        If a function argument or return is untyped.
+    """
+
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        arguments = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
+        arguments = [argument for argument in arguments if argument.arg not in {"self", "cls"}]
+        if node.args.vararg is not None:
+            arguments.append(node.args.vararg)
+        if node.args.kwarg is not None:
+            arguments.append(node.args.kwarg)
+        if node.returns is None or any(argument.annotation is None for argument in arguments):
+            raise ProposalValidationError(f"staged function {node.name!r} must be fully typed")
+
+
+def _validate_calls_and_writes(tree: ast.AST, allowed_dir: Path) -> None:
+    """Reject dynamic execution and statically unsafe writes.
+
+    Parameters
+    ----------
+    tree:
+        Parsed staged Python module.
+    allowed_dir:
+        Resolved write sandbox.
+
+    Raises
+    ------
+    ProposalValidationError
+        If forbidden execution or an unsafe write is found.
+    """
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        call_name = _call_name(node.func)
+        if call_name in _FORBIDDEN_CALLS or call_name.rsplit(".", 1)[-1] in _FORBIDDEN_CALLS:
+            raise ProposalValidationError(f"forbidden dynamic execution call: {call_name}")
+        if call_name == "open" and _open_writes(node):
+            _validate_literal_write_target(node, allowed_dir, call_name)
+        elif call_name.rsplit(".", 1)[-1] in _WRITE_METHODS:
+            _validate_literal_write_target(node, allowed_dir, call_name)
+
+
+def _call_name(function: ast.expr) -> str:
+    """Return a dotted static call name when available.
+
+    Parameters
+    ----------
+    function:
+        Call target expression.
+
+    Returns
+    -------
+    str
+        Dotted call name or an empty string.
+    """
+
+    if isinstance(function, ast.Name):
+        return function.id
+    if isinstance(function, ast.Attribute):
+        prefix = _call_name(function.value)
+        return f"{prefix}.{function.attr}" if prefix else function.attr
+    if isinstance(function, ast.Call):
+        return _call_name(function.func)
+    return ""
+
+
+def _open_writes(node: ast.Call) -> bool:
+    """Return whether a built-in ``open`` call may write.
+
+    Parameters
+    ----------
+    node:
+        Static ``open`` call.
+
+    Returns
+    -------
+    bool
+        True for write/append/create/update modes or dynamic mode values.
+    """
+
+    mode_node: Optional[ast.expr] = node.args[1] if len(node.args) > 1 else None
+    for keyword in node.keywords:
+        if keyword.arg == "mode":
+            mode_node = keyword.value
+    if mode_node is None:
+        return False
+    if not isinstance(mode_node, ast.Constant) or not isinstance(mode_node.value, str):
+        return True
+    return any(character in mode_node.value for character in "wax+")
+
+
+def _validate_literal_write_target(node: ast.Call, allowed_dir: Path, call_name: str) -> None:
+    """Require write targets to be literal paths inside the model sandbox.
+
+    Parameters
+    ----------
+    node:
+        Static write call.
+    allowed_dir:
+        Resolved model sandbox.
+    call_name:
+        Call name used in error reporting.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the target is dynamic or outside the sandbox.
+    """
+
+    target_node: Optional[ast.expr] = None
+    if call_name == "open" and node.args:
+        target_node = node.args[0]
+    elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Call):
+        path_call = node.func.value
+        if _call_name(path_call.func).endswith("Path") and path_call.args:
+            target_node = path_call.args[0]
+    if not isinstance(target_node, ast.Constant) or not isinstance(target_node.value, str):
+        raise ProposalValidationError(f"{call_name} has a dynamic or unverifiable write target")
+    candidate = Path(target_node.value)
+    resolved = (
+        candidate.resolve() if candidate.is_absolute() else (allowed_dir / candidate).resolve()
+    )
+    if not resolved.is_relative_to(allowed_dir):
+        raise ProposalValidationError(f"{call_name} writes outside the model sandbox")
+
+
+def _validate_source_ladder(
+    rung: SourceRung,
+    facts: Mapping[str, Any],
+    resolution: Mapping[str, Any],
+    implementation: Mapping[str, Any],
+    evidence: Mapping[str, Any],
+    known_evidence: frozenset[str],
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+    cas_root: Union[str, Path, None],
+) -> None:
+    """Enforce rung-specific source-ladder honesty.
+
+    Parameters
+    ----------
+    rung:
+        Selected rung.
+    facts:
+        Complete proposal facts used to bind source symbols to the claimed family.
+    resolution, implementation, evidence:
+        Proposal source and implementation blocks.
+    known_evidence:
+        Valid literal evidence identifiers.
+    source_manifest:
+        Exact fetched sources.
+    cas_root:
+        Optional source CAS root for source inventory inspection.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the chosen rung contradicts its evidence or requirements.
+    """
+
+    attempted = resolution.get("attempted_rungs")
+    if not isinstance(attempted, list) or not attempted:
+        raise ProposalValidationError("source ladder must record attempted rungs")
+    attempted_values = [item.get("rung") for item in attempted if isinstance(item, Mapping)]
+    rung_order = [member.value for member in SourceRung]
+    selected_index = rung_order.index(rung.value)
+    if any(required not in attempted_values for required in rung_order[: selected_index + 1]):
+        raise ProposalValidationError("selected rung does not document every higher rung")
+    if rung is SourceRung.LIBRARY:
+        recipe = implementation.get("library_recipe")
+        required = ("distribution", "version", "artifact_sha256", "module", "symbol")
+        if implementation.get("recipe_type") != "declarative-library" or not isinstance(
+            recipe, Mapping
+        ):
+            raise ProposalValidationError("R1_LIBRARY requires a declarative library recipe")
+        if any(
+            not isinstance(recipe.get(field), str) or not str(recipe[field]).strip()
+            for field in required
+        ):
+            raise ProposalValidationError("R1_LIBRARY recipe is incomplete")
+        if not recipe.get("pretrained_disable_fields"):
+            raise ProposalValidationError("R1_LIBRARY must explicitly disable pretrained fields")
+        kwargs = recipe.get("kwargs")
+        disable_fields = recipe.get("pretrained_disable_fields")
+        if not isinstance(kwargs, Mapping) or not isinstance(disable_fields, list):
+            raise ProposalValidationError("R1_LIBRARY pretrained disable declaration is malformed")
+        try:
+            validate_pretrained_disable_fields(kwargs, disable_fields)
+        except RecipeError as exc:
+            raise ProposalValidationError(str(exc)) from exc
+    if rung is SourceRung.REIMPLEMENT:
+        _validate_r4_negative_proof(resolution, known_evidence)
+        _validate_checked_link_fetch_coverage(resolution, source_manifest, rung=rung)
+        if _implementation_source_available(
+            source_manifest,
+            cas_root=cas_root,
+            linkage_terms=_model_linkage_terms(facts),
+        ):
+            raise ProposalValidationError(
+                "R4_REIMPLEMENT is forbidden when source code is available"
+            )
+    if rung is SourceRung.VENDOR:
+        _validate_checked_link_fetch_coverage(resolution, source_manifest, rung=rung)
+        _validate_r2_source_binding(implementation, resolution, evidence, source_manifest)
+    if rung in {SourceRung.VENDOR, SourceRung.PORT, SourceRung.REIMPLEMENT}:
+        source_map = implementation.get("source_to_code_map")
+        if not isinstance(source_map, list) or not source_map:
+            raise ProposalValidationError(f"{rung.value} requires a material source-to-code map")
+        cited = {
+            evidence_id
+            for item in source_map
+            if isinstance(item, Mapping)
+            for evidence_id in item.get("evidence_ids", [])
+            if isinstance(evidence_id, str)
+        }
+        if not cited or not cited <= known_evidence:
+            raise ProposalValidationError(
+                f"{rung.value} source map lacks literal descriptive evidence"
+            )
+        excerpts = evidence.get("excerpts", [])
+        descriptive_ids = {
+            item.get("evidence_id")
+            for item in excerpts
+            if isinstance(item, Mapping)
+            and any(
+                token in str(support).lower()
+                for support in item.get("supports", [])
+                for token in ("architecture", "implementation", "input_contract", "fidelity")
+            )
+        }
+        if not cited & descriptive_ids:
+            raise ProposalValidationError(f"{rung.value} did not cite transcribed descriptive text")
+
+
+def _validate_r4_negative_proof(
+    resolution: Mapping[str, Any], known_evidence: frozenset[str]
+) -> None:
+    """Require a bounded, evidence-backed negative source search for R4.
+
+    Parameters
+    ----------
+    resolution:
+        Complete source-resolution block.
+    known_evidence:
+        Validated literal evidence identifiers.
+
+    Raises
+    ------
+    ProposalValidationError
+        If higher-rung attempts do not explicitly establish unavailability or
+        the bounded search report is empty.
+    """
+
+    attempted = resolution.get("attempted_rungs")
+    if not isinstance(attempted, list):
+        raise ProposalValidationError("R4 requires explicit negative proof from a bounded search")
+    attempts_by_rung = {item.get("rung"): item for item in attempted if isinstance(item, Mapping)}
+    for higher_rung in ("R1_LIBRARY", "R2_VENDOR", "R3_PORT"):
+        attempt = attempts_by_rung.get(higher_rung)
+        if not isinstance(attempt, Mapping) or attempt.get("result") != "unavailable":
+            raise ProposalValidationError(
+                "R4 requires explicit negative proof that every higher rung is unavailable"
+            )
+        reason_code = attempt.get("reason_code")
+        attempt_evidence = attempt.get("evidence_ids")
+        if (
+            not isinstance(reason_code, str)
+            or "search" not in reason_code.lower()
+            or not isinstance(attempt_evidence, list)
+            or not attempt_evidence
+            or any(
+                not isinstance(evidence_id, str) or evidence_id not in known_evidence
+                for evidence_id in attempt_evidence
+            )
+        ):
+            raise ProposalValidationError(
+                "R4 higher-rung unavailability must be backed by bounded-search evidence"
+            )
+    selected_attempt = attempts_by_rung.get(SourceRung.REIMPLEMENT.value)
+    if not isinstance(selected_attempt, Mapping) or selected_attempt.get("result") != "selected":
+        raise ProposalValidationError("R4 source ladder must explicitly select R4_REIMPLEMENT")
+    search_report = resolution.get("search_report")
+    if not isinstance(search_report, Mapping) or any(
+        not isinstance(search_report.get(field), list) or not search_report[field]
+        for field in ("queries", "places_checked", "links_checked", "languages_checked")
+    ):
+        raise ProposalValidationError(
+            "R4 requires an explicit bounded search report with no usable implementation found"
+        )
+
+
+def _validate_r2_source_binding(
+    implementation: Mapping[str, Any],
+    resolution: Mapping[str, Any],
+    evidence: Mapping[str, Any],
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+) -> None:
+    """Bind an R2 adapter to exact mirrored upstream bytes and mapped code.
+
+    Parameters
+    ----------
+    implementation:
+        R2 implementation block.
+    resolution:
+        Source-resolution block classifying authoritative implementation sources.
+    evidence:
+        Literal excerpt block already verified against controlled source bytes.
+    source_manifest:
+        Controlled-fetch manifest containing exact source hashes.
+
+    Raises
+    ------
+    ProposalValidationError
+        If upstream files or source-map rows do not bind to exact fetched bytes.
+    """
+
+    sources = _source_manifest_index(source_manifest)
+    declared_sources = resolution.get("sources")
+    if not isinstance(declared_sources, list):
+        raise ProposalValidationError("R2_VENDOR has no declared implementation sources")
+    declared_by_id = {
+        source.get("source_id"): source
+        for source in declared_sources
+        if isinstance(source, Mapping) and isinstance(source.get("source_id"), str)
+    }
+    upstream_files = implementation.get("upstream_files")
+    if not isinstance(upstream_files, list) or not upstream_files:
+        raise ProposalValidationError("R2_VENDOR requires exact mirrored upstream files")
+    upstream_source_ids: set[str] = set()
+    for upstream in upstream_files:
+        if not isinstance(upstream, Mapping):
+            raise ProposalValidationError("R2_VENDOR upstream file binding must be an object")
+        source_id = upstream.get("source_id")
+        source = sources.get(source_id) if isinstance(source_id, str) else None
+        if source is None:
+            raise ProposalValidationError("R2_VENDOR upstream file references an unfetched source")
+        declared = declared_by_id.get(source_id)
+        if not isinstance(declared, Mapping) or declared.get("role") != "implementation":
+            raise ProposalValidationError(
+                "R2_VENDOR upstream bytes are not classified as implementation source"
+            )
+        if upstream.get("sha256") != source.get("content_sha256"):
+            raise ProposalValidationError(
+                "R2_VENDOR upstream file hash does not match exact source bytes"
+            )
+        if declared.get("content_sha256") != source.get("content_sha256"):
+            raise ProposalValidationError(
+                "R2_VENDOR declared source does not match controlled source bytes"
+            )
+        upstream_source_ids.add(str(source_id))
+    source_map = implementation.get("source_to_code_map")
+    if not isinstance(source_map, list) or not source_map:
+        raise ProposalValidationError("R2_VENDOR requires an exact source-to-code map")
+    excerpts = evidence.get("excerpts")
+    if not isinstance(excerpts, list):
+        raise ProposalValidationError("R2_VENDOR source map has no literal evidence")
+    excerpt_bindings = {
+        (excerpt.get("evidence_id"), excerpt.get("source_id"), excerpt.get("locator"))
+        for excerpt in excerpts
+        if isinstance(excerpt, Mapping)
+    }
+    for mapping in source_map:
+        if not isinstance(mapping, Mapping):
+            raise ProposalValidationError("R2_VENDOR source-to-code binding must be an object")
+        source_id = mapping.get("source_id")
+        locator = mapping.get("source_locator")
+        if not isinstance(source_id, str) or source_id not in upstream_source_ids:
+            raise ProposalValidationError(
+                "R2_VENDOR source map does not reference bound upstream bytes"
+            )
+        if not isinstance(locator, str) or not locator.strip():
+            raise ProposalValidationError("R2_VENDOR source map lacks an exact source locator")
+        mapping_evidence = mapping.get("evidence_ids")
+        if not isinstance(mapping_evidence, list) or not any(
+            (evidence_id, source_id, locator) in excerpt_bindings
+            for evidence_id in mapping_evidence
+        ):
+            raise ProposalValidationError(
+                "R2_VENDOR source map locator is not bound to a verified exact excerpt"
+            )
+
+
+def _validate_checked_link_fetch_coverage(
+    resolution: Mapping[str, Any],
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+    *,
+    rung: SourceRung,
+) -> None:
+    """Require every checked R2/R4 candidate link to have fetched CAS bytes.
+
+    Parameters
+    ----------
+    resolution:
+        Source-resolution block containing the bounded search report.
+    source_manifest:
+        Exact controlled-fetch source rows.
+    rung:
+        Selected source rung used in fail-closed diagnostics.
+
+    Raises
+    ------
+    ProposalValidationError
+        If an author-reported checked link was withheld from controlled fetch.
+    """
+
+    search_report = resolution.get("search_report")
+    if not isinstance(search_report, Mapping):
+        raise ProposalValidationError(f"{rung.value} requires a bounded search report")
+    try:
+        fetched_sources_for_checked_links(search_report, source_manifest)
+    except EvidenceValidationError as exc:
+        raise ProposalValidationError(f"{rung.value} checked-link coverage gap: {exc}") from exc
+
+
+def _source_manifest_index(
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+) -> dict[str, Mapping[str, Any]]:
+    """Index exact controlled-fetch rows by source identifier.
+
+    Parameters
+    ----------
+    source_manifest:
+        Manifest wrapper or direct source sequence.
+
+    Returns
+    -------
+    dict[str, Mapping[str, Any]]
+        Exact source rows keyed by source ID.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the manifest is malformed or duplicates an identifier.
+    """
+
+    raw_sources: object
+    if isinstance(source_manifest, Mapping):
+        raw_sources = source_manifest.get("sources")
+        if raw_sources is None and "source_id" in source_manifest:
+            raw_sources = [source_manifest]
+    else:
+        raw_sources = source_manifest
+    if not isinstance(raw_sources, Sequence) or isinstance(raw_sources, (str, bytes)):
+        raise ProposalValidationError("source manifest must contain a source list")
+    indexed: dict[str, Mapping[str, Any]] = {}
+    for source in raw_sources:
+        if not isinstance(source, Mapping):
+            raise ProposalValidationError("every source manifest must be an object")
+        source_id = source.get("source_id")
+        if not isinstance(source_id, str) or not source_id:
+            raise ProposalValidationError("source manifest row has no source_id")
+        if source_id in indexed:
+            raise ProposalValidationError(f"duplicate source_id: {source_id}")
+        indexed[source_id] = source
+    return indexed
+
+
+def _implementation_source_available(
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+    *,
+    cas_root: Union[str, Path, None],
+    linkage_terms: frozenset[str],
+) -> bool:
+    """Return whether exact fetched CAS bytes expose implementation source.
+
+    Parameters
+    ----------
+    source_manifest:
+        Controlled-fetch manifest wrapper or rows.
+    cas_root:
+        Optional CAS root for manifests without an explicit object path.
+    linkage_terms:
+        Normalized model/family symbols that source bytes must actually reference.
+
+    Returns
+    -------
+    bool
+        True when a fetched object inventory contains usable source code.
+    """
+
+    sources = _source_manifest_index(source_manifest)
+    inventory_results = [
+        _source_cas_contains_implementation(
+            source,
+            cas_root=cas_root,
+            linkage_terms=linkage_terms,
+        )
+        for source in sources.values()
+    ]
+    return any(inventory_results)
+
+
+def _source_cas_contains_implementation(
+    source: Mapping[str, Any],
+    *,
+    cas_root: Union[str, Path, None],
+    linkage_terms: frozenset[str],
+) -> bool:
+    """Inspect one hash-bound CAS object for usable implementation code.
+
+    Parameters
+    ----------
+    source:
+        Controlled-fetch manifest row.
+    cas_root:
+        Optional CAS root for manifests without an explicit object path.
+    linkage_terms:
+        Normalized model/family symbols required for relevance.
+
+    Returns
+    -------
+    bool
+        True when archive names, a byte manifest, or raw source bytes expose code.
+
+    Raises
+    ------
+    ProposalValidationError
+        If fetched bytes are absent or no longer match their declared digest.
+    """
+
+    path_value = source.get("cas_path")
+    digest = source.get("content_sha256")
+    if not isinstance(digest, str):
+        raise ProposalValidationError("fetched source manifest has no content_sha256")
+    if isinstance(path_value, str) and path_value:
+        path = Path(path_value)
+    elif cas_root is not None:
+        path = source_cas_path(cas_root, digest)
+    else:
+        raise ProposalValidationError("R4 source inventory has no inspectable CAS path")
+    if not _cas_object_matches_digest(path, digest):
+        raise ProposalValidationError(f"R4 source inventory CAS object does not match {digest}")
+    try:
+        if zipfile.is_zipfile(path):
+            with zipfile.ZipFile(path) as archive:
+                members = [
+                    _inventory_member(
+                        member.filename,
+                        _read_inventory_stream(archive.open(member), member.file_size),
+                        linkage_terms,
+                    )
+                    for member in archive.infolist()
+                    if not member.is_dir()
+                    and member.file_size > 0
+                    and _inventory_name_is_implementation(member.filename)
+                ]
+                return _archive_inventory_has_implementation(members, linkage_terms)
+        if tarfile.is_tarfile(path):
+            with tarfile.open(path, mode="r:*") as archive:
+                tar_members: list[_InventoryMember] = []
+                for member in archive:
+                    if (
+                        not member.isfile()
+                        or member.size <= 0
+                        or not _inventory_name_is_implementation(member.name)
+                    ):
+                        continue
+                    extracted = archive.extractfile(member)
+                    if extracted is not None:
+                        tar_members.append(
+                            _inventory_member(
+                                member.name,
+                                _read_inventory_stream(extracted, member.size),
+                                linkage_terms,
+                            )
+                        )
+                return _archive_inventory_has_implementation(tar_members, linkage_terms)
+        with path.open("rb") as handle:
+            content = _read_inventory_stream(handle, path.stat().st_size)
+    except (OSError, tarfile.TarError, zipfile.BadZipFile) as exc:
+        raise ProposalValidationError(
+            f"cannot inventory fetched source CAS object {path}: {exc}"
+        ) from exc
+    return _code_bytes_are_relevant_implementation(
+        str(source.get("url") or path.name),
+        content,
+        source,
+        linkage_terms,
+    )
+
+
+def _read_inventory_stream(handle: Any, size: int) -> bytes:
+    """Read one bounded archive member incrementally for structural inspection.
+
+    Parameters
+    ----------
+    handle:
+        Binary member stream.
+    size:
+        Declared uncompressed byte count.
+
+    Returns
+    -------
+    bytes
+        Complete bounded member bytes, including members above the former 8 MiB cap.
+    """
+
+    if size > _MAX_STREAM_INVENTORY_BYTES:
+        raise ProposalValidationError(
+            f"source inventory member exceeds {_MAX_STREAM_INVENTORY_BYTES} byte safety bound"
+        )
+    chunks: list[bytes] = []
+    observed = 0
+    while True:
+        chunk = handle.read(1024**2)
+        if not chunk:
+            break
+        observed += len(chunk)
+        if observed > _MAX_STREAM_INVENTORY_BYTES:
+            raise ProposalValidationError("source inventory member exceeds safety bound")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _inventory_member(name: str, content: bytes, linkage_terms: frozenset[str]) -> _InventoryMember:
+    """Classify one implementation-role member and extract its explicit links.
+
+    Parameters
+    ----------
+    name, content, linkage_terms:
+        Archive locator, exact bytes, and model/family linkage terms.
+
+    Returns
+    -------
+    _InventoryMember
+        Whole-archive graph facts for one member.
+    """
+
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return _InventoryMember(name, "", False, False, frozenset(), frozenset(), frozenset())
+    context = re.sub(r"[^a-z0-9]+", "", f"{name} {text}".lower())
+    linked = any(term in context for term in linkage_terms)
+    defined: set[str] = set()
+    referenced: set[str] = set()
+    imported: set[str] = set()
+    structured = False
+    if Path(name).suffix.lower() in {".py", ".pyx", ""}:
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            tree = None
+        if tree is not None:
+            defined = {
+                node.name
+                for node in ast.walk(tree)
+                if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            referenced = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imported.update(alias.name for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imported.add(node.module)
+            structured = _python_has_model_structure(text, linkage_terms)
+    else:
+        definitions = re.findall(
+            r"\b(?:class|def|function|struct)\s+([A-Za-z_][A-Za-z0-9_]*)", text
+        )
+        defined.update(definitions)
+        referenced.update(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", text))
+        structured = bool(
+            definitions
+            and re.search(
+                r"\b(?:attention|conv(?:olution)?|embedding|forward|layer|lstm|module)\b",
+                text,
+                flags=re.IGNORECASE,
+            )
+        )
+    if Path(name).suffix.lower() == ".ipynb":
+        notebook_text = text.replace("\\n", "\n").replace('\\"', '"')
+        defined.update(
+            re.findall(r"\b(?:class|def|function)\s+([A-Za-z_][A-Za-z0-9_]*)", notebook_text)
+        )
+        referenced.update(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", notebook_text))
+        structured = bool(
+            re.search(r"\b(?:class|def)\s+[A-Za-z_]", notebook_text)
+            and re.search(r"\b(?:forward|call|apply)\s*\(", notebook_text)
+            and re.search(r"\breturn\b", notebook_text)
+        )
+    return _InventoryMember(
+        name,
+        text,
+        linked,
+        structured,
+        frozenset(defined),
+        frozenset(referenced),
+        frozenset(imported),
+    )
+
+
+def _archive_inventory_has_implementation(
+    members: Sequence[_InventoryMember], linkage_terms: frozenset[str]
+) -> bool:
+    """Follow bounded symbol/import links from identity files to model structure.
+
+    Parameters
+    ----------
+    members:
+        Every implementation-role file in the archive.
+    linkage_terms:
+        Specific normalized family/model terms.
+
+    Returns
+    -------
+    bool
+        True only when identity is structurally bound within the archive graph.
+    """
+
+    if not linkage_terms:
+        return False
+    for member in members:
+        linked_definitions = {
+            symbol
+            for symbol in member.defined_symbols
+            if any(
+                term in re.sub(r"[^a-z0-9]+", "", symbol.lower())
+                or re.sub(r"[^a-z0-9]+", "", symbol.lower()) in term
+                for term in linkage_terms
+            )
+        }
+        if member.linked and member.structured and linked_definitions:
+            return True
+
+    adjacency: dict[int, set[int]] = {index: set() for index in range(len(members))}
+    for left_index, left in enumerate(members):
+        for right_index, right in enumerate(members):
+            if left_index == right_index or not right.defined_symbols:
+                continue
+            module_name = Path(right.name).with_suffix("").as_posix().replace("/", ".")
+            symbol_link = bool(left.referenced_symbols & right.defined_symbols)
+            import_link = any(
+                imported == module_name
+                or imported.endswith(f".{module_name}")
+                or module_name.endswith(f".{imported}")
+                for imported in left.imported_modules
+            )
+            if symbol_link or import_link:
+                adjacency[left_index].add(right_index)
+
+    frontier = {index for index, member in enumerate(members) if member.linked}
+    visited = set(frontier)
+    for _depth in range(4):
+        frontier = {
+            neighbor
+            for index in frontier
+            for neighbor in adjacency[index]
+            if neighbor not in visited
+        }
+        visited.update(frontier)
+        if not frontier:
+            return False
+        if any(members[index].structured for index in frontier):
+            return True
+    return False
+
+
+def _cas_object_matches_digest(path: Path, digest: str) -> bool:
+    """Return whether a CAS file exists and matches its prefixed SHA-256 digest.
+
+    Parameters
+    ----------
+    path:
+        Candidate exact CAS object.
+    digest:
+        Declared prefixed SHA-256 digest.
+
+    Returns
+    -------
+    bool
+        True only for a byte-identical regular file.
+    """
+
+    if not path.is_file() or not digest.startswith("sha256:"):
+        return False
+    hasher = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024**2), b""):
+                hasher.update(chunk)
+    except OSError:
+        return False
+    return f"sha256:{hasher.hexdigest()}" == digest
+
+
+def _inventory_name_is_implementation(value: str) -> bool:
+    """Return whether an archive-internal path denotes usable source code.
+
+    Parameters
+    ----------
+    value:
+        Archive member or byte-manifest path.
+
+    Returns
+    -------
+    bool
+        True for a non-packaging code file outside documentation/test trees.
+    """
+
+    normalized = value.replace("\\", "/").strip("/")
+    path = Path(normalized)
+    lowered_parts = {part.lower() for part in path.parts[:-1]}
+    name = path.name.lower()
+    return (
+        bool(name)
+        and name not in _NON_IMPLEMENTATION_CODE_NAMES
+        and path.stem.lower() not in _NON_IMPLEMENTATION_SOURCE_STEMS
+        and not lowered_parts & _NON_IMPLEMENTATION_SOURCE_DIRS
+        and path.suffix.lower() in _IMPLEMENTATION_SOURCE_SUFFIXES
+    )
+
+
+def _model_linkage_terms(facts: Mapping[str, Any]) -> frozenset[str]:
+    """Return normalized identity/family tokens for source relevance checks.
+
+    Parameters
+    ----------
+    facts:
+        Complete proposed facts with identity and taxonomy blocks.
+
+    Returns
+    -------
+    frozenset[str]
+        Specific lowercase alphanumeric model/family tokens.
+    """
+
+    values: list[str] = []
+    identity = facts.get("identity")
+    if isinstance(identity, Mapping):
+        for field in ("canonical_name", "acronym"):
+            value = identity.get(field)
+            if isinstance(value, str):
+                values.append(value)
+        aliases = identity.get("aliases")
+        if isinstance(aliases, list):
+            values.extend(value for value in aliases if isinstance(value, str))
+    taxonomy = facts.get("taxonomy")
+    if isinstance(taxonomy, Mapping) and isinstance(taxonomy.get("family"), str):
+        values.append(str(taxonomy["family"]))
+    terms: set[str] = set()
+    for value in values:
+        split_camel = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", value)
+        normalized_full = re.sub(r"[^a-z0-9]+", "", value.lower())
+        if len(normalized_full) >= 4:
+            terms.add(normalized_full)
+        for token in re.findall(r"[a-z0-9]+", split_camel.lower()):
+            if len(token) >= 4 and token not in _SUPPORT_STOPWORDS:
+                terms.add(token)
+    return frozenset(terms)
+
+
+def _python_has_model_structure(text: str, linkage_terms: frozenset[str]) -> bool:
+    """Return whether Python source contains executable architecture structure.
+
+    Parameters
+    ----------
+    text:
+        Decoded candidate source.
+    linkage_terms:
+        Specific normalized model/family symbols.
+
+    Returns
+    -------
+    bool
+        True for a linked callable or a class/function model entry point with
+        internal computation.
+    """
+
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return False
+    function_types = (ast.AsyncFunctionDef, ast.FunctionDef)
+    for class_node in (node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)):
+        if any(
+            isinstance(member, function_types)
+            and member.name in _MODEL_ENTRY_METHODS
+            and _function_has_internal_computation(member)
+            for member in class_node.body
+        ):
+            return True
+    for node in ast.walk(tree):
+        if not isinstance(node, function_types) or not _function_has_internal_computation(node):
+            continue
+        normalized_name = re.sub(r"[^a-z0-9]+", "", node.name.lower())
+        if node.name in _MODEL_ENTRY_METHODS or any(
+            term in normalized_name or normalized_name in term for term in linkage_terms
+        ):
+            return True
+    return False
+
+
+def _function_has_internal_computation(
+    node: Union[ast.AsyncFunctionDef, ast.FunctionDef],
+) -> bool:
+    """Return whether a callable computes and returns an internal value.
+
+    Parameters
+    ----------
+    node:
+        Parsed Python callable definition.
+
+    Returns
+    -------
+    bool
+        True when the body contains a return/yield and framework-neutral
+        computation or control-flow syntax.
+    """
+
+    body_nodes = [descendant for statement in node.body for descendant in ast.walk(statement)]
+    has_result = any(
+        isinstance(descendant, (ast.Return, ast.Yield, ast.YieldFrom)) for descendant in body_nodes
+    )
+    computation_types = (
+        ast.AugAssign,
+        ast.BinOp,
+        ast.BoolOp,
+        ast.Call,
+        ast.Compare,
+        ast.DictComp,
+        ast.For,
+        ast.GeneratorExp,
+        ast.If,
+        ast.IfExp,
+        ast.ListComp,
+        ast.SetComp,
+        ast.Subscript,
+        ast.Try,
+        ast.UnaryOp,
+        ast.While,
+        ast.With,
+    )
+    return has_result and any(
+        isinstance(descendant, computation_types) for descendant in body_nodes
+    )
+
+
+def _code_bytes_are_relevant_implementation(
+    member_name: str,
+    content: bytes,
+    source: Mapping[str, Any],
+    linkage_terms: frozenset[str],
+) -> bool:
+    """Verify architecture structure and source-to-family linkage in exact bytes.
+
+    Parameters
+    ----------
+    member_name:
+        Archive member name or raw-source locator.
+    content:
+        Exact fetched candidate source bytes.
+    source:
+        Bound controlled-fetch manifest row.
+    linkage_terms:
+        Specific claimed model/family symbols.
+
+    Returns
+    -------
+    bool
+        True only when the bytes are both model-like and linked to the claimed family.
+    """
+
+    if not content or len(content) > _MAX_STREAM_INVENTORY_BYTES or not linkage_terms:
+        return False
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    normalized_context = re.sub(r"[^a-z0-9]+", "", f"{member_name} {text}".lower())
+    if not any(term in normalized_context for term in linkage_terms):
+        return False
+    if Path(member_name).suffix.lower() in {".py", ".pyx", ""}:
+        return _python_has_model_structure(text, linkage_terms)
+    architecture_tokens = re.search(
+        r"\b(?:attention|conv(?:olution)?|embedding|forward|layer|lstm|model|module|network)\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    definition_tokens = re.search(
+        r"\b(?:class|def|function|struct)\s+[A-Za-z_][A-Za-z0-9_]*",
+        text,
+    )
+    return architecture_tokens is not None and definition_tokens is not None
+
+
+def _validate_structural_slop(facts: Mapping[str, Any], code_paths: Sequence[Path]) -> None:
+    """Trip on a plain Sequential/MLP staged as a named exotic family.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+    code_paths:
+        Closed validated staged model-code manifest.
+
+    Raises
+    ------
+    ProposalValidationError
+        If staged structure is a generic stand-in for an exotic family claim.
+    """
+
+    if not code_paths:
+        return
+    trees: list[ast.AST] = []
+    for code_path in code_paths:
+        try:
+            trees.append(ast.parse(code_path.read_text(encoding="utf-8"), filename=str(code_path)))
+        except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+            raise ProposalValidationError(f"cannot inspect staged structure: {exc}") from exc
+    defined_classes = {
+        node.name for tree in trees for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
+    }
+    module_calls = [
+        _call_name(node.func).rsplit(".", 1)[-1]
+        for tree in trees
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and (
+            _call_name(node.func).startswith(("nn.", "torch.nn."))
+            or _call_name(node.func).rsplit(".", 1)[-1] in _GENERIC_MODEL_CALLS
+        )
+        and _call_name(node.func).rsplit(".", 1)[-1] not in defined_classes
+    ]
+    if not module_calls:
+        return
+    generic_structure = ("Sequential" in module_calls or module_calls.count("Linear") >= 2) and set(
+        module_calls
+    ) <= _GENERIC_MODEL_CALLS
+    if not generic_structure or not _claims_exotic_family(facts):
+        return
+    raise ProposalValidationError(
+        "structural slop tripwire: generic Sequential/MLP staged as an exotic named family"
+    )
+
+
+def _claims_exotic_family(facts: Mapping[str, Any]) -> bool:
+    """Return whether authored identity claims more than a generic MLP family.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Returns
+    -------
+    bool
+        True when family/name/class claims are not explicitly generic feed-forward terms.
+    """
+
+    identity = _mapping(facts.get("identity"), "identity")
+    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
+    architecture_classes = metadata.get("architecture_class")
+    names = [
+        identity.get("canonical_name"),
+        metadata.get("family"),
+        *(architecture_classes if isinstance(architecture_classes, list) else []),
+    ]
+    normalized = {
+        _normalize_support_text(str(name))
+        for name in names
+        if isinstance(name, str) and name.strip()
+    }
+    return bool(normalized) and not normalized <= _GENERIC_FAMILY_NAMES
+
+
+def _validate_anti_slop(facts: Mapping[str, Any]) -> None:
+    """Reject explicit approximation language in authored implementation claims.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Raises
+    ------
+    ProposalValidationError
+        If authored text admits a generic or simplified stand-in.
+    """
+
+    texts = _authored_implementation_texts(facts)
+    lowered = " ".join(texts).lower()
+    matched = sorted(
+        {match.group(0) for pattern in _SLOP_PATTERNS if (match := re.search(pattern, lowered))}
+    )
+    if matched:
+        raise ProposalValidationError(
+            f"proposal contains forbidden approximation language: {matched}"
+        )
+
+
+def _authored_implementation_texts(facts: Mapping[str, Any]) -> list[str]:
+    """Collect authored prose surfaces that can admit approximation or slop.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Returns
+    -------
+    list[str]
+        Authored descriptions, decisions, rationales, and fidelity notes.
+    """
+
+    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
+    website = _mapping(facts.get("website"), "website")
+    resolution = _mapping(facts.get("source_resolution"), "source_resolution")
+    implementation = _mapping(facts.get("implementation"), "implementation")
+    fidelity = _mapping(facts.get("fidelity"), "fidelity")
+    texts = [
+        metadata.get("description"),
+        metadata.get("key_contribution"),
+        website.get("tagline"),
+        website.get("description"),
+        website.get("key_contribution"),
+        resolution.get("decision"),
+        _mapping(resolution.get("search_report"), "source_resolution.search_report").get(
+            "conclusion"
+        ),
+        fidelity.get("reason"),
+    ]
+    for collection_name in ("patches", "declared_choices"):
+        collection = implementation.get(collection_name)
+        if isinstance(collection, list):
+            texts.extend(item.get("rationale") for item in collection if isinstance(item, Mapping))
+    deviations = fidelity.get("deviations")
+    if isinstance(deviations, list):
+        texts.extend(deviations)
+    return [text for text in texts if isinstance(text, str)]
+
+
+def _mapping(value: object, field: str) -> Mapping[str, Any]:
+    """Return a required mapping.
+
+    Parameters
+    ----------
+    value:
+        Candidate object.
+    field:
+        Field name used in errors.
+
+    Returns
+    -------
+    Mapping[str, Any]
+        Valid mapping.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the value is not an object.
+    """
+
+    if not isinstance(value, Mapping):
+        raise ProposalValidationError(f"{field} must be an object")
+    return value

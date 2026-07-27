@@ -1,0 +1,5 @@
+{
+  "name": "menagerie-tabular-ts",
+  "channels": ["pytorch", "conda-forge", "nodefaults"],
+  "dependencies": ["python>=3.11,<3.13", "pytorch>=2.3", "pytorch-forecasting", "tsai", "pytorch-tabnet", "sktime", "pandas", "scikit-learn", "lightning", "statsmodels", "einops"]
+}

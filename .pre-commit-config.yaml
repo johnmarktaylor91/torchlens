@@ -7,13 +7,18 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
         # canonical perf baselines + the menagerie catalog are intentional large data artifacts
-        exclude: ^(benchmarks/perf_baselines/.*\.json|menagerie/data/master_catalog\.jsonl|menagerie/data/routing_manifest\.tsv|menagerie/data/stable_ids\.jsonl)$
+        exclude: ^(benchmarks/perf_baselines/.*\.json|menagerie/data/master_catalog\.jsonl|menagerie/data/routing_manifest\.tsv|menagerie/data/stable_ids\.jsonl|menagerie/data/crawl_roster\.jsonl)$
       - id: detect-private-key
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
       - id: detect-secrets
         args: ["--baseline", ".secrets.baseline"]
+        # crawl_roster.jsonl is an auto-generated model-metadata catalog (names,
+        # repo URLs, triage notes). Model config-names like
+        # mmflow_..._384x768 read as high-entropy strings; no credentials ever
+        # belong in it. Excluded from scanning like the other data catalogs.
+        exclude: ^menagerie/data/crawl_roster\.jsonl$
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.7
     hooks:

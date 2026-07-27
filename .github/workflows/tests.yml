@@ -113,5 +113,302 @@ jobs:
         env:
           TORCHLENS_RENDER_BYTE_ORACLE: ${{ matrix.render_byte_oracle }}
         run: |
-          pytest tests/ -m smoke --tb=short -q
+          # tests/crawler/ belongs to the separate menagerie-crawler corpus (its
+          # own dedicated crawler-round21-* jobs run it under a full conda env with
+          # jsonschema/conda-lock). It is excluded from the core matrix like
+          # tests/test_menagerie_*.py -- otherwise pytest imports it during
+          # collection and fails on the crawler-only jsonschema dep. No smoke
+          # coverage is lost (no tests/crawler test is smoke-marked).
+          pytest tests/ -m smoke --ignore=tests/crawler --tb=short -q
           pytest tests/test_torch_compat.py --tb=short -q
+
+  crawler-round21-linux-release:
+    name: Crawler Round 21 Linux committed-lock release proofs
+    runs-on: ubuntu-latest
+    # Opt-in real/self-hosted runner gate. This Linux release proof runs a real
+    # bubblewrap-sandboxed composition (build from the committed lock, execute the
+    # model, emit a pass attestation). GitHub's hosted ubuntu runners cannot run
+    # that composition faithfully, so it is gated on the repository variable
+    # MENAGERIE_RELEASE_RUNNERS. Set it to 'true' only where real/self-hosted
+    # release runners are configured; until then this job -- and the reversion +
+    # conformance jobs that need it -- skip, while torchlens core CI still runs.
+    if: ${{ vars.MENAGERIE_RELEASE_RUNNERS == 'true' }}
+    env:
+      MENAGERIE_RELEASE_GATE: "1"
+      MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-linux-64.lock
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve round21 runner-temp attestation paths
+        shell: bash
+        run: |
+          echo "MENAGERIE_REAL_ENV_PREFIX=$RUNNER_TEMP/round21-linux-prefix" >> "$GITHUB_ENV"
+          echo "MENAGERIE_RELEASE_ATTESTATION=$RUNNER_TEMP/round21-linux-attestation.json" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-activate-base: false
+          python-version: "3.11"
+
+      - name: Require Linux lock, provenance, conda, bwrap, and strace
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap strace
+          # GitHub's ubuntu-24.04 runners restrict unprivileged user namespaces
+          # (AppArmor), so an installed bwrap still cannot construct its sandbox and
+          # detect_os_sandbox() fails closed at the release gate. Re-enable userns for
+          # the sandbox probe; guarded so it is a harmless no-op on images without the
+          # knob. This does not weaken the gate -- the test still requires a *working*
+          # bwrap sandbox, it just lets the hosted runner provide one.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>/dev/null || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>/dev/null || true
+          for artifact in \
+            "$MENAGERIE_PLATFORM_LOCK" \
+            "${MENAGERIE_PLATFORM_LOCK%.lock}.resolved.json" \
+            "${MENAGERIE_PLATFORM_LOCK%.lock}.resolved.sha256" \
+            "${MENAGERIE_PLATFORM_LOCK%.lock}.provenance.json" \
+            "${MENAGERIE_PLATFORM_LOCK%.lock}.probes.json"; do
+            if [ ! -f "$artifact" ]; then
+              echo "unmet-release-gate: missing committed Linux artifact: $artifact"
+              exit 1
+            fi
+          done
+          if ! command -v conda >/dev/null 2>&1; then
+            echo "unmet-release-gate: conda is unavailable on the Linux release host"
+            exit 1
+          fi
+          if ! command -v bwrap >/dev/null 2>&1 || ! command -v strace >/dev/null 2>&1; then
+            echo "unmet-release-gate: Linux bwrap/strace enforcement is unavailable"
+            exit 1
+          fi
+
+      - name: Materialize and verify the committed SHA-256 Linux lock
+        shell: bash
+        run: |
+          python -m pip install jsonschema
+          PYTHONPATH=. python -m menagerie.crawler.tools.release_lock \
+            --lock "$MENAGERIE_PLATFORM_LOCK" \
+            --resolved-export "${MENAGERIE_PLATFORM_LOCK%.lock}.resolved.json" \
+            --prefix "$MENAGERIE_REAL_ENV_PREFIX" \
+            --conda conda
+          "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -c \
+            "import jsonschema, numpy, pytest, torch"
+
+      - name: Run every registered Linux real composition and emit pass attestation
+        shell: bash
+        run: |
+          PYTHONPATH=. "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -m pytest -q \
+            menagerie/crawler/tests -m round21_linux_real -x --tb=short
+          "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -c \
+            "import json, os; p=json.load(open(os.environ['MENAGERIE_RELEASE_ATTESTATION'])); assert p['status']=='passed' and p['expected_nodes']==p['passed_nodes'] and not p['skipped_nodes'] and not p['xfailed_nodes']"
+
+      - name: Upload Linux release pass attestation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: round21-linux-release-attestation
+          path: ${{ runner.temp }}/round21-linux-attestation.json
+          if-no-files-found: error
+
+  crawler-round21-macos-release:
+    name: Crawler Round 21 macOS committed-lock Seatbelt release proofs
+    runs-on: macos-14-xlarge
+    # Opt-in real/self-hosted runner gate (shared with the Linux release proof via
+    # MENAGERIE_RELEASE_RUNNERS). GitHub does not provision the macos-14-xlarge
+    # Apple-Silicon runner for this repo, and the Seatbelt attestation needs a real
+    # macOS host, so this is gated. Set MENAGERIE_RELEASE_RUNNERS='true' (with a
+    # provisioned Apple-Silicon runner) to enable it plus the cross-host
+    # conformance gate that consumes its artifact.
+    if: ${{ vars.MENAGERIE_RELEASE_RUNNERS == 'true' }}
+    env:
+      MENAGERIE_RELEASE_GATE: "1"
+      MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-osx-arm64.lock
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve round21 runner-temp attestation paths
+        shell: bash
+        run: |
+          echo "MENAGERIE_REAL_ENV_PREFIX=$RUNNER_TEMP/round21-macos-prefix" >> "$GITHUB_ENV"
+          echo "MENAGERIE_RELEASE_ATTESTATION=$RUNNER_TEMP/round21-macos-attestation.json" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-activate-base: false
+          python-version: "3.11"
+
+      - name: Require macOS lock, provenance, conda, and Seatbelt denial audit
+        shell: bash
+        run: |
+          if [ "$(uname -s)" != "Darwin" ] || [ "$(uname -m)" != "arm64" ]; then
+            echo "unmet-release-gate: an Apple-Silicon macOS release host is required"
+            exit 1
+          fi
+          for artifact in \
+            "$MENAGERIE_PLATFORM_LOCK" \
+            "${MENAGERIE_PLATFORM_LOCK%.lock}.resolved.json" \
+            "${MENAGERIE_PLATFORM_LOCK%.lock}.resolved.sha256" \
+            "${MENAGERIE_PLATFORM_LOCK%.lock}.provenance.json"; do
+            if [ ! -f "$artifact" ]; then
+              echo "unmet-release-gate: missing committed macOS artifact: $artifact"
+              exit 1
+            fi
+          done
+          if ! command -v conda >/dev/null 2>&1; then
+            echo "unmet-release-gate: conda is unavailable on the macOS release host"
+            exit 1
+          fi
+          if ! command -v sandbox-exec >/dev/null 2>&1 || ! command -v log >/dev/null 2>&1; then
+            echo "unmet-release-gate: seatbelt-denial-audit-unavailable"
+            exit 1
+          fi
+
+      - name: Materialize and verify the committed SHA-256 macOS lock
+        shell: bash
+        run: |
+          python -m pip install jsonschema
+          PYTHONPATH=. python -m menagerie.crawler.tools.release_lock \
+            --lock "$MENAGERIE_PLATFORM_LOCK" \
+            --resolved-export "${MENAGERIE_PLATFORM_LOCK%.lock}.resolved.json" \
+            --prefix "$MENAGERIE_REAL_ENV_PREFIX" \
+            --conda conda
+          "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -c \
+            "import jsonschema, numpy, pytest, torch"
+
+      - name: Run every registered macOS real composition and emit pass attestation
+        shell: bash
+        run: |
+          PYTHONPATH=. "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -m pytest -q \
+            menagerie/crawler/tests -m round21_macos_real -x --tb=short
+          "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -c \
+            "import json, os; p=json.load(open(os.environ['MENAGERIE_RELEASE_ATTESTATION'])); assert p['status']=='passed' and p['expected_nodes']==p['passed_nodes'] and not p['skipped_nodes'] and not p['xfailed_nodes']"
+
+      - name: Upload macOS release pass attestation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: round21-macos-release-attestation
+          path: ${{ runner.temp }}/round21-macos-attestation.json
+          if-no-files-found: error
+
+  crawler-round21-deliberate-reversions:
+    name: Crawler Round 21 deliberate reversion gates
+    runs-on: ubuntu-latest
+    needs:
+      # Linux reversions do not need the (opt-in) macOS release job; depending on
+      # it would make this Linux gate skip whenever the macOS runner is absent.
+      - crawler-round21-linux-release
+    env:
+      MENAGERIE_RELEASE_GATE: "1"
+      MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-linux-64.lock
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve round21 runner-temp attestation paths
+        shell: bash
+        run: |
+          echo "MENAGERIE_REAL_ENV_PREFIX=$RUNNER_TEMP/round21-reversion-prefix" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-activate-base: false
+          python-version: "3.11"
+
+      - name: Materialize and verify the committed SHA-256 Linux lock
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap strace
+          # GitHub's ubuntu-24.04 runners restrict unprivileged user namespaces
+          # (AppArmor), so an installed bwrap still cannot construct its sandbox and
+          # detect_os_sandbox() fails closed at the release gate. Re-enable userns for
+          # the sandbox probe; guarded so it is a harmless no-op on images without the
+          # knob. This does not weaken the gate -- the test still requires a *working*
+          # bwrap sandbox, it just lets the hosted runner provide one.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>/dev/null || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>/dev/null || true
+          python -m pip install jsonschema
+          PYTHONPATH=. python -m menagerie.crawler.tools.release_lock \
+            --lock "$MENAGERIE_PLATFORM_LOCK" \
+            --resolved-export "${MENAGERIE_PLATFORM_LOCK%.lock}.resolved.json" \
+            --prefix "$MENAGERIE_REAL_ENV_PREFIX" \
+            --conda conda
+          "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -c \
+            "import jsonschema, numpy, pytest, torch"
+
+      - name: Run every D01-D29 disposable-checkout reversion
+        shell: bash
+        run: |
+          PYTHONPATH=. "$MENAGERIE_REAL_ENV_PREFIX/bin/python" -m menagerie.crawler.tools.round21_reversions \
+            --source "$GITHUB_WORKSPACE" \
+            --work-root "${{ runner.temp }}/round21-reversions" \
+            --attestation "${{ runner.temp }}/round21-reversion-attestation.json"
+
+      - name: Upload deliberate-reversion result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: round21-reversion-attestation
+          path: ${{ runner.temp }}/round21-reversion-attestation.json
+          if-no-files-found: error
+
+  crawler-round21-conformance:
+    name: Crawler Round 21 conformance totality and pass attestation
+    runs-on: ubuntu-latest
+    needs:
+      - crawler-round21-linux-release
+      - crawler-round21-macos-release
+      - crawler-round21-deliberate-reversions
+    env:
+      MENAGERIE_RELEASE_GATE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve round21 runner-temp attestation paths
+        shell: bash
+        run: |
+          echo "MENAGERIE_LINUX_RELEASE_ATTESTATION=$RUNNER_TEMP/round21-attestations/linux/round21-linux-attestation.json" >> "$GITHUB_ENV"
+          echo "MENAGERIE_MACOS_RELEASE_ATTESTATION=$RUNNER_TEMP/round21-attestations/macos/round21-macos-attestation.json" >> "$GITHUB_ENV"
+          echo "MENAGERIE_REVERSION_ATTESTATION=$RUNNER_TEMP/round21-attestations/reversions/round21-reversion-attestation.json" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: round21-linux-release-attestation
+          path: ${{ runner.temp }}/round21-attestations/linux
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: round21-macos-release-attestation
+          path: ${{ runner.temp }}/round21-attestations/macos
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: round21-reversion-attestation
+          path: ${{ runner.temp }}/round21-attestations/reversions
+
+      - name: Install crawler test dependencies
+        run: |
+          python -m pip install -e ".[dev,tabular]"
+
+      - name: Prove registry totality and host pass/not-skip coverage
+        run: |
+          python -m pytest -q \
+            menagerie/crawler/tests/test_release_conformance_composition.py::test_ci_attestations_cover_registry_without_skip \
+            -x --tb=short
