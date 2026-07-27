@@ -1,6 +1,144 @@
 # CHANGELOG
 
 
+## v2.32.4 (2026-07-27)
+
+### Bug Fixes
+
+- Resolve not-slow ripple regressions (RF table, data-alias marker, hygiene)
+  ([`0de238c`](https://github.com/johnmarktaylor91/torchlens/commit/0de238c8281ff5aa5ed1f08bbb5b6c59861db175))
+
+Fixes the reproducible ripple failures the re-enabled not-slow gate surfaced: - RF status table
+  returned raw strings instead of ReceptiveFieldStatus enums. - The .data-write diagnostic marker
+  was over-broad (warning-as-error on constant/scalar/view/buffer alias writes); narrowed to the
+  labeled-RHS input-derived case, with the independent UNVERIFIABLE ceiling unchanged. - Removed a
+  bare .detach() outside the training guard; ArgSpec lookup-table, record-field policy, and
+  inert-RNG reachability reconciled. The cross-thread deadlock, .data-alias ceiling, raw-hook
+  dispatch-scoped accounting, collapse, and exotic-model capture fixes are preserved.
+
+- **capture**: Attribute raw hook gaps to boundary ops
+  ([`1474940`](https://github.com/johnmarktaylor91/torchlens/commit/1474940be881efb0714a565072d5c82273c5edd7))
+
+Wrap raw forward hooks and exhaustive module forwards in witness ownership tokens, then mark those
+  tokens accounted only when model_prep synthesizes an intervention-replacement or internal-source
+  boundary op. This attributes the raw aten zeros, gelu, and relu dispatches without witness
+  exemptions while preserving genuine top-level raw-dispatch gaps.
+
+- **capture**: Ceiling data-alias writes after getter capture
+  ([`aa56e70`](https://github.com/johnmarktaylor91/torchlens/commit/aa56e702df60b6a9117613dc3ea778c4aa9156b3))
+
+- **capture**: Fail closed for indirect numpy-2 host RNGs
+  ([`3f7108e`](https://github.com/johnmarktaylor91/torchlens/commit/3f7108eb3ef3571eac27656e51baee94db1c9ac9))
+
+- **capture**: Make dynamic-parameter capture torch-2.1 compatible
+  ([`45f9300`](https://github.com/johnmarktaylor91/torchlens/commit/45f9300884ee5bfcc9948d406545aab58ade0906))
+
+- **capture**: Reconcile exotic validation dispatch gaps
+  ([`62b626c`](https://github.com/johnmarktaylor91/torchlens/commit/62b626c53b1d7c0c8f813b3198783439436610ed))
+
+Capture temporary Parameter initializer mutations from modules created during forward while
+  retaining fail-closed handling for registered state mutations.
+
+Treat torch.autograd.grad engine dispatch as an exact audited backward boundary, and capture
+  Tensor.data getters as canonical detach operations for replay-safe provenance.
+
+- **capture**: Release sealed session payload snapshots
+  ([`5525971`](https://github.com/johnmarktaylor91/torchlens/commit/55259715c4ee45dc9cfd6b32f22b3fa0b089cc5a))
+
+- **capture**: Scope raw-hook accounting to dispatch granularity
+  ([`a2629bf`](https://github.com/johnmarktaylor91/torchlens/commit/a2629bf911374fa6cda53bc631829c9778e0236e))
+
+The prior raw-hook boundary accounting credited the whole forward token, which masked a co-occurring
+  observable mutation (e.g. aten.mul_) that shares the forward with an untraceable-output boundary.
+  Credit is now dispatch-scoped: only the dispatches the synthesized
+  internal_source/intervention_replacement boundary actually represents are accounted, while every
+  value-affecting mutation stays an unaccounted owner_not_captured gap and fails closed
+  (capture_verified=False). Restores child-level negative controls (untraceable-output + mutation
+  still trips; a boundaryless child gap still trips) alongside the legitimate internal_source case.
+
+- **capture**: Stop recursive cross-thread storage deadlock
+  ([`97a7b24`](https://github.com/johnmarktaylor91/torchlens/commit/97a7b2414177f1b511e23d21bd08bb1ba46c3da8))
+
+Use the current-session label anchor directly in completeness_witness.py's non-owner membership
+  check instead of entering _tl.py's storage-validation gate. This keeps captured-tensor touch
+  detection fail-closed, including rebound objects, while avoiding recursive patched untyped_storage
+  observation on worker threads.
+
+Keep the r41 typed-storage witness assertion reachable under warnings-as-errors by filtering only
+  PyTorch's expected TypedStorage deprecation warning.
+
+- **capture**: Witness numpy-2 cyfunction RNG receivers
+  ([`baf308b`](https://github.com/johnmarktaylor91/torchlens/commit/baf308b4b8bb23984fe7a44188960d5c4c60c221))
+
+- **io**: Reconcile runnable callable aliases
+  ([`2d1e706`](https://github.com/johnmarktaylor91/torchlens/commit/2d1e706c76d20506c1bcd39282274494cd0cc973))
+
+- **io**: Scrub derived gradient payloads portably
+  ([`453af66`](https://github.com/johnmarktaylor91/torchlens/commit/453af6682a24f7019fa7351a9192651e994e638c))
+
+- **receptive_field**: Handle rank-one empty concat inputs
+  ([`316516f`](https://github.com/johnmarktaylor91/torchlens/commit/316516f8cd3ca09de14f9cb7e9d35c2292936099))
+
+- **receptive_field**: Map InstanceNorm state parents
+  ([`28adcc1`](https://github.com/johnmarktaylor91/torchlens/commit/28adcc1dcf3bb00481aa0179646aa478af58afd2))
+
+- **receptive_field**: Preserve rank-changing full rules
+  ([`b5e5317`](https://github.com/johnmarktaylor91/torchlens/commit/b5e5317c9c9ec6fb31b2e80dae39e65ea939444d))
+
+- **receptive_field**: Separate fallback axis state
+  ([`df4b8b8`](https://github.com/johnmarktaylor91/torchlens/commit/df4b8b8c130076f88732831bb59b75fcfedb38fb))
+
+- **viz**: Index collapse adjacency labels
+  ([`ba0cacd`](https://github.com/johnmarktaylor91/torchlens/commit/ba0cacdc6db97116cb516356488aff45e5078ea0))
+
+### Continuous Integration
+
+- **tests**: Defer the not-slow gate re-enable
+  ([`69de516`](https://github.com/johnmarktaylor91/torchlens/commit/69de51646da869128d973d1e405546e6d2b19697))
+
+Ship the sprint's correctness fixes on the smoke matrix (2.32.3 posture) now. The full not-slow leg
+  is a ~5h run (a per-op witness-accounting perf regression) and still has a few lower-severity
+  failures (a field-order golden, an arg-spec coverage-list reconcile, a buffer-write model, an
+  arg-positions case). Re-enabling it now would block the release on a 5h gate that can't yet pass,
+  so the not-slow CI gate re-enable + those failures + the perf clawback move to a follow-up; the
+  correctness fixes (two hang fixes, the failure backlog, and four false-VERIFIED tripwire closures)
+  all ship in this release.
+
+- **tests**: Re-enable the not-slow gate on the canonical leg
+  ([`e77509c`](https://github.com/johnmarktaylor91/torchlens/commit/e77509cee6520bc9cc25963fafdb6230ce8c3f86))
+
+Restores the canonical py3.11/torch-2.8 leg to the full `-m "not slow"` suite (reverting the
+  temporary smoke-only scope from b538324c) now that the pre-existing not-slow backlog is fixed.
+  Excludes tests/test_menagerie_*.py: the menagerie is a separate reference corpus, excluded from
+  the wheel and maintained independently, so the torchlens package gate does not run its tests.
+  Keeps the canonical render byte-oracle.
+
+### Performance Improvements
+
+- **capture**: Scope numpy-2 rng digest off internal frames
+  ([`5148a4f`](https://github.com/johnmarktaylor91/torchlens/commit/5148a4fb9f6d61292f1750b995daacbe76966662))
+
+### Testing
+
+- **capture**: Assert stable facade and factory semantics
+  ([`30d186a`](https://github.com/johnmarktaylor91/torchlens/commit/30d186a42c0bff49b0c15c52599e76e5e292927a))
+
+- **imports**: Track receptive field child collision
+  ([`30d6eea`](https://github.com/johnmarktaylor91/torchlens/commit/30d6eea0e741c0b933c6f1d8d74a1a46ed9706cb))
+
+- **intervention**: Patch resolver module directly
+  ([`e15d1e1`](https://github.com/johnmarktaylor91/torchlens/commit/e15d1e1d182adcfe04d65d35bc8d9a8fcc4d2c0f))
+
+- **toy-models**: Mark stacked SSM slow
+  ([`c59dc52`](https://github.com/johnmarktaylor91/torchlens/commit/c59dc52e55a60c10bf06056512ae7b9320e9ba50))
+
+- **viz**: Contain collapse schedule regressions
+  ([`5815ffd`](https://github.com/johnmarktaylor91/torchlens/commit/5815ffdb13fe1777d6a48f9493c12cd81bf1533e))
+
+- **viz**: Prove collapse adjacency equivalence
+  ([`706449e`](https://github.com/johnmarktaylor91/torchlens/commit/706449e8f2c919a2a1cacac2c1d1d1dfb45ced8c))
+
+
 ## v2.32.3 (2026-07-25)
 
 ### Bug Fixes
