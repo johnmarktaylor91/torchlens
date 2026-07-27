@@ -85,15 +85,25 @@ def test_macos_profile_denies_network_and_writes_except_designated_roots(
         "(version 1)\n"
         "(allow default)\n"
         "(deny network*)\n"
-        "(deny file-read-data)\n"
+        "(deny file-read-data (with send-signal SIGKILL) (with telemetry) "
+        '(with message "MENAGERIE_MACOS_WORKER_FILE_READ_DENIAL_V1"))\n'
         "(deny file-write*)\n"
         '(allow file-read-data (require-all (vnode-type DIRECTORY) (literal "/")))\n'
         '(allow file-read-data (subpath "/System"))\n'
         '(allow file-read-data (subpath "/usr/lib"))\n'
+        '(allow file-read-data (subpath "/usr/share/locale"))\n'
         '(allow file-read-data (subpath "/Library/Apple"))\n'
+        "(allow file-read-data "
+        '(literal "/Library/Preferences/Logging/com.apple.diagnosticd.filter.plist"))\n'
         '(allow file-read-data (subpath "/private/etc"))\n'
+        '(allow file-read-data (subpath "/private/var/db/timezone"))\n'
+        "(allow file-read-data "
+        '(require-all (vnode-type DIRECTORY) (literal "/private/tmp")))\n'
+        "(allow file-read-data (require-all (vnode-type DIRECTORY) "
+        '(regex #"^/private/tmp/__KMP_REGISTERED_LIB_[0-9]+$")))\n'
         '(allow file-read-data (subpath "/dev"))\n'
         '(allow file-write* (literal "/dev/null"))\n'
+        '(allow file-write-data (literal "/dev/dtracehelper"))\n'
         f'(allow file-read-data (literal "{result.resolve()}"))\n'
         f'(allow file-read-data (subpath "{result.resolve()}"))\n'
         f'(allow file-read-data (literal "{scratch.resolve()}"))\n'

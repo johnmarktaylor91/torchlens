@@ -50,6 +50,7 @@ def test_safe_environment_scrubs_credentials_and_socket_tripwire_fails(tmp_path:
     assert safe["PATH"] == "/bin"
     assert "SECRET_TOKEN" not in safe
     assert safe["HF_HUB_OFFLINE"] == "1"
+    assert safe["__CF_USER_TEXT_ENCODING"] == f"0x{os.getuid():X}:0x0:0x0"
 
     with ExecutionPolicy(tmp_path / "scratch") as observation:
         with pytest.raises(PolicyViolation, match="blocked socket"):

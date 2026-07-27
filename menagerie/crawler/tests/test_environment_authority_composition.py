@@ -754,7 +754,7 @@ def _macos_profile_manifest(tmp_path: Path) -> tuple[Any, dict[str, Path]]:
 def test_macos_v3_profile_has_one_fresh_literal_prefix_and_exact_outside_members(
     tmp_path: Path,
 ) -> None:
-    """Seatbelt grants only one fresh v3 prefix and exact outside capabilities."""
+    """Seatbelt grants one fresh v3 prefix and exact outside file/directory capabilities."""
 
     manifest, members = _macos_profile_manifest(tmp_path)
     scratch = tmp_path / "scratch"
@@ -776,8 +776,10 @@ def test_macos_v3_profile_has_one_fresh_literal_prefix_and_exact_outside_members
     assert subpath_rules == {
         '(allow file-read-data (subpath "/System"))',
         '(allow file-read-data (subpath "/usr/lib"))',
+        '(allow file-read-data (subpath "/usr/share/locale"))',
         '(allow file-read-data (subpath "/Library/Apple"))',
         '(allow file-read-data (subpath "/private/etc"))',
+        '(allow file-read-data (subpath "/private/var/db/timezone"))',
         '(allow file-read-data (subpath "/dev"))',
         f"(allow file-read-data (subpath {json.dumps(str(scratch.resolve()))}))",
         f"(allow file-read-data (subpath {json.dumps(str(result.resolve()))}))",
@@ -786,7 +788,30 @@ def test_macos_v3_profile_has_one_fresh_literal_prefix_and_exact_outside_members
     for kind in ("model", "crawler", "external", "asset", "request"):
         literal = f"(allow file-read-data (literal {json.dumps(str(members[kind]))}))"
         assert profile.count(literal) == 1
-    assert "(regex" not in profile
+    outside_members = tuple(
+        members[kind] for kind in ("model", "crawler", "external", "asset", "request")
+    )
+    traversal_directories = {
+        parent
+        for member in outside_members
+        for parent in member.parents
+        if parent != Path("/")
+    }
+    for directory in traversal_directories:
+        encoded_directory = json.dumps(str(directory))
+        directory_grant = (
+            "(allow file-read-data "
+            f"(require-all (vnode-type DIRECTORY) (literal {encoded_directory})))"
+        )
+        assert profile.count(directory_grant) == 1
+        assert f"(allow file-read-data (literal {encoded_directory}))" not in profile
+        assert f"(allow file-read-data (subpath {encoded_directory}))" not in profile
+    undeclared_sibling = members["model"].with_name("undeclared-sibling.py")
+    assert f"(literal {json.dumps(str(undeclared_sibling))})" not in profile
+    assert [line for line in profile.splitlines() if "(regex " in line] == [
+        "(allow file-read-data (require-all (vnode-type DIRECTORY) "
+        '(regex #"^/private/tmp/__KMP_REGISTERED_LIB_[0-9]+$")))'
+    ]
     for forbidden_root in (
         Path.cwd().resolve(),
         Path.home().resolve(),

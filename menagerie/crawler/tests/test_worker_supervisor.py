@@ -1282,7 +1282,8 @@ def test_macos_only_completion_marked_clean_parent_channel_is_clean() -> None:
     clean = _macos_denial_audit((_MACOS_AUDIT_COMPLETION_MARKER + "\n").encode("ascii"))
     denied = _macos_denial_audit(
         (
-            '{"eventMessage":"sandbox deny file-read-data /private/hidden.bin"}\n'
+            '{"eventMessage":"sandbox deny file-read-data /private/hidden.bin'
+            '\\nProcess: worker [42]\\nMetaData: long forced telemetry"}\n'
             f"{_MACOS_AUDIT_COMPLETION_MARKER}\n"
         ).encode("utf-8")
     )
@@ -1290,4 +1291,4 @@ def test_macos_only_completion_marked_clean_parent_channel_is_clean() -> None:
     assert clean.poisoned is False
     assert denied.poisoned is True
     assert denied.checkpoint_or_weight_read_attempted is True
-    assert "hidden.bin" in denied.checkpoint_paths[0]
+    assert denied.checkpoint_paths == ("/private/hidden.bin",)

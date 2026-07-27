@@ -49,6 +49,7 @@ from menagerie.crawler.identity import (
 from menagerie.crawler.policy import (
     _PARENT_ALLOWED_READ_PATHS_ENV,
     _PARENT_STANDARD_INPUT_ASSET_ENV,
+    _MACOS_FILE_READ_DENY_RULE,
     _MODEL_DATA_SUFFIXES,
     HostTransportLibraryCapability,
     SandboxUnavailableError,
@@ -126,6 +127,7 @@ _SYSTEM_READ_FILES = frozenset(
 _TERMINAL_TRACE_PATTERN = re.compile(r"\+\+\+ (?:exited with|killed by) .+ \+\+\+$")
 _MACOS_AUDIT_COMPLETION_MARKER = "MENAGERIE_MACOS_SANDBOX_AUDIT_COMPLETE_V1"
 _MACOS_AUDIT_SENTINEL_PREFIX = ".menagerie-seatbelt-audit-"
+_DARWIN_LIBOMP_REGISTRATION_PREFIX = "__KMP_REGISTERED_LIB_"
 _PARENT_COMPLETION_CHALLENGE_ENV = "MENAGERIE_PARENT_COMPLETION_CHALLENGE"
 _WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V1 "
 _WORKER_COMPLETION_V2_PREFIX = "MENAGERIE_WORKER_COMPLETION_V2 "
@@ -1210,6 +1212,7 @@ def _child_limit(
     rss_limit_bytes: int,
     lease_record_path: Optional[Path] = None,
     lease: Optional[WorkerLease] = None,
+    create_darwin_libomp_blocker: bool = False,
 ) -> None:
     """Apply limits, parent-death defense, and trusted lease bootstrap.
 
@@ -1219,6 +1222,9 @@ def _child_limit(
         Requested memory cap in bytes.
     lease_record_path, lease:
         Optional exact durable lease filled with child identity before model import.
+    create_darwin_libomp_blocker:
+        Whether to create the exact PID-bound LLVM OpenMP registration blocker before
+        entering Seatbelt.
     """
 
     if sys.platform.startswith("linux"):
@@ -1226,6 +1232,12 @@ def _child_limit(
         if libc.prctl(1, signal.SIGKILL) != 0:  # PR_SET_PDEATHSIG
             os._exit(126)
         if os.getppid() == 1:
+            os._exit(126)
+    if create_darwin_libomp_blocker:
+        blocker = _darwin_libomp_registration_blocker(os.getpid())
+        try:
+            blocker.mkdir(mode=0o500)
+        except OSError:
             os._exit(126)
     if lease_record_path is not None and lease is not None:
         child_pid = os.getpid()
@@ -1271,6 +1283,87 @@ def _child_limit(
         except (OSError, ValueError):
             if sys.platform != "darwin":
                 raise
+
+
+def _darwin_libomp_registration_blocker(pid: int) -> Path:
+    """Return the exact Darwin LLVM OpenMP temporary registration path.
+
+    Parameters
+    ----------
+    pid:
+        Sandboxed worker process identifier retained across ``sandbox-exec``.
+
+    Returns
+    -------
+    pathlib.Path
+        PID-specific path LLVM OpenMP otherwise creates in the host-global temporary root.
+    """
+
+    return Path("/private/tmp") / f"{_DARWIN_LIBOMP_REGISTRATION_PREFIX}{pid}"
+
+
+def _verify_darwin_libomp_registration_blocker(path: Path) -> tuple[int, int]:
+    """Verify and return the trusted pre-sandbox OpenMP blocker identity.
+
+    Parameters
+    ----------
+    path:
+        Exact PID-bound blocker created by the child bootstrap.
+
+    Returns
+    -------
+    tuple[int, int]
+        Device and inode pair used to verify cleanup.
+
+    Raises
+    ------
+    SandboxUnavailableError
+        If the blocker is absent, replaced, writable, or owned by another user.
+    """
+
+    try:
+        status = path.lstat()
+    except OSError as exc:
+        raise SandboxUnavailableError("Darwin libomp registration blocker is missing") from exc
+    if (
+        not stat.S_ISDIR(status.st_mode)
+        or stat.S_IMODE(status.st_mode) != 0o500
+        or status.st_uid != os.getuid()
+    ):
+        raise SandboxUnavailableError("Darwin libomp registration blocker is invalid")
+    return status.st_dev, status.st_ino
+
+
+def _remove_darwin_libomp_registration_blocker(
+    path: Path,
+    expected_identity: tuple[int, int],
+) -> bool:
+    """Remove one unchanged empty OpenMP blocker after sandbox exit.
+
+    Parameters
+    ----------
+    path:
+        Exact PID-bound blocker path.
+    expected_identity:
+        Parent-recorded device and inode pair.
+
+    Returns
+    -------
+    bool
+        True only when the unchanged empty directory was removed.
+    """
+
+    try:
+        status = path.lstat()
+        if (
+            not stat.S_ISDIR(status.st_mode)
+            or (status.st_dev, status.st_ino) != expected_identity
+        ):
+            return False
+        path.rmdir()
+    except OSError:
+        return False
+    return True
 
 
 def _linux_rss(pid: int) -> int:
@@ -2472,6 +2565,50 @@ def _macos_denial_process_path(line: str) -> Optional[Path]:
     return None
 
 
+def _macos_denial_excerpt(message: str) -> str:
+    """Return a bounded denial summary while retaining its target path.
+
+    Forced Seatbelt telemetry appends a multiline diagnostic report after the ordinary
+    one-line denial. Keeping the tail would discard the leading denied path and make the
+    parent observation unactionable.
+
+    Parameters
+    ----------
+    message:
+        Decoded unified-log event message.
+
+    Returns
+    -------
+    str
+        At most 500 characters from the end of the first denial line.
+    """
+
+    first_line = message.splitlines()[0] if message.splitlines() else message
+    return first_line[-500:]
+
+
+def _macos_file_read_target(message: str) -> str:
+    """Return the exact denied read target when the Seatbelt line carries one.
+
+    Parameters
+    ----------
+    message:
+        Decoded unified-log event message.
+
+    Returns
+    -------
+    str
+        Denied path, or a bounded diagnostic excerpt for an unfamiliar record shape.
+    """
+
+    first_line = message.splitlines()[0] if message.splitlines() else message
+    for separator in (" file-read-data ", " file read data "):
+        _prefix, found, target = first_line.partition(separator)
+        if found and target:
+            return target
+    return _macos_denial_excerpt(message)
+
+
 def _macos_denial_audit(
     telemetry: bytes,
     *,
@@ -2550,13 +2687,13 @@ def _macos_denial_audit(
         lowered = message.lower()
         recognized = False
         if "network" in lowered:
-            network.append(message[-500:])
+            network.append(_macos_denial_excerpt(message))
             recognized = True
         if "file-write" in lowered or "file write" in lowered:
-            writes.append(message[-500:])
+            writes.append(_macos_denial_excerpt(message))
             recognized = True
         if "file-read-data" in lowered or "file read data" in lowered:
-            checkpoint_paths.append(message[-500:])
+            checkpoint_paths.append(_macos_file_read_target(message))
             recognized = True
         # Seatbelt also emits unrelated denials such as mach-lookup. They are not
         # evidence of the network/file policy classes and must not poison this worker.
@@ -2640,8 +2777,41 @@ class _MacOSAuditChannel:
     worker_pid: Optional[int] = None
     sandbox_executable: Optional[str] = None
     profile_path: Optional[Path] = None
+    profile_text: Optional[str] = None
     worker_executable: Optional[str] = None
     sentinel_process_ids: list[int] = field(default_factory=list)
+
+
+def _wait_for_macos_audit_collector(
+    process: subprocess.Popen[Any],
+    audit_path: Path,
+) -> bool:
+    """Wait until ``log stream`` has initialized its output channel.
+
+    Parameters
+    ----------
+    process:
+        Parent-owned unified-log collector.
+    audit_path:
+        Collector output file.
+
+    Returns
+    -------
+    bool
+        True only after the live collector has written its startup banner.
+    """
+
+    deadline = time.monotonic() + 2.5
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            return False
+        try:
+            if audit_path.stat().st_size > 0:
+                return True
+        except OSError:
+            return False
+        time.sleep(0.05)
+    return False
 
 
 def _emit_macos_audit_sentinel(channel: _MacOSAuditChannel, phase: str) -> bool:
@@ -2663,6 +2833,7 @@ def _emit_macos_audit_sentinel(channel: _MacOSAuditChannel, phase: str) -> bool:
     if (
         channel.sandbox_executable is None
         or channel.profile_path is None
+        or channel.profile_text is None
         or channel.worker_executable is None
     ):
         return False
@@ -2671,23 +2842,32 @@ def _emit_macos_audit_sentinel(channel: _MacOSAuditChannel, phase: str) -> bool:
     # emits no denial at all and the collector could never observe one. The unique sentinel
     # therefore lives inside the parent-owned audit directory, which is created 0700 outside
     # every child write root and is named by no read grant, so opening it is denied by policy.
+    sentinel_token = secrets.token_hex(16)
     sentinel_file = (
-        channel.path.parent / f"{_MACOS_AUDIT_SENTINEL_PREFIX}{secrets.token_hex(16)}-{phase}"
+        channel.path.parent / f"{_MACOS_AUDIT_SENTINEL_PREFIX}{sentinel_token}-{phase}"
+    )
+    sentinel_profile = channel.path.parent / (
+        f".menagerie-seatbelt-sentinel-{sentinel_token}-{phase}.sb"
     )
     sentinel_path = str(sentinel_file)
-    # Exit zero only for EPERM. A sentinel that vanished, or that was readable, must not be
-    # mistaken for a policy denial, otherwise this tripwire silently stops proving anything.
-    script = (
-        "import errno, sys\n"
-        "try:\n"
-        "    open(sys.argv[1], 'rb').close()\n"
-        "except OSError as error:\n"
-        "    sys.exit(0 if error.errno == errno.EPERM else 3)\n"
-        "sys.exit(4)\n"
-    )
     try:
         descriptor = os.open(sentinel_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         os.close(descriptor)
+        sentinel_deny = (
+            "(deny file-read-data (with send-signal SIGKILL) (with telemetry) "
+            f'(with message "MENAGERIE_MACOS_AUDIT_SENTINEL_{sentinel_token}_{phase}"))'
+        )
+        if channel.profile_text.count(_MACOS_FILE_READ_DENY_RULE) != 1:
+            return False
+        sentinel_profile_text = channel.profile_text.replace(
+            _MACOS_FILE_READ_DENY_RULE,
+            sentinel_deny,
+            1,
+        )
+        with sentinel_profile.open("x", encoding="utf-8") as profile_handle:
+            profile_handle.write(sentinel_profile_text)
+            if not sentinel_profile_text.endswith("\n"):
+                profile_handle.write("\n")
     except OSError:
         return False
     try:
@@ -2695,12 +2875,12 @@ def _emit_macos_audit_sentinel(channel: _MacOSAuditChannel, phase: str) -> bool:
             (
                 channel.sandbox_executable,
                 "-f",
-                str(channel.profile_path),
+                str(sentinel_profile),
                 channel.worker_executable,
                 "-I",
                 "-S",
                 "-c",
-                script,
+                "import sys\nopen(sys.argv[1], 'rb')\n",
                 sentinel_path,
             ),
             stdin=subprocess.DEVNULL,
@@ -2711,7 +2891,10 @@ def _emit_macos_audit_sentinel(channel: _MacOSAuditChannel, phase: str) -> bool:
             close_fds=True,
         )
         channel.sentinel_process_ids.append(sentinel.pid)
-        if sentinel.wait(timeout=5) != 0:
+        # The bound interpreter must die from the profile's forced-report signal. A
+        # readable or vanished sentinel exits differently and produces no exact-path
+        # denial record, so both states fail the combined signal-and-collector proof.
+        if sentinel.wait(timeout=5) != -signal.SIGKILL:
             return False
         deadline = time.monotonic() + 2.5
         while time.monotonic() < deadline:
@@ -2737,6 +2920,10 @@ def _emit_macos_audit_sentinel(channel: _MacOSAuditChannel, phase: str) -> bool:
     finally:
         try:
             sentinel_file.unlink()
+        except OSError:
+            pass
+        try:
+            sentinel_profile.unlink()
         except OSError:
             pass
 
@@ -2782,6 +2969,7 @@ def _start_macos_denial_audit(
     handle = path.open("wb")
     process: Optional[subprocess.Popen[Any]] = None
     try:
+        profile_text = profile_path.read_text(encoding="utf-8")
         process = subprocess.Popen(
             (
                 log_executable,
@@ -2798,10 +2986,9 @@ def _start_macos_denial_audit(
             start_new_session=True,
             close_fds=True,
         )
-        # Start before the worker and leave an explicit overlap beyond the first
-        # ~100 ms, where unified-log startup otherwise races very short-lived children.
-        time.sleep(0.2)
-        if process.poll() is not None:
+        # A fixed sleep races collector initialization under load. Wait for the
+        # parent-owned stream's startup banner before emitting the lifetime sentinel.
+        if not _wait_for_macos_audit_collector(process, path):
             raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
         channel = _MacOSAuditChannel(
             path,
@@ -2810,6 +2997,7 @@ def _start_macos_denial_audit(
             handle,
             sandbox_executable=sandbox_executable,
             profile_path=profile_path,
+            profile_text=profile_text,
             worker_executable=worker_executable,
         )
         if not _emit_macos_audit_sentinel(channel, "startup"):
@@ -2955,6 +3143,116 @@ def _atomic_rewrite_receipt(path: Path, receipt: Mapping[str, Any]) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _sandbox_denial_reason_code(denial: SandboxDenialObservation) -> str:
+    """Return the dominant closed reason for one parent-observed denial.
+
+    Parameters
+    ----------
+    denial:
+        Parsed and integrity-checked OS sandbox observation.
+
+    Returns
+    -------
+    str
+        ``network-attempt``, ``write-outside-scratch``, or ``checkpoint-read``.
+    """
+
+    if denial.network_attempted:
+        return "network-attempt"
+    if denial.write_outside_scratch_attempted:
+        return "write-outside-scratch"
+    return "checkpoint-read"
+
+
+def _write_parent_policy_failure_receipt(
+    receipt_path: Path,
+    request: Mapping[str, Any],
+    denial: SandboxDenialObservation,
+) -> None:
+    """Write a non-awarding parent failure receipt for a force-killed macOS worker.
+
+    Seatbelt terminates the worker before model code can catch an undeclared read, so no
+    child receipt can exist. The parent already owns the audited denial and request
+    association; this envelope carries only those failure facts and can never contain a raw
+    award receipt.
+
+    Parameters
+    ----------
+    receipt_path:
+        Exact request-bound result path.
+    request:
+        Parent-authored worker request already verified against the execution manifest.
+    denial:
+        Completed parent-owned Seatbelt observation.
+    """
+
+    meaningful_modes_value = request.get("meaningful_modes")
+    meaningful_modes = (
+        [str(value) for value in meaningful_modes_value]
+        if isinstance(meaningful_modes_value, list)
+        else []
+    )
+    policy = {
+        "network_attempted": denial.network_attempted,
+        "socket_targets": list(denial.socket_targets),
+        "checkpoint_or_weight_read_attempted": (
+            denial.checkpoint_or_weight_read_attempted
+            or denial.telemetry_failure is not None
+        ),
+        "checkpoint_paths": list(denial.checkpoint_paths),
+        "write_outside_scratch_attempted": denial.write_outside_scratch_attempted,
+        "write_paths": list(denial.write_paths),
+        "credentials_present": False,
+        "torchlens_import_attempted": False,
+        "cache_read_attempted": False,
+    }
+    reason_code = _sandbox_denial_reason_code(denial)
+    error = {
+        "reason_code": reason_code,
+        "exception_type": "menagerie.crawler.worker_supervisor.SandboxDenialObservation",
+        "message": "Seatbelt terminated the worker after an audited policy denial",
+        "traceback": None,
+    }
+    diagnostic = {
+        "receipt_version": _WORKER_DIAGNOSTIC_VERSION,
+        "stable_id": request.get("stable_id"),
+        "source_identity": request.get("source_identity"),
+        "recipe_revision": request.get("recipe_revision"),
+        "observed_recipe_revision": None,
+        "observed_adapter_sha256": None,
+        "observed_code_manifest_sha256": None,
+        "observed_input_asset_sha256": None,
+        "execution_identity": request.get("execution_identity"),
+        "seed": request.get("seed"),
+        "input_seed": request.get("input_seed"),
+        "mode": request.get("mode"),
+        "device": request.get("device"),
+        "framework": request.get("framework"),
+        "awards_runs": False,
+        "constructor_started": False,
+        "constructor_completed": False,
+        "input_completed": False,
+        "per_mode": {},
+        "declared_meaningful_modes": meaningful_modes,
+        "detected_meaningful_modes": [],
+        "meaningful_modes": meaningful_modes,
+        "train_eval_divergence": None,
+        "divergence_evidence": None,
+        "policy_observation": policy,
+        "error": error,
+    }
+    record_payload = {
+        "result_version": _WORKER_RESULT_VERSION,
+        "raw_award_receipt": None,
+        "raw_award_receipt_sha256": None,
+        "diagnostic": diagnostic,
+    }
+    _atomic_rewrite_receipt(
+        receipt_path,
+        {**record_payload, "result_sha256": stable_hash(record_payload)},
+    )
+
+
 def _poison_receipt_for_policy_failure(
     receipt_path: Path,
     reason_code: str,
@@ -3068,12 +3366,7 @@ def poison_receipt_for_sandbox_denial(receipt_path: Path, denial: SandboxDenialO
 
     if not denial.poisoned:
         return False
-    if denial.network_attempted:
-        reason_code = "network-attempt"
-    elif denial.write_outside_scratch_attempted:
-        reason_code = "write-outside-scratch"
-    else:
-        reason_code = "checkpoint-read"
+    reason_code = _sandbox_denial_reason_code(denial)
     return _poison_receipt_for_policy_failure(receipt_path, reason_code, denial=denial)
 
 
@@ -3152,6 +3445,8 @@ def run_isolated_subprocess(
     request_sha256: Optional[str] = None,
     on_lease_started: Optional[Callable[[WorkerLease], None]] = None,
     verification_token: Optional[EnvironmentVerificationToken] = None,
+    policy_failure_receipt_path: Optional[Path] = None,
+    policy_failure_request: Optional[Mapping[str, Any]] = None,
 ) -> SupervisorObservation:
     """Launch a fresh credential-scrubbed subprocess inside an OS sandbox.
 
@@ -3188,6 +3483,9 @@ def run_isolated_subprocess(
         PID/start-token/PGID and before model execution is polled.
     verification_token:
         Cache-created spawn proof shared by compiler, projection, renderer, and supervisor.
+    policy_failure_receipt_path, policy_failure_request:
+        Optional exact v3 result path and parent request used only to persist a non-awarding
+        failure when forced Seatbelt termination precludes a child receipt.
 
     Returns
     -------
@@ -3206,6 +3504,8 @@ def run_isolated_subprocess(
         raise ValueError("timeout_seconds must be positive")
     if (request_nonce is None) != (request_sha256 is None):
         raise ValueError("request nonce and digest must be supplied together")
+    if (policy_failure_receipt_path is None) != (policy_failure_request is None):
+        raise ValueError("policy failure receipt path and request must be supplied together")
     if execution_read_manifest is not None:
         verify_execution_read_manifest(
             execution_read_manifest,
@@ -3342,6 +3642,9 @@ def run_isolated_subprocess(
     rss_exceeded = False
     shutdown_requested = False
     peak_rss = 0
+    darwin_libomp_blocker_path: Optional[Path] = None
+    darwin_libomp_blocker_identity: Optional[tuple[int, int]] = None
+    darwin_libomp_blocker_cleanup_failed = False
     try:
         with stdout_path.open("wb") as stdout_handle, stderr_path.open("wb") as stderr_handle:
             if isinstance(execution_read_manifest, ExecutionReadManifestV3):
@@ -3366,8 +3669,21 @@ def run_isolated_subprocess(
                     rss_limit_bytes,
                     (worker_lease_handle.record_path if worker_lease_handle is not None else None),
                     worker_lease_handle.lease if worker_lease_handle is not None else None,
+                    sandbox.kind == "sandbox-exec",
                 ),
             )
+            if sandbox.kind == "sandbox-exec":
+                darwin_libomp_blocker_path = _darwin_libomp_registration_blocker(process.pid)
+                try:
+                    darwin_libomp_blocker_identity = (
+                        _verify_darwin_libomp_registration_blocker(
+                            darwin_libomp_blocker_path
+                        )
+                    )
+                except SandboxUnavailableError:
+                    _kill_process_group(process)
+                    process.wait()
+                    raise
             if worker_lease_handle is not None:
                 if worker_lease_handle.lock_fd is not None:
                     os.close(worker_lease_handle.lock_fd)
@@ -3413,6 +3729,15 @@ def run_isolated_subprocess(
             worker_lease_handle.lifecycle_write_fd = None
         if macos_audit_channel is not None:
             _finish_macos_denial_audit(macos_audit_channel)
+        if (
+            darwin_libomp_blocker_path is not None
+            and darwin_libomp_blocker_identity is not None
+            and not _remove_darwin_libomp_registration_blocker(
+                darwin_libomp_blocker_path,
+                darwin_libomp_blocker_identity,
+            )
+        ):
+            darwin_libomp_blocker_cleanup_failed = True
     wall_seconds = time.monotonic() - started
     usage_after = resource.getrusage(resource.RUSAGE_CHILDREN)
     cpu_seconds = max(0.0, _rusage_seconds(usage_after) - _rusage_seconds(usage_before))
@@ -3435,6 +3760,11 @@ def run_isolated_subprocess(
             expected_process_roots=macos_runtime_read_roots,
             ignored_process_ids=macos_audit_channel.sentinel_process_ids,
         )
+        if darwin_libomp_blocker_cleanup_failed:
+            denial = _merge_denial_observations(
+                denial,
+                _telemetry_failure_observation("libomp-blocker-cleanup"),
+            )
     elif denial_audit_path is not None:
         denial = _parse_linux_denial_audit(
             denial_audit_path,
@@ -3450,6 +3780,17 @@ def run_isolated_subprocess(
                 or execution_read_manifest.standard_input_asset is None
                 else execution_read_manifest.standard_input_asset[0]
             ),
+        )
+    if (
+        denial.poisoned
+        and policy_failure_receipt_path is not None
+        and policy_failure_request is not None
+        and not policy_failure_receipt_path.exists()
+    ):
+        _write_parent_policy_failure_receipt(
+            policy_failure_receipt_path,
+            policy_failure_request,
+            denial,
         )
     _poison_receipts_in_roots(additional_write_roots, denial)
     parent_observation = {
@@ -3774,6 +4115,12 @@ def supervise_worker(
             request_sha256=request_sha256 if request_nonce is not None else None,
             on_lease_started=on_lease_started,
             verification_token=verification_token,
+            policy_failure_receipt_path=(
+                receipt_path if execution_read_manifest is not None else None
+            ),
+            policy_failure_request=(
+                request_value if execution_read_manifest is not None else None
+            ),
         )
     except SandboxUnavailableError:
         observation = _sandbox_unavailable_observation(argv, scratch_root, working_directory)

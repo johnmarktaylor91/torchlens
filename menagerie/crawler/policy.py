@@ -116,6 +116,10 @@ _SYSTEM_RUNTIME_CODE_ROOTS = (
 )
 _PARENT_ALLOWED_READ_PATHS_ENV = "MENAGERIE_PARENT_ALLOWED_READ_PATHS"
 _PARENT_STANDARD_INPUT_ASSET_ENV = "MENAGERIE_PARENT_STANDARD_INPUT_ASSET"
+_MACOS_FILE_READ_DENY_RULE = (
+    "(deny file-read-data (with send-signal SIGKILL) (with telemetry) "
+    '(with message "MENAGERIE_MACOS_WORKER_FILE_READ_DENIAL_V1"))'
+)
 _SPECIAL_READ_ROOTS = (Path("/dev"), Path("/proc"), Path("/sys"))
 _SYSTEM_READ_FILES = frozenset(
     {
@@ -255,6 +259,33 @@ def _normalized_write_roots(write_roots: Sequence[Path]) -> tuple[Path, ...]:
     return tuple(roots)
 
 
+def _exact_read_parent_directories(read_paths: Sequence[Path]) -> tuple[Path, ...]:
+    """Return exact directory vnodes needed to traverse declared read paths.
+
+    Python's path-based import finder reads each package directory before opening an
+    individual source file. Seatbelt does not infer those directory reads from a literal
+    file grant, so every parent must receive its own directory-vnode-only capability.
+
+    Parameters
+    ----------
+    read_paths:
+        Exact files or directories already authorized for data reads.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Sorted unique parent directories, excluding the separately granted root vnode.
+    """
+
+    directories = {
+        parent
+        for path in read_paths
+        for parent in path.resolve().parents
+        if parent != Path("/")
+    }
+    return tuple(sorted(directories, key=lambda path: str(path)))
+
+
 def generate_macos_sandbox_profile(
     write_roots: Sequence[Path],
     *,
@@ -300,7 +331,7 @@ def generate_macos_sandbox_profile(
         "(version 1)",
         "(allow default)",
         "(deny network*)",
-        "(deny file-read-data)",
+        _MACOS_FILE_READ_DENY_RULE,
         "(deny file-write*)",
         # dyld resolves the cryptex-hosted shared cache by reading the root directory itself,
         # which no declared root covers. The grant is pinned to the directory vnode and to the
@@ -308,10 +339,26 @@ def generate_macos_sandbox_profile(
         '(allow file-read-data (require-all (vnode-type DIRECTORY) (literal "/")))',
         '(allow file-read-data (subpath "/System"))',
         '(allow file-read-data (subpath "/usr/lib"))',
+        '(allow file-read-data (subpath "/usr/share/locale"))',
         '(allow file-read-data (subpath "/Library/Apple"))',
+        (
+            "(allow file-read-data "
+            '(literal "/Library/Preferences/Logging/com.apple.diagnosticd.filter.plist"))'
+        ),
         '(allow file-read-data (subpath "/private/etc"))',
+        '(allow file-read-data (subpath "/private/var/db/timezone"))',
+        (
+            "(allow file-read-data "
+            '(require-all (vnode-type DIRECTORY) (literal "/private/tmp")))'
+        ),
+        (
+            "(allow file-read-data "
+            "(require-all (vnode-type DIRECTORY) "
+            '(regex #"^/private/tmp/__KMP_REGISTERED_LIB_[0-9]+$")))'
+        ),
         '(allow file-read-data (subpath "/dev"))',
         '(allow file-write* (literal "/dev/null"))',
+        '(allow file-write-data (literal "/dev/dtracehelper"))',
     ]
     environment_prefix: Optional[Path] = None
     manifest_read_paths: tuple[Path, ...] = ()
@@ -351,6 +398,15 @@ def generate_macos_sandbox_profile(
         lines.append(f"(allow file-read-data (literal {encoded}))")
         if path in roots or path.is_dir():
             lines.append(f"(allow file-read-data (subpath {encoded}))")
+    # Exact file capabilities do not let Python enumerate their package directories.
+    # Grant only the directory vnodes on the traversal chain: this permits path-based
+    # discovery while leaving every undeclared sibling file under the deny-first rule.
+    for directory in _exact_read_parent_directories(candidate_read_paths):
+        encoded_directory = json.dumps(str(directory), ensure_ascii=True)
+        lines.append(
+            "(allow file-read-data "
+            f"(require-all (vnode-type DIRECTORY) (literal {encoded_directory})))"
+        )
     if environment_prefix is not None:
         encoded_prefix = json.dumps(str(environment_prefix), ensure_ascii=True)
         lines.append(f"(allow file-read-data (subpath {encoded_prefix}))")
@@ -1273,9 +1329,13 @@ def _probe_sandbox_exec(executable: str) -> bool:
     # actually owns libpython and the standard library, so probing with sys.prefix alone would
     # fail on a venv interpreter for reasons unrelated to Seatbelt. Both prefixes coincide for a
     # non-venv interpreter and de-duplicate inside the generator.
+    venv_configuration = Path(sys.prefix) / "pyvenv.cfg"
+    probe_read_paths = [Path(sys.executable)]
+    if venv_configuration.is_file():
+        probe_read_paths.append(venv_configuration)
     profile = generate_macos_sandbox_profile(
         (),
-        allowed_read_paths=(Path(sys.executable),),
+        allowed_read_paths=probe_read_paths,
         runtime_read_roots=(Path(sys.prefix), Path(sys.base_prefix), Path.cwd()),
     )
     return _probe_command((executable, "-p", profile, *_python_probe_argv()))
@@ -1514,6 +1574,11 @@ def build_safe_environment(
     safe.update({name: str(path) for name, path in cache_paths.items()})
     safe.update(
         {
+            # CoreFoundation otherwise reads the real user's ~/.CFUserTextEncoding even
+            # though HOME points at scratch. Supplying the conventional uid-bound UTF-8
+            # value prevents that foreign-home probe without granting any home-directory
+            # read capability.
+            "__CF_USER_TEXT_ENCODING": f"0x{os.getuid():X}:0x0:0x0",
             "HF_HUB_OFFLINE": "1",
             "TRANSFORMERS_OFFLINE": "1",
             "HF_DATASETS_OFFLINE": "1",
