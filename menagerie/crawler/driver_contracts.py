@@ -192,7 +192,7 @@ class DriverConfig:
     notify_command: Optional[str] = DEFAULT_NOTIFY_COMMAND
     author_model: str = "claude-sonnet"
     author_version: str = "current"
-    checker_model: str = "codex"
+    checker_model: str = "gpt-5.6-terra"
     checker_version: str = "current"
     only_status: Optional[str] = None
     run_repair_max: int = 2
