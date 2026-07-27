@@ -33,7 +33,6 @@ from typing import Any, Mapping, Optional, Sequence
 import uuid
 
 from menagerie.crawler.author_queue import (
-    AUTHOR_JOB_VERSION,
     DEFAULT_EFFORT_GRANT,
     EXIT_OK,
     EXIT_PERMANENT,
@@ -43,6 +42,7 @@ from menagerie.crawler.author_queue import (
     AuthorQueueError,
     EffortGrant,
     QueueJob,
+    build_job_descriptor as build_queue_job_descriptor,
     ensure_author_queue,
     job_paths,
     matches_attempt,
@@ -50,7 +50,7 @@ from menagerie.crawler.author_queue import (
     write_json_atomic,
 )
 from menagerie.crawler.capability_probe import CAPABILITY_PROBE_FORMAT
-from menagerie.crawler.identity import hash_bytes, stable_hash, utc_now
+from menagerie.crawler.identity import utc_now
 from menagerie.crawler.models import JsonObject
 
 WRAPPER_VERSION = "menagerie-author-operator 1.0.0"
@@ -152,49 +152,20 @@ def build_job_descriptor(
     nonce = str(request.get("nonce", ""))
     stable_id = str(request.get("stable_id") or f"capability-probe-{nonce[:16]}")
     work_id = str(request.get("work_id") or f"probe-{nonce[:16]}")
-    request_sha256 = hash_bytes(request_path.read_bytes())
-    job_id = _job_id(kind, work_id, request_sha256)
-    paths = job_paths(queue_root, job_id)
-    job: JsonObject = {
-        "envelope_version": AUTHOR_JOB_VERSION,
-        "job_id": job_id,
-        "attempt_nonce": attempt_nonce or uuid.uuid4().hex,
-        "kind": kind,
-        "stable_id": stable_id,
-        "work_id": work_id,
-        "author_model": author_model,
-        "campaign_id": campaign_id or request.get("campaign_id"),
-        "request_path": str(request_path.resolve()),
-        "request_sha256": request_sha256,
-        "required_output_path": str(Path(str(output)).resolve()),
-        "receipt_path": str(paths["receipt"]),
-        "backoff_path": str(paths["backoff"]),
-        "failure_path": str(paths["failure"]),
-        "claim_path": str(paths["claim"]),
-        "effort_grant": effort_grant.to_dict(),
-        "stall_timeout_seconds": float(stall_timeout_seconds),
-        "enqueued_at": utc_now(),
-    }
-    job["job_sha256"] = stable_hash(job)
-    return job
-
-
-def _job_id(kind: str, work_id: str, request_sha256: str) -> str:
-    """Return the deterministic filesystem-safe job identity.
-
-    Parameters
-    ----------
-    kind, work_id, request_sha256:
-        Round-trip label, work generation, and exact request digest.
-
-    Returns
-    -------
-    str
-        ``<kind>-<digest>`` identity, stable across retries of one request.
-    """
-
-    digest = stable_hash({"kind": kind, "work_id": work_id, "request": request_sha256})
-    return f"{kind}-{digest.removeprefix('sha256:')[:24]}"
+    return build_queue_job_descriptor(
+        queue_root=queue_root,
+        kind=kind,
+        stable_id=stable_id,
+        work_id=work_id,
+        request_path=request_path,
+        required_output_path=Path(str(output)),
+        effort_grant=effort_grant,
+        stall_timeout_seconds=stall_timeout_seconds,
+        attempt_nonce=attempt_nonce or uuid.uuid4().hex,
+        author_model=author_model,
+        campaign_id=campaign_id or request.get("campaign_id"),
+        enqueued_at=utc_now(),
+    )
 
 
 def _await_answer(

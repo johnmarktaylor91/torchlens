@@ -28,6 +28,7 @@ from typing import (
     TypeVar,
 )
 
+from menagerie.crawler import author_queue
 from menagerie.crawler.artifact_transactions import (
     ArtifactCheckpointError,
     ArtifactCheckpointProjection,
@@ -82,7 +83,6 @@ from menagerie.crawler.constants import (
     CHECKER_PROMPT_NAME,
     FAILURE_REASON_CODES,
     STDIO_TAIL_MAX_CHARS,
-    USAGE_LIMIT_PROVIDERS,
     AuthorPauseReason,
     InvocationOrigin,
     MODEL_SCHEMA_VERSION_V3,
@@ -845,25 +845,8 @@ class CommandAuthorLane(_AuthorLaneBase):
         )
 
 
-_AUTHOR_JOB_VERSION = "menagerie.crawler.author-queue-job.v1"
-_AUTHOR_QUEUE_DIRECTORIES = ("pending", "claimed", "receipts", "signals")
-
-
-def author_queue_directories(queue_root: Path) -> dict[str, Path]:
-    """Return the fixed author-queue subdirectory layout.
-
-    Parameters
-    ----------
-    queue_root:
-        Campaign-local author-queue root.
-
-    Returns
-    -------
-    dict[str, Path]
-        ``pending``, ``claimed``, ``receipts``, and ``signals`` roots.
-    """
-
-    return {name: queue_root / name for name in _AUTHOR_QUEUE_DIRECTORIES}
+_AUTHOR_JOB_VERSION = author_queue.AUTHOR_JOB_VERSION
+author_queue_directories = author_queue.author_queue_directories
 
 
 class QueueAuthorLane(_AuthorLaneBase):
@@ -935,7 +918,7 @@ class QueueAuthorLane(_AuthorLaneBase):
         self._monotonic = monotonic or time.monotonic
         self._sleep = sleep or time.sleep
         self._nonce_factory = nonce_factory or (lambda: uuid.uuid4().hex)
-        self.directories = author_queue_directories(self.queue_root)
+        self.directories = author_queue.author_queue_directories(self.queue_root)
 
     def _dispatch(
         self,
@@ -949,79 +932,35 @@ class QueueAuthorLane(_AuthorLaneBase):
     ) -> None:
         """Enqueue one job and block until the operator publishes its result."""
 
-        for directory in self.directories.values():
-            directory.mkdir(parents=True, exist_ok=True)
-        request_sha256 = hash_bytes(request_path.read_bytes())
-        job_id = self._job_id(kind, work_id, request_sha256)
-        attempt_nonce = self._nonce_factory()
-        paths = self._job_paths(job_id)
-        job: JsonObject = {
-            "envelope_version": _AUTHOR_JOB_VERSION,
-            "job_id": job_id,
-            "attempt_nonce": attempt_nonce,
-            "kind": kind,
-            "stable_id": item.stable_id,
-            "work_id": work_id,
-            "author_model": None if config is None else config.author_model,
-            "campaign_id": _campaign_id_for_item(item),
-            "request_path": str(request_path.resolve()),
-            "request_sha256": request_sha256,
-            "required_output_path": str(Path(output_path).resolve()),
-            "receipt_path": str(paths["receipt"]),
-            "backoff_path": str(paths["backoff"]),
-            "failure_path": str(paths["failure"]),
-            "claim_path": str(paths["claim"]),
-            "effort_grant": self.effort_grant.to_dict(),
-            "stall_timeout_seconds": self.stall_timeout_seconds,
-            "enqueued_at": self._clock(),
-        }
-        job["job_sha256"] = stable_hash(job)
-        _write_json_atomic(paths["pending"], job)
+        self.directories = author_queue.ensure_author_queue(self.queue_root)
+        protocol_grant = author_queue.EffortGrant.from_mapping(self.effort_grant.to_dict())
+        descriptor = author_queue.build_job_descriptor(
+            queue_root=self.queue_root,
+            kind=kind,
+            stable_id=item.stable_id,
+            work_id=work_id,
+            request_path=request_path,
+            required_output_path=output_path,
+            effort_grant=protocol_grant,
+            stall_timeout_seconds=self.stall_timeout_seconds,
+            attempt_nonce=self._nonce_factory(),
+            author_model=None if config is None else config.author_model,
+            campaign_id=_campaign_id_for_item(item),
+            enqueued_at=self._clock(),
+        )
+        job = author_queue.QueueJob.from_mapping(descriptor)
+        paths = author_queue.job_paths(self.queue_root, job.job_id)
+        author_queue.write_json_atomic(paths["pending"], descriptor)
         try:
             self._await_result(job, paths)
         finally:
             self._discard_job_files(paths)
 
-    def _job_id(self, kind: str, work_id: str, request_sha256: str) -> str:
-        """Return the deterministic filesystem-safe job identity.
-
-        Parameters
-        ----------
-        kind, work_id, request_sha256:
-            Round-trip label, work generation, and exact request digest.
-
-        Returns
-        -------
-        str
-            ``<kind>-<digest>`` identity, stable across retries of one request.
-        """
-
-        digest = stable_hash({"kind": kind, "work_id": work_id, "request": request_sha256})
-        return f"{kind}-{digest.removeprefix('sha256:')[:24]}"
-
-    def _job_paths(self, job_id: str) -> dict[str, Path]:
-        """Return every queue path owned by one job.
-
-        Parameters
-        ----------
-        job_id:
-            Deterministic job identity.
-
-        Returns
-        -------
-        dict[str, Path]
-            Pending, claim, receipt, backoff, and failure paths.
-        """
-
-        return {
-            "pending": self.directories["pending"] / f"{job_id}.json",
-            "claim": self.directories["claimed"] / f"{job_id}.json",
-            "receipt": self.directories["receipts"] / f"{job_id}.json",
-            "backoff": self.directories["signals"] / f"{job_id}.backoff.json",
-            "failure": self.directories["signals"] / f"{job_id}.failure.json",
-        }
-
-    def _await_result(self, job: Mapping[str, Any], paths: Mapping[str, Path]) -> None:
+    def _await_result(
+        self,
+        job: author_queue.QueueJob,
+        paths: Mapping[str, Path],
+    ) -> None:
         """Block until a nonce-matched result, pause, failure, or stall.
 
         Parameters
@@ -1046,7 +985,6 @@ class QueueAuthorLane(_AuthorLaneBase):
         """
 
         deadline = self._monotonic() + self.stall_timeout_seconds
-        output_path = Path(str(job["required_output_path"]))
         while True:
             backoff = self._matched_signal(paths["backoff"], job)
             if backoff is not None:
@@ -1056,23 +994,27 @@ class QueueAuthorLane(_AuthorLaneBase):
                 self._raise_operator_failure(job, failure)
             receipt = self._matched_signal(paths["receipt"], job)
             if receipt is not None:
-                if not output_path.is_file():
+                if not job.required_output_path.is_file():
                     raise DriverIntegrationError(
-                        f"author queue job {job['job_id']} reported completion without a "
-                        f"result at {output_path}"
+                        f"author queue job {job.job_id} reported completion without a "
+                        f"result at {job.required_output_path}"
                     )
                 self._audit_consumption(job, receipt)
                 return
             if self._monotonic() >= deadline:
                 claimed = paths["claim"].is_file()
                 raise AuthorQueueStalled(
-                    f"author queue job {job['job_id']} for {job['stable_id']} produced no "
+                    f"author queue job {job.job_id} for {job.stable_id} produced no "
                     f"result within {self.stall_timeout_seconds:g}s "
                     f"({'claimed but unfinished' if claimed else 'never claimed'})"
                 )
             self._sleep(self.poll_interval_seconds)
 
-    def _matched_signal(self, path: Path, job: Mapping[str, Any]) -> Optional[JsonObject]:
+    def _matched_signal(
+        self,
+        path: Path,
+        job: author_queue.QueueJob,
+    ) -> Optional[JsonObject]:
         """Read one pool-published file if it belongs to this attempt.
 
         Parameters
@@ -1088,22 +1030,23 @@ class QueueAuthorLane(_AuthorLaneBase):
             Parsed payload, or ``None`` when absent, unreadable, or superseded.
         """
 
-        if not path.is_file():
+        value = author_queue.read_json(path)
+        if value is None:
             return None
-        try:
-            value = _read_json(path)
-        except DriverIntegrationError:
-            # A partially written file is transient; the next poll re-reads it.
+        if author_queue.matches_attempt(value, job):
+            return value
+        if value.get("job_id") != job.job_id:
             return None
-        if value.get("job_id") != job["job_id"]:
-            return None
-        if value.get("attempt_nonce") != job["attempt_nonce"]:
+        if value.get("attempt_nonce") != job.attempt_nonce:
             # A late file from a superseded attempt is never this attempt's answer.
             path.unlink(missing_ok=True)
-            return None
-        return value
+        return None
 
-    def _raise_operator_failure(self, job: Mapping[str, Any], failure: Mapping[str, Any]) -> None:
+    def _raise_operator_failure(
+        self,
+        job: author_queue.QueueJob,
+        failure: Mapping[str, Any],
+    ) -> None:
         """Raise the typed error declared by an operator failure signal.
 
         Parameters
@@ -1124,15 +1067,19 @@ class QueueAuthorLane(_AuthorLaneBase):
         retryable = failure.get("retryable")
         if not isinstance(retryable, bool):
             raise DriverIntegrationError(
-                f"author queue failure for {job['stable_id']} omits a boolean "
+                f"author queue failure for {job.stable_id} omits a boolean "
                 f"retryable classification: {reason}"
             )
-        message = f"author queue job {job['job_id']} failed ({reason}): {detail}"
+        message = f"author queue job {job.job_id} failed ({reason}): {detail}"
         if retryable:
             raise RetryableOperatorError(message)
         raise DriverIntegrationError(message)
 
-    def _audit_consumption(self, job: Mapping[str, Any], receipt: Mapping[str, Any]) -> None:
+    def _audit_consumption(
+        self,
+        job: author_queue.QueueJob,
+        receipt: Mapping[str, Any],
+    ) -> None:
         """Reject a completion whose declared effort exceeds the published grant.
 
         The pool owns the tool-call and wall-clock timers because it is the only
@@ -1156,9 +1103,9 @@ class QueueAuthorLane(_AuthorLaneBase):
         consumption = receipt.get("consumption")
         if not isinstance(consumption, Mapping):
             raise DriverIntegrationError(
-                f"author queue receipt for {job['stable_id']} omits declared effort consumption"
+                f"author queue receipt for {job.stable_id} omits declared effort consumption"
             )
-        grant = self.effort_grant
+        grant = job.effort_grant
         limits = (
             ("tool_calls", float(grant.tool_calls)),
             ("fetch_targets", float(grant.fetch_targets)),
@@ -1168,12 +1115,12 @@ class QueueAuthorLane(_AuthorLaneBase):
             raw = consumption.get(metric)
             if not isinstance(raw, (int, float)) or isinstance(raw, bool) or raw < 0:
                 raise DriverIntegrationError(
-                    f"author queue receipt for {job['stable_id']} declares an invalid "
+                    f"author queue receipt for {job.stable_id} declares an invalid "
                     f"{metric} consumption"
                 )
             if float(raw) > limit:
                 raise AuthorEffortCapExceeded(
-                    f"author session for {job['stable_id']} consumed {metric} "
+                    f"author session for {job.stable_id} consumed {metric} "
                     f"{float(raw):g}, exceeding its {limit:g} grant"
                 )
 
@@ -1215,7 +1162,7 @@ def _author_backoff_from_signal(payload: Mapping[str, Any]) -> AuthorBackoffSign
     """
 
     provider = str(payload.get("provider", "anthropic"))
-    if provider not in USAGE_LIMIT_PROVIDERS:
+    if provider not in author_queue.USAGE_LIMIT_PROVIDERS:
         raise DriverIntegrationError(
             f"author backoff names an unsupported usage-limit provider: {provider!r}"
         )
