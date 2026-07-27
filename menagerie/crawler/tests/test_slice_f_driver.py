@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from copy import deepcopy
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -96,6 +97,7 @@ from menagerie.crawler.driver_progress import (
     _ENVIRONMENT_FAILURE_TRANSITIONS,
     _EnvironmentFailureTransition,
     _environment_failure,
+    _resolve_notify_command,
 )
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot, load_intake_snapshot
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
@@ -3495,6 +3497,55 @@ def test_empty_milestones_and_missing_notifier_never_block(tmp_path: Path) -> No
         )
         is False
     )
+
+
+def test_resolve_notify_command_falls_back_to_claude_scripts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The auto-discovery search path must reach ``~/.claude/scripts/``.
+
+    ``send-to-jmt.sh`` is not on PATH and neither ``~/scripts/`` nor ``~/bin/``
+    holds it on this machine's real notifier layout -- only
+    ``~/.claude/scripts/send-to-jmt.sh`` does. A silent miss here means a
+    stalled campaign produces no notification at all, since ``CommandNotifier``
+    is deliberately best-effort and never raises.
+    """
+
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    claude_script = tmp_path / ".claude" / "scripts" / "send-to-jmt.sh"
+    claude_script.parent.mkdir(parents=True)
+    claude_script.write_text("#!/bin/sh\nexit 0\n")
+    claude_script.chmod(claude_script.stat().st_mode | 0o111)
+
+    assert _resolve_notify_command(None) == (str(claude_script),)
+
+
+def test_resolve_notify_command_prefers_scripts_and_bin_over_claude(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The pre-existing ``~/scripts/`` and ``~/bin/`` candidates still win first."""
+
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    for parent in ("scripts", "bin", os.path.join(".claude", "scripts")):
+        script = tmp_path / parent / "send-to-jmt.sh"
+        script.parent.mkdir(parents=True)
+        script.write_text("#!/bin/sh\nexit 0\n")
+        script.chmod(script.stat().st_mode | 0o111)
+
+    assert _resolve_notify_command(None) == (str(tmp_path / "scripts" / "send-to-jmt.sh"),)
+
+
+def test_resolve_notify_command_missing_everywhere_is_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No candidate anywhere still degrades to the log-only fallback, not a crash."""
+
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    assert _resolve_notify_command(None) is None
 
 
 def test_failed_forward_terminalizes_and_campaign_continues(tmp_path: Path) -> None:

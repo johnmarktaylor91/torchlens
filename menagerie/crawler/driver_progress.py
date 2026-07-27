@@ -223,6 +223,7 @@ def _resolve_notify_command(command: Optional[str]) -> Optional[tuple[str, ...]]
     for candidate in (
         Path.home() / "scripts" / "send-to-jmt.sh",
         Path.home() / "bin" / "send-to-jmt.sh",
+        Path.home() / ".claude" / "scripts" / "send-to-jmt.sh",
     ):
         if candidate.is_file() and os.access(candidate, os.X_OK):
             return (str(candidate),)
