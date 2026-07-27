@@ -776,6 +776,15 @@ def _collect_node_ids(nodes: Iterable[str]) -> frozenset[str]:
     """Collect exact pytest nodes without running the tests."""
 
     roots = sorted({node.split("::", 1)[0] for node in nodes})
+    # This nested pytest only enumerates node ids (`--collect-only`); it runs no
+    # tests, so it is NOT a release-attestation run. Strip
+    # MENAGERIE_RELEASE_ATTESTATION from its environment so the conftest
+    # `pytest_sessionfinish` release hook does not fail the enumeration closed
+    # for having zero passed release nodes (a pre-existing env-inheritance defect
+    # surfaced by the native-attestation certification path).
+    enumeration_env = {
+        key: value for key, value in os.environ.items() if key != "MENAGERIE_RELEASE_ATTESTATION"
+    }
     completed = subprocess.run(
         (sys.executable, "-m", "pytest", "--collect-only", "-q", *roots),
         cwd=_REPOSITORY_ROOT,
@@ -783,6 +792,7 @@ def _collect_node_ids(nodes: Iterable[str]) -> frozenset[str]:
         capture_output=True,
         text=True,
         timeout=120,
+        env=enumeration_env,
     )
     collected = {
         line.strip()
