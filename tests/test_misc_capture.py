@@ -8,12 +8,13 @@ from pathlib import Path
 import torch
 
 import torchlens as tl
+import torchlens.utils as utils
 
 
 def test_register_op_rule_affects_flops() -> None:
     """Custom op rules are accepted by the utility registry."""
 
-    tl.utils.register_op_rule("custom_test_op", lambda *_args: 123, None)
+    utils.register_op_rule("custom_test_op", lambda *_args: 123, None)
     from torchlens.capture.flops import compute_forward_flops
 
     assert compute_forward_flops("custom_test_op", (1,), [], (), {}) == 123

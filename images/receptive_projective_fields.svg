@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">Receptive and projective influence geometry</title>
+  <desc id="desc">A source image flows through a residual block to a target feature map and output. Arrows show receptive influence back to the input and projective influence forward to the output.</desc>
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2563eb"/></marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#d97706"/></marker>
+  </defs>
+  <rect width="1200" height="420" fill="#f8fafc"/>
+  <text x="60" y="55" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#0f172a">Influence geometry on the captured DAG</text>
+  <rect x="70" y="150" width="190" height="150" rx="14" fill="#dbeafe" stroke="#2563eb" stroke-width="3"/>
+  <rect x="105" y="183" width="120" height="82" rx="4" fill="#93c5fd"/>
+  <rect x="132" y="203" width="67" height="42" fill="none" stroke="#dc2626" stroke-width="4"/>
+  <text x="104" y="335" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#1e3a8a">input image</text>
+  <rect x="420" y="150" width="260" height="150" rx="14" fill="#ede9fe" stroke="#7c3aed" stroke-width="3"/>
+  <text x="475" y="217" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#4c1d95">residual block</text>
+  <text x="455" y="254" font-family="Arial, sans-serif" font-size="18" fill="#5b21b6">executed skip path included</text>
+  <rect x="840" y="150" width="160" height="150" rx="14" fill="#ffedd5" stroke="#d97706" stroke-width="3"/>
+  <rect x="875" y="185" width="90" height="80" rx="4" fill="#fdba74"/>
+  <rect x="900" y="208" width="32" height="32" fill="none" stroke="#dc2626" stroke-width="4"/>
+  <text x="848" y="335" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#9a3412">target grid</text>
+  <path d="M260 225 H420" stroke="#475569" stroke-width="6" marker-end="url(#arrow-blue)"/>
+  <path d="M680 225 H840" stroke="#475569" stroke-width="6" marker-end="url(#arrow-blue)"/>
+  <path d="M895 115 C760 75 410 75 210 115" fill="none" stroke="#2563eb" stroke-width="5" marker-end="url(#arrow-blue)"/>
+  <text x="475" y="102" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#1d4ed8">receptive: target -&gt; source</text>
+  <path d="M210 372 C430 405 750 405 895 372" fill="none" stroke="#d97706" stroke-width="5" marker-end="url(#arrow-orange)"/>
+  <text x="455" y="395" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#b45309">projective: source -&gt; target</text>
+  <text x="1025" y="204" font-family="Arial, sans-serif" font-size="17" fill="#475569">geometric box</text>
+  <text x="1025" y="232" font-family="Arial, sans-serif" font-size="17" fill="#475569">+ gradient check</text>
+</svg>

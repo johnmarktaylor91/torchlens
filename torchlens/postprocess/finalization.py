@@ -46,6 +46,7 @@ from ..data_classes._summary import format_call_arg
 from ..data_classes.module import Module, ModuleCall
 from ..data_classes.prehook import ModuleInputSnapshot, PreHookEffect
 from ..utils.introspection import get_vars_of_type_from_obj
+from ..utils._torch_symbols import torch_attr
 
 if TYPE_CHECKING:
     from ..data_classes.layer import Layer
@@ -1510,7 +1511,7 @@ def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
         If the dtype name is unknown to the current runtime.
     """
 
-    dtype_obj = getattr(torch, dtype_name, None)
+    dtype_obj = torch_attr(dtype_name)  # r47 secD_1: no lazy ``torch.__getattr__``
     if not isinstance(dtype_obj, torch.dtype):
         raise TorchLensIOError(f"Unsupported dtype string in manifest: {dtype_name}.")
     return dtype_obj

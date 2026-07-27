@@ -13,6 +13,7 @@ when we cannot install an actual torch-2.1 environment.
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import cast
 import warnings
 
 import pytest
@@ -29,6 +30,17 @@ _HAS_FUNCTORCH_LEVEL_API = (
     getattr(getattr(getattr(torch, "_C", None), "_functorch", None), "maybe_current_level", None)
     is not None
 )
+
+
+class _UnreadableNamesSentinel:
+    """Sentinel that fails if the compatibility helper reads ``names``."""
+
+    @property
+    def names(self) -> tuple[str | None, ...]:
+        """Raise when the named-dimension metadata is inspected."""
+
+        raise AssertionError("names must not be read when the capability is absent")
+
 
 pytestmark = pytest.mark.smoke
 
@@ -87,10 +99,21 @@ def test_legacy_branch_unsupported_device_raises_runtimeerror() -> None:
 
 
 def test_log_current_autocast_state_unaffected() -> None:
-    """The public capture path still returns the expected device-keyed dict."""
+    """The public capture path still returns the expected device-keyed dict.
+
+    r35: the reserved ``__execution__`` grad/inference entry rides along with
+    ``enabled=False`` so every autocast consumer skips it structurally.
+    """
+
     state = log_current_autocast_state()
-    assert set(state) <= {"cpu", "cuda"}
-    for dev_state in state.values():
+    assert set(state) <= {"cpu", "cuda", "__execution__"}
+    execution = state["__execution__"]
+    assert execution["enabled"] is False
+    assert isinstance(execution["grad_enabled"], bool)
+    assert isinstance(execution["inference_mode"], bool)
+    for device, dev_state in state.items():
+        if device.startswith("__"):
+            continue
         assert set(dev_state) == {"enabled", "dtype"}
         assert isinstance(dev_state["enabled"], bool)
         assert isinstance(dev_state["dtype"], torch.dtype)
@@ -124,6 +147,16 @@ def test_capability_attrs_cover_all_has_flags() -> None:
 
     has_flags = {name for name in vars(tc) if name.startswith("HAS_")}
     assert set(tc._CAPABILITY_ATTRS) == has_flags  # noqa: SLF001
+
+
+def test_untyped_storage_wrapper_cache_probe_matches_runtime() -> None:
+    """Storage weak-key safety capability follows live wrapper identity behavior."""
+
+    tensor = torch.empty(0)
+    first = tensor.untyped_storage()
+    second = tensor.untyped_storage()
+
+    assert tc.HAS_CACHED_UNTYPED_STORAGE_WRAPPER is (first is second)
 
 
 def test_variable_functions_absence_falls_back_to_torch_all(
@@ -297,9 +330,52 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_DEVICE_CONSTRUCTORS": True,
         "HAS_ACCUMULATE_GRAD_CLASS": True,
         "HAS_FX_GRAPH_MODULE": True,
+        "HAS_NAMED_TENSOR_API": tc.HAS_NAMED_TENSOR_API,
+        "HAS_CACHED_UNTYPED_STORAGE_WRAPPER": tc.HAS_CACHED_UNTYPED_STORAGE_WRAPPER,
+        "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE": (
+            tc.HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
+        ),
         "HAS_DYNAMO_OPTIMIZED_MODULE": True,
+        "HAS_GENERATOR_CLONE_STATE": hasattr(torch.Generator, "clone_state"),
+        "HAS_GENERATOR_GRAPHSAFE_GET_STATE": hasattr(torch.Generator, "graphsafe_get_state"),
+        "HAS_GENERATOR_GRAPHSAFE_SET_STATE": hasattr(torch.Generator, "graphsafe_set_state"),
+        # CVE-2025-32434 fix presence (feature-detected; version-dependent, so mirror
+        # the live capability like AUTOCAST rather than hardcoding a boolean).
+        "HAS_SAFE_WEIGHTS_ONLY_LOAD": tc.HAS_SAFE_WEIGHTS_ONLY_LOAD,
         "HAS_TENSOR_SEQUENCE_SLOT_FIX": True,
+        # r35 decision E: ambient execution-context knobs are feature-detected and
+        # surfaced in the capability snapshot (values are runtime-dependent).
+        "HAS_FLOAT32_MATMUL_PRECISION": tc.HAS_FLOAT32_MATMUL_PRECISION,
+        "HAS_DETERMINISTIC_ALGORITHMS_QUERY": tc.HAS_DETERMINISTIC_ALGORITHMS_QUERY,
+        "HAS_CUDA_MATMUL_TF32": tc.HAS_CUDA_MATMUL_TF32,
+        "HAS_CUDNN_FLAGS": tc.HAS_CUDNN_FLAGS,
+        "HAS_SDP_TOGGLES": tc.HAS_SDP_TOGGLES,
+        # r53 hon_1: the global uninitialized-memory fill knob is an ambient
+        # execution-context knob, feature-detected and surfaced like the others.
+        "HAS_FILL_UNINITIALIZED_MEMORY": tc.HAS_FILL_UNINITIALIZED_MEMORY,
         "AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED": tc.AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED,
     }
 
     assert snapshot == expected
+
+
+def test_tensor_has_named_dims_reports_native_tensor_names() -> None:
+    """Named-dimension inspection reports ordinary and named tensors accurately."""
+
+    assert tc.tensor_has_named_dims(torch.ones(2, 3)) is False
+    if not tc.HAS_NAMED_TENSOR_API:
+        pytest.skip("native named-tensor API is unavailable")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        named = torch.ones(2, 3).refine_names("batch", "feature")
+    assert tc.tensor_has_named_dims(named) is True
+
+
+def test_tensor_has_named_dims_short_circuits_when_api_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Absent named-tensor support returns false without reading the input."""
+
+    monkeypatch.setattr(tc, "HAS_NAMED_TENSOR_API", False)
+    sentinel = cast(torch.Tensor, _UnreadableNamesSentinel())
+    assert tc.tensor_has_named_dims(sentinel) is False

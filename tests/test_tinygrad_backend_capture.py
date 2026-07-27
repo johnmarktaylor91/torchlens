@@ -837,6 +837,7 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     assert loaded.backend == "tinygrad"
     assert loaded.param_source == "none"
     assert all(op.out is None for op in loaded.layer_list)
+    assert loaded.derived_grads["inputs.0"].grad is None
 
     portable_path = tmp_path / "tinygrad_portable.tlspec"
     source_out = trace[trace.output_layers[0]].out
@@ -850,6 +851,10 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     assert loaded_out.shape == expected.shape
     assert str(loaded_out.dtype) == str(source_out.dtype)
     np.testing.assert_allclose(loaded_out.numpy(), expected)
+    np.testing.assert_allclose(
+        loaded_portable.derived_grads["inputs.0"].grad.numpy(),
+        trace.derived_grads["inputs.0"].grad.numpy(),
+    )
 
     loaded_status = loaded_portable.validate_forward_pass(
         [_tiny_square_loss(Tensor([1.0, -2.0, 3.0]))]

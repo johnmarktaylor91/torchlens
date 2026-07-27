@@ -96,7 +96,7 @@ earlier saved activation. Use `"copy"` unless that aliasing tradeoff is explicit
 | **`torch.func.vmap` / `grad` / `jacfwd`** | `UserWarning` per collapsed boundary; inner ops skipped | Log the pre-vmap module separately, or accept an incomplete log |
 | **Multi-process spawn / `DataLoader` workers** | `RuntimeError` if called from a worker | Log in the main process |
 | **Tensor subclasses with custom `__torch_function__`** | May work; limited metadata fidelity | Log with a plain `torch.Tensor` input if possible |
-| **Tensor `.data` attribute access** | Attribute access itself is not captured and may sever provenance | Prefer ordinary tensor operations or an explicit, traceable `detach()` when detachment is intended |
+| **Tensor `.data` attribute access** | The getter is captured as its detach-like read op; any in-place write through the alias or a storage-sharing view ceilings runnable faithfulness to `unverifiable` | Prefer ordinary tensor operations or an explicit `detach()` when detachment is intended |
 | **Very deep module hierarchy (>1000 levels)** | May hit Python recursion limit | Flatten the hierarchy, or raise `sys.setrecursionlimit` |
 | **Buffer `.data = tensor` reassignment** | `RuntimeError` during end-of-capture reconciliation | Use `self.buffer = tensor` or `self.buffer.copy_(tensor)`; see [Buffers](buffers.md) |
 

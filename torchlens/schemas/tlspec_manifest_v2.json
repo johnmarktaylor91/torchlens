@@ -103,13 +103,21 @@
         "unsupported_sites"
       ],
       "properties": {
-        "capability": {"const": "sparse_recorded_taken_path_v1"},
-        "call_recipe": {"const": "non_tensor_args_and_tensor_slots_v1"},
+        "capability": {"const": "sparse_recorded_taken_path_v2"},
+        "call_recipe": {"const": "non_tensor_args_tensor_slots_context_and_obligations_v3"},
         "callable_ref_schema": {"const": 1},
         "state_binding": {"const": "module_path_role_v1"},
         "input_binding": {"const": "model_site_io_role_v1"},
         "control_witness": {"const": "scalar_bool_and_arm_entry_v1"},
-        "initializer_policy_version": {"const": "torchlens_role_init_v1"},
+        "initializer_policy_version": {"const": "torchlens_role_init_v2"},
+        "ambient_context": {
+          "type": "object",
+          "properties": {
+            "grad_enabled": {"type": "boolean"},
+            "inference_mode": {"type": "boolean"},
+            "fill_uninitialized_memory": {"type": ["boolean", "null"]}
+          }
+        },
         "payload_layers": {
           "type": "object",
           "required": ["weights", "activations"],
@@ -135,18 +143,95 @@
               "required": ["present", "schema"],
               "properties": {
                 "present": {"type": "boolean"},
-                "schema": {"const": "selected_activation_v1"},
+                "schema": {"const": "selected_activation_v2"},
                 "members": {"type": "array"},
                 "original_input_digests": {"type": "array"},
-                "capture_state_digests": {"type": "array"}
+                "capture_state_digests": {"type": "array"},
+                "input_fingerprints": {"type": "array"}
               }
             }
           }
         },
         "callable_registry": {"type": "array"},
-        "calls": {"type": "array"},
-        "tensor_slots": {"type": "array"},
+        "calls": {
+          "type": "array",
+          "items": {
+            "properties": {
+              "num_positional_args": {"minimum": 0},
+              "num_keyword_args": {"minimum": 0}
+            }
+          }
+        },
+        "tensor_slots": {
+          "type": "array",
+          "items": {
+            "properties": {
+              "rank": {"minimum": 0},
+              "shape": {"items": {"minimum": 0}}
+            }
+          }
+        },
+        "input_boundary": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["position", "tensor_sites"],
+            "properties": {
+              "position": {"type": "string"},
+              "tensor_sites": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["container_path", "slot_id", "metadata_reads"],
+                  "properties": {
+                    "slot_id": {"type": "string"},
+                    "metadata_reads": {"type": "array", "items": {"type": "string"}}
+                  }
+                }
+              }
+            }
+          }
+        },
         "control_witnesses": {"type": "array"},
+        "coverage_gaps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "gap_kind",
+              "source_family",
+              "source_member",
+              "order",
+              "resulting_completeness"
+            ],
+            "properties": {
+              "gap_kind": {"type": "string"},
+              "source_family": {"type": "string"},
+              "source_member": {"type": "string"},
+              "order": {"type": "integer", "minimum": 0},
+              "resulting_completeness": {"type": "string"}
+            }
+          }
+        },
+        "required_witness_inventory": {
+          "type": "object",
+          "required": ["registry_version", "families"],
+          "properties": {
+            "registry_version": {"type": "string"},
+            "families": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["family", "disposition", "members"],
+                "properties": {
+                  "family": {"type": "string"},
+                  "disposition": {"type": "string"},
+                  "members": {"type": "array", "items": {"type": "string"}}
+                }
+              }
+            }
+          }
+        },
         "rng_profile": {
           "type": "object",
           "required": ["host_rng_consumed", "capture_seed"],

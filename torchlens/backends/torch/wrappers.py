@@ -7,6 +7,7 @@ This module also patches detached torch references and torch transform boundarie
 import inspect
 import sys
 import sysconfig
+import threading
 import time
 import types
 import weakref
@@ -32,15 +33,18 @@ from ... import _state
 from ...constants import get_orig_torch_funcs
 from ...data_classes.func_call_location import FuncCallLocation
 from ._tl import (
-    get_buffer_address,
+    get_param_meta,
     get_tensor_label,
+    is_tensor_data_alias,
     is_decorated_function,
+    mark_tensor_data_alias,
     mark_decorated_function,
     set_tensor_label,
 )
 from ...data_classes.internal_types import FuncExecutionContext
 from ...utils.introspection import get_vars_of_type_from_obj, nested_getattr
 from ...utils._torch_compat import (
+    HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE,
     get_current_function_mode_stack,
     get_device_constructors,
     get_device_context_type,
@@ -57,6 +61,7 @@ from ...utils.hashing import make_random_barcode
 from ...utils.arg_handling import copy_arg_tree
 from ...utils.tensor_utils import print_override, safe_copy
 from .ops import (
+    _is_inplace_augmented_assignment_dunder,
     _walk_output_tensors_with_paths,
     apply_live_hooks_to_outputs,
     log_function_output_tensors,
@@ -65,6 +70,7 @@ from .ops import (
 from .buffer_writes import (
     record_op_buffer_writes,
     resolve_registered_buffer_address,
+    session_validated_buffer_address,
     snapshot_buffer_args,
 )
 from .escape_detection import (
@@ -76,8 +82,14 @@ from .escape_detection import (
 from .completeness_witness import (
     CompletenessWitnessMode,
     completeness_scope_for_wrapper,
+    internal_scalar_read,
+    observe_nonowner_operands,
+    record_data_alias_mutation,
+    record_host_string_escape_source,
     record_uncaptured_owner_callsite,
+    string_escape_is_owner_thread,
 )
+from .aliasing import _tensors_alias
 from .sources import log_source_tensor
 
 if TYPE_CHECKING:
@@ -100,7 +112,11 @@ def _diagnostic_edge_armed() -> bool:
         ``True`` when a shared one-shot token is required.
     """
 
-    return _state._escape_detector_mode == "shadow" or _state._completeness_witness_mode == "shadow"
+    return (
+        _state._escape_detector_mode == "shadow"
+        or _state._completeness_witness_mode == "shadow"
+        or _state._runnable_ledger_armed
+    )
 
 
 _KNOWN_TORCH_FREE_PREFIXES = (
@@ -876,6 +892,168 @@ def _collect_output_tensors(out: Any) -> list[torch.Tensor]:
     )
 
 
+def _is_unregistered_parameter(trace: Any, value: Any) -> bool:
+    """Return whether ``value`` is a Parameter outside the prepared model state.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace carrying the current-session parameter registry.
+    value:
+        Candidate operation output.
+
+    Returns
+    -------
+    bool
+        ``True`` for a Parameter that is not the exact prepared parameter object
+        recorded at its stamped address in this capture.
+    """
+
+    if not isinstance(value, torch.nn.Parameter):
+        return False
+    meta = get_param_meta(value)
+    address = None if meta is None else meta.param_address
+    if not address:
+        return True
+    param_logs = getattr(trace, "param_logs", None)
+    if param_logs is None or address not in param_logs:
+        return True
+    return getattr(param_logs[address], "_param_ref", None) is not value
+
+
+def _parameter_mutation_output_for_logging(
+    trace: Any,
+    value: Any,
+    *,
+    source: Any,
+    was_inplace: bool,
+) -> Any:
+    """Convert an unregistered Parameter mutation result into a loggable Tensor.
+
+    PyTorch constructs module Parameters from ordinary factory tensors, and the
+    conversion intentionally drops TorchLens tensor labels. Initializers such as
+    ``uniform_`` then return the new Parameter itself. Parameter outputs are normally
+    excluded because prepared model state remains a source rather than an op output,
+    but that rule also dropped real initialization ops for modules created inside
+    ``forward``.
+
+    Only unregistered Parameters are converted. Mutations of prepared model state
+    remain excluded and therefore remain visible to the completeness tripwire instead
+    of being laundered into a disconnected op.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    value:
+        Safe-copied operation output.
+    source:
+        Live same-object return whose current-session registration is authoritative.
+    was_inplace:
+        Whether the wrapped callable has an in-place mutation signature.
+
+    Returns
+    -------
+    Any
+        A plain Tensor snapshot for capture-local Parameter mutations; otherwise
+        ``value`` unchanged.
+    """
+
+    if not was_inplace or not _is_unregistered_parameter(trace, source):
+        return value
+    with _state.pause_logging():
+        if HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE:
+            plain_value = value.as_subclass(torch.Tensor)
+        else:
+            plain_value = torch.ops.aten.detach.default(value)
+        tensor = safe_copy(plain_value, detach_tensor=True)
+        tensor.requires_grad_(value.requires_grad)
+    return tensor
+
+
+def _canonical_capture_callable(
+    func: Callable[..., Any],
+    func_name: str,
+) -> tuple[Callable[..., Any], str]:
+    """Return the replay-safe callable identity for one wrapped operation.
+
+    ``Tensor.data`` is a C descriptor whose getter dispatches ``aten.detach`` and
+    returns the same storage-sharing, autograd-detached value as ``Tensor.detach``.
+    Record that operation under the canonical detach callable so live validation
+    and portable replay agree without admitting the unsafe ``data`` descriptor
+    through the callable resolver.
+
+    Parameters
+    ----------
+    func:
+        Original wrapped callable.
+    func_name:
+        TorchLens name associated with the wrapped namespace entry.
+
+    Returns
+    -------
+    tuple[Callable[..., Any], str]
+        Callable and operation name to persist for capture/replay.
+    """
+
+    if func_name != "data":
+        return func, func_name
+    decorated_detach = torch.Tensor.detach
+    original_detach = _state._decorated_to_orig.get(id(decorated_detach), decorated_detach)
+    return cast(Callable[..., Any], original_detach), "detach"
+
+
+def _func_mutates_receiver(func_name: str) -> bool:
+    """Return whether a wrapped function mutates its first tensor argument.
+
+    Parameters
+    ----------
+    func_name : str
+        TorchLens wrapper name for the callable.
+
+    Returns
+    -------
+    bool
+        ``True`` for in-place methods, augmented-assignment dunders, and
+        setter-style tensor operations.
+    """
+
+    return (
+        _is_inplace_augmented_assignment_dunder(func_name)
+        or func_name in {"__setitem__", "__delitem__"}
+        or (func_name.endswith("_") and not func_name.startswith("__"))
+    )
+
+
+def _propagate_data_alias_provenance(
+    func_name: str,
+    data_alias_inputs: tuple[torch.Tensor, ...],
+    output_tensors: list[torch.Tensor],
+) -> None:
+    """Propagate ``Tensor.data`` provenance through storage-sharing outputs.
+
+    Parameters
+    ----------
+    func_name : str
+        Original wrapped callable name before replay canonicalization.
+    data_alias_inputs : tuple[torch.Tensor, ...]
+        Input tensors already known to descend from ``Tensor.data``.
+    output_tensors : list[torch.Tensor]
+        Live output tensors after capture labels have been assigned.
+    """
+
+    if func_name == "data":
+        for output in output_tensors:
+            mark_tensor_data_alias(output)
+        return
+    if not data_alias_inputs:
+        return
+    with internal_scalar_read():
+        for output in output_tensors:
+            if any(_tensors_alias(output, source) for source in data_alias_inputs):
+                mark_tensor_data_alias(output)
+
+
 def _register_inplace_live_grad_hook(trace: Any, tensor: Any, raw_label: str) -> None:
     """Hook the live in-place result so its gradient is captured under ``raw_label``.
 
@@ -939,7 +1117,28 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         # When logging is off, pass through with minimal overhead.
         # DeviceContext injection is still needed even when not logging,
         # because the user's model may rely on torch.device('meta') context.
-        if not _state._logging_enabled or _state._active_trace is None:
+        # r43 hon2_4: op-logging is OWNER-thread-scoped. A NON-owner thread running torch ops
+        # during a capture (a worker formatting ``str(tensor)``, a DataLoader thread) must NOT
+        # be logged into the owner's Trace -- doing so tags its temporaries with capture labels
+        # (a false cross-thread ceiling) and corrupts owner-op attribution (an observed crash).
+        # Cross-thread tensor->host escapes are still observed by the mode-independent belt
+        # (tensor-method patches), which is independent of this wrapper.
+        if (
+            not _state._logging_enabled
+            or _state._active_trace is None
+            or _state._active_owner_thread_id != threading.get_ident()
+        ):
+            # r45 hon2_1: while a runnable capture is armed, a NON-owner thread's op that consumes
+            # a captured tensor as an operand ceilings replay proof to ``unverifiable`` (the
+            # worker-DERIVED cross-thread escape sibling: fresh worker-side storage the
+            # owner-only census never registered). ``_nonowner_belt_armed`` is False for every
+            # plain trace and the whole steady state, so the disarmed hot path pays one bool read.
+            if (
+                _state._nonowner_belt_armed
+                and _state._active_trace is not None
+                and _state._active_owner_thread_id != threading.get_ident()
+            ):
+                observe_nonowner_operands(args, kwargs)
             kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
             return func(*args, **kwargs)
 
@@ -1005,6 +1204,15 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         # Inline tensor extraction — avoids BFS crawl for the common case
         # where args are flat tensors. Falls back to BFS only for nested containers.
         arg_tensorlike = _collect_tensor_args(args, kwargs)
+        data_alias_inputs = tuple(
+            tensor for tensor in arg_tensorlike if is_tensor_data_alias(tensor)
+        )
+        mutates_data_alias = bool(
+            args
+            and isinstance(args[0], torch.Tensor)
+            and is_tensor_data_alias(args[0])
+            and _func_mutates_receiver(func_name)
+        )
 
         # Register buffer tensors on first encounter. Buffers are tagged with
         # _tl.address during model prep but don't get _tl.label_raw
@@ -1012,7 +1220,12 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         for t in arg_tensorlike:
             if isinstance(t, torch.nn.Parameter):
                 continue
-            address = get_buffer_address(t)
+            # r81: the first-encounter registration gate must not trust the raw
+            # static stamp (stale cross-capture stamps and input-rebound storage
+            # would be re-rooted as internal state); require current-session
+            # object + storage identity, with the storage-anchored tracker as
+            # the alias fallback.
+            address = session_validated_buffer_address(trace, t)
             if address is None:
                 address = resolve_registered_buffer_address(trace, t)
             if address is not None and get_tensor_label(t) is None:
@@ -1020,8 +1233,24 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
 
         # Intercept print functions to show TorchLens label info in repr.
         if (func_name in print_funcs) and (len(arg_tensorlike) > 0):
-            out = print_override(args[0], func_name)
-            return out
+            # r39 hon2_1: stringifying a captured tensor extracts its VALUES into the returned
+            # string (a genuine tensor->host value escape the user can fold back into control
+            # flow -- a string NaN guard). ``print_override`` runs that extraction under
+            # ``pause_logging()``, blinding the ordinary ``.numpy()``/``.item()`` escape
+            # observers, so record the source here BEFORE the paused format, through the same
+            # attribution ladder. A runnable capture then ceilings a changed-input run whose
+            # stringified source differs, exactly like a ``.numpy()`` escape.
+            for stringified in arg_tensorlike:
+                record_host_string_escape_source(trace, stringified)
+            # r43 hon2_4: ``print_override`` formats under a GLOBAL ``pause_logging()``; a
+            # NON-OWNER thread must NEVER flip that toggle mid-forward (it blinds owner op
+            # capture -> the observed crash). The owner keeps ``print_override``; a worker
+            # calls the original torch string function unchanged (the captured-tensor ceiling
+            # was already applied by ``record_host_string_escape_source`` above).
+            if string_escape_is_owner_thread(trace):
+                out = print_override(args[0], func_name)
+                return out
+            return func(*args, **kwargs)
 
         # Snapshot args before the call in case in-place ops mutate them.
         if trace.save_arg_values:
@@ -1080,6 +1309,8 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                 out_orig = func(*args, **kwargs)
         finally:
             _nvtx_range_pop(nvtx_pushed)
+        if mutates_data_alias:
+            record_data_alias_mutation(trace)
         return_value = out_orig
         exec_ctx = FuncExecutionContext(
             time_elapsed=time.time() - capture_start_time,
@@ -1117,12 +1348,19 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             # Create a distinct tensor object for logging — otherwise attaching
             # _tl.label_raw on the output would clobber the input's label.
             out_orig = safe_copy(out_orig)
+            out_orig = _parameter_mutation_output_for_logging(
+                trace,
+                out_orig,
+                source=args[0],
+                was_inplace=was_inplace,
+            )
 
+        capture_func, capture_func_name = _canonical_capture_callable(func, func_name)
         out_before_hooks = out_orig
         out_orig = apply_live_hooks_to_outputs(
             trace,
-            func,
-            func_name,
+            capture_func,
+            capture_func_name,
             args,
             kwargs,
             out_orig,
@@ -1147,8 +1385,8 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                 with _state.pause_logging():
                     call_emitted_op = log_function_output_tensors(
                         trace,
-                        func,
-                        func_name,
+                        capture_func,
+                        capture_func_name,
                         args,
                         kwargs,
                         arg_copies,
@@ -1161,8 +1399,8 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             else:
                 call_emitted_op = log_function_output_tensors(
                     trace,
-                    func,
-                    func_name,
+                    capture_func,
+                    capture_func_name,
                     args,
                     kwargs,
                     arg_copies,
@@ -1172,6 +1410,12 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                     is_bottom_level_func,
                     func_call_id,
                 )
+
+            _propagate_data_alias_provenance(
+                func_name,
+                data_alias_inputs,
+                output_tensors,
+            )
 
             # Same-object returns are logged against out_orig (a safe_copy with
             # the op's new label). When Python object identity is preserved we
@@ -1217,7 +1461,12 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         elif output_tensors:
             producer_label = get_tensor_label(output_tensors[0])
         if is_bottom_level_func:
-            record_op_buffer_writes(trace, func_name, buffer_snapshots, producer_label)
+            record_op_buffer_writes(
+                trace,
+                capture_func_name,
+                buffer_snapshots,
+                producer_label,
+            )
 
         if out_orig is not out_before_hooks:
             return out_orig

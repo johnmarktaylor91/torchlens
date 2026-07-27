@@ -10,6 +10,7 @@ from torch import nn
 
 from .errors._base import ConfigurationError
 from .utils._torch_compat import get_dynamo_optimized_module_type
+from .utils._torch_symbols import torch_attr
 
 _NON_GRAD_DTYPES = {
     torch.int8,
@@ -19,9 +20,13 @@ _NON_GRAD_DTYPES = {
     torch.uint8,
     torch.bool,
 }
+# r47 secD_1: resolve the optional unsigned integer dtypes through ``torch_attr`` (no bare
+# ``hasattr``/``getattr(torch, <var>)``, which would fire ``torch.__getattr__``). ``torch_attr``
+# reads ``torch.__dict__`` directly and returns ``None`` for a dtype absent on this torch.
 for _dtype_name in ("uint16", "uint32", "uint64"):
-    if hasattr(torch, _dtype_name):
-        _NON_GRAD_DTYPES.add(getattr(torch, _dtype_name))
+    _resolved_dtype = torch_attr(_dtype_name)
+    if _resolved_dtype is not None:
+        _NON_GRAD_DTYPES.add(_resolved_dtype)
 
 
 class TrainingModeConfigError(ConfigurationError, ValueError):

@@ -97,8 +97,15 @@ from .code_panel import (
     render_code_panel_subgraph,
     resolve_code_panel_source,
 )
-from .collapse_plan import CollapsePlan, RawOp, RenderContext, SegmentDescriptor
-from .render_ir import build_render_ir, projected_antiparallel_endpoint_pairs
+from .collapse_plan import CollapsePlan, RawOp, SegmentDescriptor
+from .request import RenderContext
+from .render_ir import (
+    RenderIRDotStatement,
+    RenderIROrderingConstraint,
+    build_render_ir,
+    finalize_forward_regions,
+    projected_antiparallel_endpoint_pairs,
+)
 from ._render_utils import (
     compute_module_penwidth,
     direction_to_rankdir,
@@ -349,6 +356,7 @@ class CapturedForwardEdge:
     target_node: GraphNode
     module_key: str | int
     occurrence_key: tuple[Any, ...]
+    attrs: tuple[tuple[str, Any], ...]
 
 
 @dataclass(frozen=True)
@@ -482,86 +490,42 @@ class RenderedNodeEmission:
     fold: "ModuleRepeatFold | None" = None
 
 
-@dataclass(frozen=True)
-class ForwardDotCall:
-    """Recorded Graphviz call for forward DOT emission.
-
-    Parameters
-    ----------
-    kind:
-        Graphviz call kind.
-    args:
-        Positional arguments passed to the call.
-    kwargs:
-        Keyword arguments passed to the call.
-    children:
-        Nested calls for subgraph emission.
-    """
-
-    kind: Literal["node", "edge", "attr", "subgraph"]
-    args: tuple[Any, ...] = ()
-    kwargs: Mapping[str, Any] = field(default_factory=dict)
-    children: tuple["ForwardDotCall", ...] = ()
-
-
-@dataclass(frozen=True)
-class ForwardDotIR:
-    """Resolved forward DOT emission payload.
-
-    Parameters
-    ----------
-    render_ir:
-        Semantic render IR used to derive forward nodes, edges, and clusters.
-    calls:
-        Top-level Graphviz calls to replay.
-    module_cluster_dict:
-        Cluster accumulator consumed by subgraph emission.
-    top_level_sibling_rank_groups:
-        Optional sibling rank constraints emitted outside clusters.
-    captured_forward_edges:
-        Resolved forward edges captured for sibling-order verification.
-    container_overlay_edges:
-        Deferred container overlay edges emitted after clusters.
-    """
-
-    render_ir: Any
-    calls: tuple[ForwardDotCall, ...]
-    module_cluster_dict: Dict[str, Any]
-    top_level_sibling_rank_groups: tuple["SiblingOrderChain", ...]
-    captured_forward_edges: tuple["CapturedForwardEdge", ...]
-    container_overlay_edges: tuple["ContainerOverlayEdge", ...]
-
-
-class _ForwardDotRecorder:
-    """Minimal Graphviz-like recorder used while building forward render IR."""
+class _RenderIRDecisionBuilder:
+    """Graph-like adapter used only while resolving immutable IR decisions."""
 
     def __init__(self) -> None:
         """Initialize an empty recorder."""
 
-        self.calls: list[ForwardDotCall] = []
+        self.calls: list[RenderIRDotStatement] = []
+        self.body = _RenderIRBody(self.calls)
 
     def node(self, *args: Any, **kwargs: Any) -> None:
         """Record a Graphviz node call."""
 
-        self.calls.append(ForwardDotCall("node", args=tuple(args), kwargs=dict(kwargs)))
+        self.calls.append(RenderIRDotStatement("node", tuple(args), tuple(kwargs.items())))
 
     def edge(self, *args: Any, **kwargs: Any) -> None:
         """Record a Graphviz edge call."""
 
-        self.calls.append(ForwardDotCall("edge", args=tuple(args), kwargs=dict(kwargs)))
+        self.calls.append(RenderIRDotStatement("edge", tuple(args), tuple(kwargs.items())))
 
-    def subgraph(self, *args: Any, **kwargs: Any) -> "_ForwardDotSubgraphRecorder":
+    def attr(self, *args: Any, **kwargs: Any) -> None:
+        """Record a Graphviz attribute statement."""
+
+        self.calls.append(RenderIRDotStatement("attr", tuple(args), tuple(kwargs.items())))
+
+    def subgraph(self, *args: Any, **kwargs: Any) -> "_RenderIRSubgraphDecisionBuilder":
         """Record a nested Graphviz subgraph."""
 
-        return _ForwardDotSubgraphRecorder(self.calls, tuple(args), dict(kwargs))
+        return _RenderIRSubgraphDecisionBuilder(self.calls, tuple(args), dict(kwargs))
 
 
-class _ForwardDotSubgraphRecorder:
-    """Context manager recording calls made inside a Graphviz subgraph."""
+class _RenderIRSubgraphDecisionBuilder:
+    """Context manager resolving a nested immutable IR statement."""
 
     def __init__(
         self,
-        parent_calls: list[ForwardDotCall],
+        parent_calls: list[RenderIRDotStatement],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
     ) -> None:
@@ -570,9 +534,10 @@ class _ForwardDotSubgraphRecorder:
         self._parent_calls = parent_calls
         self._args = args
         self._kwargs = kwargs
-        self._children: list[ForwardDotCall] = []
+        self._children: list[RenderIRDotStatement] = []
+        self.body = _RenderIRBody(self._children)
 
-    def __enter__(self) -> "_ForwardDotSubgraphRecorder":
+    def __enter__(self) -> "_RenderIRSubgraphDecisionBuilder":
         """Return the active nested recorder."""
 
         return self
@@ -582,10 +547,10 @@ class _ForwardDotSubgraphRecorder:
 
         if exc_type is None:
             self._parent_calls.append(
-                ForwardDotCall(
+                RenderIRDotStatement(
                     "subgraph",
-                    args=self._args,
-                    kwargs=self._kwargs,
+                    self._args,
+                    tuple(self._kwargs.items()),
                     children=tuple(self._children),
                 )
             )
@@ -593,17 +558,36 @@ class _ForwardDotSubgraphRecorder:
     def attr(self, *args: Any, **kwargs: Any) -> None:
         """Record a Graphviz attr call inside the subgraph."""
 
-        self._children.append(ForwardDotCall("attr", args=tuple(args), kwargs=dict(kwargs)))
+        self._children.append(RenderIRDotStatement("attr", tuple(args), tuple(kwargs.items())))
 
     def node(self, *args: Any, **kwargs: Any) -> None:
         """Record a Graphviz node call inside the subgraph."""
 
-        self._children.append(ForwardDotCall("node", args=tuple(args), kwargs=dict(kwargs)))
+        self._children.append(RenderIRDotStatement("node", tuple(args), tuple(kwargs.items())))
 
     def edge(self, *args: Any, **kwargs: Any) -> None:
         """Record a Graphviz edge call inside the subgraph."""
 
-        self._children.append(ForwardDotCall("edge", args=tuple(args), kwargs=dict(kwargs)))
+        self._children.append(RenderIRDotStatement("edge", tuple(args), tuple(kwargs.items())))
+
+    def subgraph(self, *args: Any, **kwargs: Any) -> "_RenderIRSubgraphDecisionBuilder":
+        """Record a nested Graphviz subgraph."""
+
+        return _RenderIRSubgraphDecisionBuilder(self._children, tuple(args), dict(kwargs))
+
+
+class _RenderIRBody:
+    """Minimal Graphviz body adapter recording already-resolved raw statements."""
+
+    def __init__(self, calls: list[RenderIRDotStatement]) -> None:
+        """Initialize the adapter over a statement list."""
+
+        self._calls = calls
+
+    def append(self, value: str) -> None:
+        """Record one raw Graphviz body fragment."""
+
+        self._calls.append(RenderIRDotStatement("raw", (value,)))
 
 
 _CODE_PANEL_COMPOSED_FORMATS = frozenset({"svg", "pdf", "png"})
@@ -679,8 +663,6 @@ __all__ = [
     "FROZEN_PARAMS_BG_COLOR",
     "FocusNode",
     "FoldRepeatsLiteral",
-    "ForwardDotCall",
-    "ForwardDotIR",
     "GRADIENT_ARROW_COLOR",
     "GraphNode",
     "GraphvizRenderError",
@@ -714,6 +696,7 @@ __all__ = [
     "RenderContext",
     "RenderEdge",
     "RenderedNodeEmission",
+    "RenderIROrderingConstraint",
     "Role",
     "RollingAnnotation",
     "SIBLING_ORDER_EPSILON",
@@ -742,8 +725,8 @@ __all__ = [
     "_CODE_PANEL_COMPOSED_FORMATS",
     "_EDGE_LABEL_FONT_SIZE",
     "_EDGE_LABEL_PAD",
-    "_ForwardDotRecorder",
-    "_ForwardDotSubgraphRecorder",
+    "_RenderIRDecisionBuilder",
+    "_RenderIRSubgraphDecisionBuilder",
     "_GRAPHVIZ_ESCAPE_HINT",
     "_NOISE_BUFFER_NAMES",
     "_ROLLED_CYCLE_HEAD_LABEL_PLACEMENT",
@@ -762,6 +745,7 @@ __all__ = [
     "base64",
     "batch_summary",
     "build_render_ir",
+    "finalize_forward_regions",
     "cast",
     "compose_graph_with_code_panel",
     "compute_module_penwidth",

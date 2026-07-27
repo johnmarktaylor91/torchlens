@@ -53,6 +53,8 @@ from typing import (
 
 import torch
 
+from ..utils._torch_compat import tensor_version_or_none
+
 from .._deprecations import MISSING
 from .._io import (
     FieldPolicy,
@@ -236,6 +238,8 @@ _OP_DYNAMIC_SLOT_NAMES = (
     "_pending_transformed_grad_blob_id",
     "_grad_records",
     "_facets_cache",
+    "_receptive_field_cache",
+    "_projective_field_cache",
     "_arg_expressions_cache",
     "_is_in_conditional_body",
     "_construction_done",
@@ -757,7 +761,7 @@ def _stamp_reference_out(
     if save_mode != "reference":
         return
     annotations["save_mode"] = "reference"
-    annotations["saved_out_version"] = getattr(raw_out, "_version", None)
+    annotations["saved_out_version"] = tensor_version_or_none(raw_out)
 
 
 def _validate_reference_out_not_mutated(state: dict[str, Any]) -> None:
@@ -770,7 +774,7 @@ def _validate_reference_out_not_mutated(state: dict[str, Any]) -> None:
     if not isinstance(out, torch.Tensor):
         return
     saved_version = annotations.get("saved_out_version")
-    current_version = getattr(out, "_version", None)
+    current_version = tensor_version_or_none(out)
     if saved_version is not None and current_version != saved_version:
         label = state.get("label") or state.get("layer_label") or state.get("_label_raw")
         raise MutatedReferenceError(
@@ -867,7 +871,16 @@ def _dedup_saved_activation_out(
         setattr(trace, "_out_identity_cache", identity_cache)
 
     source_key = id(source_tensor)
-    source_version = getattr(source_tensor, "_version", None)
+    # r65: TorchLens's OWN dedup-bookkeeping ``_version`` read runs under the explicit
+    # internal-read marker so the r65 state-metadata property observer never mistakes it
+    # for a user ``._version`` read on a registered buffer/param receiver (unmarked it
+    # fires for every saved state source and would spuriously refuse any model whose
+    # consumed buffer was ever mutated in place before capture). Imported lazily:
+    # ``data_classes`` sits below the torch backend in the layering.
+    from ..backends.torch.completeness_witness import internal_scalar_read
+
+    with internal_scalar_read():
+        source_version = tensor_version_or_none(source_tensor)
     cached = identity_cache.get(source_key)
     if cached is not None:
         cached_source, cached_label, cached_out, cached_version = cached
@@ -885,6 +898,7 @@ if TYPE_CHECKING:
     import pandas as pd
 
     from .._io.lazy import LazyActivationRef
+    from ..receptive_field._view import ReceptiveFieldView
     from .func_call_location import FuncCallLocation
     from .layer import Layer
     from .layer import OpAccessor
@@ -1106,6 +1120,8 @@ class Op:
         "out_ref": FieldPolicy.DROP,
         "grad_ref": FieldPolicy.DROP,
         "_grad_records": FieldPolicy.BLOB_RECURSIVE,
+        "_receptive_field_cache": FieldPolicy.DROP,
+        "_projective_field_cache": FieldPolicy.DROP,
         "_arg_expressions_cache": FieldPolicy.DROP,
         "_pending_blob_id": FieldPolicy.DROP,
         "_pending_transformed_out_blob_id": FieldPolicy.DROP,
@@ -2648,6 +2664,8 @@ class Op:
         state = dict(state_items(self))
         state["_source_trace_ref"] = None
         state.pop("_facets_cache", None)
+        state.pop("_receptive_field_cache", None)
+        state.pop("_projective_field_cache", None)
         state["func"] = None
         state["grad_fn_handle"] = None
         state["tlspec_version"] = TLSPEC_VERSION
@@ -2773,6 +2791,61 @@ class Op:
 
         try:
             object.__delattr__(self, "_facets_cache")
+        except AttributeError:
+            pass
+
+    @property
+    def receptive_field(self) -> "ReceptiveFieldView":
+        """Return the lazy receptive-field query view for this Op."""
+
+        from ..receptive_field import _engine
+        from ..receptive_field._view import ReceptiveFieldView
+
+        trace = self.source_trace
+        solution = _engine.solve(trace)
+        cache = self._slot("_receptive_field_cache")
+        if cache is not None and cache._solution is not solution:
+            for op in trace.layer_list:
+                if op._slot("_receptive_field_cache") is not None:
+                    object.__setattr__(
+                        op,
+                        "_receptive_field_cache",
+                        ReceptiveFieldView(op, solution),
+                    )
+            cache = self._slot("_receptive_field_cache")
+        if cache is None:
+            cache = ReceptiveFieldView(self, solution)
+            object.__setattr__(self, "_receptive_field_cache", cache)
+        return cache
+
+    @receptive_field.deleter
+    def receptive_field(self) -> None:
+        """Drop the cached receptive-field query view for this Op."""
+
+        try:
+            object.__delattr__(self, "_receptive_field_cache")
+        except AttributeError:
+            pass
+
+    @property
+    def projective_field(self) -> "ReceptiveFieldView":
+        """Return the lazy source-anchored projective-field query view."""
+
+        from ..receptive_field._view import ReceptiveFieldView
+
+        cache = self._slot("_projective_field_cache")
+        current = ReceptiveFieldView.projective(self)
+        if cache is None or cache._solution is not current._solution:
+            cache = current
+            object.__setattr__(self, "_projective_field_cache", cache)
+        return cache
+
+    @projective_field.deleter
+    def projective_field(self) -> None:
+        """Drop the cached source-anchored projective-field query view."""
+
+        try:
+            object.__delattr__(self, "_projective_field_cache")
         except AttributeError:
             pass
 

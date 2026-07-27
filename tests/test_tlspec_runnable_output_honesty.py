@@ -298,14 +298,24 @@ def test_r7_nonreconstructable_class_output_is_unverifiable_or_rejected(
 
 @pytest.mark.parametrize("kind", ["namedtuple", "dataclass", "hf_model_output"])
 def test_r7_reconstructable_class_output_round_trips_verified(kind: str, tmp_path: Path) -> None:
-    """Class outputs with replay-safe metadata rebuild exactly without divergence."""
+    """Class outputs with replay-safe metadata rebuild exactly without divergence.
+
+    r27-B2: a custom-``__init__`` ``hf_model_output`` (``_R7ModelOutput`` defines its OWN
+    ``__init__``) is honest fail-closed to UNVERIFIABLE -- its constructor cannot be proven
+    side-effect-free from the type without INVOKING it (the RCE surface). The output still
+    RECONSTRUCTS faithfully; only the honesty verdict is downgraded. ``namedtuple`` / ``dataclass``
+    outputs (no custom constructor to distrust) stay VERIFIED.
+    """
 
     model = _R7ContainerOutputModel(kind, 7)
     x = torch.tensor([1.0, 2.0])
     result = _roundtrip(model, x, tmp_path / f"{kind}_faithful.tlspec")
     live = model(x)
 
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    if kind == "hf_model_output":
+        assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    else:
+        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert type(result.output) is type(live)
     assert result.output.meta == 7
     assert torch.equal(result.output.value, live.value)
@@ -355,3 +365,265 @@ def test_f6_exotic_output_dict_key_typed_reject_not_raw_valueerror(
     result = tl.load(path).run(inputs=x)
     assert result.report.path_faithfulness is not PathFaithfulness.DIVERGED
     assert key in result.output
+
+
+# --------------------------------------------------------------------------- #
+# r26-C1: a host-escaped non-tensor scalar OUTPUT the sparse DAG cannot reproduce
+# must be UNVERIFIABLE, never a false VERIFIED with a dropped ``None`` output.
+# --------------------------------------------------------------------------- #
+
+
+class _IntScalarOutput(nn.Module):
+    """Return an ``int(...)`` host-escaped scalar (no output tensor slot)."""
+
+    def forward(self, x: torch.Tensor) -> Any:
+        return int(x.argmax().item())
+
+
+class _FloatScalarOutput(nn.Module):
+    """Return a ``float(...)`` host-escaped scalar derived from a param op."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> Any:
+        return float(self.lin(x).sum().detach())
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    ("model_factory", "x"),
+    [
+        (_IntScalarOutput, torch.tensor([0.1, 0.9, 0.3, 0.2])),
+        (_FloatScalarOutput, torch.randn(2, 4)),
+    ],
+)
+def test_r26_host_escaped_scalar_output_refuses_at_save(
+    model_factory: Any, x: torch.Tensor, tmp_path: Path
+) -> None:
+    """A model returning a host-escaped Python scalar has no reproducible output.
+
+    ``trace.output_layers == []`` (no output tensor slot), so the v2 descriptor has
+    no carrier for the output contract. r37 corr1_1/INV-3 hardening: the runnable
+    save REFUSES uniformly at preflight (missing_output_container_contract) --
+    accept-then-``None`` (the pre-r37 posture this test used to pin as a run-time
+    UNVERIFIABLE ceiling) is gone; the artifact is never produced.
+    """
+
+    from torchlens.errors import RunnablePreflightError
+
+    model = model_factory()
+    trace = _capture(model, x)
+    assert trace.output_layers == []
+    path = tmp_path / "scalar_out.tlspec"
+    with pytest.raises(RunnablePreflightError) as excinfo:
+        trace.save(path, level="runnable", include_activations=True)
+    assert "missing_output_container_contract" in str(excinfo.value.fields.get("diagnostics"))
+
+
+@pytest.mark.smoke
+def test_r26_normal_tensor_output_still_verified(tmp_path: Path) -> None:
+    """A normal tensor-output model must still VERIFY (no C1 over-trigger)."""
+
+    class _TensorOut(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.lin(x)
+
+    x = torch.randn(2, 4)
+    result = _roundtrip(_TensorOut(), x, tmp_path / "tensor_out.tlspec", include_activations=True)
+
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert isinstance(result.output, torch.Tensor)
+
+
+# --------------------------------------------------------------------------- #
+# r27-H4 (R27-C1/C2): a run whose path ceils at UNVERIFIABLE because the OUTPUT
+# was never reproduced (host-escaped scalar) or reconstructs LOSSILY (a computed
+# __post_init__ field) must NEVER simultaneously report numeric_attestation =
+# ATTESTED -- an internally inconsistent false positive. The two lossy/dropped
+# flags are now threaded into the numeric-attestation gate.
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class _H4LossyPostInitOutput:
+    """Dataclass output whose ``__post_init__`` computes dropped non-field state.
+
+    The non-invoking rebuild restores only ``value`` / ``meta`` and cannot recompute
+    ``derived``, so ``_container_spec_reconstruction_lossy`` flags it and the run ceils
+    at UNVERIFIABLE. Defined at MODULE scope so ``resolve_container_type`` finds it and
+    the lossiness comes specifically from the ``__post_init__`` signal (not "type not
+    loaded"), exercising the exact H4 gate.
+    """
+
+    value: torch.Tensor
+    meta: int
+
+    def __post_init__(self) -> None:
+        """Compute a dropped non-field attribute."""
+
+        self.derived = int(self.meta) * 2
+
+
+class _H4LossyDataclassModel(nn.Module):
+    """Return a lossy-reconstruction dataclass output."""
+
+    def forward(self, x: torch.Tensor) -> Any:
+        """Return the lossy ``__post_init__`` dataclass output."""
+
+        return _H4LossyPostInitOutput(value=x + 1, meta=7)
+
+
+class _H4FloatScalarModel(nn.Module):
+    """Return a host-escaped ``float(...)`` scalar (no output tensor slot)."""
+
+    def __init__(self) -> None:
+        """Build a linear op so activations exist to (falsely) attest."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> Any:
+        """Return a host-escaped scalar derived from a param op."""
+
+        return float(self.lin(x).sum().detach())
+
+
+@pytest.mark.smoke
+def test_h4_host_escaped_scalar_output_refuses_at_save(tmp_path: Path) -> None:
+    """A dropped (host-escaped) output can never reach attestation: since r37 the
+    zero-tensor-slot artifact is refused at SAVE (missing_output_container_contract),
+    so no run -- attested or otherwise -- exists to mis-report."""
+
+    from torchlens.errors import RunnablePreflightError
+
+    x = torch.randn(2, 4)
+    trace = _capture(_H4FloatScalarModel(), x)
+    with pytest.raises(RunnablePreflightError) as excinfo:
+        trace.save(tmp_path / "h4_scalar.tlspec", level="runnable", include_activations=True)
+    assert "missing_output_container_contract" in str(excinfo.value.fields.get("diagnostics"))
+
+
+@pytest.mark.smoke
+def test_h4_lossy_container_output_not_attested(tmp_path: Path) -> None:
+    """A lossy __post_init__ dataclass output must not be ATTESTED (path UNVERIFIABLE)."""
+
+    x = torch.tensor([1.0, 2.0])
+    result = _roundtrip(
+        _H4LossyDataclassModel(), x, tmp_path / "h4_lossy.tlspec", include_activations=True
+    )
+
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
+
+
+# ---------------------------------------------------------------------------
+# r35 I1 (hon1_1 == corr1_1, hon1_2, decision B): uniform save-time refusal of
+# every lossy/unaddressable model output -- any cardinality, any depth.
+# ---------------------------------------------------------------------------
+
+
+class _IntSet(set):  # type: ignore[type-arg]
+    """Set subclass output (must refuse exactly like a bare set)."""
+
+
+class _LambdaOutputModel(nn.Module):
+    """Return an arbitrary lossy/unaddressable output shape."""
+
+    def __init__(self, builder: Any) -> None:
+        super().__init__()
+        self._builder = builder
+
+    def forward(self, x: torch.Tensor) -> Any:
+        return self._builder(x)
+
+
+class _OpaqueTensorHolder:
+    """Opaque object (DynamicCache-style) holding a tensor."""
+
+    def __init__(self, value: torch.Tensor) -> None:
+        self.value = value
+
+
+@dataclass
+class _SetFieldOutput:
+    """Dataclass output holding a set field."""
+
+    value: torch.Tensor
+    extras: Any
+
+
+_R35_LOSSY_OUTPUT_BUILDERS = {
+    "bare_one_tensor_set": lambda x: {x + 1},
+    "one_tensor_set_with_flag": lambda x: {x + 1, "flag"},
+    "bare_two_tensor_set": lambda x: {x + 1, x * 2},
+    "bare_frozenset": lambda x: frozenset({x + 1}),
+    "empty_set_in_tuple": lambda x: (x + 1, set()),
+    "empty_frozenset_in_tuple": lambda x: (x + 1, frozenset()),
+    "set_subclass": lambda x: _IntSet({x + 1}),
+    "tuple_nested_one_tensor_set": lambda x: (x + 1, {x * 2}),
+    "tuple_nested_two_tensor_set": lambda x: (x + 1, {x * 2, x * 3}),
+    "dict_nested_set": lambda x: {"a": {x + 1}},
+    "deep_list_dict_nested_set": lambda x: [{"inner": (x + 1, {x * 2})}],
+    "dataclass_with_set_field": lambda x: _SetFieldOutput(value=x + 1, extras={x * 2}),
+    "opaque_tensor_holder_in_tuple": lambda x: (x + 1, _OpaqueTensorHolder(x * 2)),
+}
+
+
+@pytest.mark.smoke
+@pytest.mark.filterwarnings("ignore:TorchLens intervention-ready output traversal:UserWarning")
+@pytest.mark.parametrize("kind", sorted(_R35_LOSSY_OUTPUT_BUILDERS))
+def test_r35_lossy_output_refuses_runnable_save_uniformly(tmp_path: Path, kind: str) -> None:
+    """Every lossy/unaddressable output refuses at save with the typed code.
+
+    r34 hon1_1/corr1_1 (bare one-tensor set: false VERIFIED+ATTESTED) and
+    hon1_2 (nested sets: false DIVERGED / advertise-then-crash) close as ONE
+    class: refuse-unless-proved at save. Analysis capture stays available.
+    """
+
+    from torchlens.errors import RunnablePreflightError
+
+    model = _LambdaOutputModel(_R35_LOSSY_OUTPUT_BUILDERS[kind]).eval()
+    x = torch.arange(4.0) + 1.0
+    trace = _capture(model, x)
+    with pytest.raises(RunnablePreflightError) as excinfo:
+        tl.save(trace, str(tmp_path / f"{kind}.tlspec"), level="runnable")
+    codes = {diag.code.value for diag in excinfo.value.fields["diagnostics"]}
+    assert "missing_output_container_contract" in codes
+    # No runnable artifact was written.
+    assert not (tmp_path / f"{kind}.tlspec").exists()
+    # Ordinary analysis save remains available for the same capture.
+    tl.save(trace, str(tmp_path / f"{kind}_analysis.tlspec"), level="portable")
+
+
+_R35_LOSSLESS_OUTPUT_BUILDERS = {
+    "bare_tensor": lambda x: x + 1,
+    "tuple": lambda x: (x + 1, x * 2),
+    "one_tensor_list": lambda x: [x + 1],
+    "dict": lambda x: {"a": x + 1, "b": x * 2},
+    "namedtuple": lambda x: _Pair(value=x + 1, meta=3),
+    "tuple_with_literal": lambda x: (x + 1, "ok", 7),
+}
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("kind", sorted(_R35_LOSSLESS_OUTPUT_BUILDERS))
+def test_r35_lossless_outputs_still_save_and_run_verified(tmp_path: Path, kind: str) -> None:
+    """Positive controls: proved-lossless outputs save, run, and match kinds."""
+
+    model = _LambdaOutputModel(_R35_LOSSLESS_OUTPUT_BUILDERS[kind]).eval()
+    x = torch.arange(4.0) + 1.0
+    expected = model(x)
+    trace = _capture(model, x)
+    path = tmp_path / f"{kind}.tlspec"
+    tl.save(trace, str(path), level="runnable")
+    result = tl.load(str(path)).run(inputs=x)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert type(result.output) is type(expected)
+    if isinstance(expected, torch.Tensor):
+        assert torch.equal(result.output, expected)

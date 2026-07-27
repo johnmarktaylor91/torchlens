@@ -44,6 +44,7 @@ log.draw()                    # PDF of the computational graph
   [5-minute gallery](examples/5min/README.md) |
   [50-minute gallery](examples/50min/README.md)
 - [Performance guide](docs/performance.md) |
+  [Receptive & projective fields](docs/receptive_projective_fields.md) |
   [AI-agent quick reference](docs/for-ai-agents.md) |
   [Limitations](docs/LIMITATIONS.md) |
   [Migration tables](docs/migration/)
@@ -212,6 +213,27 @@ log.log_backward(log[log.output_layers[0]].out.sum())
 
 Backward capture is PyTorch-only. Non-torch backends expose derived leaf-level
 gradients through a second AD pass. See [docs/backward.md](docs/backward.md).
+
+### Influence geometry in both directions
+
+**The first tool that gets ResNets right:** TorchLens computes receptive fields back toward an
+input and projective fields forward toward an output over the captured DAG, then can cross-check
+the geometric answer with an empirical gradient support mask. It includes ResNet skip connections
+because it analyzes executed graph paths rather than multiplying a module list.
+
+```python
+target = log["features.6"]
+rf = target.receptive_field
+unit = rf.center_unit(batch_index=0)
+box = rf.at((3, 3))
+check = rf.check(unit)
+outgoing = target.projective_field.at((3, 3))
+```
+
+<img src="images/receptive_projective_fields.svg" width="70%" alt="Receptive and projective field directions through a neural-network graph">
+
+See the [receptive and projective fields guide](docs/receptive_projective_fields.md) for the
+status contract, visual overlays, validation, and layer-to-layer queries.
 
 ### 3. Vast metadata per operation
 

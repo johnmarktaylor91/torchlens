@@ -1277,6 +1277,7 @@ def _add_edges_for_node(
                     target_node=child_node,
                     module_key=edge_module_key,
                     occurrence_key=render_edge.occurrence_key,
+                    attrs=tuple(edge_dict.items()),
                 )
             )
 

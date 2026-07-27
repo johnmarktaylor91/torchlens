@@ -21,6 +21,7 @@ import torch
 
 from ... import _state
 from ...utils._torch_compat import get_accumulate_grad_class
+from ...utils._torch_symbols import torch_attr
 
 from ..._deprecations import MISSING, MissingType
 from ...quantities import Bytes, Duration
@@ -348,8 +349,10 @@ def _traces_for_roots(roots: Any) -> tuple[Any, ...]:
             trace = trace_ref()
             if trace is None or not hasattr(trace, "layer_list"):
                 stale_ids.append(grad_fn_object_id)
-            elif id(trace) not in matched_ids and not getattr(
-                trace, "_tl_backward_triggers_disarmed", False
+            elif (
+                id(trace) not in matched_ids
+                and not getattr(trace, "_tl_backward_triggers_disarmed", False)
+                and not getattr(trace, "_tl_rf_probe_active", False)
             ):
                 matched.append(trace)
                 matched_ids.add(id(trace))
@@ -1376,7 +1379,7 @@ def _torch_dtype_from_string(dtype_name: str) -> torch.dtype | str:
 
     if dtype_name.startswith("torch."):
         dtype_attr = dtype_name.removeprefix("torch.")
-        dtype = getattr(torch, dtype_attr, None)
+        dtype = torch_attr(dtype_attr)  # r47 secD_1: no lazy ``torch.__getattr__``
         if isinstance(dtype, torch.dtype):
             return dtype
     return dtype_name
@@ -2615,8 +2618,15 @@ def install_autograd_wrappers() -> None:
 
         def run() -> Any:
             """Invoke the original autograd grad function."""
-            if _state._escape_detector_mode == "shadow":
-                with expected_original_call(original, "autograd:grad"):
+            if (
+                _state._escape_detector_mode == "shadow"
+                or _state._completeness_witness_mode == "shadow"
+            ):
+                with expected_original_call(
+                    original,
+                    "autograd:grad",
+                    census_scope="expected_opaque",
+                ):
                     return original(*args, **kwargs)
             return original(*args, **kwargs)
 

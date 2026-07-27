@@ -20,6 +20,7 @@ Design rationale:
     just to check the toggle.
 """
 
+import threading
 import weakref
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -46,6 +47,32 @@ duration of a forward pass inside ``active_logging()``.
 # ---------------------------------------------------------------------------
 # Session state — reset every forward pass
 # ---------------------------------------------------------------------------
+
+_active_owner_thread_id: int | None = None
+"""Thread ident of the thread that entered ``active_logging()`` (r43 hon2_4).
+
+TorchLens capture is single-owner-threaded by design (the aten census is a thread-local
+``TorchDispatchMode``; the docs forbid concurrent captures). The torch-function wrapper,
+however, is a GLOBAL decoration that fires on EVERY thread, so a NON-owner thread running
+torch ops during a capture (a worker formatting ``str(tensor)``, a DataLoader thread) would
+otherwise be logged into the owner's Trace -- tagging its temporaries with capture labels
+(a false cross-thread ceiling) and corrupting owner-op attribution (an observed crash). The
+wrapper op-logging fast-path skips any thread other than this owner. Cross-thread tensor->host
+escapes are still observed by the mode-independent belt (which patches tensor methods directly,
+independent of this wrapper). Set with ``_active_trace`` in ``active_logging`` and cleared on
+exit.
+"""
+
+_nonowner_belt_armed: bool = False
+"""Global gate for the r45 hon2_1 cross-thread captured-operand observer.
+
+Set True (beside ``_WitnessState.belt_armed``) for exactly the runnable-capture forward
+window inside ``_observe_invisible_host_escapes`` and cleared in its ``finally``. The global
+torch-function wrapper's NON-owner fast path reads this single bool: when False (every plain
+trace and the entire steady state) the wrapper stays a near-noop; when True a non-owner thread's
+torch op is inspected for consumption of a captured operand (which ceilings replay proof to
+``unverifiable``). A bare bool keeps ``_state.py`` import-free.
+"""
 
 _active_trace: "Trace | None" = None
 """The Trace accumulating data for the current forward pass.
@@ -443,6 +470,14 @@ _escape_detector_mode: str = "off"
 
 _completeness_witness_mode: str = "off"
 """Dispatcher completeness witness mode: ``"off"`` or diagnostic ``"shadow"``."""
+
+_runnable_ledger_armed: bool = False
+"""Whether the r35 event-lifecycle ledger requires wrapper ownership tokens.
+
+Armed only around a runnable-eligible (``intervention_ready``) capture forward so
+the dispatch census can attribute raised / host-returning aten events to their
+exact wrapper owner even when both diagnostic shadow modes are off.
+"""
 _prepared_models: weakref.WeakSet[Any] = weakref.WeakSet()
 """Models that have already been through ``_prepare_model_once()``.
 
@@ -621,6 +656,7 @@ def active_logging(trace: "Trace") -> Iterator[None]:
     clearing it on inner exit) is worse than failing loudly.
     """
     global _logging_enabled, _active_trace, _functorch_warning_emitted, _func_call_id_counter
+    global _active_owner_thread_id
     if _logging_enabled or _active_trace is not None or _hook_reentrancy_depth > 0:
         active_model = getattr(_active_trace, "model_label", None)
         if active_model is None:
@@ -637,6 +673,7 @@ def active_logging(trace: "Trace") -> Iterator[None]:
     # Model log must be visible before the toggle flips — wrappers will
     # immediately read _active_trace once _logging_enabled is True.
     _active_trace = trace
+    _active_owner_thread_id = threading.get_ident()
     _functorch_warning_emitted = False
     _func_call_id_counter = 0
     _logging_enabled = True
@@ -646,6 +683,7 @@ def active_logging(trace: "Trace") -> Iterator[None]:
         # Toggle off first so no wrapper sees enabled=True with trace=None
         _logging_enabled = False
         _active_trace = None
+        _active_owner_thread_id = None
 
 
 @contextmanager

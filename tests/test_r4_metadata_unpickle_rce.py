@@ -189,13 +189,17 @@ def test_runnable_levels_still_run(tmp_path: Path) -> None:
 
 @pytest.mark.smoke
 def test_control_flow_bundle_round_trips(tmp_path: Path) -> None:
-    """A control-flow portable bundle (embedded tensor + torch method refs) loads."""
+    """A control-flow bundle keeps tensors out of metadata and restores arm bindings."""
 
     x = torch.randn(2, 4)
     bundle = tmp_path / "cf"
     tl.trace(_ControlFlow(), x, layers_to_save="all").save(bundle, level="portable")
+    assert b"_load_from_bytes" not in _metadata_path(bundle).read_bytes()
     loaded = tl.load(bundle)
     assert loaded is not None
+    for conditional in loaded.conditionals:
+        for arm in conditional.arms:
+            assert arm._trace is loaded
 
 
 # --------------------------------------------------------------------------- #

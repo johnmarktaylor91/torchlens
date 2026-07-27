@@ -444,6 +444,7 @@ _UNARY_FUNCS = [
     "item",
     "tolist",
     "numpy",
+    "array",
     # --- Activations (unary) ---
     "relu",
     "relu6",

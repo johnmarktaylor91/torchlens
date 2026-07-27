@@ -47,19 +47,39 @@ from typing import Any
 import warnings
 
 import torch
+from torch.utils._python_dispatch import TorchDispatchMode
+
+from ._torch_symbols import torch_attr
 
 __all__ = [
     "AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED",
     "HAS_ACCUMULATE_GRAD_CLASS",
     "HAS_AUTOCAST_DEVICE_TYPE_ARG",
+    "HAS_CUDA_MATMUL_TF32",
+    "HAS_CUDNN_FLAGS",
+    "HAS_DETERMINISTIC_ALGORITHMS_QUERY",
+    "HAS_FILL_UNINITIALIZED_MEMORY",
+    "HAS_FLOAT32_MATMUL_PRECISION",
+    "HAS_SDP_TOGGLES",
+    "apply_ambient_execution_context",
+    "read_fill_uninitialized_memory",
+    "snapshot_ambient_execution_context",
+    "write_fill_uninitialized_memory",
     "HAS_DEVICE_CONTEXT_DISPATCH",
     "HAS_DEVICE_CONSTRUCTORS",
     "HAS_FUNCTORCH_APIS",
     "HAS_FUNCTORCH_LEVEL_API",
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
     "HAS_FX_GRAPH_MODULE",
+    "HAS_GENERATOR_CLONE_STATE",
+    "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
+    "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
     "HAS_JIT_BUILTIN_TABLE",
+    "HAS_NAMED_TENSOR_API",
+    "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
+    "HAS_SAFE_WEIGHTS_ONLY_LOAD",
+    "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
     "HAS_TORCH_FUNC",
     "HAS_TORCH_VF",
@@ -85,6 +105,7 @@ __all__ = [
     "fix_tensor_sequence_slot",
     "mark_torch_capability_missing",
     "resolve_runnable_torch_alias",
+    "tensor_has_named_dims",
 ]
 
 
@@ -93,6 +114,39 @@ TorchCapabilitySnapshot = dict[str, bool]
 
 _CAPABILITY_WARNING_ENV = "TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS"
 _warned_missing_capabilities: set[str] = set()
+
+
+class _ParameterAsSubclassProbeMode(TorchDispatchMode):
+    """Redispatch operations unchanged for the Parameter subclass capability probe."""
+
+    def __torch_dispatch__(
+        self,
+        func: Any,
+        types: tuple[type[Any], ...],
+        args: tuple[Any, ...] = (),
+        kwargs: dict[str, Any] | None = None,
+    ) -> Any:
+        """Redispatch one probe operation without changing its result.
+
+        Parameters
+        ----------
+        func:
+            Dispatcher operator invoked by the probe.
+        types:
+            Participating tensor subclass types.
+        args:
+            Positional operator arguments.
+        kwargs:
+            Keyword operator arguments.
+
+        Returns
+        -------
+        Any
+            Unmodified operator result.
+        """
+
+        del types
+        return func(*args, **(kwargs or {}))
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,7 +176,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         "linear",
         "private_to_public:_C._nn.linear->torch.nn.functional.linear",
         (2, 1),
-        (2, 12),
+        (2, 13),
     ),
     RunnableTorchAlias(
         "_C._nn.linear",
@@ -130,7 +184,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         "linear",
         "private_to_public:_C._nn.linear->torch.nn.functional.linear",
         (2, 1),
-        (2, 12),
+        (2, 13),
     ),
     RunnableTorchAlias(
         "torch._VF.linear",
@@ -196,7 +250,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         None,
         "private_to_public:_C._linalg.linalg_*->torch.linalg.*",
         (2, 1),
-        (2, 12),
+        (2, 13),
         "linalg_",
     ),
     RunnableTorchAlias(
@@ -571,6 +625,47 @@ def _probe_fx_graph_module() -> bool:
     return _nested_getattr_or_none(torch, ("fx", "GraphModule")) is not None
 
 
+def _probe_named_tensor_api() -> bool:
+    """Return whether native Torch named-tensor inspection/construction exists.
+
+    Returns
+    -------
+    bool
+        Whether the required native named-tensor surface is available.
+    """
+
+    return all(hasattr(torch.Tensor, attr) for attr in ("names", "has_names", "refine_names"))
+
+
+def _probe_cached_untyped_storage_wrapper() -> bool:
+    """Return whether a tensor retains one stable untyped-storage Python wrapper.
+
+    Torch 2.1 creates a fresh ``UntypedStorage`` wrapper on every
+    ``Tensor.untyped_storage()`` call. Its wrapper destructor can leave a
+    ``weakref.ref`` pointing at freed memory, so placing an ephemeral handle in a
+    ``WeakKeyDictionary`` can later segfault CPython while clearing the weakref.
+    Newer torch retains one wrapper on the tensor, which makes weak-key storage
+    registries safe for the tensor's lifetime.
+
+    The probe deliberately compares two live handles instead of constructing a
+    weakref: exercising the broken weakref destructor would itself corrupt the
+    interpreter on an unsupported runtime.
+
+    Returns
+    -------
+    bool
+        ``True`` when repeated calls return the same retained wrapper.
+    """
+
+    try:
+        tensor = torch.empty(0)
+        first = tensor.untyped_storage()
+        second = tensor.untyped_storage()
+    except (AttributeError, RuntimeError, TypeError):
+        return False
+    return first is second
+
+
 def _probe_dynamo_optimized_module() -> bool:
     """Return whether torch exposes the private Dynamo OptimizedModule type.
 
@@ -640,6 +735,71 @@ def _probe_tensor_sequence_slot_fix() -> bool:
     return type_obj.tp_name == b"Tensor" and bool(type_obj.tp_as_sequence)
 
 
+def _probe_safe_weights_only_load() -> bool:
+    """Return whether ``torch.load(..., weights_only=True)`` is CVE-2025-32434-safe.
+
+    CVE-2025-32434 (critical, CVSS 9.3; affects torch <= 2.5.1, fixed in torch
+    2.6.0) is a remote-code-execution reachable through ``torch.load`` *itself*
+    even with ``weights_only=True``: the pre-2.6 weights-only unpickler could be
+    bypassed. TorchLens routes an embedded-tensor reconstruction through
+    ``torch.load(BytesIO, weights_only=True)`` (see
+    ``torchlens._io._safe_unpickle._safe_load_from_bytes``), so on an affected
+    runtime that "restricted" nested load is a working RCE and must fail closed.
+
+    The patched behavior is internal to the unpickler and has NO version-string-
+    free *behavioral* signature we can cheaply exercise, so -- consistent with this
+    module's feature-detect convention (never parse ``torch.__version__`` for a
+    behavioral branch) -- we probe the 2.6.0 serialization-hardening SURFACE that
+    shipped *in* the fix release: the public
+    ``torch.serialization.get_unsafe_globals_in_checkpoint`` inspection API plus the
+    rewritten ``torch._weights_only_unpickler.get_globals_in_pkl`` GLOBAL-opcode
+    handler. Both are ABSENT on every affected version (<= 2.5.1) and PRESENT on
+    2.6.0+ (verified against the v2.5.1 and v2.6.0 sources). Requiring BOTH is the
+    conservative, fail-closed direction: a false negative merely refuses an
+    embedded load on a safe torch, whereas admitting it on a vulnerable torch would
+    reopen the RCE.
+
+    Returns
+    -------
+    bool
+        ``True`` only when the running torch carries the CVE-2025-32434 fix.
+    """
+
+    try:
+        import torch._weights_only_unpickler as _weights_only_unpickler
+        import torch.serialization as _serialization
+    except Exception:  # pragma: no cover - defensive; both import on supported torch.
+        return False
+    return hasattr(_serialization, "get_unsafe_globals_in_checkpoint") and hasattr(
+        _weights_only_unpickler, "get_globals_in_pkl"
+    )
+
+
+def _probe_parameter_as_subclass_in_dispatch_mode() -> bool:
+    """Return whether Parameter-to-Tensor subclass conversion works in a dispatch mode.
+
+    Torch 2.1 rejects ``Parameter.as_subclass(torch.Tensor)`` while a
+    :class:`TorchDispatchMode` is active because the returned raw tensor is already
+    associated with a base ``Tensor`` Python object. Newer torch releases permit the
+    conversion. TorchLens' completeness witness is itself a dispatch mode, so this
+    behavioral probe mirrors the dynamic-parameter logging context without parsing a
+    version string.
+
+    Returns
+    -------
+    bool
+        ``True`` when the conversion succeeds inside a redispatching mode.
+    """
+
+    parameter = torch.nn.Parameter(torch.empty(0))
+    try:
+        with _ParameterAsSubclassProbeMode():
+            plain_tensor = parameter.as_subclass(torch.Tensor)
+    except (RuntimeError, TypeError):
+        return False
+    return type(plain_tensor) is torch.Tensor
+
+
 HAS_VARIABLE_FUNCTIONS: bool = _probe_variable_functions()
 HAS_TORCH_VF: bool = _probe_torch_vf()
 HAS_TORCH_FUNC: bool = _probe_torch_func()
@@ -651,8 +811,15 @@ HAS_DEVICE_CONTEXT_DISPATCH: bool = _probe_device_context_dispatch()
 HAS_DEVICE_CONSTRUCTORS: bool = _probe_device_constructors()
 HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_accumulate_grad_class()
 HAS_FX_GRAPH_MODULE: bool = _probe_fx_graph_module()
+HAS_NAMED_TENSOR_API: bool = _probe_named_tensor_api()
+HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
 HAS_DYNAMO_OPTIMIZED_MODULE: bool = False
+HAS_GENERATOR_CLONE_STATE: bool = hasattr(torch.Generator, "clone_state")
+HAS_GENERATOR_GRAPHSAFE_GET_STATE: bool = hasattr(torch.Generator, "graphsafe_get_state")
+HAS_GENERATOR_GRAPHSAFE_SET_STATE: bool = hasattr(torch.Generator, "graphsafe_set_state")
+HAS_SAFE_WEIGHTS_ONLY_LOAD: bool = _probe_safe_weights_only_load()
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
+HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE: bool = _probe_parameter_as_subclass_in_dispatch_mode()
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
 _DYNAMO_OPTIMIZED_MODULE_PROBED: bool = False
 
@@ -669,8 +836,21 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_DEVICE_CONSTRUCTORS",
     "HAS_ACCUMULATE_GRAD_CLASS",
     "HAS_FX_GRAPH_MODULE",
+    "HAS_NAMED_TENSOR_API",
+    "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
+    "HAS_GENERATOR_CLONE_STATE",
+    "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
+    "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
+    "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
+    "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
+    "HAS_FLOAT32_MATMUL_PRECISION",
+    "HAS_DETERMINISTIC_ALGORITHMS_QUERY",
+    "HAS_CUDA_MATMUL_TF32",
+    "HAS_CUDNN_FLAGS",
+    "HAS_SDP_TOGGLES",
+    "HAS_FILL_UNINITIALIZED_MEMORY",
 )
 
 
@@ -725,6 +905,26 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     snapshot = {name: bool(globals()[name]) for name in _CAPABILITY_ATTRS}
     snapshot["AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED"] = bool(AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED)
     return snapshot
+
+
+def tensor_has_named_dims(value: torch.Tensor) -> bool:
+    """Return whether ``value`` has at least one named dimension.
+
+    Parameters
+    ----------
+    value:
+        Native tensor to inspect.
+
+    Returns
+    -------
+    bool
+        Whether at least one dimension has a non-null name.
+    """
+
+    if not HAS_NAMED_TENSOR_API:
+        return False
+    names = getattr(value, "names", None)
+    return bool(names and any(name is not None for name in names))
 
 
 def get_variable_function_names() -> list[str]:
@@ -1124,3 +1324,351 @@ else:
     def autocast_get_dtype(device_type: str) -> torch.dtype:
         """Return the autocast dtype for ``device_type`` (torch 2.1-2.3 path)."""
         return _legacy_get_autocast_dtype(device_type)
+
+
+# --- r35 decision E: ambient execution-context snapshot/restore ------------------
+#
+# Every knob below is a fragile cross-version torch surface, so it is probed here
+# (the doctrinal home for such probes) behind named ``HAS_*`` capability flags.
+# ``None`` in a snapshot means "this runtime does not expose the control"; every
+# exposed control is recorded affirmatively, including its disabled state.
+
+
+def _probe_float32_matmul_precision() -> bool:
+    """Return whether this torch exposes the float32 matmul precision control."""
+
+    return callable(getattr(torch, "get_float32_matmul_precision", None)) and callable(
+        getattr(torch, "set_float32_matmul_precision", None)
+    )
+
+
+def _probe_deterministic_algorithms_query() -> bool:
+    """Return whether deterministic-algorithms mode is both queryable and settable."""
+
+    return (
+        callable(getattr(torch, "are_deterministic_algorithms_enabled", None))
+        and callable(getattr(torch, "is_deterministic_algorithms_warn_only_enabled", None))
+        and callable(getattr(torch, "use_deterministic_algorithms", None))
+    )
+
+
+def _probe_cuda_matmul_tf32() -> bool:
+    """Return whether the CUDA matmul TF32 flag is exposed."""
+
+    matmul = getattr(getattr(torch.backends, "cuda", None), "matmul", None)
+    return matmul is not None and hasattr(matmul, "allow_tf32")
+
+
+def _probe_cudnn_flags() -> bool:
+    """Return whether the cuDNN backend flag set is exposed."""
+
+    cudnn = getattr(torch.backends, "cudnn", None)
+    return cudnn is not None and all(
+        hasattr(cudnn, name) for name in ("allow_tf32", "deterministic", "benchmark", "enabled")
+    )
+
+
+def _probe_sdp_toggles() -> bool:
+    """Return whether the scaled-dot-product attention backend toggles are exposed."""
+
+    cuda_backend = getattr(torch.backends, "cuda", None)
+    return cuda_backend is not None and all(
+        callable(getattr(cuda_backend, name, None))
+        for name in (
+            "flash_sdp_enabled",
+            "enable_flash_sdp",
+            "mem_efficient_sdp_enabled",
+            "enable_mem_efficient_sdp",
+            "math_sdp_enabled",
+            "enable_math_sdp",
+        )
+    )
+
+
+def _probe_fill_uninitialized_memory() -> bool:
+    """Return whether the deterministic uninit-memory fill knob is exposed.
+
+    ``torch.utils.deterministic.fill_uninitialized_memory`` (torch >= 2.1)
+    governs whether ``torch.use_deterministic_algorithms(True)`` deterministically
+    fills the ``empty`` factory family. Feature-detected for the r53 hon_1/hon_2
+    ambient wave; an absent knob records ``None`` (never a guessed boolean).
+    """
+
+    deterministic = getattr(getattr(torch, "utils", None), "deterministic", None)
+    if deterministic is None:
+        return False
+    try:
+        return isinstance(deterministic.fill_uninitialized_memory, bool)
+    except (AttributeError, RuntimeError):
+        return False
+
+
+HAS_FLOAT32_MATMUL_PRECISION: bool = _probe_float32_matmul_precision()
+HAS_DETERMINISTIC_ALGORITHMS_QUERY: bool = _probe_deterministic_algorithms_query()
+HAS_CUDA_MATMUL_TF32: bool = _probe_cuda_matmul_tf32()
+HAS_CUDNN_FLAGS: bool = _probe_cudnn_flags()
+HAS_SDP_TOGGLES: bool = _probe_sdp_toggles()
+HAS_FILL_UNINITIALIZED_MEMORY: bool = _probe_fill_uninitialized_memory()
+
+
+def read_fill_uninitialized_memory() -> bool | None:
+    """Return the deterministic uninit-memory fill flag, or ``None`` when absent.
+
+    THE one sanctioned read of ``torch.utils.deterministic.fill_uninitialized_memory``
+    (a module-``__getattr__`` property invisible to static typing): the ambient
+    snapshot and the producer-side determinism refinement both route here.
+    """
+
+    if not HAS_FILL_UNINITIALIZED_MEMORY:
+        return None
+    return bool(torch.utils.deterministic.fill_uninitialized_memory)  # type: ignore[attr-defined]
+
+
+def write_fill_uninitialized_memory(value: bool) -> None:
+    """Set the deterministic uninit-memory fill flag (caller checks the flag)."""
+
+    torch.utils.deterministic.fill_uninitialized_memory = bool(value)  # type: ignore[attr-defined]
+
+
+def tensor_version_or_none(tensor: Any) -> int | None:
+    """Return ``tensor._version`` for TorchLens-internal bookkeeping, or ``None``.
+
+    r37 hon1_4: inference tensors REJECT ``_version`` with ``RuntimeError``
+    ("Inference tensors do not track version counter"), which ``getattr(...,
+    None)`` does not swallow -- every capture under ambient
+    ``torch.inference_mode()`` crashed on TL's own dedup/reference/version
+    bookkeeping reads. This helper is the ONE safe accessor for every
+    TorchLens-owned ``_version`` read; an unavailable version degrades the
+    optimization (dedup miss / conservative mutation fallback), never aborts
+    capture. Genuine USER ``_version`` reads keep their native torch behavior.
+    """
+
+    try:
+        version = tensor._version
+    except (RuntimeError, AttributeError, NotImplementedError, TypeError):
+        return None
+    return int(version) if isinstance(version, int) else None
+
+
+def snapshot_ambient_execution_context() -> dict[str, Any]:
+    """Snapshot the capture-scoped ambient backend execution context (decision E).
+
+    Returns
+    -------
+    dict[str, Any]
+        Plain JSON-safe mapping of every decision-E ambient control. Controls the
+        runtime does not expose are ``None``; exposed controls are recorded
+        affirmatively (explicit ``False``), never omitted.
+    """
+
+    snapshot: dict[str, Any] = {
+        "default_dtype": str(torch.get_default_dtype()),
+        "default_device": str(getattr(torch, "get_default_device", lambda: "cpu")()),
+        "float32_matmul_precision": (
+            str(torch.get_float32_matmul_precision()) if HAS_FLOAT32_MATMUL_PRECISION else None
+        ),
+        "deterministic_algorithms": (
+            bool(torch.are_deterministic_algorithms_enabled())
+            if HAS_DETERMINISTIC_ALGORITHMS_QUERY
+            else None
+        ),
+        "deterministic_algorithms_warn_only": (
+            bool(torch.is_deterministic_algorithms_warn_only_enabled())
+            if HAS_DETERMINISTIC_ALGORITHMS_QUERY
+            else None
+        ),
+        "cuda_matmul_allow_tf32": (
+            bool(torch.backends.cuda.matmul.allow_tf32) if HAS_CUDA_MATMUL_TF32 else None
+        ),
+        "cudnn_allow_tf32": bool(torch.backends.cudnn.allow_tf32) if HAS_CUDNN_FLAGS else None,
+        "cudnn_deterministic": (
+            bool(torch.backends.cudnn.deterministic) if HAS_CUDNN_FLAGS else None
+        ),
+        "cudnn_benchmark": bool(torch.backends.cudnn.benchmark) if HAS_CUDNN_FLAGS else None,
+        "cudnn_enabled": bool(torch.backends.cudnn.enabled) if HAS_CUDNN_FLAGS else None,
+        "flash_sdp_enabled": (
+            bool(torch.backends.cuda.flash_sdp_enabled()) if HAS_SDP_TOGGLES else None
+        ),
+        "mem_efficient_sdp_enabled": (
+            bool(torch.backends.cuda.mem_efficient_sdp_enabled()) if HAS_SDP_TOGGLES else None
+        ),
+        "math_sdp_enabled": (
+            bool(torch.backends.cuda.math_sdp_enabled()) if HAS_SDP_TOGGLES else None
+        ),
+        # r53 hon_1: the GLOBAL autograd/inference mode is a result-affecting
+        # ambient control (a Python branch on ``torch.is_grad_enabled()`` /
+        # ``is_inference_mode_enabled()`` is steered by it). Every supported
+        # torch exposes both queries, so they are REQUIRED strict booleans --
+        # never ``None``, never defaulted.
+        "grad_enabled": bool(torch.is_grad_enabled()),
+        "inference_mode": bool(torch.is_inference_mode_enabled()),
+        # r53 hon_2: deterministic uninit-memory fill knob (feature-detected).
+        "fill_uninitialized_memory": read_fill_uninitialized_memory(),
+    }
+    return snapshot
+
+
+def apply_ambient_execution_context(values: dict[str, Any]) -> None:
+    """Apply one recorded ambient execution context to the current runtime.
+
+    Parameters
+    ----------
+    values:
+        Mapping in the :func:`snapshot_ambient_execution_context` shape. ``None``
+        entries (producer runtime did not expose the control) are skipped; the
+        caller decides how to treat a recorded value this runtime cannot set.
+
+    Raises
+    ------
+    RuntimeError
+        If a recorded (non-``None``) control cannot be applied on this runtime.
+    """
+
+    def _require(flag: bool, name: str) -> None:
+        if not flag:
+            raise RuntimeError(
+                f"Recorded ambient execution context field {name!r} is not "
+                "supported by this torch runtime."
+            )
+
+    default_dtype = values.get("default_dtype")
+    if default_dtype is not None:
+        # r47 secD_1: ``torch_attr`` reads ``torch.__dict__`` (no lazy ``torch.__getattr__``).
+        dtype = torch_attr(str(default_dtype).removeprefix("torch."))
+        if not isinstance(dtype, torch.dtype):
+            raise RuntimeError(f"Recorded default dtype {default_dtype!r} is unavailable.")
+        if torch.get_default_dtype() is not dtype:
+            torch.set_default_dtype(dtype)
+    # r37 R4 (corr2-3/corr2-2): ``default_device`` is deliberately NOT applied here.
+    # ``torch.set_default_device`` mutates the PROCESS-level TorchFunctionMode stack
+    # (installing or replacing a DeviceContext), so setter-based apply/restore leaks
+    # a mode into the caller (measured: a fresh implicit-CPU consumer ended with a
+    # process DeviceContext installed) and corrupts nested caller modes. The recorded
+    # default device is entered as a SCOPED ``with torch.device(recorded)`` context
+    # around the run transaction (see ``_ambient_execution_context_restored``), whose
+    # ``__exit__`` restores the caller's exact mode stack by construction on every
+    # exit path -- no restore logic, no global mutation. The snapshot schema keeps
+    # the ``default_device`` key unchanged.
+    deterministic = values.get("deterministic_algorithms")
+    if deterministic is not None:
+        _require(HAS_DETERMINISTIC_ALGORITHMS_QUERY, "deterministic_algorithms")
+        warn_only = bool(values.get("deterministic_algorithms_warn_only") or False)
+        torch.use_deterministic_algorithms(bool(deterministic), warn_only=warn_only)
+    # ``torch.backends.cuda.matmul.allow_tf32`` and
+    # ``torch.set_float32_matmul_precision`` are two views of ONE underlying
+    # control (setting ``allow_tf32=True`` coerces precision to "high"). Apply
+    # the coarse Boolean FIRST so the finer-grained recorded precision value
+    # wins; the pair is snapshotted together, so the final state is coherent.
+    cuda_tf32 = values.get("cuda_matmul_allow_tf32")
+    if cuda_tf32 is not None:
+        _require(HAS_CUDA_MATMUL_TF32, "cuda_matmul_allow_tf32")
+        torch.backends.cuda.matmul.allow_tf32 = bool(cuda_tf32)
+    precision = values.get("float32_matmul_precision")
+    if precision is not None:
+        _require(HAS_FLOAT32_MATMUL_PRECISION, "float32_matmul_precision")
+        torch.set_float32_matmul_precision(str(precision))
+    for field_name, attr in (
+        ("cudnn_allow_tf32", "allow_tf32"),
+        ("cudnn_deterministic", "deterministic"),
+        ("cudnn_benchmark", "benchmark"),
+        ("cudnn_enabled", "enabled"),
+    ):
+        recorded = values.get(field_name)
+        if recorded is None:
+            continue
+        _require(HAS_CUDNN_FLAGS, field_name)
+        setattr(torch.backends.cudnn, attr, bool(recorded))
+    for field_name, setter in (
+        ("flash_sdp_enabled", "enable_flash_sdp"),
+        ("mem_efficient_sdp_enabled", "enable_mem_efficient_sdp"),
+        ("math_sdp_enabled", "enable_math_sdp"),
+    ):
+        recorded = values.get(field_name)
+        if recorded is None:
+            continue
+        _require(HAS_SDP_TOGGLES, field_name)
+        getattr(torch.backends.cuda, setter)(bool(recorded))
+    # r53 hon_2: the deterministic uninit-memory fill knob restores through the
+    # ordinary setter path (module property setter; snapshot/apply transactional).
+    fill_uninitialized = values.get("fill_uninitialized_memory")
+    if fill_uninitialized is not None:
+        _require(HAS_FILL_UNINITIALIZED_MEMORY, "fill_uninitialized_memory")
+        write_fill_uninitialized_memory(bool(fill_uninitialized))
+    # r53 hon_1: ``grad_enabled``/``inference_mode`` are deliberately NOT applied
+    # here. Like ``default_device`` (r37 R4 above), they restore as SCOPED
+    # contexts (``torch.set_grad_enabled`` / ``torch.inference_mode``) around the
+    # run transaction in ``_ambient_execution_context_restored``, whose
+    # ``__exit__`` restores the caller's exact mode on every exit path by
+    # construction -- a setter-based apply of a THREAD-LOCAL autograd mode from a
+    # ``finally`` block could race an interleaved caller context. The snapshot
+    # schema keeps both keys for the ambient-coverage meta-test.
+
+
+# --- r35 hon1_4: repr-independent torch structseq field discovery -----------------
+#
+# The ONLY sanctioned sources for ``torch.return_types`` structseq field names are
+# the TYPE's ``__match_args__`` declaration (CPython 3.10+) and, on 3.9, an
+# identity round-trip over the type's member descriptors. ``repr()`` parsing is
+# FORBIDDEN: console wrap position injects phantom fields (``dtype=`` /
+# ``grad_fn=`` at line start), flipping witness verdicts on tensor size alone.
+
+
+def torch_structseq_field_names(value: Any) -> tuple[str, ...]:
+    """Return the exact ordered public field names of a torch structseq value.
+
+    Parameters
+    ----------
+    value:
+        Candidate ``torch.return_types.*`` (PyStructSequence) instance.
+
+    Returns
+    -------
+    tuple[str, ...]
+        The validated ordered field names, or ``()`` when ``value`` is not a
+        fully named torch structseq or its declaration cannot be PROVEN
+        (producers refuse such a structseq; runtimes report typed
+        unavailability -- never a guess, never a repr parse).
+    """
+
+    cls = type(value)
+    if cls.__module__ != "torch.return_types" or not isinstance(value, tuple):
+        return ()
+    n_fields = getattr(value, "n_fields", None)
+    n_unnamed = getattr(value, "n_unnamed_fields", 0)
+    if not isinstance(n_fields, int) or n_fields <= 0 or n_unnamed:
+        return ()
+    match_args = getattr(cls, "__match_args__", None)
+    if (
+        isinstance(match_args, tuple)
+        and len(match_args) == n_fields
+        and len(set(match_args)) == n_fields
+        and all(
+            isinstance(name, str) and name.isidentifier() and not name.startswith("_")
+            for name in match_args
+        )
+    ):
+        return tuple(str(name) for name in match_args)
+    # CPython 3.9 fallback: derive the name -> index bijection by IDENTITY
+    # round-trip over the type's descriptors (``getattr(value, name) is
+    # value[i]`` for exactly one ``i``). Refuse on any ambiguity or
+    # non-bijection -- fail closed, never repr.
+    candidates = [
+        name
+        for name, member in vars(cls).items()
+        if not name.startswith("_") and hasattr(member, "__get__") and not callable(member)
+    ]
+    if len(candidates) != n_fields or len(value) != n_fields:
+        return ()
+    by_index: dict[int, str] = {}
+    for name in candidates:
+        try:
+            attribute = getattr(value, name)
+        except Exception:
+            return ()
+        matches = [index for index in range(n_fields) if value[index] is attribute]
+        if len(matches) != 1 or matches[0] in by_index:
+            return ()
+        by_index[matches[0]] = name
+    if len(by_index) != n_fields:
+        return ()
+    return tuple(by_index[index] for index in range(n_fields))

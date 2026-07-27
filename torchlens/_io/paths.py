@@ -25,8 +25,9 @@ def resolve_bundle_blob_path(bundle_root: Path, relative_path: str) -> Path:
     Raises
     ------
     TorchLensIOError
-        If the path is absolute, contains ``".."``, or resolves outside the
-        bundle's ``blobs/`` directory.
+        If the path is absolute, contains ``".."``, resolves outside the
+        bundle's ``blobs/`` directory, or the ``blobs/`` directory itself is a
+        symlink.
     """
 
     candidate_path = Path(relative_path)
@@ -37,8 +38,14 @@ def resolve_bundle_blob_path(bundle_root: Path, relative_path: str) -> Path:
             f"Bundle rejected parent traversal in relative_path {relative_path!r}."
         )
 
+    blobs_dir = bundle_root / "blobs"
+    if blobs_dir.is_symlink():
+        # Per-file symlink checks are performed on the resolved blob path, so a
+        # symlinked blobs/ DIRECTORY would otherwise silently redirect every
+        # "real file" containment check into an attacker-chosen tree.
+        raise TorchLensIOError(f"Refusing symlinked blobs directory: {blobs_dir}.")
     candidate = (bundle_root / candidate_path).resolve()
-    allowed_root = (bundle_root / "blobs").resolve()
+    allowed_root = blobs_dir.resolve()
     try:
         candidate.relative_to(allowed_root)
     except ValueError as exc:

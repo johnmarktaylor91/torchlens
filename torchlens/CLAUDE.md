@@ -166,19 +166,30 @@ module-containment-refactor).
 ### Portable Artifacts
 `tl.save()` and `tl.load()` route through `_io/bundle.py`. Unified `.tlspec` directories have
 `manifest.json` plus safetensors blobs; public schema validation lives in `validation/__init__.py`.
-Runnable saves are sparse by default. `include_weights=True` bundles the full capture-time
+Runnable saves are sparse by default and produce `sparse_recorded_taken_path_v2` descriptors with
+REQUIRED explicit execution-context records (per-call `CallExecutionContext` + capture-scoped
+`AmbientExecutionContext`), restored at replay or refused typed; legacy v1 artifacts load
+analysis-only. `include_weights=True` bundles the full capture-time
 `state_dict` (named parameters plus persistent buffers) as a separate `state_dict_v1` blob family;
 the sparse core still contains no tensor values. Load binds it through the same strict state
 contract used by `Trace.load_state_dict()`, while explicit user state overrides it at run time.
+Used non-persistent buffers always ship in the REQUIRED `runnable_nonpersistent_buffer_v1` family
+(declared state; not gated on either include flag; disclosed at save).
 `include_activations=True` independently writes capture-time `save=`-selected
-`out`/`transformed_out` values as `selected_activation_v1`. Loaded values are available through
+`out`/`transformed_out` values as `selected_activation_v2`, including physical
+`InputAttestationFingerprint` eligibility records. Loaded values are available through
 `Trace.archived_activations` for inspection and eligible byte-exact attestation only; the sparse
 scheduler never consumes them. Original-input, capture-equivalent real-state runs report
-`attested` or fail transactionally with `numeric_attestation_failed`; changed-input/random-state
-runs report `not_applicable`.
+`attested` or fail transactionally with `numeric_attestation_failed`; changed-input (logical or
+physical), random-state, and nondeterministic-capture-context runs report `not_applicable`, and
+`attested` always implies `verified`.
 The frozen `ReadinessStatus`, `RunProvider`, `StateSource`, `PathFaithfulness`, `DivergencePolicy`,
 `NumericAttestationStatus`, and `RunnableErrorCode` vocabularies live in `torchlens.runnable` and are
-documented exhaustively in `docs/reference/runnable_tlspec_contract.md`.
+documented exhaustively in `docs/reference/runnable_tlspec_contract.md`. r37 additions:
+`state_alias_topology_unsupported` (save-time state-topology refusal; tied live-identity state
+stages as one alias-group allocation) and `context_field_invalid` (parse-time closed-vocabulary
+context refusal); zero-tensor-leaf and instance-stateful container outputs refuse at save with
+`missing_output_container_contract` via the one per-kind capability table.
 Non-torch preview backends use `payload_policy="array_payloads"` when their codecs can materialize
 payloads; Paddle bf16 payloads carry logical dtype metadata because NumPy transports them as
 `uint16`. TensorFlow preview payloads also use `array_payloads` for dense numeric/bool forward

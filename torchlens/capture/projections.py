@@ -14,6 +14,9 @@ from typing import TYPE_CHECKING, Any, Iterator, Protocol, cast
 
 import torch
 
+from ..utils._torch_compat import tensor_version_or_none
+from ..utils._torch_symbols import torch_attr
+
 from ..fastlog.exceptions import PredicateError
 from ..fastlog.types import (
     ActivationRecord,
@@ -912,7 +915,7 @@ def _reference_annotations(save_mode: str, payload: Any) -> dict[str, Any]:
         return {}
     return {
         "save_mode": "reference",
-        "saved_out_version": getattr(payload, "_version", None),
+        "saved_out_version": tensor_version_or_none(payload),
     }
 
 
@@ -1197,7 +1200,7 @@ def _torch_dtype_from_string(dtype_name: str | None) -> torch.dtype | None:
         return None
     if dtype_name.startswith("torch."):
         dtype_attr = dtype_name.removeprefix("torch.")
-        dtype = getattr(torch, dtype_attr, None)
+        dtype = torch_attr(dtype_attr)  # r47 secD_1: no lazy ``torch.__getattr__``
         if isinstance(dtype, torch.dtype):
             return dtype
     return None

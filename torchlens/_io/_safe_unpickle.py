@@ -19,12 +19,24 @@ loader -- raises :class:`pickle.UnpicklingError` and executes nothing.
 Allowlist policy (fail-closed):
 
 * Objects resolved from the ``torchlens`` package are admitted when they are a
-  ``type`` (the metadata dataclasses / enums / accessors), or a callable whose
-  RESOLVED real ``__module__`` is genuinely ``torchlens.*`` (a first-party facet
-  recipe / transform such as ``torchlens.utils.display.identity``). Trust is
+  ``type`` ON THE POSITIVE ``_SAFE_TORCHLENS_TYPES`` ALLOWLIST (vetted-inert metadata
+  dataclasses / enums / accessors), or a VETTED-INERT first-party callable: a PUBLIC,
+  side-effect-free ``torchlens.*`` facet recipe / transform / helper (e.g.
+  ``torchlens.utils.display.identity``), decided by
+  ``torchlens.utils._callable_safety.is_inert_first_party_callable``. A torchlens
+  ``type`` is NO LONGER admitted unconditionally: a pickle ``REDUCE`` INVOKES the
+  admitted type (or its reconstructed instance) with attacker args, so an
+  import-sink type such as ``torchlens.intervention.save.LazyImportRef`` (whose
+  ``__call__`` resolves an arbitrary import path from its own pickled field) is a
+  load-time RCE and is DENIED by the default-deny type allowlist. Trust is
   decided by the resolved object's real module, never the pickled path, so a key
   that walks attributes off a torchlens module to reach ``os.system`` (real module
-  ``posix``) is denied. This admits our own trusted code without admitting a gadget.
+  ``posix``) is denied. Crucially, a pickle ``REDUCE`` INVOKES the admitted callable
+  with attacker args, so the pre-r21 blanket "any torchlens-owned callable" policy
+  was a load-time RCE: it trusted the PRIVATE ``torchlens.utils._module_is_installed``
+  (which ``importlib.import_module``s its argument). The narrowed gate is
+  deterministic (public-name + side-effect-name guard, no live-registry lookup) and
+  admits our vetted first-party code without admitting that gadget.
 * A FOREIGN facet-recipe callable (a user/test ``@tl.facets.register`` recipe
   embedded by identity in a ``FacetRegistrySnapshot``) is handled DETERMINISTICALLY
   by the same trust model the resolver uses. Known-dangerous modules (``os`` /
@@ -58,21 +70,60 @@ Allowlist policy (fail-closed):
   *safe* wrapper that restricts the target object to the enumerated torch C
   callable-holder classes, which structurally blocks the classic
   ``getattr(obj, "__globals__")`` pivot to ``eval`` / ``exec``.
-* ``torch.storage._load_from_bytes`` legitimately reconstructs small embedded
-  tensors (e.g. a control-flow predicate value) but internally calls
-  ``torch.load`` with the *unsafe* default, i.e. a nested unrestricted unpickler.
-  It is admitted only through a wrapper that forces ``weights_only=True`` so the
-  nested load routes through torch's own restricted unpickler.
+* ``torch.storage._load_from_bytes`` reconstructs tensors embedded by legacy
+  metadata (current bundles route every tensor through manifest-bound blobs) but
+  internally calls ``torch.load`` with the *unsafe* default, i.e. a nested
+  unrestricted unpickler. It is admitted only through a wrapper that forces
+  ``weights_only=True`` so the nested load routes through torch's own restricted
+  unpickler.
 
 If a future legitimate class is not yet covered, loading it fails closed with a
 clear error; we NEVER admit a code-exec gadget to make a load succeed.
+
+STRICT-SUBSET OF THE TORCH ``weights_only`` BASELINE (r49 storage, r63 tensor/ndarray).
+This unpickler's effective admit+CONSTRUCT surface is a documented STRICT SUBSET of
+torch's ``_weights_only_unpickler._get_allowed_globals()`` baseline. The invariant is
+about CONSTRUCTION, NOT resolution: the tensor / storage / ndarray TYPE OBJECTS stay
+RESOLVABLE at ``find_class`` (legit metadata references ``torch.Tensor`` /
+``torch.FloatTensor`` / ``torch.nn.Parameter`` / ``numpy.ndarray`` as inert dtype /
+module_type values -- resolving a global only references it), but their BARE
+CONSTRUCTION from pickle-supplied args is DENIED. Two layers enforce it:
+(1) torch STORAGE constructors are denied by IDENTITY at ``find_class``
+(``_is_torch_storage_type`` -- including ``torch.storage.{Typed,Untyped}Storage``,
+which torch's OWN baseline hands back as the real, constructable classes, and every
+legacy ``torch.<dtype>Storage``). Constructing a storage allocates raw memory
+(``UntypedStorage(N)`` -> a multi-GiB alloc DoS), and current ``.tlspec`` metadata
+never needs one -- tensor payloads travel as ``BlobRef``s. A legacy embedded storage
+routes through the wrapped ``("torch.storage", "_load_from_bytes")`` path (a separate
+nested ``weights_only`` VM). (2) ``SafeBundleUnpickler`` is a pure-Python
+``pickle._Unpickler`` whose rebuilt opcode ``dispatch`` gates BUILD / REDUCE / NEWOBJ /
+NEWOBJ_EX to baseline discipline: a BUILD may not apply a ``__setstate__`` /
+storage-rebind to a torch Tensor / Storage / Parameter (the ``find_class``-invisible
+``Tensor.__setstate__`` / ``set_`` uninitialized-heap-tensor vector), and a
+REDUCE/NEWOBJ/NEWOBJ_EX may not CONSTRUCT any attacker-sized ALLOCATION type
+(``_is_alloc_constructor_type``: a torch storage, a ``torch.Tensor`` subclass or legacy
+``torch.<dtype>Tensor``, or a ``numpy.ndarray`` subclass) even if that type reached the
+stack by some means other than ``find_class`` -- ``torch.Tensor(N)`` /
+``torch.FloatTensor(N)`` / ``numpy.ndarray((N,))`` each allocate an attacker-sized,
+uninitialized-heap buffer at plain ``tl.load()`` time (r63 closes the r49 storage-only
+gap). This is enforced by ``tests/test_r49_unpickler_weights_only_baseline.py`` and
+``tests/test_r63_construct_deny.py``; the anti-drift invariant is that the set of
+admitted ``(module, name)`` for which this unpickler CONSTRUCTS (does NOT refuse on a
+REDUCE/NEWOBJ belt) a storage / tensor / ndarray object is EMPTY -- a
+CONSTRUCTOR-SEMANTICS assertion, NOT a string-subset of ``_get_allowed_globals()``
+(which is too weak, since the baseline set itself lists the two real storage classes and
+the tensor classes by name; those TYPES resolve inertly here, and only their
+construction is denied).
 """
 
 from __future__ import annotations
 
 import io
+import os
 import pickle
+import sys
 from dataclasses import dataclass
+from types import ModuleType
 from typing import Any, BinaryIO, Collection, Mapping
 
 import torch
@@ -105,10 +156,35 @@ _DENIED_FOREIGN_MODULES: frozenset[str] = frozenset(
         # Code execution / imports.
         "builtins",
         "importlib",
+        # The real import machinery behind ``importlib`` (r28, E-r28-1): under trust
+        # these expose ``_frozen_importlib:__import__``, ``_call_with_frames_removed``
+        # (a universal call gadget), and ``exec_module`` reachable via dotted walk.
+        # Prefix matching then also covers their submodules.
+        "_frozen_importlib",
+        "_frozen_importlib_external",
         "runpy",
         "code",
         "codeop",
         "ctypes",
+        # Exec / spawn / install (r26): stdlib entry points that EXECUTE
+        # arbitrary code strings/callables (debuggers, tracers, profilers,
+        # timeit), spawn processes or browsers (pydoc/webbrowser/antigravity/
+        # platform/asyncio), or install packages (pip/setuptools/venv). Denied
+        # EVEN under trust_custom_callables -- trust never authorizes these.
+        "pdb",
+        "bdb",
+        "timeit",
+        "trace",
+        "cProfile",
+        "profile",
+        "pydoc",
+        "webbrowser",
+        "antigravity",
+        "platform",
+        "asyncio",
+        "pip",
+        "setuptools",
+        "venv",
         # Process / OS / filesystem I/O.
         "os",
         "posix",
@@ -133,6 +209,92 @@ def _module_denied(module: str) -> bool:
 
     return any(
         module == denied or module.startswith(denied + ".") for denied in _DENIED_FOREIGN_MODULES
+    )
+
+
+# STRUCTURAL close of the denylist-completeness class (r31). Mirrors
+# ``torchlens.utils._callable_safety`` (``_ALLOWED_STDLIB_ROOTS`` /
+# ``_STDLIB_AND_BUILTIN_TOP_LEVEL`` / ``is_denied_stdlib_or_builtin_module``) and is
+# duplicated here -- rather than imported -- to keep this early-imported security
+# front door free of import-order coupling (exactly as ``_DENIED_FOREIGN_MODULES``
+# mirrors the resolver denylist). The explicit ``_DENIED_FOREIGN_MODULES`` denylist
+# stays as belt-and-suspenders; this positive rule closes the CLASS: any FOREIGN
+# global whose real top-level module is a Python STANDARD-LIBRARY or BUILTIN module
+# is denied EVEN under trust. The pure-forward ``operator`` / ``_operator`` root is
+# carved out for parity with the resolver; non-stdlib torch / torchlens / numpy /
+# user packages are naturally allowed (not in the detector set). NOTE: this is
+# applied ONLY in the FOREIGN tail of ``find_class`` -- the ``torch`` / ``torchlens``
+# / preview / ``_SAFE_EXPLICIT_GLOBALS`` branches (which legitimately resolve
+# ``collections`` / ``builtins`` pure-data globals) return BEFORE the tail.
+_ALLOWED_STDLIB_ROOTS: frozenset[str] = frozenset({"operator", "_operator"})
+
+
+def _stdlib_and_builtin_top_level() -> frozenset[str]:
+    """Return the top-level Python stdlib + builtin module-name detector set."""
+
+    names: set[str] = set(sys.builtin_module_names)
+    stdlib = getattr(sys, "stdlib_module_names", None)
+    if stdlib is not None:
+        names |= set(stdlib)
+        return frozenset(names)
+    # pre-3.10 fallback: enumerate top-level names from the stdlib directory.
+    try:
+        std_dir = os.path.dirname(os.__file__ or "")
+        if std_dir:
+            for entry in os.listdir(std_dir):
+                if entry.endswith(".py"):
+                    names.add(entry[:-3])
+                elif "." not in entry and not entry.startswith("_"):
+                    names.add(entry)
+    except OSError:  # pragma: no cover - defensive; stdlib dir is always readable here.
+        pass
+    return frozenset(names)
+
+
+_STDLIB_AND_BUILTIN_TOP_LEVEL: frozenset[str] = _stdlib_and_builtin_top_level()
+
+
+def _stdlib_or_builtin_denied(module: str) -> bool:
+    """Return whether ``module``'s real top-level package is a denied stdlib/builtin.
+
+    Mirrors ``torchlens.utils._callable_safety.is_denied_stdlib_or_builtin_module``.
+    The ``operator`` / ``_operator`` pure-forward root is carved out.
+    """
+
+    if not module:
+        return False
+    top_level = module.split(".", 1)[0]
+    if top_level in _ALLOWED_STDLIB_ROOTS:
+        return False
+    return top_level in _STDLIB_AND_BUILTIN_TOP_LEVEL
+
+
+def _name_has_dunder_walk(name: str) -> bool:
+    """Return whether a dotted pickled ``name`` walks through a dunder attribute.
+
+    Pickle protocol >= 4 attribute-walks a DOTTED ``name`` off the resolved module
+    (``STACK_GLOBAL``). Every escape from a value/callable object into a module's
+    globals / builtins / class / reduce machinery traverses a DUNDER attribute
+    segment: ``<func>.__globals__`` returns a module-globals MAPPING,
+    ``__builtins__`` the builtins, and ``__dict__`` / ``__class__`` / ``__reduce__``
+    / ``__subclasses__`` / ``__mro__`` / ``__base__`` the reflective pivots. A
+    LEGITIMATE pickled global name is a module-level class/function qualname -- at
+    most an ``Outer.Inner`` nested-class dotted qualname -- so any dunder segment is
+    a walk vector and is refused, EXCEPT a small allowlist of provably-inert
+    introspection dunders (``__name__`` / ``__doc__`` / ``__qualname__``) that
+    resolve to a plain ``str``/``None`` and cannot pivot into globals/builtins/reduce
+    machinery. (A trusted appliance recipe legitimately reads e.g.
+    ``torchlens.neuro.__name__``; the resolved-mapping backstop below still catches
+    any dict/globals escape the name check does not.) Used to gate the trusted-foreign
+    branch, where the resolved-real-module denylist recheck is defeated by a resolved
+    module-globals mapping (a ``dict`` has no ``__module__``, so the recheck falls back
+    to the non-denied pickled module).
+    """
+
+    inert_introspection_dunders = {"__name__", "__doc__", "__qualname__"}
+    return any(
+        segment.startswith("__") and segment not in inert_introspection_dunders
+        for segment in name.split(".")
     )
 
 
@@ -232,6 +394,154 @@ def _torch_type_denied(pickled_module: str, pickled_name: str, obj: type) -> boo
     return any(token in haystack for token in _DENIED_TORCH_TYPE_NAME_TOKENS)
 
 
+# STORAGE-CONSTRUCTOR identity denylist (r49, secA_1). The torch-``type`` branch of
+# ``find_class`` admits any resolved torch DATA ``type`` on the premise that
+# "constructing a torch data type executes no attacker code". That premise HOLDS for
+# tensor / Size / Parameter / dtype / nn-module classes, but is FALSE for a torch
+# STORAGE class: a pickle ``REDUCE`` of ``torch.UntypedStorage`` with an attacker
+# integer -- ``UntypedStorage(6_000_000_000)`` -- allocates that many raw bytes at
+# unpickle time (a multi-GiB out-of-memory DoS), and a constructed storage is the only
+# source of an uninitialized-heap tensor that a following BUILD/``set_`` could rebind.
+# torch's own ``weights_only`` baseline (``_weights_only_unpickler``) DOES list the
+# real ``torch.storage.{Typed,Untyped}Storage`` classes, so denying them here makes
+# this unpickler a documented STRICT SUBSET of that baseline. No legitimate ``.tlspec``
+# metadata references a storage type in the outer stream: tensor payloads are
+# ``BlobRef``s, and any embedded storage is reconstructed by the wrapped
+# ``_safe_load_from_bytes`` path (a separate nested ``weights_only`` load), never by an
+# outer storage global. The set is built from ``torch._storage_classes`` (all 31
+# typed/untyped classes) plus the canonical ``TypedStorage`` / ``UntypedStorage``, and
+# an ``issubclass`` belt covers any future storage subclass (e.g. a legacy typed
+# ``FloatStorage`` is a ``TypedStorage`` subclass).
+_TORCH_STORAGE_BASE_CLASSES: tuple[type, ...] = tuple(
+    cls
+    for cls in (
+        getattr(torch.storage, "TypedStorage", None),
+        getattr(torch, "UntypedStorage", None),
+        getattr(torch.storage, "_StorageBase", None),
+    )
+    if isinstance(cls, type)
+)
+
+_TORCH_STORAGE_CLASSES: frozenset[type] = frozenset(
+    set(getattr(torch, "_storage_classes", frozenset())) | set(_TORCH_STORAGE_BASE_CLASSES)
+)
+
+
+def _is_torch_storage_type(obj: Any) -> bool:
+    """Return whether ``obj`` is a torch STORAGE *class* (its ctor allocates memory).
+
+    Surface-complete + version-robust: an identity membership test over
+    ``torch._storage_classes`` (plus ``TypedStorage`` / ``UntypedStorage`` /
+    ``_StorageBase``) and an ``issubclass`` belt so any future storage subclass is
+    also caught. Never raises (a non-type ``obj`` returns ``False``).
+    """
+
+    if not isinstance(obj, type):
+        return False
+    if obj in _TORCH_STORAGE_CLASSES:
+        return True
+    if not _TORCH_STORAGE_BASE_CLASSES:
+        return False
+    try:
+        return issubclass(obj, _TORCH_STORAGE_BASE_CLASSES)
+    except TypeError:  # pragma: no cover - defensive; issubclass on odd metaclasses.
+        return False
+
+
+def _is_torch_storage_instance(obj: Any) -> bool:
+    """Return whether ``obj`` is a torch STORAGE *instance* (a BUILD/rebind target)."""
+
+    if not _TORCH_STORAGE_BASE_CLASSES:
+        return False
+    try:
+        return isinstance(obj, _TORCH_STORAGE_BASE_CLASSES)
+    except TypeError:  # pragma: no cover - defensive.
+        return False
+
+
+# ALLOCATION-CONSTRUCTOR TYPE surface (r63, tensor/ndarray-construct regap). The r49
+# belt denies only STORAGE construction, but a torch storage is NOT the only
+# pickle-reachable attacker-sized allocator: a bare REDUCE/NEWOBJ of ``torch.Tensor(N)``
+# / ``torch.FloatTensor(N)`` / ``numpy.ndarray((N,))`` with an attacker-supplied size
+# allocates an attacker-sized, UNINITIALIZED-heap buffer at plain ``tl.load()`` time (no
+# trust, no ``.run()``) -- the same alloc-DoS + uninitialized-heap-read class the
+# storage deny closes, which the storage-only belt let through. The TYPE OBJECTS stay
+# RESOLVABLE at ``find_class`` (legit metadata references these types as inert dtype /
+# module_type values); ONLY their CONSTRUCTION on the three belts is refused.
+#
+# Legacy ``torch.<dtype>Tensor`` classes (``torch.FloatTensor``, the ``torch.cuda.*`` /
+# ``torch.sparse.*`` families) are ``tensortype``-metaclass instances whose MRO is
+# ``[FloatTensor, object]`` -- they are NOT ``torch.Tensor`` subclasses, so
+# ``issubclass(obj, torch.Tensor)`` MISSES them, yet ``torch.FloatTensor(5)`` still
+# allocates a 5-element uninitialized tensor. They are caught by identity membership over
+# ``torch._tensor_classes`` (surface-complete over the 38 current classes) plus an
+# ``isinstance``-of-metaclass belt so any future/variant ``tensortype`` class is caught
+# too. numpy is a torch dependency and is imported by the time this module loads
+# (``import torch`` above), so ``numpy.ndarray`` resolves in practice; the reference is
+# guarded so this early-imported security front door never hard-fails if numpy is absent
+# (the predicate then degrades to storage + tensor coverage). No ``np`` alias existed in
+# this module (numpy globals are admitted by STRING pair in ``_SAFE_EXPLICIT_GLOBALS``,
+# never by import), so a guarded reference is introduced here.
+try:
+    import numpy as _numpy
+
+    _NUMPY_NDARRAY_TYPE: type | None = _numpy.ndarray
+except Exception:  # pragma: no cover - numpy is a torch dependency in practice.
+    _NUMPY_NDARRAY_TYPE = None
+
+
+_TORCH_LEGACY_TENSOR_CLASSES: frozenset[type] = frozenset(
+    cls for cls in getattr(torch, "_tensor_classes", frozenset()) if isinstance(cls, type)
+)
+
+# The ``tensortype`` metaclass(es) that build the legacy tensor classes (``type(...)`` of
+# each), excluding plain ``type``. An ``isinstance`` belt over these catches any legacy /
+# future tensor class the identity set above does not enumerate.
+_TORCH_TENSORTYPE_METACLASSES: tuple[type, ...] = tuple(
+    {
+        metacls
+        for metacls in (type(cls) for cls in _TORCH_LEGACY_TENSOR_CLASSES)
+        if metacls is not type
+    }
+)
+
+
+def _is_alloc_constructor_type(obj: Any) -> bool:
+    """Return whether ``obj`` is a type whose bare construction allocates attacker-sized memory.
+
+    Superset of ``_is_torch_storage_type`` (r49) that ALSO catches the two other
+    pickle-reachable attacker-sized allocators (r63): a torch tensor type (a
+    ``torch.Tensor`` subclass such as ``Parameter``, OR a legacy ``tensortype``-metaclass
+    ``torch.<dtype>Tensor`` such as ``torch.FloatTensor``) and a ``numpy.ndarray``
+    subclass. REDUCE/NEWOBJ-constructing any of these with a pickle-supplied size
+    allocates an attacker-sized, UNINITIALIZED-heap buffer at plain ``tl.load()`` time.
+    The type OBJECTS stay RESOLVABLE at ``find_class`` (legit metadata references
+    ``torch.Tensor`` / ``numpy.ndarray`` as inert values); ONLY their CONSTRUCTION on the
+    three belts is refused. Never raises (a non-type ``obj`` returns ``False``).
+    """
+
+    if _is_torch_storage_type(obj):
+        return True
+    if not isinstance(obj, type):
+        return False
+    try:
+        if issubclass(obj, torch.Tensor):
+            return True
+    except TypeError:  # pragma: no cover - defensive; issubclass on odd metaclasses.
+        pass
+    if obj in _TORCH_LEGACY_TENSOR_CLASSES:
+        return True
+    if _TORCH_TENSORTYPE_METACLASSES and isinstance(obj, _TORCH_TENSORTYPE_METACLASSES):
+        return True
+    if _NUMPY_NDARRAY_TYPE is not None:
+        try:
+            if issubclass(obj, _NUMPY_NDARRAY_TYPE):
+                return True
+        except TypeError:  # pragma: no cover - defensive.
+            pass
+    return False
+
+
 @dataclass(frozen=True)
 class _DeferredForeignCallable:
     """Inert placeholder for a foreign recipe callable retained on an untrusted load.
@@ -278,6 +588,24 @@ class _DeferredForeignCallable:
         )
 
 
+def _is_torch_owned(obj: Any) -> bool:
+    """Return whether a resolved object genuinely lives under the ``torch`` package.
+
+    Trust in the torch branch of ``find_class`` is decided by the RESOLVED object's
+    real ``__module__``, NEVER by the attacker-controlled pickled path. Pickle's
+    ``STACK_GLOBAL`` / ``GLOBAL`` resolution attribute-walks a DOTTED name off the
+    named module, so ``module="torch"`` with ``name="utils.collect_env.subprocess.Popen"``
+    escapes the torch package into stdlib ``subprocess`` and returns
+    ``subprocess.Popen`` (real module ``subprocess``) -- a ``type`` that a following
+    pickle ``REDUCE`` would INVOKE to spawn a process (RCE). Requiring the resolved
+    type's real module to be within ``torch`` denies that escape, mirroring the
+    ``_is_torchlens_owned`` real-module check.
+    """
+
+    owner = str(getattr(obj, "__module__", "") or "")
+    return owner == "torch" or owner.startswith("torch.")
+
+
 def _is_torchlens_owned(obj: Any) -> bool:
     """Return whether a resolved object genuinely lives under the ``torchlens`` package.
 
@@ -316,6 +644,176 @@ def _is_torchlens_appliance_module(module: str) -> bool:
     )
 
 
+# Positive allowlist of VETTED-INERT first-party ``(module, qualname)`` DATA types
+# (default-deny). The torchlens ``type`` branch of ``find_class`` historically
+# admitted ANY resolved ``torchlens.*`` type unconditionally on the premise that a
+# resolved type is "reconstructed via normal unpickling, never INVOKED with attacker
+# args". That premise is FALSE: a pickle ``REDUCE`` may INVOKE any admitted type
+# (its instance, or the type itself) with attacker-chosen arguments. The concrete
+# load-time RCE (r23): ``torchlens.intervention.save.LazyImportRef`` is a frozen
+# dataclass whose ``__call__(import_path, ...)`` resolves an ARBITRARY import path
+# under a trust flag read from its OWN pickled field, so a crafted ``metadata.pkl``
+# reconstructs ``LazyImportRef(import_path="os:system", trust_custom_callables=True)``
+# and REDUCE-invokes it -> ``os.system`` on plain ``tl.load``.
+#
+# This closes that with the same default-deny discipline as the r22 callable gate: a
+# torchlens type is admitted ONLY if it is on this frozen allowlist of pure DATA
+# types -- dataclasses / enums / NamedTuples / plain accessor+value classes whose
+# reconstruction runs no import / exec / filesystem / process side effect and which
+# is NOT an import-sink / instance-callable gadget. Every other torchlens type --
+# above all ``LazyImportRef`` and any callable/import-sink/exec type -- is DENIED.
+#
+# Derivation (default-deny): the set is the vetted-inert DATA-type inventory of the
+# fixed set of first-party DATA modules that make up a scrubbed ``Trace``'s
+# ``metadata.pkl`` (data_classes.* / ir.* / intervention.types / intervention._super
+# / semantic.facets / quantities / capture.config+stop / _trace_state / _io.BlobRef /
+# visualization.code_panel). It was materialized by enumerating those modules and
+# admitting each class OWNED by the module (real ``__module__`` match, so no aliasing
+# to a logic module) that (a) is NOT instance-callable and (b) carries NO custom
+# ``__reduce__`` / ``__reduce_ex__``, then EXCLUDING live-view / error / exception
+# classes (``Facet`` / ``FacetView`` / ``MissingFacet`` / ``*Error`` / ...) that never
+# appear in scrubbed metadata. ``HelperSpec`` is the single vetted instance-callable
+# exception (``__call__`` takes no attacker args; its ``factory`` is scrubbed to
+# ``None`` before pickling, so it is not a reduce-invocable import sink). The result
+# was cross-checked against the torchlens types the real unpickler resolves across the
+# io / tlspec-runnable / semantic-facet / intervention / capture-oracle suites. The
+# import-sink / logic modules -- above all ``torchlens.intervention.save`` (home of
+# ``LazyImportRef``) -- are NOT data modules and are absent, so ``LazyImportRef`` is
+# denied on both counts (module not curated; instance-callable import sink). A legit
+# type not yet covered fails CLOSED (a load error surfacing in a test) and is added
+# only after the same vetting -- never by re-admitting the blanket "any torchlens
+# type" rule.
+_SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
+    {
+        # Trace runtime-state enum + capture config / stop directives.
+        ("torchlens._trace_state", "TraceState"),
+        ("torchlens.capture.config", "InternalCaptureConfig"),
+        ("torchlens.capture.stop", "StopDirective"),
+        # Portable I/O blob reference (NamedTuple of ids).
+        ("torchlens._io", "BlobRef"),
+        # Buffer / grad / param / op / layer / module data records + accessors.
+        ("torchlens.data_classes.buffer", "Buffer"),
+        ("torchlens.data_classes.buffer", "BufferAccessor"),
+        ("torchlens.data_classes.derived_grad", "DerivedGradAccessor"),
+        ("torchlens.data_classes.derived_grad", "DerivedGradRecord"),
+        ("torchlens.data_classes.derived_grad", "IntermediateDerivedGradAccessor"),
+        ("torchlens.data_classes.derived_grad", "IntermediateDerivedGradRecord"),
+        ("torchlens.data_classes.func_call_location", "FuncCallLocation"),
+        ("torchlens.data_classes.grad_fn", "GradFn"),
+        ("torchlens.data_classes.grad_fn", "GradFnAccessor"),
+        ("torchlens.data_classes.grad_fn", "GradFnCallAccessor"),
+        ("torchlens.data_classes.grad_fn_call", "GradFnCall"),  # locked rename target
+        ("torchlens.data_classes.layer", "Layer"),
+        ("torchlens.data_classes.layer", "LayerAccessor"),
+        ("torchlens.data_classes.layer", "OpAccessor"),
+        ("torchlens.data_classes.module", "HookInfo"),
+        ("torchlens.data_classes.module", "Module"),
+        ("torchlens.data_classes.module", "ModuleAccessor"),
+        ("torchlens.data_classes.module", "ModuleCall"),
+        ("torchlens.data_classes.module", "ModuleCallAccessor"),
+        ("torchlens.data_classes.op", "GradientRecord"),
+        ("torchlens.data_classes.op", "GradientRecordAccessor"),
+        ("torchlens.data_classes.op", "Op"),
+        ("torchlens.data_classes.op", "TensorLog"),  # locked rename-map alias of Op
+        ("torchlens.data_classes.param", "Param"),
+        ("torchlens.data_classes.param", "ParamAccessor"),
+        # Prehook-provenance snapshots (frozen dataclasses, inert data).
+        ("torchlens.data_classes.prehook", "TensorInputObservation"),
+        ("torchlens.data_classes.prehook", "ModuleInputSnapshot"),
+        ("torchlens.data_classes.prehook", "PreHookEffect"),
+        # Backward-pass records. __setstate__ is the same inert version-compat
+        # field-refill pattern Trace/Op use (default_fill_state); no side effects.
+        ("torchlens.data_classes.backward_pass", "BackwardPass"),
+        ("torchlens.data_classes.backward_pass", "BackwardPassAccessor"),
+        # Trace + conditional-control-flow data classes.
+        ("torchlens.data_classes.trace", "Conditional"),
+        ("torchlens.data_classes.trace", "ConditionalAccessor"),
+        ("torchlens.data_classes.trace", "ConditionalArm"),
+        ("torchlens.data_classes.trace", "ConditionalEvent"),
+        ("torchlens.data_classes.trace", "ConditionalRoleRef"),
+        ("torchlens.data_classes.trace", "ResolvedPostprocessing"),
+        ("torchlens.data_classes.trace", "ResolvedPreprocessing"),
+        ("torchlens.data_classes.trace", "Trace"),
+        # Bundle Super* aligned-view wrappers (locked ``NodeView`` rename target).
+        ("torchlens.intervention._super.super_op", "SuperLayer"),
+        ("torchlens.intervention._super.super_op", "SuperLayerAccessor"),
+        ("torchlens.intervention._super.super_op", "SuperOp"),  # locked rename target
+        ("torchlens.intervention._super.super_op", "SuperOpAccessor"),
+        ("torchlens.intervention._super.super_op", "TraceAccessor"),
+        # Intervention-spec DATA types (portable recipe descriptors, not runtime
+        # callables). ``HelperSpec`` is instance-callable but INERT: ``__call__``
+        # takes no attacker args and its ``factory`` is scrubbed to ``None`` before
+        # pickling, so it is not a reduce-invocable import sink.
+        ("torchlens.intervention.types", "CapturedArgTemplate"),
+        ("torchlens.intervention.types", "EdgeUseRecord"),
+        ("torchlens.intervention.types", "FireRecord"),
+        ("torchlens.intervention.types", "ForkFieldPolicy"),
+        ("torchlens.intervention.types", "FrozenHookSpec"),
+        ("torchlens.intervention.types", "FrozenInterventionSpec"),
+        ("torchlens.intervention.types", "FrozenTargetSpec"),
+        ("torchlens.intervention.types", "FrozenTargetValueSpec"),
+        ("torchlens.intervention.types", "FunctionRegistryKey"),
+        ("torchlens.intervention.types", "HelperSpec"),
+        ("torchlens.intervention.types", "HookSpec"),
+        ("torchlens.intervention.types", "InterventionDecision"),
+        ("torchlens.intervention.types", "InterventionSpec"),
+        ("torchlens.intervention.types", "LiteralTensor"),
+        ("torchlens.intervention.types", "LiteralValue"),
+        ("torchlens.intervention.types", "ParentRef"),
+        ("torchlens.intervention.types", "Relationship"),
+        ("torchlens.intervention.types", "TargetSpec"),
+        ("torchlens.intervention.types", "TargetValueSpec"),
+        ("torchlens.intervention.types", "TensorSliceSpec"),
+        ("torchlens.intervention.types", "Unsupported"),
+        # IR container / container-registry structural descriptors + enums.
+        ("torchlens.ir.container", "ContainerSpec"),
+        ("torchlens.ir.container", "DataclassField"),
+        ("torchlens.ir.container", "DictKey"),
+        ("torchlens.ir.container", "HFKey"),
+        ("torchlens.ir.container", "NamedField"),
+        ("torchlens.ir.container", "TupleIndex"),
+        ("torchlens.ir.container_registry", "ContainerLeafOccurrence"),
+        ("torchlens.ir.container_registry", "ContainerRecord"),
+        ("torchlens.ir.container_registry", "ContainerRegistry"),
+        ("torchlens.ir.container_registry", "ContainerSnapshot"),
+        ("torchlens.ir.container_registry", "FuncSite"),
+        ("torchlens.ir.container_registry", "IdentityEntry"),
+        ("torchlens.ir.container_registry", "ModelSite"),
+        ("torchlens.ir.container_registry", "ModuleSite"),
+        ("torchlens.ir.container_registry", "Phase"),
+        ("torchlens.ir.container_registry", "Role"),
+        ("torchlens.ir.container_registry", "WalkResult"),
+        # Device / dtype / tensor / param reference value types.
+        ("torchlens.ir.refs", "DeferredRef"),
+        ("torchlens.ir.refs", "DeviceRef"),
+        ("torchlens.ir.refs", "DtypeRef"),
+        ("torchlens.ir.refs", "ParamRef"),
+        ("torchlens.ir.refs", "ReservedLabel"),
+        ("torchlens.ir.refs", "TensorRef"),
+        # Physical-quantity value types.
+        ("torchlens.quantities", "Bytes"),
+        ("torchlens.quantities", "Duration"),
+        ("torchlens.quantities", "Flops"),
+        ("torchlens.quantities", "Macs"),
+        ("torchlens.quantities", "Quantity"),
+        ("torchlens.quantities", "_FloatQuantity"),
+        ("torchlens.quantities", "_IntQuantity"),
+        # Semantic facet snapshot + recipe descriptor data types.
+        ("torchlens.semantic.facets", "AbsenceReason"),
+        ("torchlens.semantic.facets", "FacetCapabilityFlags"),
+        ("torchlens.semantic.facets", "FacetContribution"),
+        ("torchlens.semantic.facets", "FacetMenuItem"),
+        ("torchlens.semantic.facets", "FacetRecipe"),
+        ("torchlens.semantic.facets", "FacetRegistrySnapshot"),
+        ("torchlens.semantic.facets", "FacetSpec"),
+        ("torchlens.semantic.facets", "TransformPrimitive"),
+        ("torchlens.semantic.facets", "_RegisteredRecipe"),
+        # Visualization code-panel source text value type.
+        ("torchlens.visualization.code_panel", "SourceText"),
+    }
+)
+
+
 # Exact (module, name) globals resolved directly. Every entry is either a pure
 # data container/value type or a pure tensor-reconstruction helper -- none can
 # execute attacker code merely by being resolved or called on pickle-provided
@@ -342,6 +840,12 @@ _SAFE_EXPLICIT_GLOBALS: frozenset[tuple[str, str]] = frozenset(
         ("builtins", "str"),
         ("builtins", "bool"),
         ("builtins", "slice"),
+        # The ``Ellipsis`` singleton (``...``). Pickle resolves it as a bare
+        # ``builtins.Ellipsis`` global (no dedicated opcode, unlike ``None``);
+        # resolving the name just returns the existing singleton object, so this
+        # is strictly inert -- no different in kind from admitting the ``slice``
+        # constructor above.
+        ("builtins", "Ellipsis"),
         # torch C callable-holder classes (used as getattr targets and, rarely,
         # as bare globals). They are types; returning them is inert -- the only
         # exploit path (getattr pivot) is closed by ``_safe_getattr``.
@@ -469,10 +973,28 @@ def _safe_load_from_bytes(data: bytes) -> Any:
     Raises
     ------
     pickle.UnpicklingError
-        If the nested weights-only load fails (including because it refused a
-        disallowed global).
+        If the running torch is affected by CVE-2025-32434 (so even
+        ``weights_only=True`` is a working RCE), or if the nested weights-only load
+        fails (including because it refused a disallowed global).
     """
 
+    # CVE-2025-32434: on torch <= 2.5.1, ``torch.load(..., weights_only=True)`` is
+    # ITSELF a remote-code-execution -- the pre-2.6 weights-only unpickler could be
+    # bypassed -- so forwarding attacker bytes into it is not a safe restricted
+    # load at all. Fail closed on any runtime that lacks the 2.6.0 fix (feature-
+    # detected via the named ``HAS_SAFE_WEIGHTS_ONLY_LOAD`` capability, surfaced in
+    # ``tl.compat.report()`` / ``doctor()``). Imported lazily to keep this early
+    # security front door free of import-order coupling (mirrors ``_safe_getattr``).
+    from ..utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
+
+    if not HAS_SAFE_WEIGHTS_ONLY_LOAD:
+        raise pickle.UnpicklingError(
+            "Refusing to reconstruct an embedded tensor during bundle metadata "
+            "unpickle: the running torch is affected by CVE-2025-32434 "
+            "(torch.load(weights_only=True) remote-code-execution, fixed in torch "
+            "2.6.0). Upgrade torch to >= 2.6 to load bundles that embed tensor "
+            "storages."
+        )
     try:
         return torch.load(io.BytesIO(data), weights_only=True)
     except Exception as exc:  # noqa: BLE001 -- fail closed, never re-exec unsafely
@@ -481,13 +1003,98 @@ def _safe_load_from_bytes(data: bytes) -> Any:
         ) from exc
 
 
-class SafeBundleUnpickler(pickle.Unpickler):
+# Base pure-Python opcode handlers, captured from the dispatch table. typeshed does
+# NOT expose ``load_build`` / ``load_reduce`` / ``load_newobj`` / ``load_newobj_ex`` as
+# named methods on ``pickle._Unpickler``, so the Layer-2 overrides delegate to these
+# captured unbound functions (each called with ``self``) rather than
+# ``pickle._Unpickler.load_build(self)`` (which mypy cannot resolve).
+_BASE_LOAD_BUILD = pickle._Unpickler.dispatch[pickle.BUILD[0]]
+_BASE_LOAD_REDUCE = pickle._Unpickler.dispatch[pickle.REDUCE[0]]
+_BASE_LOAD_NEWOBJ = pickle._Unpickler.dispatch[pickle.NEWOBJ[0]]
+_BASE_LOAD_NEWOBJ_EX = pickle._Unpickler.dispatch[pickle.NEWOBJ_EX[0]]
+
+
+def _exception_arose_outside_vm(exc: BaseException) -> bool:
+    """Return whether any traceback frame of ``exc`` lies outside the unpickle VM.
+
+    LOCUS discriminator for the ``SafeBundleUnpickler.load()`` boundary (r51
+    secA_1, narrowed): a VM-internal corruption failure -- stack underflow
+    (``IndexError``), truncated fixed-width read (``struct.error``), missing memo
+    key (``KeyError``), bad utf-8 (``UnicodeDecodeError``), truncation
+    (``EOFError``) -- is raised either by pure-Python VM code in stdlib
+    ``pickle.py`` / this module, or by a C call (``struct.unpack`` / ``str``
+    decode / dict lookup) that adds NO Python frame; its traceback never leaves
+    the two VM files. An APPLICATION/reconstruction failure -- a REDUCE
+    callable's body, a ``__setstate__``, a ``find_class`` module import
+    (importlib frames), the ``_RenameAwareUnpickler`` rename hook (a bundle.py
+    frame) -- necessarily executes at least one Python frame outside them.
+    Classifying by WHERE the exception arose is version-robust where enumerating
+    exception TYPES is fragile: both file names are derived from live code
+    objects, so the comparison matches the code that actually runs under any
+    install layout, and if a future Python relocated VM internals the secA
+    corruption-corpus tests fail LOUD (a raw builtin escapes) rather than
+    silently misclassifying.
+    """
+
+    tb = exc.__traceback__
+    while tb is not None:
+        if tb.tb_frame.f_code.co_filename not in _VM_INTERNAL_CODE_FILES:
+            return True
+        tb = tb.tb_next
+    return False
+
+
+_VM_INTERNAL_CODE_FILES: frozenset[str] = frozenset(
+    {
+        # The stdlib pure-Python VM (pickle.py), via the executing code object.
+        pickle._Unpickler.load.__code__.co_filename,
+        # This module: the Layer-1/Layer-2 overrides and the load() boundary.
+        _exception_arose_outside_vm.__code__.co_filename,
+    }
+)
+
+
+class _DenyMissingDispatch(dict):  # type: ignore[type-arg]
+    """Opcode dispatch table that raises ``UnpicklingError`` on an unknown opcode.
+
+    The C ``pickle.Unpickler`` raises ``pickle.UnpicklingError`` ("invalid load key")
+    on a corrupt / truncated / unknown opcode; the pure-Python ``pickle._Unpickler``
+    instead raises a bare ``KeyError`` from its ``dispatch[key]`` lookup. Migrating the
+    base class to pure-Python (r49, secA_1) must NOT change that observable failure mode
+    -- callers (e.g. ``bundle.py::_load_trace_payload``) catch ``pickle.UnpicklingError``
+    to translate a corrupt ``metadata.pkl`` into a clean ``TorchLensIOError``. A missing
+    opcode here therefore surfaces as ``UnpicklingError``, matching the C VM.
+
+    This hook covers ONLY the unknown-opcode facet. The OTHER corrupt-input facets the
+    pure-Python VM leaks -- a stack underflow on a valid opcode (``IndexError``), a
+    truncated fixed-width read (``struct.error``), a missing memo key (``KeyError``), a
+    bad ``SHORT_BINUNICODE`` (``UnicodeDecodeError``), etc. -- are normalized to
+    ``UnpicklingError`` by the ``SafeBundleUnpickler.load()`` boundary (r51, secA_1),
+    which wraps the VM run and normalizes failures whose traceback stays INSIDE the VM
+    (locus-classified); application/reconstruction failures keep their identity.
+    """
+
+    def __missing__(self, key: int) -> None:
+        raise pickle.UnpicklingError(f"invalid load key, {chr(key)!r}.")
+
+
+class SafeBundleUnpickler(pickle._Unpickler):
     """Default-deny unpickler for untrusted TorchLens bundle ``metadata.pkl``.
 
     Applies an optional rename map (for classes moved by locked renames) and then
     gates every resolved global through the module allowlist. Anything outside the
     allowlist raises :class:`pickle.UnpicklingError` without importing or calling
     attacker-chosen code.
+
+    Base class (r49, secA_1): this is the PURE-PYTHON ``pickle._Unpickler``, NOT the C
+    ``pickle.Unpickler``. The C VM runs REDUCE/BUILD entirely in C -- a subclass method
+    override of ``load_build`` is *bypassed* -- so opcode-level policy (Layer 2 below)
+    is impossible on the C base. The pure-Python VM dispatches each opcode through a
+    CLASS-LEVEL ``dispatch`` dict of unbound functions bound at class-body time; merely
+    ``def load_build`` on the subclass is INERT (the dict still points at the base
+    function). We therefore REBUILD ``dispatch`` in the class body (see the block after
+    ``find_class``) so the overrides are actually invoked. The one-time pure-Python cost
+    at ``tl.load()`` (tens of ms on a realistic ``metadata.pkl``) is never a hot path.
     """
 
     def __init__(
@@ -526,6 +1133,57 @@ class SafeBundleUnpickler(pickle.Unpickler):
             if allowed_custom_callable_modules is not None
             else None
         )
+
+    def load(self) -> Any:
+        """Run the pure-Python VM, normalizing ONLY VM-internal corruption failures.
+
+        The C ``pickle.Unpickler`` contract this preserves has TWO halves:
+        (1) every corrupt / truncated / malformed STREAM failure surfaces as
+        ``pickle.UnpicklingError`` -- which the load sites
+        (``bundle.py::_load_trace_payload`` / ``_load_unified_bundle``) translate
+        into a clean :class:`~torchlens._io._errors.TorchLensIOError`; and (2) an
+        exception raised by APPLICATION code the stream invokes (a REDUCE
+        callable, ``__setstate__``, a ``find_class`` module import) propagates RAW
+        with its identity intact -- the C VM never relabeled those, and the load
+        sites enumerate that family (``TypeError`` / ``ValueError`` /
+        ``ImportError`` / ...) to attach the original exception as the DIRECT
+        ``__cause__`` of ``TorchLensIOError`` (the legacy-bundle live-resource
+        contract).
+
+        The pure-Python base VM leaks half (1) as raw builtins (``IndexError`` /
+        ``struct.error`` / ``KeyError`` / ``UnicodeDecodeError`` / ``EOFError``);
+        ``_DenyMissingDispatch`` restores only the unknown-opcode facet. This
+        boundary restores the WHOLE family, classified by LOCUS
+        (``_exception_arose_outside_vm``), never by exception type: only a failure
+        whose traceback stays inside the VM itself is stream corruption; a failure
+        that executed application frames keeps its identity and direct cause.
+
+        Nothing legitimate is masked: a valid stream returns normally, every
+        deliberate refusal surface in this unpickler already raises ONLY
+        ``pickle.UnpicklingError`` (which passes through unchanged), and
+        ``except Exception`` (not ``BaseException``) preserves
+        ``KeyboardInterrupt`` / ``SystemExit`` / ``GeneratorExit``. Residual,
+        stated honestly: an interpreter-raised CALL-SITE failure on an admitted
+        reconstructor (arity mismatch, or a C-implemented callable raising with
+        no Python frame) executed ZERO application code, shows only VM frames,
+        and is normalized as corrupt -- semantically true (the stream is
+        inconsistent with the admitted callable) and unreachable for the
+        live-resource contract, which by definition executes application code.
+        """
+
+        try:
+            return super().load()
+        except pickle.UnpicklingError:
+            raise
+        except Exception as exc:  # noqa: BLE001 -- locus-classified; see docstring
+            if _exception_arose_outside_vm(exc):
+                # Application/reconstruction failure on a well-formed stream: NOT
+                # corruption; never labeled so. Propagate raw so load sites keep
+                # the original type as the DIRECT __cause__ of TorchLensIOError.
+                raise
+            raise pickle.UnpicklingError(
+                f"corrupt or malformed pickle stream: {type(exc).__name__}: {exc}"
+            ) from exc
 
     def _custom_module_trusted(self, module: str) -> bool:
         """Return whether a foreign module may be imported+resolved via trust flags.
@@ -582,8 +1240,35 @@ class SafeBundleUnpickler(pickle.Unpickler):
         # Pure torch tensor reconstruction helpers. ``_rebuild_*`` functions only
         # reassemble tensors from already-resolved (allowlisted) components; any
         # class they receive as an argument was itself gated through find_class.
+        #
+        # HARDENING (r28, A-R28-1 CRITICAL default-victim RCE): the prior fast-path
+        # returned ``super().find_class`` for ANY ``name`` starting with ``_rebuild``
+        # with NO further gate. Under pickle protocol >= 4 the pickled ``name`` is
+        # attribute-walked, so a DOTTED name such as
+        # ``_rebuild_tensor_v2.__globals__.get`` walks OFF the reconstructor function
+        # into ``torch._utils`` module globals and returns a REDUCE-invocable bound
+        # ``dict.get`` -> ``_import_dotted_name`` -> ``os.system`` -- a load-time RCE
+        # (fires at metadata unpickle, no ``.run()`` needed). This is the SAME
+        # dotted-walk escape class the r27 torch-type / preview branches close; the
+        # ``_rebuild`` branch was MISSED. Legit ``_rebuild_*`` reconstructor names NEVER
+        # contain a dot, so (a) refuse any DOTTED ``name`` BEFORE resolving (never
+        # trigger the walk), and (b) after resolving, positively require a torch-owned,
+        # non-type CALLABLE (the reconstructors are functions of ``torch._utils``).
         if module == "torch._utils" and name.startswith("_rebuild"):
-            return super().find_class(module, name)
+            if "." in name:
+                raise pickle.UnpicklingError(
+                    "Blocked dotted torch._utils._rebuild name during bundle metadata "
+                    f"unpickle: {module}.{name} (a dotted name attribute-walks off the "
+                    "reconstructor into module globals; legit _rebuild_* names have no dot)."
+                )
+            obj = super().find_class(module, name)
+            if not (callable(obj) and _is_torch_owned(obj) and not isinstance(obj, type)):
+                raise pickle.UnpicklingError(
+                    "Blocked non-torch-owned / non-callable torch._utils._rebuild "
+                    f"resolution during bundle metadata unpickle: {module}.{name} "
+                    f"(resolved to {str(getattr(obj, '__module__', '') or '')!r})."
+                )
+            return obj
 
         # torch package: admit value instances (dtype / layout / memory_format /
         # ``torch.Size`` etc.) and a resolved DATA ``type`` (tensor / Module /
@@ -603,6 +1288,42 @@ class SafeBundleUnpickler(pickle.Unpickler):
             if isinstance(obj, (torch.dtype, torch.layout, torch.memory_format)):
                 return obj
             if isinstance(obj, type):
+                # POSITIVELY require the RESOLVED type's real module to be within the
+                # torch package. A DOTTED pickled name attribute-walks OFF torch and
+                # can escape into stdlib -- e.g. ``torch`` /
+                # ``utils.collect_env.subprocess.Popen`` returns ``subprocess.Popen``
+                # (real module ``subprocess``), which a following ``REDUCE`` would
+                # INVOKE to spawn a process (RCE). ``_torch_type_denied`` (a name /
+                # module-prefix denylist) would NOT catch it -- ``Popen`` matches no
+                # token and ``subprocess`` no prefix -- so the escape is denied here
+                # by the positive real-module gate BEFORE the I/O-type denylist runs.
+                if not _is_torch_owned(obj):
+                    raise pickle.UnpicklingError(
+                        "Blocked non-torch-owned type resolved via the torch "
+                        f"namespace during bundle metadata unpickle: {module}.{name} "
+                        f"resolved to a type owned by "
+                        f"{str(getattr(obj, '__module__', '') or '')!r} (a dotted "
+                        "name that escapes the torch package is refused)."
+                    )
+                # STORAGE-CONSTRUCTOR deny (r49, secA_1). A torch STORAGE class is a
+                # torch-owned DATA ``type`` and would otherwise pass here, but its
+                # construction is NOT inert: a following ``REDUCE`` of
+                # ``torch.UntypedStorage(N)`` allocates N raw bytes (a multi-GiB alloc
+                # DoS) and is the sole source of an uninitialized-heap storage a BUILD
+                # could rebind onto a tensor. torch's own ``weights_only`` baseline
+                # lists the real ``torch.storage.{Typed,Untyped}Storage`` classes, so
+                # denying them makes this unpickler a STRICT SUBSET of that baseline.
+                # ``.tlspec`` never needs one (payloads are BlobRefs; embedded storages
+                # route through the wrapped ``_safe_load_from_bytes`` nested load).
+                if _is_torch_storage_type(obj):
+                    raise pickle.UnpicklingError(
+                        "Blocked torch storage constructor during bundle metadata "
+                        f"unpickle: {module}.{name} (constructing a storage allocates "
+                        "raw memory -- an UntypedStorage(N) out-of-memory DoS and the "
+                        "source of an uninitialized-heap tensor; .tlspec tensor "
+                        "payloads are BlobRefs and embedded storages load through the "
+                        "wrapped weights_only _load_from_bytes path)."
+                    )
                 if _torch_type_denied(module, name, obj):
                     raise pickle.UnpicklingError(
                         "Blocked torch I/O / serialization type during bundle "
@@ -621,7 +1342,22 @@ class SafeBundleUnpickler(pickle.Unpickler):
         ):
             obj = super().find_class(module, name)
             if isinstance(obj, type):
-                return obj
+                # As in the torch branch: a resolved TYPE is admitted only when its
+                # OWN real module is within a preview-array root. A DOTTED pickled
+                # name (e.g. ``mlx.core`` / ``...subprocess.Popen``) attribute-walks
+                # OFF the preview package and would otherwise return an escaped,
+                # unrelated (possibly code-exec) type unconditionally.
+                type_module = str(getattr(obj, "__module__", "") or "")
+                if any(
+                    type_module == root or type_module.startswith(root + ".")
+                    for root in _PREVIEW_ARRAY_MODULE_ROOTS
+                ):
+                    return obj
+                raise pickle.UnpicklingError(
+                    "Blocked non-preview-owned type resolved via a preview-backend "
+                    f"namespace during bundle metadata unpickle: {module}.{name} "
+                    f"resolved to a type owned by {type_module!r}."
+                )
             resolved_module = getattr(type(obj), "__module__", "") or ""
             if any(
                 resolved_module == root or resolved_module.startswith(root + ".")
@@ -633,14 +1369,26 @@ class SafeBundleUnpickler(pickle.Unpickler):
                 f"unpickle: {module}.{name}."
             )
 
-        # TorchLens-owned metadata: admit classes always, and any callable whose
-        # RESOLVED real module is genuinely ``torchlens.*`` (a first-party facet
-        # recipe / transform). Importing a torchlens submodule runs only trusted
-        # first-party code, so it is safe to import + inspect the resolved object's
-        # true owner. Trust is decided by the resolved ``__module__``, NEVER by the
-        # pickled path: a key like ``torchlens._io.tlspec`` / ``os.system`` walks
-        # attributes off a torchlens module to reach ``os.system`` (real module
-        # ``posix``), which is NOT torchlens-owned and is therefore denied.
+        # TorchLens-owned metadata: admit classes always, and a NARROW, vetted set
+        # of first-party CALLABLES. Importing a torchlens submodule runs only
+        # trusted first-party code, so it is safe to import + inspect the resolved
+        # object's true owner. Trust is decided by the resolved ``__module__``,
+        # NEVER by the pickled path: a key like ``torchlens._io.tlspec`` /
+        # ``os.system`` walks attributes off a torchlens module to reach
+        # ``os.system`` (real module ``posix``), which is NOT torchlens-owned and is
+        # therefore denied.
+        #
+        # A resolved TYPE is admitted -- it is reconstructed via normal unpickling,
+        # never INVOKED with attacker args. A resolved CALLABLE is admitted only if
+        # it is a vetted-INERT first-party callable (public facet recipe / transform
+        # / helper that cannot import/exec/open/spawn): a pickle ``REDUCE`` INVOKES
+        # the admitted callable with attacker args, and the pre-r21 blanket
+        # ``_is_torchlens_owned`` admission trusted EVERY torchlens-owned callable --
+        # including the private import gadget ``torchlens.utils._module_is_installed``
+        # (``importlib.import_module`` of attacker input == confirmed load-time RCE).
+        # The gate is DETERMINISTIC (public-name + side-effect-name guard), never
+        # keyed off the live facet registry (that ordering-dependent snapshot was a
+        # prior load-failure bug).
         #
         # EXCLUDES the extras-gated appliance packages (``torchlens.neuro`` /
         # ``torchlens.notebook``): importing THOSE runs foreign third-party code,
@@ -651,8 +1399,25 @@ class SafeBundleUnpickler(pickle.Unpickler):
         ) and not _is_torchlens_appliance_module(module):
             obj = super().find_class(module, name)
             if isinstance(obj, type):
-                return obj
-            if callable(obj) and _is_torchlens_owned(obj):
+                # A resolved TYPE is NO LONGER admitted unconditionally: a pickle
+                # ``REDUCE`` INVOKES the type (or its reconstructed instance) with
+                # attacker args, so an import-sink type such as ``LazyImportRef``
+                # would be a load-time RCE. Admit ONLY vetted-inert first-party DATA
+                # types on the positive allowlist; deny every other torchlens type.
+                if (module, name) in _SAFE_TORCHLENS_TYPES:
+                    return obj
+                raise pickle.UnpicklingError(
+                    "Blocked non-allowlisted torchlens type during bundle metadata "
+                    f"unpickle: {module}.{name}. Only vetted-inert first-party DATA "
+                    "types are admitted; import-sink / instance-callable types such "
+                    "as LazyImportRef are denied (a pickle REDUCE would INVOKE the "
+                    "reconstructed object with attacker arguments)."
+                )
+            # Imported lazily to keep this early security front door free of
+            # import-order coupling (mirrors ``_safe_getattr`` above).
+            from ..utils._callable_safety import is_inert_first_party_callable
+
+            if callable(obj) and _is_torchlens_owned(obj) and is_inert_first_party_callable(obj):
                 return obj
             raise pickle.UnpicklingError(
                 "Blocked disallowed torchlens global during bundle metadata "
@@ -673,13 +1438,250 @@ class SafeBundleUnpickler(pickle.Unpickler):
             raise pickle.UnpicklingError(
                 f"Blocked dangerous global during bundle metadata unpickle: {module}.{name}."
             )
+        # 1b. STRUCTURAL close of the denylist-completeness class (r31): hard-deny any
+        #     FOREIGN global whose pickled module is a Python STANDARD-LIBRARY /
+        #     BUILTIN module (keyed on the top-level package), regardless of trust.
+        #     This closes the whole class the explicit denylist kept chasing (io /
+        #     _imp / zipimport / linecache / gc / mmap / ...). The pure-data stdlib
+        #     globals that legit bundles need (``collections`` / ``builtins``) resolved
+        #     via ``_SAFE_EXPLICIT_GLOBALS`` far above; only genuinely-foreign globals
+        #     reach here, so a stdlib/builtin owner is never legitimate.
+        if _stdlib_or_builtin_denied(module):
+            raise pickle.UnpicklingError(
+                "Blocked standard-library / builtin global during bundle metadata "
+                f"unpickle: {module}.{name}. Stdlib/builtin modules are denied even "
+                "under trust_custom_callables or an explicit module allowlist."
+            )
         # 2. Explicit trust opt-in: import + resolve the real foreign callable,
         #    mirroring ``resolve_function_registry_key`` under trust. Importing the
         #    module executes its top-level code, so this is gated behind the flags.
         if self._custom_module_trusted(module):
-            return super().find_class(module, name)
+            # DiD (r28, DiD-1): a DOTTED ``name`` under a TRUSTED module can
+            # attribute-walk into a module-globals MAPPING
+            # (``<trusted_mod>.<func>.__globals__``) whose real ``__module__`` is
+            # undefined, so the resolved-real-module denylist recheck below falls back
+            # to the (non-denied) pickled module and ADMITS it -- sidestepping the E2
+            # denylist recheck. Every such escape traverses a dunder attribute segment;
+            # legit foreign recipe names never do. Refuse a dunder-walk BEFORE resolving
+            # (never trigger the walk).
+            if _name_has_dunder_walk(name):
+                raise pickle.UnpicklingError(
+                    "Blocked dunder attribute-walk in a trusted foreign global during "
+                    f"bundle metadata unpickle: {module}.{name} (a dotted name walking "
+                    "into __globals__/__builtins__/__dict__ escapes the resolved-module "
+                    "denylist recheck)."
+                )
+            obj = super().find_class(module, name)
+            # A resolved MAPPING (e.g. a module's ``__globals__`` / ``__dict__`` reached
+            # by a dotted walk that the dunder guard above did not already refuse) is
+            # never a legitimate foreign recipe callable/type, and its real
+            # ``__module__`` is undefined -- defeating the denylist recheck. Refuse it.
+            if isinstance(obj, dict):
+                raise pickle.UnpicklingError(
+                    "Blocked mapping (module globals) resolved via a dotted name during "
+                    f"trusted bundle metadata unpickle: {module}.{name}."
+                )
+            # A resolved MODULE object (A-R32-2): a bare module has no ``__module__``, so
+            # the resolved-real-module denylist recheck below falls back to the (trusted,
+            # non-stdlib) PICKLED module name and ADMITS it -- defeating
+            # ``_stdlib_or_builtin_denied``. A bare module is never a legitimate foreign
+            # recipe callable/type. Refuse it outright, mirroring the mapping refusal
+            # above (``isinstance(obj, dict)`` misses modules).
+            if isinstance(obj, ModuleType):
+                raise pickle.UnpicklingError(
+                    "Blocked module object resolved via a dotted name during trusted "
+                    f"bundle metadata unpickle: {module}.{name}. A bare module is never a "
+                    "legitimate foreign recipe callable/type."
+                )
+            # RE-ENFORCE the DENYLIST on the RESOLVED object's REAL module, NEVER the
+            # pickled string. A DOTTED ``name`` attribute-walks off the trusted module
+            # and can land on a callable from a DIFFERENT, denied module:
+            # ``module="some_trusted_mod"`` / ``name="os.system"`` resolves
+            # ``os.system`` (real module ``posix``) whenever the trusted module did
+            # ``import os``. ``_module_denied`` on the pickled ``module`` alone (step
+            # 1) never sees ``posix``; keying on resolved identity closes the walk. We
+            # re-enforce the DENYLIST (never hand back a dangerous callable, even under
+            # trust) but NOT the allowlist -- the allowlist governs which MODULE may be
+            # IMPORTED (already enforced), and a resolved ``__module__`` may legitimately
+            # differ from the imported module (e.g. a C-accelerator re-export).
+            resolved_owner = str(getattr(obj, "__module__", "") or module)
+            if _module_denied(resolved_owner):
+                raise pickle.UnpicklingError(
+                    "Blocked dangerous global (resolved real module "
+                    f"{resolved_owner!r}) during trusted bundle metadata unpickle: "
+                    f"{module}.{name}."
+                )
+            # STRUCTURAL stdlib/builtin close (r31): a dotted ``name`` can walk OFF a
+            # trusted module and land on a stdlib/builtin callable (e.g. a trusted
+            # ``mymod.io.open`` resolving ``io.open``, real module ``io``). Deny the
+            # whole stdlib/builtin class on the resolved real module, even under trust.
+            if _stdlib_or_builtin_denied(resolved_owner):
+                raise pickle.UnpicklingError(
+                    "Blocked standard-library / builtin global (resolved real module "
+                    f"{resolved_owner!r}) reached via a dotted name during trusted "
+                    f"bundle metadata unpickle: {module}.{name}."
+                )
+            # PURITY PARITY (secE-1 / secE-r36-1). A callable that walked back into the
+            # torch namespace via a dotted name -- OR a module-less C tensor method
+            # (``resize_`` / ``set_`` / ``apply_`` / ``map_``) -- must be a PURE forward
+            # op: ``torch`` also hosts side-effecting builtins (``torch.from_file``) and
+            # the tensor-method family rebinds/reallocates storage or runs an arbitrary
+            # callable per element. This gate keys on the callable's REAL
+            # (capture-unwrapped) module, NEVER ``resolved_owner``: that fallback string
+            # is spoofed two ways -- it lands on the trusted pickled ``module`` for a
+            # module-less tensor method (real ``__module__ is None``), and on
+            # ``"torchlens.backends.torch.wrappers"`` for ANY torch op TorchLens has
+            # capture-wrapped (the near-universal live state) -- so a raw string
+            # torch/prefix check misses a wrapped ``resize_`` / ``torch.load`` (the r36
+            # hole). Mirror the r35 torchlens-walk fix / the intervention resolver on the
+            # REAL identity: when the real owner is module-less OR torch, hold it to
+            # ``is_pure_forward_callable`` (which unwraps + covers the
+            # tensor-method-descriptor case, the storage-unsafe / ``apply_`` / ``map_``
+            # name guards, and torch name/purity). Legit foreign recipe callables/types
+            # carry a real, non-torch ``__module__`` and are NOT subject to this gate.
+            from ..utils._callable_safety import (
+                is_pure_forward_callable,
+                real_callable_module,
+            )
+
+            real_owner = real_callable_module(obj) if callable(obj) else ""
+            if (
+                callable(obj)
+                and (real_owner == "" or real_owner == "torch" or real_owner.startswith("torch."))
+                and not is_pure_forward_callable(obj)
+            ):
+                raise pickle.UnpicklingError(
+                    "Blocked torch-namespace or module-less callable (chiefly a C-level "
+                    "tensor method such as resize_/set_/apply_/map_ or a side-effecting "
+                    f"torch builtin) reached via a dotted name during trusted bundle "
+                    f"metadata unpickle: {module}.{name}. Only pure forward/tensor ops "
+                    "resolve from the torch namespace or a module-less C callable, even "
+                    "under trust."
+                )
+            # OPERATOR GADGET name-scope (r33, A-R32-1 / E-r32-1): the ``operator`` /
+            # ``_operator`` root is carved out of the stdlib denial so ``operator.neg``
+            # survives, but that carve-out must NOT re-admit the generic operator
+            # gadgets (``attrgetter`` / ``methodcaller`` / ``call`` / ``getitem`` /
+            # ``setitem`` / ``delitem`` / the in-place ``iadd`` / ``imul`` / ...
+            # mutators) that enable an RCE chain (``attrgetter('__globals__')`` ->
+            # ``__import__`` -> ``os.system``). Deny any resolved ``operator`` /
+            # ``_operator`` callable whose terminal name is not a pure forward operator,
+            # even under trust. Parity with the intervention resolver.
+            if callable(obj):
+                from ..utils._callable_safety import is_denied_operator_gadget
+
+                if is_denied_operator_gadget(obj):
+                    raise pickle.UnpicklingError(
+                        "Blocked generic operator gadget (resolved real module "
+                        f"{resolved_owner!r}) reached during trusted bundle metadata "
+                        f"unpickle: {module}.{name}. Only pure arithmetic / comparison / "
+                        "bitwise / index operators resolve from operator/_operator."
+                    )
+            return obj
         # 3. Default (untrusted): LOAD-TOLERATE as an inert deferred reference. The
         #    foreign module is NEVER imported here (import executes code); the recipe
         #    reference is preserved so the trace loads structurally, and any attempt
         #    to CALL it (facet computation, or a ``__reduce__`` gadget) fails closed.
         return _DeferredForeignCallable(module, name)
+
+    # --- Layer 2: opcode-level policy (r49, secA_1) -------------------------------
+    #
+    # ``find_class`` gates which globals resolve, but three opcodes act on objects
+    # ALREADY on the stack, INVISIBLE to ``find_class``:
+    #   * BUILD applies a ``__setstate__`` / ``__dict__`` update to ``stack[-1]``. On a
+    #     torch Tensor / Storage / Parameter this reaches ``Tensor.__setstate__`` /
+    #     ``set_`` and can rebind the target onto an uninitialized or oversized storage
+    #     (an uninitialized-heap tensor) -- a storage rebind that never passed through
+    #     ``find_class``.
+    #   * REDUCE / NEWOBJ / NEWOBJ_EX CALL / ``__new__`` a callable or class on the
+    #     stack. That object normally arrives via ``find_class`` (Layer 1 already denies
+    #     storage ctors there), but a defense-in-depth belt refuses constructing any
+    #     attacker-sized ALLOCATION type -- a torch storage (r49), a ``torch.Tensor``
+    #     subclass or legacy ``torch.<dtype>Tensor``, or a ``numpy.ndarray`` subclass
+    #     (r63) -- even if that type reached the stack by some other route (a prior
+    #     REDUCE result, a memoized object, a resolved inert type reference, ...).
+    #     ``torch.Tensor(N)`` / ``torch.FloatTensor(N)`` / ``numpy.ndarray((N,))`` each
+    #     allocate an attacker-sized, uninitialized-heap buffer (``_is_alloc_constructor_type``).
+    # Legit ``.tlspec`` metadata never BUILDs a torch tensor/storage/parameter and never
+    # bare-constructs a storage/tensor/ndarray in the outer stream (payloads travel as
+    # BlobRefs and reconstruct through the wrapped ``_rebuild_*`` / ``_frombuffer`` /
+    # ``_reconstruct`` helpers, which are FUNCTIONS, not alloc TYPES), so these gates
+    # refuse nothing legit.
+
+    def load_build(self) -> None:
+        """Refuse a BUILD (``__setstate__`` / storage-rebind) on a torch tensor/storage."""
+
+        # Base ``load_build`` is ``state = stack.pop(); inst = stack[-1]`` -- so before
+        # it runs, the target instance is ``stack[-2]`` (``state`` is ``stack[-1]``).
+        inst = self.stack[-2]  # type: ignore[attr-defined]
+        if isinstance(inst, torch.Tensor) or _is_torch_storage_instance(inst):
+            raise pickle.UnpicklingError(
+                "Blocked BUILD applied to a torch "
+                f"{type(inst).__module__}.{type(inst).__qualname__} during bundle "
+                "metadata unpickle: a pickle BUILD invokes __setstate__ / storage "
+                "rebind (Tensor.set_) on the target, which can rebind it onto an "
+                "uninitialized or oversized storage. .tlspec metadata never BUILDs a "
+                "torch tensor/storage/parameter (payloads are BlobRefs)."
+            )
+        return _BASE_LOAD_BUILD(self)  # type: ignore[arg-type]
+
+    def load_reduce(self) -> None:
+        """Refuse a REDUCE that would construct an alloc type (storage/tensor/ndarray)."""
+
+        # Base ``load_reduce`` is ``args = stack.pop(); func = stack[-1]; ...`` -- so
+        # before it runs, ``func`` is ``stack[-2]`` (``args`` is ``stack[-1]``).
+        func = self.stack[-2]  # type: ignore[attr-defined]
+        if _is_alloc_constructor_type(func):
+            raise pickle.UnpicklingError(
+                "Blocked allocation-constructor (torch storage/tensor or numpy ndarray) "
+                "via REDUCE during bundle metadata unpickle: "
+                f"{getattr(func, '__module__', '')}."
+                f"{getattr(func, '__qualname__', func)!r} (constructing it from "
+                "pickle-supplied args allocates attacker-sized, uninitialized-heap "
+                "memory -- an out-of-memory DoS and the source of an uninitialized-heap "
+                "tensor; .tlspec payloads travel as BlobRefs and reconstruct through the "
+                "wrapped _rebuild/_frombuffer helpers, which are functions, not types)."
+            )
+        return _BASE_LOAD_REDUCE(self)  # type: ignore[arg-type]
+
+    def load_newobj(self) -> None:
+        """Refuse a NEWOBJ (``cls.__new__``) that would allocate a storage/tensor/ndarray."""
+
+        # Base ``load_newobj`` is ``args = stack.pop(); cls = stack.pop(); ...`` -- so
+        # ``cls`` is ``stack[-2]`` (``args`` is ``stack[-1]``).
+        cls = self.stack[-2]  # type: ignore[attr-defined]
+        if _is_alloc_constructor_type(cls):
+            raise pickle.UnpicklingError(
+                "Blocked allocation-constructor (torch storage/tensor or numpy ndarray) "
+                "via NEWOBJ during bundle metadata unpickle: "
+                f"{getattr(cls, '__module__', '')}."
+                f"{getattr(cls, '__qualname__', cls)!r}."
+            )
+        return _BASE_LOAD_NEWOBJ(self)  # type: ignore[arg-type]
+
+    def load_newobj_ex(self) -> None:
+        """Refuse a NEWOBJ_EX (``cls.__new__``) that would allocate a storage/tensor/ndarray."""
+
+        # Base ``load_newobj_ex`` is ``kwargs = stack.pop(); args = stack.pop();
+        # cls = stack.pop()`` -- so ``cls`` is ``stack[-3]``.
+        cls = self.stack[-3]  # type: ignore[attr-defined]
+        if _is_alloc_constructor_type(cls):
+            raise pickle.UnpicklingError(
+                "Blocked allocation-constructor (torch storage/tensor or numpy ndarray) "
+                "via NEWOBJ_EX during bundle metadata unpickle: "
+                f"{getattr(cls, '__module__', '')}."
+                f"{getattr(cls, '__qualname__', cls)!r}."
+            )
+        return _BASE_LOAD_NEWOBJ_EX(self)  # type: ignore[arg-type]
+
+    # REBUILD the pure-Python opcode dispatch table so the overrides above are actually
+    # invoked (proven: ``def load_build`` alone is INERT -- ``pickle._Unpickler.load``
+    # reads ``self.dispatch``, a class-level dict of unbound base functions bound at
+    # class-body time; the subclass method is not consulted unless the dict is
+    # repointed). This is the single load-bearing detail of the C->pure-Python
+    # migration. ``_RenameAwareUnpickler`` inherits this ``dispatch`` unchanged.
+    dispatch = _DenyMissingDispatch(pickle._Unpickler.dispatch)
+    dispatch[pickle.BUILD[0]] = load_build  # type: ignore[assignment]
+    dispatch[pickle.REDUCE[0]] = load_reduce  # type: ignore[assignment]
+    dispatch[pickle.NEWOBJ[0]] = load_newobj  # type: ignore[assignment]
+    dispatch[pickle.NEWOBJ_EX[0]] = load_newobj_ex  # type: ignore[assignment]

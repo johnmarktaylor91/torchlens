@@ -21,6 +21,17 @@ CodePanelMode: TypeAlias = Literal["forward", "class", "init+forward"]
 CodePanelOption: TypeAlias = bool | CodePanelMode | Callable[[nn.Module], str]
 CodePanelSide: TypeAlias = Literal["right", "left"]
 
+# Placeholder shown in the source panel when the requested source text is
+# unavailable -- either never captured (e.g. a model defined in a REPL) or
+# intentionally omitted from a shared ``.tlspec`` (saved with
+# ``include_source=False``). Rendering this instead of raising keeps a
+# load-then-visualize of a source-stripped bundle from crashing.
+_SOURCE_UNAVAILABLE_PANEL_TEXT = (
+    "# Source code not embedded in this .tlspec.\n"
+    "# (Saved with include_source=False, or source was\n"
+    "# unavailable when the model was traced.)"
+)
+
 MAX_CODE_PANEL_LINES = 120
 MIN_CODE_PANEL_DISPLAY_LINES = 36
 # Display lines longer than this wrap (hanging indent) instead of widening the
@@ -154,11 +165,19 @@ def resolve_code_panel_source(
     Raises
     ------
     ValueError
-        If a requested built-in mode was not captured or the option is invalid.
+        If the option is invalid.
     RuntimeError
         If a callable option is used after the live model is unavailable.
     TypeError
         If a callable option does not return a string.
+
+    Notes
+    -----
+    When a requested built-in mode has no captured source -- because it was
+    never captured (e.g. a REPL-defined model) or was intentionally stripped
+    from a shared ``.tlspec`` (``include_source=False``) -- a placeholder panel
+    string is returned rather than raising, so a load-then-visualize of a
+    source-stripped bundle degrades gracefully instead of crashing.
     """
 
     if code_panel is False:
@@ -184,9 +203,9 @@ def resolve_code_panel_source(
         raise ValueError(
             "code_panel must be False, True, 'forward', 'class', 'init+forward', or a callable."
         )
-    captured_source = source_code_blob.get(mode)
+    captured_source = source_code_blob.get(mode) if source_code_blob else None
     if captured_source is None:
-        raise ValueError(f"Source code for code_panel={mode!r} was not captured.")
+        return _SOURCE_UNAVAILABLE_PANEL_TEXT
     return captured_source
 
 

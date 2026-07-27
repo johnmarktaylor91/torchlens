@@ -58,19 +58,40 @@ loaded_result = tl.load("architecture.tlspec").run(inputs=x, seed=42)
 The unified `inputs=` run surface returns `RunResult(output, trace, report)` without mutating its
 source. Live traces use the existing fast refresh projector; loaded runnable traces execute the
 resolved sparse DAG with staged, embedded capture, or N1-a state. Analysis-only loads cannot run.
+Runnable descriptors are `sparse_recorded_taken_path_v2`: every call carries a REQUIRED explicit
+`CallExecutionContext` and the descriptor one `AmbientExecutionContext`, both restored at replay or
+refused typed; legacy v1 artifacts load analysis-only with a typed readiness refusal.
 Use `tl.save(trace, path, level="runnable", include_weights=True)` to opt into the full capture-time
 `state_dict` (named parameters plus persistent buffers). It is a separate `state_dict_v1` blob
-family, not part of the tensor-value-free sparse core or a reconstructed model.
+family, not part of the tensor-value-free sparse core or a reconstructed model. Used non-persistent
+buffers always ship in the REQUIRED `runnable_nonpersistent_buffer_v1` family (declared state, not
+gated on either include flag; disclosed at save).
 Use `include_activations=True` independently to archive exactly the existing capture-time `save=`
-selection as `selected_activation_v1`. Inspect it through `Trace.archived_activations`; never use
-those blobs as DAG inputs. Eligible original-input/capture-equivalent-state runs byte-attest raw
-saved slots (`attested` or transactional `numeric_attestation_failed`), while changed-input or
-random/non-equivalent-state runs are `not_applicable`.
+selection as `selected_activation_v2` (with physical `InputAttestationFingerprint` eligibility
+records). Inspect it through `Trace.archived_activations`; never use those blobs as DAG inputs.
+Eligible original-input/capture-equivalent-state runs byte-attest raw saved slots (`attested` or
+transactional `numeric_attestation_failed`), while changed-input (logical or physical),
+random/non-equivalent-state, and nondeterministic-capture-context runs are `not_applicable`;
+`attested` always implies `verified`.
 `trace.run(inputs=..., seed=..., on_divergence="raise")` reports readiness, state source,
 `verified|diverged|unverifiable` path faithfulness, and numeric attestation in its `RunResult`.
 Use `return_diverged` only when a permanently poisoned diagnostic result is intended. Match failures
 through `RunnableErrorCode`; the complete frozen taxonomy is in
-`docs/reference/runnable_tlspec_contract.md`.
+`docs/reference/runnable_tlspec_contract.md`. r37: overlapping/unprovable distinct-object state
+alias topology and zero-tensor-leaf or instance-stateful container outputs refuse at save
+(`state_alias_topology_unsupported` / `missing_output_container_contract`); tied live-identity
+state stages as one alias-group allocation; persisted context values validate at parse
+(`context_field_invalid`); non-global host RNG/entropy/clock touches permanently ceiling replay
+(r39: numpy instances via a chained `sys`/`threading.setprofile` classifier + a cheap
+model-attribute state digest -- NO process-wide gc scan; unseeded-construction `randbits` entropy;
+`datetime`/`localtime` clocks; an externally-held generator on a pre-existing non-hooked thread is
+a documented residual, and a benign background thread never ceilings a capture); tensor->host VALUE escapes are caught by dual observer routes (aten
+census + a mode-independent method/predicate belt for `_disable_current_modes` regions, plus the
+`__repr__`/`__str__` print interception); loaded-sparse and live providers settle through one
+finalizer (a live opaque output is `unverifiable`+poisoned, a parse-refused descriptor degrades
+every payload family analysis-only, an inexecutable divergent input raises `PathDivergenceError`);
+structseq trust keys on the resolution authority, never `__module__`; CUDA state stages lazily at
+run preparation behind a no-allocation readiness capability gate.
 
 Provisional semantic I/O examples (review-day names):
 

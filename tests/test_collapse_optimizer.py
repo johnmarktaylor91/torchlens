@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+import multiprocessing
 import os
 from pathlib import Path
+import queue
 import time
 from types import ModuleType
+from typing import Any
 
 import pytest
 import torch
 
 import torchlens as tl
+import torchlens.visualization.auto_collapse as auto_collapse
+from torchlens.data_classes._trace_accessors import TraceOpAccessor
 from torchlens.visualization.auto_collapse import (
+    _resolve_relationship_op,
     analyze_collapse,
     resolve_collapse_fn,
     resolve_repeat_folds,
@@ -24,6 +30,7 @@ from torchlens.visualization.collapse_optimizer import (
     _FrontierPoint,
     _OptimizerState,
     _RESULT_CACHE,
+    _SCHEDULE_CACHE,
     _branch_salience,
     _child_address_map,
     _eligible_module_box,
@@ -45,8 +52,8 @@ from torchlens.visualization.collapse_plan import (
     RenderContext,
     RepeatFold,
     SegmentDescriptor,
+    collapse_plan_for_trace,
     count,
-    plan_from_v1,
 )
 from torchlens.visualization._render_common import format_collapsed_module_contents
 
@@ -349,6 +356,43 @@ class WidthTwoResidualModel(torch.nn.Module):
         return self.out(self.block(x))
 
 
+class DenseFanUnit(torch.nn.Module):
+    """Small unit consuming all earlier dense-stack features."""
+
+    def __init__(self, input_width: int, growth_width: int = 4) -> None:
+        """Initialize the dense fan-in unit."""
+
+        super().__init__()
+        self.linear = torch.nn.Linear(input_width, growth_width)
+        self.relu = torch.nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Project and activate concatenated earlier features."""
+
+        return self.relu(self.linear(x))
+
+
+class DenseFanStack(torch.nn.Module):
+    """Compact dense-connectivity reproducer for collapse containment."""
+
+    def __init__(self, depth: int = 18, width: int = 4) -> None:
+        """Initialize a nested stack with growing dense fan-in."""
+
+        super().__init__()
+        self.units = torch.nn.ModuleList(
+            DenseFanUnit(width * (index + 1), width) for index in range(depth)
+        )
+        self.out = torch.nn.Linear(width * (depth + 1), width)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run every unit from the concatenation of all earlier features."""
+
+        features = [x]
+        for unit in self.units:
+            features.append(unit(torch.cat(features, dim=-1)))
+        return self.out(torch.cat(features, dim=-1))
+
+
 def _trace(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
     """Trace a model in eval mode."""
 
@@ -365,6 +409,70 @@ def _plan_signature(plan: CollapsePlan) -> tuple[str, ...]:
     """Return a deterministic structural signature for a collapse plan."""
 
     return tuple(repr(node) for node in plan.nodes)
+
+
+def _clear_collapse_caches(trace: tl.Trace) -> None:
+    """Clear analysis and optimizer caches for one trace.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose next collapse operation must be uncached.
+    """
+
+    auto_collapse._ANALYSIS_CACHE.pop(trace, None)
+    auto_collapse._OP_ADJACENCY_INDEX_CACHE.pop(trace, None)
+    _RESULT_CACHE.pop(trace, None)
+    _SCHEDULE_CACHE.pop(trace, None)
+
+
+def _add_unambiguous_accessor_fallback_collision(trace: tl.Trace) -> str:
+    """Add one relationship-form collision that preserves accessor resolution.
+
+    Parameters
+    ----------
+    trace:
+        Recurrent trace to modify for fallback coverage.
+
+    Returns
+    -------
+    str
+        The colliding relationship label.
+    """
+
+    input_op = next(op for op in trace.ops if op.is_input)
+    collision_op = next(op for op in trace.ops if not op.is_input and not op.is_output)
+    collision_op._label_raw = input_op.layer_label
+    return str(input_op.layer_label)
+
+
+def _assert_relationship_resolution_matches_accessor(trace: tl.Trace) -> None:
+    """Assert internal relationship resolution is identical to the public accessor.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose stored parent and child labels are being checked.
+    """
+
+    labels = {
+        label
+        for op in trace.ops
+        for label in (*getattr(op, "parents", ()), *getattr(op, "children", ()))
+    }
+    for label in labels:
+        try:
+            expected = trace.ops[label]
+        except Exception as expected_error:
+            try:
+                _resolve_relationship_op(trace, label)
+            except Exception as actual_error:
+                assert type(actual_error) is type(expected_error)
+                assert str(actual_error) == str(expected_error)
+            else:
+                pytest.fail(f"relationship resolver accepted accessor error label {label!r}")
+        else:
+            assert _resolve_relationship_op(trace, label) is expected
 
 
 def _landmark_swallow_count(trace: tl.Trace, result: object) -> int:
@@ -421,6 +529,253 @@ def _require_transformers() -> ModuleType:
     return pytest.importorskip("transformers")
 
 
+def _collapse_containment_child(trace: tl.Trace, result_queue: Any) -> None:
+    """Run the dense collapse reproducer inside a spawned child process.
+
+    Parameters
+    ----------
+    trace:
+        Parent-captured trace for the child to optimize.
+    result_queue:
+        Multiprocessing queue used to return a success or failure payload.
+    """
+
+    try:
+        torch.set_num_threads(2)
+        context = RenderContext()
+        _clear_collapse_caches(trace)
+        max_result = select_collapse_plan(trace, context, mode="max")
+        schedule = collapse_schedule(trace, context)
+        if not max_result.plan.nodes or not schedule.steps:
+            raise AssertionError("collapse containment produced an empty plan or schedule")
+        if schedule.steps[-1].plan != max_result.plan:
+            raise AssertionError("collapse schedule endpoint differs from the max plan")
+        previous_count = schedule.steps[0].visible_count
+        previous_addresses = schedule.steps[0].collapsed_addresses
+        for step in schedule.steps[1:]:
+            if step.visible_count > previous_count:
+                raise AssertionError("collapse schedule visible counts are not monotone")
+            if not previous_addresses <= step.collapsed_addresses:
+                raise AssertionError("collapse schedule addresses are not nested")
+            previous_count = step.visible_count
+            previous_addresses = step.collapsed_addresses
+        result_queue.put(
+            (
+                "ok",
+                {
+                    "max_visible_count": max_result.visible_count,
+                    "num_ops": len(trace.ops),
+                    "num_steps": len(schedule.steps),
+                },
+            )
+        )
+    except BaseException as exc:
+        result_queue.put(("error", f"{type(exc).__name__}: {exc}"))
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.parametrize(
+    ("builder", "x"),
+    (
+        (lambda: UniformStack(depth=12), torch.randn(2, 8)),
+        (lambda: UniqueWideFanModel(width=4), torch.randn(1, 4, 8, 8)),
+    ),
+)
+def test_collapse_adjacency_index_avoids_feed_forward_fuzzy_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+    builder: Callable[[], torch.nn.Module],
+    x: torch.Tensor,
+) -> None:
+    """Canonical analysis and rolled schedules never enter fuzzy Op lookup.
+
+    Parameters
+    ----------
+    monkeypatch:
+        Pytest patch helper.
+    builder:
+        Feed-forward model factory.
+    x:
+        Example model input.
+    """
+
+    analysis_trace = _trace(builder(), x)
+    schedule_trace = _trace(builder(), x)
+
+    def reject_fuzzy_lookup(self: TraceOpAccessor, key: str) -> Any:
+        """Fail if canonical collapse work enters fuzzy Op lookup."""
+
+        _ = self
+        raise AssertionError(f"unexpected fuzzy Op lookup for {key!r}")
+
+    try:
+        _clear_collapse_caches(analysis_trace)
+        monkeypatch.setattr(TraceOpAccessor, "_resolve_substring", reject_fuzzy_lookup)
+        analysis = analyze_collapse(analysis_trace)
+        assert analysis.signals
+        assert analysis.child_flow_graphs
+
+        _clear_collapse_caches(schedule_trace)
+        schedule = collapse_schedule(schedule_trace, RenderContext(vis_mode="rolled"))
+        assert schedule.steps
+        assert schedule.steps[-1].plan.nodes
+    finally:
+        analysis_trace.cleanup()
+        schedule_trace.cleanup()
+
+
+def test_collapse_adjacency_index_build_and_visit_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Index construction is once-per-trace and relationship work has a derived bound.
+
+    Parameters
+    ----------
+    monkeypatch:
+        Pytest patch helper.
+    """
+
+    trace = _trace(UniformStack(depth=12), torch.randn(2, 8))
+    original_index = auto_collapse._op_adjacency_index
+    original_resolver = auto_collapse._resolve_relationship_op
+    counts = {"index_builds": 0, "relationship_visits": 0}
+
+    def counted_index(target: tl.Trace) -> Mapping[str, str]:
+        """Count cache-miss index constructions."""
+
+        if target not in auto_collapse._OP_ADJACENCY_INDEX_CACHE:
+            counts["index_builds"] += 1
+        return original_index(target)
+
+    def counted_resolver(target: tl.Trace, label: str) -> Any:
+        """Count relationship-resolution visits."""
+
+        counts["relationship_visits"] += 1
+        return original_resolver(target, label)
+
+    def reject_fuzzy_lookup(self: TraceOpAccessor, key: str) -> Any:
+        """Fail if an ordinary relationship label requires fuzzy lookup."""
+
+        _ = self
+        raise AssertionError(f"unexpected fuzzy Op lookup for {key!r}")
+
+    try:
+        _clear_collapse_caches(trace)
+        monkeypatch.setattr(auto_collapse, "_op_adjacency_index", counted_index)
+        monkeypatch.setattr(auto_collapse, "_resolve_relationship_op", counted_resolver)
+        monkeypatch.setattr(TraceOpAccessor, "_resolve_substring", reject_fuzzy_lookup)
+        analysis = analyze_collapse(trace)
+
+        stored_references = sum(len(op.parents) + len(op.children) for op in trace.ops)
+        hierarchy_multiplier = (
+            max(
+                (int(getattr(module, "address_depth", 0)) for module in trace.modules),
+                default=0,
+            )
+            + 1
+        )
+        assert analysis.signals
+        assert counts["index_builds"] == 1
+        assert 0 < counts["relationship_visits"] <= stored_references * hierarchy_multiplier
+    finally:
+        trace.cleanup()
+
+
+def test_recurrent_relationship_fallback_is_bounded_and_equivalent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A colliding recurrent label takes the bounded compatibility fallback.
+
+    Parameters
+    ----------
+    monkeypatch:
+        Pytest patch helper.
+    """
+
+    trace = _trace(UnevenReusedSiblings(), torch.randn(2, 4))
+    fallback_label = _add_unambiguous_accessor_fallback_collision(trace)
+    original = TraceOpAccessor._resolve_substring
+    fuzzy_labels: list[str] = []
+
+    def count_fuzzy_lookup(self: TraceOpAccessor, key: str) -> Any:
+        """Count and delegate compatibility fallback lookups."""
+
+        fuzzy_labels.append(key)
+        return original(self, key)
+
+    try:
+        _clear_collapse_caches(trace)
+        monkeypatch.setattr(TraceOpAccessor, "_resolve_substring", count_fuzzy_lookup)
+        analysis = analyze_collapse(trace)
+
+        assert analysis.signals
+        assert 0 < len(fuzzy_labels) <= 4
+        assert set(fuzzy_labels) == {fallback_label}
+        _assert_relationship_resolution_matches_accessor(trace)
+    finally:
+        trace.cleanup()
+
+
+def test_relationship_resolver_preserves_ambiguity_error() -> None:
+    """A genuinely ambiguous recurrent relationship keeps the accessor error."""
+
+    trace = _trace(UnevenReusedSiblings(), torch.randn(2, 4))
+    try:
+        recurrent_op = next(
+            op for op in trace.ops if len(trace.ops.resolve_all(op.layer_label)) > 1
+        )
+        relationship_owner = next(op for op in trace.ops if op.children)
+        original_child = relationship_owner.children[0]
+        relationship_owner.children[0] = recurrent_op.layer_label
+        auto_collapse._OP_ADJACENCY_INDEX_CACHE.pop(trace, None)
+
+        _assert_relationship_resolution_matches_accessor(trace)
+
+        relationship_owner.children[0] = original_child
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.heavy
+@pytest.mark.serial
+def test_collapse_dense_fan_schedule_spawn_containment() -> None:
+    """Dense max planning and scheduling cannot hang the parent test process."""
+
+    context = multiprocessing.get_context("spawn")
+    result_queue = context.Queue()
+    trace = _trace(DenseFanStack(depth=18), torch.randn(2, 4))
+    process = context.Process(target=_collapse_containment_child, args=(trace, result_queue))
+    timed_out = False
+    try:
+        process.start()
+        process.join(20)
+        timed_out = process.is_alive()
+        if timed_out:
+            process.terminate()
+            process.join(2)
+            if process.is_alive():
+                process.kill()
+                process.join(2)
+
+        assert not timed_out, "spawned dense collapse exceeded the 20-second containment deadline"
+        assert process.exitcode == 0
+        try:
+            status, payload = result_queue.get(timeout=2)
+        except queue.Empty:
+            pytest.fail("spawned dense collapse exited without a result payload")
+        assert status == "ok", payload
+        assert payload["num_ops"] > 0
+        assert payload["num_steps"] > 0
+        assert payload["max_visible_count"] > 0
+    finally:
+        if process.is_alive():
+            process.terminate()
+            process.join(2)
+        result_queue.close()
+        result_queue.join_thread()
+        trace.cleanup()
+
+
 def test_role_components_connect_uniform_siblings() -> None:
     """Same-class siblings with comparable mass form one role component."""
 
@@ -471,7 +826,7 @@ def test_float_collapse_level_validation_and_endpoints() -> None:
     trace = _trace(UniformStack(depth=6), torch.randn(2, 8))
     context = RenderContext()
     try:
-        none_plan = plan_from_v1(trace, None, None, context)
+        none_plan = collapse_plan_for_trace(trace, None, None, context)
         max_result = select_collapse_plan(trace, context, mode="max")
 
         with pytest.raises(ValueError, match=r"\[0\.0, 1\.0\]"):
@@ -532,7 +887,7 @@ def test_float_collapse_schedule_monotone_and_nested(
     context = RenderContext()
     try:
         schedule = trace.collapse_schedule(context)
-        none_plan = plan_from_v1(trace, None, None, context)
+        none_plan = collapse_plan_for_trace(trace, None, None, context)
         max_plan = select_collapse_plan(trace, context, mode="max").plan
 
         sampled = [schedule.at(index / 10.0) for index in range(11)]
@@ -560,7 +915,7 @@ def test_rolled_v2_memo_separates_digest_identical_different_num_calls(
         context = RenderContext(vis_mode="rolled")
         collapse_fn = resolve_collapse_fn(trace, "auto", "rolled", context=context)
         result = getattr(collapse_fn, "_torchlens_v2_result")
-        rendered_plan = plan_from_v1(trace, collapse_fn, result.repeat_folds, context)
+        rendered_plan = collapse_plan_for_trace(trace, collapse_fn, result.repeat_folds, context)
 
         assert not result.declined
         assert trace.modules["short"].num_calls == 3
@@ -576,7 +931,7 @@ def test_rolled_v2_gru_auto_is_non_noop(monkeypatch: pytest.MonkeyPatch) -> None
     trace = _trace(GRUWrapper(), torch.randn(1, 6, 8))
     try:
         context = RenderContext(vis_mode="rolled")
-        none_count = count(plan_from_v1(trace, None, None, context))
+        none_count = count(collapse_plan_for_trace(trace, None, None, context))
         collapse_fn = resolve_collapse_fn(trace, "auto", "rolled", context=context)
         result = getattr(collapse_fn, "_torchlens_v2_result")
 
@@ -700,7 +1055,7 @@ def test_v2_plan_parity_and_determinism(monkeypatch: pytest.MonkeyPatch) -> None
         collapse_fn = resolve_collapse_fn(trace, "auto", "unrolled", context=context)
         folds = resolve_repeat_folds(trace, collapse_fn, context=context)
         result = getattr(collapse_fn, "_torchlens_v2_result")
-        rendered_plan = plan_from_v1(trace, collapse_fn, folds, context)
+        rendered_plan = collapse_plan_for_trace(trace, collapse_fn, folds, context)
         second = select_collapse_plan(trace, context)
 
         assert result.visible_count == count(result.plan)

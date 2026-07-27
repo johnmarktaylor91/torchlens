@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass, replace as dataclass_replace
 from typing import Any, Iterable, List, Optional, cast
 
 from torch import nn
 from torch.utils.weak import WeakIdKeyDictionary
+
+from ... import _state
 
 __all__ = [
     "TorchLensMeta",
@@ -21,8 +24,18 @@ __all__ = [
     "get_tensor_meta",
     "set_tensor_label",
     "get_tensor_label",
+    "mark_tensor_data_alias",
+    "is_tensor_data_alias",
+    "raw_tensor_label",
     "get_live_tensor_label",
     "get_live_label_list",
+    "begin_label_session",
+    "end_label_session",
+    "active_label_session_token",
+    "session_meta_is_anchored",
+    "session_label_storage_intact",
+    "session_labeled_tensors",
+    "sweep_retired_label_stamps",
     "clear_tensor_label",
     "promote_label_to_buffer_source_and_clear_label",
     "set_buffer_address",
@@ -55,6 +68,31 @@ class TensorMeta(TorchLensMeta):
     label_raw: Optional[str] = None
     address: Optional[str] = None
     buffer_source: Optional[str] = None
+    # r83 C1: monotonic token of the capture session that issued ``label_raw``
+    # (and, after promotion, ``buffer_source``). The per-object anchor that
+    # makes label provenance current-session; see the label-session block below.
+    label_session: Optional[int] = None
+    # r85: STRONG reference to the ``UntypedStorage`` the object held when its
+    # label was last stamped by ``set_tensor_label`` -- the label rung's
+    # storage-integrity pin, the activation/label twin of r81's buffer-address
+    # keeper (``_SessionBufferStamp.storage``). The IDENTITY anchor
+    # (``label_session``) proves this is the current-session labeled object; this
+    # pin proves the object's live storage was NOT ``.data=``/``set_``-rebound to
+    # foreign/input-derived storage AFTER it was labeled. Stored on the object's
+    # OWN metadata, so for an HONEST activation it is the SAME storage the tensor
+    # already holds (zero net retention) and it is released the instant the
+    # tensor dies -- it never pins the activation tensor alive, so sparse
+    # ``save=`` memory is untouched (unlike the weak ``_LabelSession.stamped``
+    # inventory, whose weakness is required for exactly that reason). Only a
+    # genuinely rebound (adversarial) object leaves its superseded storage pinned
+    # for the object's lifetime, which is what makes the ``data_ptr`` comparison a
+    # true identity proof rather than a recyclable-pointer heuristic (r81 S2).
+    label_storage: Optional[Any] = None
+    # Capture-local provenance for tensors returned by ``Tensor.data`` and
+    # storage-sharing aliases/views derived from them. The getter is represented
+    # as a canonical detach op, but a later write through this alias family must
+    # still ceiling runnable faithfulness.
+    data_alias: bool = False
 
 
 @dataclass
@@ -112,6 +150,346 @@ class TorchLensTLCollisionError(AttributeError):
 # typing-subscriptable, so the value type is documented rather than annotated).
 _MODULE_REGISTRY: "WeakIdKeyDictionary" = WeakIdKeyDictionary()
 _PARAM_REGISTRY: "WeakIdKeyDictionary" = WeakIdKeyDictionary()
+
+
+# --------------------------------------------------------------------------- #
+# r83 C1 -- CURRENT-SESSION OBJECT ANCHORING FOR RAW LABELS.
+#
+# ``TensorMeta.label_raw`` (and its promoted ``buffer_source`` sibling) used to
+# be validated by pure TEXT membership in the active capture's live event index.
+# Label text is deterministic per op-kind + ordinal, so an ordinary op in a
+# LATER, unrelated capture regenerates the same string: a tensor still carrying
+# a label from an EARLIER capture was therefore accepted as current-session
+# provenance and spliced into the new DAG as the same-named node (r82, broken
+# independently by three lanes -- a stock ``register_forward_hook`` activation
+# collector sufficed, producing a SAME-INPUT wrong parent bind reported as
+# ``VERIFIED``). r79 gave the param rung an object-identity belt and r81 gave
+# the buffer ``address`` rung one; this is the label rung's.
+#
+# THE ANCHOR is ``TensorMeta.label_session``: the monotonic token of the capture
+# that issued this object's label, written onto the object's OWN metadata by
+# ``set_tensor_label`` -- the single choke point through which every label stamp
+# in the torch backend flows (verified: no other site assigns ``label_raw``). A
+# stamp therefore cannot come into existence without its anchor, and a future
+# stamp site cannot silently escape the belt (the r80 F1 root-A failure mode).
+# Tokens are monotonic and never reused, so a label issued by an earlier capture
+# can never match the active one however the object re-enters, and whether or
+# not cleanup managed to reach it. Being a field on metadata the caller already
+# holds, the check is one integer compare -- no lookup and no allocation on the
+# per-op hot path.
+#
+# WHERE THE GATE SITS: in ``get_tensor_label`` / ``get_label_list``, the two
+# accessors every label consumer in the torch backend reads through, rather than
+# at each consumer. That is what makes it exhaustive -- the graph-parent binder,
+# the layout ancestry rooting rung, the dispatch-origin ladder, the host-escape
+# attribution ladder, the buffer-write producer and the replay-template
+# ``ParentRef`` builder are all closed at once. Gating the two provenance rungs
+# in ``ops._tensor_has_known_provenance`` alone was empirically NOT sufficient:
+# the r82 free-lane launder rode the layout/origin rungs instead.
+#
+# ``_LabelSession.stamped`` is a WEAK inventory of the objects stamped this
+# session, used only by the inventory-driven cleanup. It is weak because labels
+# are stamped on every activation and strong refs would pin the whole activation
+# graph, defeating sparse ``save=``; anything still alive at cleanup time is
+# alive because something outside TorchLens holds it -- exactly the leak vehicles
+# cleanup needs to reach. Weakness is safe here in a way it is NOT for the r81
+# buffer stamp keeper: entries are only ever compared by dereferenced object
+# identity, and ``WeakIdRef.__eq__`` returns False whenever either side is dead,
+# so a recycled ``id()`` can never produce a false match.
+# --------------------------------------------------------------------------- #
+_LABEL_SESSION_COUNTER = itertools.count(1)
+
+
+class _LabelSession:
+    """One capture session's identity for issued raw labels."""
+
+    __slots__ = ("token", "stamped")
+
+    def __init__(self, token: int) -> None:
+        """Initialize an empty anchor registry for one capture session.
+
+        Parameters
+        ----------
+        token : int
+            Monotonic session token, unique for the process lifetime.
+        """
+        self.token = token
+        # Weak inventory of every object stamped this session, for the
+        # inventory-driven cleanup (r83 C1 root A). One entry per OBJECT, not
+        # per stamp: relabeling an in-place receiver does not re-register.
+        self.stamped: "WeakIdKeyDictionary" = WeakIdKeyDictionary()
+
+
+_ACTIVE_LABEL_SESSION: Optional[_LabelSession] = None
+_RETIRED_LABEL_SESSION: Optional[_LabelSession] = None
+
+
+def begin_label_session() -> int:
+    """Install a fresh label-anchoring session and return its token.
+
+    Called once per capture from per-session model preparation. Sweeping the
+    RETIRED session's stamps happens here rather than at capture cleanup: the
+    stamps are still needed after cleanup runs, because ``_cleanup_model_session``
+    precedes ``_postprocess`` and the output-attribution fallback in
+    ``postprocess.graph_traversal`` reads output-tensor labels. Sweeping at the
+    next session's start is equally complete for the leak class -- a stale stamp
+    can only ever matter to a SUBSEQUENT capture, and it is cleared before that
+    capture stamps or reads anything.
+
+    Returns
+    -------
+    int
+        Monotonic token identifying the newly active session.
+    """
+
+    global _ACTIVE_LABEL_SESSION
+    sweep_retired_label_stamps()
+    token = next(_LABEL_SESSION_COUNTER)
+    _ACTIVE_LABEL_SESSION = _LabelSession(token)
+    return token
+
+
+def end_label_session() -> None:
+    """Retire the active label-anchoring session.
+
+    The retired session's weak inventory is kept (not dropped) so the next
+    capture can sweep the stamps that outlived it -- see
+    :func:`sweep_retired_label_stamps`.
+
+    Returns
+    -------
+    None
+        Mutates module-level session state only.
+    """
+
+    global _ACTIVE_LABEL_SESSION, _RETIRED_LABEL_SESSION
+    _RETIRED_LABEL_SESSION = _ACTIVE_LABEL_SESSION
+    _ACTIVE_LABEL_SESSION = None
+
+
+def sweep_retired_label_stamps() -> int:
+    """Clear every still-live label stamp issued by the retired session (root A).
+
+    The AUTHORITATIVE, inventory-driven counterpart to the reachability walk in
+    ``model_prep._clear_session_tensor_metadata``, which has structural blind
+    spots: it returns immediately for any ``nn.Module`` value outside the traced
+    tree (a helper module or ``nn.Sequential`` used as an activation cache) and
+    for any object with no ``__dict__`` (``__slots__``), and it reaches globals
+    only through ``forward.__code__.co_names``, so a module-global appended to
+    from a HOOK or a helper function, or a class attribute, is in none of its
+    sets. Enumerating by REGISTRATION instead reaches all of them -- and the
+    container-nested ``types.ModuleType`` stash r81's shallow sweep could not.
+
+    Defence-in-depth, NOT the correctness argument: the belt rejects an
+    unanchored stamp whether or not this sweep ever reached the object.
+
+    Returns
+    -------
+    int
+        Number of still-live stamped objects cleared.
+    """
+
+    global _RETIRED_LABEL_SESSION
+    retired = _RETIRED_LABEL_SESSION
+    _RETIRED_LABEL_SESSION = None
+    if retired is None:
+        return 0
+    cleared = 0
+    for stamped_tensor in list(retired.stamped.keys()):
+        clear_meta(stamped_tensor)
+        cleared += 1
+    return cleared
+
+
+def active_label_session_token() -> Optional[int]:
+    """Return the active label session token, if a capture is in progress.
+
+    Returns
+    -------
+    Optional[int]
+        Session token, or ``None`` when no capture session is installed.
+    """
+
+    session = _ACTIVE_LABEL_SESSION
+    return None if session is None else session.token
+
+
+def session_labeled_tensors() -> List[Any]:
+    """Return every still-live tensor stamped with a label this session.
+
+    The registration-driven inventory that :func:`sweep_retired_label_stamps`
+    consumes, and the observable form of root A. Dead entries have already been
+    dropped by the weak registry, so this names exactly the stamped objects
+    something is still holding.
+
+    Returns
+    -------
+    List[Any]
+        Live tensors that received at least one label this session.
+    """
+
+    session = _ACTIVE_LABEL_SESSION
+    if session is None:
+        return []
+    return list(session.stamped.keys())
+
+
+def _session_gate_blocks(meta: TensorMeta) -> bool:
+    """Return whether a capture is active that did NOT issue this meta's labels.
+
+    The read gate shared by :func:`get_tensor_label` and :func:`get_label_list`.
+    Outside a capture (postprocess and every read after ``end_label_session``)
+    nothing is gated, so post-capture behaviour is exactly as before r83.
+
+    Parameters
+    ----------
+    meta : TensorMeta
+        Tensor metadata being read.
+
+    Returns
+    -------
+    bool
+        True when the label belongs to some OTHER session than the active one.
+    """
+
+    session = _ACTIVE_LABEL_SESSION
+    return session is not None and meta.label_session != session.token
+
+
+def session_meta_is_anchored(meta: Optional[TensorMeta]) -> bool:
+    """Return whether a tensor's label metadata was issued by the ACTIVE session.
+
+    The belt, in its cheapest form: the anchor is an integer stamped onto the
+    object's OWN metadata by :func:`set_tensor_label`, so the check is a field
+    compare on metadata the caller already holds -- no lookup, no allocation on
+    the per-op hot path. A tensor labeled by an earlier capture carries that
+    capture's token and can never match the active one (tokens are monotonic
+    and never reused). With no session installed nothing is anchored.
+
+    Parameters
+    ----------
+    meta : Optional[TensorMeta]
+        Tensor metadata whose label components are being validated.
+
+    Returns
+    -------
+    bool
+        True only when this object's labels were issued during the currently
+        active capture session.
+    """
+
+    session = _ACTIVE_LABEL_SESSION
+    if session is None or meta is None:
+        return False
+    return meta.label_session == session.token
+
+
+def _pinned_storage(t: Any) -> Optional[Any]:
+    """Return ``t``'s ``UntypedStorage`` for pinning/validation, else ``None``.
+
+    Read under ``pause_logging`` because ``untyped_storage`` is a WITNESSED
+    host-escape method (``completeness_witness._HOST_ESCAPE_METHODS``): an
+    unpaused read on the owner thread would record a spurious host-escape fact
+    for every labeled activation. Any failure (exotic/meta/fake tensor whose
+    storage cannot be read) returns ``None`` -- the validation below treats a
+    symmetric-inaccessible pair as identity-only, exactly like r81's buffer belt.
+    """
+
+    try:
+        with _state.pause_logging():
+            return t.untyped_storage()
+    except Exception:
+        return None
+
+
+def session_label_storage_intact(meta: Optional[TensorMeta], tensor: Any) -> bool:
+    """Return whether a labeled object's LIVE storage is still its stamp-time storage.
+
+    The STORAGE-INTEGRITY axis of label/activation provenance (r85), the twin of
+    r81's :func:`session_validated_buffer_address` storage check for the buffer
+    ``address`` rung. A label anchor (:func:`session_meta_is_anchored`) proves an
+    object is the current-session labeled producer; this proves that object's
+    storage was not ``.data=``/``set_``-rebound to foreign or input-derived
+    storage between when it was labeled and when it is consumed as an op argument.
+
+    Keying on the storage OBJECT (``data_ptr`` + ``nbytes`` + device) against the
+    STRONG keeper pinned at :func:`set_tensor_label` time is what draws the sharp
+    zero-collateral line: an IN-PLACE write into the object's OWN storage
+    (``copy_``, EMA ``mul_().add_()``, ``buf[:] = ...``) keeps the pointer and
+    PASSES -- it is honest, tracked/journaled state mutation -- while a ``.data=``
+    / ``set_`` rebind swaps the pointer to another storage and FAILS.
+
+    Fail-closed, mirroring r81: a keeper or live storage inaccessible on exactly
+    ONE side is NOT intact (``False``); only the symmetric-inaccessible case
+    (both unreadable) falls back to pure object/anchor identity (``True``).
+
+    Parameters
+    ----------
+    meta : Optional[TensorMeta]
+        Tensor metadata carrying the ``label_storage`` keeper.
+    tensor : Any
+        The live tensor whose storage is being validated.
+
+    Returns
+    -------
+    bool
+        True only when the live storage still matches the stamp-time keeper (or
+        both are symmetrically inaccessible).
+    """
+
+    if meta is None:
+        return False
+    keeper = meta.label_storage
+    live = _pinned_storage(tensor)
+    if keeper is None or live is None:
+        return keeper is None and live is None
+    try:
+        with _state.pause_logging():
+            return bool(
+                live.data_ptr() == keeper.data_ptr()
+                and live.nbytes() == keeper.nbytes()
+                and str(live.device) == str(keeper.device)
+            )
+    except Exception:
+        return False
+
+
+def _session_storage_gate_blocks(meta: TensorMeta, t: Any) -> bool:
+    """Return whether an active capture must reject this label for a STORAGE rebind.
+
+    The STORAGE twin of :func:`_session_gate_blocks` (r85), sharing the same two
+    accessor choke points so the belt stays exhaustive: even a CURRENT-session
+    anchored label is not trusted -- so its object never binds as a graph parent
+    or roots a layout/origin chain -- when the object's LIVE storage was
+    ``.data=``/``set_``-rebound away from the storage it held when labeled. A
+    rebound state-derived activation that kept its label would otherwise be
+    spliced back in as the same-named parent, replaying its pre-rebind value as a
+    false VERIFIED (SOL-1); orphaning it here surfaces the existing break marker.
+
+    Only applies during an active capture: outside one (postprocess, and every
+    read after ``end_label_session``) nothing is gated, so post-capture behaviour
+    is byte-identical to r83. A foreign-session label is already rejected by
+    :func:`_session_gate_blocks`, so only the current-session anchored label
+    reaches the storage validation here. Fail-closed: an anchored label whose
+    storage integrity cannot be proven (asymmetric-inaccessible) is rejected.
+
+    Parameters
+    ----------
+    meta : TensorMeta
+        Tensor metadata carrying the label anchor and storage pin.
+    t : Any
+        The live tensor whose storage is being validated.
+
+    Returns
+    -------
+    bool
+        True when the active capture must not trust this object's label.
+    """
+
+    session = _ACTIVE_LABEL_SESSION
+    if session is None or meta.label_session != session.token:
+        return False
+    return not session_label_storage_intact(meta, t)
 
 
 def get(obj: Any) -> Optional[TorchLensMeta]:
@@ -245,8 +623,41 @@ def set_tensor_label(t: Any, label: str) -> None:
         Tensor-like object to tag.
     label : str
         Raw TorchLens label.
+
+    Notes
+    -----
+    r83 C1: the stamp and its current-session anchor are written together
+    here, the single choke point every torch-backend label stamp flows
+    through (verified: no other site assigns ``TensorMeta.label_raw``), so a
+    label can never come into existence without its anchor and no future
+    stamp site can silently escape the belt.
+
+    r85: the storage-integrity pin (``label_storage``) is re-established here on
+    EVERY label stamp -- the same choke point -- so a tracked op that (re)labels
+    the object also re-affirms the storage it legitimately produced. Because
+    ``_unattributed_tensor_arg_positions`` reads an op's INPUT provenance BEFORE
+    the output relabel, an untraced ``.data=`` rebind between two tracked ops is
+    still detected on the consuming op (against the PRIOR stamp) before this call
+    re-pins to the post-op storage. A tracked in-place op keeps the pointer, so
+    re-pinning to the same storage is a no-op for honest mutation.
     """
-    _ensure_tensor_meta(t).label_raw = label
+    meta = _ensure_tensor_meta(t)
+    meta.label_raw = label
+    meta.label_storage = _pinned_storage(t)
+    session = _ACTIVE_LABEL_SESSION
+    if session is None:
+        # Stamped outside any capture (only reachable from test/tooling code):
+        # deliberately left unanchored, so it is never mistaken for provenance.
+        meta.label_session = None
+        return
+    if meta.label_session != session.token:
+        meta.label_session = session.token
+        try:
+            session.stamped[t] = True
+        except TypeError:
+            # Not weak-referenceable: the anchor still holds; only the
+            # inventory-driven cleanup skips it.
+            pass
 
 
 def get_tensor_label(t: Any) -> Optional[str]:
@@ -260,7 +671,83 @@ def get_tensor_label(t: Any) -> Optional[str]:
     Returns
     -------
     Optional[str]
-        Raw label if present.
+        Raw label if present AND issued by the active capture session.
+
+    Notes
+    -----
+    r83 C1: this is the single gate through which every label consumer in the
+    torch backend reads provenance -- the graph-parent binder, the layout
+    ancestry rooting rung, the dispatch-origin ladder, the host-escape
+    attribution ladder, the buffer-write producer, and the replay-template
+    ``ParentRef`` builder. Gating HERE rather than at each of them is what
+    makes the belt exhaustive: a label issued by an EARLIER capture is
+    invisible to all of them at once, so a foreign tensor can never be
+    accepted as current-session state however it re-enters. With no session
+    installed (postprocess, and any read after ``end_label_session``) the raw
+    label is returned unchanged, so post-capture behaviour is untouched.
+
+    r85: the same choke point also rejects a CURRENT-session anchored label
+    whose object was ``.data=``/``set_``-rebound to foreign/input-derived
+    storage after labeling (:func:`_session_storage_gate_blocks`), so the
+    rebound activation never re-binds as its same-named graph parent and the
+    break marker on the consuming op stands.
+    """
+    meta = get_tensor_meta(t)
+    if meta is None or meta.label_raw is None:
+        return None
+    if _session_gate_blocks(meta) or _session_storage_gate_blocks(meta, t):
+        return None
+    return meta.label_raw
+
+
+def mark_tensor_data_alias(t: Any) -> None:
+    """Mark a tensor as originating from the unsafe ``Tensor.data`` surface.
+
+    Parameters
+    ----------
+    t : Any
+        Tensor-like object returned by ``Tensor.data`` or a storage-sharing
+        alias/view derived from it.
+    """
+
+    _ensure_tensor_meta(t).data_alias = True
+
+
+def is_tensor_data_alias(t: Any) -> bool:
+    """Return whether a tensor is a current-capture ``Tensor.data`` alias.
+
+    Parameters
+    ----------
+    t : Any
+        Tensor-like object to inspect.
+
+    Returns
+    -------
+    bool
+        ``True`` only when the object carries data-alias provenance and a
+        current-session capture label.
+    """
+
+    meta = get_tensor_meta(t)
+    return bool(meta is not None and meta.data_alias and get_tensor_label(t) is not None)
+
+
+def raw_tensor_label(t: Any) -> Optional[str]:
+    """Return a tensor's raw capture label WITHOUT the session-anchor gate.
+
+    For the few callers that must observe a stamp irrespective of which
+    session issued it -- notably cleanup, which clears foreign stamps, and
+    diagnostics. Never use this to decide provenance.
+
+    Parameters
+    ----------
+    t : Any
+        Tensor-like object to inspect.
+
+    Returns
+    -------
+    Optional[str]
+        Raw label if present, from any session.
     """
     meta = get_tensor_meta(t)
     return None if meta is None else meta.label_raw
@@ -280,14 +767,23 @@ def get_live_tensor_label(t: Any, live_labels: Iterable[str]) -> Optional[str]:
     -------
     Optional[str]
         Raw label if it resolves in the active trace, otherwise ``None``.
+
+    Notes
+    -----
+    r83 C1: resolution requires BOTH that the label text is live in this
+    capture AND that this object's stamp was issued by this session (the
+    ``get_tensor_label`` gate). Text alone let a tensor carrying a colliding
+    label from an earlier capture become a graph PARENT of the same-named
+    live event -- a same-input wrong value bind reported as ``VERIFIED``.
+    A rejected stamp is cleared off the object either way, so a foreign
+    stamp does not linger once the capture has seen it.
     """
 
     label = get_tensor_label(t)
-    if label is None:
-        return None
-    if label in live_labels:
+    if label is not None and label in live_labels:
         return label
-    clear_tensor_label(t)
+    if raw_tensor_label(t) is not None:
+        clear_tensor_label(t)
     return None
 
 
@@ -326,6 +822,7 @@ def clear_tensor_label(t: Any) -> None:
     meta = get_tensor_meta(t)
     if meta is not None:
         meta.label_raw = None
+        meta.data_alias = False
 
 
 def promote_label_to_buffer_source_and_clear_label(t: Any) -> None:
@@ -340,6 +837,7 @@ def promote_label_to_buffer_source_and_clear_label(t: Any) -> None:
     if meta is not None and meta.label_raw is not None:
         meta.buffer_source = meta.label_raw
         meta.label_raw = None
+        meta.data_alias = False
 
 
 def set_buffer_address(t: Any, address: str) -> None:
@@ -389,6 +887,13 @@ def get_label_list(tensors: Iterable[Any]) -> List[str]:
     ------
     TorchLensTLCollisionError
         If a tensor has a foreign non-TorchLens ``._tl`` value.
+
+    Notes
+    -----
+    r83 C1: this is the fastlog/predicate recorder's graph-parent binder, so it
+    carries the same current-session anchor gate as :func:`get_tensor_label` --
+    a foreign tensor holding a colliding label from an earlier capture must not
+    become a parent on this path either.
     """
     out: List[str] = []
     for t in tensors:
@@ -397,7 +902,12 @@ def get_label_list(tensors: Iterable[Any]) -> List[str]:
             continue
         if not isinstance(meta, TorchLensMeta):
             raise TorchLensTLCollisionError(f"Foreign _tl on tensor: {type(meta).__name__}")
-        if isinstance(meta, TensorMeta) and meta.label_raw is not None:
+        if (
+            isinstance(meta, TensorMeta)
+            and meta.label_raw is not None
+            and not _session_gate_blocks(meta)
+            and not _session_storage_gate_blocks(meta, t)
+        ):
             out.append(meta.label_raw)
     return out
 
@@ -684,7 +1194,37 @@ def copy_replacement_meta(src: Any, dst: Any) -> None:
         Source object whose metadata should be copied.
     dst : Any
         Destination object that should receive a shallow dataclass copy.
+
+    Notes
+    -----
+    r83 C1: the copy carries ``label_session`` with the rest of the dataclass,
+    so an intervention replacement inherits the source's anchor exactly -- a
+    live source's replacement keeps provenance, and a STALE source's label
+    stays stale rather than laundering into a fresh object. The replacement is
+    joined to the session inventory only when it is genuinely current-session,
+    so cleanup can reach it.
+
+    r85: the STORAGE pin (``label_storage``) is re-established to ``dst``'s OWN
+    storage rather than inheriting the source's keeper -- ``dst`` is a distinct
+    current-session object taking over the label, so its integrity pin must
+    reference the storage it actually holds, or the label would be spuriously
+    suppressed at every consumer (a distinct object never matches the source's
+    storage). This cannot launder a STALE label: the session-token anchor
+    (unchanged by re-pinning) still governs, so a foreign-session source stays
+    rejected regardless of storage.
     """
     src_meta = get(src)
     if src_meta is not None:
         dst._tl = dataclass_replace(cast(Any, src_meta))
+        if isinstance(dst._tl, TensorMeta):
+            dst._tl.label_storage = _pinned_storage(dst)
+        session = _ACTIVE_LABEL_SESSION
+        if (
+            session is not None
+            and isinstance(src_meta, TensorMeta)
+            and src_meta.label_session == session.token
+        ):
+            try:
+                session.stamped[dst] = True
+            except TypeError:
+                pass

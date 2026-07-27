@@ -1027,6 +1027,9 @@ class Trace(
     _containers: dict[int, Any]
     _annotation_blobs: dict[str, Any] | None
     _last_sibling_ordering_decision: Any
+    _receptive_field_solution: Any
+    _rf_source_solutions: Any
+    _rf_target_solutions: Any
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "trace_label": FieldPolicy.KEEP,
@@ -1044,6 +1047,9 @@ class Trace(
         "_tf_init_op_labels": FieldPolicy.DROP,
         "_tf_op_captures": FieldPolicy.DROP,
         "_tf_validation_result": FieldPolicy.DROP,
+        "_receptive_field_solution": FieldPolicy.DROP,
+        "_rf_source_solutions": FieldPolicy.DROP,
+        "_rf_target_solutions": FieldPolicy.DROP,
         "module_identity_mode": FieldPolicy.KEEP,
         "param_source": FieldPolicy.KEEP,
         "derived_grads": FieldPolicy.KEEP,
@@ -1232,6 +1238,7 @@ class Trace(
         "_buffer_accessor": FieldPolicy.DROP,
         "_buffer_write_events": FieldPolicy.DROP,
         "_buffer_write_tracker": FieldPolicy.DROP,
+        "_param_storage_addresses": FieldPolicy.DROP,
         "_buffer_initial_values": FieldPolicy.BLOB_RECURSIVE,
         "_buffer_persistence": FieldPolicy.KEEP,
         "internal_source_ops": FieldPolicy.KEEP,
@@ -1284,6 +1291,14 @@ class Trace(
         "_module_forward_args": FieldPolicy.DROP,
         "_grad_fn_strong_refs": FieldPolicy.DROP,
         "_in_exhaustive_pass": FieldPolicy.DROP,
+        # r83 S4: live-capture scratch reinstated by ``__setstate__`` alongside
+        # ``_tl_backward_hooked_tensor_keys``, but never registered here. Any
+        # trace that went through ``__setstate__`` -- which ``cache=True`` makes
+        # routine -- therefore tripped the catalog tripwire and failed
+        # ``save(level="runnable")`` outright on the SECOND capture. DROP, like
+        # its sibling: pending live-fire records are session state and are
+        # already reset on rehydrate.
+        "_pending_live_fire_records": FieldPolicy.DROP,
         "_module_containment_engine": FieldPolicy.DROP,
         "_exhaustive_module_stack": FieldPolicy.DROP,
         "_module_logs": FieldPolicy.DROP,
@@ -1291,6 +1306,21 @@ class Trace(
         "_build_state": FieldPolicy.DROP,
         "_pre_forward_rng_states": FieldPolicy.DROP,
         "_runnable_host_rng_consumed": FieldPolicy.DROP,
+        "_runnable_capture_ambient": FieldPolicy.DROP,
+        "_runnable_state_alias_topology": FieldPolicy.DROP,
+        # r63 C1: pre-clone per-slot state metadata signatures (producer-side only,
+        # never portable) and the buffer storage-pointer attribution index.
+        "_runnable_capture_state_signatures": FieldPolicy.DROP,
+        # r77 F2: capture-time persistent-buffer name universe + geometry
+        # (producer-side only, never portable).
+        "_runnable_persistent_buffer_universe": FieldPolicy.DROP,
+        "_buffer_storage_addresses": FieldPolicy.DROP,
+        "_runnable_host_rng_unreplayable": FieldPolicy.DROP,
+        "_runnable_host_rng_channels": FieldPolicy.DROP,
+        "_runnable_host_rng_replayable_reads": FieldPolicy.DROP,
+        "_runnable_rng_monitor_uncertain": FieldPolicy.DROP,
+        "_runnable_rng_monitor_uncertain_detail": FieldPolicy.DROP,
+        "_runnable_output_losslessness": FieldPolicy.DROP,
         "_mlx_saved_payloads": FieldPolicy.DROP,
         "_mlx_capture_depth": FieldPolicy.DROP,
         "_out_writer": FieldPolicy.DROP,
@@ -1298,6 +1328,9 @@ class Trace(
         "_grad_stream_retain_in_memory": FieldPolicy.DROP,
         "_defer_streaming_bundle_finalization": FieldPolicy.DROP,
         "_out_sink": FieldPolicy.DROP,
+        # Runtime-only: the set of dispatchable op func-call-ids the orphan-removal
+        # pass pruned, read by the validation dispatch-count backstop. Never portable.
+        "_orphan_pruned_func_call_ids": FieldPolicy.DROP,
         "_capture_events": FieldPolicy.DROP,
         "_tl_backward_hooked_tensor_keys": FieldPolicy.DROP,
         "_active_backward_pass_index": FieldPolicy.DROP,
@@ -1320,6 +1353,9 @@ class Trace(
         "_grad_fn_param_refs": FieldPolicy.KEEP,
         "_grad_fn_param_refs_by_object_id": FieldPolicy.DROP,
         "_param_log_by_pid": FieldPolicy.DROP,
+        "_session_param_inventory": FieldPolicy.DROP,
+        "_session_buffer_inventory": FieldPolicy.DROP,
+        "_session_buffer_identity": FieldPolicy.DROP,
         "backward_root_grad_fn_object_ids": FieldPolicy.KEEP,
         "backward_durations": FieldPolicy.KEEP,
         "num_backward_passes": FieldPolicy.KEEP,
@@ -1663,6 +1699,19 @@ class Trace(
         self.backward_pass_logs: Dict[int, BackwardPass] = OrderedDict()
         self._grad_fn_param_refs: dict[str, str] = {}
         self._param_log_by_pid: dict[int, str] = {}
+        # r79 session-leak fix: the RECORDED prep inventories of stamped
+        # parameters/buffers. Session-scoped strong refs -- authoritative source
+        # for stamp cleanup (a param/buffer popped from the live module tree
+        # mid-forward escapes re-traversal but never this list); emptied by
+        # ``_cleanup_model_session``. Never portable.
+        self._session_param_inventory: list[Any] = []
+        self._session_buffer_inventory: list[Any] = []
+        # r81: id(tensor) -> _SessionBufferStamp identity records for every
+        # buffer stamp written this session -- the buffer-rung storage-identity
+        # belt (param-rung ``_param_ref is value`` parity). Session-scoped
+        # strong refs (tensor + stamp-time storage keeper); emptied by
+        # ``_cleanup_model_session``. Never portable.
+        self._session_buffer_identity: dict[int, Any] = {}
         self.backward_root_grad_fn_object_ids: list[int] = []
         self.backward_durations: list[Duration] = []
         self.num_backward_passes: int = 0
@@ -2356,6 +2405,12 @@ class Trace(
             Independently, ``include_activations=True`` archives exactly the
             capture-time ``save=``-selected payloads for inspection and eligible
             byte-exact attestation; those payloads never seed execution.
+            ``include_source`` (default ``True``) controls whether the captured
+            model source code is embedded; set it ``False`` to strip verbatim
+            source, docstrings, and source-file references from a shared
+            ``.tlspec``. Absolute source paths are always relativized to a bare
+            basename, so no ``$HOME`` / username is ever embedded. See
+            :func:`torchlens.save` for the full option list.
 
         Warning
         -------
@@ -2638,6 +2693,9 @@ class Trace(
             state[field_name] = Bytes(state.get(field_name, 0) or 0)
         if state.get("total_autograd_memory") is not None:
             state["total_autograd_memory"] = Bytes(state["total_autograd_memory"])
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
         self.__dict__.update(state)
         if not containers_were_serialized:
             self.__dict__.pop("_containers", None)

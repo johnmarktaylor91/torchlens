@@ -6,7 +6,7 @@ import os
 import re
 import time
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -33,8 +33,8 @@ from torchlens.visualization.collapse_plan import (
     OpSegment,
     RawOp,
     RenderContext,
+    collapse_plan_for_trace,
     count,
-    plan_from_v1,
 )
 from torchlens.visualization._render_edges import _collapsed_module_should_show_remainder
 from torchlens.visualization._render_common import format_collapsed_module_contents
@@ -255,6 +255,38 @@ class BatchNormFlowStack(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the sequential BatchNorm stack."""
+
+        return self.blocks(x)
+
+
+class BufferWriteFlowBlock(torch.nn.Module):
+    """Linear child block with a registered-buffer write-version edge."""
+
+    def __init__(self, width: int = 4) -> None:
+        """Initialize the buffer-writing block."""
+
+        super().__init__()
+        self.register_buffer("running", torch.zeros(width))
+        self.linear = torch.nn.Linear(width, width)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Update the buffer and use its new version."""
+
+        updated = self.running.add_(x.mean(dim=0))
+        return torch.relu(self.linear(x) + updated)
+
+
+class BufferWriteFlowStack(torch.nn.Module):
+    """Nested stack carrying explicit registered-buffer write versions."""
+
+    def __init__(self, depth: int = 3, width: int = 4) -> None:
+        """Initialize the buffer-writing stack."""
+
+        super().__init__()
+        self.blocks = torch.nn.Sequential(*(BufferWriteFlowBlock(width) for _ in range(depth)))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the buffer-writing stack."""
 
         return self.blocks(x)
 
@@ -971,6 +1003,179 @@ def _trace(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
         return tl.trace(model.eval(), x)
 
 
+def _clear_collapse_caches(trace: tl.Trace) -> None:
+    """Clear all collapse caches for a reference-equivalence phase.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose next analysis and optimization must be uncached.
+    """
+
+    auto_collapse._ANALYSIS_CACHE.pop(trace, None)
+    auto_collapse._OP_ADJACENCY_INDEX_CACHE.pop(trace, None)
+    collapse_optimizer._RESULT_CACHE.pop(trace, None)
+    collapse_optimizer._SCHEDULE_CACHE.pop(trace, None)
+
+
+def _empty_op_adjacency_index(trace: tl.Trace) -> Mapping[str, str]:
+    """Return an empty index to force the pre-optimization accessor path.
+
+    Parameters
+    ----------
+    trace:
+        Trace deliberately ignored by the reference path.
+
+    Returns
+    -------
+    Mapping[str, str]
+        Empty relationship-label mapping.
+    """
+
+    _ = trace
+    return {}
+
+
+def _optimizer_result_signature(result: Any) -> tuple[Any, ...]:
+    """Return every non-timing optimizer artifact.
+
+    Parameters
+    ----------
+    result:
+        Optimizer result to normalize.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Stable signature excluding analysis and selection timings.
+    """
+
+    return (
+        result.selected,
+        dict(result.repeat_folds),
+        result.plan,
+        result.visible_count,
+        result.g_star,
+        result.declined,
+        result.reason,
+        dict(result.segments or {}),
+        result.level,
+    )
+
+
+def _schedule_signature(schedule: Any) -> tuple[tuple[Any, ...], ...]:
+    """Return every public schedule-step artifact.
+
+    Parameters
+    ----------
+    schedule:
+        Collapse schedule to normalize.
+
+    Returns
+    -------
+    tuple[tuple[Any, ...], ...]
+        Stable signature for every schedule step.
+    """
+
+    return tuple(
+        (
+            step.t,
+            step.target_count,
+            step.visible_count,
+            step.collapsed_addresses,
+            step.plan,
+        )
+        for step in schedule.steps
+    )
+
+
+def _relationship_resolution_signature(trace: tl.Trace) -> tuple[tuple[str, str], ...]:
+    """Return identity-checked relationship resolutions for one trace.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose parent and child labels are being checked.
+
+    Returns
+    -------
+    tuple[tuple[str, str], ...]
+        Relationship labels and their canonical operation labels.
+    """
+
+    resolutions: list[tuple[str, str]] = []
+    labels = {
+        label
+        for op in trace.ops
+        for label in (*getattr(op, "parents", ()), *getattr(op, "children", ()))
+    }
+    for label in sorted(labels):
+        expected = trace.ops[label]
+        actual = auto_collapse._resolve_relationship_op(trace, label)
+        assert actual is expected
+        resolutions.append((label, actual.label))
+    return tuple(resolutions)
+
+
+def _collapse_artifact_snapshot(trace: tl.Trace, tmp_path: Path, stem: str) -> tuple[Any, ...]:
+    """Return all non-timing analysis, plan, schedule, and DOT artifacts.
+
+    Parameters
+    ----------
+    trace:
+        Trace to analyze and render.
+    tmp_path:
+        Directory for Graphviz outputs.
+    stem:
+        Unique output-file stem.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Full collapse artifact signature.
+    """
+
+    context = RenderContext()
+    _clear_collapse_caches(trace)
+    analysis = analyze_collapse(trace)
+    auto_result = select_collapse_plan(trace, context, mode="auto")
+    max_result = select_collapse_plan(trace, context, mode="max")
+    schedule = trace.collapse_schedule(context)
+    auto_dot = _draw_source(trace, tmp_path, f"{stem}_auto", "auto").encode()
+    max_dot = _draw_source(trace, tmp_path, f"{stem}_max", "max").encode()
+    return (
+        dict(analysis.signals),
+        dict(analysis.scores),
+        dict(analysis.peer_groups),
+        dict(analysis.child_flow_graphs),
+        _optimizer_result_signature(auto_result),
+        _optimizer_result_signature(max_result),
+        _schedule_signature(schedule),
+        auto_dot,
+        max_dot,
+    )
+
+
+def _add_reference_fallback_collision(trace: tl.Trace) -> str:
+    """Add an accessor-resolvable label collision for forced-fallback coverage.
+
+    Parameters
+    ----------
+    trace:
+        Recurrent trace to modify.
+
+    Returns
+    -------
+    str
+        Relationship label deliberately removed from the fast index.
+    """
+
+    input_op = next(op for op in trace.ops if op.is_input)
+    collision_op = next(op for op in trace.ops if not op.is_input and not op.is_output)
+    collision_op._label_raw = input_op.layer_label
+    return str(input_op.layer_label)
+
+
 def _draw_source(
     trace: tl.Trace,
     tmp_path: Path,
@@ -1190,7 +1395,7 @@ def _assert_plan_svg_parity(
     plan_count = (
         count(v2_plan)
         if v2_plan is not None
-        else count(plan_from_v1(trace, collapse_fn, folds, context))
+        else count(collapse_plan_for_trace(trace, collapse_fn, folds, context))
     )
     out = tmp_path / name
     trace.draw(
@@ -1448,6 +1653,86 @@ def test_collapse_plan_parity_fast_synthetic_models(tmp_path: Path) -> None:
                 _assert_plan_svg_parity(trace, tmp_path, f"{case_name}_{mode}", mode)
         finally:
             trace.cleanup()
+
+
+@pytest.mark.parametrize(
+    ("case_name", "builder", "x"),
+    (
+        ("canonical", lambda: RepeatedResidual(depth=5), torch.randn(2, 8)),
+        ("recurrent", UnevenReusedSiblings, torch.randn(2, 4)),
+        ("ambiguous_label", UnevenReusedSiblings, torch.randn(2, 4)),
+        ("batchnorm_buffer", lambda: BatchNormFlowStack(depth=4), torch.randn(1, 4, 8, 8)),
+        ("write_version", lambda: BufferWriteFlowStack(depth=3), torch.randn(2, 4)),
+        ("external_endpoints", RegistrationInterleavedAuxParent, torch.randn(1, 4, 8, 8)),
+    ),
+)
+def test_adjacency_index_matches_forced_accessor_reference(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    case_name: str,
+    builder: Callable[[], torch.nn.Module],
+    x: torch.Tensor,
+) -> None:
+    """Indexed and forced-accessor collapse artifacts remain byte-identical.
+
+    Parameters
+    ----------
+    monkeypatch:
+        Pytest patch helper.
+    tmp_path:
+        Directory for Graphviz outputs.
+    case_name:
+        Semantic fixture category.
+    builder:
+        Model factory.
+    x:
+        Example model input.
+    """
+
+    trace = _trace(builder(), x)
+    try:
+        fallback_label = None
+        if case_name == "ambiguous_label":
+            fallback_label = _add_reference_fallback_collision(trace)
+            auto_collapse._OP_ADJACENCY_INDEX_CACHE.pop(trace, None)
+
+        relationship_signature = _relationship_resolution_signature(trace)
+        assert relationship_signature
+        if fallback_label is not None:
+            assert fallback_label not in auto_collapse._op_adjacency_index(trace)
+            assert any(label == fallback_label for label, _ in relationship_signature)
+        if case_name == "recurrent":
+            assert any(module.num_calls > 1 for module in trace.modules)
+        if case_name == "batchnorm_buffer":
+            assert any(op.is_buffer for op in trace.ops)
+        if case_name == "write_version":
+            assert any(op.buffer_write_kind is not None for op in trace.ops)
+
+        optimized = _collapse_artifact_snapshot(trace, tmp_path, f"{case_name}_indexed")
+        if case_name == "external_endpoints":
+            flow_graphs = optimized[3]
+            assert any(
+                endpoint.startswith(("external_source:", "external_sink:"))
+                for graph in flow_graphs.values()
+                for edge in graph.edges
+                for endpoint in edge
+            )
+
+        with monkeypatch.context() as reference_patch:
+            reference_patch.setattr(
+                auto_collapse,
+                "_op_adjacency_index",
+                _empty_op_adjacency_index,
+            )
+            reference = _collapse_artifact_snapshot(
+                trace,
+                tmp_path,
+                f"{case_name}_reference",
+            )
+
+        assert optimized == reference
+    finally:
+        trace.cleanup()
 
 
 def test_child_condensed_flow_graph_uses_execution_order_for_aux_branch() -> None:
@@ -2285,7 +2570,7 @@ def test_v2_auto_uses_op_segments_as_over_band_last_resort(
     trace = _trace(DistinctFunctionalChain(), torch.randn(1, 8))
     try:
         context = RenderContext()
-        full_count = count(plan_from_v1(trace, None, None, context))
+        full_count = count(collapse_plan_for_trace(trace, None, None, context))
         result = select_collapse_plan(trace, context, mode="auto")
 
         assert full_count > 40

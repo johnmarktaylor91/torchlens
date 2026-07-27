@@ -10,7 +10,7 @@ by partial saves. The bundle format is intentionally a plain directory with
 from __future__ import annotations
 
 from collections import OrderedDict, defaultdict
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 import json
 import platform
@@ -28,6 +28,7 @@ from safetensors import SafetensorError
 from safetensors.torch import load_file, save_file
 
 from . import BlobRef, FieldPolicy, PayloadLoadHints, TLSPEC_VERSION, TorchLensIOError
+from . import _json
 from ._safe_unpickle import SafeBundleUnpickler
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, enforce_version_policy, sha256_of_file
@@ -62,6 +63,14 @@ _BLOB_TENSOR_KEY = "data"
 _RUNNABLE_WEIGHT_KIND = "runnable_weight"
 _RUNNABLE_NONPERSISTENT_BUFFER_KIND = "runnable_nonpersistent_buffer"
 _RUNNABLE_ACTIVATION_KIND = "runnable_activation"
+
+# SECURITY (secF-2). Hard cap on nested-bundle recursion depth. Nested bundles are
+# shallow by construction; a deep chain is a hand-edited attacker artifact. The
+# resolved-path visited set closes self-reference and mutual cycles exactly; this
+# cap is the belt-and-suspenders bound on any deep acyclic chain that would still
+# exhaust the Python stack (and open FDs / re-parse JSON per level) before a
+# ``RecursionError``.
+_MAX_BUNDLE_NESTING_DEPTH = 32
 
 _RENAMED_PICKLE_GLOBALS: dict[tuple[str, str], tuple[str, str]] = {
     ("torchlens.data_classes.model_log", "ModelLog"): (
@@ -182,6 +191,7 @@ def save(
     include_rng_states: bool = False,
     include_weights: bool = False,
     include_activations: bool = False,
+    include_source: bool = True,
     strict: bool = True,
     overwrite: bool = False,
 ) -> None:
@@ -213,6 +223,19 @@ def save(
         Whether a runnable save should archive exactly the ``save=``-selected
         ``out``/``transformed_out`` payloads for offline inspection and eligible
         original-input, real-state numeric attestation. The payloads never seed execution.
+    include_source:
+        Whether the captured model source code is embedded in the bundle
+        (default ``True``). The source blob powers the ``draw(code_panel=...)``
+        source panels, so it is kept by default. A ``.tlspec`` is the portable,
+        shareable format, so this defaults ``True`` embeds the model's verbatim
+        class / ``__init__`` / ``forward`` source, per-call ``code_context``
+        source lines, and captured docstrings. Set ``include_source=False`` to
+        strip all of that from a shared bundle; source panels on the reloaded
+        trace then degrade to a "source not embedded" placeholder instead of
+        rendering code. Regardless of this flag, absolute source paths
+        (``$HOME``, OS username, site-packages / capturing-script layout) are
+        always reduced to a bare basename, so no host filesystem PII is ever
+        embedded. Applies at every save ``level``.
     strict:
         Whether unsupported tensors should abort the save instead of being skipped.
     overwrite:
@@ -268,6 +291,8 @@ def save(
             trace,
             sparse_run_descriptor,
         )
+        if nonpersistent_buffer_blob_specs:
+            _warn_nonpersistent_buffer_disclosure_once()
         if include_weights:
             weight_blob_specs = _capture_weight_blob_specs(
                 trace,
@@ -280,12 +305,14 @@ def save(
                 activation_members,
                 original_input_digests,
                 capture_state_digests,
+                input_fingerprints,
             ) = _capture_activation_blob_specs(trace, sparse_run_descriptor)
             sparse_run_descriptor = with_activation_payload(
                 sparse_run_descriptor,
                 members=activation_members,
                 original_input_digests=original_input_digests,
                 capture_state_digests=capture_state_digests,
+                input_fingerprints=input_fingerprints,
             )
         sparse_run_json = sparse_descriptor_to_json(sparse_run_descriptor)
         include_outs = False
@@ -335,6 +362,7 @@ def save(
             include_grads=include_grads,
             include_saved_args=include_saved_args,
             include_rng_states=include_rng_states,
+            include_source=include_source,
             sparse_runnable=sparse_run_descriptor is not None,
         )
         if sparse_run_descriptor is not None:
@@ -486,6 +514,44 @@ def save(
         raise
 
 
+def _require_canonical_runnable_labels(names: Iterable[object], *, family: str) -> None:
+    """Refuse a runnable payload family whose entry labels load would reject.
+
+    r79 (r78 free LOW): ``self._parameters[""] = nn.Parameter(...)`` bypasses
+    ``register_parameter``'s empty-name validation, captures, and SAVED an
+    artifact whose weight tensor entry carried label ``""`` -- which
+    ``validate_tlspec`` categorically refuses at load ("requires a canonical
+    label"). A save door must never produce a stillborn artifact, so this
+    preflight mirrors the load-side canonical-label predicate exactly
+    (non-``str`` or empty refuses; nothing wider).
+
+    Parameters
+    ----------
+    names:
+        Candidate canonical entry labels for one payload family.
+    family:
+        Human-readable payload family name for the refusal message.
+
+    Raises
+    ------
+    RunnablePreflightError
+        Typed save refusal for any label the load door would refuse.
+    """
+
+    from ..errors import RunnablePreflightError
+    from ..runnable import RunnableErrorCode
+
+    for name in names:
+        if not isinstance(name, str) or name == "":
+            raise RunnablePreflightError(
+                f"Runnable {family} entry requires a canonical label; got {name!r}. "
+                "An artifact with this label would be refused wholesale at load "
+                "(empty state names bypass register_parameter/register_buffer "
+                "validation and have no canonical state_dict identity).",
+                code=RunnableErrorCode.SPARSE_PREFLIGHT_FAILED.value,
+            )
+
+
 def _capture_weight_blob_specs(
     trace: Trace,
     descriptor: SparseRunDescriptor,
@@ -511,12 +577,18 @@ def _capture_weight_blob_specs(
         If the live source model or its state mapping is unavailable.
     StateBindingError
         If the full state dict disagrees with the descriptor contract.
+    RunnablePreflightError
+        If a state name is not a canonical (non-empty) label (r79 save-side
+        mirror of the load door's canonical-label check).
     """
 
     from .._runnable_state import validate_state_mapping_for_descriptor
 
     state = _capture_source_state(trace, option_name="include_weights")
     validate_state_mapping_for_descriptor(descriptor, state)
+    _require_canonical_runnable_labels(
+        cast(Mapping[str, torch.Tensor], state).keys(), family="weight tensor"
+    )
     return [
         BlobSpec(
             blob_id=f"runnable_weight_{index:05d}",
@@ -551,6 +623,9 @@ def _capture_nonpersistent_buffer_blob_specs(
     ------
     StateBindingError
         If a required captured value is missing or violates its slot contract.
+    RunnablePreflightError
+        If a buffer name is not a canonical (non-empty) label (r79 save-side
+        mirror of the load door's canonical-label check).
     """
 
     from .._runnable_state import validate_nonpersistent_buffer_mapping_for_descriptor
@@ -564,6 +639,7 @@ def _capture_nonpersistent_buffer_blob_specs(
             and not slot.state_binding.persistent
         }
     )
+    _require_canonical_runnable_labels(names, family="non-persistent buffer")
     captured_values = getattr(trace, "_buffer_initial_values", {}) or {}
     values = {name: captured_values[name] for name in names if name in captured_values}
     validate_nonpersistent_buffer_mapping_for_descriptor(descriptor, values)
@@ -587,6 +663,7 @@ def _capture_activation_blob_specs(
     tuple[ActivationPayloadMember, ...],
     tuple[SlotByteDigest, ...],
     tuple[StateByteDigest, ...],
+    tuple[Any, ...],
 ]:
     """Collect capture-selected activation blobs and attestation eligibility digests.
 
@@ -610,6 +687,7 @@ def _capture_activation_blob_specs(
     """
 
     from .._runnable_state import runnable_tensor_byte_digest
+    from .._runnable_execution import build_input_attestation_fingerprint
     from ..runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
 
     slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
@@ -619,6 +697,7 @@ def _capture_activation_blob_specs(
     blob_specs: list[BlobSpec] = []
     members: list[ActivationPayloadMember] = []
     input_digests: list[SlotByteDigest] = []
+    input_fingerprints: list[Any] = []
     for op in trace.layer_list:
         op_label = str(op.label)
         slot_id = f"slot:{op_label}"
@@ -626,11 +705,14 @@ def _capture_activation_blob_specs(
             continue
         out = _physical_op_payload(op, "out")
         if bool(getattr(op, "is_input", False)) and isinstance(out, torch.Tensor):
-            input_digests.append(
-                SlotByteDigest(
-                    slot_id=slot_id,
-                    byte_digest=runnable_tensor_byte_digest(out),
-                )
+            digest = runnable_tensor_byte_digest(out)
+            input_digests.append(SlotByteDigest(slot_id=slot_id, byte_digest=digest))
+            # hon1_3 (H-a): the physical fingerprint is built from the LIVE retained
+            # in-memory input value that seeded the captured forward (never from the
+            # serialized payload, which contiguifies strides). The run side
+            # fingerprints the executed clone on the same basis.
+            input_fingerprints.append(
+                build_input_attestation_fingerprint(slot_id, out, byte_digest=digest)
             )
         if not bool(getattr(op, "has_saved_activation", False)):
             continue
@@ -681,7 +763,13 @@ def _capture_activation_blob_specs(
         )
         for name, value in sorted(cast(Mapping[str, torch.Tensor], state).items())
     )
-    return blob_specs, tuple(members), tuple(input_digests), state_digests
+    return (
+        blob_specs,
+        tuple(members),
+        tuple(input_digests),
+        state_digests,
+        tuple(input_fingerprints),
+    )
 
 
 def _physical_op_payload(op: Any, field_name: str) -> Any:
@@ -775,6 +863,7 @@ def load(
     payload_hints: PayloadLoadHints | None = None,
     trust_custom_callables: bool = False,
     allowed_custom_callable_modules: Collection[str] | None = None,
+    _bundle_visited: "frozenset[Path] | None" = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a ``.tlspec`` object with eager tensor materialization.
 
@@ -809,6 +898,7 @@ def load(
     payload_hints: PayloadLoadHints | None = None,
     trust_custom_callables: bool = False,
     allowed_custom_callable_modules: Collection[str] | None = None,
+    _bundle_visited: "frozenset[Path] | None" = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a ``.tlspec`` object while leaving direct tensors lazy.
 
@@ -842,6 +932,7 @@ def load(
     payload_hints: PayloadLoadHints | None = None,
     trust_custom_callables: bool = False,
     allowed_custom_callable_modules: Collection[str] | None = None,
+    _bundle_visited: "frozenset[Path] | None" = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a TorchLens ``.tlspec`` object polymorphically.
 
@@ -918,6 +1009,7 @@ def load(
                 payload_hints=payload_hints,
                 trust_custom_callables=trust_custom_callables,
                 allowed_custom_callable_modules=allowed_custom_callable_modules,
+                bundle_visited=_bundle_visited,
             )
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
         from ..intervention.save import load_intervention_spec
@@ -1058,6 +1150,67 @@ def _load_trace_payload(
     return trace
 
 
+_NONPERSISTENT_DISCLOSURE_WARNED = False
+"""One-time process flag for the non-persistent buffer save disclosure."""
+
+
+def _warn_nonpersistent_buffer_disclosure_once() -> None:
+    """Emit the one-time REQUIRED-family privacy disclosure (contract section 5).
+
+    A default runnable save of a model with used non-persistent buffers carries
+    their capture-time tensor values in the required
+    ``runnable_nonpersistent_buffer_v1`` family even with both include flags
+    false -- declared state without which the artifact cannot replay. The family
+    is manifest-visible; this warning makes the disclosure active.
+    """
+
+    global _NONPERSISTENT_DISCLOSURE_WARNED
+    if _NONPERSISTENT_DISCLOSURE_WARNED:
+        return
+    _NONPERSISTENT_DISCLOSURE_WARNED = True
+    warnings.warn(
+        "This runnable save includes capture-time values of used NON-persistent "
+        "buffers (the required runnable_nonpersistent_buffer_v1 family): they are "
+        "declared state the artifact cannot replay without, and they are written "
+        "even with include_weights/include_activations false. Review the buffers "
+        "before sharing the artifact if they may hold sensitive data.",
+        UserWarning,
+        stacklevel=3,
+    )
+
+
+def _runnable_payload_disposition(trace: Trace, entries: tuple[Any, ...]) -> str:
+    """Return ``"bind"`` / ``"skip"`` / ``"error"`` for one runnable payload family (r39 corr2_3).
+
+    THE single structural disposition every payload binder (weights, non-persistent buffers,
+    archived activations, and any future execution-only family) consults before decoding a blob,
+    so ONE typed-analysis degradation rule covers EVERY typed descriptor-parse refusal -- not just
+    ``context_field_invalid`` or the legacy v1 carve-out. Three-way:
+
+    * ``"bind"`` -- a parsed sparse descriptor exists; validate and bind normally.
+    * ``"skip"`` -- a runnable descriptor was PRESENT but refused at parse (``context_field_invalid``,
+      legacy v1, or any typed parse refusal), so the trace loaded ANALYSIS-ONLY
+      (``provider == LOADED_SPARSE``, ``descriptor is None``, readiness UNAVAILABLE with the typed
+      diagnostic). Its payload blobs stay unbound (no supported descriptor validates them) and the
+      typed readiness diagnostic survives -- the load must NOT hard-fail on the payload binder
+      (the round-38 corr2_3 bug: an ``include_weights`` artifact with a tampered context field
+      raised an untyped IO error pointing at intact weights and lost the typed diagnostic).
+    * ``"error"`` -- a genuine analysis artifact (``provider == LOADED_ANALYSIS`` / no runnable
+      descriptor) carrying STRAY runnable payload blobs is a real inconsistency; hard-fail.
+    """
+
+    from ..runnable import RunProvider
+
+    if trace.runnable_descriptor is not None:
+        return "bind"
+    readiness = trace.__dict__.get("_runnable_readiness")
+    if getattr(readiness, "provider", None) is RunProvider.LOADED_SPARSE:
+        # A refused/legacy sparse descriptor degrades to analysis-only; skip binding.
+        return "skip"
+    # No runnable descriptor at all: stray runnable blobs on a true analysis artifact hard-fail.
+    return "error" if entries else "skip"
+
+
 def _bind_embedded_nonpersistent_buffer_payload(
     trace: Trace,
     *,
@@ -1090,12 +1243,16 @@ def _bind_embedded_nonpersistent_buffer_payload(
     entries = tuple(
         entry for entry in manifest.tensors if entry.kind == _RUNNABLE_NONPERSISTENT_BUFFER_KIND
     )
-    if descriptor is None:
-        if entries:
-            raise TorchLensIOError(
-                "Non-persistent buffer payloads require a parsed sparse runnable descriptor."
-            )
+    disposition = _runnable_payload_disposition(trace, entries)
+    if disposition == "skip":
+        # Parse-refused / legacy analysis-only degradation: payload blobs stay unbound and the
+        # typed readiness diagnostic survives (r39 corr2_3).
         return
+    if disposition == "error":
+        raise TorchLensIOError(
+            "Non-persistent buffer payloads require a parsed sparse runnable descriptor."
+        )
+    assert descriptor is not None  # disposition == "bind"
     declared = descriptor.payload_layers.nonpersistent_buffers
     if not declared.present:
         if entries:
@@ -1167,12 +1324,15 @@ def _bind_embedded_weight_payload(
     weight_entries = tuple(
         entry for entry in manifest.tensors if entry.kind == _RUNNABLE_WEIGHT_KIND
     )
-    if descriptor is None:
-        if weight_entries:
-            raise TorchLensIOError(
-                "Weight payload blobs require a parsed sparse runnable descriptor."
-            )
+    disposition = _runnable_payload_disposition(trace, weight_entries)
+    if disposition == "skip":
+        # r39 corr2_3: an ``include_weights`` artifact whose sparse descriptor was refused at
+        # parse (e.g. ``context_field_invalid``) loads ANALYSIS-ONLY; the intact weight blobs
+        # stay unbound and the typed diagnostic survives -- never an untyped hard IO error.
         return
+    if disposition == "error":
+        raise TorchLensIOError("Weight payload blobs require a parsed sparse runnable descriptor.")
+    assert descriptor is not None  # disposition == "bind"
     declared = descriptor.payload_layers.weights
     if not declared.present:
         if weight_entries:
@@ -1239,12 +1399,16 @@ def _bind_archived_activation_payload(
         for entry in manifest.tensors
         if entry.kind == _RUNNABLE_ACTIVATION_KIND
     }
-    if descriptor is None:
-        if activation_entries:
-            raise TorchLensIOError(
-                "Activation payload blobs require a parsed sparse runnable descriptor."
-            )
+    disposition = _runnable_payload_disposition(trace, tuple(activation_entries.values()))
+    if disposition == "skip":
+        # Parse-refused / legacy analysis-only degradation (r39 corr2_3): archived activation
+        # blobs stay unbound and the typed readiness diagnostic survives.
         return
+    if disposition == "error":
+        raise TorchLensIOError(
+            "Activation payload blobs require a parsed sparse runnable descriptor."
+        )
+    assert descriptor is not None  # disposition == "bind"
     declared = descriptor.payload_layers.activations
     if not declared.present:
         if activation_entries:
@@ -1255,7 +1419,9 @@ def _bind_archived_activation_payload(
         return
     if not isinstance(declared, ActivationPayloadLayerDescriptor):
         raise TorchLensIOError("Runnable activation payload metadata is incomplete.")
-    if declared.schema != "selected_activation_v1":
+    from ..runnable import RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION
+
+    if declared.schema != RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION:
         raise TorchLensIOError(
             f"Unsupported runnable activation payload schema {declared.schema!r}."
         )
@@ -1302,6 +1468,7 @@ def _load_unified_tlspec(
     payload_hints: PayloadLoadHints | None,
     trust_custom_callables: bool,
     allowed_custom_callable_modules: Collection[str] | None,
+    bundle_visited: "frozenset[Path] | None" = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a unified ``.tlspec`` bundle by manifest kind.
 
@@ -1331,9 +1498,14 @@ def _load_unified_tlspec(
     Raises
     ------
     TorchLensIOError
-        If the unified kind is unsupported in this runtime.
+        If the unified kind is unsupported in this runtime, or if the bundle
+        path or one of its well-known members is a symlink.
     """
 
+    _reject_symlink_path(bundle_path, context="bundle path")
+    _reject_symlink_path(bundle_path / "manifest.json", context="manifest")
+    _reject_symlink_path(bundle_path / "metadata.pkl", context="metadata")
+    _reject_symlink_path(bundle_path / "blobs", context="blobs directory")
     manifest = _read_manifest_object(bundle_path / "manifest.json")
     kind = manifest.get("kind")
     if kind == "intervention":
@@ -1359,7 +1531,7 @@ def _load_unified_tlspec(
             allowed_custom_callable_modules=allowed_custom_callable_modules,
         )
     if kind == "bundle":
-        return _load_unified_bundle(bundle_path)
+        return _load_unified_bundle(bundle_path, bundle_visited=bundle_visited)
     raise TorchLensIOError(f"Unsupported unified tlspec kind={kind!r}.")
 
 
@@ -1396,6 +1568,10 @@ def _preflight_unified_trace_manifest(
     if not isinstance(schema_version, int) or isinstance(schema_version, bool):
         raise TorchLensIOError("Unified trace manifest schema_version must be an integer.")
     if schema_version == 1:
+        # Schema v1 is torch-only (see ``_manifest_for_unified_trace_load``), so a
+        # per-entry logical_backend that is not torch would force materialization
+        # to import a foreign codec runtime. Fail closed before the body index.
+        _preflight_torch_entry_logical_backends(manifest, backend_name="torch")
         _preflight_unified_trace_body_index(manifest, bundle_path=bundle_path)
         return
     if schema_version != 2:
@@ -1422,6 +1598,11 @@ def _preflight_unified_trace_manifest(
             or manifest.get("torch_version") == ""
         ):
             raise TorchLensIOError("Torch manifest schema v2 requires non-empty torch_version.")
+        # A torch bundle early-returns past ``_preflight_schema_v2_payload_codecs``,
+        # yet materialization still honors each entry's ``logical_backend``. Assert
+        # every entry stays torch so a torch-declared bundle cannot smuggle a
+        # non-torch codec import past preflight.
+        _preflight_torch_entry_logical_backends(manifest, backend_name=backend_name)
         _preflight_unified_trace_body_index(manifest, bundle_path=bundle_path)
         return
 
@@ -1534,6 +1715,60 @@ def _preflight_schema_v2_runtime(
         )
 
 
+def _preflight_torch_entry_logical_backends(
+    manifest: dict[str, Any],
+    *,
+    backend_name: str,
+) -> None:
+    """Fail closed for torch bundles that declare a non-torch entry backend.
+
+    Torch trace bundles (schema v1, and schema v2 with ``backend == "torch"``)
+    early-return past ``_preflight_schema_v2_payload_codecs``, but blob
+    materialization (``materialize_transport_tensor``) still keys off each
+    manifest entry's ``logical_backend``. A per-entry ``logical_backend`` that is
+    not ``backend_name`` would therefore force a non-torch payload codec import
+    (and, if the runtime is present, decode) during a DEFAULT ``tl.load`` on a
+    torch-declared bundle. Reject any such entry before the body index.
+
+    Parameters
+    ----------
+    manifest:
+        Raw unified torch trace manifest.
+    backend_name:
+        Declared torch backend name (``"torch"``).
+
+    Raises
+    ------
+    TorchLensIOError
+        If ``body_index`` or ``tensors`` is malformed, or if any entry declares
+        a ``logical_backend`` other than ``backend_name``.
+    """
+
+    for section_name in ("body_index", "tensors"):
+        entries = manifest.get(section_name, [])
+        if not isinstance(entries, list):
+            raise TorchLensIOError(f"Torch trace manifest {section_name} must be a list.")
+        for raw_entry in entries:
+            if not isinstance(raw_entry, dict):
+                raise TorchLensIOError(
+                    f"Torch trace manifest {section_name} entries must be objects."
+                )
+            logical_backend = raw_entry.get("logical_backend", backend_name)
+            if logical_backend is None:
+                continue
+            if not isinstance(logical_backend, str) or logical_backend == "":
+                raise TorchLensIOError(
+                    f"Torch trace manifest {section_name} entry logical_backend must be a "
+                    "non-empty string."
+                )
+            if logical_backend != backend_name:
+                raise TorchLensIOError(
+                    f"Torch trace manifest declares {section_name} entry "
+                    f"logical_backend={logical_backend!r}; a torch bundle may not select a "
+                    "non-torch payload codec."
+                )
+
+
 def _preflight_schema_v2_payload_codecs(
     manifest: dict[str, Any],
     *,
@@ -1551,36 +1786,90 @@ def _preflight_schema_v2_payload_codecs(
     Raises
     ------
     TorchLensIOError
-        If body-index codec fields are malformed.
+        If body-index or tensors codec fields are malformed, or if the codec
+        registry fails unexpectedly during preflight.
     BackendPayloadUnsupportedError
-        If a declared materialized body entry uses an unsupported codec.
+        If a declared materialized body or tensor entry uses an unsupported
+        codec.
     """
 
     body_index = manifest.get("body_index", [])
     if not isinstance(body_index, list):
         raise TorchLensIOError("Manifest schema v2 trace body_index must be a list.")
-    for raw_entry in body_index:
-        if not isinstance(raw_entry, dict):
-            raise TorchLensIOError("Manifest schema v2 body_index entries must be objects.")
-        logical_backend = raw_entry.get("logical_backend", backend_name)
-        codec_name = raw_entry.get("codec")
-        if not isinstance(logical_backend, str) or logical_backend == "":
-            raise TorchLensIOError(
-                "Manifest body entry logical_backend must be a non-empty string."
+    tensors = manifest.get("tensors", [])
+    if not isinstance(tensors, list):
+        raise TorchLensIOError("Manifest schema v2 trace tensors must be a list.")
+    # ``body_index`` is the public mirror, but the load path materializes
+    # out/grad body blobs from the ``tensors`` entries. Both sections must
+    # declare a supported codec so a desynchronized manifest cannot smuggle an
+    # unvalidated codec past preflight into blob materialization.
+    for section_name, entries in (("body_index", body_index), ("tensors", tensors)):
+        for raw_entry in entries:
+            if not isinstance(raw_entry, dict):
+                raise TorchLensIOError(
+                    f"Manifest schema v2 {section_name} entries must be objects."
+                )
+            _preflight_schema_v2_entry_codec(
+                raw_entry,
+                backend_name=backend_name,
+                section_name=section_name,
             )
-        if logical_backend != backend_name:
-            raise TorchLensIOError(
-                f"Manifest backend {backend_name!r} conflicts with body entry "
-                f"logical_backend={logical_backend!r}."
-            )
-        if not isinstance(codec_name, str) or codec_name == "":
-            raise TorchLensIOError("Materialized schema v2 body entries require a codec string.")
+
+
+def _preflight_schema_v2_entry_codec(
+    raw_entry: dict[str, Any],
+    *,
+    backend_name: str,
+    section_name: str,
+) -> None:
+    """Validate one materialized schema-v2 manifest entry's payload codec.
+
+    Parameters
+    ----------
+    raw_entry:
+        Raw ``body_index`` or ``tensors`` manifest entry.
+    backend_name:
+        Logical backend declared by the trace manifest.
+    section_name:
+        Manifest section owning the entry, used in error messages.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the entry codec fields are malformed or codec resolution fails
+        unexpectedly.
+    BackendPayloadUnsupportedError
+        If the entry declares an unsupported codec.
+    """
+
+    logical_backend = raw_entry.get("logical_backend", backend_name)
+    codec_name = raw_entry.get("codec")
+    if not isinstance(logical_backend, str) or logical_backend == "":
+        raise TorchLensIOError(
+            f"Manifest {section_name} entry logical_backend must be a non-empty string."
+        )
+    if logical_backend != backend_name:
+        raise TorchLensIOError(
+            f"Manifest backend {backend_name!r} conflicts with {section_name} entry "
+            f"logical_backend={logical_backend!r}."
+        )
+    if not isinstance(codec_name, str) or codec_name == "":
+        raise TorchLensIOError(
+            f"Materialized schema v2 {section_name} entries require a codec string."
+        )
+    try:
         codec = get_payload_codec(logical_backend)
-        if codec.codec_name == "none" or codec.codec_name != codec_name:
-            raise BackendPayloadUnsupportedError(
-                f"Manifest schema v2 trace for backend {backend_name!r} declares unsupported "
-                f"payload codec {codec_name!r}."
-            )
+        supported_codec_name = str(codec.codec_name)
+    except Exception as exc:
+        raise TorchLensIOError(
+            f"Failed to resolve the payload codec for backend {logical_backend!r} "
+            "during manifest preflight."
+        ) from exc
+    if supported_codec_name == "none" or supported_codec_name != codec_name:
+        raise BackendPayloadUnsupportedError(
+            f"Manifest schema v2 trace for backend {backend_name!r} declares unsupported "
+            f"payload codec {codec_name!r}."
+        )
 
 
 def _manifest_for_unified_trace_load(manifest: dict[str, Any]) -> Manifest:
@@ -1615,13 +1904,21 @@ def _manifest_for_unified_trace_load(manifest: dict[str, Any]) -> Manifest:
     return parsed_manifest
 
 
-def _load_unified_bundle(bundle_path: Path) -> "Bundle":
+def _load_unified_bundle(
+    bundle_path: Path,
+    *,
+    bundle_visited: "frozenset[Path] | None" = None,
+) -> "Bundle":
     """Load a unified ``Bundle`` payload.
 
     Parameters
     ----------
     bundle_path:
         Directory containing a unified bundle manifest and metadata payload.
+    bundle_visited:
+        Internal set of already-in-progress bundle-root real paths, threaded to
+        detect self-referential / mutually-recursive nested-bundle members
+        (secF-2). ``None`` at the top level.
 
     Returns
     -------
@@ -1637,7 +1934,9 @@ def _load_unified_bundle(bundle_path: Path) -> "Bundle":
     metadata_path = bundle_path / "bundle.json"
     _reject_symlink_path(metadata_path, context="bundle metadata")
     if metadata_path.exists():
-        return _load_unified_bundle_directory(bundle_path, metadata_path)
+        return _load_unified_bundle_directory(
+            bundle_path, metadata_path, bundle_visited=bundle_visited
+        )
 
     legacy_pickle_path = bundle_path / "metadata.pkl"
     _reject_symlink_path(legacy_pickle_path, context="bundle metadata")
@@ -1707,10 +2006,26 @@ def _resolve_bundle_member_path(bundle_path: Path, relative_path: str) -> Path:
         raise TorchLensIOError(
             f"Bundle rejected member path traversal outside bundle root: {relative_path!r}."
         ) from exc
+    # SECURITY (secF-2). A member path that resolves to the bundle root itself
+    # (``"."`` / ``""`` / any path collapsing onto the root) is a self-reference
+    # that would re-enter this same directory and recurse without bound. The
+    # containment check above passes for it (it stays inside the root), so it must
+    # be rejected explicitly. Mutual / deeper cycles are additionally closed by the
+    # visited-set + depth cap in ``_load_unified_bundle_directory``.
+    if candidate == allowed_root:
+        raise TorchLensIOError(
+            f"Bundle rejected self-referential member path {relative_path!r} "
+            "(resolves to the bundle root)."
+        )
     return candidate
 
 
-def _load_unified_bundle_directory(bundle_path: Path, metadata_path: Path) -> "Bundle":
+def _load_unified_bundle_directory(
+    bundle_path: Path,
+    metadata_path: Path,
+    *,
+    bundle_visited: "frozenset[Path] | None" = None,
+) -> "Bundle":
     """Load a unified bundle container from nested member specs.
 
     Parameters
@@ -1719,6 +2034,11 @@ def _load_unified_bundle_directory(bundle_path: Path, metadata_path: Path) -> "B
         Bundle root directory.
     metadata_path:
         ``bundle.json`` metadata path.
+    bundle_visited:
+        Internal set of already-in-progress bundle-root real paths, threaded down
+        the recursive load chain to detect a member that re-enters this or an
+        ancestor bundle (secF-2 self-reference / mutual recursion). ``None`` at the
+        top level.
 
     Returns
     -------
@@ -1728,12 +2048,26 @@ def _load_unified_bundle_directory(bundle_path: Path, metadata_path: Path) -> "B
     Raises
     ------
     TorchLensIOError
-        If the nested bundle metadata or members are invalid.
+        If the nested bundle metadata or members are invalid, or a member forms a
+        load cycle or exceeds the nesting-depth cap.
     """
+
+    # SECURITY (secF-2). Record THIS bundle root before loading any member so a
+    # member that points back at us (or at an ancestor already being loaded) is
+    # caught as a cycle instead of recursing forever. The depth cap bounds any deep
+    # acyclic chain that would still blow the stack before a ``RecursionError``.
+    visited = frozenset() if bundle_visited is None else bundle_visited
+    current_root = bundle_path.resolve()
+    if len(visited) >= _MAX_BUNDLE_NESTING_DEPTH:
+        raise TorchLensIOError(
+            "Unified bundle nesting exceeds the maximum depth of "
+            f"{_MAX_BUNDLE_NESTING_DEPTH}; refusing to recurse further."
+        )
+    next_visited = visited | {current_root}
 
     try:
         with metadata_path.open("r", encoding="utf-8") as handle:
-            metadata = json.load(handle)
+            metadata = _json.load_bounded(handle)
     except (OSError, json.JSONDecodeError) as exc:
         raise TorchLensIOError(f"Failed to read bundle metadata from {metadata_path}.") from exc
     if not isinstance(metadata, dict):
@@ -1751,7 +2085,12 @@ def _load_unified_bundle_directory(bundle_path: Path, metadata_path: Path) -> "B
         if not isinstance(name, str) or not isinstance(relative_path, str):
             raise TorchLensIOError(f"Unified bundle member {index} has invalid name/path.")
         member_path = _resolve_bundle_member_path(bundle_path, relative_path)
-        loaded = load(member_path)
+        if member_path.resolve() in next_visited:
+            raise TorchLensIOError(
+                f"Unified bundle member {name!r} forms a load cycle: its path "
+                f"{relative_path!r} re-enters an in-progress bundle directory."
+            )
+        loaded = load(member_path, _bundle_visited=next_visited)
         if not isinstance(loaded, Trace):
             raise TorchLensIOError(f"Unified bundle member {name!r} did not load as a Trace.")
         members[name] = loaded
@@ -1785,7 +2124,7 @@ def _read_manifest_object(path: Path) -> dict[str, Any]:
 
     try:
         with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
+            data = _json.load_bounded(handle)
     except (OSError, json.JSONDecodeError) as exc:
         raise TorchLensIOError(f"Failed to read manifest at {path}.") from exc
     if not isinstance(data, dict):
@@ -1956,6 +2295,7 @@ def _scrub_trace_for_bundle(
     include_grads: bool,
     include_saved_args: bool,
     include_rng_states: bool,
+    include_source: bool = True,
     sparse_runnable: bool = False,
 ) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
     """Scrub a model log while excluding transient load-only private attrs.
@@ -1972,6 +2312,9 @@ def _scrub_trace_for_bundle(
         Whether nested captured args should be blobified.
     include_rng_states:
         Whether nested RNG states should be blobified.
+    include_source:
+        Whether captured model source text and docstrings are embedded; absolute
+        source paths are relativized to basenames regardless.
     sparse_runnable:
         Whether all sparse-core tensor payload families must be dropped.
 
@@ -2000,6 +2343,7 @@ def _scrub_trace_for_bundle(
             include_grads=include_grads,
             include_saved_args=include_saved_args,
             include_rng_states=include_rng_states,
+            include_source=include_source,
             sparse_runnable=sparse_runnable,
             backend_name=str(getattr(trace, "backend", "torch")),
             payload_materialization=get_backend_spec(

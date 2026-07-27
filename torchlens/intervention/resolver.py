@@ -28,8 +28,18 @@ from .selectors import (
 from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 from ..ir.container_registry import Role
-from ..utils._callable_safety import is_pure_forward_callable, unsafe_callable_reason
+from ..utils._callable_safety import (
+    _DENIED_MODULES,
+    _matches,
+    is_denied_operator_gadget,
+    is_denied_stdlib_or_builtin_module,
+    is_inert_first_party_callable,
+    is_pure_forward_callable,
+    real_callable_module,
+    unsafe_callable_reason,
+)
 from ..utils._torch_compat import resolve_runnable_torch_alias
+from ..utils._torch_symbols import torch_attr
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -100,7 +110,9 @@ def _internal_torch_builtin_key(
     """
 
     internal = getattr(getattr(torch._C, "_VariableFunctionsClass", None), name, None)
-    public = getattr(torch, name, None)
+    # r47 secD_1: resolve the public alias through ``torch_attr`` so an attacker callable ``name``
+    # reads ``torch.__dict__`` directly and never fires the PEP-562 lazy ``torch.__getattr__``.
+    public = torch_attr(name)
     if internal is not func or getattr(public, "__module__", None) == "torch":
         return None
     return FunctionRegistryKey(
@@ -271,7 +283,21 @@ def resolve_function_registry_key(
                 )
             return internal_builtin
         if key.namespace in _fixed_roots:
-            resolved = cast(Callable[..., Any], getattr(_fixed_roots[key.namespace], key.qualname))
+            # r49 secF_1: the top-level ``torch`` root must resolve through ``torch_attr``
+            # (identifier-only ``torch.__dict__`` read) so an attacker qualname (``onnx`` /
+            # ``_dynamo`` / ``has_cuda``) cannot fire torch's PEP-562 lazy ``__getattr__``
+            # (unrequested submodule import / deprecated ``replacement()`` shim) BEFORE the
+            # purity gate below rejects it -- the co-located sibling of the runnable-load site.
+            # A genuinely-missing torch attr raises ``AttributeError`` exactly as the prior
+            # bare ``getattr`` did; non-torch fixed roots carry no lazy hazard.
+            _root = _fixed_roots[key.namespace]
+            if _root is torch:
+                _resolved = torch_attr(key.qualname)
+                if _resolved is None:
+                    raise AttributeError(f"module 'torch' has no attribute {key.qualname!r}")
+                resolved = cast(Callable[..., Any], _resolved)
+            else:
+                resolved = cast(Callable[..., Any], getattr(_root, key.qualname))
             # SECURITY BOUNDARY (tripwire). These fixed namespaces also expose
             # side-effecting callables -- above all torch.load / torch.save (both
             # in torch.serialization), which unpickle attacker files (RCE) or
@@ -337,8 +363,41 @@ def resolve_function_registry_key(
                 return owner == "torchlens" or owner.startswith("torchlens.")
 
             def _enforce_foreign_trust(resolved_module: str) -> None:
-                """Default-deny a foreign callable by its REAL module identity."""
+                """Default-deny a foreign callable by its REAL module identity.
 
+                A hard denylist of dangerous modules (os / sys / subprocess /
+                builtins / importlib / ctypes / shutil / socket / ... via
+                ``_DENIED_MODULES``) is refused UNCONDITIONALLY -- even on the
+                trust-satisfied path. Trust means "run this user recipe", NEVER
+                "import os": a satisfied ``trust_custom_callables`` (or a matching
+                allowlist entry) must not be able to resolve ``os:system`` and hand
+                back a live ``os.system`` callable. This closes the trust-path leg of
+                the r23 ``LazyImportRef(import_path="os:system", trust=True)`` RCE.
+                """
+
+                if _matches(resolved_module, _DENIED_MODULES):
+                    raise UntrustedCallableError(
+                        "Refusing to resolve bundle-supplied custom callable from "
+                        f"dangerous module {resolved_module!r}; process / OS / "
+                        "serialization / import / dynamic-library modules are DENIED "
+                        "even under trust_custom_callables or an explicit module "
+                        "allowlist. Trust never authorizes importing these modules."
+                    )
+                # STRUCTURAL close of the denylist-completeness class (r31): DENY any
+                # STANDARD-LIBRARY / BUILTIN module (keyed on the resolved real
+                # top-level package), regardless of trust or allowlist. This closes
+                # the whole class the explicit denylist above kept chasing one module
+                # at a time (io / _imp / zipimport / linecache / gc / mmap / ...). The
+                # pure-forward ``operator`` root and non-stdlib torch / torchlens /
+                # user packages are carved out inside the detector.
+                if is_denied_stdlib_or_builtin_module(resolved_module):
+                    raise UntrustedCallableError(
+                        "Refusing to resolve bundle-supplied custom callable from "
+                        f"standard-library / builtin module {resolved_module!r}; stdlib "
+                        "and builtin modules are DENIED even under trust_custom_callables "
+                        "or an explicit module allowlist. Trust authorizes running a "
+                        "user recipe, never importing a stdlib/builtin module."
+                    )
                 if allowed_custom_callable_modules is not None:
                     if resolved_module not in allowed_custom_callable_modules:
                         raise UntrustedCallableError(
@@ -364,13 +423,146 @@ def resolve_function_registry_key(
                     # attributes off a torchlens module. Deny by the callable's REAL
                     # module -- the torchlens import path grants it nothing.
                     _enforce_foreign_trust(str(getattr(obj, "__module__", "") or module_name))
+                    # PURITY PARITY (secE-1). ``_enforce_foreign_trust`` gates on the
+                    # RESOLVED-owner STRING, but that string is blind to two
+                    # side-effecting families reachable by walking off a torchlens
+                    # module: (a) a torch builtin (``torch.from_file`` /
+                    # ``torch.compile``) whose real ``__module__`` is the bare,
+                    # non-denied ``"torch"``, and (b) a C tensor method
+                    # (``Tensor.apply_`` / ``resize_`` / ``set_``) whose
+                    # ``__module__ is None`` so the ``or module_name`` fallback lands
+                    # on the (benign) torchlens import path. The sibling
+                    # genuinely-foreign branch below routes torch owners through
+                    # ``is_pure_forward_callable``; mirror that gate here on the REAL
+                    # object identity (NOT the fallback string) so a foreign callable
+                    # walked off a torchlens path is held to the SAME purity contract
+                    # even under trust. ``is_pure_forward_callable`` covers torch
+                    # name/purity, the operator name-allowlist, the stdlib/denylist,
+                    # and the ``__module__ is None`` tensor-method case -- closing the
+                    # ``or module_name`` fallback loophole and collapsing both foreign
+                    # sub-branches onto one purity gate.
+                    if not is_pure_forward_callable(obj):
+                        raise UntrustedCallableError(
+                            "Refusing bundle-supplied custom callable "
+                            f"{module_name}:{qualname}: it walks off a torchlens module "
+                            f"onto a non-torchlens callable ({unsafe_callable_reason(obj)}) "
+                            "that is not a pure forward/tensor op; only pure "
+                            "forward/tensor ops resolve from a torchlens-path walk onto "
+                            "a foreign callable, even under trust."
+                        )
+                elif not is_inert_first_party_callable(obj):
+                    # Defense-in-depth (mirrors the r21 bundle-unpickler narrowing):
+                    # a genuinely torchlens-owned callable is auto-trusted ONLY if it
+                    # is a vetted-inert first-party symbol (public facet recipe /
+                    # transform / intervention helper). A PRIVATE torchlens util --
+                    # notably the ``torchlens.utils:_module_is_installed`` import
+                    # gadget -- or any I/O / import / exec / spawn callable is refused
+                    # rather than resolved to a live callable.
+                    raise UntrustedCallableError(
+                        "Refusing to resolve torchlens-owned callable "
+                        f"{module_name}:{qualname}; only public, side-effect-free "
+                        "first-party callables (facet recipes / transforms / "
+                        "intervention helpers) are auto-trusted. Private utilities "
+                        "and I/O / import / exec callables are denied."
+                    )
             else:
                 # Genuinely foreign import path: gate BEFORE importing, because the
                 # import itself executes the untrusted module's top-level code.
                 _enforce_foreign_trust(module_name)
                 module = importlib.import_module(module_name)
                 obj = _walk_qualname(module)
+                # RE-ENFORCE the DENYLIST on the RESOLVED callable's REAL module
+                # identity, NEVER the import-PATH string. A DOTTED qualname
+                # attribute-walks off the imported module and can land on a callable
+                # from a DIFFERENT, denied module: ``torch:os.system`` passes the
+                # pre-import gate on the non-denied root ``torch`` yet resolves
+                # ``os.system`` (real module ``posix``), and ``torch:serialization.load``
+                # resolves ``torch.load`` (real module ``torch.serialization``). Both
+                # are hard-denied here on the resolved owner. We re-enforce the
+                # DENYLIST (never hand back a process / OS / serialization / import
+                # callable, even under trust) but NOT the allowlist: the allowlist
+                # governs which MODULES may be IMPORTED (already enforced pre-import on
+                # ``module_name``), and the resolved ``__module__`` is an implementation
+                # detail -- ``operator:neg`` legitimately resolves ``operator.neg`` whose
+                # real module is the C accelerator ``_operator``, so re-checking the
+                # allowlist on the resolved owner would wrongly deny it.
+                resolved_owner = str(getattr(obj, "__module__", "") or module_name)
+                if _matches(resolved_owner, _DENIED_MODULES):
+                    raise UntrustedCallableError(
+                        "Refusing bundle-supplied custom callable whose RESOLVED real "
+                        f"module {resolved_owner!r} is a dangerous (process / OS / "
+                        "serialization / import) module reached by attribute-walking a "
+                        f"dotted qualname off {module_name!r}; denied even under trust."
+                    )
+                # STRUCTURAL stdlib/builtin close (r31): a dotted qualname can walk OFF
+                # a permitted user/torch module and land on a stdlib/builtin callable
+                # (e.g. a trusted ``mymod:io.open`` resolving ``io.open``, real module
+                # ``io``). ``_DENIED_MODULES`` above never enumerates every such owner;
+                # deny the whole stdlib/builtin class on the resolved real module.
+                if is_denied_stdlib_or_builtin_module(resolved_owner):
+                    raise UntrustedCallableError(
+                        "Refusing bundle-supplied custom callable whose RESOLVED real "
+                        f"module {resolved_owner!r} is a standard-library / builtin "
+                        f"module reached by attribute-walking a dotted qualname off "
+                        f"{module_name!r}; denied even under trust."
+                    )
+                # PURITY PARITY (secE-1 / secE-r36-1). A callable that walked BACK into
+                # the torch namespace via a dotted qualname -- OR a module-less C tensor
+                # method (``resize_`` / ``set_`` / ``apply_`` / ``map_``) -- must be a
+                # PURE forward op: ``torch`` also hosts side-effecting builtins
+                # (``torch.from_file``) and the tensor-method family
+                # rebinds/reallocates storage or runs an arbitrary callable per element.
+                # This gate keys on the callable's REAL (capture-unwrapped) module, NEVER
+                # ``resolved_owner``: that fallback string is spoofed two ways -- it lands
+                # on the trusted ``module_name`` for a module-less tensor method (real
+                # ``__module__ is None``), and on ``"torchlens.backends.torch.wrappers"``
+                # for ANY torch op TorchLens has capture-wrapped (the near-universal live
+                # state) -- so a raw string torch/prefix check misses a wrapped
+                # ``resize_`` / ``torch.load`` (the r36 hole). Mirror the r35
+                # torchlens-walk fix on the REAL identity: when the real owner is
+                # module-less OR torch, hold it to ``is_pure_forward_callable`` (which
+                # unwraps + covers the tensor-method-descriptor case, the storage-unsafe /
+                # ``apply_`` / ``map_`` name guards, and torch name/purity). Genuinely
+                # foreign (non-torch) trusted recipes carry a real, non-torch
+                # ``__module__`` and are NOT subject to this gate -- trust means "run this
+                # user recipe".
+                real_owner = real_callable_module(obj) if callable(obj) else ""
+                if (
+                    callable(obj)
+                    and (
+                        real_owner == "" or real_owner == "torch" or real_owner.startswith("torch.")
+                    )
+                    and not is_pure_forward_callable(obj)
+                ):
+                    raise UntrustedCallableError(
+                        "Refusing bundle-supplied custom callable "
+                        f"{module_name}:{qualname}: it resolves to a torch-namespace or "
+                        f"module-less callable ({unsafe_callable_reason(obj)}) -- chiefly a "
+                        "C-level tensor method such as resize_/set_/apply_/map_ or a "
+                        "side-effecting torch builtin -- that is not a pure forward/tensor "
+                        "op; only pure forward/tensor ops resolve from the torch namespace "
+                        "or a module-less C callable, even under trust."
+                    )
 
+            # OPERATOR GADGET name-scope (r33, A-R32-1). The ``operator`` /
+            # ``_operator`` root is carved out of the stdlib denial so ``operator:neg``
+            # survives, but that carve-out must NOT re-admit the generic operator
+            # gadgets (``attrgetter`` / ``methodcaller`` / ``call`` / ``getitem`` /
+            # ``setitem`` / ``delitem`` / the in-place ``iadd`` / ``imul`` / ...
+            # mutators) that enable an RCE chain (``attrgetter('__globals__')`` ->
+            # ``__import__`` -> ``os.system``). Applied on ALL foreign sub-branches
+            # above (torchlens-walk-to-foreign AND genuinely-foreign), where the
+            # ``is_pure_forward_callable`` gate is otherwise only applied to the torch
+            # namespace. When the RESOLVED real module is ``operator`` / ``_operator``,
+            # require the terminal name in the pure-forward operator allowlist.
+            if callable(obj) and is_denied_operator_gadget(obj):
+                raise UntrustedCallableError(
+                    "Refusing bundle-supplied custom callable "
+                    f"{module_name}:{qualname}: it resolves to a generic operator gadget "
+                    f"({unsafe_callable_reason(obj)}); only the pure arithmetic / "
+                    "comparison / bitwise / index operators resolve from "
+                    "operator/_operator, even under trust."
+                )
             if not callable(obj):
                 raise TypeError(f"{key.import_path!r} resolved to non-callable {obj!r}")
             return cast(Callable[..., Any], obj)
@@ -416,7 +608,13 @@ def _import_ref_registry_key(module_name: str, qualname: str) -> FunctionRegistr
             return FunctionRegistryKey("torch", terminal, dispatch_kind)
         if module_name == "torch.nn.functional":
             return FunctionRegistryKey("torch.nn.functional", terminal, dispatch_kind)
-        if module_name == "operator":
+        # Route BOTH ``operator`` and its C accelerator ``_operator`` onto the fixed,
+        # name-allowlisted operator root (r33, A-R32-1): the fixed root purity-gate
+        # restricts operator to ``_ALLOWED_OPERATOR_NAMES``, so ``_operator:neg`` still
+        # resolves while ``_operator:attrgetter`` / ``_operator:setitem`` are DENIED --
+        # instead of ``_operator:*`` falling through to the foreign ``custom`` tail
+        # (which, before r33, applied no operator name filter).
+        if module_name in {"operator", "_operator"}:
             return FunctionRegistryKey("operator", terminal, dispatch_kind)
     if module_name in {"torch._tensor", "torch.Tensor"} and "." not in qualname:
         return FunctionRegistryKey("torch.Tensor", terminal, "method")

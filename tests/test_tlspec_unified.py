@@ -969,6 +969,56 @@ def test_schema_v2_materialized_unknown_codec_fails_closed(tmp_path: Path) -> No
 
 
 @pytest.mark.smoke
+def test_schema_v2_materialized_unknown_tensors_entry_codec_fails_closed(tmp_path: Path) -> None:
+    """Tensors entries with unknown codecs fail preflight even when body_index is clean."""
+
+    path = tmp_path / "mlx_bad_tensor_codec.tlspec"
+    _captured_log().save(path)
+    manifest = _mlx_materialized_schema_v2_manifest(path)
+    manifest["tensors"][0]["codec"] = "unknown_codec_v1"
+    _write_manifest(path, manifest)
+
+    with pytest.raises(BackendPayloadUnsupportedError, match="unknown_codec_v1"):
+        tl.load(path)
+
+
+@pytest.mark.smoke
+def test_schema_v2_materialized_missing_tensors_entry_codec_fails_closed(tmp_path: Path) -> None:
+    """Tensors entries missing a codec fail preflight with the typed IO error."""
+
+    path = tmp_path / "mlx_missing_tensor_codec.tlspec"
+    _captured_log().save(path)
+    manifest = _mlx_materialized_schema_v2_manifest(path)
+    del manifest["tensors"][0]["codec"]
+    _write_manifest(path, manifest)
+
+    with pytest.raises(TorchLensIOError, match="codec"):
+        tl.load(path)
+
+
+@pytest.mark.smoke
+def test_schema_v2_codec_preflight_wraps_registry_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unexpected codec-registry failures surface as ``TorchLensIOError``."""
+
+    import torchlens._io.bundle as bundle_module
+
+    path = tmp_path / "mlx_registry_error.tlspec"
+    _captured_log().save(path)
+    _write_manifest(path, _mlx_materialized_schema_v2_manifest(path))
+
+    def _exploding_codec_lookup(backend_name: str) -> Any:
+        raise RuntimeError("registry exploded")
+
+    monkeypatch.setattr(bundle_module, "get_payload_codec", _exploding_codec_lookup)
+
+    with pytest.raises(TorchLensIOError, match="Failed to resolve the payload codec"):
+        tl.load(path)
+
+
+@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("mutation", "match"),
     [

@@ -57,6 +57,57 @@ def runnable_artifact(
     return path, {name: value.detach().clone() for name, value in model.state_dict().items()}
 
 
+def _with_rebuilt_state_metadata_witnesses(descriptor: Any) -> Any:
+    """Regenerate the totalized state_metadata witnesses from the (synthetic) bindings.
+
+    r71 E1 totalizes state-metadata emission over the declared state-name universe
+    and the staging belt requires witness/binding agreement, so a test that
+    synthesizes slot tables in memory must keep the witness stream coherent (an
+    incoherent descriptor is exactly what the belt refuses).
+    """
+
+    from torchlens._io.runnable import STATE_METADATA_FACT_SITE_PREFIX, _encode_literal
+    from torchlens.runnable import ControlWitness, ControlWitnessKind
+
+    witnesses = [
+        witness
+        for witness in descriptor.control_witnesses
+        if not (
+            witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
+            and witness.site_label.startswith(STATE_METADATA_FACT_SITE_PREFIX)
+        )
+    ]
+    facts: dict[str, tuple[bool, bool]] = {}
+    for slot in descriptor.tensor_slots:
+        binding = slot.state_binding
+        if binding is not None:
+            facts.setdefault(
+                binding.state_dict_name,
+                (binding.captured_requires_grad, binding.captured_grad_fn),
+            )
+    for name in sorted(facts):
+        requires_grad, grad_fn_present = facts[name]
+        observed = _encode_literal(
+            {
+                "state_metadata": True,
+                "state": name,
+                "facts": {"grad_fn": grad_fn_present, "requires_grad": requires_grad},
+            }
+        )
+        order = len(witnesses)
+        witnesses.append(
+            ControlWitness(
+                witness_id=f"witness:{order + 1}",
+                kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
+                order=order,
+                call_id=None,
+                site_label=f"{STATE_METADATA_FACT_SITE_PREFIX}{name}",
+                observed_value=observed,
+            )
+        )
+    return replace(descriptor, control_witnesses=tuple(witnesses))
+
+
 def _load(artifact: tuple[Path, dict[str, torch.Tensor]]) -> tl.Trace:
     """Load a fresh sparse Trace for an isolated state lifecycle test."""
 
@@ -202,10 +253,12 @@ def test_alias_groups_reject_conflicts_and_share_one_staged_value(
             alias_group="tied:linear",
         ),
     )
-    trace.__dict__["_runnable_descriptor"] = replace(
-        descriptor,
-        tensor_slots=tuple(slot for slot in descriptor.tensor_slots if slot is not original)
-        + (first, second),
+    trace.__dict__["_runnable_descriptor"] = _with_rebuilt_state_metadata_witnesses(
+        replace(
+            descriptor,
+            tensor_slots=tuple(slot for slot in descriptor.tensor_slots if slot is not original)
+            + (first, second),
+        )
     )
     state = {name: value.clone() for name, value in runnable_artifact[1].items()}
     state["linear.weight_alias"] = state["linear.weight"].clone()
@@ -291,6 +344,15 @@ def test_n1a_initializes_every_role_deterministically_and_names_every_slot(
                         StateSlotRole.NORM_SCALE,
                         StateSlotRole.NORM_OFFSET,
                     },
+                    # r71 E1: the totalized declared fact must stay coherent with the
+                    # synthetic role (an int64 counter cannot require grad).
+                    captured_requires_grad=role
+                    in {
+                        StateSlotRole.WEIGHT,
+                        StateSlotRole.BIAS,
+                        StateSlotRole.NORM_SCALE,
+                        StateSlotRole.NORM_OFFSET,
+                    },
                     alias_group=None,
                 ),
             )
@@ -303,8 +365,8 @@ def test_n1a_initializes_every_role_deterministically_and_names_every_slot(
     slots[0] = replace(
         slots[0], state_binding=replace(slots[0].state_binding, alias_group="tied:test")
     )
-    trace.__dict__["_runnable_descriptor"] = replace(
-        descriptor, tensor_slots=tuple(slots) + (tied,)
+    trace.__dict__["_runnable_descriptor"] = _with_rebuilt_state_metadata_witnesses(
+        replace(descriptor, tensor_slots=tuple(slots) + (tied,))
     )
     global_rng_before = torch.random.get_rng_state().clone()
 
@@ -312,7 +374,7 @@ def test_n1a_initializes_every_role_deterministically_and_names_every_slot(
     second = prepare_runnable_state(trace, seed=1234)
 
     assert first.state_source is StateSource.RANDOM_INITIALIZATION
-    assert first.initializer_policy_version == "torchlens_role_init_v1"
+    assert first.initializer_policy_version == "torchlens_role_init_v2"
     assert first.seed == 1234
     assert set(first.random_filled_slot_ids) == set(first.slot_values)
     assert torch.equal(global_rng_before, torch.random.get_rng_state())

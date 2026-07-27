@@ -82,6 +82,20 @@ tl.save(torch_trace, runnable_path, level="runnable", include_weights=True)
 verified = tl.load(runnable_path).run(inputs=x, seed=42, on_divergence="raise")
 overview_svg = torch_trace.draw(collapse="auto", vis_fileformat="svg", vis_save_only=True)
 module_scores = torch_trace.module_collapse_order
+
+# Influence geometry follows the real captured DAG in both directions.
+op = torch_trace["relu_1_2"]
+rf_box = op.receptive_field.at((10, 10))
+unit = op.receptive_field.center_unit(batch_index=0)
+rf_gradient = op.receptive_field.gradient(unit)
+rf_check = op.receptive_field.check(unit)
+rf_image = op.receptive_field.show(unit, gradient=True)
+outgoing_box = op.projective_field.at((10, 10))
+layer_to_layer = op.receptive_field.at((10, 10), source=torch_trace.input_ops[0])
+rf_table = torch_trace.receptive_fields(level="layer")
+pf_table = torch_trace.projective_fields(level="layer")
+rf_results = tl.receptive_field.verify(torch_trace, units="center")
+# tl.validate(model, x, scope="receptive_field") runs the sampled RF scope.
 ```
 
 ## Conventions
@@ -100,6 +114,8 @@ module_scores = torch_trace.module_collapse_order
 - Type hints on all functions
 - Import order: stdlib -> third-party -> local (enforced by ruff)
 - Line length: 100
+- `tl.receptive_field` is lazy; entity-level `receptive_field` / `projective_field` siblings
+  pair with `Trace.receptive_fields()` / `Trace.projective_fields()` tables.
 
 ## Quality Gates
 Every task must pass before completion unless the task explicitly narrows verification:
@@ -155,13 +171,36 @@ pytest tests/ -m "not slow" -x --tb=short
 17a. `include_weights=True` is runnable-save-only and bundles the full capture-time `state_dict`
     (named parameters plus persistent buffers) in a separate `state_dict_v1` blob family. The
     sparse core remains tensor-value-free; load uses the ordinary strict binder and reports
-    `embedded_capture_state`, never a reconstructed model.
+    `embedded_capture_state`, never a reconstructed model. Used NON-persistent buffers are always
+    shipped in the REQUIRED `runnable_nonpersistent_buffer_v1` family (not gated on either include
+    flag) and are part of the declared state model -- a default runnable save of such a model
+    carries those tensor values (disclosed via the manifest and a one-time save warning).
 17b. `include_activations=True` is runnable-save-only and archives exactly the capture-time
-    `save=`-selected `out`/`transformed_out` payloads in a separate `selected_activation_v1`
-    family. `Trace.archived_activations` is inspection/attestation-only and never seeds execution.
+    `save=`-selected `out`/`transformed_out` payloads in a separate `selected_activation_v2`
+    family, whose eligibility metadata includes physical `InputAttestationFingerprint` records.
+    `Trace.archived_activations` is inspection/attestation-only and never seeds execution.
     Original-input, capture-equivalent real-state runs must byte-attest saved raw slots before
-    exposure; mismatch raises `numeric_attestation_failed` with rollback, while changed-input or
-    random/non-equivalent-state runs report `not_applicable`.
+    exposure; mismatch raises `numeric_attestation_failed` with rollback, while changed-input
+    (logical OR physical), random/non-equivalent-state, and nondeterministic-capture-context runs
+    report `not_applicable`. `attested` implies `verified` and unpoisoned, always.
+17c. Runnable descriptors are `sparse_recorded_taken_path_v2` (call recipe
+    `non_tensor_args_tensor_slots_context_and_obligations_v3`): every call carries a REQUIRED
+    explicit `CallExecutionContext` (autocast with affirmative disabled state + grad/inference
+    mode) and the descriptor carries one `AmbientExecutionContext`, both restored at replay or
+    refused typed. Absent context records only ever mean a legacy v1 artifact, which loads
+    analysis-only. r71 A closes the witness-strip class with a structural obligation/discharge
+    invariant: `WITNESS_FAMILY_REGISTRY` v2 (`witness_family_registry_v2`) covers EVERY
+    verdict-steering witness family -- the four direct control kinds plus the shape families plus
+    two claim-only families -- each row naming its independent replay-structural anchor. Every
+    obligation is stamped on its owning replay record (`control_obligations` /
+    `control_dependencies` on calls, `host_escape` / `inert_sink` on slots,
+    `captured_requires_grad` / `captured_grad_fn` / `host_escape_disposition` on state bindings,
+    the REQUIRED `input_boundary` record) and discharged by an exact witness XOR a typed
+    `WitnessCoverageGap`; `witness_completeness` is DERIVED from the gap ledger (the summary is a
+    redundant assertion, never authority), and the required-witness inventory is a redundant
+    mirror. No record deletion can improve a verdict; the ONE out-of-scope boundary is coherent
+    reauthoring (an honest capture of a weaker program), documented in the contract's threat-model
+    subsection.
 18. `Trace.run(inputs=..., seed=...)` is transactional for live and loaded sparse providers, runs
     internal sparse calls under `pause_logging()`, and returns `RunResult(output, trace, report)`.
     Stage 6 enforces input/state, per-call/output, and control-witness honesty before exposure;
@@ -172,8 +211,36 @@ pytest tests/ -m "not slow" -x --tb=short
     faithfulness is `verified|diverged|unverifiable`, state source is
     `live_model_state|embedded_capture_state|user_state_dict|random_initialization|not_applicable`,
     and divergence policy is `raise|return_diverged`. Error handling uses `RunnableErrorCode`, never
-    exception-message matching. The complete taxonomy and payload rules live in
+    exception-message matching. r37 adds the frozen codes `state_alias_topology_unsupported`
+    (save-time refusal of distinct-object overlapping/unprovable bound-state alias topology; tied
+    live-identity state stages as ONE alias-group allocation instead) and `context_field_invalid`
+    (parse-time refusal of persisted execution-context values outside their closed vocabulary).
+    The complete taxonomy and payload rules live in
     `docs/reference/runnable_tlspec_contract.md`.
+19a. r37 honesty boundaries: zero-tensor-leaf model outputs and namedtuple/mapping/registered
+    containers carrying extra per-instance state refuse at runnable save
+    (`missing_output_container_contract`; one per-kind capability table --
+    `CONTAINER_KIND_CAPABILITIES` -- governs capture proof, save refusal, and forged-flag-proof
+    load recompute; `tl.register_container` gains an explicit `state_complete=` declaration).
+    Host nondeterminism outside the two replayable global engines (RNG instances incl.
+    outside-held NumPy Generators via a chained `sys`/`threading.setprofile` classifier + a cheap
+    model-attribute state digest (no process-wide gc scan), bare
+    `_random.Random`, unseeded-construction `randbits` entropy, `SystemRandom`/`secrets`, OS
+    entropy, `uuid4`, `default_rng`, the full clock family incl. `datetime.now`/`localtime`/
+    `os.times`/`getrusage`) permanently ceilings replay at `unverifiable` + `not_applicable`;
+    monitor uncertainty (install/chain/restore/inventory failure) downgrades completeness to
+    INCOMPLETE; a realistic pre-existing-thread persistent-generator draw is witnessed by the
+    setprofile classifier / model digest, and only an externally-held generator drawn on a
+    pre-existing non-hooked thread is a documented residual (a benign background thread never
+    ceilings a capture). Loaded-sparse and live
+    providers settle through ONE finalizer
+    (identical verdict class): a live opaque-container output is `unverifiable`+poisoned, a
+    parse-refused descriptor degrades every payload family to analysis-only, and an inexecutable
+    divergent input raises `PathDivergenceError`; structseq trust keys on the resolution authority
+    (`spec.type_module`), never the spoofable `__module__`. Alias proofs run on absolute device-scoped byte
+    intervals (storage-pointer equality never decides); the recorded default device enters as a
+    scoped `with torch.device(...)`; CUDA state stages lazily and atomically at run preparation
+    with a no-allocation readiness capability gate.
 
 ## Known Gotchas
 - Intervention-spec loads tolerate foreign `custom` callable keys for safe analysis without importing

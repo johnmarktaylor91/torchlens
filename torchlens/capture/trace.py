@@ -587,6 +587,14 @@ def save_new_outs(
         projected_layer_nums,
         projected_grad_layer_nums,
     ).project(refreshed)
+    # r39 corr2_5: copy the FRESH refresh forward's output-losslessness proof onto the
+    # projected fork. A changed input may select a different return-container KIND than the
+    # original capture, so the live provider must gate its bare-tensor fast path on the fresh
+    # proof (``bare_tensor_root``), not the stale capture-time one. Missing/malformed fresh
+    # proof leaves the field absent -> the live reconstructor fails closed (not faithful).
+    self.__dict__["_runnable_output_losslessness"] = refreshed.__dict__.get(
+        "_runnable_output_losslessness"
+    )
     if self.save_arg_values:
         self._replay_arg_version_data_complete = True
 
@@ -830,57 +838,202 @@ def _record_runnable_input_literal_leaves(
     if not bool(getattr(trace, "intervention_ready", False)):
         return
 
-    from collections.abc import Mapping as _Mapping
-
-    import torch as _torch
-
-    from torchlens._io.runnable import _UnsupportedLiteralError, _encode_literal_key
+    from torchlens._input_walk import tagged_mapping_key_component, walk_input_boundary
+    from torchlens._io.runnable import EMPTY_CONTAINER_PATH_MARKER
 
     leaves: list[tuple[object, tuple[str | int, ...], Any]] = []
 
-    def _walk(position: object, value: Any, path: tuple[str | int, ...]) -> None:
-        """Descend one boundary value, recording every non-tensor leaf.
+    def _walk_site(position: object, value: Any) -> None:
+        """Record one boundary site's non-tensor leaves through the shared traversal.
 
-        A mapping child is descended under *every* key type. When a key is
-        representable in the frozen literal grammar (``bool``/``int``/``float``/
-        ``str``/``None`` or a safe scalar tuple) the encodable key becomes the
-        container-path component so a changed leaf beneath it can be witnessed
-        and diverged upon. When a key is *not* representable (enum, object,
-        non-finite float, ...) no leaf below it can be re-derived at run time, so
-        the whole child subtree is recorded as one OPAQUE marker leaf. That
-        downgrades witness coverage to UNVERIFIABLE rather than silently dropping
-        the subtree -- a silently skipped leaf under an exotic key is the
-        false-VERIFIED money bug this walker exists to prevent.
+        Container dispatch is single-sourced in ``torchlens._input_walk`` (r65
+        Cluster Y): this walker only declares WHAT it records. A mapping child under
+        a literal-grammar key is recorded at its tagged path (bool keys stay distinct
+        from equal-valued int keys in the leaf-path set); a child under a
+        NON-representable key (enum, object, bytes, ...) cannot be
+        re-derived at run time, so the whole subtree is recorded as one OPAQUE marker
+        leaf -- downgrading witness coverage to UNVERIFIABLE rather than silently
+        dropping it (a silently skipped leaf under an exotic key is the false-VERIFIED
+        money bug this walker exists to prevent). An EMPTY container adds no child
+        leaf, so it is witnessed by a synthetic marker leaf carrying its KIND at
+        ``(*path, EMPTY_CONTAINER_PATH_MARKER)`` so an added/removed/kind-changed
+        empty container (which can steer ``'flag' in d`` / ``if not lst`` control
+        flow) diverges instead of silently replaying the recorded path. r42 corr1_2:
+        dataclass containers descend by DECLARED FIELD with the same leaf vocabulary,
+        so a tensor-only dataclass input records ZERO opaque leaves (stays fully
+        witnessable -> VERIFIED) while a genuinely-opaque field still surfaces.
         """
 
-        if isinstance(value, _torch.Tensor):
-            return
-        if isinstance(value, tuple) and hasattr(value, "_fields"):
-            for name in value._fields:
-                _walk(position, getattr(value, name), (*path, str(name)))
-            return
-        if isinstance(value, _Mapping):
-            for key, child in value.items():
-                try:
-                    _encode_literal_key(key)
-                except _UnsupportedLiteralError:
-                    leaves.append((position, path, _OPAQUE_INPUT_LEAF))
-                    continue
-                _walk(position, child, (*path, key))
-            return
-        if isinstance(value, (list, tuple)):
-            for index, child in enumerate(value):
-                _walk(position, child, (*path, index))
-            return
-        leaves.append((position, path, value))
+        walk_input_boundary(
+            value,
+            (),
+            key_component=tagged_mapping_key_component,
+            on_leaf=lambda leaf, p: leaves.append((position, p, leaf)),
+            on_empty_container=lambda kind, p: leaves.append(
+                (position, (*p, EMPTY_CONTAINER_PATH_MARKER), kind)
+            ),
+            on_opaque_key_subtree=lambda _child, p: leaves.append(
+                (position, p, _OPAQUE_INPUT_LEAF)
+            ),
+        )
 
     for index, arg in enumerate(input_args):
-        _walk(("arg", index), arg, ())
+        _walk_site(("arg", index), arg)
     for key, value in input_kwargs.items():
-        _walk(("kwarg", key), value, ())
+        _walk_site(("kwarg", key), value)
 
     if leaves:
         trace.__dict__["_runnable_input_nontensor_leaves"] = tuple(leaves)
+
+
+def _record_runnable_input_structure(
+    trace: "Trace",
+    input_args: list[Any],
+    input_kwargs: dict[Any, Any],
+) -> None:
+    """Stash ONE per-site input-boundary structure snapshot for runnable honesty (r67 C2).
+
+    One traversal per normalized model-input site (the snapshot spine in
+    ``torchlens._input_walk``) records the complete site set/arity and every nested node
+    -- kind, exact ``(module, qualname)`` type, declared child schema, ordered
+    type-strict-encoded mapping keys, registered aux, and the instance-state proof. The
+    runnable producer persists the records as REQUIRED structure facts (positive proof:
+    a site without a snapshot, or a snapshot carrying a refusal, refuses the runnable
+    save); the executor re-derives the runtime snapshot with the SAME function and
+    diverges on any node mismatch. Analysis captures are unaffected.
+    """
+
+    if not bool(getattr(trace, "intervention_ready", False)):
+        return
+
+    from torchlens._input_walk import snapshot_input_boundary
+
+    snapshots: list[dict[str, Any]] = []
+    for index, arg in enumerate(input_args):
+        record = snapshot_input_boundary(arg)
+        record["position"] = ["arg", index]
+        snapshots.append(record)
+    for key, value in input_kwargs.items():
+        record = snapshot_input_boundary(value)
+        record["position"] = ["kwarg", str(key)]
+        snapshots.append(record)
+    trace.__dict__["_runnable_input_structure"] = tuple(snapshots)
+
+
+def _record_runnable_input_tensor_sites(
+    trace: "Trace",
+    input_args: list[Any],
+    input_kwargs: dict[Any, Any],
+) -> None:
+    """Index model-input TENSOR leaves by object identity for metadata-read witnessing.
+
+    A Python-level metadata predicate read on a model input (``x.is_contiguous()`` /
+    ``x.stride()`` / ``x.requires_grad``) can steer control flow that TorchLens never
+    observes as an op: the input contract checks only shape+dtype, so a same-shape
+    runtime input differing in layout or grad flag would silently replay the wrong
+    recorded path. The completeness-witness scoped patch observes such reads during
+    the runnable forward; this map lets it attribute a read RECEIVER back to its
+    model-boundary site (position, container path) so the producer can witness the
+    read fact and the executor can diverge on a mismatched runtime input. Keys are
+    ``id(tensor)`` -- stable for the forward's duration because ``input_args`` /
+    ``input_kwargs`` hold strong references until the capture completes. It runs only
+    for intervention-ready captures and stores no tensors.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    input_args:
+        Normalized positional model inputs.
+    input_kwargs:
+        Normalized keyword model inputs.
+    """
+
+    if not bool(getattr(trace, "intervention_ready", False)):
+        return
+
+    from torchlens._input_walk import raw_mapping_key_component, walk_input_boundary
+
+    sites: dict[int, tuple[object, tuple[str | int, ...]]] = {}
+    # (tensor, site) leaves so the completeness witness can additionally index model-input
+    # leaves by STORAGE identity (r31): a metadata read routed through a ``.data`` / ``.detach()``
+    # alias shares the leaf's storage but is a distinct object the id map above misses.
+    tensor_leaves: list[tuple[Any, tuple[object, tuple[str | int, ...]]]] = []
+
+    def _walk_site(position: object, value: Any) -> None:
+        """Index one boundary site's tensor leaves by identity through the shared traversal.
+
+        Container dispatch is single-sourced in ``torchlens._input_walk`` (r65
+        Cluster Y), so this walker descends EXACTLY the container set the literal
+        walker descends -- including dataclasses (the r64 Finding-1 false-VERIFIED: a
+        missing dataclass branch here recorded no metadata witness for
+        ``box.x.is_contiguous()`` on a dataclass input field, so a same-value
+        non-contiguous twin replayed the captured branch as VERIFIED). Mapping
+        children are indexed under EVERY key with the RAW key component (the declared
+        dual vocabulary, residual R6): a fact site whose path carries a
+        non-representable key simply fails literal encoding at witness time and is
+        dropped, and the literal-leaf walker independently records such a subtree as
+        an OPAQUE leaf that downgrades the run to UNVERIFIABLE -- so a dropped
+        metadata fact under an exotic key can never yield a false VERIFIED.
+        """
+
+        def _index_tensor(tensor: Any, path: tuple[Any, ...]) -> None:
+            """Record one tensor leaf's identity-keyed site."""
+
+            site = (position, path)
+            sites[id(tensor)] = site
+            tensor_leaves.append((tensor, site))
+
+        walk_input_boundary(
+            value, (), key_component=raw_mapping_key_component, on_tensor=_index_tensor
+        )
+
+    for index, arg in enumerate(input_args):
+        _walk_site(("arg", index), arg)
+    for key, value in input_kwargs.items():
+        _walk_site(("kwarg", key), value)
+
+    if sites:
+        trace.__dict__["_runnable_input_tensor_sites"] = sites
+        from ..backends.torch.completeness_witness import record_runnable_input_storage_sites
+
+        record_runnable_input_storage_sites(trace, tensor_leaves)
+
+
+def _record_runnable_module_training_modes(trace: "Trace", model: Any) -> None:
+    """Stash the capture-time per-module ``training`` mode for runnable honesty.
+
+    ``self.training`` is module state that is NOT part of the ``state_dict`` and is not a
+    model input, yet it steers mode-sensitive ops (BatchNorm running-stats vs batch-stats,
+    Dropout on/off). The runnable VERIFIED oracle is a *fresh instance in the captured mode*
+    on the given inputs, so the captured mode is DECLARED state the replay reproduces.
+    Recording it (per submodule -- submodules can differ) lets the producer declare the mode
+    as a witness fact; a mode-sensitive op replayed without a recorded mode fact is downgraded
+    to UNVERIFIABLE (fail closed). It runs only for intervention-ready captures, touches no
+    tensors, and stores an in-memory map consumed by the producer at save time.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    model:
+        The prepared source model whose per-module ``training`` flags are recorded.
+    """
+
+    if not bool(getattr(trace, "intervention_ready", False)):
+        return
+    named_modules = getattr(model, "named_modules", None)
+    if not callable(named_modules):
+        return
+    modes: dict[str, bool] = {}
+    try:
+        for name, module in named_modules():
+            address = name or "self"
+            modes[address] = bool(getattr(module, "training", False))
+    except (AttributeError, TypeError):
+        return
+    if modes:
+        trace.__dict__["_runnable_module_training_modes"] = modes
 
 
 def _extract_and_mark_outputs(
@@ -1170,9 +1323,30 @@ def run_and_log_inputs_through_model(
             _vprint(self, f"Inputs: {len(input_tensors)} tensor(s) on {device_str}")
 
         if bool(getattr(self, "intervention_ready", False)):
-            from .._runnable_state import snapshot_capture_state
+            from .._runnable_state import (
+                snapshot_capture_state,
+                snapshot_capture_state_signatures,
+                snapshot_persistent_buffer_universe,
+                snapshot_state_alias_topology,
+            )
 
+            # r37 corr2-4: the live bound-state alias topology (object identity,
+            # storage overlap) must be captured BEFORE ``snapshot_capture_state``'s
+            # clones erase it; the runnable producer refuses unsupported topologies
+            # at save and reproduces identity groups from this record.
+            self._runnable_state_alias_topology = snapshot_state_alias_topology(model)
+            # r63 C1: per-slot metadata signatures are stamped from the LIVE tensors
+            # PRE-clone -- the clone itself compacts ``storage_offset`` and
+            # materializes conj/neg, so a post-clone signature is blind to two of
+            # the four transport-lossy physical dims. Consumed by the escape-gated
+            # ``producer_state_metadata`` preflight.
+            self._runnable_capture_state_signatures = snapshot_capture_state_signatures(model)
             self._runnable_capture_state = snapshot_capture_state(model)
+            # r77 F2: the persistent-buffer NAME universe survives non-tensor state
+            # (``get_extra_state()`` / packed entries), so a dead-model
+            # include_weights=False save declares the SAME slot universe as the
+            # live lane instead of silently dropping never-forward-used buffers.
+            self._runnable_persistent_buffer_universe = snapshot_persistent_buffer_universe(model)
 
         # Turn on the logging toggle and run the forward pass.
         # Inside this context, every decorated torch function will log its
@@ -1185,6 +1359,17 @@ def run_and_log_inputs_through_model(
                 backend.log_source_tensor(self, t, "input", input_tensor_addresses[i])
             _register_model_input_container_snapshots(self, input_args, input_kwargs)
             _record_runnable_input_literal_leaves(self, input_args, input_kwargs)
+            _record_runnable_input_tensor_sites(self, input_args, input_kwargs)
+            _record_runnable_input_structure(self, input_args, input_kwargs)
+            _record_runnable_module_training_modes(self, model)
+            if bool(getattr(self, "intervention_ready", False)):
+                # r35 decision E: capture the ambient backend execution context the
+                # forward is about to run under (defaults, matmul precision,
+                # determinism, TF32/cuDNN flags, SDP toggles) so the sparse runnable
+                # descriptor can restore it explicitly at replay.
+                from ..utils._torch_compat import snapshot_ambient_execution_context
+
+                self._runnable_capture_ambient = snapshot_ambient_execution_context()
 
             if self.capture_mode == "predicate":
                 outputs = _run_predicate_forward_with_root_frame(
@@ -1205,10 +1390,44 @@ def run_and_log_inputs_through_model(
                             # ran. TorchLens itself never draws host RNG here (its only
                             # host draw seeds before this point), so any advance is the
                             # user's. Reads are side-effect free -> capture unchanged.
+                            # r37 hon1_2: the four-layer channel monitor additionally
+                            # observes NON-global channels (RNG instances, SystemRandom,
+                            # os entropy, clocks, the default_rng factory) over the
+                            # frozen vocabulary. Any touch is permanently unreplayable
+                            # (no identifiable seed); monitor uncertainty downgrades
+                            # completeness, never reads as no-consumption.
+                            from ..utils.rng import host_nondeterminism_monitor
+
                             _host_rng_before = snapshot_host_rng()
-                            outputs = cast(Callable[..., Any], model)(*input_args, **input_kwargs)
-                            self._runnable_host_rng_consumed = host_rng_advanced(
+                            with host_nondeterminism_monitor(model) as _rng_channels:
+                                outputs = cast(Callable[..., Any], model)(
+                                    *input_args, **input_kwargs
+                                )
+                            _global_advanced = host_rng_advanced(
                                 _host_rng_before, snapshot_host_rng()
+                            )
+                            # r65 CLUSTER Z stamping split: a torch RNG
+                            # ``replayable_read`` (the ``initial_seed`` family --
+                            # a host scalar fully determined by the capture seed)
+                            # sets CONSUMED without poisoning the capture seed, so
+                            # a run at the capture seed stays verified while any
+                            # other/absent seed ceilings; ceiling ``channels``
+                            # alone decide UNREPLAYABLE.
+                            self._runnable_host_rng_consumed = (
+                                _global_advanced
+                                or bool(_rng_channels.channels)
+                                or bool(_rng_channels.replayable_reads)
+                            )
+                            self._runnable_host_rng_unreplayable = bool(_rng_channels.channels)
+                            self._runnable_host_rng_channels = tuple(sorted(_rng_channels.channels))
+                            self._runnable_host_rng_replayable_reads = tuple(
+                                sorted(_rng_channels.replayable_reads)
+                            )
+                            self._runnable_rng_monitor_uncertain = bool(_rng_channels.uncertain)
+                            # r39 CLASS A: name the offending threads / coverage failure so
+                            # the INCOMPLETE ceiling's readiness diagnostic is actionable.
+                            self._runnable_rng_monitor_uncertain_detail = tuple(
+                                _rng_channels.uncertain_detail
                             )
 
         backend.finalize_forward_session(self)

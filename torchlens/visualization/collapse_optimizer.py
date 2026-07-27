@@ -44,7 +44,7 @@ from .collapse_plan import (
     RepeatFold,
     SegmentDescriptor,
     count,
-    plan_from_v1,
+    collapse_plan_for_trace,
 )
 from .collapse_plan import EllipsisNode
 
@@ -498,7 +498,7 @@ def collapse_schedule(
     cached = cached_by_context.get(context)
     if cached is not None:
         return cached
-    full_plan = plan_from_v1(trace, None, None, context)
+    full_plan = collapse_plan_for_trace(trace, None, None, context)
     full_count = count(full_plan)
     max_result = select_collapse_plan(trace, context, mode="max")
     if max_result.declined:
@@ -537,7 +537,7 @@ def collapse_schedule(
     for address in ordered_addresses:
         selected.add(address)
         collapse_fn = _collapse_fn_from_selected(frozenset(selected))
-        plan = plan_from_v1(trace, collapse_fn, {}, context)
+        plan = collapse_plan_for_trace(trace, collapse_fn, {}, context)
         visible_count = count(plan)
         if visible_count <= previous_count:
             raw_steps.append((frozenset(selected), plan, visible_count))
@@ -896,7 +896,7 @@ def _repair_max_salience_floor(
         box_costs.extend(replacement.box_costs)
     if not changed:
         return point, CollapsePlan(nodes=point.nodes, context=context)
-    rendered_plan = plan_from_v1(
+    rendered_plan = collapse_plan_for_trace(
         trace,
         _collapse_fn_from_selected(frozenset(selected)),
         _fold_mapping(folds),
@@ -1502,7 +1502,7 @@ def _instantiate_best_point(
     if prefer_instantiated_nodes:
         plan = CollapsePlan(nodes=instantiated_point.nodes, context=context)
     else:
-        plan = plan_from_v1(trace, collapse_fn, repeat_folds, context)
+        plan = collapse_plan_for_trace(trace, collapse_fn, repeat_folds, context)
     return instantiated_point, plan
 
 
@@ -1707,7 +1707,7 @@ def _frontier_can_reach_band(
             if point.k < 1 or point.k > band_high:
                 continue
             instantiated = _instantiate_module("self", point.k, state, memo)
-            plan = plan_from_v1(
+            plan = collapse_plan_for_trace(
                 trace,
                 _collapse_fn_from_selected(instantiated.selected),
                 _fold_mapping(instantiated.folds),
@@ -1848,11 +1848,13 @@ def _floor_fallback_selection(
         is the full-op renderer plan.
     """
 
-    full_plan = plan_from_v1(trace, None, None, context)
+    full_plan = collapse_plan_for_trace(trace, None, None, context)
     full_count = count(full_plan)
     selected = frozenset(_top_level_fallback_addresses(trace))
     if selected:
-        candidate_plan = plan_from_v1(trace, _collapse_fn_from_selected(selected), None, context)
+        candidate_plan = collapse_plan_for_trace(
+            trace, _collapse_fn_from_selected(selected), None, context
+        )
         if 0 < count(candidate_plan) < full_count:
             return selected, candidate_plan
     assert full_count > 0, "collapse floor fallback produced no visible nodes"
@@ -3216,7 +3218,7 @@ def _optimizer_total_units(trace: "Trace", context: RenderContext) -> int:
 
     if context.vis_mode != "rolled":
         return max(len(trace.ops), 1)
-    return max(count(plan_from_v1(trace, None, None, context)), 1)
+    return max(count(collapse_plan_for_trace(trace, None, None, context)), 1)
 
 
 def _child_address_map(trace: "Trace") -> dict[str, tuple[str, ...]]:
@@ -3262,15 +3264,11 @@ def _rendered_own_unit_map(trace: "Trace", context: RenderContext) -> dict[str, 
 
     if context.vis_mode != "rolled":
         return {}
-    from .rendering import rendered_node_universe_from_v1
+    from .node_universe import build_node_universe
+    from .source_graph import build_source_graph
 
     units: dict[str, list[str]] = {"self": []}
-    emissions = rendered_node_universe_from_v1(
-        trace,
-        collapse_fn=None,
-        repeat_folds=None,
-        context=context,
-    )
+    emissions = build_node_universe(build_source_graph(trace, context), None, None).emissions
     for emission in emissions:
         if emission.kind in {"hidden_run_member", "run_fold_ellipsis", "module_box"}:
             continue

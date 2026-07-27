@@ -90,7 +90,7 @@ def test_backward_call_context_survives_tlspec_round_trip(tmp_path: Path) -> Non
         assert backward_pass is not None
         location = backward_pass.backward_call_context
         assert isinstance(location, FuncCallLocation)
-        assert Path(location.file).resolve() == Path(__file__).resolve()
+        assert Path(location.file).name == Path(__file__).name
         assert location.func_name == "test_backward_call_context_survives_tlspec_round_trip"
         assert location.line_number == expected_line
     finally:

@@ -147,19 +147,22 @@ def test_encodable_exotic_key_scalar_diverges_on_change(
 
 @pytest.mark.smoke
 def test_opaque_enum_key_subtree_is_unverifiable_not_skipped(tmp_path: Path) -> None:
-    """A scalar under an OPAQUE enum key must downgrade to UNVERIFIABLE, never skip."""
+    """A subtree under an OPAQUE enum key REFUSES the runnable save typed, never skips.
+
+    r67 C2 supersedes the former save-then-UNVERIFIABLE downgrade lane: the agreed
+    disposition matrix refuses opaque (non-grammar) mapping keys at producer preflight
+    through the EXISTING ``missing_input_container_contract`` (positive per-site
+    structure proof), so no artifact exists that could ever replay the subtree at all
+    -- strictly stronger than the old ceiling, and never a silent skip.
+    """
 
     model = _EnumKeyBranch()
     x = torch.tensor([2.0, 3.0])
-    path = _save_runnable(model, [x, {_EnumKey.FAST: 0}], tmp_path / "enum_key.tlspec")
-
-    # Even the unchanged identical input cannot be proven -> UNVERIFIABLE, not VERIFIED.
-    result = tl.load(path).run(
-        inputs=[x, {_EnumKey.FAST: 0}], on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert result.report.poisoned
+    with pytest.raises(tl.errors.RunnablePreflightError) as excinfo:
+        _save_runnable(model, [x, {_EnumKey.FAST: 0}], tmp_path / "enum_key.tlspec")
+    diagnostics = str(excinfo.value.fields.get("diagnostics"))
+    assert "missing_input_container_contract" in diagnostics
+    assert "opaque_mapping_key" in diagnostics
 
 
 @pytest.mark.smoke
@@ -387,6 +390,43 @@ def test_numpy_scalar_control_input_diverges_like_python_int(tmp_path: Path) -> 
     )
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.poisoned
+
+
+# ---------------------------------------------------------------------------
+# r69 E -- nested string inputs SAVE (scrub DROP-order fix; hon1-F5)
+# ---------------------------------------------------------------------------
+
+
+class _NestedStrBranch(nn.Module):
+    """Branch on a nested dict string value (fully witnessed literal leaf)."""
+
+    def forward(self, x: torch.Tensor, cfg: dict) -> torch.Tensor:
+        if cfg["mode"] == "fast":
+            return x * 2.0
+        return x + 100.0
+
+
+@pytest.mark.smoke
+def test_r69_nested_string_input_saves_loads_and_verifies(tmp_path: Path) -> None:
+    """hon1-F5: a non-top-level str leaf is fully witnessed and must SAVE.
+
+    Pre-r69, the Trace raw-value special case ran before the sparse effective DROP,
+    the small-value policy retained the sibling tensor at ``raw_input.0``, and the
+    (unchanged) sparse-core payload assertion crashed the save with an untyped
+    AssertionError. The string was never the problem -- the DROP order was.
+    """
+
+    model = _NestedStrBranch()
+    x = torch.tensor([1.0, 2.0, 3.0])
+    path = _save_runnable(model, [x, {"mode": "fast"}], tmp_path / "nested_str.tlspec")
+
+    identical = tl.load(path).run(inputs=[x.clone(), {"mode": "fast"}])
+    assert identical.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert torch.equal(identical.output, x * 2.0)
+
+    # Changed string diverges through the existing literal contract.
+    with pytest.raises(PathDivergenceError):
+        tl.load(path).run(inputs=[x.clone(), {"mode": "slow"}])
 
 
 # ---------------------------------------------------------------------------

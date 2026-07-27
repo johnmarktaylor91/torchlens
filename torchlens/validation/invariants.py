@@ -140,6 +140,29 @@ def check_metadata_invariants(trace: "Trace") -> bool:
     return True
 
 
+def _check_receptive_field_metadata_invariants(trace: "Trace") -> None:
+    """Check autograd-free receptive-field descriptor and box invariants.
+
+    Parameters
+    ----------
+    trace:
+        Postprocessed trace whose influence geometry should be checked.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If receptive-field metadata violates a geometric contract.
+    """
+
+    from ..receptive_field._errors import ReceptiveFieldError
+    from ..receptive_field._validation import check_geometric_metadata_invariants
+
+    try:
+        check_geometric_metadata_invariants(trace)
+    except ReceptiveFieldError as exc:
+        raise MetadataInvariantError("receptive_field_metadata", str(exc)) from exc
+
+
 def _check_torch_metadata_invariants(trace: "Trace") -> bool:
     """Run the unchanged torch metadata invariant sequence.
 
@@ -5493,6 +5516,11 @@ METADATA_INVARIANT_CONTRACTS: tuple[MetadataInvariantContract, ...] = (
     MetadataInvariantContract(
         "backend_neutral_accessor_refs",
         _check_backend_neutral_accessor_refs,
+        "all",
+    ),
+    MetadataInvariantContract(
+        "receptive_field_metadata",
+        _check_receptive_field_metadata_invariants,
         "all",
     ),
     MetadataInvariantContract(

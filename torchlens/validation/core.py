@@ -585,6 +585,31 @@ def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
     except (AttributeError, TypeError):
         pass
 
+    # Buffer-WRITE accessor dispatches: the ``aten.detach``/``aten.alias`` a registered
+    # buffer's ``.data`` property getter emits during the ``self.b.data.copy_(x)`` write idiom.
+    # ``.data`` is a C-level tensor property (not a wrapped torch function), so the detach has
+    # NO python-wrapper owner and is counted above as an ``unowned_dispatch`` in
+    # ``unowned_gap_dispatch_count``. The write itself (``copy_``) IS captured; only this
+    # accessor view is legitimately uncaptured -- a THIRD not-in-captured-count category
+    # alongside orphan-pruned dead computation. The witness flags each such event
+    # (``state_view_accessor``: unowned + non-mutating + pure-view + registered buffer only),
+    # so counting them here is apples-to-apples with the census: it is a strict SUBSET of the
+    # exact ``unowned_dispatch`` entries already added to the dispatch census, so crediting it
+    # in the backstop exactly offsets its own contribution. A genuine untraced dispatch (a
+    # value-producing or mutating op, or an unowned dispatch on a non-buffer tensor) is never
+    # flagged and stays unaccounted -- the tripwire remains armed.
+    buffer_write_dispatch_count = sum(
+        1
+        for entry in diagnostics
+        if entry.get("reason") == "unowned_dispatch"
+        and entry.get("state_view_accessor") is True
+        and entry.get("in_replacement_hook") is not True
+    )
+    try:
+        trace._validation_buffer_write_dispatch_op_count = buffer_write_dispatch_count
+    except (AttributeError, TypeError):
+        pass
+
     return dispatch_census_count, len(captured_census)
 
 
@@ -609,14 +634,15 @@ def _dispatch_op_count_matches_capture(self: "Trace") -> ValidationCheckResult:
     captured_count = int(
         getattr(self, "_validation_captured_dispatchable_op_count", getattr(self, "num_ops", 0))
     )
-    # Dispatchable ops captured then intentionally orphan-pruned (dead computation)
-    # are accounted for on the captured side: the honest invariant is
-    # ``dispatched == captured + orphan-pruned``. A dispatched op that neither
-    # reached the final graph NOR was recorded as an intentionally-pruned orphan
-    # (a genuine untraced/leaked op) still leaves ``dispatched > captured + pruned``
-    # and trips the backstop.
+    # Dispatchable ops captured then intentionally orphan-pruned (dead computation) AND
+    # ``.data``-accessor buffer-write view dispatches are accounted for on the captured side:
+    # the honest invariant is ``dispatched == captured + orphan-pruned + buffer-writes``. A
+    # dispatched op that reached NEITHER the final graph, NOR the intentionally-pruned orphan
+    # set, NOR the buffer-write accessor set (a genuine untraced/leaked op) still leaves
+    # ``dispatched > captured + pruned + buffer-writes`` and trips the backstop.
     pruned_count = int(getattr(self, "_validation_pruned_dispatchable_op_count", 0))
-    if dispatch_count == captured_count + pruned_count:
+    buffer_write_count = int(getattr(self, "_validation_buffer_write_dispatch_op_count", 0))
+    if dispatch_count == captured_count + pruned_count + buffer_write_count:
         return ValidationCheckResult.validated("dispatch_op_count_matched")
     return ValidationCheckResult.failed_result("dispatch_op_count_mismatch")
 
@@ -762,10 +788,11 @@ def validate_saved_outs(
             getattr(self, "_validation_captured_dispatchable_op_count", getattr(self, "num_ops", 0))
         )
         pruned_count = int(getattr(self, "_validation_pruned_dispatchable_op_count", 0))
+        buffer_write_count = int(getattr(self, "_validation_buffer_write_dispatch_op_count", 0))
         message = (
             "Validation dispatcher op count does not match captured operation count: "
             f"{dispatch_count} dispatched vs {captured_count} captured "
-            f"+ {pruned_count} orphan-pruned."
+            f"+ {pruned_count} orphan-pruned + {buffer_write_count} buffer-write."
         )
         print(message)
         record_validation_failure(
@@ -777,6 +804,7 @@ def validate_saved_outs(
                     "dispatch_op_count": dispatch_count,
                     "captured_op_count": captured_count,
                     "orphan_pruned_op_count": pruned_count,
+                    "buffer_write_op_count": buffer_write_count,
                 },
             ),
         )

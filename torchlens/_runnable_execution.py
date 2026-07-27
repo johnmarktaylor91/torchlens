@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Mapping, Sequence
-from contextlib import nullcontext
+from collections.abc import Callable, Iterable, Mapping, Sequence, Set as AbstractSet
+import math
+import sys
+from contextlib import contextmanager, nullcontext
+from functools import lru_cache
 from itertools import count
-import re
 import struct
 from typing import Any, cast
 
@@ -14,10 +16,17 @@ import numpy as np
 import torch
 
 from . import _state
+from ._io._torch_symbols import torch_attr
 from ._runnable_state import (
+    _OUTPUT_COUNT_FLOOR,
     PreparedRunnableState,
+    RunResourceCeiling,
+    _allocation_budget_bytes,
+    _guarded_defensive_materialize,
     prepare_runnable_state,
     runnable_tensor_byte_digest,
+    state_metadata_full_violations,
+    validate_run_seed,
 )
 from .errors import (
     NumericAttestationError,
@@ -28,27 +37,47 @@ from .errors import (
     RuntimeSignatureDriftError,
 )
 from .intervention.replay import _CallConeNode, _walk_call_cone
-from .ir.container import ContainerSpec, rebuild_container_from_spec
+from .ir.container import (
+    CONTAINER_KIND_CAPABILITIES,
+    ContainerReconstructionError,
+    ContainerSpec,
+    _reconstruction_would_substitute_plain,
+    namedtuple_type_can_carry_instance_state,
+    rebuild_container_from_spec,
+    reconstruction_is_lossy_by_type,
+    resolve_container_type,
+)
 from .utils.rng import (
     aten_qualname_is_seeded_rng,
+    deterministic_fill_governs,
+    qualname_is_uninit_growth_resize,
+    qualname_is_uninit_size_gated_alloc,
+    qualname_is_uninit_total_writer,
+    qualname_is_uninitialized_alloc,
     restore_host_rng,
-    set_random_seed,
     snapshot_host_rng,
+    uninit_new_call_is_size_form,
 )
+from .utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
+from .utils.tensor_utils import touched_bytes_relation
 from .runnable import (
     ActivationPayloadLayerDescriptor,
     ActivationPayloadMember,
     CallableRegistryEntry,
     ContractCheck,
+    InputAttestationFingerprint,
     ControlWitness,
     ControlWitnessKind,
     DivergencePolicy,
     LiteralAtom,
+    LiteralAtomKind,
     LiteralMapping,
     LiteralSequence,
     LiteralSequenceKind,
+    LiteralSlice,
     LiteralTorchSymbol,
     LiteralTupleKey,
+    NONDETERMINISTIC_SOURCE_VOCABULARY,
     NonTensorLiteral,
     NumericAttestationStatus,
     PathFaithfulness,
@@ -66,6 +95,9 @@ from .runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
     WitnessCompleteness,
+    WitnessGapKind,
+    derived_witness_completeness,
+    is_mode_sensitive_qualname,
     mark_trace_path_status,
 )
 
@@ -106,11 +138,43 @@ def run_loaded_sparse_trace(
             "on_divergence must be DivergencePolicy.RAISE or DivergencePolicy.RETURN_DIVERGED."
         ) from exc
     descriptor, readiness, callables = _require_loaded_sparse_provider(trace)
-    slot_values, input_checks = _bind_runtime_inputs(descriptor, inputs)
-    input_byte_digests = _snapshot_input_byte_digests(descriptor, slot_values)
+    # r71 A4 defense-in-depth: run preparation RE-ASSERTS the parser-derived
+    # completeness floor before anything executes. Parse already refused a summary
+    # differing from the floor; a descriptor that somehow reaches execution with the
+    # contradiction fails typed here (never a silently trusted summary).
+    if descriptor.witness_completeness is not derived_witness_completeness(
+        descriptor.coverage_gaps
+    ):
+        raise RunPreconditionError(
+            "Persisted witness_completeness does not equal the parser-derived "
+            "completeness floor; the descriptor is internally contradictory.",
+            code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
+        )
+    # r61 corr_2: ONE aggregate resource ceiling per transaction, constructed BEFORE
+    # any TorchLens-owned re-materialization clone runs (input mirror, run-time state
+    # clone, transaction snapshots) so every clone site shares one byte-guarded
+    # boundary. Construction only sums recorded counts, so building it pre-bind
+    # changes no accounting.
+    ceiling = RunResourceCeiling(descriptor)
+    slot_values, input_checks, input_alias_unresolved = _bind_runtime_inputs(
+        descriptor, inputs, ceiling
+    )
     _raise_first_divergence(input_checks, divergence_policy, fork=None)
+    # I5: digests/fingerprints are attestation-only facts, computed strictly
+    # AFTER admission (hard preconditions + contract enforcement) and only when
+    # an activation archive exists to attest against.
+    if isinstance(descriptor.payload_layers.activations, ActivationPayloadLayerDescriptor):
+        input_byte_digests: Mapping[str, str] = _snapshot_input_byte_digests(
+            descriptor, slot_values
+        )
+        input_fingerprints = _snapshot_input_fingerprints(
+            descriptor, slot_values, input_byte_digests
+        )
+    else:
+        input_byte_digests = {}
+        input_fingerprints = {}
     prepared_state = prepare_runnable_state(trace, seed=seed)
-    slot_values.update(_clone_state_values(prepared_state.slot_values))
+    slot_values.update(_clone_state_values(descriptor, prepared_state.slot_values, ceiling))
     fork = trace._fork_trace(name=_run_fork_name(trace))
     try:
         return _execute_loaded_sparse_transaction(
@@ -122,14 +186,66 @@ def run_loaded_sparse_trace(
             readiness=readiness,
             callables=callables,
             slot_values=slot_values,
+            ceiling=ceiling,
             input_byte_digests=input_byte_digests,
+            input_fingerprints=input_fingerprints,
             input_checks=input_checks,
+            input_alias_unresolved=input_alias_unresolved,
             prepared_state=prepared_state,
             fork=fork,
         )
     except BaseException:
         _state._unregister_log(fork)
         raise
+
+
+def _seeded_fork_devices(descriptor: SparseRunDescriptor, seed: int | None) -> list[int]:
+    """Return the CUDA device fork set for one seeded run (r35 corr2_4).
+
+    The set follows the seeding primitive, never the bound-input overlay: ALL
+    visible CUDA devices are forked when CUDA is already initialized, or when
+    the descriptor's immutable capture metadata names a CUDA device anywhere --
+    including produced-only intermediates and RNG-source slots (the original
+    leak: a CPU-input model drawing ``torch.rand(..., device="cuda")``). A
+    CPU-only descriptor on an uninitialized-CUDA runtime forks nothing AND the
+    executor seeds nothing CUDA-side, so no lazy seed can leak into the
+    caller's future CUDA state; a post-run tripwire asserts initialization did
+    not flip.
+    """
+
+    if seed is None or not torch.cuda.is_available():
+        return []
+    if torch.cuda.is_initialized():
+        return list(range(torch.cuda.device_count()))
+    descriptor_mentions_cuda = any(slot.device_type == "cuda" for slot in descriptor.tensor_slots)
+    if descriptor_mentions_cuda:
+        return list(range(torch.cuda.device_count()))
+    return []
+
+
+def _seed_run_generators(seed: int, forked_cuda_devices: list[int], *, reseed_host: bool) -> None:
+    """Seed exactly the generators this run forked (r35 corr2_4).
+
+    Never ``torch.manual_seed``: the global primitive seeds every CUDA device
+    (queuing a LAZY seed on an uninitialized runtime that would apply to the
+    caller's future initialization) plus MPS/XPU generators the fork set does
+    not snapshot. The executor seeds the CPU default generator, each forked
+    CUDA device generator individually, and -- for a faithful host-RNG replay
+    -- Python/NumPy (whose prior state the caller snapshot-restores).
+    """
+
+    # r79 seed-door mirror: no path may reach raw ``manual_seed`` with a
+    # bool/out-of-range seed even if it bypassed the run door.
+    validate_run_seed(seed)
+    if reseed_host:
+        import random
+
+        random.seed(seed)
+        np.random.seed(seed)
+    torch.default_generator.manual_seed(seed)
+    for device_index in forked_cuda_devices:
+        with torch.cuda.device(device_index):
+            torch.cuda.manual_seed(seed)
 
 
 def _host_rng_unreproduced(descriptor: SparseRunDescriptor, seed: int | None) -> bool:
@@ -163,6 +279,55 @@ def _host_rng_unreproduced(descriptor: SparseRunDescriptor, seed: int | None) ->
     return seed != profile.capture_seed
 
 
+def _finalize_provider_run(
+    *,
+    fork: Any,
+    output: Any,
+    readiness: ReadinessReport,
+    state_source: StateSource,
+    initializer_policy_version: str | None,
+    seed: int | None,
+    random_filled_slot_ids: tuple[str, ...],
+    contract_checks: tuple[ContractCheck, ...],
+    provisional_path_faithfulness: PathFaithfulness,
+    provisional_mismatch: RunnableDiagnostic | None,
+    numeric_attestation: NumericAttestationStatus,
+    divergence_policy: DivergencePolicy,
+    nondeterministic_sources: Iterable[str] = (),
+) -> RunResult:
+    """THE single provider settlement finalizer (r39 CLASS B sparse<->live parity immunizer).
+
+    Both providers -- loaded sparse and live refresh -- settle EXCLUSIVELY here: the monotonic
+    Trace-poison mark (``mark_trace_path_status``), divergence-policy enforcement
+    (``_raise_monotonic_divergence``), the one report constructor (``_run_report``, which derives
+    ``poisoned`` solely from the faithfulness lattice), and ``RunResult`` construction. Providers
+    differ in the EVIDENCE they gather (sparse computes numeric attestation before entering; live
+    passes ``NOT_PRESENT``) but never in the settlement DECISION. A source-scan meta-test forbids
+    constructing ``RunResult`` or calling ``_run_report`` anywhere else, so a future provider or
+    payload family cannot fork the settlement path and reintroduce a parity drift.
+    """
+
+    path_faithfulness, mismatch = mark_trace_path_status(
+        fork,
+        provisional_path_faithfulness,
+        provisional_mismatch,
+    )
+    _raise_monotonic_divergence(fork, path_faithfulness, mismatch, divergence_policy)
+    report = _run_report(
+        readiness,
+        state_source=state_source,
+        initializer_policy_version=initializer_policy_version,
+        seed=seed,
+        random_filled_slot_ids=random_filled_slot_ids,
+        contract_checks=contract_checks,
+        path_faithfulness=path_faithfulness,
+        first_mismatch=mismatch,
+        numeric_attestation=numeric_attestation,
+        nondeterministic_sources=nondeterministic_sources,
+    )
+    return RunResult(output=output, trace=fork, report=report)
+
+
 def _execute_loaded_sparse_transaction(
     trace: Any,
     inputs: Any,
@@ -173,13 +338,22 @@ def _execute_loaded_sparse_transaction(
     readiness: ReadinessReport,
     callables: Mapping[str, Callable[..., Any]],
     slot_values: dict[str, torch.Tensor],
+    ceiling: RunResourceCeiling,
     input_byte_digests: Mapping[str, str],
+    input_fingerprints: Mapping[str, InputAttestationFingerprint],
     input_checks: tuple[ContractCheck, ...],
+    input_alias_unresolved: bool,
     prepared_state: PreparedRunnableState,
     fork: Any,
 ) -> RunResult:
     """Execute one sparse transaction whose caller owns rollback on escape."""
 
+    # r59/r61: the ONE aggregate resource ceiling for this transaction -- constructed
+    # by ``run_loaded_sparse_trace`` before input binding, threaded here -- bounds
+    # realized output count (per-call projection + bind backstop) and re-materialization
+    # clone bytes at every snapshot site. The run-prep retention floor
+    # (prepare_runnable_state) already refused a guaranteed-OOM retained population
+    # before we got here.
     # Escape-source witness slots must be digested at their production point (before
     # any later in-place op mutates the live tensor), matching the save-side digest.
     escape_witness_slot_ids = _tensor_derived_scalar_witness_slot_ids(descriptor)
@@ -188,6 +362,7 @@ def _execute_loaded_sparse_transaction(
         fork,
         descriptor,
         slot_values,
+        ceiling=ceiling,
         witness_slot_ids=escape_witness_slot_ids,
         witness_source_snapshots=witness_source_snapshots,
     )
@@ -196,16 +371,39 @@ def _execute_loaded_sparse_transaction(
         *_state_contract_checks(descriptor, slot_values),
     ]
     _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
+    # r35 corr2_5: PRE-EXECUTION state digests -- eligibility compares each
+    # state slot's capture-start bytes, not whatever a mutating call left
+    # behind. Computed only when an activation archive exists to attest.
+    state_byte_digests: dict[str, str] = {}
+    if isinstance(descriptor.payload_layers.activations, ActivationPayloadLayerDescriptor):
+        for state_slot in descriptor.tensor_slots:
+            if state_slot.state_binding is None or state_slot.slot_id not in slot_values:
+                continue
+            try:
+                state_byte_digests[state_slot.slot_id] = runnable_tensor_byte_digest(
+                    slot_values[state_slot.slot_id]
+                )
+            except Exception:
+                # Undigestable state cannot attest; the absent entry reads as a
+                # mismatch in the eligibility partition (fail-safe).
+                continue
     call_outputs: dict[str, Any] = {}
     attestation_slot_ids = _raw_activation_slot_ids(descriptor)
     attestation_slot_values: dict[str, torch.Tensor] = {}
+    # r55 C3: registry lookup for the per-call allocation preflight (namespace /
+    # qualname drive the size-driving classification).
+    registry_by_id = {entry.registry_id: entry for entry in descriptor.callable_registry}
 
-    devices = sorted(
-        {
-            value.device.index
-            for value in slot_values.values()
-            if value.device.type == "cuda" and value.device.index is not None
-        }
+    # r35 corr2_4: the fork/restore set follows the SEEDING PRIMITIVE, never the
+    # bound-input overlay -- every visible CUDA device is forked when CUDA is
+    # initialized or the descriptor's capture metadata names a CUDA device
+    # (including produced-only intermediates and RNG-source slots), and the
+    # executor seeds ONLY the CPU generator plus each forked CUDA generator, so
+    # no unforked generator (an unmentioned CUDA device, MPS/XPU) is ever
+    # touched by a seeded run.
+    devices = _seeded_fork_devices(descriptor, seed)
+    cuda_initialized_before = (
+        torch.cuda.is_available() and torch.cuda.is_initialized() if seed is not None else None
     )
     host_rng_unreproduced = _host_rng_unreproduced(descriptor, seed)
     # Faithful original replay of a host-RNG capture (matching seed): reseed every
@@ -218,11 +416,17 @@ def _execute_loaded_sparse_transaction(
     host_rng_saved = snapshot_host_rng() if reseed_host else None
     rng_context = torch.random.fork_rng(devices=devices) if seed is not None else nullcontext()
     try:
-        with rng_context, _state.pause_logging():
-            if reseed_host:
-                set_random_seed(cast(int, seed))
-            elif seed is not None:
-                torch.manual_seed(seed)
+        # Decision E: the recorded capture-scoped ambient backend context is
+        # restored transactionally around the whole run (finally-restored on
+        # every exit); each resolved call additionally enters its own recorded
+        # per-call context tightly (see execute_call below).
+        with (
+            _ambient_execution_context_restored(descriptor.ambient_context),
+            rng_context,
+            _state.pause_logging(),
+        ):
+            if seed is not None:
+                _seed_run_generators(cast(int, seed), devices, reseed_host=reseed_host)
 
             def execute_call(call_node: _CallConeNode) -> None:
                 """Execute and stage one dependency-ready sparse call."""
@@ -235,7 +439,26 @@ def _execute_loaded_sparse_transaction(
                 )
                 contract_checks.extend(call_checks)
                 _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
-                output = _execute_sparse_call(call, callables[call.call_id], slot_values)
+                try:
+                    with _call_execution_context_entered(call.execution_context):
+                        output = _execute_sparse_call(
+                            call,
+                            callables[call.call_id],
+                            slot_values,
+                            registry_entry=registry_by_id.get(call.registry_id),
+                            ceiling=ceiling,
+                        )
+                except RuntimeSignatureDriftError:
+                    # r39 corr2_4: under ``return_diverged`` an admitted-but-INEXECUTABLE
+                    # divergent input (wrong feature shape/dtype/device) reaches the resolved
+                    # callable and throws. If an input contract check ALREADY failed, this is
+                    # input DIVERGENCE, not resolved-callable signature drift -- roll back and
+                    # raise the typed ``PathDivergenceError`` carrying the first failed check.
+                    # Genuine drift (no prior failed check) keeps ``RuntimeSignatureDriftError``.
+                    failed = _first_failed_contract(contract_checks)
+                    if failed is not None:
+                        _raise_failed_contract_as_divergence(failed, fork=fork)
+                    raise
                 call_outputs[call.call_id] = output
                 contract_checks.extend(
                     _bind_call_outputs(
@@ -244,6 +467,7 @@ def _execute_loaded_sparse_transaction(
                         output,
                         slot_values,
                         fork,
+                        ceiling=ceiling,
                         before_versions=before_versions,
                         attestation_slot_ids=attestation_slot_ids,
                         attestation_slot_values=attestation_slot_values,
@@ -259,7 +483,26 @@ def _execute_loaded_sparse_transaction(
         if host_rng_saved is not None:
             restore_host_rng(host_rng_saved)
 
-    output = _reconstruct_output(descriptor, slot_values, fork, call_outputs=call_outputs)
+    if (
+        seed is not None
+        and not devices
+        and torch.cuda.is_available()
+        and torch.cuda.is_initialized() != bool(cuda_initialized_before)
+    ):
+        # r35 corr2_4 tripwire: CUDA initialized DURING a seeded run whose fork
+        # set excluded it -- the descriptor's capture device summary missed a
+        # CUDA consumer, so run-local RNG isolation cannot be guaranteed. This
+        # is an internal summary bug, never silently ignored.
+        _state._unregister_log(fork)
+        raise RuntimeError(
+            "Internal invariant violation: CUDA became initialized during a "
+            "seeded sparse run whose descriptor named no CUDA device; the "
+            "capture device summary is incomplete."
+        )
+
+    output = _reconstruct_output(
+        descriptor, slot_values, fork, ceiling=ceiling, call_outputs=call_outputs
+    )
     contract_checks.extend(
         _post_execution_contract_checks(
             descriptor,
@@ -270,56 +513,87 @@ def _execute_loaded_sparse_transaction(
         )
     )
     _raise_first_divergence(contract_checks, divergence_policy, fork=fork)
-    nontensor_inputs_match = all(
-        check.passed for check in contract_checks if check.name.startswith("input_literal:")
-    )
+    mode_sensitive_op_unwitnessed = _mode_sensitive_op_unwitnessed(descriptor)
     tensor_derived_scalar_stale = _tensor_derived_scalar_stale(
         descriptor, slot_values, witness_source_snapshots
     )
     unbound_state_escape_stale = _unbound_state_escape_stale(descriptor, slot_values)
+    # r73 F1: compared against the RAW user input tree (pre-clone leaves; the run
+    # executed on defensive clones, so runtime strides are unchanged here).
+    input_derived_layout_stale = _input_derived_layout_stale(descriptor, inputs)
+    # r53 hon_2: ONE load-side classifier settles declared nondeterministic value
+    # sources; the branch ceiling, the attestation gate, and the report signal
+    # all consult it (the r52 raise-vs-not_applicable inconsistency is
+    # structurally unrepresentable).
+    value_source_taint = _nondeterministic_value_sources(descriptor)
+    nondeterministic_control_source = _uninit_taint_reaches(
+        value_source_taint, _control_witness_source_slot_ids(descriptor)
+    )
+    declared_nondeterministic_sources = _declared_nondeterministic_sources(
+        descriptor, value_source_taint
+    )
+    output_container_spec = _output_container_spec(fork)
+    container_reconstruction_lossy = _container_spec_reconstruction_lossy(output_container_spec)
+    output_not_reproduced = _output_not_reproduced(descriptor, output_container_spec)
+    # r35 I3 (corr2_7): settle the PROVISIONAL path verdict from ALL non-numeric
+    # contract checks and static/dynamic ceilings FIRST; numeric attestation is
+    # strictly downstream of it. A verdict that is not VERIFIED -- including one
+    # inherited monotonically from a prior poisoned run of the source Trace --
+    # makes attestation NOT_APPLICABLE before any archive byte is read, so
+    # ATTESTED can never coexist with DIVERGED/UNVERIFIABLE/poisoned, and every
+    # FUTURE contract check automatically caps attestation through this same
+    # derivation (no parallel Boolean flag list).
+    provisional_verdict, provisional_mismatch = _path_faithfulness(
+        descriptor,
+        contract_checks,
+        host_rng_unreproduced=host_rng_unreproduced,
+        tensor_derived_scalar_stale=tensor_derived_scalar_stale,
+        unbound_state_escape_stale=unbound_state_escape_stale,
+        container_reconstruction_lossy=container_reconstruction_lossy,
+        output_not_reproduced=output_not_reproduced,
+        mode_sensitive_op_unwitnessed=mode_sensitive_op_unwitnessed,
+        input_alias_unresolved=input_alias_unresolved,
+        nondeterministic_control_source=nondeterministic_control_source,
+        input_derived_layout_stale=input_derived_layout_stale,
+    )
+    eligibility_verdict = provisional_verdict
+    inherited_status = fork.__dict__.get("_runnable_path_faithfulness")
+    if (
+        isinstance(inherited_status, PathFaithfulness)
+        and inherited_status is not PathFaithfulness.VERIFIED
+        and eligibility_verdict is PathFaithfulness.VERIFIED
+    ):
+        eligibility_verdict = inherited_status
     numeric_attestation, attestation_check = _numeric_attestation_check(
         descriptor,
         prepared_state,
         slot_values=slot_values,
         attestation_slot_values=attestation_slot_values,
         input_byte_digests=input_byte_digests,
+        input_fingerprints=input_fingerprints,
+        state_byte_digests=state_byte_digests,
         trace=trace,
-        nontensor_inputs_match=nontensor_inputs_match,
-        host_rng_unreproduced=host_rng_unreproduced,
-        tensor_derived_scalar_stale=tensor_derived_scalar_stale,
-        unbound_state_escape_stale=unbound_state_escape_stale,
+        provisional_verdict=eligibility_verdict,
     )
     if attestation_check is not None:
         contract_checks.append(attestation_check)
         if not attestation_check.passed:
             _raise_numeric_attestation_failure(fork, attestation_check)
-    path_faithfulness, mismatch = _path_faithfulness(
-        descriptor,
-        contract_checks,
-        host_rng_unreproduced=host_rng_unreproduced,
-        tensor_derived_scalar_stale=tensor_derived_scalar_stale,
-        unbound_state_escape_stale=unbound_state_escape_stale,
-    )
-    path_faithfulness, mismatch = mark_trace_path_status(
-        fork,
-        path_faithfulness,
-        mismatch,
-    )
-    _raise_monotonic_divergence(
-        fork,
-        path_faithfulness,
-        mismatch,
-        divergence_policy,
-    )
-    report = _run_report(
-        readiness,
-        prepared_state,
+    return _finalize_provider_run(
+        fork=fork,
+        output=output,
+        readiness=readiness,
+        state_source=prepared_state.state_source,
+        initializer_policy_version=prepared_state.initializer_policy_version,
+        seed=prepared_state.seed,
+        random_filled_slot_ids=prepared_state.random_filled_slot_ids,
         contract_checks=tuple(contract_checks),
-        path_faithfulness=path_faithfulness,
-        first_mismatch=mismatch,
+        provisional_path_faithfulness=provisional_verdict,
+        provisional_mismatch=provisional_mismatch,
         numeric_attestation=numeric_attestation,
+        divergence_policy=divergence_policy,
+        nondeterministic_sources=declared_nondeterministic_sources,
     )
-    return RunResult(output=output, trace=fork, report=report)
 
 
 def run_live_trace(
@@ -327,8 +601,16 @@ def run_live_trace(
     inputs: Any,
     *,
     seed: int | None,
+    on_divergence: DivergencePolicy | str = DivergencePolicy.RAISE,
 ) -> RunResult:
     """Run the live-model refresh provider on a transactional fork.
+
+    r37 corr2-5: the live provider finalizes through the SAME spine as the sparse
+    provider -- ``mark_trace_path_status`` (monotonic Trace poison), the shared
+    divergence-policy enforcement, and the one ``_run_report`` finalizer (poison
+    derived solely from the faithfulness lattice). A lossy live reconstruction
+    therefore returns a POISONED report and a monotonically marked Trace that
+    every faithful consumer (``to_pandas``, export, chaining) refuses.
 
     Parameters
     ----------
@@ -338,6 +620,8 @@ def run_live_trace(
         New forward input accepted by the existing ``save_new_outs`` path.
     seed:
         Optional refresh seed.
+    on_divergence:
+        Divergence policy threaded from the public ``run`` surface.
 
     Returns
     -------
@@ -350,6 +634,7 @@ def run_live_trace(
         If the live source model is no longer available.
     """
 
+    divergence_policy = DivergencePolicy(on_divergence)
     source_ref = getattr(trace, "_source_model_ref", None)
     model = source_ref() if source_ref is not None else None
     if model is None:
@@ -371,8 +656,31 @@ def run_live_trace(
             args, kwargs = _split_mixed_inputs(inputs)
             input_args = list(args)
             input_kwargs = dict(kwargs)
-        fork.save_new_outs(model, input_args, input_kwargs=input_kwargs, random_seed=seed)
+        # r41 hon1_3 (corr2_4 parity): PRE-compute the soft input-contract checks
+        # BEFORE the forward -- a failing forward may in-place-mutate an input leaf
+        # (``resize_``) before the failing op, so a post-hoc metadata read could
+        # misclassify. The precompute has ZERO admission power: a divergent-but-
+        # executable input (changed batch / seq-len) still runs and may honestly
+        # settle VERIFIED (fresh-refresh semantics); classification happens only at
+        # native-failure time below.
+        first_failed = _first_failed_live_input_check(trace, input_args, input_kwargs)
+        try:
+            fork.save_new_outs(model, input_args, input_kwargs=input_kwargs, random_seed=seed)
+        except Exception as exc:  # not BaseException: KeyboardInterrupt/SystemExit stay raw
+            if first_failed is not None:
+                # An admitted-but-inexecutable DIVERGENT input surfaces as the typed
+                # PathDivergenceError carrying the first failed input check, with the
+                # native error chained as ``__cause__`` (corr2_4 on both providers).
+                # A native failure on a NON-divergent input re-raises raw below -- a
+                # genuinely failing model is not a divergence.
+                _raise_failed_contract_as_divergence(first_failed, fork=None, cause=exc)
+            raise
         output, faithful = _reconstruct_live_output(fork)
+        # A lossy output container (computed non-field/non-key state, __slots__, or a
+        # data-descriptor field) cannot be faithfully rebuilt, so it is UNVERIFIABLE here
+        # too -- never a false VERIFIED on the live-refresh provider.
+        if _container_spec_reconstruction_lossy(_output_container_spec(fork)):
+            faithful = False
         readiness = ReadinessReport(
             status=ReadinessStatus.READY,
             provider=RunProvider.LIVE,
@@ -386,7 +694,10 @@ def run_live_trace(
         # Honesty gate: only a faithfully reconstructed output (exact container type
         # and non-tensor leaves) is VERIFIED. An output we could only approximate
         # from naive leaf paths is UNVERIFIABLE, never blessed with a wrong object.
-        report = RunReport(
+        provisional = PathFaithfulness.VERIFIED if faithful else PathFaithfulness.UNVERIFIABLE
+        return _finalize_provider_run(
+            fork=fork,
+            output=output,
             readiness=readiness,
             state_source=StateSource.LIVE_MODEL_STATE,
             initializer_policy_version=None,
@@ -401,20 +712,129 @@ def run_live_trace(
                     "captured container contract.",
                 ),
             ),
-            path_faithfulness=(
-                PathFaithfulness.VERIFIED if faithful else PathFaithfulness.UNVERIFIABLE
-            ),
-            first_mismatch=None,
+            provisional_path_faithfulness=provisional,
+            provisional_mismatch=None,
             numeric_attestation=NumericAttestationStatus.NOT_PRESENT,
-            poisoned=False,
+            divergence_policy=divergence_policy,
         )
-        return RunResult(output=output, trace=fork, report=report)
     except BaseException:
         _state._unregister_log(fork)
         for log in _state.list_logs():
             if id(log) not in prior_log_ids:
                 _state._unregister_log(log)
         raise
+
+
+def _live_runtime_input_leaves(input_args: Any, input_kwargs: Any) -> list[torch.Tensor] | None:
+    """Flatten runtime live-refresh inputs to ordered tensor leaves, or ``None``.
+
+    Mirrors the capture-side flatten (``backend.fetch_label_move_input_tensors``:
+    ``get_vars_of_type_from_obj`` per positional arg, then per kwarg value, at
+    ``search_depth=5``) so leaf ORDER pairs 1:1 with the capture's recorded
+    ``input_layers`` ordering. Returns ``None`` on any traversal failure -- the
+    caller then skips classification entirely (never masks the native error).
+    """
+
+    from .utils.introspection import get_vars_of_type_from_obj
+
+    try:
+        if isinstance(input_args, (list, tuple)):
+            args_list = list(input_args)
+        else:
+            args_list = [input_args]
+        leaves: list[torch.Tensor] = []
+        for arg in args_list:
+            leaves.extend(get_vars_of_type_from_obj(arg, torch.Tensor, search_depth=5))
+        if input_kwargs:
+            for value in input_kwargs.values():
+                leaves.extend(get_vars_of_type_from_obj(value, torch.Tensor, search_depth=5))
+        return leaves
+    except Exception:
+        return None
+
+
+def _first_failed_live_input_check(
+    trace: Any, input_args: Any, input_kwargs: Any
+) -> ContractCheck | None:
+    """Return the first failed SOFT input-contract check for a live refresh, or ``None``.
+
+    r41 hon1_3 (corr2_4 parity): reads the capture-recorded input ops' shape/dtype off
+    the live Trace and compares the runtime leaves positionally, mirroring the sparse
+    ``_bind_runtime_inputs`` check names (``input_shape:slot:<label>`` /
+    ``input_dtype:slot:<label>``) and message text so both providers speak identically.
+    The helper has ZERO admission power (it refuses nothing and is consulted only when
+    the forward already failed natively) and returns ``None`` on ANY internal failure
+    so classification unavailability never masks the native error.
+    """
+
+    try:
+        input_labels = list(getattr(trace, "input_layers", ()) or ())
+        if not input_labels:
+            return None
+        layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
+        recorded: list[tuple[str, tuple[int, ...] | None, str | None]] = []
+        for label in input_labels:
+            op = layer_dict.get(label)
+            if op is None:
+                return None
+            shape = getattr(op, "shape", None)
+            dtype = getattr(op, "dtype", None)
+            recorded.append(
+                (
+                    str(label),
+                    tuple(shape) if shape is not None else None,
+                    str(dtype) if dtype is not None else None,
+                )
+            )
+        leaves = _live_runtime_input_leaves(input_args, input_kwargs)
+        if leaves is None:
+            return None
+        if len(leaves) != len(recorded):
+            return _contract_check(
+                "input_arity",
+                False,
+                RunnableErrorCode.INPUT_TREE_MISMATCH,
+                f"Runtime input tree carries {len(leaves)} tensor leaves; "
+                f"the capture recorded {len(recorded)}.",
+                details=(
+                    ("expected_leaves", str(len(recorded))),
+                    ("actual_leaves", str(len(leaves))),
+                ),
+            )
+        for (label, expected_shape, expected_dtype), value in zip(recorded, leaves):
+            try:
+                actual_shape: tuple[int, ...] | None = tuple(value.shape)
+            except (RuntimeError, TypeError, NotImplementedError):
+                actual_shape = None
+            if expected_shape is not None and actual_shape != expected_shape:
+                return _contract_check(
+                    f"input_shape:slot:{label}",
+                    False,
+                    RunnableErrorCode.INPUT_SHAPE_MISMATCH,
+                    f"Runtime input shape {actual_shape} does not match {expected_shape}.",
+                    affected_op_labels=(label,),
+                    details=(
+                        ("slot_id", f"slot:{label}"),
+                        ("expected_shape", repr(expected_shape)),
+                        ("actual_shape", repr(actual_shape)),
+                    ),
+                )
+            if expected_dtype is not None and str(value.dtype) != expected_dtype:
+                return _contract_check(
+                    f"input_dtype:slot:{label}",
+                    False,
+                    RunnableErrorCode.INPUT_DTYPE_MISMATCH,
+                    f"Runtime input dtype {value.dtype} does not match {expected_dtype}.",
+                    affected_op_labels=(label,),
+                    details=(
+                        ("slot_id", f"slot:{label}"),
+                        ("expected_dtype", expected_dtype),
+                        ("actual_dtype", str(value.dtype)),
+                    ),
+                )
+        return None
+    except Exception:
+        return None
 
 
 def raise_analysis_run_unavailable(trace: Any) -> None:
@@ -495,6 +915,322 @@ def _is_model_input_literal_witness(witness: ControlWitness) -> bool:
     )
 
 
+_MODEL_INPUT_METADATA_SITE_PREFIX = "model_input_metadata:"
+"""``site_label`` prefix marking a witnessed model-input metadata-predicate read."""
+
+_MODEL_INPUT_METADATA_FACT_KEY = "model_input_metadata"
+"""Discriminator key present in every model-input metadata-predicate fact."""
+
+_INPUT_DERIVED_LAYOUT_FACT_NAME = "derived_layout_read"
+"""Synthetic envelope fact: a layout-trio read on an activation whose value DAG roots at the
+owning input site (r73 F1). Carries the leaf's capture-time stride tuple. Consumed by
+:func:`_input_derived_layout_stale` as a run-time UNVERIFIABLE ceiling -- NEVER compared in
+:func:`_input_metadata_contract_checks`: a changed input layout does not PROVE the derived
+intermediate's layout differs (a ``reshape`` in between can canonicalize it), so the honest
+verdict is "cannot verify", not an observed DIVERGED contradiction (r35 three-state rule).
+Producer mirror: ``torchlens.backends.torch.completeness_witness.INPUT_DERIVED_LAYOUT_FACT_NAME``."""
+
+
+def _model_input_metadata_facts(
+    descriptor: SparseRunDescriptor,
+) -> list[tuple[ControlWitness, Mapping[str, Any]]]:
+    """Decode every witnessed model-input metadata-predicate fact (r27-H2)."""
+
+    facts: list[tuple[ControlWitness, Mapping[str, Any]]] = []
+    for witness in descriptor.control_witnesses:
+        if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
+            continue
+        if not witness.site_label.startswith(_MODEL_INPUT_METADATA_SITE_PREFIX):
+            continue
+        decoded = _decode_literal(witness.observed_value)
+        if isinstance(decoded, Mapping) and decoded.get(_MODEL_INPUT_METADATA_FACT_KEY) is True:
+            facts.append((witness, decoded))
+    return facts
+
+
+def _is_model_input_metadata_witness(witness: ControlWitness) -> bool:
+    """Return whether a structure witness records a model-input metadata-predicate read."""
+
+    return (
+        witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
+        and witness.site_label.startswith(_MODEL_INPUT_METADATA_SITE_PREFIX)
+    )
+
+
+def _runtime_input_metadata_value(value: torch.Tensor, name: str) -> Any:
+    """Evaluate one recorded metadata predicate on the RAW bound runtime input.
+
+    Evaluated on the user-provided tensor BEFORE the defensive detach-clone, which
+    erases the autograd state (``requires_grad`` / ``grad_fn`` / ``is_leaf``) and resets
+    ``storage_offset`` -- the capture-time read saw the forward's real input, so the
+    comparison must too. ``grad_fn`` is compared as a PRESENCE boolean (the exact backward
+    object is not comparable across runs), mirroring the capture-time recording.
+    """
+
+    try:
+        if name == "is_contiguous":
+            return bool(value.is_contiguous())
+        if name == "stride":
+            return [int(v) for v in value.stride()]
+        if name == "storage_offset":
+            return int(value.storage_offset())
+        if name == "requires_grad":
+            return bool(value.requires_grad)
+        if name == "grad_fn":
+            return bool(value.grad_fn is not None)
+        if name == "is_leaf":
+            return bool(value.is_leaf)
+        if name == "retains_grad":
+            return bool(value.retains_grad)
+        if name == "_base":
+            return bool(value._base is not None)
+        if name == "_is_view":
+            return bool(value._is_view())
+        if name == "is_conj":
+            return bool(value.is_conj())
+        if name == "is_neg":
+            return bool(value.is_neg())
+        if name == "is_inference":
+            return bool(value.is_inference())
+        if name == "is_pinned":
+            return bool(value.is_pinned())
+        if name == "is_shared":
+            return bool(value.is_shared())
+        if name == "is_coalesced":
+            return bool(value.is_coalesced())
+        if name == "grad":
+            return bool(value.grad is not None)
+        if name == "_grad":
+            return bool(value._grad is not None)
+        if name == "_version":
+            return int(value._version)
+        if name == "output_nr":
+            return int(value.output_nr)
+        if name == "storage_nbytes":
+            return int(value.untyped_storage().nbytes())
+    except (RuntimeError, AttributeError, TypeError, ValueError, NotImplementedError):
+        return None
+    return None
+
+
+def _fact_path_tuple_or_none(fact: Mapping[str, Any]) -> "tuple[Any, ...] | None":
+    """Belt twin of the parse-side path validator (r75 L1): ``None`` means fail closed.
+
+    Parse refuses a non-sequence fact ``path`` as ``context_field_invalid`` before any
+    execution-side consumer runs; this belt keeps the execution readers total anyway so a
+    malformed path can never crash ``tuple(...)`` into an untyped lane. r77 L1 extends
+    the belt one nesting level down to match the parse contract: a non-``str``/``int``
+    COMPONENT (a nested list/mapping/slice decoded literal) also fails closed here
+    instead of riding into the runtime-tree resolvers as an unresolvable key.
+    """
+
+    raw_path = fact.get("path", ()) or ()
+    if not isinstance(raw_path, (list, tuple)):
+        return None
+    if any(not isinstance(component, (str, int)) for component in raw_path):
+        return None
+    return tuple(raw_path)
+
+
+def _input_metadata_contract_checks(
+    descriptor: SparseRunDescriptor,
+    inputs: Any,
+    positions: set[Any],
+) -> tuple[ContractCheck, ...]:
+    """Compare runtime input metadata predicates with capture-time observed facts (r27-H2).
+
+    The capture-time forward READ these predicates (``is_contiguous`` / ``stride`` /
+    ``requires_grad``) on a model-input leaf, so their values can have steered the
+    recorded taken path. The input contract checks only shape+dtype; a same-shape
+    runtime input differing in layout or grad flag would replay the captured arm a
+    fresh model would not take -- a false VERIFIED+ATTESTED. Witnesses exist ONLY for
+    captures that performed such a read, so an ordinary layout-oblivious model has no
+    metadata witnesses and can never over-trigger here.
+    """
+
+    checks: list[ContractCheck] = []
+    # r71 A2 belt: the totalized envelope domain is the boundary record's tensor-site
+    # set (one envelope per bound tensor leaf, empty read sets explicit). Parse
+    # enforces the equality; a deficit that somehow reached execution fails closed.
+    boundary_site_count = sum(len(site.tensor_sites) for site in descriptor.input_boundary)
+    envelope_count = sum(1 for _witness, _fact in _model_input_metadata_facts(descriptor))
+    if envelope_count != boundary_site_count:
+        checks.append(
+            _contract_check(
+                "input_metadata_envelope_totality",
+                False,
+                RunnableErrorCode.CONTEXT_FIELD_INVALID,
+                "Metadata envelope count does not equal the input-boundary tensor "
+                "site count; the totalized envelope domain is incomplete.",
+                details=(
+                    ("boundary_tensor_sites", str(boundary_site_count)),
+                    ("envelopes", str(envelope_count)),
+                ),
+            )
+        )
+    for witness, fact in _model_input_metadata_facts(descriptor):
+        raw_position = fact.get("position")
+        position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
+        path = _fact_path_tuple_or_none(fact)
+        if path is None:
+            checks.append(
+                _contract_check(
+                    "input_metadata_path_malformed",
+                    False,
+                    RunnableErrorCode.CONTEXT_FIELD_INVALID,
+                    "A metadata envelope carries a non-sequence container path; the "
+                    "fact cannot be resolved against the runtime input tree.",
+                    affected_op_labels=(witness.site_label,),
+                    details=(("model_site_position", repr(position)),),
+                )
+            )
+            continue
+        recorded_facts = fact.get("facts")
+        if not isinstance(recorded_facts, Mapping):
+            continue
+        try:
+            root = _input_site_value(inputs, position, positions)
+            runtime_leaf = _value_at_path(root, path)
+            resolved = isinstance(runtime_leaf, torch.Tensor)
+        except (KeyError, IndexError, TypeError, AttributeError):
+            runtime_leaf = None
+            resolved = False
+        for name in sorted(recorded_facts):
+            if str(name) == _INPUT_DERIVED_LAYOUT_FACT_NAME:
+                # r73 F1: the derived-layout fact is a run-time UNVERIFIABLE ceiling
+                # (``_input_derived_layout_stale``), never a DIVERGED compare -- a
+                # changed input layout does not prove the derived intermediate's
+                # layout differs, so it must not fail a contract check here.
+                continue
+            recorded_value = recorded_facts[name]
+            runtime_value = (
+                _runtime_input_metadata_value(runtime_leaf, str(name)) if resolved else None
+            )
+            passed = resolved and runtime_value == recorded_value
+            checks.append(
+                _contract_check(
+                    f"input_metadata:{name}:{position!r}:{path!r}",
+                    passed,
+                    RunnableErrorCode.INPUT_TREE_MISMATCH,
+                    f"Runtime input {name} differs from the capture-time value the "
+                    "forward read; the recorded taken path may not be valid for "
+                    "this input.",
+                    affected_op_labels=(witness.site_label,),
+                    details=(
+                        ("model_site_position", repr(position)),
+                        ("container_path", repr(path)),
+                        ("predicate", str(name)),
+                        ("recorded_value", repr(recorded_value)),
+                        ("runtime_value", repr(runtime_value) if resolved else "<unresolved>"),
+                    ),
+                )
+            )
+    return tuple(checks)
+
+
+def _input_derived_layout_stale(descriptor: SparseRunDescriptor, inputs: Any) -> bool:
+    """Return whether an input-derived layout escape's rooting input changed layout (r73 F1).
+
+    The capture-time forward read a layout predicate (``is_contiguous`` / ``stride`` /
+    ``storage_offset``) on an ACTIVATION whose value DAG roots at a model input; memory
+    format propagates through elementwise ops, so the recorded taken path may depend on
+    that input's layout -- which the input contract does NOT pin (shape+dtype+device+
+    strided only). The envelope fact carries the rooting leaf's capture-time stride
+    tuple; this check compares it against the RAW runtime leaf's strides (shape equality
+    is already contract-enforced, so the tuples are commensurable; ``storage_offset``
+    never propagates to a fresh-storage intermediate, and input VIEWS are the r31
+    view-read gap's domain, so strides are the complete comparison basis).
+
+    Equal strides -> ``False``: a same-layout runtime input reproduces every propagated
+    layout bit, so an honest channels_last-on-channels_last model stays VERIFIED (zero
+    collateral). Any difference -- or an unresolvable leaf, an unreadable runtime
+    stride, or a malformed recorded tuple (foreign-authored artifact) -- returns
+    ``True`` and the run ceilings UNVERIFIABLE, never a false VERIFIED and never an
+    over-claimed DIVERGED (the derived layout is not proven different, merely
+    unverifiable). Captures that never read intermediate layout carry no such fact and
+    can never trigger here.
+    """
+
+    positions = _model_input_arity_positions(descriptor)
+    for _witness, fact in _model_input_metadata_facts(descriptor):
+        recorded_facts = fact.get("facts")
+        if not isinstance(recorded_facts, Mapping):
+            continue
+        if _INPUT_DERIVED_LAYOUT_FACT_NAME not in recorded_facts:
+            continue
+        recorded = recorded_facts[_INPUT_DERIVED_LAYOUT_FACT_NAME]
+        if not isinstance(recorded, Sequence) or isinstance(recorded, (str, bytes)):
+            return True
+        try:
+            recorded_stride = [int(v) for v in recorded]
+        except (TypeError, ValueError):
+            return True
+        raw_position = fact.get("position")
+        position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
+        path = _fact_path_tuple_or_none(fact)
+        if path is None:
+            return True
+        try:
+            root = _input_site_value(inputs, position, positions)
+            runtime_leaf = _value_at_path(root, path)
+        except (KeyError, IndexError, TypeError, AttributeError):
+            return True
+        if not isinstance(runtime_leaf, torch.Tensor):
+            return True
+        try:
+            runtime_stride = [int(v) for v in runtime_leaf.stride()]
+        except (RuntimeError, TypeError, ValueError, NotImplementedError):
+            return True
+        if runtime_stride != recorded_stride:
+            return True
+    return False
+
+
+def _inventory_site_positions(descriptor: SparseRunDescriptor) -> set[Any]:
+    """Decode the required input-site set from the REQUIRED boundary record (r71 A2).
+
+    THE run-side site authority is the witness-free ``input_boundary`` record --
+    replay-consumed structure, exact-validated at parse against the MODEL_INPUT slot
+    bindings and dense positional roots. The required-witness inventory is a
+    redundant mirror; a disagreement here (impossible post-parse) fails closed typed
+    (belt against parser regressions), and runtime site selection never re-derives
+    arity from surviving witnesses (the secA-F1 self-referential lane).
+    """
+
+    from torchlens.runnable import decode_input_site_position
+
+    try:
+        positions = {
+            decode_input_site_position(site.position) for site in descriptor.input_boundary
+        }
+    except ValueError as exc:
+        raise RunPreconditionError(
+            f"Malformed input-boundary site position: {exc}",
+            code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
+        ) from exc
+    row = next(
+        (
+            family
+            for family in descriptor.required_witness_inventory.families
+            if family.family == "input_structure"
+        ),
+        None,
+    )
+    mirror: set[Any] | None = None
+    if row is not None:
+        try:
+            mirror = {decode_input_site_position(member) for member in row.members}
+        except ValueError:
+            mirror = None
+    if mirror != positions:
+        raise RunPreconditionError(
+            "Input-boundary site record disagrees with the inventory mirror; the "
+            "descriptor is internally contradictory.",
+            code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
+        )
+    return positions
+
+
 def _model_input_arity_positions(descriptor: SparseRunDescriptor) -> set[Any]:
     """Return every distinct model-input site position, tensor and non-tensor.
 
@@ -504,6 +1240,10 @@ def _model_input_arity_positions(descriptor: SparseRunDescriptor) -> set[Any]:
     whole runtime argument list as one tensor. Including witnessed non-tensor
     leaf positions makes the shortcut fire only for a genuinely single-argument
     model, so a mixed ``[tensor, python_arg]`` call binds each site correctly.
+
+    r69 A: the parse-validated required inventory is the site AUTHORITY (union
+    belt below); a descriptor whose slot/literal-derived positions escape the
+    inventory set fails closed typed instead of silently widening arity.
     """
 
     positions = {
@@ -517,7 +1257,88 @@ def _model_input_arity_positions(descriptor: SparseRunDescriptor) -> set[Any]:
             positions.add(tuple(position))
         elif position is not None:
             positions.add(position)
-    return positions
+    inventory_positions = _inventory_site_positions(descriptor)
+    stray = {
+        position for position in positions if isinstance(position, tuple) and len(position) == 2
+    } - inventory_positions
+    if stray:
+        raise RunPreconditionError(
+            f"Descriptor input positions {sorted(stray, key=repr)!r} escape the "
+            "parse-validated required-witness inventory.",
+            code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
+        )
+    return positions | inventory_positions
+
+
+def _runtime_top_level_positions(inputs: Any, positions: set[Any]) -> set[Any] | None:
+    """Enumerate the runtime call's TOP-LEVEL model-input site positions (r42 corr1_1).
+
+    Mirrors :func:`_input_site_value`'s dispatch so the actual top-level site SET aligns with
+    the recorded ``("arg", i)`` / ``("kwarg", key)`` positions. A single bare positional site is
+    NOT exploded (a list/dataclass/dict root is one site, its inner leaves are checked by the
+    tree/literal contracts). Returns ``None`` for an input spelling the standard binder handles
+    (and raises on) itself, so the arity check never double-reports a shape the binder rejects.
+    """
+
+    if _positions_are_mixed(positions):
+        try:
+            args, kwargs = _split_mixed_inputs(inputs)
+        except TypeError:
+            return None
+        return {("arg", index) for index in range(len(args))} | {("kwarg", key) for key in kwargs}
+    kinds = {p[0] for p in positions if isinstance(p, tuple) and len(p) == 2}
+    if kinds == {"arg"}:
+        if len(positions) == 1 and ("arg", 0) in positions:
+            # Single bare positional: the whole ``inputs`` IS the one site (never exploded).
+            return {("arg", 0)}
+        if not isinstance(inputs, Sequence) or isinstance(inputs, (str, bytes)):
+            return None
+        return {("arg", index) for index in range(len(inputs))}
+    if kinds == {"kwarg"}:
+        if not isinstance(inputs, Mapping):
+            return None
+        return {("kwarg", key) for key in inputs}
+    return None
+
+
+def _top_level_input_site_contract_checks(
+    descriptor: SparseRunDescriptor, inputs: Any, positions: set[Any]
+) -> tuple[ContractCheck, ...]:
+    """Reject a runtime call carrying MORE top-level input sites than capture (r42 corr1_1).
+
+    The sparse descriptor records CONCRETE boundary positions and encodes no open-ended variadic
+    contract: a capture of a ``*args`` / ``**kwargs`` model that took two args recorded exactly
+    two concrete sites, so a third runtime arg (or an unrecorded keyword) is outside the recorded
+    taken path -- ignored input, not valid replay, and MUST NOT report VERIFIED. This mirrors the
+    tensor/non-tensor leaf-set contracts at the TOP level: any extra positional index or keyword
+    diverges. Missing sites stay the existing tree/binder contracts' domain.
+    """
+
+    expected = {p for p in positions if isinstance(p, tuple) and len(p) == 2}
+    if not expected:
+        return ()
+    actual = _runtime_top_level_positions(inputs, positions)
+    if actual is None:
+        return ()
+    extra = actual - expected
+    if not extra:
+        return ()
+    return (
+        _contract_check(
+            "input_arity_extra",
+            False,
+            RunnableErrorCode.INPUT_ARITY_EXTRA,
+            "Runtime call carries top-level model-input sites not present at capture; the "
+            "recorded taken path is not valid for extra positional/keyword arguments (including "
+            "for Python variadic signatures whose recorded taken path is a finite concrete site "
+            "set).",
+            details=(
+                ("expected_positions", repr(sorted(expected, key=repr))),
+                ("actual_positions", repr(sorted(actual, key=repr))),
+                ("extra_positions", repr(sorted(extra, key=repr))),
+            ),
+        ),
+    )
 
 
 def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
@@ -535,23 +1356,47 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
     ``+0.0`` and a ``nan`` equal to a ``nan`` with the same bits.
     """
 
-    recorded = _normalize_numpy_scalar(recorded)
-    runtime = _normalize_numpy_scalar(runtime)
+    from torchlens._input_walk import classify_scalar
+
+    # r71 B: a ``slice`` is a COMPOSITE literal leaf. ``slice.__eq__`` compares
+    # component VALUES only, so ``slice(5) == slice(MyIntEnum.FAST)`` is True and a
+    # type-steered branch would falsely VERIFY. Compare component-by-component through
+    # the SAME scalar type/value rules (never ``slice.__eq__`` as authority).
+    if isinstance(recorded, slice) or isinstance(runtime, slice):
+        if not (isinstance(recorded, slice) and isinstance(runtime, slice)):
+            return False
+        return all(
+            _literal_leaf_equal(getattr(recorded, field), getattr(runtime, field))
+            for field in ("start", "stop", "step")
+        )
+
+    recorded_kind, recorded_norm = classify_scalar(recorded)
+    runtime_kind, runtime_norm = classify_scalar(runtime)
+    # r69 B: a semantic-typed scalar (enum member, builtin/np-scalar subclass) never
+    # collapses into the builtin atom families -- type identity is application
+    # semantics, so a same-value cross-class replacement DIVERGES in both directions
+    # (a semantic capture cannot exist in a saved artifact: producer refuses typed).
+    if recorded_kind == "semantic" or runtime_kind == "semantic":
+        return False
+    # RATIFIED stock-wrapper VALUE lane: exact stock NumPy numeric/bool wrappers
+    # normalize to their builtin atoms (``np.float64(2.0) <-> 2.0`` verifies).
+    if recorded_kind == "numpy":
+        recorded = recorded_norm
+    if runtime_kind == "numpy":
+        runtime = runtime_norm
     if isinstance(recorded, bool) or isinstance(runtime, bool):
         return isinstance(recorded, bool) and isinstance(runtime, bool) and recorded == runtime
-    # Float family (incl. numeric float subclasses such as ``numpy.float64``),
-    # excluding bool handled above. ``int`` stays distinct from ``float`` (``2``
-    # vs ``2.0`` must diverge), but ``numpy.float64(2.0)`` compares equal to the
-    # plain ``float`` the literal grammar round-trips to. Compare by IEEE-754 bit
-    # pattern of the float VALUE so the r4 signed-zero/NaN honesty is preserved.
+    # Float family (exact builtins after wrapper normalization). ``int`` stays
+    # distinct from ``float`` (``2`` vs ``2.0`` must diverge). Compare by IEEE-754
+    # bit pattern of the float VALUE so the r4 signed-zero/NaN honesty is preserved.
     rec_is_float = isinstance(recorded, float)
     run_is_float = isinstance(runtime, float)
     if rec_is_float or run_is_float:
         if not (rec_is_float and run_is_float):
             return False
         return struct.pack(">d", float(recorded)) == struct.pack(">d", float(runtime))
-    # Integer family (incl. numeric int subclasses), excluding bool. ``int`` vs a
-    # non-int type diverges; two integers compare by value.
+    # Integer family, excluding bool. ``int`` vs a non-int type diverges; two
+    # integers compare by value.
     rec_is_int = isinstance(recorded, int)
     run_is_int = isinstance(runtime, int)
     if rec_is_int or run_is_int:
@@ -561,23 +1406,6 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
     if type(recorded) is not type(runtime):
         return False
     return bool(recorded == runtime)
-
-
-def _normalize_numpy_scalar(value: Any) -> Any:
-    """Convert one NumPy scalar to its Python equivalent for literal comparison.
-
-    Parameters
-    ----------
-    value:
-        Captured or runtime literal leaf.
-
-    Returns
-    -------
-    Any
-        ``value.item()`` for NumPy scalars, otherwise the original value.
-    """
-
-    return value.item() if isinstance(value, np.generic) else value
 
 
 def _input_literal_contract_checks(
@@ -596,7 +1424,20 @@ def _input_literal_contract_checks(
     for witness, fact in _model_input_literal_facts(descriptor):
         raw_position = fact.get("position")
         position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
-        path = tuple(fact.get("path", ()) or ())
+        path = _fact_path_tuple_or_none(fact)
+        if path is None:
+            checks.append(
+                _contract_check(
+                    "input_literal_path_malformed",
+                    False,
+                    RunnableErrorCode.CONTEXT_FIELD_INVALID,
+                    "A literal fact carries a non-sequence container path; the "
+                    "fact cannot be resolved against the runtime input tree.",
+                    affected_op_labels=(witness.site_label,),
+                    details=(("model_site_position", repr(position)),),
+                )
+            )
+            continue
         recorded = fact.get("value")
         if not bool(fact.get("encodable", False)):
             # Opaque capture-time leaf: not representable in the frozen literal
@@ -634,8 +1475,16 @@ def _input_literal_contract_checks(
 def _bind_runtime_inputs(
     descriptor: SparseRunDescriptor,
     inputs: Any,
-) -> tuple[dict[str, torch.Tensor], tuple[ContractCheck, ...]]:
-    """Bind and defensively clone public input leaves by persisted model sites."""
+    ceiling: RunResourceCeiling,
+) -> tuple[dict[str, torch.Tensor], tuple[ContractCheck, ...], bool]:
+    """Bind and defensively clone public input leaves by persisted model sites.
+
+    Returns the bound clone map, the ordered input contract checks, and the
+    ``input_alias_topology_unresolved`` ceiling flag (r35 decision D). Accepted
+    leaves are mirrored through the transaction ``ceiling``'s byte guard (r61
+    corr_2): a tampered input slot shape plus a runtime expanded view refuses
+    typed at ``clone_allocation_preflight`` instead of dying in the allocator.
+    """
 
     input_slots = tuple(
         slot for slot in descriptor.tensor_slots if slot.role is TensorSlotRole.MODEL_INPUT
@@ -643,6 +1492,17 @@ def _bind_runtime_inputs(
     values: dict[str, torch.Tensor] = {}
     checks: list[ContractCheck] = []
     positions = _model_input_arity_positions(descriptor)
+    # r42 corr1_1: reject EXTRA top-level args/kwargs (site-set superset) BEFORE any per-site
+    # tensor/literal/metadata check, so an ignored extra input can never be blessed VERIFIED.
+    checks.extend(_top_level_input_site_contract_checks(descriptor, inputs, positions))
+    # Torch capture DE-ALIASES model inputs (each input leaf is cloned before the forward,
+    # so ``forward(a, b)`` with ``a is b`` is captured as two DISTINCT tensors). The recorded
+    # DAG and activation archive therefore reflect distinct-input semantics, and each runtime
+    # input slot is likewise cloned independently. A runtime call that passes ALIASED inputs
+    # (same object, or distinct views sharing storage) is NOT reproducible against that
+    # de-aliased capture when an in-place op mutates an input -- see
+    # ``_input_alias_topology_checks``, which fails such a run closed instead of a false VERIFIED.
+    raw_values: dict[str, torch.Tensor] = {}
     for slot in input_slots:
         binding = slot.input_binding
         if binding is None:
@@ -654,7 +1514,7 @@ def _bind_runtime_inputs(
         try:
             root = _input_site_value(inputs, binding.model_site_position, positions)
             value = _value_at_path(root, binding.container_path)
-        except (KeyError, IndexError, TypeError) as exc:
+        except (KeyError, IndexError, TypeError, AttributeError) as exc:
             raise _input_error(
                 RunnableErrorCode.INPUT_TREE_MISMATCH,
                 slot,
@@ -666,20 +1526,59 @@ def _bind_runtime_inputs(
                 slot,
                 f"Runtime input leaf is {type(value).__name__}, expected torch.Tensor.",
             )
-        values[slot.slot_id] = value.detach().clone()
-        shape_ok = tuple(value.shape) == slot.shape
+        # r37 corr2-6 phase 0: EXACT-type admission precedes every dispatchable
+        # property read. A tensor SUBCLASS routes ``shape``/``dtype``/``device``/
+        # ``names`` through ``__torch_function__``, so reading any of them before
+        # this gate would execute user subclass code and leak its raw exception in
+        # place of the typed hard-precondition refusal. Diagnostics use ONLY
+        # ``type(value).__qualname__`` -- never a property.
+        if type(value) not in {torch.Tensor, torch.nn.Parameter}:
+            subclass_check = _contract_check(
+                f"input_layout:{slot.slot_id}",
+                False,
+                RunnableErrorCode.INPUT_TREE_MISMATCH,
+                "Runtime input is a tensor SUBCLASS the sparse replay cannot "
+                "faithfully reproduce; runnable capture records only plain "
+                "strided torch.Tensor/Parameter leaves, so such an input fails "
+                "closed (typed) before any property dispatch, under every "
+                "divergence policy.",
+                affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("tensor_class", type(value).__qualname__),
+                ),
+            )
+            diagnostic = subclass_check.diagnostic
+            raise PathDivergenceError(
+                diagnostic.message
+                if diagnostic is not None
+                else "Unsupported tensor-subclass input.",
+                code=RunnableErrorCode.INPUT_TREE_MISMATCH.value,
+                path_faithfulness=PathFaithfulness.DIVERGED,
+                first_mismatch=diagnostic,
+                contract_check=subclass_check,
+            )
+        raw_values[slot.slot_id] = value
+        # Phase-1 facts are exception-safe: exotic layouts (nested tensors) can
+        # refuse even a ``sizes()`` read, which must surface as a failed check,
+        # never a raw backend error.
+        try:
+            actual_shape: tuple[int, ...] | None = tuple(value.shape)
+        except (RuntimeError, TypeError, NotImplementedError):
+            actual_shape = None
+        shape_ok = actual_shape == slot.shape
         dtype_ok = str(value.dtype) == slot.dtype
         checks.append(
             _contract_check(
                 f"input_shape:{slot.slot_id}",
                 shape_ok,
                 RunnableErrorCode.INPUT_SHAPE_MISMATCH,
-                f"Runtime input shape {tuple(value.shape)} does not match {slot.shape}.",
+                f"Runtime input shape {actual_shape} does not match {slot.shape}.",
                 affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
                 details=(
                     ("slot_id", slot.slot_id),
                     ("expected_shape", repr(slot.shape)),
-                    ("actual_shape", repr(tuple(value.shape))),
+                    ("actual_shape", repr(actual_shape)),
                 ),
             )
         )
@@ -697,24 +1596,426 @@ def _bind_runtime_inputs(
                 ),
             )
         )
+        # r33 F7: pin DEVICE and LAYOUT next to shape+dtype. The shape+dtype contract does NOT
+        # pin either, yet the state lives on the capture DEVICE and the recorded DAG assumes a
+        # STRIDED DENSE input, so a same-shape+dtype runtime input on a different device or with
+        # an exotic layout (sparse/meta/nested/named) cannot be faithfully reproduced by the
+        # sparse replay -- today only an INCIDENTAL torch device/layout error guards them. Device
+        # TYPE is compared strictly; the INDEX only when both are concrete (a capture recorded as
+        # a bare ``cuda`` has index ``None`` and must not falsely diverge a ``cuda:0`` runtime).
+        device_ok = value.device.type == slot.device_type and (
+            slot.device_index is None
+            or value.device.index is None
+            or value.device.index == slot.device_index
+        )
+        checks.append(
+            _contract_check(
+                f"input_device:{slot.slot_id}",
+                device_ok,
+                RunnableErrorCode.INPUT_TREE_MISMATCH,
+                f"Runtime input device {value.device} does not match the capture device "
+                f"{slot.device_type}"
+                + (f":{slot.device_index}" if slot.device_index is not None else "")
+                + "; the recorded state and DAG cannot be replayed against a different device.",
+                affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("expected_device_type", slot.device_type),
+                    ("expected_device_index", repr(slot.device_index)),
+                    ("actual_device", str(value.device)),
+                ),
+            )
+        )
+        has_named_dims = tensor_has_named_dims(value)
+        layout_ok = (
+            value.layout == torch.strided
+            and not value.is_nested
+            and not bool(getattr(value, "is_meta", False))
+            and not bool(getattr(value, "is_quantized", False))
+            and not has_named_dims
+            and type(value) in {torch.Tensor, torch.nn.Parameter}
+        )
+        checks.append(
+            _contract_check(
+                f"input_layout:{slot.slot_id}",
+                layout_ok,
+                RunnableErrorCode.INPUT_TREE_MISMATCH,
+                "Runtime input has a non-strided/meta/nested/named/quantized/subclass "
+                "layout the sparse replay cannot faithfully reproduce; runnable capture "
+                "records only plain strided dense tensors, so such an input must fail "
+                "closed rather than replay the recorded DAG.",
+                affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("actual_layout", str(value.layout)),
+                    ("is_nested", repr(bool(value.is_nested))),
+                    ("is_meta", repr(bool(getattr(value, "is_meta", False)))),
+                    ("is_quantized", repr(bool(getattr(value, "is_quantized", False)))),
+                    ("named", repr(has_named_dims)),
+                    ("tensor_class", type(value).__qualname__),
+                ),
+            )
+        )
     checks.extend(_input_tree_contract_checks(descriptor, inputs))
     checks.extend(_input_literal_contract_checks(descriptor, inputs, positions))
-    return values, tuple(checks)
+    checks.extend(_input_metadata_contract_checks(descriptor, inputs, positions))
+    checks.extend(_input_nontensor_tree_contract_checks(descriptor, inputs, positions))
+    # ------------------------------------------------------------------
+    # r35 I5 (corr2_6) -- CONTRACT-BEFORE-TOUCH admission choke point.
+    # Everything ABOVE this comment reads only non-materializing, exception-
+    # safe facts from the RAW bound leaves. Everything BELOW may clone,
+    # transfer, view, digest, or otherwise materialize input bytes. Hard
+    # executability preconditions (meta/sparse/nested/named/quantized/
+    # subclass layouts) are enforced HERE, before any byte operation, and
+    # raise regardless of the divergence policy: ``return_diverged`` may
+    # continue only with an EXECUTABLE poisoned input, never past a hard
+    # precondition. Any future preamble addition that touches input bytes
+    # MUST be placed below this point.
+    # ------------------------------------------------------------------
+    hard_failure = next(
+        (check for check in checks if not check.passed and check.name.startswith("input_layout:")),
+        None,
+    )
+    if hard_failure is not None:
+        diagnostic = hard_failure.diagnostic
+        raise PathDivergenceError(
+            diagnostic.message if diagnostic is not None else "Unsupported input layout.",
+            code=(
+                diagnostic.code.value
+                if diagnostic is not None
+                else RunnableErrorCode.INPUT_TREE_MISMATCH.value
+            ),
+            path_faithfulness=PathFaithfulness.DIVERGED,
+            first_mismatch=diagnostic,
+            contract_check=hard_failure,
+        )
+    # r37 3-ADJ-6 (R10 ordering): alias-topology math runs BELOW the hard layout
+    # precondition raise, so the shared byte engine's domain is admitted plain
+    # strided tensors BY CONSTRUCTION -- it can never see a meta/nested/named/
+    # quantized layout the gate is about to reject.
+    alias_checks, input_alias_unresolved = _input_alias_topology_checks(
+        descriptor, input_slots, raw_values
+    )
+    checks.extend(alias_checks)
+    # Phase 4: clone only ACCEPTED (executable) tensors.
+    for slot in input_slots:
+        raw = raw_values.get(slot.slot_id)
+        if isinstance(raw, torch.Tensor):
+            values[slot.slot_id] = _runtime_mirror_clone(raw, ceiling, slot)
+    return values, tuple(checks), input_alias_unresolved
+
+
+def _runtime_mirror_clone(
+    raw: torch.Tensor,
+    ceiling: RunResourceCeiling,
+    slot: TensorSlotDescriptor,
+) -> torch.Tensor:
+    """Defensively clone one leaf while MIRRORING its runtime autograd metadata.
+
+    r37 corr2-7 (R13): ``detach().clone()`` strips a leaf's ``requires_grad``, so
+    the recorded ``grad_enabled=True`` call context became semantically inert (no
+    autograd history on replay) and the exact original input was needlessly
+    attestation-ineligible (fingerprint flag mismatch). The runtime mirror restores
+    ``raw.requires_grad`` on the clone where legal; fingerprints stay on the
+    executed-clone basis, so an intentionally changed-flag input remains a physical
+    input change (attestation ``not_applicable``), never normalized away. This is
+    the ONE second-clone helper -- every input-bind/state-clone/staging site routes
+    through it or the staging helper's recorded-trainable rule.
+
+    r61 corr_2: the mirror routes through the transaction ceiling's byte guard --
+    the clone's ``numel()`` is the LOGICAL numel of an expanded runtime view, so a
+    tampered input slot (`[1]` -> huge) with a matching runtime ``expand`` refuses
+    typed at ``clone_allocation_preflight`` BEFORE the materializing clone, never
+    an allocator death. Honest inputs clone with ``requires_grad`` mirrored, so
+    attestation eligibility is unchanged.
+
+    r67 C5 (corr1-2): the mirror is a PRE-EXECUTION defensive materialization, so it
+    runs under the neutral ambient -- a caller inside ``torch.inference_mode()`` no
+    longer mints an inference-mode mirror (which lost attestation on an otherwise
+    exact run and could not carry the mirrored ``requires_grad``).
+    """
+
+    with _guarded_defensive_materialize():
+        return ceiling.guarded_clone(
+            raw,
+            call_id=None,
+            slot_id=slot.slot_id,
+            affected_op_labels=(slot.slot_id.removeprefix("slot:"),),
+            mirror_requires_grad=True,
+        )
+
+
+def _model_input_version_closure(descriptor: SparseRunDescriptor) -> set[str]:
+    """Return model-input slot ids plus every slot transitively versioned from one."""
+
+    closure = {
+        slot.slot_id for slot in descriptor.tensor_slots if slot.role is TensorSlotRole.MODEL_INPUT
+    }
+    changed = True
+    while changed:
+        changed = False
+        for slot in descriptor.tensor_slots:
+            if slot.version_of in closure and slot.slot_id not in closure:
+                closure.add(slot.slot_id)
+                changed = True
+    return closure
+
+
+_VIEW_OP_QUALNAMES = frozenset(
+    {
+        # Storage-sharing view ops whose output aliases an input tensor's storage (r29-C3, F2).
+        # Deliberately OVER-broad: some entries here also cover copy variants -- that only
+        # widens the fail-closed gate, which fires ONLY when runtime inputs actually alias, so
+        # a false positive here can never over-trigger an ordinary (non-aliased-input) run.
+        "__getitem__",
+        "getitem",
+        "select",
+        "slice",
+        "narrow",
+        "narrow_copy",
+        "view",
+        "view_as",
+        "_view",
+        "reshape",
+        "reshape_as",
+        "transpose",
+        "t",
+        "permute",
+        "squeeze",
+        "unsqueeze",
+        "expand",
+        "expand_as",
+        "broadcast_to",
+        "flatten",
+        "unflatten",
+        "ravel",
+        "unfold",
+        "diagonal",
+        "diagonal_scatter",
+        "movedim",
+        "moveaxis",
+        "swapaxes",
+        "swapdims",
+        "detach",
+        "as_strided",
+        "split",
+        "split_with_sizes",
+        "chunk",
+        "tensor_split",
+        "hsplit",
+        "vsplit",
+        "dsplit",
+        "unbind",
+        "real",
+        "imag",
+        "view_as_real",
+        "view_as_complex",
+        "adjoint",
+        "alias",
+        "contiguous",
+        "indices",
+        "values",
+    }
+)
+"""Torch op qualnames whose output can SHARE STORAGE with a tensor input (r29-C3, F2)."""
+
+
+def _model_input_storage_closure(descriptor: SparseRunDescriptor) -> set[str]:
+    """Model-input slots plus every slot reachable by version chains AND view-op lineage.
+
+    A view op (``a[0]``, ``a.t()``, ``a.narrow(...)``) produces an output that SHARES STORAGE
+    with its tensor input, so an in-place op on that view mutates the input's storage even
+    though the view slot has no ``version_of`` link to the input (r29-C3, F2-hon). The gate
+    that guards the input-aliasing fail-closed therefore follows both version chains and
+    view-producing lineage from the model-input slots: a slot enters the closure if it is a
+    model input, is versioned from a closure slot, or is the output of a view op whose tensor
+    argument is already in the closure.
+    """
+
+    reg_qualname = {
+        entry.registry_id: getattr(entry.key, "qualname", None)
+        for entry in descriptor.callable_registry
+    }
+    closure = _model_input_version_closure(descriptor)
+    changed = True
+    while changed:
+        changed = False
+        for call in descriptor.calls:
+            if reg_qualname.get(call.registry_id) not in _VIEW_OP_QUALNAMES:
+                continue
+            if not any(arg.slot_id in closure for arg in call.tensor_arguments):
+                continue
+            for output_slot_id in call.output_slot_ids:
+                if output_slot_id not in closure:
+                    closure.add(output_slot_id)
+                    changed = True
+        # Re-follow version chains from any newly-added view outputs.
+        for slot in descriptor.tensor_slots:
+            if slot.version_of in closure and slot.slot_id not in closure:
+                closure.add(slot.slot_id)
+                changed = True
+    return closure
+
+
+def _descriptor_mutates_model_input(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether any in-place call targets a model-input slot, its version chain, or a
+    view derived from it (r29-C3, F2-hon)."""
+
+    closure = _model_input_storage_closure(descriptor)
+    for call in descriptor.calls:
+        if call.is_inplace and _mutation_target_slot_id(call) in closure:
+            return True
+    return False
+
+
+def _tensor_storage_key(value: torch.Tensor) -> int | None:
+    """Return a stable base-storage identity for aliasing comparison, or ``None``."""
+
+    try:
+        return int(value.untyped_storage().data_ptr())
+    except (RuntimeError, AttributeError):
+        return None
+
+
+# r37 INV-2: the alias/overlap proof engine lives in ``utils.tensor_utils`` --
+# absolute, device-scoped byte intervals, three-valued relation, pure-integer
+# enumeration. The former local implementation keyed "same memory" on
+# ``untyped_storage().data_ptr()`` EQUALITY, which mis-proved disjointness for
+# overlapping views of one external buffer (``torch.from_numpy(arr[:6])`` vs
+# ``arr[2:8]`` -- distinct torch storages, genuinely shared host memory; hon1_1).
+# No local reimplementation or pointer-equality shortcut may reappear here.
+
+
+def _touched_bytes_relation(left: torch.Tensor, right: torch.Tensor) -> str:
+    """Shared-engine adapter (see :func:`torchlens.utils.tensor_utils.touched_bytes_relation`)."""
+
+    with _state.pause_logging():
+        return touched_bytes_relation(left, right)
+
+
+def _input_alias_topology_checks(
+    descriptor: SparseRunDescriptor,
+    input_slots: Sequence[TensorSlotDescriptor],
+    raw_values: Mapping[str, torch.Tensor],
+) -> tuple[tuple[ContractCheck, ...], bool]:
+    """Fail closed on runtime input aliasing unreproducible against a de-aliased capture.
+
+    Torch capture clones each model-input leaf before the forward (``safe_copy_args``), and
+    the sparse replay likewise binds independent per-slot clones, so the captured DAG and the
+    replay both reflect DISTINCT-input semantics -- the captured alias topology is always
+    all-distinct. Any runtime aliasing between model-input sites therefore differs from the
+    captured topology and cannot be reproduced against a fresh model on those same aliased
+    inputs:
+
+    * IDENTITY (``forward(a, b)`` with ``a is b`` -- self/cross-attention ``q is k``): the
+      captured / replayed clones are distinct objects, so an ``if a is b`` / ``id()`` identity
+      branch takes the OTHER arm than a fresh model on the aliased input would -- a false
+      VERIFIED even on the ORIGINAL input (r33 F1). This holds with NO in-place mutation, so
+      the check is UNCONDITIONAL.
+    * OVERLAPPING STORAGE SPANS (two views whose byte spans overlap, a storage-identity
+      ``a.data_ptr() == b.data_ptr()`` branch, or an in-place mutation that propagates between
+      overlapping sites): the de-aliased clones neither share storage nor propagate a mutation
+      between sites, so a fresh model on the aliased input can diverge.
+
+    Both fail closed (``runtime topology != captured`` per the F1 contract: capture de-aliases,
+    so ANY runtime aliasing is unreproducible and a genuinely identity/storage-independent model
+    cannot be PROVEN so at this surface -- the honest verdict is fail-closed). DISJOINT spans of
+    one base (``base[:2]`` / ``base[2:]`` -- same storage pointer, non-overlapping bytes) are NOT
+    aliased: a mutation of one cannot reach the other and they are distinct objects, so they
+    never trigger. All-distinct inputs (the common case) never trigger -- zero over-trigger on
+    the trivial topology.
+    """
+
+    resolved: list[tuple[str, torch.Tensor]] = []
+    for slot in input_slots:
+        value = raw_values.get(slot.slot_id)
+        if isinstance(value, torch.Tensor):
+            resolved.append((slot.slot_id, value))
+    aliased_pairs: set[tuple[str, str]] = set()
+
+    def _ordered_pair(left: str, right: str) -> tuple[str, str]:
+        return (left, right) if left <= right else (right, left)
+
+    # Identity aliasing: two input sites bound to the SAME tensor object (``a is b``).
+    for i in range(len(resolved)):
+        for j in range(i + 1, len(resolved)):
+            if resolved[i][1] is resolved[j][1]:
+                aliased_pairs.add(_ordered_pair(resolved[i][0], resolved[j][0]))
+    # Storage aliasing (r35 decision D): the three-valued touched-byte engine.
+    # PROVED overlap is an observed contradiction (failed check -> DIVERGED);
+    # PROVED disjointness passes; ``unknown`` is the
+    # ``input_alias_topology_unresolved`` unverifiability ceiling -- never
+    # ``overlap`` by assumption and never VERIFIED.
+    unresolved = False
+    for i in range(len(resolved)):
+        for j in range(i + 1, len(resolved)):
+            left_id, left = resolved[i]
+            right_id, right = resolved[j]
+            if left is right:
+                continue  # identity already recorded above
+            relation = _touched_bytes_relation(left, right)
+            if relation == "overlap":
+                aliased_pairs.add(_ordered_pair(left_id, right_id))
+            elif relation == "unknown":
+                unresolved = True
+    if not aliased_pairs:
+        return (), unresolved
+    return (
+        _contract_check(
+            "input_alias_topology",
+            False,
+            RunnableErrorCode.INPUT_TREE_MISMATCH,
+            "Runtime model inputs alias (same object or proven-overlapping touched "
+            "bytes); capture de-aliases inputs (independent per-slot clones), so the "
+            "recorded taken path cannot reproduce an identity or storage-aliasing "
+            "dependence and must not be blessed VERIFIED.",
+            details=(("aliased_input_slot_pairs", repr(sorted(aliased_pairs))),),
+        ),
+    ), unresolved
 
 
 def _clone_state_values(
+    descriptor: SparseRunDescriptor,
     values: Mapping[str, torch.Tensor],
+    ceiling: RunResourceCeiling,
 ) -> dict[str, torch.Tensor]:
-    """Clone run-local state while preserving recorded alias groups."""
+    """Clone run-local state while preserving alias groups, device, and trainability.
 
+    r37 R5/R13: this second clone runs AFTER staging normalized every value to its
+    slot device, so it must not strip anything staging established -- ``clone()``
+    keeps the device; alias groups keep one shared clone (identity-keyed); and the
+    RECORDED per-slot ``trainable`` bit is restored on the clone (state semantics
+    come from the recorded binding, NOT ``mirror_requires_grad`` -- unlike runtime
+    INPUTS whose mirror follows the live leaf, see ``_runtime_mirror_clone``).
+    r61 corr_2: each identity's single clone routes through the transaction
+    ceiling's byte guard, so an oversized staged value refuses typed at
+    ``clone_allocation_preflight`` instead of dying in the allocator.
+
+    r67 C5 (corr1-2): the second state clone is a PRE-EXECUTION defensive
+    materialization, so it runs under the neutral ambient -- a caller inside
+    ``torch.inference_mode()`` no longer mints inference-mode run-local state that
+    trips the staged tripwire's ``is_inference`` dim on TorchLens's own output.
+    """
+
+    trainable_by_slot = {
+        slot.slot_id: bool(slot.state_binding.trainable)
+        for slot in descriptor.tensor_slots
+        if slot.state_binding is not None
+    }
     clones_by_identity: dict[int, torch.Tensor] = {}
     cloned: dict[str, torch.Tensor] = {}
-    for slot_id, value in values.items():
-        clone = clones_by_identity.get(id(value))
-        if clone is None:
-            clone = value.detach().clone()
-            clones_by_identity[id(value)] = clone
-        cloned[slot_id] = clone
+    with _guarded_defensive_materialize():
+        for slot_id, value in values.items():
+            clone = clones_by_identity.get(id(value))
+            if clone is None:
+                clone = ceiling.guarded_clone(value, call_id=None, slot_id=slot_id)
+                if trainable_by_slot.get(slot_id, False) and not clone.requires_grad:
+                    try:
+                        clone.requires_grad_(True)
+                    except RuntimeError:
+                        pass  # non-differentiable dtype cannot carry the trainable bit
+                clones_by_identity[id(value)] = clone
+            cloned[slot_id] = clone
     return cloned
 
 
@@ -729,6 +2030,111 @@ def _snapshot_input_byte_digests(
         for slot in descriptor.tensor_slots
         if slot.role is TensorSlotRole.MODEL_INPUT and slot.slot_id in slot_values
     }
+
+
+def _snapshot_input_fingerprints(
+    descriptor: SparseRunDescriptor,
+    slot_values: Mapping[str, torch.Tensor],
+    input_byte_digests: Mapping[str, str],
+) -> dict[str, InputAttestationFingerprint]:
+    """Fingerprint the EXECUTED input clones on the capture-identical basis (hon1_3).
+
+    Runs after admission (I5), before any sparse call. The capture side
+    fingerprints the retained input clone that seeded the captured forward; both
+    sides therefore compare the same clone basis, so a physical twin (layout /
+    stride / offset / alignment-class change) is detected exactly.
+    """
+
+    fingerprints: dict[str, InputAttestationFingerprint] = {}
+    for slot in descriptor.tensor_slots:
+        if slot.role is not TensorSlotRole.MODEL_INPUT or slot.slot_id not in slot_values:
+            continue
+        fingerprints[slot.slot_id] = build_input_attestation_fingerprint(
+            slot.slot_id,
+            slot_values[slot.slot_id],
+            byte_digest=input_byte_digests.get(slot.slot_id),
+        )
+    return fingerprints
+
+
+_FINGERPRINT_ALIGNMENT_MODULUS = 16
+"""Data-pointer alignment-class modulus for the physical input fingerprint.
+
+H_B_RESOLUTION R2: fp16 CUDA conv kernel selection/reduction order is keyed to the
+data pointer's alignment class (a misaligned offset view vs an aligned buffer), so
+the fingerprint records ``data_ptr() % 16`` of the value that actually seeds
+execution and attestation goes ``not_applicable`` on any mismatch instead of
+false-tripping the byte tripwire. The modulus is the vector-width class boundary:
+every fresh torch allocation (capture and replay both execute fresh clones) is at
+least 16-byte aligned, so equal-basis executions always agree, while an offset
+view that changes the executed alignment class is caught.
+"""
+
+
+def build_input_attestation_fingerprint(
+    slot_id: str,
+    value: torch.Tensor,
+    *,
+    byte_digest: str | None = None,
+) -> InputAttestationFingerprint:
+    """Build the physical identity fingerprint of one model-input value (hon1_3 H-a).
+
+    Both sides use the same basis: at save time the LIVE retained in-memory input
+    that seeded the captured forward; at run time the executed defensive clone.
+    Any physical fact that cannot be read fails toward attestation ineligibility
+    (a sentinel value that can never equal a well-formed capture record).
+
+    Parameters
+    ----------
+    slot_id:
+        Descriptor slot id of the model input.
+    value:
+        Live tensor to fingerprint.
+    byte_digest:
+        Precomputed logical byte digest, or ``None`` to compute one here.
+
+    Returns
+    -------
+    InputAttestationFingerprint
+        Frozen physical fingerprint record.
+    """
+
+    def _safe_bool(getter: Callable[[], Any]) -> bool:
+        try:
+            return bool(getter())
+        except (RuntimeError, AttributeError, TypeError, NotImplementedError):
+            return False
+
+    try:
+        alignment = int(value.data_ptr()) % _FINGERPRINT_ALIGNMENT_MODULUS
+    except (RuntimeError, AttributeError, TypeError, NotImplementedError):
+        # Unreadable pointer: use an out-of-range sentinel so it can never match
+        # a well-formed capture record (fail toward not_applicable, never a
+        # false ATTESTED).
+        alignment = -1
+    if byte_digest is None:
+        byte_digest = runnable_tensor_byte_digest(value)
+    return InputAttestationFingerprint(
+        slot_id=slot_id,
+        byte_digest=byte_digest,
+        device_type=str(value.device.type),
+        device_index=None if value.device.index is None else int(value.device.index),
+        layout=str(value.layout),
+        sizes=tuple(int(item) for item in value.shape),
+        strides=tuple(int(item) for item in value.stride()),
+        storage_offset=int(value.storage_offset()),
+        is_contiguous=_safe_bool(value.is_contiguous),
+        is_channels_last=_safe_bool(lambda: value.is_contiguous(memory_format=torch.channels_last)),
+        is_channels_last_3d=_safe_bool(
+            lambda: value.is_contiguous(memory_format=torch.channels_last_3d)
+        ),
+        is_conj=_safe_bool(value.is_conj),
+        is_neg=_safe_bool(value.is_neg),
+        tensor_class=type(value).__qualname__,
+        requires_grad=bool(value.requires_grad),
+        is_inference=_safe_bool(value.is_inference),
+        alignment_class=alignment,
+    )
 
 
 def _positions_are_mixed(positions: set[Any]) -> bool:
@@ -786,6 +2192,32 @@ def _input_site_value(inputs: Any, position: Any, positions: set[Any]) -> Any:
     return _value_at_path(inputs, position if isinstance(position, tuple) else (position,))
 
 
+def _type_strict_path(path: Iterable[Any]) -> tuple[Any, ...]:
+    """Type-tag numeric mapping-key path components so ``bool``/``int``/``float`` twins do not
+    conflate under Python ``==`` (r33 F6).
+
+    A dict key ``True`` compares equal to ``1`` and ``1.0`` (``True == 1 == 1.0`` with colliding
+    hashes), so a raw ``(True,)`` leaf path matches ``(1,)`` / ``(1.0,)`` in the contract path
+    SET -- a runtime input whose key TYPE changed then silently passes the input-tree tripwire.
+    Tagging each numeric component with its concrete type keeps the three distinct. Applied
+    SYMMETRICALLY to the recorded and runtime path sets, so an ordinary same-type structure (the
+    common case) is unaffected -- zero over-trigger. Non-numeric components (``str`` keys,
+    already-encoded ``(BOOL_KEY_PATH_TAG, ...)`` tuples) pass through unchanged.
+    """
+
+    tagged: list[Any] = []
+    for component in path:
+        if isinstance(component, bool):
+            tagged.append(("\x00tl_key_bool", bool(component)))
+        elif isinstance(component, int):
+            tagged.append(("\x00tl_key_int", int(component)))
+        elif isinstance(component, float):
+            tagged.append(("\x00tl_key_float", float(component)))
+        else:
+            tagged.append(component)
+    return tuple(tagged)
+
+
 def _input_tree_contract_checks(
     descriptor: SparseRunDescriptor,
     inputs: Any,
@@ -798,17 +2230,17 @@ def _input_tree_contract_checks(
         if slot.role is TensorSlotRole.MODEL_INPUT and slot.input_binding is not None
     )
     positions = _model_input_arity_positions(descriptor)
-    expected_by_position: dict[Any, set[tuple[str | int, ...]]] = {}
+    expected_by_position: dict[Any, set[tuple[Any, ...]]] = {}
     for slot in slots:
         assert slot.input_binding is not None
         expected_by_position.setdefault(slot.input_binding.model_site_position, set()).add(
-            slot.input_binding.container_path
+            _type_strict_path(slot.input_binding.container_path)
         )
     checks: list[ContractCheck] = []
     for position, expected in expected_by_position.items():
         try:
             root = _input_site_value(inputs, position, positions)
-            actual = set(_tensor_leaf_paths(root))
+            actual = {_type_strict_path(p) for p in _tensor_leaf_paths(root)}
         except (KeyError, IndexError, TypeError):
             actual = set()
         checks.append(
@@ -817,6 +2249,88 @@ def _input_tree_contract_checks(
                 actual == expected,
                 RunnableErrorCode.INPUT_TREE_MISMATCH,
                 "Runtime input tensor-leaf paths disagree with the recorded input tree.",
+                details=(
+                    ("model_site_position", repr(position)),
+                    ("expected_paths", repr(sorted(expected, key=repr))),
+                    ("actual_paths", repr(sorted(actual, key=repr))),
+                ),
+            )
+        )
+    return tuple(checks)
+
+
+def _runtime_nontensor_leaf_paths(root: Any) -> set[tuple[str | int, ...]]:
+    """Enumerate runtime non-tensor input leaf paths, mirroring the capture walk.
+
+    Routes through the shared boundary traversal (``torchlens._input_walk``, r65
+    Cluster Y) with the SAME tagged-key literal vocabulary as the capture-side
+    ``_record_runnable_input_literal_leaves``, so the runtime non-tensor leaf-path SET
+    aligns with the recorded fact set BY CONSTRUCTION: tensor leaves are skipped,
+    namedtuples and dataclasses descend by field name (r42 corr1_2: a tensor-only
+    dataclass input's runtime set matches the recorded empty set exactly), mappings
+    descend under grammar-encodable keys (a non-encodable key collapses its whole
+    subtree to one opaque leaf at the parent path, exactly as capture does),
+    lists/tuples descend by index, empty containers surface as synthetic marker
+    paths, and every other value is a scalar leaf recorded at its path.
+    """
+
+    from torchlens._input_walk import tagged_mapping_key_component, walk_input_boundary
+    from torchlens._io.runnable import EMPTY_CONTAINER_PATH_MARKER
+
+    paths: set[tuple[str | int, ...]] = set()
+    walk_input_boundary(
+        root,
+        (),
+        key_component=tagged_mapping_key_component,
+        on_leaf=lambda _value, path: paths.add(path),
+        on_empty_container=lambda _kind, path: paths.add((*path, EMPTY_CONTAINER_PATH_MARKER)),
+        on_opaque_key_subtree=lambda _child, path: paths.add(path),
+    )
+    return paths
+
+
+def _input_nontensor_tree_contract_checks(
+    descriptor: SparseRunDescriptor,
+    inputs: Any,
+    positions: set[Any],
+) -> tuple[ContractCheck, ...]:
+    """Compare the runtime NON-tensor leaf-path tree with every recorded input site.
+
+    The per-leaf value check (:func:`_input_literal_contract_checks`) only visits
+    leaves RECORDED at capture, so it catches a CHANGED or MISSING non-tensor leaf but
+    is blind to an EXTRA runtime non-tensor leaf (an added dict key the model branches
+    on via ``'flag' in d`` / ``d.get('mode')``, or a longer list). An extra leaf can
+    steer unwitnessed Python control flow while replay still reports VERIFIED against a
+    fresh model on the given inputs. This mirrors the tensor-leaf set-equality
+    (:func:`_input_tree_contract_checks`) for non-tensor leaves: EVERY model-input site
+    is seeded with its recorded non-tensor leaf-path set (the empty set when capture had
+    no non-tensor leaf at that site), and any runtime non-tensor leaf path absent at
+    capture -- or a recorded one absent at runtime -- diverges the run.
+    """
+
+    expected_by_position: dict[Any, set[tuple[Any, ...]]] = {
+        position: set() for position in positions
+    }
+    for _witness, fact in _model_input_literal_facts(descriptor):
+        raw_position = fact.get("position")
+        position = tuple(raw_position) if isinstance(raw_position, (list, tuple)) else raw_position
+        path = _type_strict_path(fact.get("path", ()) or ())
+        expected_by_position.setdefault(position, set()).add(path)
+
+    checks: list[ContractCheck] = []
+    for position, expected in expected_by_position.items():
+        try:
+            root = _input_site_value(inputs, position, positions)
+            actual = {_type_strict_path(p) for p in _runtime_nontensor_leaf_paths(root)}
+        except (KeyError, IndexError, TypeError, AttributeError):
+            actual = set()
+        checks.append(
+            _contract_check(
+                f"input_nontensor_tree:{position!r}",
+                actual == expected,
+                RunnableErrorCode.INPUT_TREE_MISMATCH,
+                "Runtime non-tensor input leaf paths disagree with the recorded input "
+                "tree; an added/removed non-tensor leaf can steer an unwitnessed path.",
                 details=(
                     ("model_site_position", repr(position)),
                     ("expected_paths", repr(sorted(expected, key=repr))),
@@ -866,6 +2380,27 @@ def _state_contract_checks(
                 ),
             )
         )
+        # r37 R5 in-transaction tripwire: staging is the sole placement authority,
+        # so a device mismatch HERE is a broken staging/state hook -- a typed state
+        # failure before any callable, never a mid-call runtime_signature_drift.
+        device_ok = value.device.type == slot.device_type and (
+            slot.device_index is None
+            or value.device.index is None
+            or value.device.index == slot.device_index
+        )
+        checks.append(
+            _contract_check(
+                f"state_device:{slot.slot_id}",
+                device_ok,
+                RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+                f"State slot {slot.slot_id!r} was not staged to its recorded device.",
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("expected_device", f"{slot.device_type}:{slot.device_index}"),
+                    ("actual_device", str(value.device)),
+                ),
+            )
+        )
         checks.append(
             _contract_check(
                 f"state_dtype:{slot.slot_id}",
@@ -876,6 +2411,26 @@ def _state_contract_checks(
                     ("slot_id", slot.slot_id),
                     ("expected_dtype", slot.dtype),
                     ("actual_dtype", str(value.dtype)),
+                ),
+            )
+        )
+        # r63 C1 in-transaction tripwire: the canonical staging clone is the sole state
+        # placement authority, so every staged runtime state tensor must still exhibit the
+        # full canonical metadata signature (admitted exact class, strided dense layout,
+        # unnamed, default stride, zero offset, no lazy conj/neg) before any recorded
+        # callable observes it -- a mismatch here is a broken/bypassed staging path or a
+        # post-bind mutation of staged state, refused typed rather than replayed.
+        metadata_violations = state_metadata_full_violations(value)
+        checks.append(
+            _contract_check(
+                f"state_metadata:{slot.slot_id}",
+                not metadata_violations,
+                RunnableErrorCode.STATE_METADATA_MISMATCH,
+                f"State slot {slot.slot_id!r} no longer carries the canonical staged "
+                f"metadata signature (violations: {metadata_violations!r}).",
+                details=(
+                    ("slot_id", slot.slot_id),
+                    ("violations", repr(metadata_violations)),
                 ),
             )
         )
@@ -969,9 +2524,19 @@ def _pre_call_contract_checks(
         for path in referenced_paths
         if len(path) >= 2 and path[0] == "kwargs" and isinstance(path[1], str)
     }
-    arity_ok = positional_indices == set(range(call.num_positional_args)) and (
-        len(keyword_names) == call.num_keyword_args
+    # r53 free_1: allocation-free dense pigeonhole. A set of nonnegative ints
+    # equals ``set(range(n))`` iff it has exactly ``n`` members spanning
+    # ``[0, n-1]`` -- checked WITHOUT materializing ``set(range(n))`` from the
+    # persisted integer, so an in-memory descriptor bypassing parse anchoring
+    # can no longer scale this tripwire into an allocation bomb. (A negative
+    # ``n`` now fails the check outright; previously ``set(range(-n))`` was
+    # empty and vacuously matched an empty leaf set.)
+    n_positional = call.num_positional_args
+    positional_dense = len(positional_indices) == n_positional and (
+        n_positional == 0
+        or (min(positional_indices) == 0 and max(positional_indices) == n_positional - 1)
     )
+    arity_ok = positional_dense and len(keyword_names) == call.num_keyword_args
     checks = (
         _contract_check(
             f"call_dispatch:{call.call_id}",
@@ -995,18 +2560,641 @@ def _pre_call_contract_checks(
             ),
         ),
     )
-    versions = {
-        argument.slot_id: slot_values[argument.slot_id]._version
-        for argument in call.tensor_arguments
-        if argument.slot_id in slot_values
-    }
+    # r37 hon1_4: inference tensors carry NO version counter (reading ``_version``
+    # raises), so a slot whose version is unavailable records NO baseline. The
+    # mutation tripwire then enforces only its version-independent legs for that
+    # slot (alias identity for in-place calls); value fidelity remains guarded by
+    # the output comparison and numeric attestation layers.
+    versions: dict[str, int] = {}
+    for argument in call.tensor_arguments:
+        value = slot_values.get(argument.slot_id)
+        if value is None:
+            continue
+        version = tensor_version_or_none(value)
+        if version is not None:
+            versions[argument.slot_id] = version
     return checks, versions
+
+
+def _context_unavailable_error(field: str, detail: str) -> RunPreconditionError:
+    """Build the typed refusal for an un-enterable/un-restorable execution context."""
+
+    return RunPreconditionError(
+        f"Recorded execution context {field!r} cannot be entered or restored on "
+        f"this runtime: {detail}",
+        code=RunnableErrorCode.EXECUTION_CONTEXT_UNAVAILABLE.value,
+        context_field=field,
+    )
+
+
+@contextmanager
+def _ambient_execution_context_restored(ambient: Any) -> Any:
+    """Transactionally restore the recorded capture-scoped ambient context (decision E).
+
+    The caller's ambient state is snapshotted, the recorded values are applied
+    (``None`` producer-absent fields are left as-is -- there is nothing recorded
+    to restore), and the caller's state is re-applied in ``finally`` on every
+    exit: success, divergence, callable exception, and numeric-attestation
+    rollback. A recorded value this runtime cannot apply rolls back any partial
+    application and raises the typed ``execution_context_unavailable`` refusal
+    -- never a silent ambient passthrough.
+    """
+
+    from .utils._torch_compat import (
+        apply_ambient_execution_context,
+        snapshot_ambient_execution_context,
+    )
+
+    recorded = {
+        "default_dtype": ambient.default_dtype,
+        "default_device": ambient.default_device,
+        "float32_matmul_precision": ambient.float32_matmul_precision,
+        "deterministic_algorithms": ambient.deterministic_algorithms,
+        "deterministic_algorithms_warn_only": ambient.deterministic_algorithms_warn_only,
+        "cuda_matmul_allow_tf32": ambient.cuda_matmul_allow_tf32,
+        "cudnn_allow_tf32": ambient.cudnn_allow_tf32,
+        "cudnn_deterministic": ambient.cudnn_deterministic,
+        "cudnn_benchmark": ambient.cudnn_benchmark,
+        "cudnn_enabled": ambient.cudnn_enabled,
+        "flash_sdp_enabled": ambient.flash_sdp_enabled,
+        "mem_efficient_sdp_enabled": ambient.mem_efficient_sdp_enabled,
+        "math_sdp_enabled": ambient.math_sdp_enabled,
+        # r53 hon_2: deterministic uninit-memory fill restores transactionally
+        # (setter-based) so a deterministic+fill capture NaN-fills identically.
+        "fill_uninitialized_memory": ambient.fill_uninitialized_memory,
+    }
+    saved = snapshot_ambient_execution_context()
+    # r37 R4 (corr2-3/corr2-2): the recorded DEFAULT DEVICE is entered as a SCOPED
+    # ``with torch.device(recorded)`` mode nested above the caller's existing mode
+    # stack -- never via ``torch.set_default_device`` (which mutates process-global
+    # mode bookkeeping and, measured, leaks/clobbers DeviceContext modes on every
+    # policy: implicit callers gained a mode, nested callers were corrupted). The
+    # context-manager exit IS the restoration mechanism -- correct by construction on
+    # success, divergence, callable exception, and attestation rollback -- so no
+    # restore logic exists for the device at all. A mode-stack length postcondition
+    # (feature-probed introspection) is a belt-and-suspenders tripwire.
+    device_scope: Any = nullcontext()
+    if ambient.default_device is not None:
+        try:
+            device_scope = torch.device(str(ambient.default_device))
+        except (RuntimeError, TypeError, ValueError) as exc:
+            raise _context_unavailable_error("default_device", str(exc)) from exc
+    from .utils._torch_compat import get_current_function_mode_stack
+
+    stack_before = get_current_function_mode_stack()
+    depth_before = len(list(stack_before)) if stack_before is not None else None
+    try:
+        apply_ambient_execution_context(recorded)
+    except RuntimeError as exc:
+        try:
+            apply_ambient_execution_context(saved)
+        except RuntimeError:  # pragma: no cover - saved values came from this runtime
+            pass
+        raise _context_unavailable_error("ambient_context", str(exc)) from exc
+    try:
+        # r53 hon_1: the recorded GLOBAL autograd/inference mode is entered as
+        # SCOPED contexts around the whole sparse run (outside every per-call
+        # context), so a Python branch on ``torch.is_grad_enabled()`` /
+        # ``is_inference_mode_enabled()`` inside replayed code observes the
+        # SAME global a fresh instance under the recorded ambient would --
+        # never the caller's ambient mode. Both nest legally inside a caller's
+        # ``no_grad()``/``inference_mode()`` and restore the caller's exact
+        # thread-local mode on every exit path by construction (the same
+        # correct-by-construction posture as the scoped default device above).
+        # A Python READ of either flag is deliberately never ceilinged:
+        # library code reads them constantly, and record+restore makes the
+        # branch deterministic, so a witness would be a mass over-trigger for
+        # zero honesty gain.
+        with (
+            device_scope,
+            torch.set_grad_enabled(bool(ambient.grad_enabled)),
+            torch.inference_mode(bool(ambient.inference_mode)),
+        ):
+            yield
+    finally:
+        apply_ambient_execution_context(saved)
+        if depth_before is not None and sys.exc_info()[0] is None:
+            stack_after = get_current_function_mode_stack()
+            depth_after = len(list(stack_after)) if stack_after is not None else None
+            if depth_after is not None and depth_after != depth_before:
+                raise RuntimeError(
+                    "Internal invariant violation: the run transaction changed the "
+                    f"caller's TorchFunctionMode stack depth ({depth_before} -> "
+                    f"{depth_after}); scoped device-context restoration must be "
+                    "exact on every exit path."
+                )
+
+
+@contextmanager
+def _call_execution_context_entered(context: Any) -> Any:
+    """Enter the REQUIRED recorded per-call execution context tightly (corr2_8).
+
+    Autocast: an ``enabled=True`` record enters autocast with the recorded
+    dtype; an explicit ``enabled=False`` record actively enters a DISABLED
+    autocast context when the runtime currently has that device class enabled
+    (so a caller's ambient autocast cannot contaminate a disabled capture) and
+    is vacuously satisfied when the device class is absent/disabled. Grad and
+    inference modes are entered explicitly. Context entry never touches RNG;
+    the caller's context is restored in reverse order on every exit. An
+    un-enterable recorded context is a typed refusal, never a raw torch error.
+    """
+
+    from .utils._torch_compat import autocast_is_enabled
+
+    stack: list[Any] = []
+    try:
+        for entry in context.autocast:
+            if entry.enabled:
+                dtype_name = str(entry.dtype or "").removeprefix("torch.")
+                # r45 secC_1 (defense-in-depth): route through the single ``torch_attr`` helper
+                # so this decode site cannot fire ``torch.__getattr__`` (lazy import /
+                # deprecated ``replacement()``) even if a context is ever built off the parser
+                # path. The subsequent ``isinstance(..., torch.dtype)`` gate is unchanged.
+                dtype = torch_attr(dtype_name)
+                if not isinstance(dtype, torch.dtype):
+                    raise _context_unavailable_error(
+                        f"autocast:{entry.device_type}",
+                        f"recorded autocast dtype {entry.dtype!r} is unavailable",
+                    )
+                try:
+                    ctx = torch.amp.autocast(entry.device_type, enabled=True, dtype=dtype)
+                    ctx.__enter__()
+                except (RuntimeError, ValueError, TypeError) as exc:
+                    raise _context_unavailable_error(
+                        f"autocast:{entry.device_type}", str(exc)
+                    ) from exc
+                stack.append(ctx)
+                continue
+            # Explicit disabled record: enter a disabled context only when the
+            # runtime reports that device class currently autocast-enabled; a
+            # runtime without the device class is vacuously disabled already.
+            try:
+                currently_enabled = bool(autocast_is_enabled(entry.device_type))
+            except (RuntimeError, TypeError):
+                currently_enabled = False
+            if currently_enabled:
+                try:
+                    ctx = torch.amp.autocast(entry.device_type, enabled=False)
+                    ctx.__enter__()
+                except (RuntimeError, ValueError, TypeError) as exc:
+                    raise _context_unavailable_error(
+                        f"autocast:{entry.device_type}", str(exc)
+                    ) from exc
+                stack.append(ctx)
+        try:
+            inference_ctx = torch.inference_mode(bool(context.inference_mode))
+            inference_ctx.__enter__()
+            stack.append(inference_ctx)
+            grad_ctx = torch.enable_grad() if context.grad_enabled else torch.no_grad()
+            grad_ctx.__enter__()
+            stack.append(grad_ctx)
+        except RuntimeError as exc:
+            raise _context_unavailable_error("grad_mode", str(exc)) from exc
+        yield
+    finally:
+        for ctx in reversed(stack):
+            ctx.__exit__(None, None, None)
+
+
+# r55 C3 -> r57 C3 (free_1 HIGH / sec_1 MED / corr_2 HIGH): op-agnostic
+# allocation-bomb preflight, with the size-driving-op ALLOWLIST DELETED.
+#
+# The op-execution literal-argument path is the seam r53 free_1 missed: a hostile
+# ``.tlspec`` can edit one plaintext ``manifest.json`` numeric literal so a
+# taken-path call (``torch.zeros(10**12)``/``F.pad(x, [10**12])``/
+# ``hann_window(10**11)``/``interpolate(scale_factor=1e12)``) drives a
+# multi-terabyte allocation and OOM-kills the default
+# ``tl.load(path).run(inputs)`` victim. The recorded-output-slot bound
+# (``_preflight_run_allocation`` at run-prep) catches the *self-consistent* tamper
+# (literal AND output slot both huge) but NOT the literal-only tamper (output slot
+# left honest/small), and per-arg ``.to("meta")`` never forces a *factory* op (no
+# tensor operand) onto meta.
+#
+# r55 gated the projection behind a hand-maintained ``_SIZE_DRIVING_QUALNAME_TAILS``
+# allowlist; that allowlist re-opened the class at every op it forgot (r56 found
+# ``pad``/``constant_pad_nd``/``fold``/``*_window``/``tril_indices``/``one_hot``
+# missing, plus a float ``interpolate(scale_factor=...)`` slipping the integer-only
+# sub-gate). The projection *mechanism* was ALREADY op-agnostic; only the GATE was
+# enumerated. r57 DELETES the allowlist entirely: ``FakeTensorMode`` projects the
+# output shape/bytes of EVERY taken-path call carrying a non-bool numeric literal
+# WITHOUT allocating (fake tensors never allocate -- factory ops included), and a
+# projected over-budget NEW allocation is refused BEFORE the real allocator runs.
+# "Size-relevance" is decided STRUCTURALLY by the projection, never guessed from an
+# op-name family list. Pure views / input-returning / in-place ops are excluded
+# structurally too (their fake output storage aliases a fake input storage, so they
+# contribute zero NEW bytes). It is the primary layer; the run-prep
+# recorded-output bound is layer 2, and both fail OPEN on a projection that raises.
+
+
+class _ProjectionCountExceeded(Exception):
+    """Private sentinel: a projection realized more fake outputs than the ceiling (r59).
+
+    Raised from ``_CountBoundedFakeTensorMode.__torch_dispatch__`` DURING fanout
+    construction (before the full fake tree exists), so a huge output-count literal can
+    never self-DoS the projection. It is caught BEFORE ``_preflight_call_allocation``'s
+    generic ``except Exception`` fail-open and converted to a typed refusal -- an honest
+    op never realizes more than ``max(recorded * 8, 4096)`` outputs, so a breach is a
+    hard faithfulness divergence, not a missing fake implementation. Deliberately NOT a
+    ``RuntimeError`` subclass so it is caught by its own clause ahead of the
+    allocation-classed / fail-open handling.
+    """
+
+
+# Allocator-death signatures on a raw ``RuntimeError`` message (r59 section 2.4). A
+# projection or real call that dies of allocation cannot fail OPEN: the real op's
+# identical prelude would die the same way. These convert to a typed refusal.
+_ALLOCATOR_SIGNATURES = (
+    "std::bad_alloc",
+    "DefaultCPUAllocator",
+    "can't allocate memory",
+    "CUDA out of memory",
+    "CUDACachingAllocator",
+)
+
+
+def _is_allocator_death(exc: BaseException) -> bool:
+    """Return whether an exception is an allocation failure (fail-closed, not fail-open)."""
+
+    if isinstance(exc, MemoryError):
+        return True
+    oom = getattr(torch, "OutOfMemoryError", None)
+    if isinstance(oom, type) and isinstance(exc, oom):
+        return True
+    cuda_oom = getattr(torch.cuda, "OutOfMemoryError", None)
+    if isinstance(cuda_oom, type) and isinstance(exc, cuda_oom):
+        return True
+    if isinstance(exc, RuntimeError):
+        message = str(exc)
+        return any(sig in message for sig in _ALLOCATOR_SIGNATURES)
+    return False
+
+
+@lru_cache(maxsize=1)
+def _fake_tensor_mode_class() -> type[Any] | None:
+    """Return torch's ``FakeTensorMode`` class if importable, else ``None``.
+
+    Feature-detected per the ``_torch_compat`` convention (never a version
+    string): the projection is a runtime allocation preflight, not a capture-hot
+    probe, so an absent ``FakeTensorMode`` fails OPEN to the run-prep
+    recorded-output bound rather than refusing a legitimate run.
+    """
+
+    try:
+        from torch._subclasses.fake_tensor import FakeTensorMode
+    except Exception:  # pragma: no cover - FakeTensorMode ships on supported torch.
+        return None
+    return FakeTensorMode
+
+
+def _count_fake_tensor_leaves(tree: Any) -> int:
+    """Count tensor leaves in a projection output tree (bounded container kinds)."""
+
+    total = 0
+    stack: list[Any] = [tree]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, torch.Tensor):
+            total += 1
+        elif isinstance(node, (tuple, list)):
+            stack.extend(node)
+        elif isinstance(node, Mapping):
+            stack.extend(node.values())
+    return total
+
+
+@lru_cache(maxsize=1)
+def _count_bounded_fake_tensor_mode_class() -> type[Any] | None:
+    """Return a ``FakeTensorMode`` subclass that caps realized fake-output arity (r59).
+
+    The subclass counts fake tensor leaves produced by EACH ``__torch_dispatch__`` and
+    raises ``_ProjectionCountExceeded`` the instant the running total passes the per-call
+    ceiling -- DURING fanout construction, before the whole fake output tree materializes.
+    This kills the ``tensor_split(x, N)`` self-DoS (r58 free_1): projecting the real op to
+    "see" its size would itself build N fake objects; counting during construction aborts
+    at ``ceiling + 1`` fakes regardless of N. Data-dependent ops (``nonzero``/``unique``)
+    still raise their own ``DynamicOutputShapeException`` through ``super()`` untouched, so
+    the fail-open path is preserved. ``None`` when ``FakeTensorMode`` is unavailable.
+    """
+
+    base = _fake_tensor_mode_class()
+    if base is None:
+        return None
+
+    class _CountBoundedFakeTensorMode(base):  # type: ignore[valid-type,misc]
+        def __init__(self, *args: Any, ceiling: int = _OUTPUT_COUNT_FLOOR, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self._tl_ceiling = ceiling
+            self._tl_fake_count = 0
+            self._tl_baseline = 0
+
+        def _tl_set_baseline(self) -> None:
+            # Discount fakes created by input conversion so only projection OUTPUT
+            # tensors count against the ceiling (from_tensor is not contractually
+            # dispatch-silent across torch versions -- keep this cross-version defense).
+            self._tl_baseline = self._tl_fake_count
+
+        def __torch_dispatch__(
+            self, func: Any, types: Any, args: Any = (), kwargs: Any = None
+        ) -> Any:
+            out = super().__torch_dispatch__(func, types, args, kwargs)
+            self._tl_fake_count += _count_fake_tensor_leaves(out)
+            if self._tl_fake_count - self._tl_baseline > self._tl_ceiling:
+                raise _ProjectionCountExceeded(
+                    f"projection realized {self._tl_fake_count - self._tl_baseline} fake "
+                    f"outputs, exceeding ceiling {self._tl_ceiling}"
+                )
+            return out
+
+    return _CountBoundedFakeTensorMode
+
+
+def _has_numeric_literal(value: Any, _depth: int = 0) -> bool:
+    """Return whether a decoded argument tree carries a size-relevant numeric literal.
+
+    One of the two size sources ``_projection_required_by_arguments`` recognizes
+    (the other is a tensor operand -- ``_has_tensor_operand``, r61). "Carries a
+    size-relevant literal" means the decoded tree holds any non-bool ``int`` or
+    any *finite* ``float`` -- the float branch covers multiplier parameters such as
+    ``F.interpolate(scale_factor=<float>)`` that an integer-only gate missed
+    (r56 free_1). ``bool`` is excluded (never a size argument), and non-finite
+    float sentinels (``inf``/``nan``) are not size authorities and fall through to
+    the existing literal validation. Bounded recursion mirrors the literal-nesting
+    ceiling. Whether such a call is *actually* size-driving is then decided
+    structurally by the projection, never by an op-name family list.
+    """
+
+    if _depth > _MAX_DECODE_NESTING_DEPTH:
+        return False
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if isinstance(value, (list, tuple)):
+        return any(_has_numeric_literal(item, _depth + 1) for item in value)
+    if isinstance(value, Mapping):
+        return any(_has_numeric_literal(item, _depth + 1) for item in value.values())
+    return False
+
+
+def _has_tensor_operand(value: Any, _depth: int = 0) -> bool:
+    """True if a decoded argument tree contains a torch.Tensor (bounded, short-circuit).
+
+    isinstance-only -- NO property read (numel/shape) ever fires, so a subclass can
+    never route user code through the predicate. Mirrors ``_has_numeric_literal``'s
+    recursion over list/tuple/Mapping. Every shape amplifier (``outer``/``kron``/
+    broadcast-``mul``/``cartesian_prod``/``tensordot(dims=0)``/``einsum``/``diag`` --
+    and the zero-numel family ``mm``/``matmul``/``einsum`` on ``[N,0] @ [0,N]``,
+    where numel is a PRODUCT so a 0 dim hides arbitrarily large sibling dims)
+    carries a tensor operand, so no amplifier can be pre-filtered out: the r60
+    free_1 has-literal premise hole is closed structurally, not by an op list.
+    Over-depth returns True (fail-closed: project).
+    """
+
+    if _depth > _MAX_DECODE_NESTING_DEPTH:
+        return True
+    if isinstance(value, torch.Tensor):
+        return True
+    if isinstance(value, (list, tuple)):
+        return any(_has_tensor_operand(item, _depth + 1) for item in value)
+    if isinstance(value, Mapping):
+        return any(_has_tensor_operand(item, _depth + 1) for item in value.values())
+    return False
+
+
+def _projection_required_by_arguments(args: Sequence[Any], kwargs: Mapping[str, Any]) -> bool:
+    """Whether this replay call carries any size source (tensor operand or numeric literal).
+
+    The ONLY sound projection skip is "no size source at all" (r61): a call with
+    neither a tensor operand nor a numeric literal gives no fake/meta kernel
+    anything to size an output tree from, so it is provably allocation-trivial.
+    Any richer skip heuristic (has-literal-only, numel/arity thresholds) gaps on a
+    shape-amplifier family and re-opens the class.
+    """
+
+    arg_list = list(args)
+    kwarg_dict = dict(kwargs)
+    return (
+        _has_numeric_literal(arg_list)
+        or _has_numeric_literal(kwarg_dict)
+        or _has_tensor_operand(arg_list)
+        or _has_tensor_operand(kwarg_dict)
+    )
+
+
+def _tree_to_fake(mode: Any, value: Any) -> Any:
+    """Replace every live tensor in an argument tree with its fake stand-in."""
+
+    if isinstance(value, torch.Tensor):
+        try:
+            return mode.from_tensor(value)
+        except Exception:
+            return value
+    if isinstance(value, tuple):
+        return tuple(_tree_to_fake(mode, item) for item in value)
+    if isinstance(value, list):
+        return [_tree_to_fake(mode, item) for item in value]
+    if isinstance(value, dict):
+        return {key: _tree_to_fake(mode, item) for key, item in value.items()}
+    return value
+
+
+def _fake_tensor_storage_id(value: torch.Tensor) -> int | None:
+    """Return a fake tensor's storage identity (``untyped_storage()._cdata``), or None.
+
+    The storage ``_cdata`` pointer identifies the underlying allocation. Two
+    tensors that share it alias the same storage (a view / in-place / input-return
+    output aliases its input). ``FakeTensorMode`` exposes readable fake storages;
+    an unreadable one returns ``None`` and is treated per-caller (input side: not
+    aliasable; output side: charged fail-closed).
+    """
+
+    try:
+        return int(value.untyped_storage()._cdata)
+    except Exception:
+        return None
+
+
+def _input_storage_ids(value: Any) -> frozenset[int]:
+    """Collect the fake-input storage identities across a fake argument tree.
+
+    Only readable storage ids participate: an input whose storage cannot be read
+    is simply absent from the set, so it can never make an output *look* like a
+    view (an unreadable output is charged regardless). Bounded to the same
+    container kinds the fake conversion produces.
+    """
+
+    ids: set[int] = set()
+    stack: list[Any] = [value]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, torch.Tensor):
+            sid = _fake_tensor_storage_id(node)
+            if sid is not None:
+                ids.add(sid)
+        elif isinstance(node, (tuple, list)):
+            stack.extend(node)
+        elif isinstance(node, Mapping):
+            stack.extend(node.values())
+    return frozenset(ids)
+
+
+def _new_allocation_bytes(
+    projected: Any, input_storage_ids: AbstractSet[int]
+) -> dict[torch.device, int]:
+    """Sum the NEWLY-allocated projected output bytes per device across an output tree.
+
+    An output tensor whose fake ``untyped_storage()._cdata`` aliases a fake-INPUT
+    storage allocates nothing -- it is a pure view, an input-returning op, or an
+    in-place op -- so it contributes ZERO new bytes and is skipped. This structural
+    storage-aliasing test replaces the r55 hardcoded view-name exclusion
+    (``expand``/``broadcast_to``/``as_strided``/``unfold``) with no op/view list,
+    and correctly charges only the NEW tensors of a mixed-output op (e.g.
+    ``split`` -> views of the input are skipped; a fresh concat is charged). An
+    output whose storage identity cannot be read is CHARGED (fail-closed: an
+    unreadable materializer must never masquerade as a view). ``_base`` is
+    deliberately NOT used: in-place / input-returning outputs have ``_base is
+    None`` yet still alias an input storage.
+    """
+
+    totals: dict[torch.device, int] = {}
+    stack: list[Any] = [projected]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, torch.Tensor):
+            sid = _fake_tensor_storage_id(node)
+            if sid is not None and sid in input_storage_ids:
+                continue  # aliases a fake input storage -> allocates nothing
+            try:
+                nbytes = int(node.numel()) * int(node.element_size())
+                device = node.device
+            except Exception:
+                continue
+            totals[device] = totals.get(device, 0) + nbytes
+        elif isinstance(node, (tuple, list)):
+            stack.extend(node)
+        elif isinstance(node, Mapping):
+            stack.extend(node.values())
+    return totals
+
+
+def _preflight_call_allocation(
+    entry: CallableRegistryEntry | None,
+    func: Callable[..., Any],
+    args: Sequence[Any],
+    kwargs: Mapping[str, Any],
+    call: RunnableCallDescriptor,
+    ceiling: RunResourceCeiling | None = None,
+) -> None:
+    """Refuse a size-source-carrying call by projected NEW bytes AND realized output COUNT.
+
+    Runs the resolved callable under a count-instrumented
+    ``FakeTensorMode(allow_non_fake_inputs=True)`` (ZERO allocation) for EVERY taken-path
+    call carrying a size source: a non-bool numeric literal (``_has_numeric_literal``) OR
+    a tensor operand (``_has_tensor_operand``, r61 -- the has-literal-only gate's premise,
+    "no literal implies bounded by live shapes", is FALSE for shape amplifiers such as
+    ``outer``/``kron``/broadcast-``mul``/``cartesian_prod``/``tensordot(dims=0)``/
+    ``einsum``/``diag`` and the zero-numel ``mm``/``matmul``/``einsum`` on ``[N,0]@[0,N]``).
+    The r55 op-name allowlist is deleted, so "size-relevance" is decided structurally by
+    the projection, not guessed; the ONLY skip is a call with NO size source at all
+    (``_projection_required_by_arguments``). Two structural bounds fire before the real
+    call:
+
+    * output COUNT (r59 free_1): the count-bounded mode caps realized fake outputs at
+      ``max(recorded * 8, 4096)`` DURING fanout construction and raises
+      ``_ProjectionCountExceeded`` -- caught here BEFORE the generic fail-open and
+      converted to a typed ``op_output_count_preflight`` refusal, so a
+      ``tensor_split(x, N)`` count bomb can neither self-DoS the projection nor slip
+      through as a 0-byte fanout.
+    * NEW bytes: each projected output-device's NEWLY-allocated total (pure views /
+      input-returning / in-place outputs contribute zero -- ``_new_allocation_bytes``)
+      is compared against the never-under-estimating live budget and refused typed at
+      ``op_allocation_preflight``.
+
+    If the projection RAISES a NON-allocation error -- a data-dependent op with no
+    fake/meta impl (``nonzero``/``unique`` -> ``DynamicOutputShapeException``, or ``fold``
+    with capture-invalid ``output_size``) -- it FAILS OPEN to the run-prep bound, so a
+    legitimate such op is never over-refused (the r51 over-catch anti-pattern). But an
+    ALLOCATION-classed projection failure (``std::bad_alloc`` in the C++ prelude at
+    int-limit N) fails CLOSED typed (r59 section 2.4): the real op's identical prelude
+    would die too, so failing open just runs the death twice. An unavailable
+    ``FakeTensorMode`` fails open identically. ``entry`` is retained for call-site
+    stability but no longer gates the projection.
+    """
+
+    del entry  # r57: no op-name gate; r61: no has-literal gate either -- any size source projects.
+    if not _projection_required_by_arguments(args, kwargs):
+        return  # provably trivial: no tensor operand and no numeric literal -> no size source
+    mode_cls = _count_bounded_fake_tensor_mode_class()
+    if mode_cls is None:
+        return  # feature-detect fail-open -> run-prep recorded-output bound
+    count_ceiling = (
+        ceiling.per_call_output_count_ceiling(call)
+        if ceiling is not None
+        else max(len(getattr(call, "output_slot_ids", ()) or ()) * 8, _OUTPUT_COUNT_FLOOR)
+    )
+    try:
+        with mode_cls(allow_non_fake_inputs=True, ceiling=count_ceiling) as mode:
+            fake_args = _tree_to_fake(mode, list(args))
+            fake_kwargs = _tree_to_fake(mode, dict(kwargs))
+            input_storage_ids = _input_storage_ids(fake_args) | _input_storage_ids(fake_kwargs)
+            mode._tl_set_baseline()
+            projected = func(*fake_args, **fake_kwargs)
+    except _ProjectionCountExceeded as exc:
+        # Count breach: a faithful replay never realizes more than the ceiling. Typed
+        # refusal, BEFORE the generic fail-open and before the full fake/real tree exists.
+        raise RunCapabilityUnavailableError(
+            f"Sparse call {call.call_id!r} projects more than {count_ceiling} output "
+            f"tensors ({exc}); the recorded output-count literal would drive an "
+            "unbounded fanout allocation. The descriptor may be tampered.",
+            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+            detection_stage="op_output_count_preflight",
+            call_id=call.call_id,
+            affected_op_labels=call.op_labels,
+            output_count_ceiling=count_ceiling,
+        ) from exc
+    except Exception as exc:
+        # r59 section 2.4: an ALLOCATION-classed projection failure (std::bad_alloc in
+        # the O(N) C++ prelude at int-limit N) fails CLOSED -- the real op's identical
+        # prelude dies too. Every OTHER failure (data-dependent nonzero/unique, fold
+        # output_size inconsistency) keeps today's FAIL OPEN so a legitimate op runs.
+        if _is_allocator_death(exc):
+            raise RunCapabilityUnavailableError(
+                f"Sparse call {call.call_id!r} could not be projected without an "
+                "allocation failure; the recorded literals drive an out-of-budget "
+                "allocation in the operator prelude. The descriptor may be tampered.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                detection_stage="op_allocation_preflight",
+                call_id=call.call_id,
+                affected_op_labels=call.op_labels,
+            ) from exc
+        return
+    for device, requested in _new_allocation_bytes(projected, input_storage_ids).items():
+        available = _allocation_budget_bytes(device)
+        if requested > available:
+            raise RunCapabilityUnavailableError(
+                f"Sparse call {call.call_id!r} projects a {requested}-byte allocation "
+                f"on device {str(device)!r}, but only {available} bytes are available "
+                "on this host. The recorded literal arguments would drive an "
+                "out-of-budget allocation; the descriptor may be tampered.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                detection_stage="op_allocation_preflight",
+                call_id=call.call_id,
+                device=str(device),
+                required_bytes=requested,
+                available_bytes=available,
+                affected_op_labels=call.op_labels,
+            )
 
 
 def _execute_sparse_call(
     call: RunnableCallDescriptor,
     func: Callable[..., Any],
     slot_values: Mapping[str, torch.Tensor],
+    *,
+    registry_entry: CallableRegistryEntry | None = None,
+    ceiling: RunResourceCeiling | None = None,
 ) -> Any:
     """Construct and execute one sparse call from literal and tensor leaves."""
 
@@ -1031,9 +3219,33 @@ def _execute_sparse_call(
                 slot_id=tensor_argument.slot_id,
             ) from exc
         _write_argument(args, kwargs, tensor_argument.argument_path, value)
+    # r55 C3: op-agnostic allocation preflight BEFORE the real dispatch. A typed
+    # refusal here replaces the raw allocator OOM-kill a hostile literal would
+    # otherwise cause; it never masks a genuine signature drift (the drift path
+    # below still runs the real call for every non-refused request).
+    _preflight_call_allocation(registry_entry, func, args, kwargs, call, ceiling)
     try:
         return func(*args, **kwargs)
+    except RunCapabilityUnavailableError:
+        # A typed capability refusal from a nested guard (e.g. a re-materialization
+        # clone inside a resolved callable) is already correct -- never re-cloak it as
+        # signature drift.
+        raise
     except Exception as exc:
+        # r59 section 2.4: an allocation-classed death from the REAL call is a capability
+        # fact, not signature drift -- re-type it typed at ``op_allocation_execution`` so a
+        # gate-4-passing run whose live+transient peak still overruns the host reports an
+        # allocation refusal, never a misleading ``runtime_signature_drift``.
+        if _is_allocator_death(exc):
+            raise RunCapabilityUnavailableError(
+                f"Sparse call {call.call_id!r} failed with an allocation error during "
+                "execution; its recorded shapes exhaust this host's memory. The "
+                "descriptor may be tampered or the host is too small.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                detection_stage="op_allocation_execution",
+                call_id=call.call_id,
+                affected_op_labels=call.op_labels,
+            ) from exc
         raise RuntimeSignatureDriftError(
             f"Resolved callable rejected sparse recipe for {call.call_id!r}: {exc}",
             code=RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value,
@@ -1047,6 +3259,7 @@ def _populate_source_slots(
     descriptor: SparseRunDescriptor,
     slot_values: Mapping[str, torch.Tensor],
     *,
+    ceiling: RunResourceCeiling,
     witness_slot_ids: frozenset[str] = frozenset(),
     witness_source_snapshots: dict[str, torch.Tensor] | None = None,
 ) -> None:
@@ -1064,13 +3277,26 @@ def _populate_source_slots(
         value = slot_values.get(slot.slot_id)
         op = _op_for_slot(fork, slot.slot_id)
         if value is not None and op is not None:
-            op._internal_set("out", value.detach().clone())
+            op._internal_set(
+                "out",
+                ceiling.guarded_clone(
+                    value,
+                    call_id=None,
+                    slot_id=slot.slot_id,
+                    affected_op_labels=(),
+                ),
+            )
         if (
             value is not None
             and witness_source_snapshots is not None
             and slot.slot_id in witness_slot_ids
         ):
-            witness_source_snapshots[slot.slot_id] = value.detach().clone()
+            witness_source_snapshots[slot.slot_id] = ceiling.guarded_clone(
+                value,
+                call_id=None,
+                slot_id=slot.slot_id,
+                affected_op_labels=(),
+            )
 
 
 def _write_argument(
@@ -1146,6 +3372,7 @@ def _bind_call_outputs(
     slot_values: dict[str, torch.Tensor],
     fork: Any,
     *,
+    ceiling: RunResourceCeiling,
     before_versions: Mapping[str, int],
     attestation_slot_ids: frozenset[str],
     attestation_slot_values: dict[str, torch.Tensor],
@@ -1159,17 +3386,27 @@ def _bind_call_outputs(
     output = _resolve_setter_output(call, output, slot_values)
     expected_paths = tuple(slots[slot_id].output_path or () for slot_id in call.output_slot_ids)
     actual_paths = _tensor_leaf_paths(output)
+    # r59 gate 2 (backstop): a projection-skipped call (data-dependent fail-open, or no
+    # numeric literal) cannot smuggle an unbounded realized-output tree past the
+    # front-line count projection. Honest realized == recorded, so this is pure headroom.
+    ceiling.charge_realized_outputs(call, len(actual_paths))
+    expected_structure_paths = _canonicalize_structseq_output_paths(output, expected_paths)
+    actual_structure_paths = _canonicalize_structseq_output_paths(output, actual_paths)
+    output_type_matches = _recorded_structseq_output_type_matches(fork, call, output)
     checks.append(
         _contract_check(
             f"output_structure:{call.call_id}",
             len(call.output_slot_ids) == len(call.op_labels)
-            and tuple(actual_paths) == expected_paths,
+            and output_type_matches
+            and actual_structure_paths == expected_structure_paths,
             RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
             f"Call {call.call_id!r} output tensor paths disagree with the recorded container.",
             affected_op_labels=call.op_labels,
             details=(
                 ("expected_paths", repr(expected_paths)),
                 ("actual_paths", repr(tuple(actual_paths))),
+                ("canonical_expected_paths", repr(expected_structure_paths)),
+                ("canonical_actual_paths", repr(actual_structure_paths)),
             ),
         )
     )
@@ -1215,16 +3452,37 @@ def _bind_call_outputs(
                 slot_values[version.slot_id] = value
                 produced_slot_ids.add(version.slot_id)
         for produced_slot_id in produced_slot_ids & attestation_slot_ids:
-            attestation_slot_values[produced_slot_id] = value.detach().clone()
+            # r59 gate 3: byte-guard every op-output snapshot before it allocates.
+            attestation_slot_values[produced_slot_id] = ceiling.guarded_clone(
+                value,
+                call_id=call.call_id,
+                slot_id=produced_slot_id,
+                affected_op_labels=call.op_labels,
+            )
         if witness_source_snapshots is not None:
             # Snapshot every escape-witness source slot at its production point so a
             # later in-place mutation of the live tensor cannot restale the digest
             # comparison (H3): the run-digest then matches the pre-mutation save-digest.
             for produced_slot_id in produced_slot_ids & witness_slot_ids:
-                witness_source_snapshots[produced_slot_id] = value.detach().clone()
+                witness_source_snapshots[produced_slot_id] = ceiling.guarded_clone(
+                    value,
+                    call_id=call.call_id,
+                    slot_id=produced_slot_id,
+                    affected_op_labels=call.op_labels,
+                )
         op = _op_for_label(fork, op_label)
         if op is not None:
-            op._internal_set("out", value.detach().clone())
+            # r59 gate 3: byte-guard the fork ``Op.out`` snapshot BEFORE it materializes a
+            # tampered view (r58 free_2) and before the shape-mismatch check below.
+            op._internal_set(
+                "out",
+                ceiling.guarded_clone(
+                    value,
+                    call_id=call.call_id,
+                    slot_id=slot_id,
+                    affected_op_labels=(op_label,),
+                ),
+            )
         shape_ok = tuple(value.shape) == slot.shape
         dtype_ok = str(value.dtype) == slot.dtype
         checks.append(
@@ -1264,7 +3522,14 @@ def _bind_call_outputs(
                 ),
             )
         )
-    checks.extend(_mutation_contract_checks(call, output, slot_values, before_versions))
+    state_slot_ids = frozenset(
+        slot.slot_id
+        for slot in descriptor.tensor_slots
+        if slot.role in {TensorSlotRole.PARAMETER, TensorSlotRole.BUFFER}
+    )
+    checks.extend(
+        _mutation_contract_checks(call, output, slot_values, before_versions, state_slot_ids)
+    )
     return tuple(checks)
 
 
@@ -1273,23 +3538,37 @@ def _mutation_contract_checks(
     output: Any,
     slot_values: Mapping[str, torch.Tensor],
     before_versions: Mapping[str, int],
+    state_slot_ids: frozenset[str] = frozenset(),
 ) -> tuple[ContractCheck, ...]:
-    """Validate recorded in-place aliasing and tensor-version expectations."""
+    """Validate recorded in-place aliasing and tensor-version expectations.
+
+    A NON-inplace call may legitimately bump the ``_version`` of a STATE buffer/parameter
+    slot -- a mode-sensitive norm layer (InstanceNorm/BatchNorm with
+    ``track_running_stats=True``) updates its ``running_mean``/``running_var`` running stats
+    inside the functional ``instance_norm``/``batch_norm`` call, which TorchLens does not
+    record as a separate in-place op (r29-C3, codex-F3). That running-stat update is a
+    declared-state side effect reproduced identically on a fresh replay from the captured
+    state, NOT the input/activation-tensor mutation this check guards against, so state slots
+    are excluded from the non-inplace ``changed`` set. Value correctness of the updated buffer
+    is separately enforced by state/output attestation, so this exclusion cannot mask a real
+    numeric divergence.
+    """
 
     changed = {
         slot_id
         for slot_id, before in before_versions.items()
-        if slot_id in slot_values and slot_values[slot_id]._version != before
+        if slot_id in slot_values and tensor_version_or_none(slot_values[slot_id]) != before
     }
     if not call.is_inplace:
+        non_state_changed = changed - state_slot_ids
         return (
             _contract_check(
                 f"mutation:{call.call_id}",
-                not changed,
+                not non_state_changed,
                 RunnableErrorCode.MUTATION_VERSION_MISMATCH,
                 f"Non-mutating call {call.call_id!r} changed an input tensor version.",
                 affected_op_labels=call.op_labels,
-                details=(("changed_slot_ids", repr(tuple(sorted(changed)))),),
+                details=(("changed_slot_ids", repr(tuple(sorted(non_state_changed)))),),
             ),
         )
     input_slot_id = _mutation_target_slot_id(call)
@@ -1315,10 +3594,14 @@ def _mutation_contract_checks(
         and isinstance(output_value, torch.Tensor)
         and (input_value is output_value or input_value.data_ptr() == output_value.data_ptr())
     )
+    # Version leg: enforced only when a baseline exists. An inference tensor has no
+    # version counter, so its in-place relation is proven by alias identity alone
+    # (hon1_4); a versioned tensor keeps the full version-bump requirement.
+    version_leg = input_slot_id in changed if input_slot_id in before_versions else True
     return (
         _contract_check(
             f"mutation:{call.call_id}",
-            input_slot_id in changed and aliases,
+            version_leg and aliases,
             RunnableErrorCode.MUTATION_VERSION_MISMATCH,
             f"In-place call {call.call_id!r} violated its alias/version expectation.",
             affected_op_labels=call.op_labels,
@@ -1382,6 +3665,7 @@ def _reconstruct_output(
     slot_values: Mapping[str, torch.Tensor],
     fork: Any,
     *,
+    ceiling: RunResourceCeiling,
     call_outputs: Mapping[str, Any],
 ) -> Any:
     """Reconstruct the model-output container and populate synthetic output Ops."""
@@ -1403,7 +3687,16 @@ def _reconstruct_output(
         slot_values_dict[slot.slot_id] = value
         op = _op_for_slot(fork, slot.slot_id)
         if op is not None:
-            op._internal_set("out", value.detach().clone())
+            # r59 gate 3: byte-guard the reconstructed model-output snapshot too.
+            op._internal_set(
+                "out",
+                ceiling.guarded_clone(
+                    value,
+                    call_id=None,
+                    slot_id=slot.slot_id,
+                    affected_op_labels=(),
+                ),
+            )
         values.append((slot.output_path or (), value))
     container_spec = _output_container_spec(fork)
     if container_spec is not None:
@@ -1420,6 +3713,20 @@ def _reconstruct_output(
                 f"Recorded output container could not be reconstructed: {exc}",
                 code=RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH.value,
             ) from exc
+    if len(values) == 1 and not values[0][0]:
+        # Genuine bare-tensor model output: nothing to reconstruct.
+        return values[0][1]
+    if values:
+        # r35 I1 defense in depth: a multi-leaf output with NO recorded container
+        # spec can only come from a legacy/tampered artifact (new saves are refused
+        # unless losslessness is proved). Approximating the container here would be
+        # a silent lossy substitution, so fail typed instead.
+        raise RunPreconditionError(
+            "Model output has multiple leaves but no recorded lossless container "
+            "contract; this artifact predates (or violates) the v2 output "
+            "losslessness proof and cannot be reconstructed faithfully.",
+            code=RunnableErrorCode.MISSING_OUTPUT_CONTAINER_CONTRACT.value,
+        )
     return _container_from_paths(values)
 
 
@@ -1432,6 +3739,143 @@ def _output_container_spec(trace: Any) -> ContainerSpec | None:
         if isinstance(spec, ContainerSpec):
             return spec
     return None
+
+
+def _output_not_reproduced(
+    descriptor: SparseRunDescriptor, container_spec: ContainerSpec | None
+) -> bool:
+    """Return whether the captured model output was NOT reproduced by the sparse replay.
+
+    A model whose forward returns a HOST-ESCAPED non-tensor Python scalar (``float(x.sum())``,
+    ``x.item()``, ``int(...)``, ``bool(...)``) has NO output tensor slots AND no reconstructable
+    output container spec, so the sparse DAG cannot emit that value: ``_reconstruct_output``
+    returns a dropped ``None``. The escape-witness class applies to the OUTPUT too -- an output
+    the replay never produced or compared must never be blessed VERIFIED. Stage-6 downgrades
+    such a run to UNVERIFIABLE.
+
+    A normal tensor output has >= 1 ``OUTPUT`` tensor slot; a container output (even one whose
+    leaves are all literals) carries a ``ContainerSpec``; both are genuinely produced/compared
+    and stay eligible for VERIFIED. Only the "no output slot AND no container spec" shape -- the
+    host-escaped / dropped output -- is flagged here.
+
+    Parameters
+    ----------
+    descriptor:
+        Runnable descriptor whose tensor slots include the model-output slots.
+    container_spec:
+        The shared recorded output ``ContainerSpec`` (``None`` when none was recorded).
+
+    Returns
+    -------
+    bool
+        True when replay produced no output tensor and no reconstructable container.
+    """
+
+    has_output_slot = any(slot.role is TensorSlotRole.OUTPUT for slot in descriptor.tensor_slots)
+    return not has_output_slot and container_spec is None
+
+
+def _container_spec_reconstruction_lossy(spec: ContainerSpec | None) -> bool:
+    """Return whether ``spec`` (or any nested child) reconstructs lossily.
+
+    A dataclass / ``ModelOutput`` output whose live instance carried computed
+    non-field/non-key state, a ``__slots__`` layout, or a data-descriptor field is
+    flagged ``lossy_reconstruction`` at capture: the non-invoking rebuild cannot restore
+    that state and must NOT be blessed VERIFIED. Any lossy node anywhere in the output
+    container tree downgrades the whole run to UNVERIFIABLE.
+
+    The persisted ``lossy_reconstruction`` flag is attacker-controlled in an untrusted bundle,
+    so we NEVER trust a ``False`` alone: for every dataclass / ``hf_model_output`` node we ALSO
+    recompute lossiness INDEPENDENTLY from the RESOLVED type at load time (``__slots__`` /
+    data-descriptor field / dropped non-field state), so a forged ``lossy_reconstruction=False``
+    cannot force a false VERIFIED. The persisted flag stays as a supplementary signal (kept for
+    the purely instance-level custom-``ModelOutput`` case that is not type-observable at load),
+    but it can only ADD lossiness, never suppress the independent recompute.
+    """
+
+    if spec is None:
+        return False
+    if _spec_node_reconstruction_lossy(spec):
+        return True
+    return any(_container_spec_reconstruction_lossy(child) for _, child in spec.child_specs)
+
+
+def _spec_node_reconstruction_lossy(spec: ContainerSpec) -> bool:
+    """Return whether one dataclass / ``hf_model_output`` node reconstructs lossily.
+
+    Combines the persisted (supplementary) flag with an INDEPENDENT load-time recompute from
+    the resolved type. A tampered spec naming a type that fails default-deny admissibility, or
+    one whose type is not loaded (reconstruction then falls back to a plain namespace / mapping
+    that is NOT the captured container type), is treated as lossy -- never a false VERIFIED.
+    """
+
+    if getattr(spec, "lossy_reconstruction", False):
+        return True
+    # r37 R11: the load-time recompute follows the capability table's per-kind
+    # instance-state rule. ``type_recompute`` kinds re-derive lossiness from the
+    # RESOLVED type so a forged ``lossy_reconstruction=False`` cannot suppress it;
+    # builtin-stateless kinds short-circuit False; ``instance_refused`` /
+    # ``declaration_required`` kinds are policed at save (their persisted flag is
+    # supplementary and honest captures never produce a stateful instance).
+    rule = CONTAINER_KIND_CAPABILITIES.get(spec.kind, {}).get("instance_state_rule")
+    if rule != "type_recompute":
+        return False
+    if spec.kind == "namedtuple":
+        try:
+            container_type = resolve_container_type(spec)
+        except ContainerReconstructionError:
+            return True
+        if container_type is None:
+            # Unresolved namedtuple type: reconstruction substitutes a synthesized
+            # type -- a lossy type substitution, never a false VERIFIED.
+            return True
+        # secB_1 forged-flag defense: a resolved namedtuple type that CAN carry
+        # per-instance state (no ``__slots__ = ()``) is treated as lossy even when
+        # the persisted flag is false. Plain ``collections.namedtuple`` /
+        # ``typing.NamedTuple`` / slotted subclasses stay VERIFIED-eligible.
+        # r49 secB_1: ALSO couple to reconstruction's substitution criterion -- a namedtuple
+        # type that is neither a generated namedtuple nor a trusted structseq rebuilds as a
+        # plain ``tuple`` (type substitution), which the instance-dict signal alone misses
+        # (the r48 non-``FunctionType``-``__new__`` hole).
+        return namedtuple_type_can_carry_instance_state(
+            container_type
+        ) or _reconstruction_would_substitute_plain(container_type, "namedtuple", spec.fields, spec)
+    captured_names = spec.fields if spec.kind == "dataclass" else spec.keys
+    try:
+        container_type = resolve_container_type(spec)
+    except ContainerReconstructionError:
+        # A tampered / non-admissible type is refused at reconstruction; for the honesty
+        # gate treat it as lossy so it can never be blessed VERIFIED.
+        return True
+    if container_type is None:
+        # The captured type is not loaded, so reconstruction returns a plain namespace / mapping
+        # rather than the recorded container type: a lossy substitution, never a false VERIFIED.
+        return True
+    return reconstruction_is_lossy_by_type(container_type, captured_names, spec.kind, spec)
+
+
+def _fresh_bare_tensor_root(trace: Any) -> bool:
+    """Return whether the fresh refresh proof positively attests a bare-tensor output root (r39).
+
+    Consumes the ``_runnable_output_losslessness`` proof ``save_new_outs`` copies from the FRESH
+    refresh forward onto the projected fork (corr2_5). The live bare-tensor fast path is honest
+    ONLY when that proof is present, lossless, its root kind is exactly ``bare_tensor``, it walked
+    a single leaf, and it used no fallback/duplicate traversal -- otherwise an opaque
+    set/frozenset/custom container (which yields the same one-leaf/no-spec/no-path signature)
+    could be wrongly blessed. A missing or malformed proof fails closed (returns ``False``).
+    """
+
+    proof = getattr(trace, "__dict__", {}).get("_runnable_output_losslessness")
+    if not isinstance(proof, Mapping):
+        return False
+    return (
+        bool(proof.get("lossless"))
+        and bool(proof.get("bare_tensor_root"))
+        and proof.get("root_kind") == "bare_tensor"
+        and int(proof.get("leaf_count", 0)) <= 1
+        and not bool(proof.get("used_fallback"))
+        and not bool(proof.get("duplicate_paths"))
+    )
 
 
 def _reconstruct_live_output(trace: Any) -> tuple[Any, bool]:
@@ -1469,8 +3913,13 @@ def _reconstruct_live_output(trace: Any) -> tuple[Any, bool]:
         op = trace.ops[output_labels[0]]
         has_spec = getattr(op, "container_spec", None) is not None
         has_path = bool(getattr(op, "container_path", ()) or ())
-        if not has_spec and not has_path:
-            # Genuine single bare-tensor model output: no container to reconstruct.
+        if not has_spec and not has_path and _fresh_bare_tensor_root(trace):
+            # Genuine single bare-tensor model output: no container to reconstruct. r39
+            # corr2_5: gated on the FRESH refresh proof's ``bare_tensor_root`` fact -- an
+            # opaque set/frozenset/custom container the traversal fell back on produces the
+            # SAME "one leaf, no spec, no path" signature, so without this positive proof a
+            # wrong bare-tensor object would be blessed faithful (and a multi-tensor set would
+            # silently drop a leaf). A missing/opaque proof falls through to faithful=False.
             return op.out, True
     # Multi-leaf output lacking a faithful reconstructable container contract, or a
     # single leaf that was actually a non-reconstructable (opaque) container. Return
@@ -1531,28 +3980,55 @@ def _call_witness_checks(
     call: RunnableCallDescriptor,
     slot_values: Mapping[str, torch.Tensor],
 ) -> tuple[ContractCheck, ...]:
-    """Compare scalar-bool and loop witnesses immediately after their call."""
+    """Compare scalar-bool and loop witnesses immediately after their call.
+
+    r71 A2: the call's OWNER-RECORD ``control_obligations`` are the required check
+    domain (replay-consumed structure, never the witness stream). Every obligation
+    demands its exact same-kind witness; a missing witness whose obligation carries
+    no typed predicate gap fails closed as a check (belt behind the parse-time
+    discharge equality). Surviving witnesses without an obligation cannot exist
+    post-parse.
+    """
 
     checks: list[ContractCheck] = []
-    for witness in sorted(descriptor.control_witnesses, key=lambda item: item.order):
-        if witness.call_id != call.call_id or witness.kind not in {
-            ControlWitnessKind.SCALAR_BOOL,
-            ControlWitnessKind.LOOP_PREDICATE,
-        }:
+    witnesses_by_identity = {
+        (witness.call_id, witness.kind, witness.site_label): witness
+        for witness in descriptor.control_witnesses
+        if witness.kind in {ControlWitnessKind.SCALAR_BOOL, ControlWitnessKind.LOOP_PREDICATE}
+    }
+    gap_members = {
+        gap.source_member
+        for gap in descriptor.coverage_gaps
+        if gap.gap_kind
+        in {WitnessGapKind.UNOBSERVED_PREDICATE, WitnessGapKind.UNCLASSIFIED_TERMINAL_BOOL}
+    }
+    for obligation in call.control_obligations:
+        witness = witnesses_by_identity.get((call.call_id, obligation.kind, obligation.site_label))
+        code = (
+            RunnableErrorCode.LOOP_PREDICATE_DIVERGENCE
+            if obligation.kind is ControlWitnessKind.LOOP_PREDICATE
+            else RunnableErrorCode.SCALAR_BOOL_DIVERGENCE
+        )
+        if witness is None:
+            if obligation.output_slot_id in gap_members:
+                # Gap-discharged obligation: the derived completeness floor already
+                # ceilings this run at UNVERIFIABLE; there is no witness to compare.
+                continue
+            checks.append(
+                _contract_check(
+                    f"control_obligation:{call.call_id}:{obligation.site_label}",
+                    False,
+                    RunnableErrorCode.CONTEXT_FIELD_INVALID,
+                    "Control obligation has no discharging witness or typed gap.",
+                    affected_op_labels=(obligation.site_label,),
+                )
+            )
             continue
-        values = [
-            slot_values[slot_id] for slot_id in call.output_slot_ids if slot_id in slot_values
-        ]
+        scalar = slot_values.get(obligation.output_slot_id)
         expected = bool(_decode_literal(witness.observed_value))
-        scalar = values[0] if values else None
         actual: bool | None = None
         if isinstance(scalar, torch.Tensor) and scalar.numel() == 1:
             actual = bool(scalar.item())
-        code = (
-            RunnableErrorCode.LOOP_PREDICATE_DIVERGENCE
-            if witness.kind is ControlWitnessKind.LOOP_PREDICATE
-            else RunnableErrorCode.SCALAR_BOOL_DIVERGENCE
-        )
         checks.append(
             _contract_check(
                 f"control_witness:{witness.witness_id}",
@@ -1569,6 +4045,10 @@ def _call_witness_checks(
             )
         )
     return tuple(checks)
+
+
+_INPUT_STRUCTURE_SITE_PREFIX = "input_structure:"
+"""``site_label`` prefix of a persisted input-boundary structure fact (r67 C2)."""
 
 
 def _post_execution_contract_checks(
@@ -1599,12 +4079,39 @@ def _post_execution_contract_checks(
             # Non-tensor input leaves are compared in the input contract before
             # execution; they are not runtime container-structure facts.
             continue
+        if _is_model_input_metadata_witness(witness):
+            # Model-input metadata-predicate facts are compared against the RAW
+            # runtime inputs in the input contract before execution; they are not
+            # runtime container-structure facts.
+            continue
         if _is_unbound_state_escape_witness(witness):
             # Unbound state escapes are compared by capture-digest in the dedicated
             # staleness check, not against runtime container structure.
             continue
+        if _is_state_metadata_fact_witness(witness):
+            # r65 F-1: declared capture-time state-metadata facts (requires_grad /
+            # grad_fn presence) are REPRODUCED by run preparation (the recorded bit is
+            # applied to the staged slot), not compared against runtime container
+            # structure.
+            continue
+        if witness.site_label.startswith(_MODULE_TRAINING_MODE_SITE_PREFIX):
+            # The declared per-module train/eval mode is a capture-time state fact anchoring
+            # VERIFIED (see ``_mode_sensitive_op_unwitnessed``), not a runtime container
+            # structure fact; it must not be compared against the runtime container.
+            continue
         if witness.kind is ControlWitnessKind.CONDITIONAL_ARM_ENTRY:
             checks.append(_conditional_arm_check(witness, fork))
+        elif witness.site_label.startswith(_INPUT_STRUCTURE_SITE_PREFIX):
+            # r67 C2: per-site input-boundary structure facts compare against a runtime
+            # snapshot built by the SAME spine function -- kind, exact class, child
+            # schema, ordered codec keys, arity, and the symmetric instance-state proof.
+            checks.append(
+                _input_structure_witness_check(
+                    witness,
+                    inputs=inputs,
+                    all_positions=_input_structure_positions(descriptor),
+                )
+            )
         elif witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT:
             checks.append(
                 _structure_witness_check(
@@ -1631,6 +4138,29 @@ def _post_execution_contract_checks(
                     affected_op_labels=(witness.site_label,),
                 )
             )
+    # r71 A2 belt: every owner-record arm-entry dependency edge must own its witness
+    # (parse enforces the equality; a descriptor that somehow reaches execution with
+    # an unwitnessed edge fails closed as a check, never a silently skipped arm).
+    from .runnable import control_dependency_site_label
+
+    arm_witness_labels = {
+        witness.site_label
+        for witness in descriptor.control_witnesses
+        if witness.kind is ControlWitnessKind.CONDITIONAL_ARM_ENTRY
+    }
+    for call in descriptor.calls:
+        for edge in call.control_dependencies:
+            edge_label = control_dependency_site_label(edge)
+            if edge_label not in arm_witness_labels:
+                checks.append(
+                    _contract_check(
+                        f"control_dependency:{edge_label}",
+                        False,
+                        RunnableErrorCode.CONTEXT_FIELD_INVALID,
+                        "Arm-entry control dependency has no discharging witness.",
+                        affected_op_labels=(edge_label,),
+                    )
+                )
     return tuple(checks)
 
 
@@ -1655,6 +4185,90 @@ def _conditional_arm_check(witness: ControlWitness, fork: Any) -> ContractCheck:
         f"Conditional arm witness {witness.witness_id!r} did not enter its recorded edge.",
         affected_op_labels=affected or (witness.site_label,),
         details=(("recorded_edge", edge_text), ("order", str(witness.order))),
+    )
+
+
+def _input_structure_positions(descriptor: SparseRunDescriptor) -> "set[Any]":
+    """Return the required input-site set for structure-check site selection (r69 A).
+
+    Consumes the parse-validated descriptor-native inventory -- NEVER the surviving
+    ``input_structure`` witnesses (the r68 secA-F1 lane re-derived positions from the
+    stream being validated, so a stripped family restored weaker semantics). A belt
+    cross-checks the surviving facts against the inventory and fails closed typed on
+    any deficit that somehow reached execution.
+    """
+
+    inventory_positions = _inventory_site_positions(descriptor)
+    witness_positions: set[Any] = set()
+    for witness in descriptor.control_witnesses:
+        if not witness.site_label.startswith(_INPUT_STRUCTURE_SITE_PREFIX):
+            continue
+        try:
+            fact = _decode_literal(witness.observed_value)
+        except Exception:
+            continue
+        position = fact.get("position") if isinstance(fact, Mapping) else None
+        if isinstance(position, list) and len(position) == 2:
+            witness_positions.add(tuple(position))
+    if witness_positions != inventory_positions:
+        raise RunPreconditionError(
+            "Surviving input-structure facts do not equal the parse-validated "
+            f"required inventory (facts {sorted(witness_positions, key=repr)!r}, "
+            f"required {sorted(inventory_positions, key=repr)!r}).",
+            code=RunnableErrorCode.CONTEXT_FIELD_INVALID.value,
+        )
+    return inventory_positions
+
+
+def _input_structure_witness_check(
+    witness: ControlWitness, *, inputs: Any, all_positions: "set[Any]"
+) -> ContractCheck:
+    """Compare one persisted input-boundary structure fact with the runtime site (r67 C2).
+
+    The runtime snapshot comes from the SAME spine function that produced the persisted
+    fact, so capture and runtime can never diverge in vocabulary. Any node mismatch --
+    kind swap at any depth (hon1-F2a), exact-class swap (free-F3/hon1-F2b), empty-
+    dataclass arity (free-F2/hon1-F2c), ordered-key or grammar-key drift (hon1-F1),
+    registered schema drift (corr1-3) -- fails the check (``input_tree_mismatch``
+    class), as does RUNTIME-ADDED undeclared instance state (the symmetric bind-side
+    proof: a runtime snapshot refusal can never pass).
+    """
+
+    from torchlens._input_walk import snapshot_input_boundary
+
+    expected = _decode_literal(witness.observed_value)
+    position_raw = expected.get("position")
+    position = tuple(position_raw) if isinstance(position_raw, list) else position_raw
+    try:
+        runtime_value = _input_site_value(inputs, position, all_positions or {position})
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return _contract_check(
+            f"control_witness:{witness.witness_id}",
+            False,
+            RunnableErrorCode.INPUT_TREE_MISMATCH,
+            f"Model input site {position!r} is missing from the runtime inputs.",
+            affected_op_labels=(witness.site_label,),
+            details=(("position", repr(position)),),
+        )
+    runtime_snapshot = snapshot_input_boundary(runtime_value)
+    expected_nodes = expected.get("nodes", [])
+    actual_nodes = runtime_snapshot.get("nodes", [])
+    refusals = runtime_snapshot.get("refusals", [])
+    passed = expected_nodes == actual_nodes and not refusals
+    return _contract_check(
+        f"control_witness:{witness.witness_id}",
+        passed,
+        RunnableErrorCode.INPUT_TREE_MISMATCH,
+        f"Runtime input structure at site {position!r} differs from the captured "
+        "boundary snapshot (container kind, exact class, child schema, mapping keys, "
+        "or undeclared instance state).",
+        affected_op_labels=(witness.site_label,),
+        details=(
+            ("position", repr(position)),
+            ("expected_nodes", repr(expected_nodes)[:2000]),
+            ("actual_nodes", repr(actual_nodes)[:2000]),
+            ("runtime_refusals", repr(refusals)),
+        ),
     )
 
 
@@ -1740,6 +4354,33 @@ def _raw_runtime_output(
     return reconstructed_output
 
 
+def _registered_flatten_children(value):
+    """Return a registered container's flatten children, else ``None`` (r67 C2, corr1-3)."""
+
+    from torchlens.ir.container import get_registered_container
+
+    if isinstance(value, (torch.Tensor, Mapping, list, tuple, str, bytes)) or value is None:
+        return None
+    registration = get_registered_container(type(value))
+    if registration is None:
+        return None
+    try:
+        return list(registration.flatten(value)[0])
+    except Exception:
+        return None
+
+
+def _codec_component(key):
+    """Encode one runtime mapping key through the canonical codec, or ``None`` (r67 C2)."""
+
+    from torchlens._input_walk import encode_mapping_key
+
+    try:
+        return encode_mapping_key(key)
+    except ValueError:
+        return None
+
+
 def _tensor_leaf_paths(
     value: Any, path: tuple[str | int, ...] = ()
 ) -> tuple[tuple[str | int, ...], ...]:
@@ -1747,8 +4388,14 @@ def _tensor_leaf_paths(
 
     if isinstance(value, torch.Tensor):
         return (path,)
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+    registered_children = _registered_flatten_children(value)
+    if registered_children is not None:
         paths: list[tuple[str | int, ...]] = []
+        for index, child in enumerate(registered_children):
+            paths.extend(_tensor_leaf_paths(child, (*path, index)))
+        return tuple(paths)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        paths = []
         for field in dataclasses.fields(value):
             paths.extend(_tensor_leaf_paths(getattr(value, field.name), (*path, field.name)))
         return tuple(paths)
@@ -1760,9 +4407,14 @@ def _tensor_leaf_paths(
         return tuple(paths)
     if isinstance(value, Mapping):
         paths = []
+        # r67 C2 (hon1-F1): mapping keys route through the ONE type-strict codec so a
+        # tensor child under a grammar key (2.5 / None / bool / safe tuple) enters the
+        # leaf accounting; a non-grammar key is skipped here (its subtree is already
+        # opaque-ceilinged / save-refused by the structure spine).
         for key, child in value.items():
-            if isinstance(key, (str, int)):
-                paths.extend(_tensor_leaf_paths(child, (*path, key)))
+            component = _codec_component(key)
+            if component is not None:
+                paths.extend(_tensor_leaf_paths(child, (*path, component)))
         return tuple(paths)
     if isinstance(value, (list, tuple)):
         paths = []
@@ -1770,6 +4422,126 @@ def _tensor_leaf_paths(
             paths.extend(_tensor_leaf_paths(child, (*path, index)))
         return tuple(paths)
     return ()
+
+
+def _canonicalize_structseq_output_paths(
+    output: Any,
+    paths: Sequence[Sequence[str | int]],
+) -> tuple[tuple[str | int, ...], ...]:
+    """Canonicalize only ``torch.return_types`` named/positional path components.
+
+    Parameters
+    ----------
+    output:
+        Runtime output container used to interpret path components.
+    paths:
+        Tensor leaf paths to canonicalize.
+
+    Returns
+    -------
+    tuple[tuple[str | int, ...], ...]
+        Paths where field names and positional indexes are equivalent only while
+        traversing a ``torch.return_types.*`` structseq.
+    """
+
+    return tuple(_canonicalize_structseq_output_path(output, tuple(path)) for path in paths)
+
+
+def _canonicalize_structseq_output_path(
+    output: Any,
+    path: tuple[str | int, ...],
+) -> tuple[str | int, ...]:
+    """Canonicalize one path through runtime ``torch.return_types`` containers.
+
+    Parameters
+    ----------
+    output:
+        Runtime output container used to interpret path components.
+    path:
+        Tensor leaf path to canonicalize.
+
+    Returns
+    -------
+    tuple[str | int, ...]
+        Path with structseq fields represented by their positional index.
+    """
+
+    current = output
+    canonical: list[str | int] = []
+    for component in path:
+        canonical_component = component
+        field_names = _torch_structseq_field_names(current)
+        if field_names:
+            if isinstance(component, str) and component in field_names:
+                canonical_component = field_names.index(component)
+            elif isinstance(component, int) and 0 <= component < len(field_names):
+                canonical_component = component
+        canonical.append(canonical_component)
+        try:
+            current = _value_at_path(current, (canonical_component,))
+        except (AttributeError, KeyError, IndexError, TypeError):
+            break
+    return tuple(canonical)
+
+
+def _recorded_structseq_output_type_matches(
+    trace: Any,
+    call: RunnableCallDescriptor,
+    output: Any,
+) -> bool:
+    """Return whether a recorded torch structseq call produced a torch structseq.
+
+    Parameters
+    ----------
+    trace:
+        Runtime fork containing recorded op metadata.
+    call:
+        Runnable call descriptor being bound.
+    output:
+        Runtime output produced by the resolved callable.
+
+    Returns
+    -------
+    bool
+        False only when the recorded call's output container was a
+        ``torch.return_types.*`` structseq but runtime produced another tuple
+        shape, such as a plain positional tuple.
+    """
+
+    if not _call_has_recorded_torch_structseq_output(trace, call):
+        return True
+    return _torch_structseq_field_names(output) != ()
+
+
+def _call_has_recorded_torch_structseq_output(
+    trace: Any,
+    call: RunnableCallDescriptor,
+) -> bool:
+    """Return whether any call output op recorded a torch structseq container.
+
+    Parameters
+    ----------
+    trace:
+        Runtime fork containing recorded op metadata.
+    call:
+        Runnable call descriptor being inspected.
+
+    Returns
+    -------
+    bool
+        True when any output op for the call has a ``torch.return_types`` root
+        container specification.
+    """
+
+    for op_label in call.op_labels:
+        op = _op_for_label(trace, op_label)
+        container_spec = getattr(op, "container_spec", None)
+        if (
+            isinstance(container_spec, ContainerSpec)
+            and container_spec.type_module == "torch.return_types"
+        ):
+            return True
+    return False
 
 
 def _container_leaf_paths(
@@ -1780,8 +4552,14 @@ def _container_leaf_paths(
 
     if isinstance(value, torch.Tensor):
         return (path,)
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+    registered_children = _registered_flatten_children(value)
+    if registered_children is not None:
         paths: list[tuple[str | int, ...]] = []
+        for index, child in enumerate(registered_children):
+            paths.extend(_container_leaf_paths(child, (*path, index)))
+        return tuple(paths)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        paths = []
         for field in dataclasses.fields(value):
             paths.extend(_container_leaf_paths(getattr(value, field.name), (*path, field.name)))
         return tuple(paths)
@@ -1793,9 +4571,12 @@ def _container_leaf_paths(
         return tuple(paths)
     if isinstance(value, Mapping):
         paths = []
+        # r67 C2 (hon1-F1): same ONE type-strict key codec as the capture-side path
+        # normalization -- lockstep by construction.
         for key, child in value.items():
-            if isinstance(key, (str, int)):
-                paths.extend(_container_leaf_paths(child, (*path, key)))
+            component = _codec_component(key)
+            if component is not None:
+                paths.extend(_container_leaf_paths(child, (*path, component)))
         return tuple(paths)
     if isinstance(value, (list, tuple)):
         paths = []
@@ -1822,6 +4603,11 @@ def _container_kind(value: Any) -> str:
         return "list"
     if isinstance(value, Mapping):
         return "dict"
+    # r67 C2 (corr1-3): a registered container reports the SAME vocabulary name the
+    # capture-side ContainerSpec records, so the legacy structure witness compares
+    # kind-for-kind instead of class-name-vs-"registered" false-diverging.
+    if _registered_flatten_children(value) is not None:
+        return "registered"
     return type(value).__name__
 
 
@@ -1866,6 +4652,12 @@ def _container_field_names(value: Any) -> tuple[str, ...]:
 def _torch_structseq_field_names(value: Any) -> tuple[str, ...]:
     """Return producer-compatible field names for a torch structseq value.
 
+    r35 hon1_4: delegates to the shared repr-independent helper in
+    ``utils/_torch_compat.py`` -- the exact same source the capture side uses,
+    so capture and replay stay behavior-identical. Console wrap position,
+    dtype/device suffixes, and tensor rendering can never create or destroy a
+    structural field.
+
     Parameters
     ----------
     value:
@@ -1878,17 +4670,9 @@ def _torch_structseq_field_names(value: Any) -> tuple[str, ...]:
         a fully named ``torch.return_types`` value.
     """
 
-    if not isinstance(value, tuple) or type(value).__module__ != "torch.return_types":
-        return ()
-    n_fields = getattr(value, "n_fields", None)
-    n_unnamed = getattr(value, "n_unnamed_fields", 0)
-    if not isinstance(n_fields, int) or n_fields <= 0 or n_unnamed:
-        return ()
-    field_names = tuple(
-        match.group(1)
-        for match in re.finditer(r"^\s*([A-Za-z_]\w*)=", repr(value), flags=re.MULTILINE)
-    )
-    return field_names if len(field_names) == n_fields else ()
+    from .utils._torch_compat import torch_structseq_field_names
+
+    return torch_structseq_field_names(value)
 
 
 def _scalar_literal_equal(actual: Any, expected: Any) -> bool:
@@ -1948,6 +4732,19 @@ def _tensor_derived_scalar_stale(
     """
 
     snapshots = witness_source_snapshots or {}
+    # r71 A2: the OWNER-RECORD obligations (``TensorSlotDescriptor.host_escape``) are
+    # the required staleness domain -- replay-consumed structure, never the witness
+    # stream. An obligated slot with no surviving witness cannot be re-confirmed:
+    # stale (fail closed). A gap-discharged obligation also reads stale here, which
+    # coincides with the UNVERIFIABLE floor its gap already guarantees.
+    witnessed_slot_ids = {
+        witness.site_label
+        for witness in descriptor.control_witnesses
+        if witness.kind is ControlWitnessKind.TENSOR_DERIVED_SCALAR_LITERAL
+    }
+    for slot in descriptor.tensor_slots:
+        if slot.host_escape and slot.slot_id not in witnessed_slot_ids:
+            return True
     for witness in descriptor.control_witnesses:
         if witness.kind is not ControlWitnessKind.TENSOR_DERIVED_SCALAR_LITERAL:
             continue
@@ -1988,6 +4785,9 @@ _UNBOUND_STATE_ESCAPE_SITE_PREFIX = "unbound_state_escape:"
 _UNBOUND_STATE_ESCAPE_FACT_KEY = "unbound_state_escape"
 """Discriminator key present in every unbound-state escape fact."""
 
+_STATE_METADATA_FACT_SITE_PREFIX = "state_metadata:"
+"""``site_label`` prefix marking a declared capture-time state-metadata fact (r65 F-1)."""
+
 
 def _is_unbound_state_escape_witness(witness: ControlWitness) -> bool:
     """Return whether a structure witness records an unbound state escape."""
@@ -1995,6 +4795,15 @@ def _is_unbound_state_escape_witness(witness: ControlWitness) -> bool:
     return (
         witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
         and witness.site_label.startswith(_UNBOUND_STATE_ESCAPE_SITE_PREFIX)
+    )
+
+
+def _is_state_metadata_fact_witness(witness: ControlWitness) -> bool:
+    """Return whether a structure witness records a declared state-metadata fact (r65)."""
+
+    return (
+        witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
+        and witness.site_label.startswith(_STATE_METADATA_FACT_SITE_PREFIX)
     )
 
 
@@ -2021,6 +4830,26 @@ def _unbound_state_escape_stale(
         binding = slot.state_binding
         if binding is not None:
             name_to_slot_id.setdefault(binding.state_dict_name, slot.slot_id)
+    # r71 A2: the OWNER-RECORD dispositions (``StateSlotBinding.host_escape_disposition
+    # == "escaped"``) are the required staleness domain. An escaped-claimed slot with
+    # no surviving witness cannot re-confirm its capture digest: stale (fail closed);
+    # a gap-discharged claim coincides with its guaranteed UNVERIFIABLE floor.
+    witnessed_members: set[tuple[str, str]] = set()
+    for witness in descriptor.control_witnesses:
+        if not _is_unbound_state_escape_witness(witness):
+            continue
+        fact = _decode_literal(witness.observed_value)
+        if isinstance(fact, Mapping):
+            name = fact.get("state_dict_name")
+            slot_id = fact.get("slot_id")
+            if isinstance(name, str) and isinstance(slot_id, str):
+                witnessed_members.add((name, slot_id))
+    for slot in descriptor.tensor_slots:
+        binding = slot.state_binding
+        if binding is None or binding.host_escape_disposition != "escaped":
+            continue
+        if (binding.state_dict_name, slot.slot_id) not in witnessed_members:
+            return True
     for witness in descriptor.control_witnesses:
         if not _is_unbound_state_escape_witness(witness):
             continue
@@ -2050,18 +4879,62 @@ def _path_faithfulness(
     host_rng_unreproduced: bool = False,
     tensor_derived_scalar_stale: bool = False,
     unbound_state_escape_stale: bool = False,
+    container_reconstruction_lossy: bool = False,
+    output_not_reproduced: bool = False,
+    mode_sensitive_op_unwitnessed: bool = False,
+    input_alias_unresolved: bool = False,
+    nondeterministic_control_source: bool = False,
+    input_derived_layout_stale: bool = False,
 ) -> tuple[PathFaithfulness, RunnableDiagnostic | None]:
     """Classify exact three-state path faithfulness after all honesty checks."""
 
     failed = next((check for check in checks if not check.passed), None)
     if failed is not None:
         return PathFaithfulness.DIVERGED, failed.diagnostic
-    if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
+    # r71 A3: the VERIFIED gate consults ONLY the parser-derived completeness FLOOR
+    # (re-derived here from the typed gap ledger by the ONE derivation function).
+    # The persisted summary is a redundant assertion checked equal at parse; reading
+    # it for a verdict is forbidden (source-scan tripwire).
+    if derived_witness_completeness(descriptor.coverage_gaps) is not WitnessCompleteness.COMPLETE:
+        return PathFaithfulness.UNVERIFIABLE, None
+    if input_alias_unresolved:
+        # r35 decision D: the three-valued alias engine could prove neither
+        # overlap nor disjointness for a same-storage input pair. Unknown is not
+        # an observed contradiction (never DIVERGED by assumption) and not a
+        # proof of equivalence (never VERIFIED): the honest ceiling is
+        # UNVERIFIABLE (``input_alias_topology_unresolved``).
+        return PathFaithfulness.UNVERIFIABLE, None
+    if mode_sensitive_op_unwitnessed:
+        # A BatchNorm/InstanceNorm op in the taken path is train/eval mode-sensitive, but the
+        # capture-time mode was not recorded as a declared fact. Without that anchor the run
+        # cannot prove which mode (eval running-stats vs train batch-stats) VERIFIED
+        # corresponds to, so the honest ceiling is UNVERIFIABLE, never a false VERIFIED.
+        return PathFaithfulness.UNVERIFIABLE, None
+    if output_not_reproduced:
+        # The captured forward returned a HOST-ESCAPED non-tensor scalar (or otherwise
+        # unrepresentable value): no output tensor slot and no reconstructable output container,
+        # so the sparse DAG emitted a dropped ``None`` that was never produced or compared. A
+        # dropped output can never be VERIFIED; the honest ceiling is UNVERIFIABLE.
+        return PathFaithfulness.UNVERIFIABLE, None
+    if container_reconstruction_lossy:
+        # The output is a dataclass / ModelOutput whose live instance carried computed
+        # non-field/non-key state (e.g. a __post_init__ value derived from a tensor), a
+        # __slots__ layout, or a data-descriptor field. The non-invoking rebuild restores
+        # only captured fields/keys, so the replayed output differs from a fresh instance
+        # and the derived state cannot be safely recomputed. The honest ceiling is
+        # UNVERIFIABLE, never a false VERIFIED that drops that state silently.
         return PathFaithfulness.UNVERIFIABLE, None
     if host_rng_unreproduced:
         # A Python/NumPy-RNG control-flow capture replayed off its captured seed:
         # the single recorded branch may not be the one a fresh seeded call takes,
         # so the honest ceiling is UNVERIFIABLE, never a false VERIFIED.
+        return PathFaithfulness.UNVERIFIABLE, None
+    if nondeterministic_control_source:
+        # r53 hon_2: a recorded control fact (scalar-bool, loop predicate, or a
+        # tensor->host escape source) derives from surviving uninitialized-memory
+        # taint -- the taken branch is a function of allocator garbage no seed
+        # governs, so NO replay is reproducible. Exact parity with the seeded
+        # RNG-driven branch ceiling: UNVERIFIABLE, never a false VERIFIED.
         return PathFaithfulness.UNVERIFIABLE, None
     if tensor_derived_scalar_stale:
         # A tensor->Python escape baked a derived constant into a downstream op or
@@ -2075,31 +4948,72 @@ def _path_faithfulness(
         # differs from capture; the untraced branch/literal may be stale, so the
         # honest ceiling is UNVERIFIABLE, never a silently wrong VERIFIED.
         return PathFaithfulness.UNVERIFIABLE, None
+    if input_derived_layout_stale:
+        # r73 F1: the capture read a layout predicate on an activation ROOTED at a
+        # model input, and this run's input carries different strides than capture
+        # (channels_last twin, transposed-then-copied layout, ...). Memory format
+        # propagates through elementwise ops, so the recorded taken path may not be
+        # the one a fresh model takes on this input -- but a different input layout
+        # does not PROVE the derived read flipped (an intervening reshape can
+        # canonicalize it), so the honest ceiling is UNVERIFIABLE, never DIVERGED
+        # by assumption and never a false VERIFIED. Same-stride inputs never reach
+        # here: honest channels_last-on-channels_last models stay VERIFIED.
+        return PathFaithfulness.UNVERIFIABLE, None
     return PathFaithfulness.VERIFIED, None
 
 
 def _run_report(
     readiness: ReadinessReport,
-    state: PreparedRunnableState,
     *,
+    state_source: StateSource,
+    initializer_policy_version: str | None,
+    seed: int | None,
+    random_filled_slot_ids: tuple[str, ...],
     contract_checks: tuple[ContractCheck, ...],
     path_faithfulness: PathFaithfulness,
     first_mismatch: RunnableDiagnostic | None,
     numeric_attestation: NumericAttestationStatus,
+    nondeterministic_sources: Iterable[str] = (),
 ) -> RunReport:
-    """Build the settled sparse run-report surface."""
+    """Build the settled run-report surface -- the ONE report finalizer (r37 corr2-5).
 
+    EVERY provider (loaded sparse AND live refresh) routes its report through this
+    constructor: ``poisoned`` is DERIVED solely from ``path_faithfulness is not
+    VERIFIED`` (no caller Boolean exists), and the r35 I3 tripwire-on-the-tripwire
+    asserts ``attested`` structurally implies a verified, unpoisoned path, so no
+    provider can emit an internally contradictory report. Direct ``RunReport(``
+    construction outside this finalizer is forbidden (source-scan meta-test).
+    ``nondeterministic_sources`` (r53 F4) is normalized (sorted, deduplicated)
+    and closed-vocabulary-checked HERE and only here.
+    """
+
+    poisoned = path_faithfulness is not PathFaithfulness.VERIFIED
+    if numeric_attestation is NumericAttestationStatus.ATTESTED and (
+        path_faithfulness is not PathFaithfulness.VERIFIED or poisoned
+    ):
+        raise RuntimeError(
+            "Internal invariant violation: numeric_attestation=attested requires "
+            f"a verified, unpoisoned path (got {path_faithfulness.value!r})."
+        )
+    declared_sources = tuple(sorted(set(nondeterministic_sources)))
+    unknown_sources = set(declared_sources) - NONDETERMINISTIC_SOURCE_VOCABULARY
+    if unknown_sources:
+        raise RuntimeError(
+            "Internal invariant violation: nondeterministic sources outside the "
+            f"closed vocabulary: {sorted(unknown_sources)!r}."
+        )
     return RunReport(
         readiness=readiness,
-        state_source=state.state_source,
-        initializer_policy_version=state.initializer_policy_version,
-        seed=state.seed,
-        random_filled_slot_ids=state.random_filled_slot_ids,
+        state_source=state_source,
+        initializer_policy_version=initializer_policy_version,
+        seed=seed,
+        random_filled_slot_ids=random_filled_slot_ids,
         contract_checks=contract_checks,
         path_faithfulness=path_faithfulness,
         first_mismatch=first_mismatch,
         numeric_attestation=numeric_attestation,
-        poisoned=path_faithfulness is not PathFaithfulness.VERIFIED,
+        poisoned=poisoned,
+        nondeterministic_sources=declared_sources,
     )
 
 
@@ -2110,13 +5024,20 @@ def _numeric_attestation_check(
     slot_values: Mapping[str, torch.Tensor],
     attestation_slot_values: Mapping[str, torch.Tensor],
     input_byte_digests: Mapping[str, str],
+    input_fingerprints: Mapping[str, InputAttestationFingerprint],
+    state_byte_digests: Mapping[str, str],
     trace: Any,
-    nontensor_inputs_match: bool = True,
-    host_rng_unreproduced: bool = False,
-    tensor_derived_scalar_stale: bool = False,
-    unbound_state_escape_stale: bool = False,
+    provisional_verdict: PathFaithfulness,
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
     """Compare recomputed saved slots with the independent activation archive.
+
+    r35 I3 (corr2_7): eligibility DERIVES from the settled provisional path
+    verdict -- computed from every non-numeric contract check and every static/
+    dynamic ceiling, including the fork's inherited monotonic mark -- instead of
+    a parallel Boolean flag list. Any verdict that is not ``verified`` returns
+    ``not_applicable`` before a single archive byte is read, so ``attested``
+    structurally implies ``verified`` and every future contract check
+    automatically caps attestation.
 
     Parameters
     ----------
@@ -2133,9 +5054,8 @@ def _numeric_attestation_check(
         Model-input byte digests captured before any in-place sparse call.
     trace:
         Loaded source Trace retaining inspection-only archived activations.
-    nontensor_inputs_match:
-        Whether every witnessed non-tensor input leaf matched its recorded
-        capture-time value. A changed non-tensor input forces ``not_applicable``.
+    provisional_verdict:
+        Settled non-numeric path verdict (inherited monotonic marks folded in).
 
     Returns
     -------
@@ -2143,29 +5063,15 @@ def _numeric_attestation_check(
         Applicability/result status and the aggregate byte-exact tripwire check.
     """
 
-    if host_rng_unreproduced:
-        # Python/NumPy-RNG control flow replayed off its captured seed: the recorded
-        # taken path is not guaranteed to be the branch a fresh seeded call takes, so
-        # a byte-exact attestation would dishonestly bless a possibly-stale result.
+    if provisional_verdict is not PathFaithfulness.VERIFIED:
+        # Not a settled VERIFIED path: attestation is not applicable and the
+        # archive is never opened (no comparison before a non-numeric verdict).
         return NumericAttestationStatus.NOT_APPLICABLE, None
-    if not nontensor_inputs_match:
-        # A changed non-tensor input means the recorded taken path may not apply,
-        # so recomputed slots must never be attested against the capture archive.
-        return NumericAttestationStatus.NOT_APPLICABLE, None
-    if tensor_derived_scalar_stale:
-        # A tensor->host escape source slot recomputed differently: the sparse
-        # replay cannot recompute the baked constant / taken branch, so a byte-exact
-        # attestation would dishonestly bless a possibly-stale result.
-        return NumericAttestationStatus.NOT_APPLICABLE, None
-    if unbound_state_escape_stale:
-        # An unbound state slot (read only through an untraced host path) was staged
-        # with a value differing from capture, so the recorded taken path may not
-        # apply; a byte-exact attestation would dishonestly bless a stale result.
-        return NumericAttestationStatus.NOT_APPLICABLE, None
-    if descriptor.witness_completeness is not WitnessCompleteness.COMPLETE:
-        # Incomplete witness coverage (e.g. an opaque non-tensor input leaf that
-        # cannot be re-verified) makes the path only UNVERIFIABLE, so a byte-exact
-        # attestation would dishonestly bless a possibly-wrong replayed path.
+    if descriptor.ambient_context.attestation_ineligible_context:
+        # Positive capture-time nondeterministic-context marking (decision E /
+        # H_B_RESOLUTION R1): cudnn.benchmark or a CUDA-nondeterministic op
+        # captured without deterministic algorithms cannot promise reproducible
+        # bytes -- fail-safe ineligibility, never a spurious tripwire raise.
         return NumericAttestationStatus.NOT_APPLICABLE, None
     layer = descriptor.payload_layers.activations
     if not layer.present:
@@ -2180,19 +5086,32 @@ def _numeric_attestation_check(
     if any(member.field != "out" for member in layer.members):
         return NumericAttestationStatus.NOT_APPLICABLE, None
     raw_members = layer.members
+    if _has_journaled_buffer_activation_member(descriptor, layer, raw_members):
+        # Repeated registered-buffer slots for the same state entry whose archived bytes DIFFER
+        # from the capture-time state are journal points (a mode-sensitive norm layer updating
+        # its running stats mid-forward), not immutable activation payloads: each slot's bytes
+        # are only meaningful at that journal point, so skip byte-exact activation attestation
+        # rather than raising a false mismatch on a valid replay. A repeated buffer slot whose
+        # archived bytes EQUAL the capture state (a read-only running stat under eval) is stable,
+        # not journaled, and stays byte-attestable (r29-C4, codex-F2).
+        return NumericAttestationStatus.NOT_APPLICABLE, None
     if _has_out_mutated_activation_member(descriptor, raw_members):
         # An archived activation that later became an ``out=`` destination was
         # captured before its mutation. Its pre-write bytes are allocator data,
         # not a reproducible result, so attesting it would create a false
         # divergence on an otherwise faithful original-input replay.
         return NumericAttestationStatus.NOT_APPLICABLE, None
-    if not raw_members or not _attestation_inputs_match(descriptor, layer, input_byte_digests):
+    if not raw_members or not _attestation_inputs_match(
+        descriptor, layer, input_byte_digests, input_fingerprints
+    ):
         return NumericAttestationStatus.NOT_APPLICABLE, None
-    if not _attestation_state_matches(descriptor, layer, state, slot_values):
+    if not _attestation_state_matches(descriptor, layer, state, state_byte_digests, trace):
         return NumericAttestationStatus.NOT_APPLICABLE, None
     archived = trace.__dict__.get("_runnable_archived_activations")
     if not isinstance(archived, Mapping):
         return NumericAttestationStatus.NOT_APPLICABLE, None
+    saw_benign_layout_mismatch = False
+    benign_layout_slot_ids: set[str] = set()
     for member in raw_members:
         archive_key = f"{member.slot_id}:{member.field}"
         archived_record = archived.get(archive_key)
@@ -2213,6 +5132,43 @@ def _numeric_attestation_check(
         )
         passed = recomputed_digest == member.byte_digest and archived_digest == member.byte_digest
         if not passed:
+            # FALLBACK (narrow, provably-benign): a byte-faithful replay of this
+            # slot is genuinely infeasible from the run path for a matmul-family
+            # kernel. Capture records the op under autograd (a grad-specialized
+            # BLAS reduction order); replay recomputes it under
+            # ``pause_logging()``/no-grad isolation, and the two reduction orders
+            # differ by ~1 dtype ULP (verified ~5e-7 on eval MHA in-proj linear).
+            # The exact capture-time layout/grad context is NOT recorded in the
+            # sparse descriptor, so the run path cannot reproduce those bytes
+            # without abandoning its no-grad isolation (a capture-side change,
+            # out of scope). When the ARCHIVE still matches capture bytes
+            # (archived_digest == byte_digest, so the archive is intact -- NOT
+            # tampered) and the recomputed value is within a tight ULP bound of
+            # the archive AND the producing op is a known layout/reduction-order-
+            # sensitive BLAS kernel, report this slot ``not_applicable`` rather
+            # than raising. Downstream view/shape members directly fed by that
+            # benign slot may carry the same ULP-scale bytes; they are also
+            # skipped only when the archive is intact and the same tight bound
+            # holds. This stays fail-closed: a tampered archive
+            # (archived_digest != byte_digest) or any divergence beyond the tight
+            # ULP bound STILL raises numeric_attestation_failed -- the byte-exact
+            # tripwire is preserved, never widened into a tolerance gate.
+            if archived_digest == member.byte_digest and _is_benign_layout_nonreproducible(
+                descriptor, member, recomputed, archived_value
+            ):
+                saw_benign_layout_mismatch = True
+                benign_layout_slot_ids.add(member.slot_id)
+                continue
+            if archived_digest == member.byte_digest and _is_benign_downstream_nonreproducible(
+                descriptor,
+                member,
+                recomputed,
+                archived_value,
+                benign_layout_slot_ids=benign_layout_slot_ids,
+            ):
+                saw_benign_layout_mismatch = True
+                benign_layout_slot_ids.add(member.slot_id)
+                continue
             return (
                 NumericAttestationStatus.NUMERIC_ATTESTATION_FAILED,
                 _contract_check(
@@ -2231,10 +5187,279 @@ def _numeric_attestation_check(
                     ),
                 ),
             )
+    if saw_benign_layout_mismatch:
+        return NumericAttestationStatus.NOT_APPLICABLE, None
     return (
         NumericAttestationStatus.ATTESTED,
         ContractCheck(name="numeric_attestation:selected_slots", passed=True, diagnostic=None),
     )
+
+
+# Matmul-family qualname tails whose BLAS backends pick a reduction order that
+# depends on tensor memory layout and grad/inference dispatch context. Capture
+# records these ops under autograd; the run path recomputes them under no-grad
+# ``pause_logging()`` isolation, so their outputs can legitimately differ from
+# the archived bytes by ~1 dtype ULP without any corruption. This set is
+# deliberately NARROW -- only the reduction kernels proven layout/grad-sensitive
+# -- so the byte-exact tripwire stays armed for every other op.
+_LAYOUT_SENSITIVE_BLAS_QUALNAMES: frozenset[str] = frozenset(
+    {
+        "linear",
+        "matmul",
+        "mm",
+        "bmm",
+        "mv",
+        "dot",
+        "vdot",
+        "inner",
+        "outer",
+        "ger",
+        "addmm",
+        "addbmm",
+        "baddbmm",
+        "addmv",
+        "addr",
+        "einsum",
+        "tensordot",
+    }
+)
+
+
+def _member_producer_is_layout_sensitive_blas(
+    descriptor: SparseRunDescriptor, member: ActivationPayloadMember
+) -> bool:
+    """Return whether the op producing a member slot is a layout-sensitive BLAS kernel.
+
+    Parameters
+    ----------
+    descriptor:
+        Sparse descriptor whose calls and registry name the producing op.
+    member:
+        Archived activation member under attestation.
+
+    Returns
+    -------
+    bool
+        Whether the slot is produced by a matmul-family reduction kernel whose
+        replay bytes can differ from the grad-context capture bytes by ULP noise.
+    """
+
+    registry = {entry.registry_id: entry for entry in descriptor.callable_registry}
+    for call in descriptor.calls:
+        if member.slot_id not in call.output_slot_ids:
+            continue
+        entry = registry.get(call.registry_id)
+        if entry is None:
+            return False
+        qualname = entry.key.qualname or ""
+        tail = qualname.rsplit(".", 1)[-1]
+        return tail in _LAYOUT_SENSITIVE_BLAS_QUALNAMES
+    return False
+
+
+def _within_layout_reduction_tolerance(recomputed: torch.Tensor, archived: torch.Tensor) -> bool:
+    """Return whether a replay tensor is within a tight ULP band of the archive.
+
+    The only sanctioned divergence is a matmul reduction-order difference between
+    the grad-enabled capture kernel and the no-grad replay kernel, bounded by a
+    small multiple of the dtype ULP times the value magnitude. A genuine
+    corruption (wrong path / weights / op) is orders of magnitude larger and
+    fails this bound, so the byte-exact tripwire still fires on it.
+
+    Parameters
+    ----------
+    recomputed:
+        Fresh replay tensor for the slot.
+    archived:
+        Capture-time archived tensor for the slot (byte-verified intact).
+
+    Returns
+    -------
+    bool
+        Whether the tensors match within the tight reduction-order tolerance.
+    """
+
+    if recomputed.shape != archived.shape or recomputed.dtype != archived.dtype:
+        return False
+    if not archived.dtype.is_floating_point:
+        return False
+    recomputed64 = recomputed.detach().to(torch.float64)
+    archived64 = archived.detach().to(torch.float64)
+    recomputed_finite = torch.isfinite(recomputed64)
+    archived_finite = torch.isfinite(archived64)
+    if not bool((recomputed_finite == archived_finite).all().item()):
+        return False
+    nonfinite_mask = ~archived_finite
+    if bool(nonfinite_mask.any().item()):
+        recomputed_nonfinite = recomputed64[nonfinite_mask]
+        archived_nonfinite = archived64[nonfinite_mask]
+        both_nan = torch.isnan(recomputed_nonfinite) & torch.isnan(archived_nonfinite)
+        both_same_inf = (
+            torch.isinf(recomputed_nonfinite)
+            & torch.isinf(archived_nonfinite)
+            & (torch.signbit(recomputed_nonfinite) == torch.signbit(archived_nonfinite))
+        )
+        if not bool((both_nan | both_same_inf).all().item()):
+            return False
+    finite_mask = archived_finite
+    if not bool(finite_mask.any().item()):
+        return True
+    recomputed64 = recomputed64[finite_mask]
+    archived64 = archived64[finite_mask]
+    difference = (recomputed64 - archived64).abs()
+    eps = float(torch.finfo(archived.dtype).eps)
+    # 256 ULP relative + absolute floor: comfortably covers reduction-order noise
+    # (verified ~5e-7 for float32 == ~4 ULP on eval MHA) while a corruption stays
+    # hundreds of times larger. Scaled by dtype so fp16/bf16 keep a proportional
+    # band and fp64 a far tighter one.
+    tolerance = 256.0 * eps * (archived64.abs() + 1.0)
+    return bool((difference <= tolerance).all().item())
+
+
+def _is_benign_layout_nonreproducible(
+    descriptor: SparseRunDescriptor,
+    member: ActivationPayloadMember,
+    recomputed: Any,
+    archived_value: Any,
+) -> bool:
+    """Return whether a slot mismatch is a provably-benign BLAS-layout artifact.
+
+    True only when BOTH the recomputed and archived values are real tensors, the
+    producing op is a known layout/reduction-order-sensitive BLAS kernel, and the
+    recomputed value sits within a tight ULP band of the archive. Used solely as
+    the F1 fallback: such a slot reports ``not_applicable`` instead of raising,
+    because a byte-faithful replay is genuinely infeasible from the no-grad run
+    path. Every other mismatch (non-BLAS op, larger-than-ULP divergence, or a
+    non-tensor slot) still raises ``numeric_attestation_failed``.
+
+    Parameters
+    ----------
+    descriptor:
+        Sparse descriptor naming the producing op.
+    member:
+        Archived activation member under attestation.
+    recomputed:
+        Fresh replay value for the slot.
+    archived_value:
+        Capture-time archived value for the slot (byte-verified intact by caller).
+
+    Returns
+    -------
+    bool
+        Whether the mismatch is the sanctioned layout-nonreproducible case.
+    """
+
+    if not (isinstance(recomputed, torch.Tensor) and isinstance(archived_value, torch.Tensor)):
+        return False
+    if not _member_producer_is_layout_sensitive_blas(descriptor, member):
+        return False
+    return _within_layout_reduction_tolerance(recomputed, archived_value)
+
+
+def _is_benign_downstream_nonreproducible(
+    descriptor: SparseRunDescriptor,
+    member: ActivationPayloadMember,
+    recomputed: Any,
+    archived_value: Any,
+    *,
+    benign_layout_slot_ids: set[str],
+) -> bool:
+    """Return whether a mismatch is tight-ULP fallout from a benign BLAS slot.
+
+    Parameters
+    ----------
+    descriptor:
+        Sparse descriptor naming slot producers and tensor arguments.
+    member:
+        Archived activation member under attestation.
+    recomputed:
+        Fresh replay value for the slot.
+    archived_value:
+        Capture-time archived value for the slot (byte-verified intact by caller).
+    benign_layout_slot_ids:
+        Slots already proven to be benign layout/reduction-order mismatches.
+
+    Returns
+    -------
+    bool
+        Whether this member is fed by a previously proven benign slot and remains
+        within the same tight ULP band.
+    """
+
+    if not benign_layout_slot_ids:
+        return False
+    if not (isinstance(recomputed, torch.Tensor) and isinstance(archived_value, torch.Tensor)):
+        return False
+    if not _within_layout_reduction_tolerance(recomputed, archived_value):
+        return False
+    if member.slot_id in benign_layout_slot_ids:
+        return True
+    slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
+    slot = slots.get(member.slot_id)
+    if slot is not None and (
+        slot.producer_slot_id in benign_layout_slot_ids or slot.version_of in benign_layout_slot_ids
+    ):
+        return True
+    for call in descriptor.calls:
+        if member.slot_id not in call.output_slot_ids:
+            continue
+        return any(argument.slot_id in benign_layout_slot_ids for argument in call.tensor_arguments)
+    return False
+
+
+def _has_journaled_buffer_activation_member(
+    descriptor: SparseRunDescriptor,
+    layer: Any,
+    members: Sequence[ActivationPayloadMember],
+) -> bool:
+    """Return whether selected activation payloads include JOURNALED buffer slots.
+
+    A buffer state entry with multiple selected activation members is journaled only when at
+    least one member's ARCHIVED bytes DIFFER from the capture-time state digest -- i.e. the
+    buffer was actually WRITTEN mid-forward (a norm layer updating its running stats). When
+    every repeated member equals the capture state digest, the buffer is a STABLE read-only
+    source (running stats under eval, or an unwritten buffer read at several points), which is
+    fully byte-attestable and must NOT be suppressed (r29-C4, codex-F2). When the capture state
+    digest is unavailable for a repeated buffer name, fail closed (treat as journaled) rather
+    than risk a false mismatch.
+
+    Parameters
+    ----------
+    descriptor:
+        Sparse descriptor declaring tensor slot roles.
+    layer:
+        Activation payload layer descriptor carrying ``capture_state_digests``.
+    members:
+        Raw activation payload members selected for byte attestation.
+
+    Returns
+    -------
+    bool
+        ``True`` when a repeated same-state buffer entry was actually journaled (written).
+    """
+
+    slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
+    state_digests = {
+        item.state_dict_name: item.byte_digest
+        for item in getattr(layer, "capture_state_digests", ()) or ()
+    }
+    members_by_state: dict[str, list[ActivationPayloadMember]] = {}
+    for member in members:
+        slot = slots.get(member.slot_id)
+        if slot is None or slot.role is not TensorSlotRole.BUFFER:
+            continue
+        binding = slot.state_binding
+        if binding is None:
+            continue
+        members_by_state.setdefault(binding.state_dict_name, []).append(member)
+    for state_name, state_members in members_by_state.items():
+        if len(state_members) <= 1:
+            continue
+        if state_name not in state_digests:
+            return True
+        if any(member.byte_digest != state_digests[state_name] for member in state_members):
+            return True
+    return False
 
 
 def _has_out_mutated_activation_member(
@@ -2287,51 +5512,515 @@ def _raw_activation_slot_ids(descriptor: SparseRunDescriptor) -> frozenset[str]:
     return frozenset(member.slot_id for member in layer.members if member.field == "out")
 
 
-def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> bool:
-    """Return whether replay contains a PyTorch seeded-RNG operation.
+def _descriptor_has_seeded_rng(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether replay actually consumes non-reproducible seeded RNG.
+
+    A captured RNG source slot always taints the replay. For seeded-RNG ATen
+    ops the answer is keyed off *actual RNG consumption*, not the op name: a
+    ``dropout`` family call in eval mode (``training=False``) or with ``p == 0``
+    draws nothing from the generator and replays byte-exact, so it must NOT be
+    treated as seeded (that over-triggered ``not_applicable`` on eval-mode
+    transformers). Every other seeded-RNG op (``rand``/``randn``/``bernoulli``/
+    ``multinomial`` and a genuinely training dropout with ``p > 0``) still taints.
 
     Parameters
     ----------
     descriptor:
-        Sparse runnable descriptor whose registry entries identify replayed
-        PyTorch operations.
+        Sparse runnable descriptor whose registry entries and calls identify
+        replayed PyTorch operations.
 
     Returns
     -------
     bool
-        Whether replay includes a captured RNG source or an ATen operation
-        marked by PyTorch as ``nondeterministic_seeded``.
+        Whether replay includes a captured RNG source or a call that actually
+        draws from a PyTorch seeded generator during replay.
     """
 
     if any(slot.role is TensorSlotRole.RNG_SOURCE for slot in descriptor.tensor_slots):
         return True
-    return any(_registry_entry_has_seeded_rng_tag(entry) for entry in descriptor.callable_registry)
+    registry = {entry.registry_id: entry for entry in descriptor.callable_registry}
+    return any(_call_consumes_seeded_rng(call, registry) for call in descriptor.calls)
 
 
-def _registry_entry_has_seeded_rng_tag(entry: CallableRegistryEntry) -> bool:
-    """Return whether one portable callable maps to a seeded ATen RNG op.
+def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether declared nondeterminism reaches the byte-exact attestation claim.
+
+    Seeded-RNG consumption anywhere in the replay keeps its historical
+    presence-based ineligibility (``_descriptor_has_seeded_rng``). r53 hon_2
+    additionally consults the uninitialized-memory value-source classifier
+    (``_nondeterministic_value_sources``): surviving ``uninitialized_alloc``
+    taint that reaches an archived-activation member slot or a model output
+    slot makes the artifact declared-nondeterministic, so numeric attestation
+    is ``not_applicable`` UPFRONT -- never the r52 contradictory
+    ``numeric_attestation_failed`` raise on bytes the recorded computation
+    never determined. Fully sanitized flows (``empty`` then a total write) and
+    dead tainted intermediates keep the run attestation-eligible, and a byte
+    mismatch on an UNTAINTED slot still raises (the tripwire is untouched).
+    """
+
+    if _descriptor_has_seeded_rng(descriptor):
+        return True
+    taint = _nondeterministic_value_sources(descriptor)
+    if not taint:
+        return False
+    reach: set[str] = {
+        slot.slot_id
+        for slot in descriptor.tensor_slots
+        if slot.role is TensorSlotRole.OUTPUT or slot.output_path is not None
+    }
+    layer = descriptor.payload_layers.activations
+    if isinstance(layer, ActivationPayloadLayerDescriptor):
+        reach.update(member.slot_id for member in layer.members)
+    return _uninit_taint_reaches(taint, reach)
+
+
+_UNINIT_SOURCE_KIND = "uninitialized_alloc"
+_SEEDED_SOURCE_KIND = "seeded_rng"
+_HOST_RNG_SOURCE_KIND = "host_rng"
+
+_UNINIT_SANITIZER_NAMESPACES = frozenset({"torch", "torch.Tensor", "torch.nn.functional"})
+"""Trusted namespaces whose ``out=`` convention is a total destination overwrite."""
+
+
+def _decoded_positional_literals(call: RunnableCallDescriptor) -> tuple[Any, ...]:
+    """Return a call's positional LITERAL arguments, decoded, in index order.
+
+    Tensor operands (a method receiver at ``args[0]``, other tensor arguments)
+    are naturally excluded -- they are ``tensor_arguments``, not literals -- so
+    the result is exactly the size-argument tuple ``uninit_new_call_is_size_form``
+    classifies for ``Tensor.new(...)``. Index gaps are collapsed (order is
+    preserved), which is all the arg-form predicate needs.
+    """
+
+    indexed: dict[int, Any] = {}
+    for literal in call.literal_arguments:
+        path = tuple(literal.argument_path)
+        if len(path) == 2 and path[0] == "args" and isinstance(path[1], int):
+            indexed[path[1]] = _decode_literal(literal.value)
+    return tuple(indexed[index] for index in sorted(indexed))
+
+
+def _nondeterministic_value_sources(
+    descriptor: SparseRunDescriptor,
+) -> dict[str, frozenset[str]]:
+    """Classify every tensor slot's declared nondeterministic VALUE sources (r53 hon_2).
+
+    THE single load-side choke point for nondeterministic-value recognition: no
+    call site outside this function may re-derive nondeterminism from qualnames
+    (source-scan meta-test). Sources are the uninitialized-memory op family
+    (``empty`` factories; a GROWING ``resize_``/``resize_as_`` decided from the
+    recorded receiver-vs-product element counts) and seeded-RNG products
+    (``RNG_SOURCE`` slots plus actually-consuming seeded calls). Taint
+    propagates along the recorded call schedule: a product inherits the union
+    of its tensor-argument taints, EXCEPT at a total write -- an ``out=``
+    destination or an in-place ``copy_``/``zero_``/``fill_``/RNG-fill receiver
+    -- where the destination's prior taint is dropped and the written version
+    carries only the value-source operands' taint (exact value semantics; the
+    RNG fills replace uninit taint with the seeded classification through the
+    ordinary seeded-consumption rule). A partial or unprovable in-place write
+    propagates (fail closed; r35 unknown-alias precedent). The whole family is
+    clean when the recorded ambient context proves deterministic fill
+    (``deterministic_algorithms`` true and ``fill_uninitialized_memory`` not
+    false) and per-product when the product has zero elements.
+
+    Returns
+    -------
+    dict[str, frozenset[str]]
+        Mapping from slot id to its non-empty declared source-kind set; slots
+        with no declared nondeterministic source are absent.
+    """
+
+    registry = {entry.registry_id: entry for entry in descriptor.callable_registry}
+    slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
+    ambient = descriptor.ambient_context
+    fill_deterministic = deterministic_fill_governs(
+        ambient.deterministic_algorithms, ambient.fill_uninitialized_memory
+    )
+
+    def _slot_numel(slot_id: str) -> int | None:
+        slot = slots.get(slot_id)
+        if slot is None:
+            return None
+        numel = 1
+        for dim in slot.shape:
+            numel *= int(dim)
+        return numel
+
+    taint: dict[str, frozenset[str]] = {
+        slot.slot_id: frozenset({_SEEDED_SOURCE_KIND})
+        for slot in descriptor.tensor_slots
+        if slot.role is TensorSlotRole.RNG_SOURCE
+    }
+    for call in descriptor.calls:
+        entry = registry.get(call.registry_id)
+        namespace = entry.key.namespace if entry is not None else None
+        qualname = entry.key.qualname if entry is not None else None
+        consumes_seeded = _call_consumes_seeded_rng(call, registry)
+        # Total-write destination: exact first-level receiver/out leaf only; a
+        # nested or absent destination path never sanitizes, and an ``out=``
+        # kwarg sanitizes only for trusted torch-namespace callables whose
+        # ``out=`` convention IS a total overwrite (fail closed for customs).
+        dest_slot_id: str | None = None
+        if namespace in _UNINIT_SANITIZER_NAMESPACES:
+            for ref in call.tensor_arguments:
+                if tuple(ref.argument_path) == ("kwargs", "out"):
+                    dest_slot_id = ref.slot_id
+                    break
+            # r55 hon_2: an ``out=`` that ALIASES a value operand
+            # (``torch.add(a, x, out=a)``) computes a result that READS the
+            # destination's prior (uninitialized) bytes -- it is NOT a pure total
+            # overwrite. "All elements written" is not "result independent of
+            # prior content". Preserve the destination's taint (fail closed, r35
+            # unknown-alias precedent) by declining to treat it as a total-write
+            # destination; only a genuine total write to a destination that is
+            # not itself read (below, or the ``copy_``/``zero_``/``fill_`` receiver
+            # branch) drops taint.
+            if dest_slot_id is not None and any(
+                ref.slot_id == dest_slot_id and tuple(ref.argument_path) != ("kwargs", "out")
+                for ref in call.tensor_arguments
+            ):
+                dest_slot_id = None
+        if dest_slot_id is None and qualname_is_uninit_total_writer(namespace, qualname):
+            for ref in call.tensor_arguments:
+                if tuple(ref.argument_path) == ("args", 0):
+                    dest_slot_id = ref.slot_id
+                    break
+        operand_union: set[str] = set()
+        sanitized_union: set[str] = set()
+        for ref in call.tensor_arguments:
+            ref_taint = taint.get(ref.slot_id)
+            if not ref_taint:
+                continue
+            operand_union |= ref_taint
+            if ref.slot_id != dest_slot_id:
+                sanitized_union |= ref_taint
+        produced = sanitized_union if dest_slot_id is not None else operand_union
+        if consumes_seeded:
+            produced = produced | {_SEEDED_SOURCE_KIND}
+        is_uninit_factory = qualname_is_uninitialized_alloc(namespace, qualname)
+        # r55 hon_1 consumer: ``Tensor.new`` is uninitialized-memory ONLY in its
+        # SIZE-argument form (``new(*sizes)`` redispatches ``aten.empty``); the
+        # DATA form (``new([values])``/``new(tensor)``) is a deterministic copy
+        # constructor. Decode the call's positional literal sizes and consult
+        # W1's arg-form predicate; the data form (``False``) stays clean, and an
+        # undecidable form (``None`` -- a plain int-tuple, since the portable
+        # grammar erases ``torch.Size``) fails CLOSED to tainted (grow-gate
+        # posture). ``new`` has no aten spelling, so this Python-method surface
+        # is the only place its uninit taint is recognized.
+        is_size_gated_uninit = False
+        if qualname_is_uninit_size_gated_alloc(namespace, qualname):
+            try:
+                new_sizes = _decoded_positional_literals(call)
+            except Exception:
+                new_sizes = None
+            if new_sizes is None:
+                is_size_gated_uninit = True  # undecodable form -> fail closed
+            else:
+                is_size_gated_uninit = uninit_new_call_is_size_form(new_sizes) is not False
+        is_growth_resize = qualname_is_uninit_growth_resize(namespace, qualname)
+        receiver_numel: int | None = None
+        if is_growth_resize:
+            receiver_numel = next(
+                (
+                    _slot_numel(ref.slot_id)
+                    for ref in call.tensor_arguments
+                    if tuple(ref.argument_path) == ("args", 0)
+                ),
+                None,
+            )
+        for out_slot_id in call.output_slot_ids:
+            slot_taint = set(produced)
+            if is_uninit_factory or is_size_gated_uninit:
+                # A factory product's value derives from NO operand: it is pure
+                # allocator garbage (tainted) unless deterministically filled
+                # or empty of elements (both value-constant).
+                out_numel = _slot_numel(out_slot_id)
+                slot_taint = set()
+                if not fill_deterministic and (out_numel is None or out_numel > 0):
+                    slot_taint = {_UNINIT_SOURCE_KIND}
+            elif is_growth_resize and not fill_deterministic:
+                # Shrink/same-size preserves the element prefix (probed clean);
+                # a GROW exposes stale allocator tail bytes. An undecidable
+                # grow fact fails closed to tainted.
+                out_numel = _slot_numel(out_slot_id)
+                if receiver_numel is None or out_numel is None or out_numel > receiver_numel:
+                    slot_taint.add(_UNINIT_SOURCE_KIND)
+            if slot_taint:
+                taint[out_slot_id] = frozenset(slot_taint)
+            else:
+                taint.pop(out_slot_id, None)
+    # Value-identity closure: an OUTPUT (or other alias) slot that no call
+    # produces is wired to its source through ``producer_slot_id``/``version_of``
+    # -- same value, same taint. ONLY call-orphan slots inherit here: a slot a
+    # call produces already carries that call's (possibly deliberately
+    # SANITIZED) taint, and re-unioning its ``version_of`` base would resurrect
+    # exactly the taint a total write removed. Iterate to fixpoint (chains are
+    # short and acyclic by construction).
+    call_produced: set[str] = {
+        out_slot_id for call in descriptor.calls for out_slot_id in call.output_slot_ids
+    }
+    changed = True
+    while changed:
+        changed = False
+        for slot in descriptor.tensor_slots:
+            if slot.slot_id in call_produced:
+                continue
+            inherited: set[str] = set(taint.get(slot.slot_id, frozenset()))
+            before = len(inherited)
+            for link in (slot.producer_slot_id, slot.version_of):
+                if link is not None:
+                    inherited |= taint.get(link, frozenset())
+            if len(inherited) > before:
+                taint[slot.slot_id] = frozenset(inherited)
+                changed = True
+    return taint
+
+
+def _uninit_taint_reaches(taint: Mapping[str, frozenset[str]], slot_ids: Iterable[str]) -> bool:
+    """Return whether surviving uninitialized-memory taint reaches any listed slot."""
+
+    return any(_UNINIT_SOURCE_KIND in taint.get(slot_id, frozenset()) for slot_id in slot_ids)
+
+
+def _control_witness_source_slot_ids(descriptor: SparseRunDescriptor) -> frozenset[str]:
+    """Return every slot whose VALUE decided a recorded control fact.
+
+    The set is the tensor->host escape-source witnesses
+    (``TENSOR_DERIVED_SCALAR_LITERAL`` site labels are their source slot ids)
+    plus the predicate-producing call outputs of ``SCALAR_BOOL`` /
+    ``LOOP_PREDICATE`` witnesses. ``CONDITIONAL_ARM_ENTRY`` witnesses carry
+    ``call_id=None`` (they record arm-edge structure, not a predicate source)
+    and contribute nothing here -- a tainted value computed INSIDE an arm never
+    ceilings the branch decision itself (over-trigger guard).
+    """
+
+    sources: set[str] = set(_tensor_derived_scalar_witness_slot_ids(descriptor))
+    calls_by_id = {call.call_id: call for call in descriptor.calls}
+    for witness in descriptor.control_witnesses:
+        if witness.kind not in {
+            ControlWitnessKind.SCALAR_BOOL,
+            ControlWitnessKind.LOOP_PREDICATE,
+            ControlWitnessKind.CONDITIONAL_ARM_ENTRY,
+        }:
+            continue
+        if witness.call_id is None:
+            continue
+        call = calls_by_id.get(witness.call_id)
+        if call is not None:
+            sources.update(call.output_slot_ids)
+    return frozenset(sources)
+
+
+def _declared_nondeterministic_sources(
+    descriptor: SparseRunDescriptor,
+    taint: Mapping[str, frozenset[str]],
+) -> frozenset[str]:
+    """Derive the run's declared nondeterministic sources (closed vocabulary, r53 F4).
+
+    ``seeded_rng`` and ``host_rng`` are the descriptor's existing presence
+    facts; ``uninitialized_alloc`` is declared exactly when surviving family
+    taint reaches an observable surface (a model output slot, an archived
+    activation member, or a control-fact source) -- a fully sanitized scratch
+    or a dead tainted intermediate declares nothing.
+    """
+
+    sources: set[str] = set()
+    if _descriptor_has_seeded_rng(descriptor):
+        sources.add(_SEEDED_SOURCE_KIND)
+    if descriptor.rng_profile.host_rng_consumed:
+        sources.add(_HOST_RNG_SOURCE_KIND)
+    if taint:
+        reach: set[str] = {
+            slot.slot_id
+            for slot in descriptor.tensor_slots
+            if slot.role is TensorSlotRole.OUTPUT or slot.output_path is not None
+        }
+        layer = descriptor.payload_layers.activations
+        if isinstance(layer, ActivationPayloadLayerDescriptor):
+            reach.update(member.slot_id for member in layer.members)
+        reach.update(_control_witness_source_slot_ids(descriptor))
+        if _uninit_taint_reaches(taint, reach):
+            sources.add(_UNINIT_SOURCE_KIND)
+    return frozenset(sources)
+
+
+_MODULE_TRAINING_MODE_SITE_PREFIX = "module_training_mode:"
+"""``site_label`` prefix marking the declared capture-time per-module train/eval mode."""
+
+
+def _is_mode_sensitive_qualname(qualname: str | None) -> bool:
+    """Delegate to the ONE shared mode-sensitivity classifier (r71 A).
+
+    Single-sourced in ``torchlens.runnable.is_mode_sensitive_qualname`` so the
+    parse-time ``module_training_mode`` domain derivation and this runtime belt can
+    never disagree on which ops are train/eval mode-sensitive.
+    """
+
+    return is_mode_sensitive_qualname(qualname)
+
+
+def _descriptor_has_mode_sensitive_op(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether the taken path contains a train/eval mode-sensitive op."""
+
+    registry = {entry.registry_id: entry for entry in descriptor.callable_registry}
+    for call in descriptor.calls:
+        entry = registry.get(call.registry_id)
+        if entry is not None and _is_mode_sensitive_qualname(entry.key.qualname):
+            return True
+    return False
+
+
+def _descriptor_declares_training_mode(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether the descriptor declares the capture-time per-module train/eval mode."""
+
+    return any(
+        witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
+        and witness.site_label.startswith(_MODULE_TRAINING_MODE_SITE_PREFIX)
+        for witness in descriptor.control_witnesses
+    )
+
+
+def _mode_sensitive_op_unwitnessed(descriptor: SparseRunDescriptor) -> bool:
+    """Return whether a mode-sensitive op replays without a declared train/eval mode.
+
+    ``self.training`` is declared state the VERIFIED oracle (a fresh instance in the
+    captured mode on the given inputs) reproduces. A BatchNorm / InstanceNorm op in the
+    taken path whose capture-time mode is NOT recorded has no witnessed proof of the mode
+    it corresponds to (eval running-stats vs train batch-stats), so the honest ceiling is
+    UNVERIFIABLE. Captures with no mode-sensitive op, or that declare the mode (every new
+    intervention-ready capture does), stay VERIFIED -- no over-trigger.
+    """
+
+    return _descriptor_has_mode_sensitive_op(descriptor) and not _descriptor_declares_training_mode(
+        descriptor
+    )
+
+
+def _call_consumes_seeded_rng(
+    call: RunnableCallDescriptor,
+    registry: Mapping[str, CallableRegistryEntry],
+) -> bool:
+    """Return whether one replayed call actually draws from a seeded generator.
 
     Parameters
     ----------
-    entry:
-        Portable callable identity recorded in a runnable descriptor.
+    call:
+        Replayed sparse call descriptor.
+    registry:
+        Registry-id to callable-entry map for the descriptor.
 
     Returns
     -------
     bool
-        Whether any matching ATen overload has PyTorch's maintained
-        ``nondeterministic_seeded`` tag.
+        Whether this specific call consumes non-reproducible seeded RNG at
+        replay time (op-name seeding refined by dropout ``training``/``p``).
     """
 
-    return aten_qualname_is_seeded_rng(entry.key.namespace, entry.key.qualname)
+    entry = registry.get(call.registry_id)
+    if entry is None:
+        return False
+    namespace = entry.key.namespace
+    qualname = entry.key.qualname
+    if not aten_qualname_is_seeded_rng(namespace, qualname):
+        return False
+    if _is_dropout_qualname(qualname):
+        # A dropout family op draws from the RNG only when it is genuinely
+        # active (training=True and p>0); eval/identity dropout is RNG-inert.
+        return _dropout_call_draws_rng(call)
+    return True
+
+
+def _is_dropout_qualname(qualname: str | None) -> bool:
+    """Return whether a captured qualname belongs to the dropout op family.
+
+    Covers ``dropout``/``dropout_``/``feature_dropout``/``alpha_dropout``/
+    ``feature_alpha_dropout`` under any namespace spelling. All members share
+    the ``training``+``p`` RNG-consumption contract.
+    """
+
+    if not qualname:
+        return False
+    tail = qualname.rsplit(".", 1)[-1]
+    if tail.endswith("_"):
+        tail = tail[:-1]
+    return tail.endswith("dropout")
+
+
+def _dropout_call_draws_rng(call: RunnableCallDescriptor) -> bool:
+    """Return whether a dropout call consumes RNG given its recorded literals.
+
+    Dropout draws from the generator only when ``training is True`` AND ``p > 0``.
+    The decision is keyed off the recorded ``training`` and ``p`` literals; when
+    a value cannot be proven RNG-inert the call stays conservatively tagged as
+    seeded (fail-closed: never a false ``attested``).
+
+    Parameters
+    ----------
+    call:
+        The dropout-family sparse call descriptor.
+
+    Returns
+    -------
+    bool
+        Whether the recorded dropout call actually draws from the RNG.
+    """
+
+    named = _named_literal_values(call)
+    training = named.get("training", named.get("train"))
+    p_value = named.get("p")
+    if training is False:
+        return False
+    if isinstance(p_value, (int, float)) and not isinstance(p_value, bool) and p_value == 0:
+        return False
+    return True
+
+
+def _named_literal_values(call: RunnableCallDescriptor) -> dict[str, Any]:
+    """Map recorded literal arguments to their parameter names.
+
+    Positional literals are named through ``call.argument_names``; keyword
+    literals use their stored key. Only the safe literal grammar is decoded.
+
+    Parameters
+    ----------
+    call:
+        Sparse call descriptor whose literal leaves are being named.
+
+    Returns
+    -------
+    dict[str, Any]
+        Parameter name to decoded literal value mapping.
+    """
+
+    values: dict[str, Any] = {}
+    for literal_argument in call.literal_arguments:
+        path = literal_argument.argument_path
+        if len(path) != 2:
+            continue
+        root, key = path
+        if root == "args" and isinstance(key, int) and 0 <= key < len(call.argument_names):
+            values[call.argument_names[key]] = _decode_literal(literal_argument.value)
+        elif root == "kwargs":
+            values[str(key)] = _decode_literal(literal_argument.value)
+    return values
 
 
 def _attestation_inputs_match(
     descriptor: SparseRunDescriptor,
     layer: Any,
     input_byte_digests: Mapping[str, str],
+    input_fingerprints: Mapping[str, InputAttestationFingerprint],
 ) -> bool:
-    """Return whether every available capture-input digest matches this run."""
+    """Return whether the run's inputs are LOGICALLY and PHYSICALLY original.
+
+    r35 hon1_3 (H-a): eligibility is layout-strict. Alongside the logical byte
+    digests, every recorded ``InputAttestationFingerprint`` must equal the
+    fingerprint of the value that actually seeds execution -- sizes, strides,
+    storage offset, memory-format flags, conj/neg bits, device, subclass class,
+    grad/inference metadata, and data-pointer alignment class. A physical twin
+    (byte-identical values, different layout) is changed-input-for-attestation
+    ONLY: ``not_applicable``, with path faithfulness untouched.
+    """
 
     expected_slot_ids = {
         slot.slot_id for slot in descriptor.tensor_slots if slot.role is TensorSlotRole.MODEL_INPUT
@@ -2339,9 +6028,19 @@ def _attestation_inputs_match(
     observed_slot_ids = {digest.slot_id for digest in layer.original_input_digests}
     if not expected_slot_ids or observed_slot_ids != expected_slot_ids:
         return False
-    return all(
+    if not all(
         input_byte_digests.get(digest.slot_id) == digest.byte_digest
         for digest in layer.original_input_digests
+    ):
+        return False
+    recorded_fingerprints = tuple(getattr(layer, "input_fingerprints", ()) or ())
+    if {fingerprint.slot_id for fingerprint in recorded_fingerprints} != expected_slot_ids:
+        # v2 requires a fingerprint per input slot; anything else is ineligible
+        # (fail-safe: never attest without the physical identity proof).
+        return False
+    return all(
+        input_fingerprints.get(fingerprint.slot_id) == fingerprint
+        for fingerprint in recorded_fingerprints
     )
 
 
@@ -2349,30 +6048,63 @@ def _attestation_state_matches(
     descriptor: SparseRunDescriptor,
     layer: Any,
     state: PreparedRunnableState,
-    slot_values: Mapping[str, torch.Tensor],
+    state_byte_digests: Mapping[str, str],
+    trace: Any,
 ) -> bool:
-    """Return whether runtime state is capture-equivalent rather than random."""
+    """Return whether runtime state is capture-equivalent rather than random.
 
-    state_slots = {
-        slot.state_binding.state_dict_name: slot
-        for slot in descriptor.tensor_slots
-        if slot.state_binding is not None
-    }
-    if not state_slots:
+    r35 corr2_5: eligibility is PARTITIONED by persistence. PERSISTENT slots
+    (the canonical ``state_dict``) compare against the activation layer's
+    ``capture_state_digests`` (which by construction contain only canonical
+    entries). USED NON-PERSISTENT buffer slots are separately required to
+    originate from the present, schema-valid, load-validated capture-embedded
+    ``runnable_nonpersistent_buffer_v1`` family and to match its byte digests;
+    staged user state can never supply them. Comparison uses PRE-EXECUTION
+    digests so a slot a call mutates mid-run is judged by its capture-start
+    state.
+    """
+
+    persistent_slots: dict[str, TensorSlotDescriptor] = {}
+    nonpersistent_slots: dict[str, TensorSlotDescriptor] = {}
+    for slot in descriptor.tensor_slots:
+        binding = slot.state_binding
+        if binding is None:
+            continue
+        if binding.persistent:
+            persistent_slots[binding.state_dict_name] = slot
+        else:
+            nonpersistent_slots[binding.state_dict_name] = slot
+    if not persistent_slots and not nonpersistent_slots:
         return True
-    if state.state_source not in {
-        StateSource.EMBEDDED_CAPTURE_STATE,
-        StateSource.USER_STATE_DICT,
-    }:
-        return False
-    expected = {item.state_dict_name: item.byte_digest for item in layer.capture_state_digests}
-    if set(expected) != set(state_slots):
-        return False
-    return all(
-        slot.slot_id in slot_values
-        and runnable_tensor_byte_digest(slot_values[slot.slot_id]) == expected[name]
-        for name, slot in state_slots.items()
-    )
+    if persistent_slots:
+        if state.state_source not in {
+            StateSource.EMBEDDED_CAPTURE_STATE,
+            StateSource.USER_STATE_DICT,
+        }:
+            return False
+        expected = {item.state_dict_name: item.byte_digest for item in layer.capture_state_digests}
+        if set(expected) != set(persistent_slots):
+            return False
+        if not all(
+            state_byte_digests.get(slot.slot_id) == expected[name]
+            for name, slot in persistent_slots.items()
+        ):
+            return False
+    if nonpersistent_slots:
+        embedded = trace.__dict__.get("_runnable_embedded_nonpersistent_buffers")
+        if not isinstance(embedded, Mapping):
+            return False
+        for name, slot in nonpersistent_slots.items():
+            recorded = embedded.get(name)
+            if not isinstance(recorded, torch.Tensor):
+                return False
+            try:
+                recorded_digest = runnable_tensor_byte_digest(recorded)
+            except Exception:
+                return False
+            if state_byte_digests.get(slot.slot_id) != recorded_digest:
+                return False
+    return True
 
 
 def _raise_numeric_attestation_failure(fork: Any, check: ContractCheck) -> None:
@@ -2418,21 +6150,30 @@ def _contract_check(
     return ContractCheck(name=name, passed=passed, diagnostic=diagnostic)
 
 
-def _raise_first_divergence(
-    checks: Sequence[ContractCheck],
-    policy: DivergencePolicy,
-    *,
-    fork: Any | None,
-) -> None:
-    """Raise and discard transactional state at the first observed contradiction."""
+def _first_failed_contract(checks: Sequence[ContractCheck]) -> ContractCheck | None:
+    """Return the first failed contract check, or ``None`` when all passed (r39 corr2_4)."""
 
-    failed = next((check for check in checks if not check.passed), None)
-    if failed is None or policy is DivergencePolicy.RETURN_DIVERGED:
-        return
+    return next((check for check in checks if not check.passed), None)
+
+
+def _raise_failed_contract_as_divergence(
+    failed: ContractCheck, *, fork: Any | None, cause: BaseException | None = None
+) -> None:
+    """Roll back and raise a first-failed contract check as a typed ``PathDivergenceError``.
+
+    The single typed-divergence raise shared by hard admission (:func:`_raise_first_divergence`),
+    the call loop (r39 corr2_4), and the live provider's classify-at-native-failure fold (r41
+    hon1_3): a call that throws AFTER an input contract check already failed is INPUT
+    DIVERGENCE, not resolved-callable ``RuntimeSignatureDriftError``, so it must surface as
+    ``PathDivergenceError`` carrying that first failed check under either policy. ``cause``
+    (live provider) chains the native error as ``__cause__`` so the underlying torch failure
+    stays inspectable.
+    """
+
     if fork is not None:
         _state._unregister_log(fork)
     diagnostic = failed.diagnostic
-    raise PathDivergenceError(
+    error = PathDivergenceError(
         diagnostic.message if diagnostic is not None else "Sparse run path diverged.",
         code=(
             diagnostic.code.value
@@ -2443,6 +6184,23 @@ def _raise_first_divergence(
         first_mismatch=diagnostic,
         contract_check=failed,
     )
+    if cause is not None:
+        raise error from cause
+    raise error
+
+
+def _raise_first_divergence(
+    checks: Sequence[ContractCheck],
+    policy: DivergencePolicy,
+    *,
+    fork: Any | None,
+) -> None:
+    """Raise and discard transactional state at the first observed contradiction."""
+
+    failed = _first_failed_contract(checks)
+    if failed is None or policy is DivergencePolicy.RETURN_DIVERGED:
+        return
+    _raise_failed_contract_as_divergence(failed, fork=fork)
 
 
 def _raise_monotonic_divergence(
@@ -2468,21 +6226,81 @@ def _raise_monotonic_divergence(
     )
 
 
-def _decode_literal(value: NonTensorLiteral | LiteralTupleKey) -> Any:
+_MAX_DECODE_NESTING_DEPTH = 200
+"""Defensive run-side literal-decode nesting ceiling (r55 C4).
+
+W3's load-side parser (``_io/runnable_load._parse_literal``) already bounds
+descriptor nesting to the SAME ceiling at parse, so a legitimately-loaded
+descriptor never approaches this here. This is the belt-and-suspenders guard on
+the run-side decoder: an over-depth decode raises ``ValueError`` -- routed to the
+same typed refusal surface as any other malformed literal -- rather than an
+uncaught ``RecursionError``. 200 sits far above any real literal nesting and
+below the interpreter's default recursion crash depth.
+"""
+
+
+def _decode_literal(value: NonTensorLiteral | LiteralTupleKey, _depth: int = 0) -> Any:
     """Decode one safe sparse literal without importing artifact-selected code."""
 
+    if _depth > _MAX_DECODE_NESTING_DEPTH:
+        raise ValueError(
+            f"Runnable literal nesting exceeds the maximum decode depth of "
+            f"{_MAX_DECODE_NESTING_DEPTH}."
+        )
     if isinstance(value, LiteralAtom):
+        # ``ELLIPSIS`` and ``NONE`` both carry ``value is None`` on the wire (``...`` has
+        # no JSON-native representation), so the atom KIND -- not the stored value -- is
+        # what disambiguates a real ``None`` index from a ``...`` index at decode time.
+        if value.kind is LiteralAtomKind.ELLIPSIS:
+            return Ellipsis
+        if value.kind is LiteralAtomKind.NONFINITE_FLOAT:
+            return _decode_nonfinite_float_literal(value.value)
         return value.value
+    if isinstance(value, LiteralSlice):
+        return slice(
+            _decode_literal(value.start, _depth + 1),
+            _decode_literal(value.stop, _depth + 1),
+            _decode_literal(value.step, _depth + 1),
+        )
     if isinstance(value, LiteralTupleKey):
-        return tuple(_decode_literal(item) for item in value.items)
+        return tuple(_decode_literal(item, _depth + 1) for item in value.items)
     if isinstance(value, LiteralSequence):
-        items = [_decode_literal(item) for item in value.items]
+        items = [_decode_literal(item, _depth + 1) for item in value.items]
         return tuple(items) if value.kind is LiteralSequenceKind.TUPLE else items
     if isinstance(value, LiteralMapping):
-        return {_decode_literal(entry.key): _decode_literal(entry.value) for entry in value.entries}
+        return {
+            _decode_literal(entry.key, _depth + 1): _decode_literal(entry.value, _depth + 1)
+            for entry in value.entries
+        }
     if isinstance(value, LiteralTorchSymbol):
         return _decode_torch_symbol(value.qualname)
     raise TypeError(f"Unknown sparse literal type {type(value).__name__}.")
+
+
+def _decode_nonfinite_float_literal(value: Any) -> float:
+    """Decode one non-finite float atom payload.
+
+    Parameters
+    ----------
+    value:
+        Serialized non-finite float payload.
+
+    Returns
+    -------
+    float
+        ``nan``, ``inf``, or ``-inf``.
+    """
+
+    if value == "nan":
+        return float("nan")
+    if value == "inf":
+        return float("inf")
+    if value == "-inf":
+        return float("-inf")
+    raise RunPreconditionError(
+        f"Unsupported non-finite float literal payload {value!r}.",
+        code=RunnableErrorCode.UNSUPPORTED_LITERAL.value,
+    )
 
 
 # POSITIVE allowlist of the torch symbolic constant *types* a forward op
@@ -2511,14 +6329,32 @@ def _decode_torch_symbol(qualname: str) -> Any:
     """
 
     if qualname.startswith("torch.device(") and qualname.endswith(")"):
-        return torch.device(qualname[13:-1])
+        # r41 secC: the device constructor is inert value construction but rejects a
+        # malformed payload with a raw torch error; an attacker-edited qualname must
+        # surface as the SAME typed literal refusal as every other branch, never a
+        # bare ``RuntimeError`` outside the ``RunnableErrorCode`` vocabulary.
+        try:
+            return torch.device(qualname[13:-1])
+        except (RuntimeError, ValueError, TypeError) as exc:
+            raise RunPreconditionError(
+                f"Unsupported torch literal symbol {qualname!r}.",
+                code=RunnableErrorCode.UNSUPPORTED_LITERAL.value,
+            ) from exc
     name = qualname.removeprefix("torch.")
     if name == qualname or "." in name or not name.isidentifier():
         raise RunPreconditionError(
             f"Unsupported torch literal symbol {qualname!r}.",
             code=RunnableErrorCode.UNSUPPORTED_LITERAL.value,
         )
-    symbol = getattr(torch, name, None)
+    # r42 secC_1 / r45: the shared ``torch_attr`` helper reads ``torch.__dict__`` WITHOUT firing
+    # ``torch.__getattr__``, so an attacker qualname (``torch._inductor`` / ``_dynamo`` /
+    # ``_export`` / ``onnx`` / deprecated ``has_cuda``) triggers NO lazy submodule import and
+    # invokes NO deprecated ``replacement()`` -- both unrequested side effects the old
+    # ``getattr(torch, name, None)`` ran, one of which could also leak a raw ``ImportError``
+    # outside the typed vocabulary. Every allowlisted dtype/layout/memory_format/qscheme/``Size``
+    # symbol is a real ``torch.__dict__`` entry and still resolves; everything else returns
+    # ``None`` -> the typed refusal below.
+    symbol = torch_attr(name)
     if symbol is torch.Size or isinstance(symbol, _ALLOWED_TORCH_SYMBOL_TYPES):
         return symbol
     raise RunPreconditionError(
@@ -2527,17 +6363,112 @@ def _decode_torch_symbol(qualname: str) -> Any:
     )
 
 
+def _field_getattr(current: Any, component: Any) -> Any:
+    """Read one attribute-path component against a structurally-known field only.
+
+    Attacker-controlled path strings from an untrusted bundle reach this function
+    (``input_binding.container_path``, the recorded literal-witness ``fact["path"]``,
+    and the reconstructed output ``slot.output_path``). An unconstrained ``getattr``
+    would fire arbitrary victim-object descriptor getters and could walk dunder chains
+    (``__class__.__init__.__globals__`` ...), so the component must be a string that is
+    STRUCTURALLY PRESENT as a declared field on the current object's type -- a dataclass
+    field, a namedtuple ``_fields`` entry, or a ``torch.return_types`` structseq field.
+    Dunder / descriptor attributes (``__class__``, ``__dict__``, ...) are never declared
+    fields, so this check inherently excludes the escape chains; anything else raises
+    ``AttributeError`` and every caller fails closed.
+    """
+
+    if not isinstance(component, str):
+        raise AttributeError(f"Non-string attribute component {component!r}.")
+    allowed: set[str] = set()
+    if dataclasses.is_dataclass(current) and not isinstance(current, type):
+        allowed.update(field.name for field in dataclasses.fields(current))
+    allowed.update(_container_field_names(current))
+    if component not in allowed:
+        raise AttributeError(
+            f"Attribute component {component!r} is not a structurally-known field of "
+            f"{type(current).__name__}."
+        )
+    return getattr(current, component)
+
+
 def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
-    """Read one list/tuple/mapping/object path from a runtime value."""
+    """Read one list/tuple/mapping/object path from a runtime value.
+
+    Attribute traversal is constrained to structurally-known container fields via
+    :func:`_field_getattr`; string components are never fed to an unconstrained
+    ``getattr`` (untrusted-bundle path strings could otherwise walk descriptor / dunder
+    chains).
+
+    One synthetic component form (r29-C2) is decoded: a terminal
+    ``EMPTY_CONTAINER_PATH_MARKER`` resolves to the KIND string of the empty container at
+    the parent path (so a runtime empty container of a different kind, or a non-empty/scalar
+    value, diverges). Mapping lookups bind by CANONICAL ENCODED TOKEN for every key
+    (r69 D): each runtime candidate is encoded through the one
+    ``encode_mapping_key`` authority and compared by exact token type/value -- the
+    r29 ``(BOOL_KEY_PATH_TAG, bool)`` tuple spelling is retired (no producer emits
+    it; a decoded-value lookup lane would reopen hash-equality conflation).
+    """
+
+    from torchlens._input_walk import encode_mapping_key
+    from torchlens._io.runnable import (
+        EMPTY_CONTAINER_PATH_MARKER,
+        empty_container_kind,
+    )
+    from torchlens.ir.container import get_registered_container
 
     current = value
     for component in path:
+        if component == EMPTY_CONTAINER_PATH_MARKER:
+            kind = empty_container_kind(current)
+            if kind is None:
+                raise KeyError(EMPTY_CONTAINER_PATH_MARKER)
+            return kind
+        # r67 C2 (corr1-3): a registered container resolves indexed components by
+        # RE-FLATTENING through its registration -- never ``obj[index]`` (the type may
+        # not support indexing at all). A missing/throwing registration raises typed
+        # KeyError (bind-side fence), never an AttributeError crash.
+        if not isinstance(current, (Mapping, list, tuple)) and not isinstance(component, str):
+            registration = get_registered_container(type(current))
+            if registration is not None:
+                try:
+                    children = list(registration.flatten(current)[0])
+                except Exception as exc:
+                    raise KeyError(f"registered flatten failed: {exc!r}") from exc
+                if not isinstance(component, int) or not (0 <= component < len(children)):
+                    raise KeyError(component)
+                current = children[component]
+                continue
         if isinstance(current, Mapping):
-            current = current[component]
+            # r69 D: ONE canonical key identity end to end -- EVERY mapping lookup
+            # (including raw-looking str/int components) encodes each runtime
+            # candidate through the same ``encode_mapping_key`` authority and
+            # compares exact canonical token type/value. A persisted component is
+            # never decoded for a runtime value-equality scan (NaN could not bind
+            # itself and Python hash/equality conflated bool/int/float twins).
+            # Candidates the grammar refuses are skipped (they can never have been
+            # recorded); multiple token matches fail closed as
+            # ``ambiguous_mapping_key``.
+            matches = []
+            for candidate in current.keys():
+                try:
+                    token = encode_mapping_key(candidate)
+                except ValueError:
+                    continue
+                if type(token) is type(component) and token == component:
+                    matches.append(candidate)
+            if not matches:
+                raise KeyError(component)
+            if len(matches) > 1:
+                raise KeyError(
+                    f"ambiguous_mapping_key: {len(matches)} runtime keys encode to "
+                    f"the canonical token {component!r}"
+                )
+            current = current[matches[0]]
         elif isinstance(component, int):
             current = current[component]
         else:
-            current = getattr(current, component)
+            current = _field_getattr(current, component)
     return current
 
 

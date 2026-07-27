@@ -7,7 +7,8 @@ from pathlib import Path
 from collections.abc import Collection
 from typing import Any
 
-from .._io import JaxPayloadLoadHint, PayloadLoadHints, rehydrate_nested
+from .._io import JaxPayloadLoadHint, PayloadLoadHints, TorchLensIOError, rehydrate_nested
+from .._io import _json
 from .._io.bundle import cleanup_tmp, load, save
 from .._trace_state import TraceState
 from ..intervention.save import save_intervention
@@ -67,6 +68,7 @@ def detect_tlspec_format(path: str | Path) -> str:
     """
 
     tlspec_path = Path(path)
+    _reject_symlinked_metadata_path(tlspec_path)
     manifest = _read_json_object_if_present(tlspec_path / "manifest.json")
     if manifest is not None:
         has_kind = "kind" in manifest
@@ -85,6 +87,32 @@ def detect_tlspec_format(path: str | Path) -> str:
     return "unknown"
 
 
+def _reject_symlinked_metadata_path(path: Path) -> None:
+    """Reject a symlinked ``.tlspec`` format-detection path (defense-in-depth).
+
+    ``detect_tlspec_format`` / ``inspect_tlspec`` read ``manifest.json`` /
+    ``spec.json`` for format classification BEFORE the bundle loader's symlink
+    guards (``torchlens._io.bundle._reject_symlink_path``) fire. A crafted
+    ``.tlspec`` whose child JSON member -- or the bundle root directory -- is a
+    symlink would otherwise be FOLLOWED out of the bundle at classification time
+    (arbitrary-path read / DoS). Mirror the loader guards so format detection
+    refuses a symlinked member too.
+
+    Parameters
+    ----------
+    path:
+        Bundle root or metadata-file path to validate.
+
+    Raises
+    ------
+    TorchLensIOError
+        If ``path`` is a symlink.
+    """
+
+    if path.is_symlink():
+        raise TorchLensIOError(f"Refusing symlinked .tlspec format-detection path: {path}.")
+
+
 def _read_json_object_if_present(path: Path) -> dict[str, Any] | None:
     """Read one JSON object if the file exists and parses cleanly.
 
@@ -100,11 +128,12 @@ def _read_json_object_if_present(path: Path) -> dict[str, Any] | None:
         object.
     """
 
+    _reject_symlinked_metadata_path(path)
     if not path.exists():
         return None
     try:
         with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
+            data = _json.load_bounded(handle)
     except (OSError, json.JSONDecodeError):
         return None
     if not isinstance(data, dict):
@@ -135,6 +164,7 @@ def inspect_tlspec(path: str | Path) -> dict[str, Any]:
     """
 
     tlspec_path = Path(path)
+    _reject_symlinked_metadata_path(tlspec_path)
     manifest_path = tlspec_path / "manifest.json"
     manifest = _read_json_object_if_present(manifest_path)
     if manifest is not None:

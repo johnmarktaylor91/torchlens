@@ -18,7 +18,7 @@ from torchlens.errors import (
     PathDivergenceError,
     PoisonedRunError,
     RunCapabilityUnavailableError,
-    RuntimeSignatureDriftError,
+    RunPreconditionError,
 )
 from torchlens.options import CaptureOptions
 from torchlens.runnable import (
@@ -769,20 +769,29 @@ def test_shape_divergence_return_mode_finishes_and_poison_marks_result(
 def test_unfinishable_sparse_call_raises_typed_error_without_leaking_fork(
     runnable_execution_artifact: tuple[Path, RunnableExecutionModel, tl.Trace],
 ) -> None:
-    """Rollback registry state when wrong-shape replay fails inside a native call."""
+    """Rollback registry state when a wrong-shape divergent input is inexecutable.
+
+    r39 corr2_4: an admitted-but-INEXECUTABLE divergent input (wrong FEATURE shape that fails
+    the native call) under ``return_diverged`` surfaces as ``PathDivergenceError`` carrying the
+    already-failed ``input_shape`` contract check -- NOT ``RuntimeSignatureDriftError`` (which is
+    reserved for genuine resolved-callable/torch-version drift with all input checks passing).
+    The transactional fork is still rolled back either way (no leaked log).
+    """
 
     path, model, _ = runnable_execution_artifact
     loaded = tl.load(path)
     loaded.load_state_dict(model.state_dict())
     logs_before = set(_state.list_logs())
 
-    with pytest.raises(RuntimeSignatureDriftError) as caught:
+    with pytest.raises(PathDivergenceError) as caught:
         loaded.run(
             inputs=torch.ones(2, 4),
             on_divergence=DivergencePolicy.RETURN_DIVERGED,
         )
 
-    assert caught.value.fields["code"] == "runtime_signature_drift"
+    assert caught.value.fields["path_faithfulness"] is PathFaithfulness.DIVERGED
+    check = caught.value.fields.get("contract_check")
+    assert check is not None and check.name.startswith("input_shape:")
     assert set(_state.list_logs()) == logs_before
 
 
@@ -818,13 +827,34 @@ def test_poisoned_trace_is_refused_by_faithful_downstream_consumers(
 def test_incomplete_witness_coverage_is_unverifiable_and_poisoned(
     honesty_artifact: Path,
 ) -> None:
-    """Never promote absence of an observed mismatch to verified without coverage."""
+    """Never promote absence of an observed mismatch to verified without coverage.
+
+    r71 A3: incompleteness is carried by the typed gap LEDGER (the summary is a
+    redundant derived assertion). A surviving gap ceilings the run UNVERIFIABLE;
+    a summary flipped WITHOUT its gap is an internally contradictory descriptor
+    and refuses typed at run preparation (the floor re-assert belt).
+    """
+
+    from torchlens.runnable import (
+        WITNESS_GAP_REGISTRY,
+        WitnessCoverageGap,
+        WitnessGapKind,
+    )
 
     loaded = tl.load(honesty_artifact)
     descriptor = loaded.__dict__["_runnable_descriptor"]
+    gap_spec = WITNESS_GAP_REGISTRY[WitnessGapKind.RNG_MONITOR_UNCERTAIN]
+    gap = WitnessCoverageGap(
+        gap_kind=WitnessGapKind.RNG_MONITOR_UNCERTAIN,
+        source_family=gap_spec.source_family,
+        source_member="capture",
+        order=0,
+        resulting_completeness=gap_spec.resulting_completeness,
+    )
     loaded.__dict__["_runnable_descriptor"] = replace(
         descriptor,
-        witness_completeness=WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE,
+        coverage_gaps=(gap,),
+        witness_completeness=gap_spec.resulting_completeness,
     )
 
     result = loaded.run(inputs=torch.ones(2), seed=29)
@@ -834,6 +864,16 @@ def test_incomplete_witness_coverage_is_unverifiable_and_poisoned(
     assert result.report.poisoned
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     assert result.trace.__dict__["_runnable_poisoned"] is True
+
+    # Summary-only flip (no gap): internally contradictory -> typed refusal, never
+    # a silently trusted summary in EITHER direction.
+    contradictory = tl.load(honesty_artifact)
+    contradictory.__dict__["_runnable_descriptor"] = replace(
+        contradictory.__dict__["_runnable_descriptor"],
+        witness_completeness=WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE,
+    )
+    with pytest.raises(RunPreconditionError):
+        contradictory.run(inputs=torch.ones(2), seed=29)
 
 
 def test_poison_mark_and_first_mismatch_are_monotonic(honesty_artifact: Path) -> None:
@@ -871,3 +911,324 @@ def _assert_outs_equal(trace: tl.Trace, expected: tuple[torch.Tensor | None, ...
             assert op.out is None
         else:
             assert torch.equal(op.out, value)
+
+
+# --------------------------------------------------------------------------- #
+# r27-C1: ``_value_at_path`` must never feed an attacker-controlled path string
+# to an unconstrained ``getattr``. Path components are reached from untrusted
+# bundle fields (``input_binding.container_path`` and the recorded literal-witness
+# ``fact["path"]``), so a component like ``"__class__"`` must be refused rather
+# than firing descriptor getters or walking a dunder escape chain.
+# --------------------------------------------------------------------------- #
+
+
+class _C1FieldPair(NamedTuple):
+    """Namedtuple container with one legitimate structural field."""
+
+    value: torch.Tensor
+    meta: int
+
+
+def test_c1_value_at_path_refuses_dunder_attribute_traversal() -> None:
+    """A dunder / non-field attribute component raises AttributeError, never resolves."""
+
+    from torchlens._runnable_execution import _field_getattr, _value_at_path
+
+    pair = _C1FieldPair(torch.zeros(2), 3)
+
+    # Legitimate structural field access still works (no over-trigger).
+    assert torch.equal(_value_at_path(pair, ("value",)), pair.value)
+    assert _value_at_path(pair, ("meta",)) == 3
+
+    # A dunder escape-chain component is refused BEFORE any getattr fires.
+    for attacker in ("__class__", "__init__", "__globals__", "__dict__", "__reduce__"):
+        with pytest.raises(AttributeError):
+            _value_at_path(pair, (attacker,))
+        with pytest.raises(AttributeError):
+            _field_getattr(pair, attacker)
+
+    # A non-field public attribute that genuinely exists on the object is still
+    # refused: only STRUCTURALLY-declared fields are traversable.
+    with pytest.raises(AttributeError):
+        _value_at_path(pair, ("count",))  # tuple.count method attribute
+
+
+def test_c1_value_at_path_mapping_and_index_paths_unaffected() -> None:
+    """Mapping-key and integer-index traversal still work (attr guard is scoped)."""
+
+    from torchlens._runnable_execution import _value_at_path
+
+    root = {"weird__key__": torch.ones(3), "nested": [torch.zeros(1), {"k": 5}]}
+    # Mapping keys use ``[]`` not getattr, so even a dunder-looking KEY is allowed.
+    assert torch.equal(_value_at_path(root, ("weird__key__",)), root["weird__key__"])
+    assert _value_at_path(root, ("nested", 1, "k")) == 5
+
+
+# --------------------------------------------------------------------------- #
+# r27-H3: torch capture DE-ALIASES model inputs (each leaf is cloned before the
+# forward). A runtime call whose inputs ALIAS (same object, or distinct views
+# sharing storage) while an in-place op mutates a model input is NOT reproducible
+# against that de-aliased capture: a fresh model on the aliased inputs propagates
+# the mutation between sites, the de-aliased replay does not. Such a run must fail
+# closed (DIVERGED / NOT_APPLICABLE), never a false VERIFIED.
+# --------------------------------------------------------------------------- #
+
+
+class _AliasInplaceModel(nn.Module):
+    """Mutate one model input in place, then read another input site."""
+
+    def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        """In-place add on ``a``; a fresh aliased model would see it through ``b``."""
+
+        a.add_(1.0)
+        return b * 2.0
+
+
+def _save_alias_runnable(path: Path) -> Path:
+    """Capture and save the in-place two-input alias model as a runnable artifact."""
+
+    t = torch.tensor([1.0, 2.0])
+    trace = tl.trace(
+        _AliasInplaceModel(),
+        [t, t],
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
+    )
+    trace.save(path, level="runnable", include_activations=True)
+    return path
+
+
+def test_h3_same_object_aliased_input_with_inplace_fails_closed(tmp_path: Path) -> None:
+    """Runtime ``a is b`` with an in-place op on an input must not be VERIFIED."""
+
+    path = _save_alias_runnable(tmp_path / "alias_same.tlspec")
+    shared = torch.tensor([1.0, 2.0])
+
+    with pytest.raises(PathDivergenceError):
+        tl.load(path).run(inputs=[shared, shared])
+    diverged = tl.load(path).run(
+        inputs=[shared, shared], on_divergence=DivergencePolicy.RETURN_DIVERGED
+    )
+    assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
+    assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
+
+
+def test_h3_view_aliased_distinct_objects_with_inplace_fails_closed(tmp_path: Path) -> None:
+    """Distinct runtime objects that share storage must also fail closed."""
+
+    path = _save_alias_runnable(tmp_path / "alias_view.tlspec")
+    base = torch.tensor([1.0, 2.0])
+    view = base.view_as(base)
+    assert base is not view
+    assert base.untyped_storage().data_ptr() == view.untyped_storage().data_ptr()
+
+    diverged = tl.load(path).run(
+        inputs=[base, view], on_divergence=DivergencePolicy.RETURN_DIVERGED
+    )
+    assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
+    assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
+
+
+def test_h3_distinct_inputs_still_verify(tmp_path: Path) -> None:
+    """Distinct (non-aliased) runtime inputs match the de-aliased capture -> VERIFIED."""
+
+    path = _save_alias_runnable(tmp_path / "alias_distinct.tlspec")
+    a = torch.tensor([1.0, 2.0])
+    b = torch.tensor([1.0, 2.0])
+
+    result = tl.load(path).run(inputs=[a, b])
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
+
+
+def test_h3_readonly_aliased_inputs_fail_closed(tmp_path: Path) -> None:
+    """r33 F1: aliased runtime inputs fail closed; distinct inputs stay VERIFIED.
+
+    Torch capture DE-ALIASES model inputs (independent per-slot clones), so the recorded DAG
+    always reflects DISTINCT-input semantics. A runtime call whose inputs are aliased (same
+    object, ``a is b``) cannot be proven faithful against a fresh model on those aliased inputs
+    -- an ``if a is b`` / ``id()`` identity branch (self/cross-attention ``q is k``) would take
+    a different arm than the de-aliased replay, a false VERIFIED even on the original input.
+    Superseding the earlier r29 "read-only aliasing is numerically irrelevant" reasoning
+    (incomplete: it misses identity branches), any runtime aliasing now fails closed. The
+    trivial all-distinct topology (the common case) is unaffected -- no over-trigger.
+    """
+
+    class _ReadOnly(nn.Module):
+        def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+            return a + b
+
+    z = torch.tensor([3.0, 4.0])
+    trace = tl.trace(
+        _ReadOnly(),
+        [z, z],
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
+    )
+    trace.save(tmp_path / "readonly.tlspec", level="runnable", include_activations=True)
+
+    # Aliased runtime inputs (same object) -> fail closed (F1 honesty).
+    shared = torch.tensor([3.0, 4.0])
+    with pytest.raises(PathDivergenceError):
+        tl.load(tmp_path / "readonly.tlspec").run(inputs=[shared, shared])
+    diverged = tl.load(tmp_path / "readonly.tlspec").run(
+        inputs=[shared, shared], on_divergence=DivergencePolicy.RETURN_DIVERGED
+    )
+    assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
+
+    # Distinct runtime inputs match the de-aliased capture -> VERIFIED (no over-trigger).
+    verified = tl.load(tmp_path / "readonly.tlspec").run(
+        inputs=[torch.tensor([3.0, 4.0]), torch.tensor([5.0, 6.0])]
+    )
+    assert verified.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+# --------------------------------------------------------------------------- #
+# r27-H5: self.training is module state (not state_dict, not an input) that steers
+# mode-sensitive ops (BatchNorm running-stats vs batch-stats). The VERIFIED oracle
+# is a fresh instance IN THE CAPTURED MODE on the given inputs, so the captured mode
+# is DECLARED state. Every intervention-ready capture now records it; a mode-sensitive
+# op replayed WITHOUT a declared mode (an old bundle / capture gap) downgrades to
+# UNVERIFIABLE (fail closed). Mode-insensitive models are unaffected.
+# --------------------------------------------------------------------------- #
+
+
+class _BatchNormModel(nn.Module):
+    """Linear + BatchNorm1d: BatchNorm is train/eval mode-sensitive."""
+
+    def __init__(self) -> None:
+        """Build a linear layer feeding a BatchNorm layer."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+        self.bn = nn.BatchNorm1d(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the linear then the mode-sensitive BatchNorm."""
+
+        return self.bn(self.lin(x))
+
+
+@pytest.mark.parametrize("train", [False, True])
+def test_h5_batchnorm_records_mode_and_verifies(train: bool, tmp_path: Path) -> None:
+    """A BatchNorm model records its mode and still VERIFIES (no over-trigger)."""
+
+    model = _BatchNormModel()
+    model.train(train)
+    x = torch.randn(8, 4)
+    trace = tl.trace(
+        model,
+        x,
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
+    )
+    assert trace.__dict__.get("_runnable_module_training_modes") == {
+        "self": train,
+        "lin": train,
+        "bn": train,
+    }
+    trace.save(tmp_path / "bn.tlspec", level="runnable", include_activations=True)
+    result = tl.load(tmp_path / "bn.tlspec").run(inputs=x)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+def test_h5_dropout_model_in_eval_records_mode_and_verifies(tmp_path: Path) -> None:
+    """A Dropout model captured in eval records its mode and still VERIFIES."""
+
+    class _DropModel(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+            self.drop = nn.Dropout(0.5)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.drop(self.lin(x))
+
+    model = _DropModel().eval()
+    x = torch.randn(8, 4)
+    trace = tl.trace(
+        model,
+        x,
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
+    )
+    assert trace.__dict__.get("_runnable_module_training_modes") == {
+        "self": False,
+        "lin": False,
+        "drop": False,
+    }
+    trace.save(tmp_path / "drop.tlspec", level="runnable", include_activations=True)
+    result = tl.load(tmp_path / "drop.tlspec").run(inputs=x)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+def test_h5_mode_sensitive_op_without_declared_mode_is_unverifiable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A BatchNorm capture that records NO mode now fails TYPED at save (r71 A4).
+
+    The r71 mode-domain check moved to parse and the producer runs the SAME validator
+    as its save-time self-check, so a capture gap that drops the declared train/eval
+    mode (the corr2recover producer-regression lane) refuses the runnable save with
+    ``context_field_invalid`` -- strictly stronger than the former ship-then-
+    UNVERIFIABLE disposition. ``_mode_sensitive_op_unwitnessed`` remains as the
+    runtime belt behind the parse gate.
+    """
+
+    import torchlens.capture.trace as capture_trace
+    from torchlens.errors import RunnablePreflightError
+
+    # Simulate an old bundle / capture gap: skip the mode recording entirely.
+    monkeypatch.setattr(
+        capture_trace, "_record_runnable_module_training_modes", lambda trace, model: None
+    )
+    model = _BatchNormModel().eval()
+    x = torch.randn(8, 4)
+    trace = tl.trace(
+        model,
+        x,
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
+    )
+    assert trace.__dict__.get("_runnable_module_training_modes") is None
+    with pytest.raises(RunnablePreflightError) as excinfo:
+        trace.save(tmp_path / "bn_nomode.tlspec", level="runnable", include_activations=True)
+    assert "context_field_invalid" in str(excinfo.value.fields.get("diagnostics"))
+    assert "module_training_mode" in str(excinfo.value.fields.get("diagnostics"))
+
+
+def test_h5_mode_insensitive_model_without_mode_still_verifies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A model with NO mode-sensitive op verifies even with no declared mode (no over-trigger)."""
+
+    import torchlens.capture.trace as capture_trace
+
+    monkeypatch.setattr(
+        capture_trace, "_record_runnable_module_training_modes", lambda trace, model: None
+    )
+
+    class _Plain(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.lin(x)
+
+    x = torch.randn(8, 4)
+    trace = tl.trace(
+        _Plain(),
+        x,
+        capture=CaptureOptions(
+            intervention_ready=True, capture_container_structure=True, cache=False
+        ),
+    )
+    trace.save(tmp_path / "plain_nomode.tlspec", level="runnable", include_activations=True)
+    result = tl.load(tmp_path / "plain_nomode.tlspec").run(inputs=x)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

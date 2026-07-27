@@ -49,6 +49,7 @@ from .ops import (
     _get_autograd_saved_stats_for_tensor,
     _walk_output_tensors_with_paths,
     log_function_output_tensors,
+    runnable_output_losslessness,
 )
 from .sources import log_source_tensor as _log_source_tensor
 from .wrappers import unwrap_torch, wrap_torch
@@ -680,6 +681,19 @@ class TorchBackend:
 
         self_trace = cast("Trace", session)
         output_entries = list(_walk_output_tensors_with_paths(outputs))
+        # r35 I1 (subsumes r33 R32-B1): stamp the POSITIVE model-output losslessness
+        # proof -- exact root kind, recursively supported children, encodable literal
+        # leaves, and a tensor-leaf/typed-path bijection (duplicate paths and any BFS
+        # fallback break the proof). The runnable producer refuses any save whose
+        # output is not PROVED lossless (refuse-unless-proved), closing every lossy
+        # cardinality/depth: bare one-tensor sets, nested sets, opaque tensor
+        # holders, set subclasses, and multi-tensor collapses alike. Ordinary
+        # analysis capture is unaffected by the stamp.
+        setattr(
+            self_trace,
+            "_runnable_output_losslessness",
+            runnable_output_losslessness(outputs, output_entries),
+        )
         # The container_spec is only user-facing metadata when explicitly opted
         # into via capture_container_structure (or implied by intervention_ready);
         # with the default OFF it must stay None on output layers. The container

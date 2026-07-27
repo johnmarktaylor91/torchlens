@@ -108,6 +108,41 @@ class LazyImportRef:
     trust_custom_callables: bool = False
     allowed_custom_callable_modules: tuple[str, ...] | None = None
 
+    def __setstate__(self, state: object) -> None:
+        """Force fail-closed trust on ANY unpickle reconstruction (self-defense).
+
+        A ``LazyImportRef`` is materialized in-process from a load call with a trust
+        context threaded through ``__init__``; it is NEVER a legitimate member of a
+        pickled ``metadata.pkl`` graph. If some path (a forged bundle, a
+        ``__reduce__`` gadget) reconstructs one via unpickle, its trust MUST NOT come
+        from the attacker-controlled pickled fields, or a crafted
+        ``LazyImportRef(import_path="os:system", trust_custom_callables=True)`` would
+        REDUCE-invoke ``os.system``. Pickle restores frozen-dataclass state by
+        bypassing ``__setattr__``, so this hook rebuilds the state with
+        ``object.__setattr__`` and HARD-FORCES ``trust_custom_callables=False`` and
+        ``allowed_custom_callable_modules=None`` regardless of the pickled values.
+        The ``import_path`` is preserved (inert until ``__call__``), but resolution
+        can now never be attacker-trusted -- the foreign resolver denies it.
+
+        This is scoped to the UNPICKLE path only: the normal in-process load path
+        constructs the reference through ``__init__`` (never ``__setstate__``), so a
+        legitimately-trusted intervention-spec load is unaffected.
+
+        Parameters
+        ----------
+        state:
+            Pickled instance state (the frozen dataclass ``__dict__``, or a
+            ``(dict, slots)`` 2-tuple), used only to recover ``import_path``.
+        """
+
+        payload: object = state
+        if isinstance(state, tuple) and state and isinstance(state[0], dict):
+            payload = state[0]
+        import_path = payload.get("import_path", "") if isinstance(payload, dict) else ""
+        object.__setattr__(self, "import_path", import_path if isinstance(import_path, str) else "")
+        object.__setattr__(self, "trust_custom_callables", False)
+        object.__setattr__(self, "allowed_custom_callable_modules", None)
+
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Resolve and call the referenced object under its captured trust gate.
 
@@ -259,6 +294,12 @@ def load_intervention_spec(
 
     spec_path = Path(path)
     _reject_symlink_path(spec_path, context="intervention spec path")
+    # Defense-in-depth: the spec ROOT being non-symlink does not stop a symlinked
+    # CHILD member (spec.json / manifest.json) from redirecting the read out of
+    # the attacker-controlled directory. Mirror the trace loader's per-member
+    # symlink rejection before opening either file.
+    _reject_symlink_path(spec_path / _SPEC_FILE, context="intervention spec.json")
+    _reject_symlink_path(spec_path / _MANIFEST_FILE, context="intervention manifest.json")
     data = _read_json_file(spec_path / _SPEC_FILE)
     _validate_format_version(data.get("format_version"))
     manifest = _read_json_file(spec_path / _MANIFEST_FILE)
@@ -451,6 +492,69 @@ def _reject_symlink_path(path: Path, *, context: str) -> None:
 
     if path.is_symlink():
         raise ReplayPreconditionError(f"Refusing to use symlink {context}: {path}")
+
+
+def _resolve_intervention_tensor_path(spec_path: Path, relative_path: str) -> Path:
+    """Resolve one manifest tensor sidecar path under the spec directory.
+
+    This mirrors the anti-traversal / anti-symlink guarantees the portable trace
+    loader gets from ``resolve_bundle_blob_path`` + ``_reject_symlink_path`` (see
+    ``torchlens/_io/paths.py`` and ``torchlens/_io/bundle.py``). The intervention
+    sidecar loader is reached by a DEFAULT ``tl.load`` on an attacker-controlled
+    intervention-shaped ``.tlspec`` directory, so an attacker-set
+    ``relative_path`` must never read a file outside ``spec_path`` and must never
+    follow an in-bundle symlink. The checksum gate is NOT a defense here: the
+    attacker also controls ``entry.sha256`` and can make it match the
+    out-of-bundle file, so containment must be enforced BEFORE the checksum and
+    the safetensors read.
+
+    Parameters
+    ----------
+    spec_path:
+        Trusted intervention spec directory root (already non-symlink checked).
+    relative_path:
+        Manifest-provided sidecar path relative to ``spec_path``.
+
+    Returns
+    -------
+    Path
+        Absolute, containment-checked, non-symlink sidecar path.
+
+    Raises
+    ------
+    ReplayPreconditionError
+        If ``relative_path`` is absolute, contains ``".."``, resolves outside
+        ``spec_path``, or targets an in-bundle symlink.
+    """
+
+    candidate_rel = Path(relative_path)
+    if candidate_rel.is_absolute():
+        raise ReplayPreconditionError(
+            f"Intervention spec rejected absolute tensor relative_path {relative_path!r}."
+        )
+    if ".." in candidate_rel.parts:
+        raise ReplayPreconditionError(
+            f"Intervention spec rejected parent traversal in tensor relative_path {relative_path!r}."
+        )
+    candidate = spec_path / candidate_rel
+    # Reject an in-bundle symlink FILE (or symlinked final component) before we
+    # resolve/read it, so a symlink that points back inside the bundle is also
+    # refused rather than silently followed.
+    _reject_symlink_path(candidate, context="intervention tensor sidecar")
+    # Containment against the spec ROOT (not a resolved ``tensors/`` subdir),
+    # so a symlinked intermediate directory that redirects the sidecar outside
+    # the spec is caught here: ``candidate.resolve()`` follows the symlink out
+    # and ``relative_to`` fails.
+    allowed_root = spec_path.resolve()
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(allowed_root)
+    except ValueError as exc:
+        raise ReplayPreconditionError(
+            "Intervention spec rejected tensor path traversal outside spec directory: "
+            f"{relative_path!r}."
+        ) from exc
+    return resolved
 
 
 def _enforce_direct_write_policy(
@@ -1749,7 +1853,7 @@ def _load_tensor_refs(spec_path: Path, entries: list[TensorEntry]) -> dict[str, 
 
     tensors: dict[str, torch.Tensor] = {}
     for entry in entries:
-        path = spec_path / entry.relative_path
+        path = _resolve_intervention_tensor_path(spec_path, entry.relative_path)
         if sha256_of_file(path) != entry.sha256:
             raise ReplayPreconditionError(f"Tensor sidecar checksum mismatch: {entry.blob_id}")
         tensor = load_file(str(path))[_BLOB_TENSOR_KEY]

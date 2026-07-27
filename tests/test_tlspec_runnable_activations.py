@@ -242,7 +242,7 @@ def test_include_activations_persists_exact_save_selected_family_and_digests(
     members = activation_layer["members"]
     selected_labels = {str(op.label) for op in trace.layer_list if bool(op.has_saved_activation)}
     assert activation_layer["present"] is True
-    assert activation_layer["schema"] == "selected_activation_v1"
+    assert activation_layer["schema"] == "selected_activation_v2"
     assert {member["op_label"] for member in members} == selected_labels
     assert all(len(member["byte_digest"]) == 64 for member in members)
     assert {member["slot_id"] for member in members} == {
@@ -269,7 +269,7 @@ def test_include_activations_default_is_absent_and_requires_runnable_level(
     manifest = _manifest(path)
     assert manifest["run"]["payload_layers"]["activations"] == {
         "present": False,
-        "schema": "selected_activation_v1",
+        "schema": "selected_activation_v2",
     }
     assert not any(entry["kind"] == "runnable_activation" for entry in manifest["tensors"])
     assert tl.load(path).archived_activations == {}

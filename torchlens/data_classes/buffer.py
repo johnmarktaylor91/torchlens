@@ -126,6 +126,9 @@ class Buffer:
                 "versions": [],
             },
         )
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
         self.__dict__.update(state)
 
     @property

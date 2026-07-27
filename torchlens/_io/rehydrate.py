@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from collections import OrderedDict, defaultdict
 import dataclasses
+import inspect
+import types
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Literal, Mapping
@@ -19,12 +21,17 @@ from safetensors import SafetensorError
 from safetensors.torch import load_file
 
 from . import BlobRef, FieldPolicy, PayloadLoadHints, TorchLensIOError
+from ._torch_symbols import torch_attr
 from .accessor_rebuild import rebuild_trace_accessors
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .payload_codec import materialize_transport_tensor
 from .paths import resolve_bundle_blob_path
-from .scrub import _RAW_IMAGE_SENTINEL
+from .scrub import (
+    _RAW_IMAGE_SENTINEL,
+    _RAW_INPUT_IMAGE_BYTES_LIMIT,
+    _RAW_INPUT_IMAGE_MAX_EDGE,
+)
 from ..backends import BackendRuntimeCompatibilityError
 from ..data_classes._state_adapter import state_items
 from ..data_classes.trace import Trace
@@ -153,9 +160,29 @@ def rehydrate_trace(
             module_accessor_state._pass_dict,
         )
 
+    _bind_conditional_arms(trace)
     _set_payload_load_status(trace, manifest_index, payload_statuses)
     _restore_trace_state_order(trace, portable_key_order)
     return trace
+
+
+def _bind_conditional_arms(trace: Trace) -> None:
+    """Bind loaded conditional-arm convenience accessors to their owning trace.
+
+    Parameters
+    ----------
+    trace:
+        Rehydrated trace whose runtime-only conditional bindings should be restored.
+    """
+
+    from ..data_classes.trace import ConditionalAccessor
+
+    accessor = getattr(trace, "conditionals", None)
+    if not isinstance(accessor, ConditionalAccessor):
+        return
+    for conditional in accessor.values():
+        for arm_index, arm in enumerate(conditional.arms):
+            arm._bind(trace, conditional.id, arm_index)
 
 
 def _rehydrate_small_raw_images(value: Any) -> Any:
@@ -177,12 +204,41 @@ def _rehydrate_small_raw_images(value: Any) -> Any:
         data = value.get("data")
         if not isinstance(data, bytes):
             return value
+        # SECURITY (secF-1). ``data`` is attacker-controlled bytes on a plain
+        # ``tl.load()``: a hand-edited ``metadata.pkl`` is NOT bound by the
+        # save-time "small" policy, so this sink must re-impose the SAME canonical
+        # bounds the writer applies (never the attacker-echoed ``bytes_limit`` /
+        # ``max_edge`` fields sitting in ``value``) and fail CLOSED. Without this,
+        # a few-hundred-byte blob declaring huge dimensions forced a large
+        # ``Image.load()`` allocation (decompression-bomb DoS), and malformed
+        # bytes raised an UNCAUGHT Pillow error that crashed the whole load.
+        # 1) Byte cap: refuse to even hand oversized bytes to Pillow's C codecs.
+        if len(data) > _RAW_INPUT_IMAGE_BYTES_LIMIT:
+            return value
         try:
             from PIL import Image
         except ImportError:
             return value
-        image = Image.open(BytesIO(data))
-        image.load()
+        # 2) Header-only dimension check BEFORE decode: ``Image.open`` reads the
+        #    format header (giving ``.size``) without allocating pixel buffers, so
+        #    an oversized *declared* image is rejected here -- before ``.load()``
+        #    can allocate -- and bounded to the documented save-time max edge.
+        # 3) Fail closed: any decoder error (malformed / truncated / unsupported
+        #    bytes, or an early decompression-bomb guard) degrades to the inert raw
+        #    sentinel dict instead of propagating out of ``tl.load()``.
+        try:
+            image = Image.open(BytesIO(data))
+            width, height = image.size
+            if (
+                width > _RAW_INPUT_IMAGE_MAX_EDGE
+                or height > _RAW_INPUT_IMAGE_MAX_EDGE
+                or width < 1
+                or height < 1
+            ):
+                return value
+            image.load()
+        except Exception:
+            return value
         return image
     if isinstance(value, list):
         return [_rehydrate_small_raw_images(item) for item in value]
@@ -544,9 +600,17 @@ def _assign_rehydrated_field(value: Any, field_name: str, field_value: Any) -> N
         Rehydrated field value.
     """
 
-    internal_set = getattr(value, "_internal_set", None)
-    if callable(internal_set):
-        internal_set(field_name, field_value)
+    # r54 sec_3: resolve the ``_internal_set`` protocol setter off the CLASS, never
+    # off the (attacker-controllable) instance ``__dict__``. ``getattr_static``
+    # walks the class MRO without triggering descriptors, so a planted instance
+    # ``_internal_set`` key can never substitute for the real slotted-class method.
+    # Only a genuine class-owned plain method (the sole real one is
+    # ``Op._internal_set``) is bound and invoked; non-slotted classes have no
+    # ``_internal_set`` on the class and fall through to the frozen/``setattr``
+    # branch exactly as before.
+    internal_set = inspect.getattr_static(type(value), "_internal_set", None)
+    if isinstance(internal_set, types.FunctionType):
+        internal_set.__get__(value, type(value))(field_name, field_value)
     elif dataclasses.is_dataclass(value) and getattr(type(value), "__dataclass_params__").frozen:
         object.__setattr__(value, field_name, field_value)
     else:
@@ -893,7 +957,12 @@ def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
         If the dtype string is unknown to the runtime.
     """
 
-    dtype_obj = getattr(torch, dtype_name, None)
+    # r45 secC_1: the manifest ``dtype`` field is attacker-controlled. ``torch_attr`` reads
+    # ``torch.__dict__`` directly, so an arbitrary attribute name (``onnx`` / ``_dynamo`` /
+    # deprecated ``has_cuda``) fires NO lazy submodule import, NO deprecated ``replacement()``,
+    # and leaks NO raw ``ImportError`` before the ``isinstance`` value gate below. Every real
+    # dtype is a ``torch.__dict__`` entry and still resolves.
+    dtype_obj = torch_attr(dtype_name)
     if not isinstance(dtype_obj, torch.dtype):
         raise TorchLensIOError(f"Unsupported dtype string in manifest: {dtype_name}.")
     return dtype_obj

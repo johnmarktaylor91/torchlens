@@ -7,38 +7,13 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
-from .._literals import BufferVisibilityLiteral, VisModeLiteral, VisNodePlacementLiteral
+from .request import RenderContext
 
 if TYPE_CHECKING:
     from ..data_classes.module import Module
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
     from .auto_collapse import ModuleRepeatFold
-
-
-@dataclass(frozen=True)
-class RenderContext:
-    """Visualization context bits that affect collapse planning.
-
-    Parameters
-    ----------
-    vis_mode:
-        Render granularity, ``"unrolled"`` by default.
-    show_buffer_layers:
-        Buffer visibility policy used by the renderer.
-    show_containers:
-        Container overlay policy. R1a parity is scoped to ``False``.
-    engine:
-        Graph layout engine. R1a parity is scoped to Graphviz ``dot``.
-    skip_fn:
-        Optional public node-skip predicate threaded into render IR.
-    """
-
-    vis_mode: VisModeLiteral = "unrolled"
-    show_buffer_layers: BufferVisibilityLiteral = "meaningful"
-    show_containers: Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"] = False
-    engine: VisNodePlacementLiteral = "dot"
-    skip_fn: Callable[[Any], bool] | None = None
 
 
 @dataclass(frozen=True)
@@ -341,42 +316,56 @@ def count(plan: CollapsePlan) -> int:
     return total
 
 
-def plan_from_v1(
+def collapse_plan_for_trace(
     trace: "Trace",
     collapse_fn: Callable[["Module"], bool] | None,
     repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
     context: RenderContext | None = None,
 ) -> CollapsePlan:
-    """Reconstruct the plan implied by current v1 renderer decisions.
+    """Build a collapse plan through the shared node-universe entry point.
 
     Parameters
     ----------
     trace:
-        Trace being rendered.
+        Trace being projected.
     collapse_fn:
-        Active v1 collapse predicate.
+        Active collapse predicate.
     repeat_folds:
-        Current v1 repeat-fold mapping.
+        Active repeat-fold mapping.
     context:
-        Render context. Defaults to the scoped S7 parity context.
+        Resolved render context.
 
     Returns
     -------
     CollapsePlan
-        Plan whose count matches the renderer's SVG node count in the default
-        unrolled/dot/default-buffer/container-off context.
+        Renderer-faithful structural plan.
     """
 
-    resolved_context = RenderContext() if context is None else context
-    from .render_ir import build_render_ir
+    from .node_universe import build_node_universe
+    from .source_graph import build_source_graph
 
-    render_ir = build_render_ir(
-        trace,
-        collapse_fn=collapse_fn,
-        repeat_folds=repeat_folds,
-        context=resolved_context,
+    resolved_context = RenderContext() if context is None else context
+    universe = build_node_universe(
+        build_source_graph(trace, resolved_context), collapse_fn, repeat_folds
     )
-    emissions = render_ir.node_emissions
+    return collapse_plan_from_universe(universe)
+
+
+def collapse_plan_from_universe(universe: Any) -> CollapsePlan:
+    """Convert visible structural units into the stable collapse-plan AST.
+
+    Parameters
+    ----------
+    universe:
+        Presentation-free node universe.
+
+    Returns
+    -------
+    CollapsePlan
+        Existing plan AST with unchanged count and representation semantics.
+    """
+
+    emissions = universe.emissions
     nodes: list[PlanNode] = []
     consumed_ellipsis: set[str] = set()
     for emission in emissions:
@@ -408,4 +397,4 @@ def plan_from_v1(
     for emission in emissions:
         if emission.kind == "run_fold_ellipsis" and emission.name not in consumed_ellipsis:
             nodes.append(Boundary("run_fold_ellipsis"))
-    return CollapsePlan(nodes=tuple(nodes), context=resolved_context)
+    return CollapsePlan(nodes=tuple(nodes), context=universe.source_graph.request)

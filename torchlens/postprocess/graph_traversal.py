@@ -10,7 +10,7 @@ Step 4 (_mark_layer_depths): Optional forward/backward BFS recording
 """
 
 from collections import OrderedDict
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
@@ -458,6 +458,11 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     # input-disconnected and orphaned away, so the runnable descriptor would
     # otherwise never learn the taken branch was nondeterministic + unwitnessed.
     _record_pruned_rng_control_flow(self, orphan_nodes)
+    # Record pruned in-place ops that mutated an UNLABELLED (invisible ``.data`` / foreign)
+    # alias: their write targets storage the sparse DAG cannot model, so dropping the op
+    # silently loses the mutation. Recording it lets the runnable descriptor stay honestly
+    # UNVERIFIABLE instead of VERIFYING a replay that omits the write.
+    _record_pruned_alias_mutation(self, orphan_nodes)
     if getattr(self, "keep_orphans", False):
         for orphan_label in orphan_nodes:
             self._raw_layer_dict[orphan_label].is_orphan = True
@@ -492,18 +497,54 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     self._raw_layer_dict = new_layer_dict
 
 
+def _child_edge_totally_overwrites(self: "Trace", walked_label: str, child_label: str) -> bool:
+    """Return whether a child op TOTALLY overwrites the walked tensor's bytes (r53 hon_2).
+
+    The sanitized pruned-orphan walk stops at a total-writer edge whose
+    DESTINATION is the walked tensor (``copy_``/``zero_``/``fill_``/RNG-fill
+    receiver, or an ``out=`` destination): the post-write value is independent
+    of the walked nondeterministic bytes, so a pruned ``empty -> fill_(1) ->
+    branch`` chain must NOT be flagged (empty-plus-fill is THE idiomatic
+    scratch init). The walk CONTINUES when the walked tensor is the VALUE
+    SOURCE of the writer (``dst.copy_(walked)``). Unknown or partial in-place
+    writers never stop the walk (fail closed).
+    """
+
+    from ..utils.rng import qualname_is_uninit_total_writer
+
+    op = self._raw_layer_dict.get(child_label)
+    if op is None:
+        return False
+    func_id = getattr(op, "func_id", None)
+    namespace = getattr(func_id, "namespace", None)
+    qualname = getattr(func_id, "qualname", None)
+    arg_locs = getattr(op, "parent_arg_positions", None)
+    args_locs = arg_locs.get("args", {}) if isinstance(arg_locs, dict) else {}
+    kwargs_locs = arg_locs.get("kwargs", {}) if isinstance(arg_locs, dict) else {}
+    if (
+        namespace in ("torch", "torch.Tensor", "torch.nn.functional")
+        and kwargs_locs.get("out") == walked_label
+    ):
+        return True
+    return qualname_is_uninit_total_writer(namespace, qualname) and args_locs.get(0) == walked_label
+
+
 def _rng_orphan_drove_control_or_output(
     self: "Trace", start_label: str, escape_sources: frozenset[str]
 ) -> bool:
-    """Return whether an orphaned RNG op's value steered control flow or output.
+    """Return whether an orphaned nondeterministic op's value steered control or output.
 
-    Walks the forward (child) chain from ``start_label``. The RNG result
-    "influenced control" when the op itself or any descendant is a recorded
-    tensor->host escape source (its value was read by ``bool()``/``.item()`` to
-    steer pure-Python control flow); it "influenced output" when a descendant is
-    an output node (defensive: an output-reaching op is not normally orphaned).
-    A genuinely-dead RNG draw whose result feeds nothing reaches neither and
-    returns ``False``, so it stays VERIFIED.
+    Walks the forward (child) chain from ``start_label``. The nondeterministic
+    result (a seeded torch-RNG draw or an uninitialized-memory family product,
+    r53 hon_2) "influenced control" when the op itself or any descendant is a
+    recorded tensor->host escape source (its value was read by
+    ``bool()``/``.item()`` to steer pure-Python control flow); it "influenced
+    output" when a descendant is an output node (defensive: an output-reaching
+    op is not normally orphaned). The walk is SANITIZED: it never crosses a
+    total-writer edge whose destination is the walked tensor
+    (``_child_edge_totally_overwrites``), so an empty-then-fully-written
+    scratch chain stays clean. A genuinely-dead draw whose result feeds nothing
+    reaches neither and returns ``False``, so it stays VERIFIED.
     """
 
     seen: set[str] = set()
@@ -519,20 +560,76 @@ def _rng_orphan_drove_control_or_output(
         if label in escape_sources or getattr(op, "is_output", False):
             return True
         for child_label in getattr(op, "children", ()) or ():
-            if child_label not in seen:
-                stack.append(child_label)
+            if child_label in seen:
+                continue
+            if _child_edge_totally_overwrites(self, label, child_label):
+                continue
+            stack.append(child_label)
     return False
 
 
-def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> None:
-    """Flag pruned torch-RNG ops that drove control flow, for the runnable descriptor.
+def _orphan_is_uninit_alloc_source(self: "Trace", op: Any) -> bool:
+    """Return whether an orphaned op is an uninitialized-memory value source (r53 hon_2).
 
-    An orphaned op is an RNG op when its captured callable maps to an ATen
-    ``nondeterministic_seeded`` overload. When such an op's value reached a
-    control decision (or, defensively, an output), the recorded taken branch is
-    nondeterministic yet fully pruned from the visible graph. Recording its raw
-    label in the weak-keyed side table lets the runnable producer downgrade
-    witness completeness so the model is honestly UNVERIFIABLE + NOT_APPLICABLE
+    Keys on the shared closed family table (``utils/rng.py``): the ``empty``
+    factory family taints unless its product has zero elements; a resize
+    spelling taints only when it GREW its receiver beyond the pre-call element
+    count (shrink/same-size preserves the prefix), failing closed to tainted
+    when either shape is unreadable. The whole family is clean when the
+    capture-time ambient snapshot proves deterministic fill.
+    """
+
+    from ..utils.rng import (
+        deterministic_fill_governs,
+        qualname_is_uninit_growth_resize,
+        qualname_is_uninitialized_alloc,
+    )
+
+    func_id = getattr(op, "func_id", None)
+    namespace = getattr(func_id, "namespace", None)
+    qualname = getattr(func_id, "qualname", None)
+    is_factory = qualname_is_uninitialized_alloc(namespace, qualname)
+    is_resize = qualname_is_uninit_growth_resize(namespace, qualname)
+    if not is_factory and not is_resize:
+        return False
+    snapshot = getattr(self, "_runnable_capture_ambient", None)
+    if isinstance(snapshot, dict) and deterministic_fill_governs(
+        snapshot.get("deterministic_algorithms"),
+        snapshot.get("fill_uninitialized_memory"),
+    ):
+        return False
+
+    def _numel(shape: Any) -> int | None:
+        if not isinstance(shape, tuple):
+            return None
+        numel = 1
+        for dim in shape:
+            if not isinstance(dim, int):
+                return None
+            numel *= dim
+        return numel
+
+    out_numel = _numel(getattr(op, "shape", None))
+    if is_factory:
+        return out_numel is None or out_numel > 0
+    arg_locs = getattr(op, "parent_arg_positions", None)
+    args_locs = arg_locs.get("args", {}) if isinstance(arg_locs, dict) else {}
+    receiver = self._raw_layer_dict.get(args_locs.get(0, ""))
+    pre_numel = _numel(getattr(receiver, "shape", None)) if receiver is not None else None
+    return pre_numel is None or out_numel is None or out_numel > pre_numel
+
+
+def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> None:
+    """Flag pruned nondeterministic-source ops that drove control flow (runnable descriptor).
+
+    An orphaned op is a nondeterministic value source when its captured
+    callable maps to an ATen ``nondeterministic_seeded`` overload OR to the
+    uninitialized-memory family (r53 hon_2, shared predicate). When such an
+    op's value reached a control decision (or, defensively, an output) through
+    the sanitized child walk, the recorded taken branch is nondeterministic yet
+    fully pruned from the visible graph. Recording its raw label in the
+    weak-keyed side table lets the runnable producer downgrade witness
+    completeness so the model is honestly UNVERIFIABLE + NOT_APPLICABLE
     instead of falsely VERIFIED + ATTESTED. This only reads orphan metadata and
     records a side-channel fact; it never alters the visible graph.
     """
@@ -553,10 +650,36 @@ def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> No
             continue
         if not aten_qualname_is_seeded_rng(
             getattr(func_id, "namespace", None), getattr(func_id, "qualname", None)
-        ):
+        ) and not _orphan_is_uninit_alloc_source(self, op):
             continue
         if _rng_orphan_drove_control_or_output(self, label, escape_sources):
             record_pruned_rng_control_source(self, label)
+
+
+def _record_pruned_alias_mutation(self: "Trace", orphan_nodes: set[str]) -> None:
+    """Flag orphan-pruned in-place ops that mutated an unlabelled alias, for the runnable descriptor.
+
+    Capture records (in a weak-keyed side table) every in-place op whose mutation TARGET carried no
+    resolvable capture label -- an invisible ``.data`` / foreign alias (``y.data.add_(5.0)``). Such
+    an op's output slot feeds nothing in the tensor graph, so orphan removal drops it and the write
+    to the aliased storage is silently lost: a sparse replay recomputes the PRE-mutation value and
+    would falsely report VERIFIED. Recording the raw label of each candidate that is ACTUALLY pruned
+    lets the runnable producer downgrade witness completeness so the model is honestly UNVERIFIABLE +
+    NOT_APPLICABLE. A candidate op that survives pruning is graph-represented (replayed) and never
+    recorded. This only reads orphan metadata and records a side-channel fact; it never alters the
+    visible graph.
+    """
+
+    from ..backends.torch.completeness_witness import (
+        alias_mutation_candidate_labels,
+        record_pruned_alias_mutation_source,
+    )
+
+    candidates = alias_mutation_candidate_labels(self)
+    if not candidates:
+        return
+    for label in candidates & orphan_nodes:
+        record_pruned_alias_mutation_source(self, label)
 
 
 def _expand_seen_nodes_to_complete_func_call_groups(

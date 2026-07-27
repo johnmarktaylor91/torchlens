@@ -16,8 +16,9 @@ from torch import nn
 pytest.importorskip("safetensors")
 
 from torchlens import Trace, load, trace as trace_fn, save
-from torchlens.io import cleanup_tmp
+from torchlens.io import cleanup_tmp, detect_tlspec_format
 from torchlens._io import TLSPEC_VERSION, TorchLensIOError
+from torchlens._io.paths import resolve_bundle_blob_path
 from torchlens._io.manifest import Manifest
 from torchlens._io.payload_codec import (
     _raise_for_unsupported_array_dtype,
@@ -1084,6 +1085,121 @@ def test_bundle_save_rejects_symlink_target(tmp_path: Path) -> None:
 
     with pytest.raises(TorchLensIOError, match="symlinked save target"):
         save(trace, symlink_path)
+
+
+def _build_unified_bundle(tmp_path: Path) -> Path:
+    """Save one valid unified ``.tlspec`` bundle for symlink-guard tests.
+
+    Parameters
+    ----------
+    tmp_path:
+        Base temporary directory.
+
+    Returns
+    -------
+    Path
+        Saved bundle directory that detects as ``v2.0_unified``.
+    """
+
+    trace = _build_conv_log()
+    bundle_path = tmp_path / "unified_bundle.tlspec"
+    save(trace, bundle_path)
+    assert detect_tlspec_format(bundle_path) == "v2.0_unified"
+    return bundle_path
+
+
+def test_unified_load_rejects_symlinked_metadata(tmp_path: Path) -> None:
+    """Unified loads should refuse a symlinked ``metadata.pkl`` member."""
+
+    bundle_path = _build_unified_bundle(tmp_path)
+    member = bundle_path / "metadata.pkl"
+    target = tmp_path / "real_metadata.pkl"
+    member.rename(target)
+    member.symlink_to(target)
+
+    with pytest.raises(TorchLensIOError, match="Refusing symlinked metadata"):
+        load(bundle_path)
+
+
+def test_unified_load_rejects_symlinked_manifest(tmp_path: Path) -> None:
+    """Unified loads should refuse a symlinked ``manifest.json`` member."""
+
+    bundle_path = _build_unified_bundle(tmp_path)
+    member = bundle_path / "manifest.json"
+    target = tmp_path / "real_manifest.json"
+    member.rename(target)
+    member.symlink_to(target)
+
+    # r29 F-r28-1: a symlinked manifest is now rejected even earlier, at
+    # format-detection (before the loader's own symlink guard), so match the
+    # symlink-refusal message point-agnostically -- the assertion still verifies
+    # that a symlinked manifest.json member is refused with TorchLensIOError.
+    with pytest.raises(TorchLensIOError, match="Refusing symlinked"):
+        load(bundle_path)
+
+
+def test_unified_load_rejects_symlinked_blobs_dir(tmp_path: Path) -> None:
+    """Unified loads should refuse a symlinked ``blobs`` directory."""
+
+    bundle_path = _build_unified_bundle(tmp_path)
+    member = bundle_path / "blobs"
+    target = tmp_path / "real_blobs"
+    member.rename(target)
+    member.symlink_to(target, target_is_directory=True)
+
+    with pytest.raises(TorchLensIOError, match="Refusing symlinked blobs directory"):
+        load(bundle_path)
+
+
+def test_unified_load_rejects_symlinked_bundle_path(tmp_path: Path) -> None:
+    """Unified loads should refuse a symlinked bundle directory path."""
+
+    bundle_path = _build_unified_bundle(tmp_path)
+    link_path = tmp_path / "bundle_link.tlspec"
+    link_path.symlink_to(bundle_path, target_is_directory=True)
+
+    # r29 F-r28-1: a symlinked bundle path is now rejected earlier, at
+    # format-detection, so match the symlink-refusal point-agnostically -- the
+    # assertion still verifies a symlinked bundle directory is refused.
+    with pytest.raises(TorchLensIOError, match="Refusing symlinked"):
+        load(link_path)
+
+
+def test_unified_load_accepts_regular_bundle_members(tmp_path: Path) -> None:
+    """Control: a normal unified bundle still loads after the symlink guards."""
+
+    bundle_path = _build_unified_bundle(tmp_path)
+
+    loaded = load(bundle_path)
+
+    assert isinstance(loaded, Trace)
+
+
+def test_resolve_bundle_blob_path_rejects_symlinked_blobs_dir(tmp_path: Path) -> None:
+    """The blob resolver should reject the ``blobs`` directory itself being a symlink."""
+
+    bundle_root = tmp_path / "root.tlspec"
+    bundle_root.mkdir()
+    outside_tree = tmp_path / "outside_tree"
+    outside_tree.mkdir()
+    (outside_tree / "0000000001.safetensors").write_bytes(b"payload")
+    (bundle_root / "blobs").symlink_to(outside_tree, target_is_directory=True)
+
+    with pytest.raises(TorchLensIOError, match="Refusing symlinked blobs directory"):
+        resolve_bundle_blob_path(bundle_root, "blobs/0000000001.safetensors")
+
+
+def test_resolve_bundle_blob_path_accepts_regular_blobs_dir(tmp_path: Path) -> None:
+    """Control: the blob resolver still accepts a regular ``blobs`` directory."""
+
+    bundle_root = tmp_path / "root.tlspec"
+    (bundle_root / "blobs").mkdir(parents=True)
+    blob_file = bundle_root / "blobs" / "0000000001.safetensors"
+    blob_file.write_bytes(b"payload")
+
+    resolved = resolve_bundle_blob_path(bundle_root, "blobs/0000000001.safetensors")
+
+    assert resolved == blob_file.resolve()
 
 
 def test_bundle_loaded_log_validation_guard_raises(tmp_path: Path) -> None:

@@ -42,10 +42,18 @@ def _add_tensor_backward_hook(trace: "Trace", t: torch.Tensor, tensor_label: str
         tensor_label: Raw tensor label (e.g. ``"conv2d_3_47_raw"``) used to
             look up the corresponding log entry when the grad arrives.
     """
-    if t.grad_fn is not None:
+    # r65: TorchLens's OWN hook-bookkeeping ``grad_fn``/``requires_grad`` reads, hoisted
+    # under the explicit internal-read marker so the r65 state-metadata property observer
+    # never mistakes them for user autograd reads on a registered buffer/param receiver.
+    from .completeness_witness import internal_scalar_read
+
+    with internal_scalar_read():
+        _grad_fn = t.grad_fn
+        _requires_grad = bool(t.requires_grad)
+    if _grad_fn is not None:
         from .backward import _register_forward_grad_fn
 
-        _register_forward_grad_fn(trace, t.grad_fn, tensor_label)
+        _register_forward_grad_fn(trace, _grad_fn, tensor_label)
     should_defer_hook = getattr(
         trace, "_deferred_gradient_selector", None
     ) is not None and not getattr(trace, "_installing_deferred_gradient_hooks", False)
@@ -57,7 +65,7 @@ def _add_tensor_backward_hook(trace: "Trace", t: torch.Tensor, tensor_label: str
     if (
         not getattr(trace, "capture_tensor_grad_hooks", True)
         or should_defer_hook
-        or (t.grad_fn is None and not t.requires_grad)
+        or (_grad_fn is None and not _requires_grad)
     ):
         return
 
@@ -76,6 +84,8 @@ def _add_tensor_backward_hook(trace: "Trace", t: torch.Tensor, tensor_label: str
         refresh_target_ref = getattr(active_trace, "_refresh_projection_target_ref", None)
         if refresh_target_ref is not None:
             active_trace = refresh_target_ref()
+        if active_trace is not None and getattr(active_trace, "_tl_rf_probe_active", False):
+            return
         if active_trace is not None:
             _emit_tensor_grad_event(active_trace, grad, tensor_label)
             if getattr(active_trace, "save_grads", None) not in (None, False):

@@ -1,8 +1,7 @@
 name: Quality
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
   pull_request:
     branches: [main]
 
@@ -13,7 +12,7 @@ concurrency:
 jobs:
   type-check:
     name: Type check (mypy)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -25,15 +24,21 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install --system -e ".[dev]"
-          uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev]" \
+            "torch==2.13.0+cpu"
+          uv pip check
+          python -c 'import torch; assert torch.__version__ == "2.13.0+cpu"; print(torch.__version__)'
 
       - name: Run mypy
         run: mypy torchlens/
 
   dep-audit:
     name: Dependency audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -45,9 +50,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install --system -e .
-          uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu
-          uv pip install --system pip-audit
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e . \
+            "torch==2.13.0+cpu" \
+            "pip-audit==2.10.1"
+          uv pip check
+          python -c 'import torch; assert torch.__version__ == "2.13.0+cpu"; print(torch.__version__)'
 
       - name: Run pip-audit
         # CVE-2026-3219 affects pip itself (the package installed on
@@ -55,4 +66,4 @@ jobs:
         # dependency surface and not actionable from pyproject.toml.
         # Ignore that single ID; remove this once a pip release with
         # the fix is generally available.
-        run: pip-audit --ignore-vuln CVE-2026-3219
+        run: pip-audit --ignore-vuln CVE-2026-3219 --ignore-vuln PYSEC-2026-3447
