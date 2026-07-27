@@ -558,6 +558,18 @@ class JsonlLedger:
 
         return tuple(deepcopy(self._records))
 
+    @property
+    def record_count(self) -> int:
+        """Return the append generation without copying ledger payloads.
+
+        Returns
+        -------
+        int
+            Number of persisted records.
+        """
+
+        return len(self._records)
+
     def append(self, payload: Mapping[str, Any]) -> AppendResult:
         """Validate, idempotently append, flush, and fsync one complete line.
 

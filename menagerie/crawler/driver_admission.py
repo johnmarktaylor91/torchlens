@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 import logging
+import os
 import platform
 import subprocess
 import sys
@@ -29,6 +30,7 @@ from typing import (
 
 from menagerie.crawler.artifact_transactions import (
     ArtifactCheckpointError,
+    ArtifactCheckpointProjection,
     ArtifactEventKind,
     ArtifactRehydrationError,
     ArtifactTransactionProjection,
@@ -1337,7 +1339,7 @@ class CommandCheckerLane:
             [*self.command, str(request_path)], check=False, capture_output=True, text=True
         )
         signal = classify_checker_response(
-            completed.returncode, completed.stderr or completed.stdout
+            completed.returncode, completed.stderr + "\n" + completed.stdout
         )
         if signal is not None:
             return CheckerOutcome(backoff=signal)
@@ -1516,6 +1518,8 @@ class AdmissionEnvironmentMixin:
     """Admission, environment, and execution workflow methods for the driver."""
 
     _authority_context: Optional[AuthorityContext]
+    _artifact_checkpoint_cache: Optional[tuple[int, ArtifactCheckpointProjection]]
+    _ledger_hot_path_samples: list[tuple[int, float]]
 
     if TYPE_CHECKING:
 
@@ -2086,7 +2090,7 @@ class AdmissionEnvironmentMixin:
                     )
                     anchored_campaign_ids = {
                         str(gate_item["campaign_root_work_id"])
-                        for gate in scan_jsonl(self.paths.ledgers.gates)
+                        for gate in reducer.gate_records
                         for gate_item in gate.get("items", [])
                         if isinstance(gate_item, Mapping)
                         and gate_item.get("stable_id") == item.stable_id
@@ -2335,21 +2339,25 @@ class AdmissionEnvironmentMixin:
             If canonical authority is present but incomplete, ambiguous, stale, or corrupt.
         """
 
-        if not reducer.artifact_ledger.events:
+        started = time.perf_counter()
+        terminal_count = len(reducer.current_records)
+        if reducer.artifact_ledger.event_count == 0:
+            self._record_ledger_hot_path_metric(
+                terminal_count=terminal_count,
+                elapsed_seconds=time.perf_counter() - started,
+                artifact_event_count=0,
+                checkpoint_cache_hit=False,
+            )
             return None
-        has_exact_final = any(
-            event.get("stable_id") == item.stable_id
-            and event.get("work_id") == item.active_work_id
-            and event.get("event_kind")
-            in {
-                ArtifactEventKind.PUBLISHED.value,
-                ArtifactEventKind.PRIVATE_COMMITTED.value,
-            }
-            for event in reducer.artifact_ledger.events
-        )
-        if not has_exact_final:
+        if not reducer.artifact_ledger.has_final_event(item.stable_id, item.active_work_id):
             # Historical transactions remain immutable audit evidence, but they do
             # not become reconstruction authority for a new work generation.
+            self._record_ledger_hot_path_metric(
+                terminal_count=terminal_count,
+                elapsed_seconds=time.perf_counter() - started,
+                artifact_event_count=reducer.artifact_ledger.event_count,
+                checkpoint_cache_hit=False,
+            )
             return None
         canonical_root = _canonical_crawler_root(self.paths)
         repository_root = _canonical_repo_root(canonical_root)
@@ -2362,9 +2370,9 @@ class AdmissionEnvironmentMixin:
             self.paths.ledgers.artifacts,
         )
         try:
-            projection = validate_artifact_checkpoint(
-                artifact_paths,
-                context=reducer.context,
+            projection, cache_hit = self._validated_artifact_projection(
+                reducer,
+                artifact_paths=artifact_paths,
                 mirrors=mirrors,
                 canonical_root=canonical_root,
                 repository_root=repository_root,
@@ -2432,7 +2440,7 @@ class AdmissionEnvironmentMixin:
             artifact_type = (
                 ActivatedHandoffArtifact if self.config.only_status is not None else AuthorArtifact
             )
-            return artifact_type(
+            artifact = artifact_type(
                 author_result=result,
                 source_manifest=dict(inputs.source_manifest),
                 model_dir=rehydrated.model_dir,
@@ -2449,10 +2457,100 @@ class AdmissionEnvironmentMixin:
                     else {}
                 ),
             )
+            self._record_ledger_hot_path_metric(
+                terminal_count=terminal_count,
+                elapsed_seconds=time.perf_counter() - started,
+                artifact_event_count=reducer.artifact_ledger.event_count,
+                checkpoint_cache_hit=cache_hit,
+            )
+            return artifact
         except (ArtifactCheckpointError, ArtifactRehydrationError, ValueError) as exc:
             raise DriverIntegrationError(
                 f"canonical artifact authority cannot be rehydrated: {exc}"
             ) from exc
+
+    def _validated_artifact_projection(
+        self,
+        reducer: CanonicalReducer,
+        *,
+        artifact_paths: Sequence[Path],
+        mirrors: MirrorStore,
+        canonical_root: Path,
+        repository_root: Path,
+    ) -> tuple[ArtifactCheckpointProjection, bool]:
+        """Validate artifact authority with an append-invalidated reserve cache.
+
+        Parameters
+        ----------
+        reducer:
+            Locked canonical reducer and artifact append generation.
+        artifact_paths, mirrors, canonical_root, repository_root:
+            Unchanged inputs to full checkpoint validation.
+
+        Returns
+        -------
+        tuple[ArtifactCheckpointProjection, bool]
+            Validated projection and whether the reserve cache served it.
+        """
+
+        generation = reducer.artifact_ledger.event_count
+        enabled = os.environ.get("MENAGERIE_CRAWLER_ARTIFACT_MEMOIZATION") == "1"
+        cached = self._artifact_checkpoint_cache
+        if enabled and cached is not None and cached[0] == generation:
+            return cached[1], True
+        projection = validate_artifact_checkpoint(
+            artifact_paths,
+            context=reducer.context,
+            mirrors=mirrors,
+            canonical_root=canonical_root,
+            repository_root=repository_root,
+        )
+        if enabled:
+            self._artifact_checkpoint_cache = (generation, projection)
+        return projection, False
+
+    def _record_ledger_hot_path_metric(
+        self,
+        *,
+        terminal_count: int,
+        elapsed_seconds: float,
+        artifact_event_count: int,
+        checkpoint_cache_hit: bool,
+    ) -> None:
+        """Append local slope telemetry without changing canonical record semantics.
+
+        Parameters
+        ----------
+        terminal_count, elapsed_seconds:
+            Per-model authority time paired with current terminal count.
+        artifact_event_count:
+            Append generation that invalidates the reserve cache.
+        checkpoint_cache_hit:
+            Whether full transaction-chain validation was memoized.
+        """
+
+        self._ledger_hot_path_samples.append((terminal_count, elapsed_seconds))
+        slope = _linear_slope(self._ledger_hot_path_samples)
+        payload = {
+            "metric": "final-authority-per-model-seconds-vs-terminal-count",
+            "terminal_count": terminal_count,
+            "elapsed_seconds": elapsed_seconds,
+            "artifact_event_count": artifact_event_count,
+            "checkpoint_cache_enabled": (
+                os.environ.get("MENAGERIE_CRAWLER_ARTIFACT_MEMOIZATION") == "1"
+            ),
+            "checkpoint_cache_hit": checkpoint_cache_hit,
+            "slope_seconds_per_terminal": slope,
+            "positive_slope_detected": slope is not None and slope > 0.0,
+        }
+        path = self.paths.runtime_root / "instrumentation" / "ledger-hot-path.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        try:
+            os.write(descriptor, canonical_json_bytes(payload) + b"\n")
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
 
     def _ensure_gates(
         self,
@@ -2470,7 +2568,7 @@ class AdmissionEnvironmentMixin:
             artifacts[item.stable_id] = _require_legacy_audit_fidelity(
                 item, artifacts[item.stable_id], self.config
             )
-        persisted = scan_jsonl(self.paths.ledgers.gates)
+        persisted = list(reducer.gate_records)
         items_by_id = {item.stable_id: item for item in work}
         pending_ids = {
             item.stable_id
@@ -3218,7 +3316,7 @@ class AdmissionEnvironmentMixin:
                     for entry in details.get("completed_work", [])
                     if isinstance(entry, Mapping)
                 }
-                gates = scan_jsonl(self.paths.ledgers.gates)
+                gates = reducer.gate_records
                 unsatisfied: list[WorkItem] = []
                 for item in by_intent[intent_name]:
                     current = reducer.current_records.get(item.stable_id)
@@ -3330,7 +3428,7 @@ class AdmissionEnvironmentMixin:
                 )
                 reducer.update_context(refreshed_context)
                 self._authority_context = refreshed_context
-                gates = scan_jsonl(self.paths.ledgers.gates)
+                gates = reducer.gate_records
                 authority = environment.environment_authority
                 cache = environment.environment_authority_cache
                 if live_supervised_environment and (authority is None or cache is None):
@@ -5309,3 +5407,30 @@ def _specialize_variant_recipe(
         raise VariantRecipeUnsupported(str(exc)) from exc
     facts["implementation"] = implementation
     facts["input_contract"] = input_contract
+
+
+def _linear_slope(samples: Sequence[tuple[int, float]]) -> Optional[float]:
+    """Return the least-squares timing slope against terminal count.
+
+    Parameters
+    ----------
+    samples:
+        ``(terminal_count, per_model_seconds)`` observations.
+
+    Returns
+    -------
+    float | None
+        Seconds added per terminal, or ``None`` until counts vary.
+    """
+
+    if len(samples) < 2:
+        return None
+    count = float(len(samples))
+    sum_x = sum(float(sample[0]) for sample in samples)
+    sum_y = sum(sample[1] for sample in samples)
+    sum_xx = sum(float(sample[0]) ** 2 for sample in samples)
+    sum_xy = sum(float(sample[0]) * sample[1] for sample in samples)
+    denominator = count * sum_xx - sum_x**2
+    if denominator == 0.0:
+        return None
+    return (count * sum_xy - sum_x * sum_y) / denominator

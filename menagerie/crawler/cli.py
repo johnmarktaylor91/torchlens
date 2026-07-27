@@ -14,6 +14,13 @@ from pathlib import Path
 from typing import Any, Mapping, Optional, Protocol, Sequence
 
 from menagerie.crawler.authority import AuthorityContext, build_authority_context
+from menagerie.crawler.campaign_config import (
+    CampaignConfig,
+    default_campaign_config_path,
+    load_campaign_config,
+    resolve_command,
+    write_campaign_config,
+)
 from menagerie.crawler.checkpoint import (
     CheckpointError,
     append_canonical_requeue_grant,
@@ -71,6 +78,12 @@ EXIT_ERROR = 1
 EXIT_USAGE = 2
 EXIT_LOCKED = 3
 EXIT_PAUSED = 4
+EXIT_REVIEW_PAUSED = 5
+EXIT_OPERATOR_OUTAGE = 6
+
+
+class OperatorOutageError(RuntimeError):
+    """Raised when required operator-side commands or paths are unavailable."""
 
 
 class DriverFactory(Protocol):
@@ -228,6 +241,12 @@ def main(
     except DriverLockError as exc:
         print(str(exc), file=sys.stderr)
         return EXIT_LOCKED
+    except OperatorOutageError as exc:
+        print(
+            json.dumps({"status": "operator-outage", "detail": str(exc)}, sort_keys=True),
+            file=sys.stderr,
+        )
+        return EXIT_OPERATOR_OUTAGE
     except (CheckpointError, DriverError, OSError, ValueError) as exc:
         print(f"crawler error: {exc}", file=sys.stderr)
         return EXIT_ERROR
@@ -280,6 +299,7 @@ def _add_driver_config_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--notify-command")
     parser.add_argument("--run-id", default="crawler-run")
     parser.add_argument("--wake-episode-id", help=argparse.SUPPRESS)
+    parser.add_argument("--campaign-config", type=Path, help=argparse.SUPPRESS)
     parser.add_argument(
         "--author-command",
         default=os.environ.get("MENAGERIE_AUTHOR_COMMAND"),
@@ -473,6 +493,8 @@ def _driver_command(args: argparse.Namespace, factory: DriverFactory) -> int:
         )
     print(json.dumps(output, sort_keys=True))
     if result.paused_reason is not None:
+        if result.paused_reason == "review-checkpoint":
+            return EXIT_REVIEW_PAUSED
         return EXIT_PAUSED
     if bool(getattr(args, "dry_run", False)) and acceptance["status"] != "passed":
         return EXIT_ERROR
@@ -521,6 +543,7 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
         )
     if getattr(args, "dry_run_environment_prefix", None) is not None:
         raise ValueError("--dry-run-environment-prefix requires --dry-run")
+    campaign_config_path = _load_or_persist_campaign_config(args)
     if args.intake is None:
         raise ValueError("run/resume requires --intake unless --dry-run is selected")
     author_queue_root = _optional_author_queue_root(args)
@@ -551,6 +574,7 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
             else default_config.checker_model
         ),
         only_status=getattr(args, "only_status", None),
+        campaign_config_path=campaign_config_path,
         invocation_origin=(
             InvocationOrigin.WAKE_CALLBACK
             if getattr(args, "wake_episode_id", None) is not None
@@ -577,6 +601,132 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
         clock=utc_now,
     )
     return CrawlerDriver(paths, config, dependencies)
+
+
+def _load_or_persist_campaign_config(args: argparse.Namespace) -> Path:
+    """Load persisted resume inputs or freeze one ordinary campaign invocation.
+
+    Parameters
+    ----------
+    args:
+        Parsed run, resume, or handoff arguments.
+
+    Returns
+    -------
+    pathlib.Path
+        Exact mode-0600 campaign config used by wake callbacks.
+    """
+
+    repo_root = args.repo_root.resolve()
+    requested = getattr(args, "campaign_config", None)
+    config_path = requested.resolve() if isinstance(requested, Path) else None
+    if config_path is None and args.command == "resume":
+        if isinstance(args.intake, Path):
+            candidate = default_campaign_config_path(repo_root, args.intake.resolve())
+            config_path = candidate if candidate.is_file() else None
+        else:
+            candidates = tuple(
+                sorted((repo_root / ".crawl-local" / "campaign-configs").glob("*.json"))
+            )
+            if len(candidates) == 1:
+                config_path = candidates[0]
+            elif not candidates:
+                raise OperatorOutageError("resume requires --intake or --campaign-config")
+            else:
+                raise OperatorOutageError("resume is ambiguous; pass --intake or --campaign-config")
+    if config_path is not None:
+        persisted = load_campaign_config(config_path)
+        if persisted.repo_root != repo_root:
+            raise ValueError("campaign config belongs to a different repository root")
+        _apply_campaign_config(args, persisted)
+        return config_path
+
+    if not isinstance(args.intake, Path):
+        raise OperatorOutageError("campaign launch requires --intake")
+    intake_root = args.intake.resolve()
+    try:
+        author = resolve_command(_required_command(args.author_command, "author"), cwd=repo_root)
+        checker = resolve_command(_required_command(args.checker_command, "checker"), cwd=repo_root)
+        environment = resolve_command(
+            _required_command(args.environment_command, "environment"), cwd=repo_root
+        )
+        notifier = CommandNotifier(args.notify_command).command
+        resolved_notifier = (
+            resolve_command(notifier, cwd=repo_root) if notifier is not None else None
+        )
+        public_mirror = _required_absolute_environment_path("MENAGERIE_PUBLIC_MIRROR")
+        private_mirror = _required_absolute_environment_path("MENAGERIE_PRIVATE_MIRROR")
+    except ValueError as exc:
+        raise OperatorOutageError(str(exc)) from exc
+    persisted = CampaignConfig(
+        repo_root=repo_root,
+        intake_root=intake_root,
+        target=args.target,
+        run_id=args.run_id,
+        author_command=author,
+        checker_command=checker,
+        environment_command=environment,
+        notify_command=resolved_notifier,
+        public_mirror=public_mirror,
+        private_mirror=private_mirror,
+        review_checkpoint_at=args.review_checkpoint_at,
+        progress_milestones=tuple(args.progress_milestones),
+        phase=args.phase,
+        only_status=getattr(args, "only_status", None),
+    )
+    config_path = default_campaign_config_path(repo_root, intake_root)
+    write_campaign_config(config_path, persisted)
+    _apply_campaign_config(args, persisted)
+    return config_path
+
+
+def _apply_campaign_config(args: argparse.Namespace, config: CampaignConfig) -> None:
+    """Apply frozen campaign inputs to one parsed invocation.
+
+    Parameters
+    ----------
+    args, config:
+        Mutable parser namespace and validated private configuration.
+    """
+
+    args.intake = config.intake_root
+    args.target = config.target
+    args.run_id = config.run_id
+    args.author_command = shlex.join(config.author_command)
+    args.checker_command = shlex.join(config.checker_command)
+    args.environment_command = shlex.join(config.environment_command)
+    args.notify_command = (
+        shlex.join(config.notify_command) if config.notify_command is not None else None
+    )
+    args.review_checkpoint_at = config.review_checkpoint_at
+    args.progress_milestones = config.progress_milestones
+    args.phase = config.phase
+    args.only_status = config.only_status
+    os.environ["MENAGERIE_PUBLIC_MIRROR"] = str(config.public_mirror)
+    os.environ["MENAGERIE_PRIVATE_MIRROR"] = str(config.private_mirror)
+
+
+def _required_absolute_environment_path(name: str) -> Path:
+    """Return one mandatory absolute operator path from the environment.
+
+    Parameters
+    ----------
+    name:
+        Environment variable name.
+
+    Returns
+    -------
+    pathlib.Path
+        Resolved absolute path.
+    """
+
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        raise ValueError(f"campaign launch requires {name}")
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        raise ValueError(f"{name} must be absolute")
+    return path.resolve()
 
 
 def _dry_run_acceptance(

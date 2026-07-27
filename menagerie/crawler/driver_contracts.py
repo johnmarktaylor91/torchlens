@@ -264,6 +264,7 @@ class DriverConfig:
     checker_model: str = "gpt-5.6-terra"
     checker_version: str = "current"
     only_status: Optional[str] = None
+    campaign_config_path: Optional[Path] = None
     run_repair_max: int = 2
     invocation_origin: InvocationOrigin = InvocationOrigin.ORDINARY_RUN
     wake_episode_id: Optional[str] = None
@@ -290,6 +291,8 @@ class DriverConfig:
             raise ValueError("progress milestones must be unique")
         if self.run_repair_max < 0:
             raise ValueError("run_repair_max cannot be negative")
+        if self.campaign_config_path is not None and not self.campaign_config_path.is_absolute():
+            raise ValueError("campaign_config_path must be absolute")
         if not isinstance(self.invocation_origin, InvocationOrigin):
             raise ValueError("invocation_origin must be a closed InvocationOrigin")
         if (

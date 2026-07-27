@@ -87,6 +87,18 @@ class CommandNotifier:
         self._argv = _resolve_notify_command(command)
         self._timeout_seconds = timeout_seconds
 
+    @property
+    def command(self) -> Optional[tuple[str, ...]]:
+        """Return the resolved notifier command.
+
+        Returns
+        -------
+        tuple[str, ...] | None
+            Resolved argv, or ``None`` for log-only notification.
+        """
+
+        return self._argv
+
     def notify(self, summary: str, *, idempotency_key: str) -> bool:
         """Invoke the notifier once, logging and continuing on any failure."""
 

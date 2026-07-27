@@ -35,6 +35,7 @@ from typing import Any, Callable, Mapping, Optional, Protocol as Protocol, Seque
 
 from menagerie.crawler.artifact_transactions import (
     ArtifactCheckpointError,
+    ArtifactCheckpointProjection,
     ArtifactEventKind,
     ArtifactInput,
     ArtifactRehydrationError,
@@ -480,6 +481,8 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         self._intake_snapshot: Optional[IntakeSnapshot] = None
         self._authority_context: Optional[AuthorityContext] = None
         self._shutdown_event = threading.Event()
+        self._artifact_checkpoint_cache: Optional[tuple[int, ArtifactCheckpointProjection]] = None
+        self._ledger_hot_path_samples: list[tuple[int, float]] = []
 
     def run(self, *, after_review: bool = False) -> DriverResult:
         """Acquire authority and resume the first unsatisfied durable work identity."""
@@ -921,7 +924,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             if self.paths.runtime_root.name == ".crawl-local"
             else Path.cwd()
         )
-        return (
+        callback = [
             sys.executable,
             "-m",
             "menagerie.crawler",
@@ -935,7 +938,10 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             self.config.target,
             "--run-id",
             self.config.run_id,
-        )
+        ]
+        if self.config.campaign_config_path is not None:
+            callback.extend(("--campaign-config", str(self.config.campaign_config_path)))
+        return tuple(callback)
 
     def _process_scheduled_work(
         self,
@@ -1680,7 +1686,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         """
 
         terminal_attempts = tuple(attempts)
-        gates = scan_jsonl(self.paths.ledgers.gates)
+        gates = reducer.gate_records
         created_at = self.dependencies.clock()
         terminal_diagnostic_reference = (
             _redact_terminal_detail(
@@ -1926,11 +1932,10 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         completed = len(current)
         intake_snapshot_id = intake_snapshot.snapshot_id
         intake_snapshot_sha256 = intake_snapshot.snapshot_sha256
-        canonical_path = canonical_operational_ledger_path(self.paths.ledgers.models)
-        canonical_events = scan_jsonl(canonical_path)
+        canonical_events = operational.records
         existing = {
             str(event.get("details", {}).get("policy_key"))
-            for event in (*canonical_events, *operational.records)
+            for event in canonical_events
             if event.get("event_kind") == OperationalEventKind.PROGRESS_NOTIFICATION.value
             and isinstance(event.get("details", {}).get("policy_key"), str)
         }
@@ -1989,13 +1994,8 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             Locked append-only operational ledger containing identities and attempts.
         """
 
-        canonical_path = canonical_operational_ledger_path(self.paths.ledgers.models)
-        canonical_events = scan_jsonl(canonical_path)
-        durable_events_by_id = {
-            str(event.get("event_id")): event for event in (*canonical_events, *operational.records)
-        }
-        for event in canonical_events:
-            operational.append(event)
+        canonical_events = operational.records
+        durable_events_by_id = {str(event.get("event_id")): event for event in canonical_events}
         durable_events = tuple(durable_events_by_id.values())
         delivered = {
             str(event.get("details", {}).get("notification_event_id"))
@@ -2037,11 +2037,8 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
     ) -> bool:
         """Record best-effort delivery separately from its durable notification identity."""
 
-        canonical_path = canonical_operational_ledger_path(self.paths.ledgers.models)
-        canonical_events = scan_jsonl(canonical_path)
-        combined_by_id = {
-            str(event.get("event_id")): event for event in (*canonical_events, *operational.records)
-        }
+        canonical_events = operational.records
+        combined_by_id = {str(event.get("event_id")): event for event in canonical_events}
         combined = tuple(combined_by_id.values())
         completed = [
             event
@@ -2136,11 +2133,9 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 "review_threshold": threshold,
             }
         )
-        canonical_path = canonical_operational_ledger_path(self.paths.ledgers.models)
-        canonical_events = scan_jsonl(canonical_path)
         policy_events = [
             event
-            for event in (*canonical_events, *operational.records)
+            for event in operational.records
             if event.get("details", {}).get("policy_key") == policy_key
         ]
         kinds = [event.get("event_kind") for event in policy_events]
@@ -2188,11 +2183,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
     def _review_is_pending(self, operational: JsonlLedger, intake_snapshot: IntakeSnapshot) -> bool:
         """Return whether this verified snapshot's review policy lacks a signoff."""
 
-        canonical_path = canonical_operational_ledger_path(self.paths.ledgers.models)
-        combined_by_id = {
-            str(event.get("event_id")): event
-            for event in (*scan_jsonl(canonical_path), *operational.records)
-        }
+        combined_by_id = {str(event.get("event_id")): event for event in operational.records}
         combined = tuple(combined_by_id.values())
         snapshot_policy_keys = {
             stable_hash(
