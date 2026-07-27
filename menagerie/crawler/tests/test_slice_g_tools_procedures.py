@@ -166,6 +166,8 @@ def test_requeue_appends_grant_without_mutating_prior_records(tmp_path: Path) ->
             "1",
             "--stage",
             "forward",
+            "--intent",
+            "graph",
             "--ledger",
             str(ledger),
         ]
@@ -177,6 +179,7 @@ def test_requeue_appends_grant_without_mutating_prior_records(tmp_path: Path) ->
     grant = json.loads(after.splitlines()[-1])
     assert grant["attempts"] == 1
     assert grant["new_work_generation"] == 2
+    assert grant["target_intent"] == "graph"
 
 
 def _crawler_subcommands() -> set[str]:

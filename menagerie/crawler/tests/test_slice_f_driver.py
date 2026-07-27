@@ -2477,6 +2477,29 @@ def _driver(
     )
 
 
+def test_requeue_can_apply_dependency_evidenced_intent_correction(tmp_path: Path) -> None:
+    """An active grant reroutes a failed model without restructuring phase order."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    stable_id = snapshot.items[0].stable_id
+    work = _driver(tmp_path, snapshot)._ordered_work(
+        snapshot,
+        {},
+        {
+            stable_id: {
+                "grant_ids": ["grant-routing"],
+                "work_id": "work-routing",
+                "active": True,
+                "target_intent": "graph",
+            }
+        },
+    )
+
+    assert len(work) == 1
+    assert work[0].route.intent == "graph"
+    assert work[0].route.phase is EnvironmentPhase.PYTORCH
+
+
 def test_family_representative_once_templates_variants_that_still_run(tmp_path: Path) -> None:
     """One author result seeds variants that each pass the full write gate and execution."""
 

@@ -81,6 +81,7 @@ from menagerie.crawler.env_lifecycle import (
     ArtifactReceipt,
     EnvironmentExactnessError,
     EnvironmentProbeError,
+    PerIntentGenerationEffort,
     ProbeResult,
     SequentialEnvironmentLifecycle,
     SolveResult,
@@ -91,7 +92,7 @@ from menagerie.crawler.env_lifecycle import (
     parse_resolved_export,
     validate_probe_receipts,
 )
-from menagerie.crawler.effort import EffortTracker, StageCap
+from menagerie.crawler.effort import StageCap
 from menagerie.crawler.fetcher import FetchTarget
 from menagerie.crawler.family_templates import (
     FamilyTemplateError,
@@ -132,7 +133,6 @@ from menagerie.crawler.reducer import (
 )
 from menagerie.crawler.routing import (
     IntentRoute,
-    ModelRequirements,
     phase_routes,
     route_model,
 )
@@ -940,18 +940,15 @@ def build_command_environment_lane(
 ) -> SequentialEnvironmentLifecycle:
     """Build the production sequential lifecycle around an argv-only tooling wrapper."""
 
-    effort = EffortTracker(
-        {
-            "environment": StageCap(
+    return SequentialEnvironmentLifecycle(
+        CommandEnvironmentBackend(command),
+        PerIntentGenerationEffort(
+            StageCap(
                 attempts=2,
                 seconds=30 * 60,
                 bytes=100 * 1024**3,
             )
-        }
-    )
-    return SequentialEnvironmentLifecycle(
-        CommandEnvironmentBackend(command),
-        effort,
+        ),
         env_root=runtime_root / "envs",
     )
 
@@ -1062,12 +1059,7 @@ class AdmissionEnvironmentMixin:
                     raise DriverIntegrationError("reaped worker lease is outside active intake")
                 item = WorkItem(
                     intake,
-                    route_model(
-                        ModelRequirements(
-                            intake.stable_id,
-                            _framework_from_intake(intake),
-                        )
-                    ),
+                    route_model(intake.to_model_requirements(_framework_from_intake(intake))),
                 )
                 attempt = _driver_failure_attempt(
                     item,
@@ -1146,7 +1138,19 @@ class AdmissionEnvironmentMixin:
         discovery_urls = _intake_discovery_urls(snapshot)
         for item in snapshot.items:
             framework = _framework_from_intake(item)
-            route = route_model(ModelRequirements(item.stable_id, framework))
+            route = route_model(item.to_model_requirements(framework))
+            target_intent = (requeues or {}).get(item.stable_id, {}).get("target_intent")
+            if target_intent is not None:
+                if not isinstance(target_intent, str) or target_intent not in self.registry.intents:
+                    raise DriverIntegrationError(
+                        f"requeue for {item.stable_id} names an unknown environment intent"
+                    )
+                target = self.registry.intents[target_intent]
+                if target.phase is not route.phase:
+                    raise DriverIntegrationError(
+                        f"requeue for {item.stable_id} cannot cross environment phases"
+                    )
+                route = IntentRoute(item.stable_id, target.name, target.phase)
             routes.append((item, route))
         ordered_routes = phase_routes(route for _item, route in routes)
         by_id = {item.stable_id: item for item, _route in routes}
@@ -1235,8 +1239,19 @@ class AdmissionEnvironmentMixin:
         canonical_grants_path = canonical_requeue_grants_path(self.paths.ledgers.models)
         runtime_grants = _validated_requeue_grants(self.paths.requeue_grants, intake_ids)
         for grant in runtime_grants:
+            target_intent = grant.get("target_intent")
+            if target_intent is not None and target_intent not in self.registry.intents:
+                raise DriverIntegrationError(
+                    f"requeue grant names an unknown environment intent: {target_intent}"
+                )
             append_canonical_requeue_grant(canonical_grants_path, grant)
         grants = _validated_requeue_grants(canonical_grants_path, intake_ids)
+        if any(
+            grant.get("target_intent") is not None
+            and grant.get("target_intent") not in self.registry.intents
+            for grant in grants
+        ):
+            raise DriverIntegrationError("canonical requeue grant names an unknown intent")
         by_id = {str(grant["grant_id"]): grant for grant in grants}
         canonical_events_path = canonical_operational_ledger_path(self.paths.ledgers.models)
         canonical_events = scan_jsonl(canonical_events_path)
@@ -1259,7 +1274,7 @@ class AdmissionEnvironmentMixin:
                 raise DriverIntegrationError("requeue consumption stable_id mismatch")
             if any(
                 details.get(field) != bound_grant.get(field)
-                for field in ("stage", "reason", "attempts")
+                for field in ("stage", "reason", "attempts", "target_intent")
             ):
                 raise DriverIntegrationError("requeue consumption grant facts mismatch")
             generation = details.get("new_work_generation")
@@ -1345,6 +1360,7 @@ class AdmissionEnvironmentMixin:
                     "grant_ids": [*recorded_grants, str(details["grant_id"])],
                     "work_id": str(details["new_work_id"]),
                     "active": True,
+                    "target_intent": details.get("target_intent"),
                 }
                 continue
 
@@ -1372,6 +1388,18 @@ class AdmissionEnvironmentMixin:
                         "generation": generation,
                     }
                 )
+                event_details: JsonObject = {
+                    "grant_id": grant["grant_id"],
+                    "stable_id": stable_id,
+                    "stage": grant["stage"],
+                    "reason": grant["reason"],
+                    "attempts": grant["attempts"],
+                    "source_record_revision": record["record_revision"],
+                    "new_work_generation": generation,
+                    "new_work_id": new_work_id,
+                }
+                if grant.get("target_intent") is not None:
+                    event_details["target_intent"] = grant["target_intent"]
                 event = {
                     "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
                     "event_id": f"requeue-consumed-{str(grant['grant_id'])[7:31]}",
@@ -1385,16 +1413,7 @@ class AdmissionEnvironmentMixin:
                     "current_environment": None,
                     "run_id": self.config.run_id,
                     "machine_id": self.config.machine_id,
-                    "details": {
-                        "grant_id": grant["grant_id"],
-                        "stable_id": stable_id,
-                        "stage": grant["stage"],
-                        "reason": grant["reason"],
-                        "attempts": grant["attempts"],
-                        "source_record_revision": record["record_revision"],
-                        "new_work_generation": generation,
-                        "new_work_id": new_work_id,
-                    },
+                    "details": event_details,
                 }
                 operational.append(event)
                 self.dependencies.boundary_hook("after-requeue-consume", stable_id)
@@ -1402,6 +1421,7 @@ class AdmissionEnvironmentMixin:
                     "grant_ids": [*recorded_grants, str(grant["grant_id"])],
                     "work_id": new_work_id,
                     "active": True,
+                    "target_intent": grant.get("target_intent"),
                 }
                 continue
 
@@ -2974,7 +2994,7 @@ def _validated_requeue_grants(path: Path, intake_ids: frozenset[str]) -> tuple[J
     validated: list[JsonObject] = []
     by_id: dict[str, JsonObject] = {}
     common = {"grant_id", "stable_id", "stage", "reason", "attempts"}
-    optional = {"created_at", "granted_by", "new_work_generation"}
+    optional = {"created_at", "granted_by", "new_work_generation", "target_intent"}
     for row in rows:
         if set(row) - common - optional or not common <= set(row):
             raise DriverIntegrationError("requeue grant has an invalid field contract")
@@ -2983,6 +3003,7 @@ def _validated_requeue_grants(path: Path, intake_ids: frozenset[str]) -> tuple[J
         stage = row.get("stage")
         reason = row.get("reason")
         attempts = row.get("attempts")
+        target_intent = row.get("target_intent")
         if (
             not isinstance(grant_id, str)
             or not isinstance(stable_id, str)
@@ -2994,6 +3015,10 @@ def _validated_requeue_grants(path: Path, intake_ids: frozenset[str]) -> tuple[J
             or not isinstance(attempts, int)
             or isinstance(attempts, bool)
             or attempts < 1
+            or (
+                target_intent is not None
+                and (not isinstance(target_intent, str) or not target_intent)
+            )
         ):
             raise DriverIntegrationError("requeue grant values are invalid")
         if "new_work_generation" in row:
@@ -3006,17 +3031,22 @@ def _validated_requeue_grants(path: Path, intake_ids: frozenset[str]) -> tuple[J
                 or not granted_by
             ):
                 raise DriverIntegrationError("requeue tool grant generation is invalid")
-            expected = stable_hash(
-                {
-                    "generation": generation,
-                    "stable_id": stable_id,
-                    "stage": stage,
-                    "reason": reason,
-                    "attempts": attempts,
-                    "granted_by": granted_by,
-                }
-            )
+            identity = {
+                "generation": generation,
+                "stable_id": stable_id,
+                "stage": stage,
+                "reason": reason,
+                "attempts": attempts,
+                "granted_by": granted_by,
+            }
+            if target_intent is not None:
+                identity["target_intent"] = target_intent
+            expected = stable_hash(identity)
         else:
+            if target_intent is not None:
+                raise DriverIntegrationError(
+                    "legacy crawler requeue grants cannot override environment intent"
+                )
             if not isinstance(row.get("created_at"), str):
                 raise DriverIntegrationError("crawler requeue grant has no creation time")
             expected = stable_hash(

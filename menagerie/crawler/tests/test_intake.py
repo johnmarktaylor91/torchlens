@@ -95,6 +95,38 @@ def test_all_legacy_audit_classes_survive_snapshot_reload(tmp_path: Path) -> Non
     assert all(legacy_requires_fidelity_audit(flags) for flags in flags_by_name.values())
 
 
+def test_intake_persists_zoo_era_routing_requirements(tmp_path: Path) -> None:
+    """Dependency routing facts are immutable members of the intake snapshot."""
+
+    master = tmp_path / "master.jsonl"
+    deferred = tmp_path / "deferred.jsonl"
+    _write_jsonl(
+        master,
+        [
+            {
+                "name": "MaskRCNN",
+                "zoo": "open-mmlab/mmdetection",
+                "variant": "",
+                "era": "2018",
+            }
+        ],
+    )
+    _write_jsonl(deferred, [])
+
+    snapshot = create_intake_snapshot(master, deferred, tmp_path / "snapshots")
+    item = snapshot.items[0]
+    loaded = load_intake_snapshot(snapshot.root).items[0]
+
+    assert item.era == "2018"
+    assert item.packages == frozenset({"mmcv", "mmengine"})
+    assert item.to_dict()["routing_requirements"] == {
+        "packages": ["mmcv", "mmengine"],
+        "exact_repository": False,
+        "legacy_torch": False,
+    }
+    assert loaded == item
+
+
 def test_load_rejects_changed_manifest_source_without_reconstruction(tmp_path: Path) -> None:
     """Snapshot loading always verifies declared source bytes, even with no model artifacts."""
 

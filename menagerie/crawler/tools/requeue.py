@@ -31,6 +31,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--grant", required=True, type=int, help="additional attempt count")
     parser.add_argument("--stage", required=True)
     parser.add_argument("--granted-by", default="operator")
+    parser.add_argument(
+        "--intent",
+        dest="target_intent",
+        help="dependency-evidenced corrected environment intent",
+    )
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--ledger", type=Path)
     return parser
@@ -69,6 +74,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 reason=args.reason,
                 attempts=args.grant,
                 granted_by=args.granted_by,
+                target_intent=args.target_intent,
             )
             append_canonical_requeue_grant(ledger, payload)
         print(json.dumps(payload, sort_keys=True))

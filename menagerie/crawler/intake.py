@@ -17,6 +17,7 @@ from menagerie.crawler.identity import (
     stable_hash,
 )
 from menagerie.crawler.models import JsonObject
+from menagerie.crawler.routing import ModelRequirements, requirements_from_zoo_era
 
 
 class IntakeError(ValueError):
@@ -53,6 +54,10 @@ class IntakeItem:
     preserved_legacy_flags: tuple[str, ...]
     variant_scope: str = "family"
     family_representative_id: Optional[str] = None
+    era: Optional[str] = None
+    packages: frozenset[str] = frozenset()
+    exact_repository: bool = False
+    legacy_torch: bool = False
 
     @property
     def natural_key(self) -> tuple[str, str, str]:
@@ -85,7 +90,35 @@ class IntakeItem:
             "preserved_legacy_flags": list(self.preserved_legacy_flags),
             "variant_scope": self.variant_scope,
             "family_representative_id": self.family_representative_id or self.stable_id,
+            "era": self.era,
+            "routing_requirements": {
+                "packages": sorted(self.packages),
+                "exact_repository": self.exact_repository,
+                "legacy_torch": self.legacy_torch,
+            },
         }
+
+    def to_model_requirements(self, framework: str) -> ModelRequirements:
+        """Return the complete deterministic router input for this intake row.
+
+        Parameters
+        ----------
+        framework:
+            Framework inferred from the immutable name and zoo.
+
+        Returns
+        -------
+        ModelRequirements
+            All intake-derived facts consumed by the router.
+        """
+
+        return ModelRequirements(
+            stable_id=self.stable_id,
+            framework=framework,
+            packages=self.packages,
+            exact_repository=self.exact_repository,
+            legacy_torch=self.legacy_torch,
+        )
 
 
 def derive_legacy_risk_flags(
@@ -336,6 +369,10 @@ def _build_items(
             prior_key = by_id.get(stable_id)
             if prior_key is not None and prior_key != key:
                 raise IntakeError(f"stable ID {stable_id!r} maps to both {prior_key!r} and {key!r}")
+            raw_era = row.get("era")
+            if raw_era is not None and not isinstance(raw_era, str):
+                raise IntakeError(f"{source} row {key[0]!r} has a non-string era")
+            routing = requirements_from_zoo_era(key[1], raw_era)
             item = IntakeItem(
                 stable_id=stable_id,
                 name=key[0],
@@ -346,6 +383,10 @@ def _build_items(
                 preserved_legacy_flags=derive_legacy_risk_flags(row, discovery_source=source),
                 variant_scope=str(row.get("variant_scope", "family")),
                 family_representative_id=str(row.get("family_representative_id") or stable_id),
+                era=raw_era,
+                packages=routing.packages,
+                exact_repository=routing.exact_repository,
+                legacy_torch=routing.legacy_torch,
             )
             existing = by_key.get(key)
             if existing is not None:
@@ -518,6 +559,12 @@ def load_intake_snapshot(snapshot_root: Path) -> IntakeSnapshot:
             stable_hash(source_row): source_row for source_row in _read_jsonl(source_path)
         }
 
+    def bound_source_row(row: Mapping[str, Any]) -> Optional[Mapping[str, Any]]:
+        """Return the immutable legacy source row bound to one intake item."""
+
+        discovery_source = str(row["discovery_source"])
+        return source_rows.get(discovery_source, {}).get(str(row["legacy_row_sha256"]))
+
     def loaded_flags(row: Mapping[str, Any]) -> tuple[str, ...]:
         """Return stored flags or derive them from immutable snapshotted source bytes."""
 
@@ -525,25 +572,69 @@ def load_intake_snapshot(snapshot_root: Path) -> IntakeSnapshot:
         if isinstance(raw_flags, list):
             return tuple(sorted(str(flag) for flag in raw_flags))
         discovery_source = str(row["discovery_source"])
-        source_row = source_rows.get(discovery_source, {}).get(str(row["legacy_row_sha256"]))
-        if source_row is None:
+        legacy_row = bound_source_row(row)
+        if legacy_row is None:
             return derive_legacy_risk_flags({}, discovery_source=discovery_source)
-        return derive_legacy_risk_flags(source_row, discovery_source=discovery_source)
+        return derive_legacy_risk_flags(legacy_row, discovery_source=discovery_source)
 
-    items = tuple(
-        IntakeItem(
-            stable_id=str(row["stable_id"]),
-            name=str(row["name"]),
-            zoo=str(row["zoo"]),
-            variant=str(row["variant"]),
-            discovery_source=str(row["discovery_source"]),
-            legacy_row_sha256=str(row["legacy_row_sha256"]),
-            preserved_legacy_flags=loaded_flags(row),
-            variant_scope=str(row.get("variant_scope", "family")),
-            family_representative_id=str(row.get("family_representative_id") or row["stable_id"]),
+    def loaded_routing(
+        row: Mapping[str, Any],
+    ) -> tuple[Optional[str], frozenset[str], bool, bool]:
+        """Load stored routing facts or derive them from snapshotted source bytes."""
+
+        legacy_row = bound_source_row(row)
+        raw_era = row.get("era")
+        if raw_era is None and legacy_row is not None:
+            raw_era = legacy_row.get("era")
+        if raw_era is not None and not isinstance(raw_era, str):
+            raise IntakeError("intake routing era must be a string or null")
+        raw_routing = row.get("routing_requirements")
+        if raw_routing is None:
+            derived = requirements_from_zoo_era(str(row["zoo"]), raw_era)
+            return (
+                raw_era,
+                derived.packages,
+                derived.exact_repository,
+                derived.legacy_torch,
+            )
+        if not isinstance(raw_routing, Mapping):
+            raise IntakeError("intake routing requirements must be an object")
+        raw_packages = raw_routing.get("packages")
+        exact_repository = raw_routing.get("exact_repository")
+        legacy_torch = raw_routing.get("legacy_torch")
+        if (
+            not isinstance(raw_packages, list)
+            or not all(isinstance(package, str) and package for package in raw_packages)
+            or raw_packages != sorted(set(raw_packages))
+            or not isinstance(exact_repository, bool)
+            or not isinstance(legacy_torch, bool)
+        ):
+            raise IntakeError("intake routing requirements are malformed")
+        return raw_era, frozenset(raw_packages), exact_repository, legacy_torch
+
+    loaded_items: list[IntakeItem] = []
+    for row in rows:
+        era, packages, exact_repository, legacy_torch = loaded_routing(row)
+        loaded_items.append(
+            IntakeItem(
+                stable_id=str(row["stable_id"]),
+                name=str(row["name"]),
+                zoo=str(row["zoo"]),
+                variant=str(row["variant"]),
+                discovery_source=str(row["discovery_source"]),
+                legacy_row_sha256=str(row["legacy_row_sha256"]),
+                preserved_legacy_flags=loaded_flags(row),
+                variant_scope=str(row.get("variant_scope", "family")),
+                family_representative_id=str(
+                    row.get("family_representative_id") or row["stable_id"]
+                ),
+                era=era,
+                packages=packages,
+                exact_repository=exact_repository,
+                legacy_torch=legacy_torch,
+            )
         )
-        for row in rows
-    )
+    items = tuple(loaded_items)
     loaded_ids = {item.stable_id for item in items}
     for item in items:
         if item.variant_scope != "family":

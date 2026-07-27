@@ -11,7 +11,7 @@ from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from menagerie.crawler.authority import EnvironmentAuthorityCache
 from menagerie.crawler.envs import EnvironmentIntent, IntentProbes
-from menagerie.crawler.effort import EffortTracker
+from menagerie.crawler.effort import EffortTracker, StageCap
 from menagerie.crawler.identity import canonical_json_bytes, compute_env_generation, hash_bytes
 
 
@@ -111,6 +111,42 @@ class EnvironmentBackend(Protocol):
 
 DiskFree = Callable[[Path], int]
 UseEnvironment = Callable[[Path, tuple[ProbeResult, ...]], None]
+IntentEffort = Callable[[EnvironmentIntent], EffortTracker]
+
+
+class PerIntentGenerationEffort:
+    """Own an independent environment effort tracker per intent-generation."""
+
+    def __init__(self, cap: StageCap) -> None:
+        """Configure the common cap applied independently to every scope.
+
+        Parameters
+        ----------
+        cap:
+            Environment cap cloned into each lazily observed intent-generation.
+        """
+
+        self._cap = cap
+        self._trackers: dict[tuple[str, str, str | None], EffortTracker] = {}
+
+    def __call__(self, intent: EnvironmentIntent) -> EffortTracker:
+        """Return the tracker for one exact intent-generation.
+
+        Parameters
+        ----------
+        intent:
+            Immutable environment intent and target generation.
+
+        Returns
+        -------
+        EffortTracker
+            Independent tracker for the intent, target, and generation tuple.
+        """
+
+        key = (intent.name, intent.lock.target, intent.generation)
+        if key not in self._trackers:
+            self._trackers[key] = EffortTracker({"environment": self._cap})
+        return self._trackers[key]
 
 
 def disk_free_bytes(path: Path) -> int:
@@ -137,7 +173,7 @@ class SequentialEnvironmentLifecycle:
     def __init__(
         self,
         backend: EnvironmentBackend,
-        effort: EffortTracker,
+        effort: EffortTracker | IntentEffort,
         *,
         env_root: Path,
         disk_free: DiskFree = disk_free_bytes,
@@ -147,7 +183,7 @@ class SequentialEnvironmentLifecycle:
         """Configure the backend, effort caps, roots, and disk invariants."""
 
         self._backend = backend
-        self._effort = effort
+        self._effort_for_intent = effort if callable(effort) else lambda _intent: effort
         self._env_root = env_root
         self._disk_free = disk_free
         self._minimum_free_bytes = minimum_free_bytes
@@ -236,14 +272,15 @@ class SequentialEnvironmentLifecycle:
         disk_before = self._disk_free(self._env_root)
         if disk_before < self._minimum_free_bytes:
             raise DiskRecoveryError("less than the required 30 GiB is available")
-        self._effort.consume("environment", attempts=1)
+        effort = self._effort_for_intent(intent)
+        effort.consume("environment", attempts=1)
         try:
             solved = self._backend.solve(
                 intent.lock.lock_path.parent.parent / "environment.yml", intent.lock.target
             )
         except Exception as exc:
             raise EnvironmentSolveError(f"target solve failed for {intent.name}: {exc}") from exc
-        self._effort.consume(
+        effort.consume(
             "environment",
             seconds=solved.elapsed_seconds,
             bytes_used=solved.artifact_bytes,

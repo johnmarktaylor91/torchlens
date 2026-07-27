@@ -16,6 +16,7 @@ from menagerie.crawler.env_lifecycle import (
     EnvironmentCleanupError,
     EnvironmentExactnessError,
     EnvironmentProbeError,
+    PerIntentGenerationEffort,
     ProbeResult,
     SequentialEnvironmentLifecycle,
     SolveResult,
@@ -336,6 +337,31 @@ def test_lifecycle_orders_solve_create_probe_use_and_teardown(tmp_path: Path) ->
     assert observed_probes == [result.probe_results]
     assert intent.lock.lock_path.is_file()
     assert intent.lock.export_hash_path.read_text(encoding="utf-8").startswith("sha256:")
+
+
+def test_environment_effort_cap_is_independent_per_intent_generation(tmp_path: Path) -> None:
+    """Exhausting one intent cannot consume another intent's attempt budget."""
+
+    root = _copy_env_specs(tmp_path)
+    registry = load_environment_registry(root)
+    core = registry.intents["core"]
+    graph = registry.intents["graph"]
+    effort = PerIntentGenerationEffort(StageCap(attempts=1, seconds=5, bytes=100))
+    lifecycle = SequentialEnvironmentLifecycle(
+        FakeEnvironmentBackend([]),
+        effort,
+        env_root=tmp_path / "active",
+        disk_free=lambda _path: 1000,
+        minimum_free_bytes=0,
+    )
+
+    lifecycle.run(core, use=lambda _prefix, _probes: None)
+    lifecycle.run(graph, use=lambda _prefix, _probes: None)
+
+    assert effort(core).usage("environment").attempts == 1
+    assert effort(graph).usage("environment").attempts == 1
+    with pytest.raises(EffortCapExceeded):
+        lifecycle.run(core, use=lambda _prefix, _probes: None)
 
 
 def test_cap_exceeding_solve_is_typed_recorded_and_not_materialized(tmp_path: Path) -> None:

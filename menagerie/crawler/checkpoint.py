@@ -677,6 +677,7 @@ def build_canonical_requeue_grant(
     reason: str,
     attempts: int,
     granted_by: str,
+    target_intent: Optional[str] = None,
 ) -> JsonObject:
     """Build the sole canonical requeue-grant schema and identity.
 
@@ -686,6 +687,9 @@ def build_canonical_requeue_grant(
         Canonical grant ledger used to allocate the next append generation.
     stable_id, stage, reason, attempts, granted_by:
         Validated operator authorization facts.
+    target_intent:
+        Optional dependency-evidenced environment correction for the new work
+        generation.
 
     Returns
     -------
@@ -723,6 +727,8 @@ def build_canonical_requeue_grant(
         raise ValueError("reason and granted_by must be non-empty")
     if not isinstance(attempts, int) or isinstance(attempts, bool) or attempts < 1:
         raise ValueError("grant attempts must be a positive integer")
+    if target_intent is not None and not target_intent.strip():
+        raise ValueError("target_intent must be non-empty when provided")
     generation = len(scan_jsonl(path, validate=False)) + 1
     identity = {
         "generation": generation,
@@ -732,7 +738,9 @@ def build_canonical_requeue_grant(
         "attempts": attempts,
         "granted_by": granted_by,
     }
-    return {
+    if target_intent is not None:
+        identity["target_intent"] = target_intent
+    grant: JsonObject = {
         "grant_id": stable_hash(identity),
         "stable_id": stable_id,
         "stage": stage,
@@ -741,6 +749,9 @@ def build_canonical_requeue_grant(
         "granted_by": granted_by,
         "new_work_generation": generation,
     }
+    if target_intent is not None:
+        grant["target_intent"] = target_intent
+    return grant
 
 
 def _canonical_operational_path_for_runtime(runtime_path: Path) -> Optional[Path]:

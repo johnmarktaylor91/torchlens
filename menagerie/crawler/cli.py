@@ -49,7 +49,7 @@ from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot, loa
 from menagerie.crawler.recordio import SingleWriterError
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import materialize_current
-from menagerie.crawler.routing import ModelRequirements, phase_routes, route_model
+from menagerie.crawler.routing import phase_routes, route_model
 from menagerie.crawler.status import funnel_counts, partition_report, wakeup_status
 from menagerie.crawler.wakeup import (
     OperationalContext,
@@ -148,6 +148,11 @@ def build_parser() -> argparse.ArgumentParser:
     requeue.add_argument("--grant", required=True, type=int)
     requeue.add_argument("--stage", required=True)
     requeue.add_argument("--granted-by", default="operator")
+    requeue.add_argument(
+        "--intent",
+        dest="target_intent",
+        help="dependency-evidenced corrected environment intent",
+    )
 
     handoff = subparsers.add_parser(
         "handoff", aliases=["handoff-linux"], help="run Linux deferred sweep"
@@ -329,7 +334,7 @@ def _plan_command(args: argparse.Namespace) -> int:
     snapshot = load_intake_snapshot(args.intake)
     registry = load_environment_registry(target=args.target)
     routes = phase_routes(
-        route_model(ModelRequirements(item.stable_id, _framework(item.name, item.zoo)))
+        route_model(item.to_model_requirements(_framework(item.name, item.zoo)))
         for item in snapshot.items
     )
     if args.phase is not None:
@@ -839,6 +844,7 @@ def _requeue_command(args: argparse.Namespace) -> int:
             reason=args.reason,
             attempts=args.grant,
             granted_by=args.granted_by,
+            target_intent=args.target_intent,
         )
         append_canonical_requeue_grant(path, payload)
     print(json.dumps(payload, sort_keys=True))

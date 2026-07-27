@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import json
+from collections import Counter
+from pathlib import Path
+
 import pytest
 
+from menagerie.crawler.cli import _framework
 from menagerie.crawler.constants import EnvironmentPhase, PlatformRequirement
+from menagerie.crawler.envs import DEFAULT_ENVS_ROOT
 from menagerie.crawler.effort import EffortCapExceeded, EffortTracker, StageCap
 from menagerie.crawler.routing import (
     Arm64HeavyBuildAttempts,
@@ -13,6 +19,7 @@ from menagerie.crawler.routing import (
     PlatformEvidence,
     defer_for_platform,
     phase_routes,
+    requirements_from_zoo_era,
     route_model,
 )
 
@@ -25,6 +32,72 @@ def test_torch_model_routes_by_declared_package_need() -> None:
     )
     assert route.intent == "graph"
     assert route.phase is EnvironmentPhase.PYTORCH
+
+
+@pytest.mark.parametrize(
+    ("zoo", "era", "expected_intent"),
+    (
+        ("open-mmlab/mmdetection", None, "mmlab"),
+        ("torch_geometric", None, "graph"),
+        ("historical-classics", "2018", "legacy-torch"),
+        ("discovered-pytorch", None, "oddballs"),
+    ),
+)
+def test_zoo_era_table_populates_complete_router_requirements(
+    zoo: str, era: str | None, expected_intent: str
+) -> None:
+    """Immutable zoo and era hints select the dependency-capable intent."""
+
+    requirements = requirements_from_zoo_era(zoo, era)
+    route = route_model(
+        ModelRequirements(
+            "m_intake",
+            "pytorch",
+            requirements.packages,
+            requirements.exact_repository,
+            requirements.legacy_torch,
+        )
+    )
+    assert route.intent == expected_intent
+
+
+def test_real_roster_routing_distribution_cannot_collapse_to_one_intent() -> None:
+    """The complete launch roster exercises every shipped environment intent."""
+
+    roster_path = Path(__file__).resolve().parents[2] / "data" / "crawl_roster.jsonl"
+    rows = [
+        json.loads(line)
+        for line in roster_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    counts: Counter[str] = Counter()
+    targeted: dict[str, Counter[str]] = {
+        "open-mmlab/mmdetection": Counter(),
+        "torch_geometric": Counter(),
+    }
+    for index, row in enumerate(rows):
+        zoo = str(row["zoo"])
+        requirements = requirements_from_zoo_era(zoo, row.get("era"))
+        route = route_model(
+            ModelRequirements(
+                str(index),
+                _framework(str(row["name"]), zoo),
+                requirements.packages,
+                requirements.exact_repository,
+                requirements.legacy_torch,
+            )
+        )
+        counts[route.intent] += 1
+        if zoo in targeted:
+            targeted[zoo][route.intent] += 1
+
+    shipped_intents = {path.parent.name for path in DEFAULT_ENVS_ROOT.glob("*/environment.yml")}
+    assert len(rows) == 28_482
+    assert set(counts) == shipped_intents
+    assert counts["core"] < len(rows) * 0.8
+    assert max(counts.values()) < len(rows) * 0.8
+    assert targeted["open-mmlab/mmdetection"] == {"mmlab": 151}
+    assert targeted["torch_geometric"] == {"graph": 69}
 
 
 @pytest.mark.parametrize(

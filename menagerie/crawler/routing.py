@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
-from typing import Iterable, Mapping, Optional
+from typing import Iterable, Literal, Mapping, Optional
 
 from menagerie.crawler.constants import EnvironmentPhase, PlatformRequirement
 from menagerie.crawler.effort import EffortTracker
@@ -29,6 +30,112 @@ _PACKAGE_INTENTS: tuple[tuple[str, frozenset[str]], ...] = (
     ),
 )
 
+_ZooMatchKind = Literal["exact", "prefix", "contains"]
+
+
+@dataclass(frozen=True)
+class ZooRequirementsRule:
+    """One auditable zoo/era rule used to derive intake routing requirements."""
+
+    match: _ZooMatchKind
+    zoos: tuple[str, ...]
+    packages: frozenset[str] = frozenset()
+    exact_repository: bool = False
+    legacy_before_year: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class IntakeRoutingRequirements:
+    """Dependency facts deterministically derived from one immutable roster row."""
+
+    packages: frozenset[str] = frozenset()
+    exact_repository: bool = False
+    legacy_torch: bool = False
+
+
+# Rules are normalized, ordered for audit readability, and cumulative. A zoo may
+# legitimately require both an ecosystem package and exact-repository handling.
+ZOO_ERA_REQUIREMENTS_TABLE: tuple[ZooRequirementsRule, ...] = (
+    ZooRequirementsRule(
+        match="exact",
+        zoos=(
+            "discovered-pytorch",
+            "historical-classics",
+            "unregistered-classics-pytorch",
+        ),
+        exact_repository=True,
+    ),
+    ZooRequirementsRule(
+        match="prefix",
+        zoos=("github:", "github/", "torch.hub:", "torchhub:"),
+        exact_repository=True,
+    ),
+    ZooRequirementsRule(
+        match="contains",
+        zoos=(
+            "open-mmlab",
+            "mmagic",
+            "mmdet",
+            "mmlab",
+            "mmocr",
+            "mmpose",
+            "mmpretrain",
+            "mmseg",
+        ),
+        packages=frozenset({"mmengine", "mmcv"}),
+    ),
+    ZooRequirementsRule(
+        match="contains",
+        zoos=("detectron2",),
+        packages=frozenset({"detectron2"}),
+    ),
+    ZooRequirementsRule(
+        match="contains",
+        zoos=("pytorch-geometric", "torch-geometric", "torch_geometric"),
+        packages=frozenset({"torch-geometric"}),
+    ),
+    ZooRequirementsRule(
+        match="contains",
+        zoos=("dgl",),
+        packages=frozenset({"dgl"}),
+    ),
+    ZooRequirementsRule(
+        match="exact",
+        zoos=("e3nn",),
+        packages=frozenset({"e3nn"}),
+    ),
+    ZooRequirementsRule(
+        match="exact",
+        zoos=("ogb",),
+        packages=frozenset({"ogb"}),
+    ),
+    ZooRequirementsRule(
+        match="prefix",
+        zoos=("speechbrain",),
+        packages=frozenset({"speechbrain"}),
+    ),
+    ZooRequirementsRule(
+        match="prefix",
+        zoos=("torchaudio",),
+        packages=frozenset({"torchaudio"}),
+    ),
+    ZooRequirementsRule(
+        match="exact",
+        zoos=("pypi:pytorch-forecasting",),
+        packages=frozenset({"pytorch-forecasting"}),
+    ),
+    ZooRequirementsRule(
+        match="exact",
+        zoos=("tsai",),
+        packages=frozenset({"tsai"}),
+    ),
+    ZooRequirementsRule(
+        match="exact",
+        zoos=("historical-classics",),
+        legacy_before_year=2019,
+    ),
+)
+
 
 class RoutingError(ValueError):
     """Base class for invalid or unsupported routing decisions."""
@@ -47,6 +154,69 @@ class ModelRequirements:
     packages: frozenset[str] = frozenset()
     exact_repository: bool = False
     legacy_torch: bool = False
+
+
+def requirements_from_zoo_era(zoo: str, era: Optional[str] = None) -> IntakeRoutingRequirements:
+    """Derive deterministic dependency requirements from immutable intake hints.
+
+    Parameters
+    ----------
+    zoo:
+        Immutable roster zoo identifier.
+    era:
+        Optional roster era. Only an explicit four-digit year can activate a
+        legacy rule.
+
+    Returns
+    -------
+    IntakeRoutingRequirements
+        Cumulative package, repository, and legacy-routing facts.
+    """
+
+    normalized_zoo = zoo.strip().lower()
+    years = tuple(int(match) for match in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", era or ""))
+    earliest_year = min(years) if years else None
+    packages: set[str] = set()
+    exact_repository = False
+    legacy_torch = False
+    for rule in ZOO_ERA_REQUIREMENTS_TABLE:
+        if not _zoo_rule_matches(normalized_zoo, rule):
+            continue
+        packages.update(rule.packages)
+        exact_repository = exact_repository or rule.exact_repository
+        legacy_torch = legacy_torch or (
+            rule.legacy_before_year is not None
+            and earliest_year is not None
+            and earliest_year < rule.legacy_before_year
+        )
+    return IntakeRoutingRequirements(
+        packages=frozenset(packages),
+        exact_repository=exact_repository,
+        legacy_torch=legacy_torch,
+    )
+
+
+def _zoo_rule_matches(zoo: str, rule: ZooRequirementsRule) -> bool:
+    """Return whether one normalized zoo matches an auditable table rule.
+
+    Parameters
+    ----------
+    zoo:
+        Lowercase normalized zoo identifier.
+    rule:
+        Exact, prefix, or substring table row.
+
+    Returns
+    -------
+    bool
+        Whether the table row applies.
+    """
+
+    if rule.match == "exact":
+        return zoo in rule.zoos
+    if rule.match == "prefix":
+        return zoo.startswith(rule.zoos)
+    return any(marker in zoo for marker in rule.zoos)
 
 
 @dataclass(frozen=True)

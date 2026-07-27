@@ -2477,6 +2477,7 @@ class ReceiptDriverMixin:
                     reducer,
                     operational,
                     state,
+                    human_review=stage == "import",
                 )
                 return None
             self.dependencies.boundary_hook("after-forward", item.stable_id)
