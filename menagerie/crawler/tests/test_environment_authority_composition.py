@@ -348,7 +348,11 @@ def test_outside_selected_interpreter_is_rejected_at_binding(tmp_path: Path) -> 
 
     prefix = tmp_path / "prefix"
     (prefix / "bin").mkdir(parents=True)
-    (prefix / "bin" / "python").symlink_to("/bin/false")
+    # The escape target must be an executable that really exists outside the prefix, or
+    # resolve(strict=True) fails first and the binding is rejected as "unavailable" without
+    # ever reaching the containment check this test exists to prove. /bin/false is absent on
+    # macOS, so name the running interpreter, which is present on every supported platform.
+    (prefix / "bin" / "python").symlink_to(sys.executable)
 
     with pytest.raises(AuthorityDerivationError, match="selected interpreter.*prefix"):
         EnvironmentAuthorityCache().bind(
@@ -761,23 +765,26 @@ def test_macos_v3_profile_has_one_fresh_literal_prefix_and_exact_outside_members
         execution_read_manifest=manifest,
     )
 
-    prefix_grant = f"(allow file-read* (subpath {json.dumps(str(members['prefix']))}))"
+    # Read grants name the exact file-read-data operation. The file-read* wildcard loses to
+    # the exact (deny file-read-data) that opens the profile, so a wildcard grant would be
+    # inert and the sandbox would deny every read on the host.
+    prefix_grant = f"(allow file-read-data (subpath {json.dumps(str(members['prefix']))}))"
     assert profile.count(prefix_grant) == 1
     subpath_rules = {
-        line for line in profile.splitlines() if line.startswith("(allow file-read* (subpath ")
+        line for line in profile.splitlines() if line.startswith("(allow file-read-data (subpath ")
     }
     assert subpath_rules == {
-        '(allow file-read* (subpath "/System"))',
-        '(allow file-read* (subpath "/usr/lib"))',
-        '(allow file-read* (subpath "/Library/Apple"))',
-        '(allow file-read* (subpath "/private/etc"))',
-        '(allow file-read* (subpath "/dev"))',
-        f"(allow file-read* (subpath {json.dumps(str(scratch.resolve()))}))",
-        f"(allow file-read* (subpath {json.dumps(str(result.resolve()))}))",
+        '(allow file-read-data (subpath "/System"))',
+        '(allow file-read-data (subpath "/usr/lib"))',
+        '(allow file-read-data (subpath "/Library/Apple"))',
+        '(allow file-read-data (subpath "/private/etc"))',
+        '(allow file-read-data (subpath "/dev"))',
+        f"(allow file-read-data (subpath {json.dumps(str(scratch.resolve()))}))",
+        f"(allow file-read-data (subpath {json.dumps(str(result.resolve()))}))",
         prefix_grant,
     }
     for kind in ("model", "crawler", "external", "asset", "request"):
-        literal = f"(allow file-read* (literal {json.dumps(str(members[kind]))}))"
+        literal = f"(allow file-read-data (literal {json.dumps(str(members[kind]))}))"
         assert profile.count(literal) == 1
     assert "(regex" not in profile
     for forbidden_root in (

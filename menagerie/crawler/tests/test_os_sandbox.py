@@ -77,22 +77,27 @@ def test_macos_profile_denies_network_and_writes_except_designated_roots(
     result = tmp_path / "result root"
     profile = generate_macos_sandbox_profile((result, scratch, scratch / "nested"))
 
+    # Every read allowance names the exact file-read-data operation, never file-read*.
+    # Seatbelt resolves a request against the most specific matching operation node, so a
+    # file-read* allowance is silently inert against the exact (deny file-read-data) above it
+    # and the profile would deny every read on the host, aborting the child inside dyld.
     assert profile == (
         "(version 1)\n"
         "(allow default)\n"
         "(deny network*)\n"
         "(deny file-read-data)\n"
         "(deny file-write*)\n"
-        '(allow file-read* (subpath "/System"))\n'
-        '(allow file-read* (subpath "/usr/lib"))\n'
-        '(allow file-read* (subpath "/Library/Apple"))\n'
-        '(allow file-read* (subpath "/private/etc"))\n'
-        '(allow file-read* (subpath "/dev"))\n'
+        '(allow file-read-data (require-all (vnode-type DIRECTORY) (literal "/")))\n'
+        '(allow file-read-data (subpath "/System"))\n'
+        '(allow file-read-data (subpath "/usr/lib"))\n'
+        '(allow file-read-data (subpath "/Library/Apple"))\n'
+        '(allow file-read-data (subpath "/private/etc"))\n'
+        '(allow file-read-data (subpath "/dev"))\n'
         '(allow file-write* (literal "/dev/null"))\n'
-        f'(allow file-read* (literal "{result.resolve()}"))\n'
-        f'(allow file-read* (subpath "{result.resolve()}"))\n'
-        f'(allow file-read* (literal "{scratch.resolve()}"))\n'
-        f'(allow file-read* (subpath "{scratch.resolve()}"))\n'
+        f'(allow file-read-data (literal "{result.resolve()}"))\n'
+        f'(allow file-read-data (subpath "{result.resolve()}"))\n'
+        f'(allow file-read-data (literal "{scratch.resolve()}"))\n'
+        f'(allow file-read-data (subpath "{scratch.resolve()}"))\n'
         f'(allow file-write* (literal "{result.resolve()}"))\n'
         f'(allow file-write* (subpath "{result.resolve()}"))\n'
         f'(allow file-write* (literal "{scratch.resolve()}"))\n'

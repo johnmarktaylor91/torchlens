@@ -93,6 +93,11 @@ _RUNTIME_METADATA_NAMES = frozenset(
     {
         "INSTALLER",
         "METADATA",
+        # importlib.metadata probes PKG-INFO by name as the egg-info spelling of METADATA
+        # whenever it resolves a distribution version, so an ordinary `import torch` walks
+        # into it. It is core distribution metadata, and the caller below still confines the
+        # name to a .dist-info/.egg-info directory, so no payload can reach the runtime here.
+        "PKG-INFO",
         "RECORD",
         "WHEEL",
         "direct_url.json",
@@ -198,6 +203,36 @@ class SandboxUnavailableError(RuntimeError):
     """Raised when worker execution has no usable OS isolation boundary."""
 
 
+def _sbpl_regex_literal(pattern: str) -> str:
+    """Return one Seatbelt ``#"..."`` regex literal for an already-built pattern.
+
+    Seatbelt does not collapse a doubled backslash inside a regex literal, so a
+    JSON-encoded pattern reaches the matcher carrying ``\\\\.`` where the pattern meant
+    ``\\.``. That demands a literal backslash in the candidate path and therefore matches
+    nothing, silently voiding the grant. The literal below preserves the single
+    backslashes ``re.escape`` produced and refuses any pattern it cannot quote unambiguously.
+
+    Parameters
+    ----------
+    pattern:
+        Complete regex pattern to embed.
+
+    Returns
+    -------
+    str
+        Seatbelt regex literal.
+
+    Raises
+    ------
+    SandboxUnavailableError
+        If the pattern contains a quote that Seatbelt quoting cannot express.
+    """
+
+    if '"' in pattern:
+        raise SandboxUnavailableError("sandbox read root is not expressible as a Seatbelt regex")
+    return f'#"{pattern}"'
+
+
 def _normalized_write_roots(write_roots: Sequence[Path]) -> tuple[Path, ...]:
     """Return sorted, resolved writable roots without redundant descendants.
 
@@ -254,17 +289,28 @@ def generate_macos_sandbox_profile(
     roots = _normalized_write_roots(write_roots)
     # Seatbelt is the OS containment layer for the named data/write/network classes.
     # The allow-default profile is intentionally not a general process-capability boundary.
+    #
+    # Every read allowance below must name the exact ``file-read-data`` operation, never the
+    # ``file-read*`` wildcard. Seatbelt resolves a request against the most specific matching
+    # operation node, so an exact ``(deny file-read-data)`` outranks any ``(allow file-read* ...)``
+    # regardless of rule order. Wildcard read allowances are silently inert against this deny and
+    # leave the profile denying every file data read on the host, which aborts the child inside
+    # dyld before any userspace code runs. Metadata and xattr reads stay covered by allow-default.
     lines = [
         "(version 1)",
         "(allow default)",
         "(deny network*)",
         "(deny file-read-data)",
         "(deny file-write*)",
-        '(allow file-read* (subpath "/System"))',
-        '(allow file-read* (subpath "/usr/lib"))',
-        '(allow file-read* (subpath "/Library/Apple"))',
-        '(allow file-read* (subpath "/private/etc"))',
-        '(allow file-read* (subpath "/dev"))',
+        # dyld resolves the cryptex-hosted shared cache by reading the root directory itself,
+        # which no declared root covers. The grant is pinned to the directory vnode and to the
+        # exact literal "/", so it exposes only the top-level entry names and no file contents.
+        '(allow file-read-data (require-all (vnode-type DIRECTORY) (literal "/")))',
+        '(allow file-read-data (subpath "/System"))',
+        '(allow file-read-data (subpath "/usr/lib"))',
+        '(allow file-read-data (subpath "/Library/Apple"))',
+        '(allow file-read-data (subpath "/private/etc"))',
+        '(allow file-read-data (subpath "/dev"))',
         '(allow file-write* (literal "/dev/null"))',
     ]
     environment_prefix: Optional[Path] = None
@@ -302,17 +348,26 @@ def generate_macos_sandbox_profile(
     read_paths = tuple(dict.fromkeys(path.resolve() for path in (*roots, *candidate_read_paths)))
     for path in read_paths:
         encoded = json.dumps(str(path), ensure_ascii=True)
-        lines.append(f"(allow file-read* (literal {encoded}))")
+        lines.append(f"(allow file-read-data (literal {encoded}))")
         if path in roots or path.is_dir():
-            lines.append(f"(allow file-read* (subpath {encoded}))")
+            lines.append(f"(allow file-read-data (subpath {encoded}))")
     if environment_prefix is not None:
         encoded_prefix = json.dumps(str(environment_prefix), ensure_ascii=True)
-        lines.append(f"(allow file-read* (subpath {encoded_prefix}))")
+        lines.append(f"(allow file-read-data (subpath {encoded_prefix}))")
     elif execution_read_manifest is None:
         runtime_suffixes = "a|c|cc|cpp|cu|cuh|dylib|h|hpp|metallib|py|pyc|pyd|pyi|pyx|so"
         for root in tuple(dict.fromkeys(path.resolve() for path in runtime_read_roots)):
+            encoded_root = json.dumps(str(root), ensure_ascii=True)
             pattern = f"^{re.escape(str(root))}/.*\\.(?:{runtime_suffixes})$"
-            lines.append(f"(allow file-read* (regex #{json.dumps(pattern)}))")
+            lines.append(f"(allow file-read-data (regex {_sbpl_regex_literal(pattern)}))")
+            # The suffix regex can only ever match a file, so it never grants the directory
+            # reads that the interpreter's path-based finder performs on each search root.
+            # Pin the extra grant to the directory vnode: entry names inside an already
+            # code-readable root become visible, contents of non-code files stay denied.
+            lines.append(
+                "(allow file-read-data "
+                f"(require-all (vnode-type DIRECTORY) (subpath {encoded_root})))"
+            )
     for root in roots:
         encoded = json.dumps(str(root), ensure_ascii=True)
         lines.append(f"(allow file-write* (literal {encoded}))")
@@ -1214,10 +1269,14 @@ def _probe_sandbox_exec(executable: str) -> bool:
         True when Seatbelt launches a no-op under the profile.
     """
 
+    # A virtual environment splits its runtime across the venv prefix and the base prefix that
+    # actually owns libpython and the standard library, so probing with sys.prefix alone would
+    # fail on a venv interpreter for reasons unrelated to Seatbelt. Both prefixes coincide for a
+    # non-venv interpreter and de-duplicate inside the generator.
     profile = generate_macos_sandbox_profile(
         (),
         allowed_read_paths=(Path(sys.executable),),
-        runtime_read_roots=(Path(sys.prefix), Path.cwd()),
+        runtime_read_roots=(Path(sys.prefix), Path(sys.base_prefix), Path.cwd()),
     )
     return _probe_command((executable, "-p", profile, *_python_probe_argv()))
 

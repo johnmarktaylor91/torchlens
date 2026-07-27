@@ -125,7 +125,7 @@ _SYSTEM_READ_FILES = frozenset(
 )
 _TERMINAL_TRACE_PATTERN = re.compile(r"\+\+\+ (?:exited with|killed by) .+ \+\+\+$")
 _MACOS_AUDIT_COMPLETION_MARKER = "MENAGERIE_MACOS_SANDBOX_AUDIT_COMPLETE_V1"
-_MACOS_AUDIT_SENTINEL_PREFIX = "/private/var/empty/.menagerie-seatbelt-audit-"
+_MACOS_AUDIT_SENTINEL_PREFIX = ".menagerie-seatbelt-audit-"
 _PARENT_COMPLETION_CHALLENGE_ENV = "MENAGERIE_PARENT_COMPLETION_CHALLENGE"
 _WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V1 "
 _WORKER_COMPLETION_V2_PREFIX = "MENAGERIE_WORKER_COMPLETION_V2 "
@@ -1258,9 +1258,19 @@ def _child_limit(
         except Exception:
             os._exit(126)
     if rss_limit_bytes > 0:
-        resource.setrlimit(resource.RLIMIT_AS, (rss_limit_bytes, rss_limit_bytes))
-        if sys.platform == "darwin" and hasattr(resource, "RLIMIT_DATA"):
-            resource.setrlimit(resource.RLIMIT_DATA, (rss_limit_bytes, rss_limit_bytes))
+        # Darwin aliases RLIMIT_AS, RLIMIT_DATA, and RLIMIT_RSS onto one limit its kernel
+        # never implemented, and refuses every attempt to lower it with EINVAL, so the
+        # child-side cap simply does not exist there. Memory containment on macOS is carried
+        # by the parent RSS sampler in run_isolated_subprocess, which polls _macos_rss and
+        # kills the process group on breach. Refusing the spawn instead would not add any
+        # containment. Every other platform keeps the original fail-closed behavior.
+        try:
+            resource.setrlimit(resource.RLIMIT_AS, (rss_limit_bytes, rss_limit_bytes))
+            if sys.platform == "darwin" and hasattr(resource, "RLIMIT_DATA"):
+                resource.setrlimit(resource.RLIMIT_DATA, (rss_limit_bytes, rss_limit_bytes))
+        except (OSError, ValueError):
+            if sys.platform != "darwin":
+                raise
 
 
 def _linux_rss(pid: int) -> int:
@@ -1683,6 +1693,13 @@ def _request_allowed_read_paths(
         executable = Path(argv[0])
         if executable.is_file():
             allowed.append(executable)
+            # A virtual-environment interpreter reads its own pyvenv.cfg during startup to
+            # find the base prefix owning the standard library. The marker carries no code
+            # suffix, so the environment suffix grants can never cover it, and site aborts the
+            # worker when the read is denied. Name the one exact file, only when it exists.
+            marker = executable.parent.parent / "pyvenv.cfg"
+            if executable.parent.name == "bin" and marker.is_file():
+                allowed.append(marker)
     try:
         request_index = argv.index("--request") + 1
         request_path = Path(argv[request_index]).resolve()
@@ -1753,11 +1770,16 @@ def _runtime_read_roots(argv: Sequence[str], cwd: Path) -> tuple[Path, ...]:
 
     roots = [cwd.resolve()]
     if argv:
-        executable = Path(argv[0]).resolve()
-        roots.append(
-            executable.parent.parent if executable.parent.name == "bin" else executable.parent
-        )
-    return tuple(dict.fromkeys(roots))
+        # A virtual environment splits its runtime in two: site-packages lives under the venv
+        # prefix reached through the launcher path, while libpython and the standard library
+        # live under the base prefix the launcher symlink resolves to. Taking only the resolved
+        # path drops site-packages, and taking only the unresolved path drops the standard
+        # library. Both spellings collapse to one root for a non-venv interpreter.
+        for candidate in (Path(argv[0]), Path(argv[0]).resolve()):
+            roots.append(
+                candidate.parent.parent if candidate.parent.name == "bin" else candidate.parent
+            )
+    return tuple(dict.fromkeys(root.resolve() for root in roots))
 
 
 def _syscall_name(line: str) -> Optional[str]:
@@ -2644,8 +2666,30 @@ def _emit_macos_audit_sentinel(channel: _MacOSAuditChannel, phase: str) -> bool:
         or channel.worker_executable is None
     ):
         return False
-    sentinel_path = f"{_MACOS_AUDIT_SENTINEL_PREFIX}{secrets.token_hex(16)}-{phase}"
-    script = "import sys\ntry:\n open(sys.argv[1], 'rb')\nexcept OSError:\n pass"
+    # The sentinel must be a file that really exists. A lookup that fails with ENOENT is
+    # answered by the filesystem before Seatbelt evaluates the profile, so a missing path
+    # emits no denial at all and the collector could never observe one. The unique sentinel
+    # therefore lives inside the parent-owned audit directory, which is created 0700 outside
+    # every child write root and is named by no read grant, so opening it is denied by policy.
+    sentinel_file = (
+        channel.path.parent / f"{_MACOS_AUDIT_SENTINEL_PREFIX}{secrets.token_hex(16)}-{phase}"
+    )
+    sentinel_path = str(sentinel_file)
+    # Exit zero only for EPERM. A sentinel that vanished, or that was readable, must not be
+    # mistaken for a policy denial, otherwise this tripwire silently stops proving anything.
+    script = (
+        "import errno, sys\n"
+        "try:\n"
+        "    open(sys.argv[1], 'rb').close()\n"
+        "except OSError as error:\n"
+        "    sys.exit(0 if error.errno == errno.EPERM else 3)\n"
+        "sys.exit(4)\n"
+    )
+    try:
+        descriptor = os.open(sentinel_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(descriptor)
+    except OSError:
+        return False
     try:
         sentinel = subprocess.Popen(
             (
@@ -2669,18 +2713,32 @@ def _emit_macos_audit_sentinel(channel: _MacOSAuditChannel, phase: str) -> bool:
         channel.sentinel_process_ids.append(sentinel.pid)
         if sentinel.wait(timeout=5) != 0:
             return False
+        deadline = time.monotonic() + 2.5
+        while time.monotonic() < deadline:
+            try:
+                collected = channel.path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                return False
+            # The collector writes NDJSON, which escapes every path separator, so the marker
+            # is only ever visible once a record is decoded. Searching the raw bytes silently
+            # never matches and would report a healthy collector as dead.
+            if any(
+                sentinel_path in message
+                for message in (
+                    _macos_denial_message(line) for line in collected.splitlines()
+                )
+                if message is not None
+            ):
+                return True
+            time.sleep(0.05)
+        return False
     except (OSError, subprocess.TimeoutExpired):
         return False
-    deadline = time.monotonic() + 2.5
-    marker = sentinel_path.encode("utf-8")
-    while time.monotonic() < deadline:
+    finally:
         try:
-            if marker in channel.path.read_bytes():
-                return True
+            sentinel_file.unlink()
         except OSError:
-            return False
-        time.sleep(0.05)
-    return False
+            pass
 
 
 def _start_macos_denial_audit(
