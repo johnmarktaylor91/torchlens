@@ -5,8 +5,8 @@ import json
 import logging
 import os
 import shlex
-import shutil
 import subprocess
+import sys
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -224,22 +224,32 @@ def _ascii_line(value: str) -> str:
 
 
 def _resolve_notify_command(command: Optional[str]) -> Optional[tuple[str, ...]]:
-    """Resolve an explicit notifier or the conventional home/PATH script."""
+    """Resolve an explicit notifier, or the delivery script behind the receipt shim.
+
+    The transport search order is unchanged. What changed is that the resolved default is
+    wrapped in ``menagerie.crawler.operator_notify``, which delivers through that same
+    script and then writes the nonce receipt the strict doctor requires. Without the
+    wrapper there is no way to distinguish "notification delivered" from "notifier script
+    happened to exist", which is precisely the unattended-operation failure the doctor
+    check exists to catch. An explicit ``command`` is still honored verbatim; an operator
+    who overrides it owns providing the receipt.
+    """
+
+    from menagerie.crawler.operator_notify import resolve_transport
 
     if command:
         parsed = tuple(shlex.split(command))
         return parsed or None
-    found = shutil.which("send-to-jmt.sh")
-    if found is not None:
-        return (found,)
-    for candidate in (
-        Path.home() / "scripts" / "send-to-jmt.sh",
-        Path.home() / "bin" / "send-to-jmt.sh",
-        Path.home() / ".claude" / "scripts" / "send-to-jmt.sh",
-    ):
-        if candidate.is_file() and os.access(candidate, os.X_OK):
-            return (str(candidate),)
-    return None
+    transport = resolve_transport()
+    if transport is None:
+        return None
+    return (
+        sys.executable,
+        "-m",
+        "menagerie.crawler.operator_notify",
+        "--transport",
+        shlex.join(transport),
+    )
 
 
 def _framework_from_intake(item: IntakeItem) -> str:

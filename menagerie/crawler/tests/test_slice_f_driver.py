@@ -3759,6 +3759,10 @@ def test_resolve_notify_command_falls_back_to_claude_scripts(
     ``~/.claude/scripts/send-to-jmt.sh`` does. A silent miss here means a
     stalled campaign produces no notification at all, since ``CommandNotifier``
     is deliberately best-effort and never raises.
+
+    The resolved default is now the ``operator_notify`` receipt shim wrapping that same
+    discovered transport: the search order is what this test pins, and the shim is what
+    lets the strict doctor tell a delivered notification from a merely present script.
     """
 
     monkeypatch.setattr(shutil, "which", lambda _name: None)
@@ -3768,7 +3772,10 @@ def test_resolve_notify_command_falls_back_to_claude_scripts(
     claude_script.write_text("#!/bin/sh\nexit 0\n")
     claude_script.chmod(claude_script.stat().st_mode | 0o111)
 
-    assert _resolve_notify_command(None) == (str(claude_script),)
+    resolved = _resolve_notify_command(None)
+    assert resolved is not None
+    assert resolved[1:4] == ("-m", "menagerie.crawler.operator_notify", "--transport")
+    assert resolved[4] == str(claude_script)
 
 
 def test_resolve_notify_command_prefers_scripts_and_bin_over_claude(
@@ -3784,7 +3791,9 @@ def test_resolve_notify_command_prefers_scripts_and_bin_over_claude(
         script.write_text("#!/bin/sh\nexit 0\n")
         script.chmod(script.stat().st_mode | 0o111)
 
-    assert _resolve_notify_command(None) == (str(tmp_path / "scripts" / "send-to-jmt.sh"),)
+    resolved = _resolve_notify_command(None)
+    assert resolved is not None
+    assert resolved[4] == str(tmp_path / "scripts" / "send-to-jmt.sh")
 
 
 def test_resolve_notify_command_missing_everywhere_is_none(
