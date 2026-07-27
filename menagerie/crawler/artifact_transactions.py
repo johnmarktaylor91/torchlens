@@ -1385,6 +1385,15 @@ class ArtifactEventLedger:
 
         self._ledger = JsonlLedger(path, ARTIFACT_EVENT_SCHEMA_VERSION, recover_tail=recover_tail)
         validate_artifact_event_chains(self._ledger.records)
+        self._final_work_ids = {
+            (str(event["stable_id"]), str(event["work_id"]))
+            for event in self._ledger.records
+            if event.get("event_kind")
+            in {
+                ArtifactEventKind.PUBLISHED.value,
+                ArtifactEventKind.PRIVATE_COMMITTED.value,
+            }
+        }
 
     def __enter__(self) -> ArtifactEventLedger:
         """Return this locked ledger.
@@ -1431,6 +1440,34 @@ class ArtifactEventLedger:
         """
 
         return tuple(self._ledger.records)
+
+    @property
+    def event_count(self) -> int:
+        """Return the append generation used by validation caches.
+
+        Returns
+        -------
+        int
+            Number of persisted artifact events.
+        """
+
+        return self._ledger.record_count
+
+    def has_final_event(self, stable_id: str, work_id: str) -> bool:
+        """Return whether exact finalized authority exists in this shard.
+
+        Parameters
+        ----------
+        stable_id, work_id:
+            Exact model and work-generation identities.
+
+        Returns
+        -------
+        bool
+            Whether a published or private-committed event exists.
+        """
+
+        return (stable_id, work_id) in self._final_work_ids
 
     def close(self) -> None:
         """Release the underlying writer lock idempotently."""
@@ -1485,6 +1522,13 @@ class ArtifactEventLedger:
         validate_artifact_event_chains(proposed, validate_schema=False)
         result = self._ledger.append(payload)
         validate_artifact_event_chains(self._ledger.records)
+        if result.appended and result.record.get("event_kind") in {
+            ArtifactEventKind.PUBLISHED.value,
+            ArtifactEventKind.PRIVATE_COMMITTED.value,
+        }:
+            self._final_work_ids.add(
+                (str(result.record["stable_id"]), str(result.record["work_id"]))
+            )
         return result
 
 

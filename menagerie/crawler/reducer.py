@@ -1911,6 +1911,18 @@ class CanonicalReducer:
 
         return self._artifacts
 
+    @property
+    def gate_records(self) -> tuple[JsonObject, ...]:
+        """Return defensive copies from the already-open gate ledger.
+
+        Returns
+        -------
+        tuple[dict[str, Any], ...]
+            Persisted gate records in ledger order.
+        """
+
+        return tuple(self._gates.records)
+
     def _attempt_index(self) -> Mapping[str, Mapping[str, Any]]:
         """Return the shared immutable attempt-ID index for reducer validation."""
 

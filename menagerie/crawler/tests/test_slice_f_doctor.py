@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 from pathlib import Path
+import subprocess
 from typing import Mapping
 
 import pytest
 
-from menagerie.crawler.doctor import DoctorConfig, DoctorError, DoctorProbes, run_doctor
+from menagerie.crawler.doctor import (
+    DoctorConfig,
+    DoctorError,
+    DoctorProbes,
+    SystemDoctorProbes,
+    run_doctor,
+)
 
 
 @dataclass
@@ -28,6 +36,24 @@ class FakeDoctorProbes(DoctorProbes):
     )
     wakeup_ok: bool = True
     violations: tuple[str, ...] = ()
+    wrappers: dict[str, str] = field(
+        default_factory=lambda: {
+            "author": "author 1",
+            "checker": "checker 1",
+            "environment": "environment 1",
+        }
+    )
+    codex_ok: bool = True
+    environment_versions: dict[str, str] = field(
+        default_factory=lambda: {
+            "conda": "conda 1",
+            "mamba": "mamba 1",
+            "conda-lock": "conda-lock 1",
+        }
+    )
+    notifier_ok: bool = True
+    worker_slot_free: bool = True
+    reserve_bytes: int = 200 * 1024**3
 
     def machine(self) -> tuple[str, str]:
         """Return the configured system and architecture."""
@@ -58,6 +84,36 @@ class FakeDoctorProbes(DoctorProbes):
         """Return configured author tools."""
 
         return self.tools
+
+    def wrapper_versions(self) -> Mapping[str, str]:
+        """Return configured operator wrapper versions."""
+
+        return self.wrappers
+
+    def codex_ready(self) -> bool:
+        """Return configured Codex capability status."""
+
+        return self.codex_ok
+
+    def environment_tool_versions(self) -> Mapping[str, str]:
+        """Return configured environment tool versions."""
+
+        return self.environment_versions
+
+    def notifier_delivery(self) -> bool:
+        """Return configured nonce-delivery status."""
+
+        return self.notifier_ok
+
+    def worker_slot_available(self) -> bool:
+        """Return configured global worker-slot availability."""
+
+        return self.worker_slot_free
+
+    def dynamic_disk_reserve_bytes(self) -> int:
+        """Return configured dynamic disk reserve."""
+
+        return self.reserve_bytes
 
     def secret_findings(self) -> tuple[str, ...]:
         """Return configured secret findings."""
@@ -119,3 +175,55 @@ def test_doctor_fails_critical_preflight_findings(
     with pytest.raises(DoctorError) as captured:
         run_doctor(_config(tmp_path), probes)
     assert any(failure.startswith(finding) for failure in captured.value.failures)
+
+
+def test_doctor_survey_runs_all_checks_without_raising(tmp_path: Path) -> None:
+    """Non-strict survey reports mandatory failures honestly and returns."""
+
+    probes = FakeDoctorProbes(branch_name="main", tools=frozenset(), notifier_ok=False)
+    report = run_doctor(
+        DoctorConfig(tmp_path, tmp_path / ".crawl-local", "osx-arm64", strict=False),
+        probes,
+    )
+
+    assert not report.passed
+    assert report.checks["branch"].startswith("fail:")
+    assert report.checks["author-web-tools"].startswith("fail:")
+    assert report.checks["notifier-delivery"].startswith("fail:")
+    assert report.checks["torchlens-import-ban"] == "pass"
+
+
+def test_author_tools_requires_fresh_nonce_bound_live_receipts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real probe accepts exercised receipts rather than MCP help text."""
+
+    wrapper = tmp_path / "author-wrapper"
+    wrapper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    wrapper.chmod(0o755)
+    monkeypatch.setenv("MENAGERIE_AUTHOR_COMMAND", str(wrapper))
+
+    def runner(argv: list[str] | tuple[str, ...], _cwd: Path) -> subprocess.CompletedProcess[str]:
+        """Materialize the exact nonce-bound capability receipt."""
+
+        request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
+        receipt = {
+            "nonce": request["nonce"],
+            "completed_at": request["requested_at"],
+            "receipts": [
+                {
+                    "tool": tool,
+                    "nonce": request["nonce"],
+                    "exercised": True,
+                    "receipt": f"{tool}-receipt",
+                }
+                for tool in request["required_tools"]
+            ],
+        }
+        Path(request["required_output_path"]).write_text(json.dumps(receipt), encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    config = DoctorConfig(tmp_path, tmp_path / ".crawl-local", "osx-arm64")
+    probes = SystemDoctorProbes(config, command_runner=runner)
+
+    assert probes.author_tools() == frozenset({"WebSearch", "web_search_exa", "web_fetch_exa"})

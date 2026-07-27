@@ -15,7 +15,7 @@ from menagerie.crawler.authority import build_authority_context
 from menagerie.crawler.cli import (
     EXIT_ERROR,
     EXIT_OK,
-    EXIT_PAUSED,
+    EXIT_REVIEW_PAUSED,
     _persisted_environment_generations,
 )
 from menagerie.crawler.driver import DriverConfig
@@ -175,7 +175,7 @@ def test_documented_dry_run_and_resume_use_real_environment(
         real_environment_fixture.prefix,
         "run",
     )
-    assert run.returncode == EXIT_PAUSED, (run.stdout, run.stderr)
+    assert run.returncode == EXIT_REVIEW_PAUSED, (run.stdout, run.stderr)
     run_output = _json_output(run)
     assert run_output["status"] == "paused:review-checkpoint"
     assert run_output["acceptance"]["status"] == "pending"

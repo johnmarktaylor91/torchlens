@@ -302,7 +302,7 @@ def classify_checker_response(
     """
 
     lowered = response_body.lower()
-    quota_markers = ("quota", "billing limit", "usage limit", "insufficient_quota")
+    quota_markers = ("quota", "usage limit")
     rate_markers = ("rate limit", "too many requests", "retry after", "tokens per minute")
     reason: Optional[CheckerPauseReason] = None
     if any(marker in lowered for marker in quota_markers):

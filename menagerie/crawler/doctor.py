@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import fcntl
+import json
 import os
 import platform
+import secrets
+import shlex
 import shutil
 import socket
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Mapping, Protocol, Sequence
 
 from menagerie.crawler.checkpoint import CRAWLER_BRANCH
+from menagerie.crawler.driver_progress import _resolve_notify_command
+from menagerie.crawler.identity import canonical_json_bytes
 from menagerie.crawler.policy import (
     ExecutionPolicy,
     PolicyViolation,
@@ -97,7 +103,37 @@ class DoctorProbes(Protocol):
         ...
 
     def author_tools(self) -> frozenset[str]:
-        """Return available Claude author research tools."""
+        """Exercise and attest Claude author research tools."""
+
+        ...
+
+    def wrapper_versions(self) -> Mapping[str, str]:
+        """Return resolved version receipts for all three operator wrappers."""
+
+        ...
+
+    def codex_ready(self) -> bool:
+        """Return whether Codex auth, pinned model, and high effort execute."""
+
+        ...
+
+    def environment_tool_versions(self) -> Mapping[str, str]:
+        """Return version receipts for conda, mamba, and conda-lock."""
+
+        ...
+
+    def notifier_delivery(self) -> bool:
+        """Deliver a nonce and validate its bound receipt."""
+
+        ...
+
+    def worker_slot_available(self) -> bool:
+        """Return whether the global worker-slot lock is available."""
+
+        ...
+
+    def dynamic_disk_reserve_bytes(self) -> int:
+        """Return free bytes after accounting for current runtime occupancy."""
 
         ...
 
@@ -185,20 +221,174 @@ class SystemDoctorProbes:
         return all(Path(str(value)).exists() and os.access(str(value), os.R_OK) for value in values)
 
     def author_tools(self) -> frozenset[str]:
-        """Inspect Claude Code help/MCP output for WebSearch and both Exa tools."""
+        """Exercise all required tools through a nonce-bound author queue request."""
 
-        if shutil.which("claude") is None:
+        raw_command = os.environ.get("MENAGERIE_AUTHOR_COMMAND")
+        if raw_command is None:
             return frozenset()
-        help_result = self._run(["claude", "--help"], self.config.repo_root)
-        mcp_result = self._run(["claude", "mcp", "list"], self.config.repo_root)
-        combined = (
-            f"{help_result.stdout}\n{help_result.stderr}\n{mcp_result.stdout}\n{mcp_result.stderr}"
+        command = tuple(shlex.split(raw_command))
+        if not command:
+            return frozenset()
+        root = self.config.runtime_root / "doctor" / "author-capability"
+        root.mkdir(parents=True, exist_ok=True)
+        nonce = secrets.token_hex(24)
+        requested_at = datetime.now(timezone.utc)
+        receipt_path = root / "receipt.json"
+        request = {
+            "format": "menagerie.crawler.author-capability-probe.v1",
+            "nonce": nonce,
+            "requested_at": requested_at.isoformat().replace("+00:00", "Z"),
+            "deadline_seconds": 120,
+            "required_tools": ["WebSearch", "web_search_exa", "web_fetch_exa"],
+            "required_output_path": str(receipt_path.resolve()),
+        }
+        request_path = root / "request.json"
+        request_path.write_bytes(canonical_json_bytes(request) + b"\n")
+        completed = self._run([*command, str(request_path)], self.config.repo_root)
+        observed_at = datetime.now(timezone.utc)
+        if (
+            completed.returncode != 0
+            or observed_at > requested_at + timedelta(seconds=120)
+            or not receipt_path.is_file()
+        ):
+            return frozenset()
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return frozenset()
+        if not isinstance(receipt, Mapping) or receipt.get("nonce") != nonce:
+            return frozenset()
+        try:
+            completed_at = datetime.fromisoformat(
+                str(receipt["completed_at"]).removesuffix("Z") + "+00:00"
+            )
+        except (KeyError, ValueError):
+            return frozenset()
+        if not requested_at <= completed_at <= requested_at + timedelta(seconds=120):
+            return frozenset()
+        raw_receipts = receipt.get("receipts")
+        if not isinstance(raw_receipts, list):
+            return frozenset()
+        tools = {
+            str(value.get("tool"))
+            for value in raw_receipts
+            if isinstance(value, Mapping)
+            and value.get("nonce") == nonce
+            and value.get("exercised") is True
+            and isinstance(value.get("receipt"), str)
+            and bool(str(value["receipt"]).strip())
+        }
+        return frozenset(tools)
+
+    def wrapper_versions(self) -> Mapping[str, str]:
+        """Resolve and execute ``--version`` for all configured wrappers."""
+
+        versions: dict[str, str] = {}
+        for lane in ("author", "checker", "environment"):
+            raw_command = os.environ.get(f"MENAGERIE_{lane.upper()}_COMMAND")
+            if raw_command is None:
+                continue
+            command = tuple(shlex.split(raw_command))
+            if not command:
+                continue
+            executable = _resolve_executable(command[0], self.config.repo_root)
+            if executable is None:
+                continue
+            completed = self._run([executable, *command[1:], "--version"], self.config.repo_root)
+            combined = f"{completed.stdout}\n{completed.stderr}".strip()
+            if completed.returncode == 0 and combined:
+                versions[lane] = combined[:500]
+        return versions
+
+    def codex_ready(self) -> bool:
+        """Exercise Codex auth with the pinned metadata model at high effort."""
+
+        if shutil.which("codex") is None:
+            return False
+        auth = self._run(["codex", "login", "status"], self.config.repo_root)
+        if auth.returncode != 0:
+            return False
+        probe = self._run(
+            [
+                "codex",
+                "exec",
+                "--skip-git-repo-check",
+                "--ephemeral",
+                "--sandbox",
+                "read-only",
+                "-C",
+                str(self.config.repo_root),
+                "-m",
+                "gpt-5.6-terra",
+                "-c",
+                "model_reasoning_effort=high",
+                "--json",
+                "Reply with the single word ready.",
+            ],
+            self.config.repo_root,
         )
-        return frozenset(
-            tool
-            for tool in ("WebSearch", "web_search_exa", "web_fetch_exa")
-            if tool.lower() in combined.lower()
+        combined = f"{probe.stderr}\n{probe.stdout}".lower()
+        return (
+            probe.returncode == 0
+            and "model metadata for" not in combined
+            and "model is not supported" not in combined
         )
+
+    def environment_tool_versions(self) -> Mapping[str, str]:
+        """Execute required conda-family version probes."""
+
+        versions: dict[str, str] = {}
+        for tool in ("conda", "mamba", "conda-lock"):
+            if shutil.which(tool) is None:
+                continue
+            completed = self._run([tool, "--version"], self.config.repo_root)
+            combined = f"{completed.stdout}\n{completed.stderr}".strip()
+            if completed.returncode == 0 and combined:
+                versions[tool] = combined[:500]
+        return versions
+
+    def notifier_delivery(self) -> bool:
+        """Send a nonce and require a matching machine-readable receipt."""
+
+        command = _resolve_notify_command(None)
+        if command is None:
+            return False
+        root = self.config.runtime_root / "doctor" / "notifier"
+        root.mkdir(parents=True, exist_ok=True)
+        nonce = secrets.token_hex(24)
+        receipt_path = root / "receipt.json"
+        completed = subprocess.run(
+            [*command, f"Menagerie crawler doctor nonce {nonce}"],
+            cwd=self.config.repo_root,
+            check=False,
+            capture_output=True,
+            text=True,
+            env={
+                **os.environ,
+                "MENAGERIE_NOTIFICATION_IDEMPOTENCY_KEY": nonce,
+                "MENAGERIE_NOTIFICATION_RECEIPT_PATH": str(receipt_path),
+            },
+        )
+        if completed.returncode != 0 or not receipt_path.is_file():
+            return False
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        return isinstance(receipt, Mapping) and receipt.get("nonce") == nonce
+
+    def worker_slot_available(self) -> bool:
+        """Probe the cross-campaign worker execution slot."""
+
+        return _lock_available(self.config.runtime_root / "locks" / "execution.flock")
+
+    def dynamic_disk_reserve_bytes(self) -> int:
+        """Subtract current crawler runtime occupancy from filesystem free space."""
+
+        occupied = sum(
+            path.stat().st_size for path in self.config.runtime_root.rglob("*") if path.is_file()
+        )
+        return max(0, self.disk_free_bytes() - occupied)
 
     def secret_findings(self) -> tuple[str, ...]:
         """Scan first-party crawler files for credential material."""
@@ -325,7 +515,54 @@ def run_doctor(config: DoctorConfig, probes: DoctorProbes | None = None) -> Doct
         f"{free} bytes free; need {config.minimum_disk_bytes}",
     )
     _record(checks, failures, "lock", active.lock_available(), "driver lock is busy")
+    _record(
+        checks,
+        failures,
+        "worker-slot-lock",
+        active.worker_slot_available(),
+        "global execution slot is busy",
+    )
     _record(checks, failures, "mirrors", active.mirrors_reachable(), "mirror reachability failed")
+    wrapper_versions = active.wrapper_versions()
+    required_wrappers = {"author", "checker", "environment"}
+    _record(
+        checks,
+        failures,
+        "wrappers",
+        required_wrappers.issubset(wrapper_versions),
+        f"missing version receipts {sorted(required_wrappers - set(wrapper_versions))}",
+    )
+    environment_versions = active.environment_tool_versions()
+    required_environment_tools = {"conda", "mamba", "conda-lock"}
+    _record(
+        checks,
+        failures,
+        "environment-tools",
+        required_environment_tools.issubset(environment_versions),
+        f"missing versions {sorted(required_environment_tools - set(environment_versions))}",
+    )
+    _record(
+        checks,
+        failures,
+        "codex-auth-model-effort",
+        active.codex_ready(),
+        "Codex auth or pinned high-effort model probe failed",
+    )
+    _record(
+        checks,
+        failures,
+        "notifier-delivery",
+        active.notifier_delivery(),
+        "nonce delivery receipt failed",
+    )
+    dynamic_reserve = active.dynamic_disk_reserve_bytes()
+    _record(
+        checks,
+        failures,
+        "dynamic-disk-reserve",
+        dynamic_reserve >= config.minimum_disk_bytes,
+        f"{dynamic_reserve} bytes dynamically reserved; need {config.minimum_disk_bytes}",
+    )
 
     tools = active.author_tools()
     required_tools = {"WebSearch", "web_search_exa", "web_fetch_exa"}
@@ -363,9 +600,9 @@ def run_doctor(config: DoctorConfig, probes: DoctorProbes | None = None) -> Doct
         not violations,
         f"violations={list(violations)}",
     )
-    if failures:
+    if failures and config.strict:
         raise DoctorError(failures)
-    return DoctorReport(config.target, checks, True)
+    return DoctorReport(config.target, checks, not failures)
 
 
 def _record(
@@ -381,4 +618,71 @@ def _record(
 def _run_command(argv: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     """Run one read-only doctor command without a shell."""
 
-    return subprocess.run(list(argv), cwd=cwd, check=False, capture_output=True, text=True)
+    try:
+        return subprocess.run(
+            list(argv),
+            cwd=cwd,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return subprocess.CompletedProcess(
+            list(argv),
+            124,
+            stdout=str(exc.stdout or ""),
+            stderr=str(exc.stderr or "doctor probe timed out"),
+        )
+
+
+def _resolve_executable(value: str, cwd: Path) -> str | None:
+    """Resolve one configured executable without a shell.
+
+    Parameters
+    ----------
+    value, cwd:
+        Executable token and repository-relative base.
+
+    Returns
+    -------
+    str | None
+        Absolute executable path when resolvable.
+    """
+
+    path = Path(value).expanduser()
+    if path.is_absolute():
+        return str(path.resolve()) if path.is_file() else None
+    if path.parent != Path("."):
+        candidate = (cwd / path).resolve()
+        return str(candidate) if candidate.is_file() else None
+    found = shutil.which(value)
+    return str(Path(found).resolve()) if found is not None else None
+
+
+def _lock_available(path: Path) -> bool:
+    """Probe one nonblocking exclusive kernel lock.
+
+    Parameters
+    ----------
+    path:
+        Lock file path.
+
+    Returns
+    -------
+    bool
+        Whether the lock can be acquired now.
+    """
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        finally:
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
+    return True

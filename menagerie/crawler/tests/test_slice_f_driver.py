@@ -17,7 +17,9 @@ from typing import Any, Mapping, Optional, Sequence
 import pytest
 
 import menagerie.crawler.checkpoint as checkpoint_module
+import menagerie.crawler.cli as cli_module
 import menagerie.crawler.driver as driver_module
+import menagerie.crawler.driver_admission as driver_admission_module
 import menagerie.crawler.reducer as reducer_module
 from menagerie.crawler.artifact_transactions import (
     ArtifactEventKind,
@@ -39,6 +41,7 @@ from menagerie.crawler.authority import (
     derive_parent_attestation,
 )
 from menagerie.crawler.checker_dispatch import CheckerBackoffSignal
+from menagerie.crawler.campaign_config import load_campaign_config
 from menagerie.crawler.checkpoint import (
     _externally_controlled_record_text,
     canonical_operational_ledger_path,
@@ -104,6 +107,7 @@ from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_
 from menagerie.crawler.fetcher import fetch_targets as controlled_fetch_targets
 from menagerie.crawler.metadata import authored_fact_leaves, recompute_accepted_identities
 from menagerie.crawler.models import LedgerPaths
+from menagerie.crawler.mirrors import MirrorStore
 from menagerie.crawler.policy import SandboxUnavailableError
 from menagerie.crawler.proposal import DEFAULT_GATED_CLAIMS, model_code_manifest
 from menagerie.crawler.recordio import JsonlLedger, payload_hash, scan_jsonl
@@ -2080,6 +2084,31 @@ Path(request["required_output_path"]).write_text(json.dumps(gate), encoding="utf
     assert outcome.gate["items"][0]["verified_hashes"]["proposal"] == proposal["proposal_sha256"]
 
 
+def test_command_checker_lane_classifies_quota_from_stdout_with_stderr_noise(
+    tmp_path: Path,
+) -> None:
+    """Structured stdout quota survives the checker's nonempty stderr preamble."""
+
+    artifact = make_proposed_artifact(
+        make_author_proposal("m_checker_quota"),
+        {"sources": []},
+        model_dir=tmp_path / "model",
+    )
+    script = (
+        "import sys; "
+        "print('Reading additional input from stdin...', file=sys.stderr); "
+        "print('usage limit reached'); "
+        "raise SystemExit(76)"
+    )
+
+    outcome = CommandCheckerLane((sys.executable, "-c", script)).check_metadata(
+        [artifact], tmp_path / "work", DriverConfig()
+    )
+
+    assert outcome.backoff is not None
+    assert outcome.backoff.reason is CheckerPauseReason.QUOTA_EXHAUSTED
+
+
 def test_parent_refuses_observed_adapter_digest_mismatch() -> None:
     """A success-shaped child envelope cannot hide a different observed adapter digest."""
 
@@ -3401,6 +3430,204 @@ def test_scheduled_wake_live_lock_is_idempotent_success(tmp_path: Path) -> None:
     assert all(
         event["event_kind"] != "wake-noop-already-running" for event in scan_jsonl(event_path)
     )
+
+
+def test_wake_callback_reloads_all_commands_from_private_config_in_clean_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A launchd-style clean environment retains every frozen wrapper and scope."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    commands: dict[str, Path] = {}
+    for lane in ("author", "checker", "environment", "notify"):
+        path = tmp_path / "bin" / lane
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        path.chmod(0o755)
+        commands[lane] = path
+    public_mirror = tmp_path / "public-mirror"
+    private_mirror = tmp_path / "private-mirror"
+    public_mirror.mkdir()
+    private_mirror.mkdir()
+    monkeypatch.setenv("MENAGERIE_PUBLIC_MIRROR", str(public_mirror))
+    monkeypatch.setenv("MENAGERIE_PRIVATE_MIRROR", str(private_mirror))
+    launch_args = build_parser().parse_args(
+        [
+            "--repo-root",
+            str(tmp_path),
+            "run",
+            "--intake",
+            str(snapshot.root),
+            "--phase",
+            "pytorch",
+            "--review-checkpoint-at",
+            "17",
+            "--progress-milestones",
+            "19,23",
+            "--run-id",
+            "clean-wake",
+            "--author-command",
+            str(commands["author"]),
+            "--checker-command",
+            str(commands["checker"]),
+            "--environment-command",
+            str(commands["environment"]),
+            "--notify-command",
+            str(commands["notify"]),
+        ]
+    )
+    launched = cli_module._default_driver_factory(launch_args)
+    callback = launched._wakeup_callback_argv()
+    config_index = callback.index("--campaign-config") + 1
+    config_path = Path(callback[config_index])
+    persisted = load_campaign_config(config_path)
+
+    assert config_path.stat().st_mode & 0o777 == 0o600
+    assert persisted.author_command == (str(commands["author"].resolve()),)
+    assert persisted.checker_command == (str(commands["checker"].resolve()),)
+    assert persisted.environment_command == (str(commands["environment"].resolve()),)
+    assert persisted.notify_command == (str(commands["notify"].resolve()),)
+    assert persisted.review_checkpoint_at == 17
+    assert persisted.progress_milestones == (19, 23)
+    assert persisted.phase == "pytorch"
+
+    for name in (
+        "MENAGERIE_AUTHOR_COMMAND",
+        "MENAGERIE_CHECKER_COMMAND",
+        "MENAGERIE_ENVIRONMENT_COMMAND",
+        "MENAGERIE_PUBLIC_MIRROR",
+        "MENAGERIE_PRIVATE_MIRROR",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    resumed_args = build_parser().parse_args(list(callback[3:]))
+    resumed = cli_module._default_driver_factory(resumed_args)
+
+    assert isinstance(resumed.dependencies.author, CommandAuthorLane)
+    assert resumed.dependencies.author.command == persisted.author_command
+    assert isinstance(resumed.dependencies.checker, CommandCheckerLane)
+    assert resumed.dependencies.checker.command == persisted.checker_command
+    assert resumed.config.review_checkpoint_at == 17
+    assert resumed.config.progress_milestones == (19, 23)
+    assert resumed.config.phase == "pytorch"
+    assert os.environ["MENAGERIE_PUBLIC_MIRROR"] == str(public_mirror.resolve())
+    assert os.environ["MENAGERIE_PRIVATE_MIRROR"] == str(private_mirror.resolve())
+
+    for name in (
+        "MENAGERIE_AUTHOR_COMMAND",
+        "MENAGERIE_CHECKER_COMMAND",
+        "MENAGERIE_ENVIRONMENT_COMMAND",
+        "MENAGERIE_PUBLIC_MIRROR",
+        "MENAGERIE_PRIVATE_MIRROR",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    manual_args = build_parser().parse_args(
+        [
+            "--repo-root",
+            str(tmp_path),
+            "resume",
+            "--intake",
+            str(snapshot.root),
+        ]
+    )
+    manual_resume = cli_module._default_driver_factory(manual_args)
+    assert isinstance(manual_resume.dependencies.author, CommandAuthorLane)
+    assert manual_resume.dependencies.author.command == persisted.author_command
+    assert manual_resume.config.campaign_config_path == config_path
+
+
+def test_cli_uses_distinct_review_and_operator_outage_exits(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Review pauses and missing operator configuration no longer collapse."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    driver = _driver(tmp_path, snapshot, review_at=1)
+
+    assert (
+        cli_main(
+            ["--repo-root", str(tmp_path), "run"],
+            driver_factory=lambda _args: driver,
+        )
+        == cli_module.EXIT_REVIEW_PAUSED
+    )
+    assert cli_main(["--repo-root", str(tmp_path), "run"]) == cli_module.EXIT_OPERATOR_OUTAGE
+    error = json.loads(capsys.readouterr().err)
+    assert error["status"] == "operator-outage"
+
+
+def test_artifact_validation_reserve_cache_invalidates_on_append_generation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The opt-in checkpoint cache hits once and misses after an artifact append."""
+
+    class FakeArtifactLedger:
+        """Mutable artifact append generation."""
+
+        event_count = 4
+
+    class FakeReducer:
+        """Minimal reducer surface consumed by checkpoint validation."""
+
+        artifact_ledger = FakeArtifactLedger()
+        context = object()
+
+    driver = _driver(tmp_path, _snapshot(tmp_path, count=1))
+    calls: list[int] = []
+    projection = object()
+
+    def fake_validate(*_args: object, **_kwargs: object) -> object:
+        """Record each full checkpoint validation."""
+
+        calls.append(FakeReducer.artifact_ledger.event_count)
+        return projection
+
+    monkeypatch.setenv("MENAGERIE_CRAWLER_ARTIFACT_MEMOIZATION", "1")
+    monkeypatch.setattr(driver_admission_module, "validate_artifact_checkpoint", fake_validate)
+    mirrors = MirrorStore(
+        tmp_path / "mirrors" / "public",
+        tmp_path / "mirrors" / "private",
+        tmp_path / "mirrors" / "local",
+    )
+    kwargs = {
+        "artifact_paths": (driver.paths.ledgers.artifacts,),
+        "mirrors": mirrors,
+        "canonical_root": tmp_path,
+        "repository_root": tmp_path,
+    }
+
+    first, first_hit = driver._validated_artifact_projection(FakeReducer(), **kwargs)
+    second, second_hit = driver._validated_artifact_projection(FakeReducer(), **kwargs)
+    FakeReducer.artifact_ledger.event_count += 1
+    third, third_hit = driver._validated_artifact_projection(FakeReducer(), **kwargs)
+
+    assert first is projection and second is projection and third is projection
+    assert (first_hit, second_hit, third_hit) == (False, True, False)
+    assert calls == [4, 5]
+
+
+def test_ledger_hot_path_metrics_report_positive_terminal_slope(tmp_path: Path) -> None:
+    """Per-model authority timing exposes a positive slope against terminal count."""
+
+    driver = _driver(tmp_path, _snapshot(tmp_path, count=1))
+    driver._record_ledger_hot_path_metric(
+        terminal_count=10,
+        elapsed_seconds=0.1,
+        artifact_event_count=4,
+        checkpoint_cache_hit=False,
+    )
+    driver._record_ledger_hot_path_metric(
+        terminal_count=20,
+        elapsed_seconds=0.2,
+        artifact_event_count=4,
+        checkpoint_cache_hit=True,
+    )
+
+    metrics = scan_jsonl(
+        driver.paths.runtime_root / "instrumentation" / "ledger-hot-path.jsonl",
+        validate=False,
+    )
+    assert metrics[-1]["slope_seconds_per_terminal"] == pytest.approx(0.01)
+    assert metrics[-1]["positive_slope_detected"] is True
 
 
 def test_scheduled_wake_not_before_guard_does_not_run_driver(tmp_path: Path) -> None:
