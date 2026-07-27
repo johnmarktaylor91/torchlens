@@ -251,6 +251,7 @@ from menagerie.crawler.driver_contracts import (
     EnvironmentLane as EnvironmentLane,
     ForwardLane as ForwardLane,
     Notifier as Notifier,
+    RetryableOperatorError,
     UsageBackoffSignal,
     UsagePauseScheduler as UsagePauseScheduler,
     VariantRecipeUnsupported,
@@ -513,6 +514,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         """Append a typed campaign-health failure before propagating an error."""
 
         created_at = self.dependencies.clock()
+        retryable = isinstance(exc, RetryableOperatorError)
         exception_type = f"{type(exc).__module__}.{type(exc).__qualname__}"
         identity = stable_hash(
             {
@@ -527,7 +529,11 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             "event_id": f"driver-failure-{identity}",
             "created_at": created_at,
             "event_kind": OperationalEventKind.CAMPAIGN_HEALTH.value,
-            "status": OperationalEventStatus.RUNNER_FAILED.value,
+            "status": (
+                OperationalEventStatus.RETRYABLE_INFRASTRUCTURE.value
+                if retryable
+                else OperationalEventStatus.RUNNER_FAILED.value
+            ),
             "provider": None,
             "observed_response": None,
             "reset_at": None,
@@ -538,6 +544,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             "details": {
                 "exception_type": exception_type,
                 "message": str(exc),
+                "retryable_infrastructure": retryable,
             },
         }
         with JsonlLedger(
@@ -547,7 +554,11 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         _write_driver_state(
             self.paths.driver_state,
             {
-                "status": "failed:runner",
+                "status": (
+                    OperationalEventStatus.RETRYABLE_INFRASTRUCTURE.value
+                    if retryable
+                    else "failed:runner"
+                ),
                 "exception_type": exception_type,
                 "message": str(exc),
             },
@@ -927,7 +938,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             if self.paths.runtime_root.name == ".crawl-local"
             else Path.cwd()
         )
-        callback = [
+        direct_callback = [
             sys.executable,
             "-m",
             "menagerie.crawler",
@@ -943,7 +954,29 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             self.config.run_id,
         ]
         if self.config.campaign_config_path is not None:
-            callback.extend(("--campaign-config", str(self.config.campaign_config_path)))
+            direct_callback.extend(
+                ("--campaign-config", str(self.config.campaign_config_path))
+            )
+        supervisor = repo_root / "tools" / "crawler_supervisor.sh"
+        if (
+            self.config.campaign_config_path is None
+            or self.config.campaign_id is None
+            or not supervisor.is_file()
+        ):
+            return tuple(direct_callback)
+        callback = [
+            str(supervisor),
+            "--python",
+            sys.executable,
+            "run",
+            "--repo-root",
+            str(repo_root),
+            "--campaign-config",
+            str(self.config.campaign_config_path),
+        ]
+        callback.extend(("--campaign-id", self.config.campaign_id))
+        if self.config.author_queue_root is not None:
+            callback.extend(("--author-queue", str(self.config.author_queue_root)))
         return tuple(callback)
 
     def _process_scheduled_work(
@@ -1606,6 +1639,8 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 if repaired.campaign_root_work_id != artifact.campaign_root_work_id:
                     raise DriverIntegrationError("mode repair changed campaign lineage")
                 _validate_artifact_identities(repaired, self.config)
+            except RetryableOperatorError:
+                raise
             except Exception as exc:  # noqa: BLE001 -- each generation consumes the bounded cap
                 last_error = exc
                 continue

@@ -77,15 +77,47 @@ Two of its checks now depend on this pool:
   underlying delivery script exits zero, so this fails exactly when notifications would
   silently vanish -- which is the state in which a month-long unattended campaign goes dark.
 
-### 1.4 Start the driver
+### 1.4 Freeze the campaign policy
+
+Only `c1-mech` is allowed to carry the anti-slop review gate. Its launch must include the
+three durable advance notifications:
 
 ```bash
 cd "$CLONE" && $PY -m menagerie.crawler run \
   --intake .crawl-local/intake --target osx-arm64 \
+  --review-checkpoint-at 1000 --progress-milestones 900,950,1000,2000,3000,5000,10000 \
   --author-command "$MENAGERIE_AUTHOR_COMMAND" \
   --checker-command "$MENAGERIE_CHECKER_COMMAND" \
   --environment-command "$MENAGERIE_ENVIRONMENT_COMMAND"
 ```
+
+This first invocation writes the mode-0600 campaign config. Stop it once that config
+exists, then install the supervisor in section 1.5. For `c2-disco`, `c3-classics`, and
+`c4-native`, do not launch until the C1 review is signed off, and replace the checkpoint
+flag with `--review-checkpoint-at 0`. The production campaign manifest and CLI both reject
+the inverse policy: C1 cannot silently lose its gate, and C2-C4 cannot accidentally inherit
+it.
+
+### 1.5 Install the per-campaign launchd supervisor
+
+```bash
+CONFIG=$(find "$CLONE/.crawl-local/campaign-configs" -name '*.json' -print -quit)
+PLIST="$HOME/Library/LaunchAgents/org.torchlens.menagerie-crawler.$CAMPAIGN.plist"
+"$PY" -m menagerie.crawler.supervisor render-launchd \
+  --campaign-id "$CAMPAIGN" --repo-root "$CLONE" \
+  --campaign-config "$CONFIG" --author-queue "$QUEUE" \
+  --python "$PY" --output "$PLIST"
+launchctl bootstrap "gui/$(id -u)" "$PLIST"
+```
+
+The installed agent runs `tools/crawler_supervisor.sh`. Unexpected driver exits restart
+with exponential backoff; five crashes in 30 minutes open a circuit and produce a
+receipt-backed alert. Exit 3 backs off because another driver owns the campaign. Exit 4
+stops the outer agent and delegates exactly once to the existing reset-time wake episode;
+that callback re-enters through the same supervisor. Exit 5 stops for human review. Exit 6
+is retryable operator infrastructure and alerts before stopping. Exit 0 notifies and
+stops. launchd restarts only an unexpectedly dead *supervisor*, not any of those handled
+states.
 
 ---
 
@@ -177,9 +209,10 @@ outside a per-job root is a hard stop, not a warning.
   a queue that is always empty means the driver, not the author lane, is the bottleneck.
 - Watch for **stalls**. If the pool stops answering, the engine's lane hits its 45-minute
   deadline and raises retryable infrastructure -- a stalled queue, never a failed model.
-  That is the safe behavior, but it costs a full retry cycle, so treat repeated stalls as
-  an incident.
-- The driver notifies at 900/950 before the hard 1,000-model review checkpoint, and on
+  The supervisor independently watches the durable pending queue and alerts as soon as the
+  same deadline is crossed, before the bounded engine retry finishes. That is the safe
+  behavior, but it costs a full retry cycle, so treat repeated stalls as an incident.
+- The driver notifies at 900/950/1000 before and at the hard 1,000-model review checkpoint, and on
   quota pauses. Those notifications now carry receipts; if a notification is expected and
   no receipt exists, the notifier is broken -- re-run the doctor.
 
@@ -205,14 +238,21 @@ come.
 
 ## 5. Resume
 
-1. Confirm the driver is up and the wrapper environment is exported (section 1.1). After a
-   quota wake the driver reloads its persisted campaign config, so the wrapper commands
-   survive a clean environment.
+1. Start a replacement managing Claude session in the same campaign clone and export the
+   queue variables from section 1.1. Do not delete or recreate the queue. The pending job
+   descriptor is the exact work the dead session left behind, and its nonce prevents a late
+   answer from the old session being accepted.
 2. `list` -- pending jobs are exactly where they were.
 3. `expired` -- clear any lease left behind by the stopped session; re-claim with `--force`.
 4. Re-run the doctor's two receipts if the machine or the tool configuration changed. They
    are cheap and they are the only evidence that the author path still works.
-5. Resume the loop in section 2.
+5. Resume the loop in section 2. If the driver has already exited 6, kickstart the installed
+   agent with
+   `launchctl kickstart "gui/$(id -u)/org.torchlens.menagerie-crawler.$CAMPAIGN"`.
+
+The 45-minute incident is operational-only: it appends campaign health and supervisor
+state, but no model attempt or terminal failure. Never requeue the affected model merely
+because its managing session died.
 
 ---
 

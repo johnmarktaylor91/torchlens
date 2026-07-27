@@ -31,7 +31,9 @@ from menagerie.crawler.env_lifecycle import (
 )
 from menagerie.crawler.identity import (
     canonical_json_bytes,
+    stable_hash,
 )
+from menagerie.crawler.operator_notify import read_receipt
 from menagerie.crawler.intake import (
     IntakeItem,
     legacy_requires_fidelity_audit,
@@ -79,13 +81,15 @@ class CommandNotifier:
         command: Optional[str],
         *,
         timeout_seconds: float = DEFAULT_NOTIFY_TIMEOUT_SECONDS,
+        receipt_root: Optional[Path] = None,
     ) -> None:
-        """Resolve an explicit command or the conventional JMT script."""
+        """Resolve a notifier and bind its nonce-receipt evidence root."""
 
         if timeout_seconds <= 0:
             raise ValueError("notifier timeout must be positive")
         self._argv = _resolve_notify_command(command)
         self._timeout_seconds = timeout_seconds
+        self._receipt_root = receipt_root
 
     @property
     def command(self) -> Optional[tuple[str, ...]]:
@@ -100,12 +104,19 @@ class CommandNotifier:
         return self._argv
 
     def notify(self, summary: str, *, idempotency_key: str) -> bool:
-        """Invoke the notifier once, logging and continuing on any failure."""
+        """Invoke the notifier and require its matching nonce receipt."""
 
         ascii_summary = _ascii_line(summary)
         if self._argv is None:
             LOGGER.warning("crawler notification (log-only): %s", ascii_summary)
             return False
+        receipt_root = self._receipt_root or Path.cwd() / ".crawl-local" / "notification-receipts"
+        receipt_root.mkdir(parents=True, exist_ok=True)
+        receipt_name = stable_hash(
+            {"notification_idempotency_key": idempotency_key}
+        ).removeprefix("sha256:")
+        receipt_path = receipt_root / f"{receipt_name}.json"
+        receipt_path.unlink(missing_ok=True)
         try:
             completed = subprocess.run(
                 [*self._argv, ascii_summary],
@@ -113,7 +124,11 @@ class CommandNotifier:
                 capture_output=True,
                 text=True,
                 timeout=self._timeout_seconds,
-                env={**os.environ, "MENAGERIE_NOTIFICATION_IDEMPOTENCY_KEY": idempotency_key},
+                env={
+                    **os.environ,
+                    "MENAGERIE_NOTIFICATION_IDEMPOTENCY_KEY": idempotency_key,
+                    "MENAGERIE_NOTIFICATION_RECEIPT_PATH": str(receipt_path),
+                },
             )
         except subprocess.TimeoutExpired:
             LOGGER.warning(
@@ -132,6 +147,10 @@ class CommandNotifier:
                 completed.stderr.strip(),
                 ascii_summary,
             )
+            return False
+        receipt = read_receipt(receipt_path)
+        if receipt is None or receipt.get("nonce") != idempotency_key:
+            LOGGER.warning("crawler notifier returned success without a matching nonce receipt")
             return False
         return True
 
