@@ -61,14 +61,20 @@ from ...utils._torch_symbols import torch_attr
 from ...utils._callable_safety import private_c_forward_op_module_names
 from ... import _state
 from ..._errors import TorchLensCaptureGapWarning
-from ._tl import get_buffer_address, get_tensor_label, get_tensor_meta
+from ._tl import (
+    get_buffer_address,
+    get_tensor_label,
+    get_tensor_meta,
+    is_tensor_data_alias,
+    session_meta_is_anchored,
+)
 from .buffer_writes import session_validated_buffer_address
 from .escape_detection import ExpectedOriginalToken, _active_token
 
 CompletenessWitnessMode = Literal["off", "shadow"]
 """Supported dispatcher-witness rollout modes."""
 
-MAX_AUDITED_COMPLETENESS_BOUNDARIES = 8
+MAX_AUDITED_COMPLETENESS_BOUNDARIES = 9
 """Hard budget preventing expected-opaque wrapper scopes from growing unchecked."""
 
 
@@ -121,6 +127,14 @@ AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
         wrapper_name="torch_func:__int__:logged",
         operator="aten._local_scalar_dense.default",
         reason="int(tensor) extracts a Python int, which is intentionally not an op output",
+    ),
+    AuditedCompletenessBoundary(
+        wrapper_name="autograd:grad",
+        operator=None,
+        reason=(
+            "torch.autograd.grad executes a separately captured backward pass; its engine "
+            "dispatches are not forward operations"
+        ),
     ),
 )
 """Reviewable exact expected-opaque rows; additions require a regression test and reason."""
@@ -2112,6 +2126,46 @@ def record_pruned_alias_mutation_source(trace: Any, label: str) -> None:
     labels.add(label)
 
 
+_DATA_ALIAS_MUTATION_TRACES: "weakref.WeakSet[Any]" = weakref.WeakSet()
+"""Traces containing a successful write through a ``Tensor.data`` alias lineage.
+
+The ``Tensor.data`` getter is captured as a canonical detach op so read-only consumers retain
+replay provenance. That graph node must not launder the descriptor's unsafe write semantics:
+an in-place receiver reached directly from ``.data`` or through a storage-sharing view remains
+an untracked escape surface and ceilings runnable faithfulness to ``unverifiable``.
+"""
+
+
+def data_alias_mutation_detected(trace: Any) -> bool:
+    """Return whether capture observed a write through a ``Tensor.data`` alias.
+
+    Parameters
+    ----------
+    trace : Any
+        Capture trace to inspect.
+
+    Returns
+    -------
+    bool
+        ``True`` when a successful receiver mutation targeted a data-alias
+        tensor or storage-sharing view derived from one.
+    """
+
+    return trace in _DATA_ALIAS_MUTATION_TRACES
+
+
+def record_data_alias_mutation(trace: Any) -> None:
+    """Record a successful write through a ``Tensor.data`` alias.
+
+    Parameters
+    ----------
+    trace : Any
+        Active capture trace whose runnable proof must be ceilinged.
+    """
+
+    _DATA_ALIAS_MUTATION_TRACES.add(trace)
+
+
 _HOST_ESCAPE_MUTABLE_WRITEBACK: "weakref.WeakSet[Any]" = weakref.WeakSet()
 """Traces where a host WRITE-BACK through a mutable zero-copy alias was detected.
 
@@ -2273,9 +2327,15 @@ def _nonowner_touch_is_captured(state: "_WitnessState", tensor: Any) -> bool:
     if not isinstance(tensor, torch.Tensor):
         return False
     trace = state.trace
-    if isinstance(get_tensor_label(tensor), str):
-        return True
     meta = get_tensor_meta(tensor)
+    # This path must remain observer-free: get_tensor_label() also validates the
+    # live storage, which calls the patched untyped_storage() host-escape surface.
+    # On a non-owner thread that wrapper re-enters this predicate indefinitely.
+    # The current-session object anchor is sufficient for captured membership:
+    # even a storage-rebound captured object must still trip the cross-thread
+    # ceiling, while a stale label from an earlier capture remains rejected.
+    if meta is not None and isinstance(meta.label_raw, str) and session_meta_is_anchored(meta):
+        return True
     if meta is not None and getattr(meta, "address", None) is not None:
         return True
     if get_buffer_address(tensor) is not None:
@@ -3248,9 +3308,24 @@ def _register_dispatch_result_origins(
 
 
 def _resolved_dispatch_origins(
-    trace: Any, source: torch.Tensor
+    trace: Any,
+    source: torch.Tensor,
+    *,
+    prefer_ledger: bool = False,
 ) -> tuple[set[str], set[str]] | None:
     """Resolve an unlabelled escape source to positive (labels, state names), or ``None``.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace owning the dispatch-origin ledger.
+    source:
+        Tensor whose value origins must be resolved.
+    prefer_ledger:
+        Whether to consult the dispatch ledger before the tensor's own label.
+        ``Tensor.data`` aliases use this route because their canonical detach
+        label represents the getter, while the ledger names the semantic base
+        producer required by the host-escape witness.
 
     Returns ``None`` -- the caller MUST fail closed -- when the source's propagated
     origin set contains ``unknown`` (an operand the census could not attribute),
@@ -3263,8 +3338,15 @@ def _resolved_dispatch_origins(
     it needs no witness.
     """
 
-    with _state.pause_logging(), internal_scalar_read():
-        origins = _operand_origins(trace, source)
+    origins: frozenset[str] | None = None
+    if prefer_ledger:
+        registry = _DISPATCH_TENSOR_ORIGINS.get(trace)
+        entry = registry.get(source) if registry is not None else None
+        if entry is not None:
+            origins = entry[0]
+    if origins is None:
+        with _state.pause_logging(), internal_scalar_read():
+            origins = _operand_origins(trace, source)
     if _ORIGIN_UNKNOWN in origins or _ORIGIN_RNG in origins or _ORIGIN_UNINIT in origins:
         return None
     labels = {
@@ -3318,7 +3400,13 @@ def _record_escape_source_tensor(
     if _escape_source_is_torchlens_internal():
         return
     is_bool = source.dtype is torch.bool
-    label = get_tensor_label(source)
+    # ``Tensor.data`` is captured as a canonical detach node so ordinary tensor
+    # replay retains a graph edge. For a host escape, however, the alias is not
+    # the semantic value source: resolve its dispatch origins exactly like the
+    # historical unlabelled ``.data`` object so the witness attributes the base
+    # producer rather than the synthetic getter node.
+    data_alias = is_tensor_data_alias(source)
+    label = None if data_alias else get_tensor_label(source)
     if not isinstance(label, str):
         # An UNLABELLED escape source (a ``.data`` alias, a raw-dispatch product):
         # r37 INV-1 single-exit attribution ladder. Every rung is a POSITIVE
@@ -3348,7 +3436,11 @@ def _record_escape_source_tensor(
         # and state names (param/buffer sources -> PASS A digest). Multi-element and
         # scalar sources resolve identically -- no arity assumption anywhere.
         # Owner-thread only (resolution flips the global logging toggle).
-        resolved = _resolved_dispatch_origins(trace, source) if resolve_origins else None
+        resolved = (
+            _resolved_dispatch_origins(trace, source, prefer_ledger=data_alias)
+            if resolve_origins
+            else None
+        )
         if resolved is not None:
             origin_labels, origin_states = resolved
             if origin_labels:
@@ -3808,6 +3900,35 @@ def _dispatch_result_holds_tensor(result: Any) -> bool:
     return False
 
 
+def _event_is_capture_accounted(event: _DispatchEvent) -> bool:
+    """Return whether the event is represented by its owner's captured artifact.
+
+    Ordinary wrapped operations account for their complete aten decomposition. A token
+    credited by synthesized boundary Ops is narrower: it accounts for the non-mutating
+    opaque output construction represented by those exact boundary tensors and raw labels,
+    but never for a mutating dispatch. Mutations always remain visible because a
+    functionless boundary cannot attest their side effects on existing graph values.
+
+    Parameters
+    ----------
+    event:
+        Dispatcher event being finalized.
+
+    Returns
+    -------
+    bool
+        Whether this exact event has a captured representation.
+    """
+
+    owner = event.owner
+    if owner is None or owner.capture_accounted is not True:
+        return False
+    boundary_outputs = owner.capture_accounted_outputs
+    if not boundary_outputs:
+        return True
+    return not event.mutates
+
+
 _RUNNABLE_LEDGER_FACTS: "weakref.WeakKeyDictionary[Any, list[dict[str, Any]]]" = (
     weakref.WeakKeyDictionary()
 )
@@ -3915,7 +4036,7 @@ def _finalize_runnable_ledger(state: _WitnessState) -> None:
     facts: list[dict[str, Any]] = []
     for event in state.events:
         owner = event.owner
-        owner_accounted = owner is not None and owner.capture_accounted is True
+        owner_accounted = _event_is_capture_accounted(event)
         audited_opaque = owner is not None and _is_expected_opaque_dispatch(event.operator, owner)
         # ``_operator_name`` yields overload-qualified names (``aten.equal.default``);
         # the allowlists hold overload-stripped base names.
@@ -5521,7 +5642,7 @@ def _finalize_census(state: _WitnessState) -> None:
         if owner is not None and _is_expected_opaque_dispatch(event.operator, owner):
             expected_opaque_count += 1
             continue
-        if owner is not None and owner.capture_accounted is True:
+        if _event_is_capture_accounted(event):
             accounted_count += 1
             continue
         reason = "unowned_dispatch" if owner is None else "owner_not_captured"
@@ -5573,6 +5694,9 @@ def _finalize_census(state: _WitnessState) -> None:
                 "owner_func_call_id": owner.func_call_id,
                 "owner_barcode": _barcode_text(owner.call_barcode),
                 "capture_accounted": owner.capture_accounted,
+                "capture_accounted_boundary_labels": tuple(
+                    raw_label for _, raw_label in owner.capture_accounted_outputs.values()
+                ),
                 "scope": owner_scope,
                 "aten_ops": tuple(operators),
                 "in_replacement_hook": owner_in_replacement_hook.get(id(owner), False),

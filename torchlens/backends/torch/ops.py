@@ -28,6 +28,7 @@ from ._tl import (
     get_param_meta,
     get_tensor_label,
     get_tensor_meta,
+    is_tensor_data_alias,
     session_label_storage_intact,
     session_meta_is_anchored,
     set_tensor_label,
@@ -1874,6 +1875,7 @@ def _unattributed_tensor_arg_positions(
     trace: "Trace",
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
+    func_name: str,
 ) -> tuple[str, ...]:
     """Find tensor arguments that will not become graph parents or known sources.
 
@@ -1885,6 +1887,8 @@ def _unattributed_tensor_arg_positions(
         Positional function arguments.
     kwargs:
         Keyword function arguments.
+    func_name:
+        Wrapped callable name used to identify receiver mutations.
 
     Returns
     -------
@@ -1893,12 +1897,50 @@ def _unattributed_tensor_arg_positions(
     """
 
     positions: list[str] = []
+    mutates_receiver = (
+        _is_inplace_augmented_assignment_dunder(func_name)
+        or func_name in _SETTER_MUTATION_FUNC_NAMES
+        or (func_name.endswith("_") and not func_name.startswith("__"))
+    )
+    capture_events = getattr(trace, "capture_events", None)
+    live_events = capture_events.live_index.by_raw_label if capture_events is not None else {}
+
+    def has_input_rooted_tensor(value: Any) -> bool:
+        """Return whether ``value`` contains a tensor derived from a model input."""
+
+        if isinstance(value, torch.Tensor):
+            label = get_tensor_label(value)
+            event = live_events.get(label) if isinstance(label, str) else None
+            return bool(event is not None and event.input_ancestors)
+        if isinstance(value, (list, tuple)):
+            return any(has_input_rooted_tensor(item) for item in value)
+        if isinstance(value, dict):
+            return any(has_input_rooted_tensor(item) for item in value.values())
+        return False
+
+    unsafe_receiver_with_graph_rhs = bool(
+        mutates_receiver
+        and args
+        and isinstance(args[0], torch.Tensor)
+        and is_tensor_data_alias(args[0])
+        and (
+            any(has_input_rooted_tensor(value) for value in args[1:])
+            or any(has_input_rooted_tensor(value) for value in kwargs.values())
+        )
+    )
 
     def visit(value: Any, path: str) -> None:
         """Append unattributed tensor positions under ``path``."""
 
         if isinstance(value, torch.Tensor):
-            if not _tensor_has_known_provenance(trace, value):
+            # A ``.data`` getter now has a canonical detach graph node, but a
+            # subsequent receiver mutation still writes through an alias whose
+            # effect is not connected to the returned base tensor in the sparse
+            # graph. Preserve the provenance warning for that unsafe lvalue
+            # position when an input-derived RHS would otherwise appear fully
+            # represented, while the independent data-alias witness ceilings replay.
+            unsafe_data_alias_receiver = path == "arg0" and unsafe_receiver_with_graph_rhs
+            if unsafe_data_alias_receiver or not _tensor_has_known_provenance(trace, value):
                 positions.append(path)
             return
         if isinstance(value, (list, tuple)):
@@ -3261,7 +3303,12 @@ def _build_shared_fields_dict(
     fields_dict["transform_fn_name"] = getattr(func, "__tl_transform_fn_name__", None)
     fields_dict["transform_fn_qualname"] = getattr(func, "__tl_transform_fn_qualname__", None)
     fields_dict["transform_fn_source"] = getattr(func, "__tl_transform_fn_source__", None)
-    fields_dict["unattributed_tensor_args"] = _unattributed_tensor_arg_positions(self, args, kwargs)
+    fields_dict["unattributed_tensor_args"] = _unattributed_tensor_arg_positions(
+        self,
+        args,
+        kwargs,
+        func_name,
+    )
 
     # Function config — lightweight hyperparameter extraction, always on.
     param_shapes = cast(list[tuple[int, ...]] | None, fields_dict.get("param_shapes"))

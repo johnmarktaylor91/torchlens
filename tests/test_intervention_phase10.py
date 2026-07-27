@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import sys
 from pathlib import Path
@@ -35,6 +36,8 @@ from torchlens.intervention.types import (
     InterventionSpec,
 )
 from torchlens.validation import check_spec_compat
+
+_INTERVENTION_RESOLVER = importlib.import_module("torchlens.intervention.resolver")
 
 
 class _ReluModel(nn.Module):
@@ -663,7 +666,7 @@ def test_custom_function_key_is_refused_without_import(monkeypatch: pytest.Monke
 
         raise AssertionError(f"unexpected import of {module_name}")
 
-    monkeypatch.setattr("torchlens.intervention.resolver.importlib.import_module", fail_import)
+    monkeypatch.setattr(_INTERVENTION_RESOLVER.importlib, "import_module", fail_import)
 
     with pytest.raises(UntrustedCallableError, match="arbitrary code"):
         resolve_function_registry_key(key)
@@ -709,7 +712,7 @@ def test_loaded_spec_tolerates_custom_key_without_import(
         raise AssertionError(f"unexpected import of {module_name}")
 
     with monkeypatch.context() as import_patch:
-        import_patch.setattr("torchlens.intervention.resolver.importlib.import_module", fail_import)
+        import_patch.setattr(_INTERVENTION_RESOLVER.importlib, "import_module", fail_import)
         assert load_intervention_spec(path)
 
     assert load_intervention_spec(path, allowed_custom_callable_modules={"operator"})
@@ -996,7 +999,7 @@ def test_r2_load_tolerates_torchlens_prefixed_foreign_key_no_foreign_import(
         )
         return real_import_module(module_name)
 
-    monkeypatch.setattr("torchlens.intervention.resolver.importlib.import_module", guarded_import)
+    monkeypatch.setattr(_INTERVENTION_RESOLVER.importlib, "import_module", guarded_import)
     assert load_intervention_spec(path)
     assert calls == []
 

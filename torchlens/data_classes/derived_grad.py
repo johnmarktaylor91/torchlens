@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, ClassVar
 
+from .._io import FieldPolicy
 from ..ir.refs import DtypeRef
 from ._accessor_base import Accessor
 
@@ -34,6 +35,17 @@ class DerivedGradRecord:
         Backend-owned validation and fingerprint metadata.
     """
 
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "path": FieldPolicy.KEEP,
+        "source": FieldPolicy.KEEP,
+        "argnum": FieldPolicy.KEEP,
+        "input_argnum": FieldPolicy.KEEP,
+        "aval": FieldPolicy.KEEP,
+        "dtype_ref": FieldPolicy.KEEP,
+        "grad": FieldPolicy.BLOB,
+        "provenance": FieldPolicy.KEEP,
+    }
+
     path: str
     source: str
     argnum: int
@@ -46,6 +58,11 @@ class DerivedGradRecord:
 
 class DerivedGradAccessor(Accessor[DerivedGradRecord]):
     """Dict-like accessor for leaf-level derived gradient records."""
+
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "_dict": FieldPolicy.KEEP,
+        "_list": FieldPolicy.KEEP,
+    }
 
     def __init__(self, records: Mapping[str, DerivedGradRecord] | None = None) -> None:
         """Initialize a derived-gradient accessor.
@@ -79,6 +96,15 @@ class IntermediateDerivedGradRecord:
         Backend-owned mechanism, loss, save predicate, and status metadata.
     """
 
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "op_label": FieldPolicy.KEEP,
+        "layer_label": FieldPolicy.KEEP,
+        "aval": FieldPolicy.KEEP,
+        "dtype_ref": FieldPolicy.KEEP,
+        "grad": FieldPolicy.BLOB,
+        "provenance": FieldPolicy.KEEP,
+    }
+
     op_label: str
     layer_label: str
     aval: str
@@ -89,6 +115,11 @@ class IntermediateDerivedGradRecord:
 
 class IntermediateDerivedGradAccessor(Accessor[IntermediateDerivedGradRecord]):
     """Dict-like accessor for op-level derived gradient records."""
+
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "_dict": FieldPolicy.KEEP,
+        "_list": FieldPolicy.KEEP,
+    }
 
     def __init__(self, records: Mapping[str, IntermediateDerivedGradRecord] | None = None) -> None:
         """Initialize an intermediate-derived-gradient accessor.

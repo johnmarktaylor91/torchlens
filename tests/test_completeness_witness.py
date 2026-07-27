@@ -101,6 +101,57 @@ class _DirectAtenSubmoduleGapModel(nn.Module):
         return torch.sigmoid(self.child(x))
 
 
+class _DirectAtenIntermediateChild(nn.Module):
+    """Use an unwrapped intermediate but return a separately traced output."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a traced sigmoid of an unwrapped relu intermediate."""
+
+        escaped = torch.ops.aten.relu.default(x)
+        return torch.sigmoid(escaped)
+
+
+class _DirectAtenIntermediateSubmoduleGapModel(nn.Module):
+    """Expose a child-level raw dispatch not owned by an output boundary."""
+
+    def __init__(self) -> None:
+        """Create the child module."""
+
+        super().__init__()
+        self.child = _DirectAtenIntermediateChild()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the child whose direct aten intermediate remains unaccounted."""
+
+        return self.child(x).add(1)
+
+
+class _MutatingDirectAtenOutputChild(nn.Module):
+    """Mutate a traced value before returning a separate untraceable raw output."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return raw relu output after an observable unwrapped in-place mutation."""
+
+        y = x + 1
+        torch.ops.aten.mul_.Tensor(y, 2)
+        return torch.ops.aten.relu.default(y)
+
+
+class _MutatingDirectAtenOutputSubmoduleModel(nn.Module):
+    """Consume the ATTACK4 child output in a represented parent operation."""
+
+    def __init__(self) -> None:
+        """Create the mutating child module."""
+
+        super().__init__()
+        self.child = _MutatingDirectAtenOutputChild()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the child and consume its boundary output."""
+
+        return torch.sigmoid(self.child(x))
+
+
 class _LinearCompositeModel(nn.Module):
     """Exercise a Python-level linear call with a multi-aten decomposition."""
 
@@ -115,6 +166,65 @@ class _LinearCompositeModel(nn.Module):
         """Apply the functional linear composite."""
 
         return F.linear(x, self.weight, self.bias)
+
+
+class _DynamicParameterInitializationModel(nn.Module):
+    """Create and initialize a temporary module during the captured forward."""
+
+    def __init__(self) -> None:
+        """Create stable prepared state for the represented output path."""
+
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(4, 4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Use stable inputs after constructing a dead temporary Linear module."""
+
+        nn.Linear(4, 4)
+        return x @ self.weight
+
+
+class _RegisteredParameterMutationModel(nn.Module):
+    """Mutate prepared model state during the captured forward."""
+
+    def __init__(self) -> None:
+        """Create the registered parameter that must remain a witnessed gap."""
+
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(4, 4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Mutate the registered parameter before consuming it."""
+
+        with torch.no_grad():
+            self.weight.uniform_()
+        return x @ self.weight
+
+
+class _MidForwardAutogradGradModel(nn.Module):
+    """Execute a separately captured autograd pass inside the forward."""
+
+    def __init__(self) -> None:
+        """Create the parameter differentiated by the inner pass."""
+
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(4, 4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Differentiate an inner loss and consume the resulting gradient."""
+
+        inner = (x @ self.weight).square().mean()
+        (gradient,) = torch.autograd.grad(inner, self.weight, create_graph=True)
+        return x @ (self.weight - 0.01 * gradient)
+
+
+class _DataPropertyModel(nn.Module):
+    """Read Tensor.data before a represented tensor operation."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a sigmoid of the captured detach-like property result."""
+
+        return torch.sigmoid(x.data)
 
 
 class _VmapBoundaryModel(nn.Module):
@@ -260,14 +370,12 @@ def test_direct_aten_call_trips_non_vacuous_witness() -> None:
 
 @pytest.mark.smoke
 def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> None:
-    """A genuine raw replacement hook's untraceable dispatch is tagged per-event.
+    """A raw replacement hook's dispatches belong to its explicit boundary Op.
 
     A raw ``register_forward_hook`` output replacement runs inside the torchlens
-    ``wrapped_hook`` frame. Its raw-aten call (unowned) and python-wrapped call
-    (an accounted owner orphaned out of the trace) must both carry
-    ``in_replacement_hook=True`` so the validation census can excuse ONLY genuine
-    replacement construction. This pins the frame-detection signal: a rename of
-    the ``wrapped_hook`` bracket would surface here first.
+    ``wrapped_hook`` frame. Its raw-aten construction must be owned by the hook
+    token and accounted by the synthesized ``intervention_replacement`` boundary,
+    while nested Python-wrapped construction remains independently accounted.
     """
 
     class _Mlp(nn.Module):
@@ -285,38 +393,107 @@ def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> No
     wrap_torch(patch_policy="scoped", completeness_witness=True)
     model = _Mlp().eval()
     model.relu.register_forward_hook(_replacement_hook)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         trace = tl.trace(model, torch.randn(3, 4))
 
-    # The raw-aten replacement call is unowned AND tagged as replacement construction.
-    unowned = [d for d in trace.completeness_diagnostics if d["reason"] == "unowned_dispatch"]
-    assert unowned, "expected the raw replacement aten call to be recorded as unowned"
-    assert all(d["in_replacement_hook"] is True for d in unowned)
-    # The python-wrapped construction owner (torch.tensor) is orphaned yet tagged.
-    hooked_owners = [
-        d for d in trace.completeness_decompositions if d.get("in_replacement_hook") is True
+    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert trace.capture_verified is True
+    assert trace.completeness_witness_verified is True
+    assert trace.completeness_witness_unaccounted_count == 0
+    assert trace.completeness_diagnostics == []
+    hook_owners = [
+        row
+        for row in trace.completeness_decompositions
+        if row["owner_wrapper"] == "module_forward_hook:user"
     ]
-    assert hooked_owners, "expected a wrapped replacement owner tagged in_replacement_hook"
+    assert len(hook_owners) == 1
+    assert hook_owners[0]["capture_accounted"] is True
+    assert hook_owners[0]["in_replacement_hook"] is True
+    assert "aten.mul.Tensor" in hook_owners[0]["aten_ops"]
+    assert any(
+        op.func_name == "intervention_replacement" and op.intervention_replaced for op in trace.ops
+    )
 
 
 @pytest.mark.smoke
-def test_direct_aten_call_in_submodule_still_trips_witness() -> None:
-    """Accounting fixes do not dull a direct-aten tripwire in a child module."""
+def test_direct_aten_submodule_output_is_owned_by_internal_source() -> None:
+    """A child module's untraceable output is owned by its internal-source boundary."""
+
+    wrap_torch(patch_policy="scoped", completeness_witness=True)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace = tl.trace(_DirectAtenSubmoduleGapModel(), torch.randn(4))
+
+    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert trace.capture_verified is True
+    assert trace.completeness_witness_verified is True
+    assert trace.completeness_witness_unaccounted_count == 0
+    assert trace.completeness_diagnostics == []
+    module_owners = [
+        row
+        for row in trace.completeness_decompositions
+        if row["owner_wrapper"] == "module_forward:exhaustive"
+        and "aten.relu.default" in row["aten_ops"]
+    ]
+    assert len(module_owners) == 1
+    assert module_owners[0]["capture_accounted"] is True
+    assert len(module_owners[0]["capture_accounted_boundary_labels"]) == 1
+    assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
+
+
+@pytest.mark.smoke
+def test_direct_aten_child_intermediate_still_trips_witness() -> None:
+    """A child raw dispatch not represented by its output boundary fails closed."""
 
     wrap_torch(patch_policy="scoped", completeness_witness=True)
     with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
-        trace = tl.trace(_DirectAtenSubmoduleGapModel(), torch.randn(4))
+        trace = tl.trace(_DirectAtenIntermediateSubmoduleGapModel(), torch.randn(4))
 
+    assert trace.capture_verified is False
     assert trace.completeness_witness_verified is False
     assert trace.completeness_witness_unaccounted_count == 1
     report = trace.completeness_diagnostics[0]
     assert report["operator"] == "aten.relu.default"
     assert report["reason"] == "owner_not_captured"
+    assert report["mutates"] is False
     assert report["file"] == __file__
     assert isinstance(report["line"], int)
     assert report["line"] > 0
     assert report["function"] == "forward"
+
+
+@pytest.mark.smoke
+def test_untraceable_child_output_does_not_mask_observable_mutation() -> None:
+    """ATTACK4 mutation remains unaccounted beside an owned output boundary."""
+
+    wrap_torch(patch_policy="scoped", completeness_witness=True)
+    with pytest.warns(TorchLensCaptureGapWarning, match="unaccounted aten dispatch"):
+        trace = tl.trace(_MutatingDirectAtenOutputSubmoduleModel(), torch.randn(4))
+
+    assert trace.capture_verified is False
+    assert trace.completeness_witness_verified is False
+    assert trace.completeness_witness_unaccounted_count == 1
+    mutating = [
+        report
+        for report in trace.completeness_diagnostics
+        if report["operator"] == "aten.mul_.Tensor"
+    ]
+    assert len(mutating) == 1
+    assert mutating[0]["reason"] == "owner_not_captured"
+    assert mutating[0]["mutates"] is True
+    assert mutating[0]["in_replacement_hook"] is False
+    child_owners = [
+        row
+        for row in trace.completeness_decompositions
+        if row["owner_wrapper"] == "module_forward:exhaustive"
+        and "aten.mul_.Tensor" in row["aten_ops"]
+        and "aten.relu.default" in row["aten_ops"]
+    ]
+    assert len(child_owners) == 1
+    assert child_owners[0]["capture_accounted"] is True
+    assert len(child_owners[0]["capture_accounted_boundary_labels"]) == 1
+    assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
 
 
 @pytest.mark.smoke
@@ -510,6 +687,7 @@ def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
         "torch_func:__bool__:logged",
         "torch_func:__float__:logged",
         "torch_func:__int__:logged",
+        "autograd:grad",
     }
     scalar_rows = [row for row in AUDITED_COMPLETENESS_BOUNDARIES if row.operator is not None]
     assert {row.wrapper_name for row in scalar_rows} == {
@@ -520,6 +698,66 @@ def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
     }
     assert {row.operator for row in scalar_rows} == {"aten._local_scalar_dense.default"}
     assert all(row.reason for row in AUDITED_COMPLETENESS_BOUNDARIES)
+
+
+@pytest.mark.smoke
+def test_dynamic_parameter_initializers_are_captured_without_hiding_state_mutations() -> None:
+    """Capture temporary Parameter initialization while registered-state writes fail closed."""
+
+    wrap_torch(patch_policy="scoped", completeness_witness=True)
+    temporary_trace = tl.trace(_DynamicParameterInitializationModel(), torch.randn(2, 4))
+
+    initializer_rows = [
+        row
+        for row in temporary_trace.completeness_decompositions
+        if row["owner_func_name"] == "uniform_"
+    ]
+    assert len(initializer_rows) == 2
+    assert all(row["capture_accounted"] is True for row in initializer_rows)
+    assert temporary_trace.completeness_diagnostics == []
+    assert temporary_trace.capture_verified is True
+
+    with pytest.warns(TorchLensCaptureGapWarning, match="aten.uniform_"):
+        state_trace = tl.trace(_RegisteredParameterMutationModel(), torch.randn(2, 4))
+
+    assert state_trace.capture_verified is False
+    assert [
+        (row["operator"], row["reason"], row["mutates"])
+        for row in state_trace.completeness_diagnostics
+    ] == [("aten.uniform_.default", "owner_not_captured", True)]
+
+
+@pytest.mark.smoke
+def test_mid_forward_autograd_grad_is_an_exact_backward_boundary() -> None:
+    """Exclude only engine dispatches represented by the captured backward pass."""
+
+    wrap_torch(patch_policy="scoped", completeness_witness=True)
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        trace = tl.trace(_MidForwardAutogradGradModel(), torch.randn(2, 4))
+
+    boundary_rows = [
+        row for row in trace.completeness_decompositions if row["owner_wrapper"] == "autograd:grad"
+    ]
+    assert len(boundary_rows) == 1
+    assert boundary_rows[0]["scope"] == "expected_opaque"
+    assert boundary_rows[0]["aten_ops"]
+    assert trace.num_backward_passes == 1
+    assert trace.completeness_diagnostics == []
+    assert trace.capture_verified is True
+
+
+@pytest.mark.smoke
+def test_tensor_data_getter_dispatch_is_captured() -> None:
+    """Represent the C-level data getter's detach dispatch as an ordinary op."""
+
+    wrap_torch(patch_policy="scoped", completeness_witness=True)
+    trace = tl.trace(_DataPropertyModel(), torch.randn(4))
+
+    detach_ops = [op for op in trace.ops if op.func_name == "detach"]
+    assert len(detach_ops) == 1
+    assert detach_ops[0].parents == ["input_1"]
+    assert trace.completeness_diagnostics == []
+    assert trace.capture_verified is True
 
 
 def test_is_mutating_operator_reads_schema_not_name() -> None:

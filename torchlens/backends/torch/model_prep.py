@@ -65,7 +65,10 @@ from .tensor_tracking import _append_module_suffix_to_equivalence_class
 from .sources import log_source_tensor
 from ...constants import LAYER_PASS_LOG_FIELD_ORDER
 from . import module_stack as _mstack
-from .escape_detection import expected_original_call
+from .escape_detection import (
+    expected_original_call,
+    mark_expected_original_accounted,
+)
 
 # Cache class-level module metadata (inspect.getsourcelines, inspect.signature, etc.)
 # shared across instances of the same class type. Cleared at the start of each
@@ -1309,7 +1312,7 @@ def _ensure_module_output_tensor_logged(
     module: nn.Module,
     parent_labels: list[str],
     kind: str = "intervention_replacement",
-) -> None:
+) -> str:
     """Log a fresh entry for an unlabeled tensor surfaced mid-forward.
 
     This handles two distinct, legitimately untraceable cases and must keep
@@ -1344,9 +1347,9 @@ def _ensure_module_output_tensor_logged(
 
     Returns
     -------
-    None
-        The tensor is tagged and an Op is inserted into the raw graph so
-        downstream module-exit and op logging can continue.
+    str
+        Raw label of the inserted boundary Op. The tensor is tagged so downstream
+        module-exit and op logging can continue.
     """
 
     from .ops import _make_layer_log_entry, _pop_tensor_live_fire_results
@@ -1631,6 +1634,7 @@ def _ensure_module_output_tensor_logged(
     from .ops import _add_tensor_backward_hook
 
     _add_tensor_backward_hook(trace, tensor, new_entry._label_raw)
+    return new_entry._label_raw
 
 
 def _make_user_forward_hook_wrapper(
@@ -1656,11 +1660,21 @@ def _make_user_forward_hook_wrapper(
         """Run a raw forward hook and repair TorchLens metadata on replacements."""
 
         original_output = hook_args[-1] if hook_args else None
-        result = hook_fn(*hook_args, **hook_kwargs)
+        expected_token = None
+        if (
+            _state._escape_detector_mode == "shadow"
+            or _state._completeness_witness_mode == "shadow"
+        ):
+            with expected_original_call(hook_fn, "module_forward_hook:user") as expected_token:
+                result = hook_fn(*hook_args, **hook_kwargs)
+        else:
+            result = hook_fn(*hook_args, **hook_kwargs)
         if result is None or result is original_output:
+            mark_expected_original_accounted(expected_token, captured=False)
             return result
         trace = _state._active_trace
         if trace is None or not _state._logging_enabled:
+            mark_expected_original_accounted(expected_token, captured=False)
             return result
         parent_labels = [
             label
@@ -1670,6 +1684,7 @@ def _make_user_forward_hook_wrapper(
             )
             is not None
         ]
+        replacement_boundaries: list[tuple[torch.Tensor, str]] = []
         for replacement in get_vars_of_type_from_obj(result, torch.Tensor, search_depth=4):
             replacement_label = get_live_tensor_label(
                 replacement, trace.capture_events.live_index.by_raw_label
@@ -1677,7 +1692,15 @@ def _make_user_forward_hook_wrapper(
             if replacement_label is not None:
                 replace_op_event(trace, replacement_label, intervention_replaced=True)
             else:
-                _ensure_module_output_tensor_logged(trace, replacement, module, parent_labels)
+                boundary_label = _ensure_module_output_tensor_logged(
+                    trace, replacement, module, parent_labels
+                )
+                replacement_boundaries.append((replacement, boundary_label))
+        mark_expected_original_accounted(
+            expected_token,
+            captured=bool(replacement_boundaries),
+            boundary_outputs=tuple(replacement_boundaries),
+        )
         return result
 
     mark_tensor_replacement_wrapped(wrapped_hook)
@@ -1690,13 +1713,19 @@ def _record_module_exit_metadata(
     out: Any,
     input_tensor_labels: set[str],
     input_tensor_labels_at_entry: list[str],
-) -> None:
+) -> tuple[tuple[torch.Tensor, str], ...]:
     """Record post-forward module metadata for exhaustive mode.
 
     Called immediately after ``orig_forward()`` returns in the
     ``module_forward_decorator``. Pops the module call-label stack, creates
     boundary identity ops for pass-through outputs, recovers replacement outputs,
     and annotates output tensors with module-exit metadata.
+
+    Returns
+    -------
+    tuple[tuple[torch.Tensor, str], ...]
+        Exact output tensors and raw labels of boundary Ops inserted for otherwise
+        untraceable outputs.
     """
     address = _module_address(module)
     mod_id = id(module)
@@ -1733,6 +1762,7 @@ def _record_module_exit_metadata(
     output_paths: list[tuple[object, ...]] = []
     per_output_atomic: list[tuple[str, tuple[ModuleFrame, ...], bool, tuple[str, int] | None]] = []
     output_names: list[str | None] = []
+    untraceable_output_boundaries: list[tuple[torch.Tensor, str]] = []
     for output_index, (t, container_path, _container_spec) in enumerate(output_entries):
         # nn.Identity modules and pass-through tensors (output is same object
         # as input) need _decorated_identity() to create a distinct log entry
@@ -1766,13 +1796,14 @@ def _record_module_exit_metadata(
             intervention_parent_labels = list(
                 getattr(t, "_tl_module_intervention_parent_labels", ())
             )
-            _ensure_module_output_tensor_logged(
+            boundary_label = _ensure_module_output_tensor_logged(
                 trace,
                 t,
                 module,
                 parent_labels=intervention_parent_labels,
                 kind="intervention_replacement" if fire_results else "internal_source",
             )
+            untraceable_output_boundaries.append((t, boundary_label))
             tensor_label = get_tensor_label(t)
         if tensor_label is None:
             continue
@@ -1823,6 +1854,7 @@ def _record_module_exit_metadata(
             output_names=tuple(output_names),
         )
     )
+    return tuple(untraceable_output_boundaries)
 
 
 def module_forward_decorator(
@@ -2017,12 +2049,15 @@ def module_forward_decorator(
             input_tensor_labels, input_tensor_labels_at_entry = _record_module_entry_metadata(
                 trace, module, args, kwargs
             )
+            expected_token = None
             try:
                 if (
                     _state._escape_detector_mode == "shadow"
                     or _state._completeness_witness_mode == "shadow"
                 ):
-                    with expected_original_call(orig_forward, "module_forward:exhaustive"):
+                    with expected_original_call(
+                        orig_forward, "module_forward:exhaustive"
+                    ) as expected_token:
                         out = orig_forward(*args, **kwargs)
                 else:
                     out = orig_forward(*args, **kwargs)
@@ -2044,8 +2079,13 @@ def module_forward_decorator(
                 if call_labels:
                     call_labels.pop()
                 raise
-            _record_module_exit_metadata(
+            untraceable_output_boundaries = _record_module_exit_metadata(
                 trace, module, out, input_tensor_labels, input_tensor_labels_at_entry
+            )
+            mark_expected_original_accounted(
+                expected_token,
+                captured=bool(untraceable_output_boundaries),
+                boundary_outputs=untraceable_output_boundaries,
             )
             options = getattr(trace, "_predicate_save_options", None)
             if options is not None and options.halt is not None:

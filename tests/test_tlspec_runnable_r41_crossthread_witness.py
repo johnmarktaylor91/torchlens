@@ -843,6 +843,7 @@ def _escape_witnessed(trace: Any) -> bool:
     )
 
 
+@pytest.mark.filterwarnings("ignore:TypedStorage is deprecated.*:UserWarning")
 @pytest.mark.parametrize("member", _ESCAPE_MEMBERS)
 def test_in_window_thread_escape_witnessed(member: str) -> None:
     """Every declared escape vocabulary member on a CAPTURED tensor ceilings from a non-owner thread.

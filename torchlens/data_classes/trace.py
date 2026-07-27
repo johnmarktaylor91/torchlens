@@ -1027,6 +1027,9 @@ class Trace(
     _containers: dict[int, Any]
     _annotation_blobs: dict[str, Any] | None
     _last_sibling_ordering_decision: Any
+    _receptive_field_solution: Any
+    _rf_source_solutions: Any
+    _rf_target_solutions: Any
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "trace_label": FieldPolicy.KEEP,
@@ -1044,6 +1047,9 @@ class Trace(
         "_tf_init_op_labels": FieldPolicy.DROP,
         "_tf_op_captures": FieldPolicy.DROP,
         "_tf_validation_result": FieldPolicy.DROP,
+        "_receptive_field_solution": FieldPolicy.DROP,
+        "_rf_source_solutions": FieldPolicy.DROP,
+        "_rf_target_solutions": FieldPolicy.DROP,
         "module_identity_mode": FieldPolicy.KEEP,
         "param_source": FieldPolicy.KEEP,
         "derived_grads": FieldPolicy.KEEP,

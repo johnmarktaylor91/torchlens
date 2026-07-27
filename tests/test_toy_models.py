@@ -1348,16 +1348,14 @@ def test_sequential_param_free_loops(default_input1):
 
 def test_propertymodel(input_complex):
     model = example_models.PropertyModel()
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
-        assert validate_forward_pass(model, input_complex)
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
-        show_model_graph(
-            model,
-            input_complex,
-            vis_save_only=True,
-            vis_mode="unrolled",
-            vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "propertymodel"),
-        )
+    assert validate_forward_pass(model, input_complex)
+    show_model_graph(
+        model,
+        input_complex,
+        vis_save_only=True,
+        vis_mode="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "propertymodel"),
+    )
 
 
 def test_ubermodel1(input_2d):
@@ -2633,6 +2631,7 @@ def test_selective_ssm():
     )
 
 
+@pytest.mark.slow
 def test_stacked_ssm():
     model = example_models.StackedSSM()
     x = torch.randint(0, 100, (2, 10))

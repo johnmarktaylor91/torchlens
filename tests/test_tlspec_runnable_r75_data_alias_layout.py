@@ -1,13 +1,12 @@
-"""Unlabeled-receiver / ``.data``-alias intermediate-layout fail-open closure (r75 F1).
+"""``.data``-alias intermediate-layout fail-open closure (r75 F1).
 
 Round-74 (hon1 + free-roam, cross-lab) confirmed the r73 intermediate-layout net FAIL-OPENED
-on unlabeled receivers: ``.data`` is the label-AND-``_base``-destroying alias spelling (not in
-``ORIG_TORCH_FUNCS``, ``_base is None``), so ``(x * 2).data.is_contiguous(channels_last)``
-recorded NOTHING and a channels_last twin replayed the captured arm as a false VERIFIED --
-the exact r72 class, one ``.data`` away from the r73 fixed spelling. Worse, ``.data`` LAUNDERS
-ANCESTRY transitively: any logged op consuming the alias starts an ancestry-orphaned chain
-(``(y.data * 1.0)``, ``(x * 2).data[0]``) whose empty ``input_ancestors`` was absorbed by the
-"empty == state-rooted, record nothing" branch.
+on unlabeled receivers: the C-level ``.data`` getter destroyed labels and ``_base``, so
+``(x * 2).data.is_contiguous(channels_last)`` recorded nothing and a channels-last twin
+replayed the captured arm as a false VERIFIED. The r75 origin/storage ladder below remains
+the defense-in-depth attribution path. TorchLens now additionally captures the getter's real
+``aten.detach`` dispatch as the canonical replayable ``Tensor.detach`` op, preserving direct
+graph ancestry for ordinary captures without admitting the unsafe descriptor itself.
 
 The r75 closure makes the layout-trio fall-through FAIL-CLOSED BY CONSTRUCTION -- no rung
 records nothing silently -- with graduated precision:
@@ -39,7 +38,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
@@ -318,19 +316,20 @@ def test_r75_unresolvable_receiver_fails_closed(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_r75_direct_alias_consumption_still_refuses_at_save(tmp_path: Path) -> None:
-    """Save-door posture pin: a logged op directly consuming ``.data`` refuses typed.
+def test_r75_direct_alias_consumption_is_replayable(tmp_path: Path) -> None:
+    """A logged op directly consuming ``.data`` retains complete replay provenance.
 
-    ``torch.cat([y, y.data])`` carries an unattributable tensor literal the sparse recipe
-    cannot rebuild; capture warns about the provenance-less arg and the producer preflight
-    refuses (pre-existing behavior, re-pinned here so the class stays closed at the save
-    door too, never a silent narrowing)."""
+    ``torch.cat([y, y.data])`` now receives both the original producer and the canonical
+    detach op as graph parents. The sparse recipe can therefore rebuild the call without
+    broadening callable trust to the unsafe ``data`` descriptor.
+    """
 
     x = _nchw()
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
-        trace = _capture(MixedCatDirectConsumption().eval(), x)
-    with pytest.raises(RunnablePreflightError):
-        trace.save(tmp_path / "mixed.tlspec", level="runnable", include_weights=True)
+    path = _save(MixedCatDirectConsumption().eval(), x, tmp_path / "mixed.tlspec")
+
+    result = tl.load(path).run(inputs=x.clone())
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not result.report.poisoned
 
 
 @pytest.mark.smoke

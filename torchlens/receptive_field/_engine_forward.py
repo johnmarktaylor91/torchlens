@@ -9,7 +9,6 @@ from fractions import Fraction
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from .._io import FieldPolicy
 from ._engine import (
     _concatenation_offsets,
     _graph_revision,
@@ -83,7 +82,6 @@ def solve_projective(trace: Trace, target_ops: Iterable[Op | str]) -> _Projectiv
 
     targets = _canonical_targets(trace, target_ops)
     target_labels = tuple(target.label for target in targets)
-    _ensure_trace_cache_policy(trace)
     epoch = _rf_rules_epoch()
     revision = _graph_revision(trace)
     cache = trace.__dict__.get("_rf_target_solutions")
@@ -143,12 +141,6 @@ def _canonical_targets(trace: Trace, target_ops: Iterable[Op | str]) -> tuple[Op
     if len(keys) != len(set(keys)):
         raise ValueError("Projective targets must have distinct result keys.")
     return targets
-
-
-def _ensure_trace_cache_policy(trace: Trace) -> None:
-    """Declare the target-set solution cache as runtime-only portable state."""
-
-    type(trace).PORTABLE_STATE_SPEC.setdefault("_rf_target_solutions", FieldPolicy.DROP)
 
 
 def _solve_projective_uncached(
@@ -628,6 +620,20 @@ def _transpose_full(
         notes,
         child_to_parent=child_to_parent,
     )
+    if passthrough.axes is None and all(axis.output_axis is None for axis in state.axes):
+        passthrough = replace(state, notes=notes, rule=rule_name)
+    elif passthrough.axes is None and selected == set(range(parent_rank)):
+        fallback_axes = tuple(
+            replace(
+                axis,
+                geometry=_Full(exact=exact),
+                output_axis=None,
+                kind="full",
+                provenance=child.label,
+            )
+            for axis in state.axes
+        )
+        return replace(state, axes=fallback_axes, notes=notes, rule=rule_name)
     assert passthrough.axes is not None
     axes: list[_AxisState] = []
     batch_axis = passthrough.batch_axis

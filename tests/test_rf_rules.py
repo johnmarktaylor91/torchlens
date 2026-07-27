@@ -130,6 +130,22 @@ def test_training_batch_norm_projective_maps_channel_vector_parents() -> None:
         assert descriptor.layout.axis_kinds == ("full", "pointwise", "full", "full")
 
 
+def test_training_instance_norm_projective_maps_running_stat_parents() -> None:
+    """Map InstanceNorm running-stat vectors onto the channel axis."""
+
+    trace = tl.trace(
+        nn.InstanceNorm1d(3, track_running_stats=True).train(),
+        torch.randn(2, 3, 4),
+    )
+    instance_norm = _op(trace, "instance_norm")
+    solution = solve_projective(trace, trace.output_ops)
+
+    for parent_reference in instance_norm.parents:
+        parent = trace.layer_dict_all_keys[parent_reference]
+        state = solution.states[(parent.label, trace.output_ops[0].io_role)]
+        assert state.axes is not None
+
+
 def test_group_and_current_stat_instance_norm_globalize_normalized_axes() -> None:
     """Keep InstanceNorm exact while bounding GroupNorm to its group envelope."""
 

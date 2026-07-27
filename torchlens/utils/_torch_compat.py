@@ -47,6 +47,7 @@ from typing import Any
 import warnings
 
 import torch
+from torch.utils._python_dispatch import TorchDispatchMode
 
 from ._torch_symbols import torch_attr
 
@@ -75,6 +76,7 @@ __all__ = [
     "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
     "HAS_JIT_BUILTIN_TABLE",
     "HAS_NAMED_TENSOR_API",
+    "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
     "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
@@ -112,6 +114,39 @@ TorchCapabilitySnapshot = dict[str, bool]
 
 _CAPABILITY_WARNING_ENV = "TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS"
 _warned_missing_capabilities: set[str] = set()
+
+
+class _ParameterAsSubclassProbeMode(TorchDispatchMode):
+    """Redispatch operations unchanged for the Parameter subclass capability probe."""
+
+    def __torch_dispatch__(
+        self,
+        func: Any,
+        types: tuple[type[Any], ...],
+        args: tuple[Any, ...] = (),
+        kwargs: dict[str, Any] | None = None,
+    ) -> Any:
+        """Redispatch one probe operation without changing its result.
+
+        Parameters
+        ----------
+        func:
+            Dispatcher operator invoked by the probe.
+        types:
+            Participating tensor subclass types.
+        args:
+            Positional operator arguments.
+        kwargs:
+            Keyword operator arguments.
+
+        Returns
+        -------
+        Any
+            Unmodified operator result.
+        """
+
+        del types
+        return func(*args, **(kwargs or {}))
 
 
 @dataclass(frozen=True, slots=True)
@@ -740,6 +775,31 @@ def _probe_safe_weights_only_load() -> bool:
     )
 
 
+def _probe_parameter_as_subclass_in_dispatch_mode() -> bool:
+    """Return whether Parameter-to-Tensor subclass conversion works in a dispatch mode.
+
+    Torch 2.1 rejects ``Parameter.as_subclass(torch.Tensor)`` while a
+    :class:`TorchDispatchMode` is active because the returned raw tensor is already
+    associated with a base ``Tensor`` Python object. Newer torch releases permit the
+    conversion. TorchLens' completeness witness is itself a dispatch mode, so this
+    behavioral probe mirrors the dynamic-parameter logging context without parsing a
+    version string.
+
+    Returns
+    -------
+    bool
+        ``True`` when the conversion succeeds inside a redispatching mode.
+    """
+
+    parameter = torch.nn.Parameter(torch.empty(0))
+    try:
+        with _ParameterAsSubclassProbeMode():
+            plain_tensor = parameter.as_subclass(torch.Tensor)
+    except (RuntimeError, TypeError):
+        return False
+    return type(plain_tensor) is torch.Tensor
+
+
 HAS_VARIABLE_FUNCTIONS: bool = _probe_variable_functions()
 HAS_TORCH_VF: bool = _probe_torch_vf()
 HAS_TORCH_FUNC: bool = _probe_torch_func()
@@ -759,6 +819,7 @@ HAS_GENERATOR_GRAPHSAFE_GET_STATE: bool = hasattr(torch.Generator, "graphsafe_ge
 HAS_GENERATOR_GRAPHSAFE_SET_STATE: bool = hasattr(torch.Generator, "graphsafe_set_state")
 HAS_SAFE_WEIGHTS_ONLY_LOAD: bool = _probe_safe_weights_only_load()
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
+HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE: bool = _probe_parameter_as_subclass_in_dispatch_mode()
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
 _DYNAMO_OPTIMIZED_MODULE_PROBED: bool = False
 
@@ -783,6 +844,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
     "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
+    "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
     "HAS_FLOAT32_MATMUL_PRECISION",
     "HAS_DETERMINISTIC_ALGORITHMS_QUERY",
     "HAS_CUDA_MATMUL_TF32",

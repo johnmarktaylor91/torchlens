@@ -41,6 +41,7 @@ from torchlens.runnable import (
     ReadinessStatus,
     RunnableErrorCode,
 )
+from torchlens.utils import rng as rng_utils
 
 _CAP = dict(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -82,6 +83,95 @@ def _roundtrip(
 
 _GLOBAL_GEN = np.random.default_rng(12345)
 _GLOBAL_RANDOMSTATE = np.random.RandomState(999)
+
+
+def _draw_fast_local_generator(
+    rng: np.random.Generator = np.random.default_rng(),
+) -> float:
+    """Draw through a pre-constructed Generator held only by a fast-local default."""
+
+    return float(rng.standard_normal())
+
+
+def _draw_fast_local_randomstate(
+    rng: np.random.RandomState = np.random.RandomState(),
+) -> float:
+    """Draw through a pre-constructed RandomState held only by a fast-local default."""
+
+    return float(rng.standard_normal())
+
+
+_NUMPY2_INDIRECT_RNG_REGISTRY: dict[str, Any] = {
+    "generator": np.random.default_rng(),
+    "randomstate": np.random.RandomState(),
+}
+
+
+class _PlainNumpyRngHolder:
+    """Plain non-module object holding pre-constructed NumPy RNG instances."""
+
+    def __init__(self) -> None:
+        """Construct both private NumPy RNG families before any capture begins."""
+
+        self.generator = np.random.default_rng()
+        self.randomstate = np.random.RandomState()
+
+
+_NUMPY2_INDIRECT_RNG_HOLDER = _PlainNumpyRngHolder()
+
+
+class _FastLocalNumpyRngBranch(nn.Module):
+    """Branch on a pre-constructed NumPy RNG reachable only as a helper fast local."""
+
+    def __init__(self, rng_kind: str) -> None:
+        """Store the requested RNG family without retaining the RNG itself."""
+
+        super().__init__()
+        self.rng_kind = rng_kind
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Draw through a helper argument materialized as a frame fast local."""
+
+        if self.rng_kind == "generator":
+            value = _draw_fast_local_generator()
+        else:
+            value = _draw_fast_local_randomstate()
+        return x * 2.0 if value < 0.0 else x * 3.0
+
+
+class _GlobalContainerNumpyRngBranch(nn.Module):
+    """Branch on a pre-constructed NumPy RNG nested in a referenced global dict."""
+
+    def __init__(self, rng_kind: str) -> None:
+        """Store the requested RNG family without retaining the RNG itself."""
+
+        super().__init__()
+        self.rng_kind = rng_kind
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Draw through a concrete RNG stored one level below a global container."""
+
+        value = float(_NUMPY2_INDIRECT_RNG_REGISTRY[self.rng_kind].standard_normal())
+        return x * 2.0 if value < 0.0 else x * 3.0
+
+
+class _GlobalObjectNumpyRngBranch(nn.Module):
+    """Branch on a pre-constructed NumPy RNG held by a plain global object."""
+
+    def __init__(self, rng_kind: str) -> None:
+        """Store the requested RNG family without retaining the RNG itself."""
+
+        super().__init__()
+        self.rng_kind = rng_kind
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Draw through a concrete RNG stored in a global object's instance dict."""
+
+        if self.rng_kind == "generator":
+            value = float(_NUMPY2_INDIRECT_RNG_HOLDER.generator.standard_normal())
+        else:
+            value = float(_NUMPY2_INDIRECT_RNG_HOLDER.randomstate.standard_normal())
+        return x * 2.0 if value < 0.0 else x * 3.0
 
 
 class _ThreadedNpGenBranch(nn.Module):
@@ -258,6 +348,69 @@ def test_deterministic_model_stays_verified(tmp_path: Path) -> None:
     assert _host_rng_consumed(_DeterministicLinear(), x) is False
     result = _roundtrip(_DeterministicLinear(), x, tmp=tmp_path, run_seed=1)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+@pytest.mark.skipif(
+    not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
+    reason="NumPy build emits c_call for RNG draw methods",
+)
+@pytest.mark.parametrize(
+    ("model_type", "reachability"),
+    [
+        (_FastLocalNumpyRngBranch, "fast-local"),
+        (_GlobalContainerNumpyRngBranch, "global-container"),
+        (_GlobalObjectNumpyRngBranch, "global-object"),
+    ],
+    ids=["fast-local", "global-container", "global-object"],
+)
+@pytest.mark.parametrize("rng_kind", ["generator", "randomstate"])
+def test_numpy2_indirect_preconstructed_rng_never_false_verified(
+    model_type: Any,
+    reachability: str,
+    rng_kind: str,
+    tmp_path: Path,
+) -> None:
+    """Every NumPy-2 indirect pre-constructed RNG draw fails closed to UNVERIFIABLE."""
+
+    x = torch.randn(2, 4)
+    model = model_type(rng_kind)
+    assert _host_rng_consumed(model, x) is True, (reachability, rng_kind)
+    result = _roundtrip(model_type(rng_kind), x, tmp=tmp_path, capture_seed=1, run_seed=2)
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
+
+
+@pytest.mark.skipif(
+    not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
+    reason="NumPy build emits c_call for RNG draw methods",
+)
+def test_numpy2_frame_digest_deterministic_control_stays_verified(tmp_path: Path) -> None:
+    """The NumPy-2 frame-digest fallback does not ceiling a deterministic capture."""
+
+    x = torch.randn(2, 4)
+    assert _host_rng_consumed(_DeterministicLinear(), x) is False
+    result = _roundtrip(_DeterministicLinear(), x, tmp=tmp_path, run_seed=1)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+
+
+def test_numpy2_frame_digest_holder_walk_executes_no_hostile_attribute_hooks() -> None:
+    """The one-level holder walk never executes hostile attribute hooks."""
+
+    fired: list[str] = []
+
+    class _Hostile:
+        @property
+        def __dict__(self) -> dict[str, Any]:
+            fired.append("property")
+            return {}
+
+        def __getattr__(self, name: str) -> Any:
+            fired.append(f"__getattr__:{name}")
+            raise AttributeError(name)
+
+    children = rng_utils.host_nondeterminism_monitor._numpy_frame_candidate_children(_Hostile())
+    assert children == ()
+    assert fired == []
 
 
 def test_seeded_numpy_singleton_stays_verified(tmp_path: Path) -> None:

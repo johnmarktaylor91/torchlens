@@ -1282,9 +1282,10 @@ def _normalized_callable_name(name: str | None) -> str | None:
     ``sites[].function_path`` (derived from ``layer_list[].func_name``) and
     ``run.callable_registry[].key.qualname`` are persisted independently and
     agree verbatim for every op measured across dunder, in-place, method and
-    function dispatch, with two exceptions where the site keeps the operator
+    function dispatch, with three exceptions where the site keeps the operator
     dunder while the registry records the torch method (``__neg__``/``neg``,
-    ``__pow__``/``pow``). Stripping the operator dunder underscores collapses
+    ``__pow__``/``pow``, and ``__ipow__``/``pow_``). Stripping ordinary operator
+    dunder underscores and mapping the one in-place power spelling collapses
     exactly those, and nothing else: ``__iadd__`` and ``relu_`` keep their
     distinguishing characters, so an in-place op can never normalize onto its
     out-of-place sibling.
@@ -1305,6 +1306,8 @@ def _normalized_callable_name(name: str | None) -> str | None:
     stripped = name.strip()
     if not stripped or stripped == "none":
         return None
+    if stripped == "__ipow__":
+        return "pow_"
     if stripped.startswith("__") and stripped.endswith("__") and len(stripped) > 4:
         return stripped[2:-2]
     return stripped
@@ -1332,9 +1335,9 @@ def _callable_registry_contradiction(
     signature-incompatible key never reaches here, keeping the resolver's own
     richer readiness/``ReattachError`` path. Compares against the persisted
     registry qualname (not the resolved one) so a version-alias move never
-    false-refuses, and normalizes the operator dunder so the two measured
-    record-spelling divergences (``__neg__``/``neg``, ``__pow__``/``pow``) are
-    not read as contradictions. A record that states no name (a source op's
+    false-refuses, and normalizes the operator dunder so the measured
+    record-spelling divergences (``__neg__``/``neg``, ``__pow__``/``pow``,
+    ``__ipow__``/``pow_``) are not read as contradictions. A record that states no name (a source op's
     ``"none"``, a missing label) is no opinion, never a contradiction.
 
     Parameters

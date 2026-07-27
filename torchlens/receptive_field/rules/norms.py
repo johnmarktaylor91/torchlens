@@ -70,7 +70,31 @@ def instance_norm(context: ReceptiveFieldRuleContext) -> _RuleResult:
     if not use_input_stats:
         return context.passthrough()
     rank = len(context.in_shapes[0]) if context.in_shapes else len(context.out_shape)
-    return context.full(axes=tuple(range(2, rank)))
+    coupled_axes = tuple(range(2, rank))
+    full_axes_by_parent: dict[str, object] = {"default": coupled_axes}
+    parent_to_child_axes: dict[str, dict[int, int]] = {}
+    channel_parent_roles = {
+        "args:1",
+        "args:2",
+        "args:3",
+        "args:4",
+        "kwargs:running_mean",
+        "kwargs:running_var",
+        "kwargs:weight",
+        "kwargs:bias",
+    }
+    for parent_index, parent_label in enumerate(context.op.parents):
+        if context.parent_role(parent_index) in channel_parent_roles:
+            full_axes_by_parent[parent_label] = ()
+            parent_to_child_axes[parent_label] = {0: 1}
+    return _RuleResult(
+        "full",
+        {
+            "axes": full_axes_by_parent,
+            "exact": True,
+            "parent_to_child_axes": parent_to_child_axes,
+        },
+    )
 
 
 @register_rf_rule("group_norm")
