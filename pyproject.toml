@@ -89,7 +89,23 @@ all-stretch = [
     "torchshow~=0.5",
     "lovely-tensors~=0.1.18",
 ]
-dev = ["ruff==0.15.4", "pytest", "pytest-cov", "mypy==2.1.0", "pip-audit==2.10.1", "pre-commit"]
+dev = [
+    "ruff==0.15.4",
+    "pytest",
+    "pytest-cov",
+    "mypy==2.1.0",
+    "pip-audit==2.10.1",
+    "pre-commit",
+    # jsonschema/referencing back the menagerie crawler's payload validation
+    # (menagerie/crawler/schema.py: Draft202012Validator + a referencing Registry).
+    # This is internal contributor/automation tooling, not a torchlens runtime
+    # feature, so it lives alongside the other dev-tooling packages rather than
+    # in `test` (ML-framework test deps) or core `dependencies` (shipped library
+    # surface). `registry=` on Draft202012Validator needs jsonschema>=4.18, the
+    # version that adopted the `referencing` library for $ref resolution.
+    "jsonschema>=4.18",
+    "referencing>=0.28",
+]
 io = ["pyarrow"]
 test = [
     "lightning",
@@ -103,6 +119,20 @@ test = [
     "torchaudio",
     "torch_geometric",
     "torchvision",
+    # menagerie catalog machinery (menagerie/schema.py, menagerie/envs.py,
+    # menagerie/ledger.py) hard-imports these at module load / call time with no
+    # try/except guard. They are exercised directly by tests/test_menagerie_*.py
+    # (e.g. test_menagerie_schema.py imports pydantic.ValidationError,
+    # test_menagerie_envs.py calls envs.load_registry() which parses YAML).
+    # pydantic is not currently pulled in transitively by anything else in this
+    # extra and its absence is a hard ModuleNotFoundError on a clean install;
+    # PyYAML/psutil happen to be pulled in transitively today (e.g. via
+    # lightning/timm/transformers) but are undeclared direct imports, so they are
+    # declared explicitly here too rather than relying on incidental transitive
+    # resolution.
+    "pydantic>=2.0",
+    "PyYAML>=6.0",
+    "psutil>=5.9",
     "transformers",
     "visualpriors",
 ]
