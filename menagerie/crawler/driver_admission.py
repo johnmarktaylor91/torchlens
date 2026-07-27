@@ -8,6 +8,8 @@ import logging
 import platform
 import subprocess
 import sys
+import time
+import uuid
 from collections import defaultdict
 from contextlib import nullcontext
 from copy import deepcopy
@@ -36,8 +38,15 @@ from menagerie.crawler.artifact_transactions import (
     validate_artifact_checkpoint,
 )
 from menagerie.crawler.author_dispatch import (
+    AUTHOR_EXIT_PERMANENT,
+    AUTHOR_EXIT_RETRYABLE,
+    AUTHOR_EXIT_UNAVAILABLE,
+    AuthorBackoffSignal,
+    AuthorEffortGrant,
     ProposedAuthorResult,
     build_author_envelope,
+    classify_author_response,
+    parse_author_reset_at,
     serialize_author_result_cache,
     validate_author_result,
     validate_author_result_cache,
@@ -65,8 +74,13 @@ from menagerie.crawler.checkpoint import (
     canonical_requeue_grants_path,
 )
 from menagerie.crawler.constants import (
+    AUTHOR_QUEUE_POLL_SECONDS,
+    AUTHOR_QUEUE_STALL_SECONDS,
     CHECKER_PROMPT_NAME,
     FAILURE_REASON_CODES,
+    STDIO_TAIL_MAX_CHARS,
+    USAGE_LIMIT_PROVIDERS,
+    AuthorPauseReason,
     InvocationOrigin,
     MODEL_SCHEMA_VERSION_V3,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
@@ -110,6 +124,7 @@ from menagerie.crawler.identity import (
     canonical_json_bytes,
     hash_bytes,
     stable_hash,
+    utc_now,
 )
 from menagerie.crawler.intake import (
     IntakeItem,
@@ -144,6 +159,10 @@ from menagerie.crawler.worker_supervisor import (
 from menagerie.crawler.driver_contracts import (
     ActivatedHandoffArtifact,
     AuthorArtifact,
+    AuthorBackoffError,
+    AuthorEffortCapExceeded,
+    AuthorQueueStalled,
+    AuthorUsagePause,
     CheckerOutcome,
     DriverConfig,
     DriverIntegrationError,
@@ -151,6 +170,7 @@ from menagerie.crawler.driver_contracts import (
     DriverPaused,
     DriverResult,
     EnvironmentBinding,
+    RetryableOperatorError,
     VariantRecipeUnsupported,
     WorkItem,
     _campaign_id_for_item,
@@ -586,15 +606,17 @@ def _quarantine_work_identity(item: WorkItem, artifact: AuthorArtifact) -> JsonO
     }
 
 
-class CommandAuthorLane:
-    """Author lane that writes the frozen envelope and invokes an injected command."""
+class _AuthorLaneBase:
+    """Shared author-lane workflow around one injected operator transport.
 
-    def __init__(self, command: Sequence[str]) -> None:
-        """Store a non-shell Claude Code command prefix."""
+    Both production lanes build the identical two envelopes, run the identical
+    controlled fetch, and run the identical validators. They differ only in how
+    one request round trip reaches an operator: a subprocess wrapper
+    (:class:`CommandAuthorLane`) or a file-queue RPC serviced by the managing
+    Claude session (:class:`QueueAuthorLane`).
+    """
 
-        if not command:
-            raise ValueError("author command cannot be empty")
-        self.command = tuple(command)
+    effort_grant: AuthorEffortGrant
 
     def author(
         self,
@@ -611,7 +633,7 @@ class CommandAuthorLane:
         model_dir = root / "model"
         model_dir.mkdir(parents=True, exist_ok=True)
         result_path = root / "result.json"
-        source_manifest = self._fetch_author_sources(item, root)
+        source_manifest = self._fetch_author_sources(item, root, config)
         work_id = item.active_work_id
         envelope = build_author_envelope(
             context=context,
@@ -625,27 +647,35 @@ class CommandAuthorLane:
             output_path=result_path,
         )
         envelope_path = write_envelope_atomic(envelope, root / "request.json")
-        completed = subprocess.run(
-            [*self.command, str(envelope_path)], check=False, capture_output=True, text=True
+        self._dispatch(
+            kind="author",
+            item=item,
+            config=config,
+            work_id=work_id,
+            request_path=envelope_path,
+            output_path=result_path,
         )
-        if completed.returncode != 0:
-            raise DriverIntegrationError(
-                f"author command failed for {item.stable_id}: {completed.stderr[-1500:]}"
-            )
         result = validate_author_result(result_path, envelope, cas_root=root / "source-cas")
         return AuthorArtifact(result, source_manifest, model_dir)
 
-    def _fetch_author_sources(self, item: WorkItem, root: Path) -> JsonObject:
+    def _fetch_author_sources(
+        self,
+        item: WorkItem,
+        root: Path,
+        config: Optional[DriverConfig] = None,
+    ) -> JsonObject:
         """Ask for exact pins, controlled-fetch them, and freeze a nonempty pack."""
 
         request_path = root / "source-request.json"
         output_path = root / "source-targets.json"
+        work_id = f"work-{item.stable_id}"
         body: JsonObject = {
             "envelope_version": "menagerie.crawler.author-source-request.v1",
-            "work_id": f"work-{item.stable_id}",
+            "work_id": work_id,
             "stable_id": item.stable_id,
             "untrusted_hints": item.intake.to_dict(),
             "required_output_path": str(output_path.resolve()),
+            "max_sources": self.effort_grant.fetch_targets,
             "required_fields": [
                 "source_id",
                 "url",
@@ -658,18 +688,27 @@ class CommandAuthorLane:
         from menagerie.crawler.author_dispatch import write_envelope_atomic
 
         written = write_envelope_atomic(request, request_path)
-        completed = subprocess.run(
-            [*self.command, str(written)], check=False, capture_output=True, text=True
+        self._dispatch(
+            kind="source-request",
+            item=item,
+            config=config,
+            work_id=work_id,
+            request_path=written,
+            output_path=output_path,
         )
-        if completed.returncode != 0:
-            raise DriverIntegrationError(
-                f"author source request failed for {item.stable_id}: {completed.stderr[-1500:]}"
-            )
         value = _read_json(output_path)
         raw_targets = value.get("sources")
         if not isinstance(raw_targets, list) or not raw_targets:
             raise DriverIntegrationError(
                 "author source request must name at least one pinned source"
+            )
+        # LP-13.2 controlled-fetch ceiling. The lane is the only engine boundary
+        # that observes the pinned target count, so it enforces it here rather
+        # than trusting the operator's own accounting.
+        if len(raw_targets) > self.effort_grant.fetch_targets:
+            raise AuthorEffortCapExceeded(
+                f"author source request for {item.stable_id} named {len(raw_targets)} targets, "
+                f"exceeding the {self.effort_grant.fetch_targets} controlled-fetch grant"
             )
         targets: list[FetchTarget] = []
         for raw in raw_targets:
@@ -688,6 +727,520 @@ class CommandAuthorLane:
         if not manifest.get("sources"):
             raise DriverIntegrationError("controlled fetch produced an empty source manifest")
         return dict(manifest)
+
+    def _dispatch(
+        self,
+        *,
+        kind: str,
+        item: WorkItem,
+        config: Optional[DriverConfig],
+        work_id: str,
+        request_path: Path,
+        output_path: Path,
+    ) -> None:
+        """Run one operator round trip that publishes ``output_path``."""
+
+        raise NotImplementedError
+
+
+def classify_author_exit(
+    kind: str,
+    stable_id: str,
+    returncode: int,
+    stdout: str,
+    stderr: str,
+) -> None:
+    """Convert one operator exit code into the typed author-lane outcome.
+
+    Risk R8: an unrecognized nonzero exit used to become a permanent model
+    failure. The operator protocol exit codes are honored here so a transient
+    failure is retryable, a quota response is a scheduler pause, and only a
+    declared contract rejection is permanent.
+
+    Parameters
+    ----------
+    kind:
+        ``source-request`` or ``author`` round-trip label.
+    stable_id:
+        Model whose author session produced the exit.
+    returncode:
+        Operator process exit status.
+    stdout, stderr:
+        Captured operator output. Both are inspected: structured provider errors
+        are observed on either stream.
+
+    Raises
+    ------
+    AuthorBackoffError
+        On a rate/quota response, including exit ``76``.
+    RetryableOperatorError
+        On a declared retryable or unavailable operator failure.
+    DriverIntegrationError
+        On a declared permanent contract rejection or an unclassified exit.
+    """
+
+    if returncode == 0:
+        return
+    combined = f"{stderr}\n{stdout}".strip()
+    label = "author command failed" if kind == "author" else "author source request failed"
+    tail = combined[-STDIO_TAIL_MAX_CHARS:]
+    signal = classify_author_response(returncode, combined)
+    if signal is not None:
+        raise AuthorBackoffError(signal)
+    if returncode in (AUTHOR_EXIT_RETRYABLE, AUTHOR_EXIT_UNAVAILABLE):
+        raise RetryableOperatorError(f"{label} for {stable_id} (exit {returncode}): {tail}")
+    if returncode == AUTHOR_EXIT_PERMANENT:
+        # Deliberately does NOT use the historical retryable prefix: a declared
+        # contract rejection must not be retried.
+        raise DriverIntegrationError(
+            f"author {kind} rejected the contract for {stable_id} (exit {returncode}): {tail}"
+        )
+    # Unclassified exits keep the historical message prefix, which
+    # ``_is_infrastructure_error`` already treats as one retryable transport
+    # failure rather than an immediate permanent model failure.
+    raise DriverIntegrationError(f"{label} for {stable_id}: {tail}")
+
+
+class CommandAuthorLane(_AuthorLaneBase):
+    """Author lane that writes the frozen envelope and invokes an injected command."""
+
+    def __init__(
+        self,
+        command: Sequence[str],
+        *,
+        effort_grant: Optional[AuthorEffortGrant] = None,
+    ) -> None:
+        """Store a non-shell Claude Code command prefix and its effort grant."""
+
+        if not command:
+            raise ValueError("author command cannot be empty")
+        self.command = tuple(command)
+        self.effort_grant = effort_grant or AuthorEffortGrant()
+
+    def _dispatch(
+        self,
+        *,
+        kind: str,
+        item: WorkItem,
+        config: Optional[DriverConfig],
+        work_id: str,
+        request_path: Path,
+        output_path: Path,
+    ) -> None:
+        """Invoke the wrapper with one absolute request path and classify its exit."""
+
+        del config, work_id, output_path
+        completed = subprocess.run(
+            [*self.command, str(request_path)], check=False, capture_output=True, text=True
+        )
+        classify_author_exit(
+            kind,
+            item.stable_id,
+            completed.returncode,
+            completed.stdout or "",
+            completed.stderr or "",
+        )
+
+
+_AUTHOR_JOB_VERSION = "menagerie.crawler.author-queue-job.v1"
+_AUTHOR_QUEUE_DIRECTORIES = ("pending", "claimed", "receipts", "signals")
+
+
+def author_queue_directories(queue_root: Path) -> dict[str, Path]:
+    """Return the fixed author-queue subdirectory layout.
+
+    Parameters
+    ----------
+    queue_root:
+        Campaign-local author-queue root.
+
+    Returns
+    -------
+    dict[str, Path]
+        ``pending``, ``claimed``, ``receipts``, and ``signals`` roots.
+    """
+
+    return {name: queue_root / name for name in _AUTHOR_QUEUE_DIRECTORIES}
+
+
+class QueueAuthorLane(_AuthorLaneBase):
+    """Author lane that bridges the engine to an in-session Claude subagent pool.
+
+    The engine's author boundary is a subprocess contract: run a command with one
+    absolute request path and read the result from the envelope's exact
+    ``required_output_path``. Re-entering the ``claude`` CLI per model to satisfy
+    that contract costs a full interactive context load per invocation, so the
+    production pool is instead a set of subagents dispatched inside one live
+    managing session.
+
+    This lane is the bridge. It builds the same two envelopes as
+    :class:`CommandAuthorLane`, publishes a job descriptor into a file queue, and
+    blocks until the operator publishes the result at the exact required path.
+    Every validator, staging step, and identity derivation downstream is
+    unchanged, so the authority side of the contract is fully conserved.
+
+    Queue protocol (all paths absolute, all writes atomic)::
+
+        <queue_root>/pending/<job_id>.json     lane -> pool   job descriptor
+        <queue_root>/claimed/<job_id>.json     pool -> lane   lease, for liveness
+        <queue_root>/receipts/<job_id>.json    pool -> lane   completion receipt
+        <queue_root>/signals/<job_id>.backoff.json   pool -> lane   typed pause
+        <queue_root>/signals/<job_id>.failure.json   pool -> lane   typed failure
+
+    The result itself is published to ``required_output_path``; the receipt is the
+    commit point, so the lane never reads a half-written result. Every pool file
+    must echo the job's ``attempt_nonce``: a late file from a superseded attempt
+    is ignored, never mistaken for this attempt's answer.
+    """
+
+    def __init__(
+        self,
+        queue_root: Path,
+        *,
+        effort_grant: Optional[AuthorEffortGrant] = None,
+        stall_timeout_seconds: float = float(AUTHOR_QUEUE_STALL_SECONDS),
+        poll_interval_seconds: float = AUTHOR_QUEUE_POLL_SECONDS,
+        clock: Optional[Callable[[], str]] = None,
+        monotonic: Optional[Callable[[], float]] = None,
+        sleep: Optional[Callable[[float], None]] = None,
+        nonce_factory: Optional[Callable[[], str]] = None,
+    ) -> None:
+        """Bind the queue root, the effort grant, and the stall deadline.
+
+        Parameters
+        ----------
+        queue_root:
+            Campaign-local author-queue root serviced by the managing session.
+        effort_grant:
+            Per-session effort budget published to the pool and audited on return.
+        stall_timeout_seconds:
+            Outer deadline. Exceeding it is retryable infrastructure (risk R6),
+            never a model failure.
+        poll_interval_seconds:
+            Result polling cadence.
+        clock, monotonic, sleep, nonce_factory:
+            Injectable time and identity sources for deterministic tests.
+        """
+
+        if stall_timeout_seconds <= 0 or poll_interval_seconds <= 0:
+            raise ValueError("author queue timeouts must be positive")
+        self.queue_root = Path(queue_root)
+        self.effort_grant = effort_grant or AuthorEffortGrant()
+        self.stall_timeout_seconds = float(stall_timeout_seconds)
+        self.poll_interval_seconds = float(poll_interval_seconds)
+        self._clock = clock or utc_now
+        self._monotonic = monotonic or time.monotonic
+        self._sleep = sleep or time.sleep
+        self._nonce_factory = nonce_factory or (lambda: uuid.uuid4().hex)
+        self.directories = author_queue_directories(self.queue_root)
+
+    def _dispatch(
+        self,
+        *,
+        kind: str,
+        item: WorkItem,
+        config: Optional[DriverConfig],
+        work_id: str,
+        request_path: Path,
+        output_path: Path,
+    ) -> None:
+        """Enqueue one job and block until the operator publishes its result."""
+
+        for directory in self.directories.values():
+            directory.mkdir(parents=True, exist_ok=True)
+        request_sha256 = hash_bytes(request_path.read_bytes())
+        job_id = self._job_id(kind, work_id, request_sha256)
+        attempt_nonce = self._nonce_factory()
+        paths = self._job_paths(job_id)
+        job: JsonObject = {
+            "envelope_version": _AUTHOR_JOB_VERSION,
+            "job_id": job_id,
+            "attempt_nonce": attempt_nonce,
+            "kind": kind,
+            "stable_id": item.stable_id,
+            "work_id": work_id,
+            "author_model": None if config is None else config.author_model,
+            "campaign_id": _campaign_id_for_item(item),
+            "request_path": str(request_path.resolve()),
+            "request_sha256": request_sha256,
+            "required_output_path": str(Path(output_path).resolve()),
+            "receipt_path": str(paths["receipt"]),
+            "backoff_path": str(paths["backoff"]),
+            "failure_path": str(paths["failure"]),
+            "claim_path": str(paths["claim"]),
+            "effort_grant": self.effort_grant.to_dict(),
+            "stall_timeout_seconds": self.stall_timeout_seconds,
+            "enqueued_at": self._clock(),
+        }
+        job["job_sha256"] = stable_hash(job)
+        _write_json_atomic(paths["pending"], job)
+        try:
+            self._await_result(job, paths)
+        finally:
+            self._discard_job_files(paths)
+
+    def _job_id(self, kind: str, work_id: str, request_sha256: str) -> str:
+        """Return the deterministic filesystem-safe job identity.
+
+        Parameters
+        ----------
+        kind, work_id, request_sha256:
+            Round-trip label, work generation, and exact request digest.
+
+        Returns
+        -------
+        str
+            ``<kind>-<digest>`` identity, stable across retries of one request.
+        """
+
+        digest = stable_hash({"kind": kind, "work_id": work_id, "request": request_sha256})
+        return f"{kind}-{digest.removeprefix('sha256:')[:24]}"
+
+    def _job_paths(self, job_id: str) -> dict[str, Path]:
+        """Return every queue path owned by one job.
+
+        Parameters
+        ----------
+        job_id:
+            Deterministic job identity.
+
+        Returns
+        -------
+        dict[str, Path]
+            Pending, claim, receipt, backoff, and failure paths.
+        """
+
+        return {
+            "pending": self.directories["pending"] / f"{job_id}.json",
+            "claim": self.directories["claimed"] / f"{job_id}.json",
+            "receipt": self.directories["receipts"] / f"{job_id}.json",
+            "backoff": self.directories["signals"] / f"{job_id}.backoff.json",
+            "failure": self.directories["signals"] / f"{job_id}.failure.json",
+        }
+
+    def _await_result(self, job: Mapping[str, Any], paths: Mapping[str, Path]) -> None:
+        """Block until a nonce-matched result, pause, failure, or stall.
+
+        Parameters
+        ----------
+        job:
+            Published job descriptor.
+        paths:
+            Queue paths owned by the job.
+
+        Raises
+        ------
+        AuthorBackoffError
+            When the pool reports a provider rate/quota pause.
+        RetryableOperatorError
+            When the pool reports a transient failure.
+        AuthorQueueStalled
+            When neither a result nor a signal arrives before the deadline.
+        AuthorEffortCapExceeded
+            When declared consumption exceeds the published grant.
+        DriverIntegrationError
+            When the pool violates the result-publication contract.
+        """
+
+        deadline = self._monotonic() + self.stall_timeout_seconds
+        output_path = Path(str(job["required_output_path"]))
+        while True:
+            backoff = self._matched_signal(paths["backoff"], job)
+            if backoff is not None:
+                raise AuthorBackoffError(_author_backoff_from_signal(backoff))
+            failure = self._matched_signal(paths["failure"], job)
+            if failure is not None:
+                self._raise_operator_failure(job, failure)
+            receipt = self._matched_signal(paths["receipt"], job)
+            if receipt is not None:
+                if not output_path.is_file():
+                    raise DriverIntegrationError(
+                        f"author queue job {job['job_id']} reported completion without a "
+                        f"result at {output_path}"
+                    )
+                self._audit_consumption(job, receipt)
+                return
+            if self._monotonic() >= deadline:
+                claimed = paths["claim"].is_file()
+                raise AuthorQueueStalled(
+                    f"author queue job {job['job_id']} for {job['stable_id']} produced no "
+                    f"result within {self.stall_timeout_seconds:g}s "
+                    f"({'claimed but unfinished' if claimed else 'never claimed'})"
+                )
+            self._sleep(self.poll_interval_seconds)
+
+    def _matched_signal(self, path: Path, job: Mapping[str, Any]) -> Optional[JsonObject]:
+        """Read one pool-published file if it belongs to this attempt.
+
+        Parameters
+        ----------
+        path:
+            Candidate pool file.
+        job:
+            Published job descriptor carrying the attempt nonce.
+
+        Returns
+        -------
+        dict[str, Any] | None
+            Parsed payload, or ``None`` when absent, unreadable, or superseded.
+        """
+
+        if not path.is_file():
+            return None
+        try:
+            value = _read_json(path)
+        except DriverIntegrationError:
+            # A partially written file is transient; the next poll re-reads it.
+            return None
+        if value.get("job_id") != job["job_id"]:
+            return None
+        if value.get("attempt_nonce") != job["attempt_nonce"]:
+            # A late file from a superseded attempt is never this attempt's answer.
+            path.unlink(missing_ok=True)
+            return None
+        return value
+
+    def _raise_operator_failure(self, job: Mapping[str, Any], failure: Mapping[str, Any]) -> None:
+        """Raise the typed error declared by an operator failure signal.
+
+        Parameters
+        ----------
+        job, failure:
+            Published job descriptor and the pool's failure payload.
+
+        Raises
+        ------
+        RetryableOperatorError
+            When the pool declares the failure transient.
+        DriverIntegrationError
+            When the pool declares the failure permanent.
+        """
+
+        detail = str(failure.get("detail", ""))[:STDIO_TAIL_MAX_CHARS]
+        reason = str(failure.get("reason", "unspecified"))
+        retryable = failure.get("retryable")
+        if not isinstance(retryable, bool):
+            raise DriverIntegrationError(
+                f"author queue failure for {job['stable_id']} omits a boolean "
+                f"retryable classification: {reason}"
+            )
+        message = f"author queue job {job['job_id']} failed ({reason}): {detail}"
+        if retryable:
+            raise RetryableOperatorError(message)
+        raise DriverIntegrationError(message)
+
+    def _audit_consumption(self, job: Mapping[str, Any], receipt: Mapping[str, Any]) -> None:
+        """Reject a completion whose declared effort exceeds the published grant.
+
+        The pool owns the tool-call and wall-clock timers because it is the only
+        boundary that observes them (PLAN_RECONCILED section 3.4). The lane makes
+        that enforcement checkable by requiring the pool to declare what it spent
+        and refusing a receipt that spent more than it was granted.
+
+        Parameters
+        ----------
+        job, receipt:
+            Published job descriptor and the pool's completion receipt.
+
+        Raises
+        ------
+        DriverIntegrationError
+            When the receipt omits declared consumption.
+        AuthorEffortCapExceeded
+            When any declared dimension exceeds its grant.
+        """
+
+        consumption = receipt.get("consumption")
+        if not isinstance(consumption, Mapping):
+            raise DriverIntegrationError(
+                f"author queue receipt for {job['stable_id']} omits declared effort consumption"
+            )
+        grant = self.effort_grant
+        limits = (
+            ("tool_calls", float(grant.tool_calls)),
+            ("fetch_targets", float(grant.fetch_targets)),
+            ("wall_seconds", float(grant.wall_seconds)),
+        )
+        for metric, limit in limits:
+            raw = consumption.get(metric)
+            if not isinstance(raw, (int, float)) or isinstance(raw, bool) or raw < 0:
+                raise DriverIntegrationError(
+                    f"author queue receipt for {job['stable_id']} declares an invalid "
+                    f"{metric} consumption"
+                )
+            if float(raw) > limit:
+                raise AuthorEffortCapExceeded(
+                    f"author session for {job['stable_id']} consumed {metric} "
+                    f"{float(raw):g}, exceeding its {limit:g} grant"
+                )
+
+    def _discard_job_files(self, paths: Mapping[str, Path]) -> None:
+        """Remove this attempt's queue files so no stale job is re-served.
+
+        Parameters
+        ----------
+        paths:
+            Queue paths owned by the job. The published result is never removed;
+            only the queue's own control files are.
+        """
+
+        for name in ("pending", "claim", "receipt", "backoff", "failure"):
+            try:
+                paths[name].unlink(missing_ok=True)
+            except OSError:  # noqa: PERF203 -- queue cleanup is best effort
+                logging.getLogger(__name__).debug("author queue cleanup failed: %s", paths[name])
+
+
+def _author_backoff_from_signal(payload: Mapping[str, Any]) -> AuthorBackoffSignal:
+    """Parse one pool-published backoff sidecar into the typed pause signal.
+
+    Parameters
+    ----------
+    payload:
+        Pool backoff payload carrying provider, reset evidence, and an excerpt.
+
+    Returns
+    -------
+    AuthorBackoffSignal
+        Typed pause signal with a reset time. An unparseable or absent reset
+        falls back to the scheduler's one-hour re-check rather than blocking.
+
+    Raises
+    ------
+    DriverIntegrationError
+        When the provider is outside the closed usage-limit vocabulary.
+    """
+
+    provider = str(payload.get("provider", "anthropic"))
+    if provider not in USAGE_LIMIT_PROVIDERS:
+        raise DriverIntegrationError(
+            f"author backoff names an unsupported usage-limit provider: {provider!r}"
+        )
+    excerpt = str(payload.get("response_excerpt", ""))[:1_500]
+    raw_reason = str(payload.get("reason", AuthorPauseReason.QUOTA_EXHAUSTED.value))
+    try:
+        reason = AuthorPauseReason(raw_reason)
+    except ValueError as exc:
+        raise DriverIntegrationError(
+            f"author backoff names an unsupported pause reason: {raw_reason!r}"
+        ) from exc
+    raw_reset = payload.get("reset_at")
+    reset_at = str(raw_reset) if isinstance(raw_reset, str) and raw_reset.strip() else None
+    if reset_at is None:
+        reset_at = parse_author_reset_at(excerpt)
+    raw_retry = payload.get("retry_after_seconds")
+    retry_after = (
+        int(raw_retry)
+        if isinstance(raw_retry, (int, float)) and not isinstance(raw_retry, bool)
+        else None
+    )
+    return AuthorBackoffSignal(
+        reason=reason,
+        retry_after_seconds=retry_after,
+        reset_at=reset_at,
+        response_excerpt=excerpt,
+        provider=provider,
+    )
 
 
 class CommandCheckerLane:
@@ -1635,12 +2188,26 @@ class AdmissionEnvironmentMixin:
                     admission=("author", item),
                 )
                 artifact = self._stage_author_result(item, artifact, reducer)
+            except AuthorBackoffError as backoff:
+                # Provider usage exhaustion is a campaign pause with a reset time,
+                # never this model's failure. Caught ahead of the blanket arm below
+                # so it can never be recorded as `failed:source`.
+                raise AuthorUsagePause(
+                    self._pause_for_usage(backoff.signal, operational, len(work))
+                ) from backoff
             except Exception as exc:  # noqa: BLE001 -- author failure belongs to this model
+                # PLAN.md LP-13.2: cap exhaustion is `failed:<actual-stage>` with
+                # `effort-cap-exhausted`, distinct from an unresolved identity.
+                reason_code = (
+                    "effort-cap-exhausted"
+                    if isinstance(exc, AuthorEffortCapExceeded)
+                    else "identity-unresolved"
+                )
                 attempt = _driver_failure_attempt(
                     item,
                     None,
                     "source",
-                    "identity-unresolved",
+                    reason_code,
                     exc,
                     self.config,
                     diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
@@ -1652,7 +2219,7 @@ class AdmissionEnvironmentMixin:
                     item,
                     None,
                     "failed:source",
-                    "identity-unresolved",
+                    reason_code,
                     str(exc),
                     (persisted,),
                     reducer,
@@ -1962,6 +2529,11 @@ class AdmissionEnvironmentMixin:
                         ),
                         self.config,
                     )
+                except AuthorBackoffError as backoff:
+                    # A provider pause during a bounded repair is a campaign pause with a
+                    # reset time, not a failed repair. `_ensure_gates` already returns a
+                    # usage-pause reason, so route it the same way as a checker backoff.
+                    return self._pause_for_usage(backoff.signal, operational, len(work))
                 except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
                     reason = (
                         "protocol-violation"
@@ -2197,6 +2769,11 @@ class AdmissionEnvironmentMixin:
                             ),
                             self.config,
                         )
+                    except AuthorBackoffError as backoff:
+                        # A provider pause during a bounded repair is a campaign pause with a
+                        # reset time, not a failed repair. `_ensure_gates` already returns a
+                        # usage-pause reason, so route it the same way as a checker backoff.
+                        return self._pause_for_usage(backoff.signal, operational, len(work))
                     except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
                         reason = (
                             "protocol-violation"
@@ -2358,6 +2935,11 @@ class AdmissionEnvironmentMixin:
                                 ),
                                 admission=("author", item),
                             )
+                        except AuthorBackoffError as backoff:
+                            # A provider pause during a bounded repair is a campaign pause with a
+                            # reset time, not a failed repair. `_ensure_gates` already returns a
+                            # usage-pause reason, so route it the same way as a checker backoff.
+                            return self._pause_for_usage(backoff.signal, operational, len(work))
                         except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
                             reason = (
                                 "protocol-violation"
@@ -2531,6 +3113,11 @@ class AdmissionEnvironmentMixin:
         while current is not None and id(current) not in seen:
             seen.add(id(current))
             if isinstance(current, (OSError, subprocess.SubprocessError)):
+                return True
+            # Typed transient operator failures (R8): a declared-retryable operator
+            # exit or a stalled author queue must be retried, never recorded as a
+            # permanent model failure.
+            if isinstance(current, RetryableOperatorError):
                 return True
             if isinstance(current, DriverIntegrationError):
                 message = str(current).lower()

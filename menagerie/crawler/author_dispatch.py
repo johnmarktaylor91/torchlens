@@ -7,14 +7,19 @@ from dataclasses import dataclass
 from enum import Enum
 import json
 import os
+import re
 from pathlib import Path
-from typing import Any, Mapping, TypeAlias, Union
+from typing import Any, Mapping, Optional, TypeAlias, Union
 
 from menagerie.crawler.authority import AuthorityContext
 from menagerie.crawler.constants import (
+    AUTHOR_MAX_FETCH_TARGETS,
+    AUTHOR_MAX_TOOL_CALLS,
     AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
     AUTHOR_PROMPT_NAME,
     AUTHOR_RESULT_SCHEMA_VERSION,
+    AUTHOR_SESSION_WALL_SECONDS,
+    AuthorPauseReason,
 )
 from menagerie.crawler.identity import fsync_directory, hash_bytes, stable_hash
 from menagerie.crawler.models import JsonObject
@@ -142,6 +147,172 @@ class BlockedRecommendation:
 AuthorResult: TypeAlias = (
     ProposedAuthorResult | DeferRecommendation | SkipRecommendation | BlockedRecommendation
 )
+
+
+# Operator protocol exit codes (PLAN_RECONCILED section 3.0). ``0`` publishes a
+# valid result at the exact required path; every other code is a typed refusal.
+AUTHOR_EXIT_OK = 0
+AUTHOR_EXIT_PERMANENT = 64
+AUTHOR_EXIT_RETRYABLE = 75
+AUTHOR_EXIT_BACKOFF = 76
+AUTHOR_EXIT_UNAVAILABLE = 78
+
+_AUTHOR_QUOTA_MARKERS = ("usage limit", "quota", "credit balance")
+_AUTHOR_RATE_MARKERS = ("rate limit", "too many requests", "retry after", "overloaded")
+_AUTHOR_RESET_PATTERNS = (
+    re.compile(r"try again at ([^.\n]+)", re.IGNORECASE),
+    re.compile(r"resets? at ([^.\n]+)", re.IGNORECASE),
+)
+
+
+@dataclass(frozen=True)
+class AuthorBackoffSignal:
+    """Typed author rate/quota pause signal for the wakeup layer.
+
+    The author-side analogue of
+    :class:`menagerie.crawler.checker_dispatch.CheckerBackoffSignal`. It exists so
+    Claude usage exhaustion becomes a scheduler pause with a reset time instead of
+    a permanent ``failed:source`` terminal for the model that happened to be in
+    flight.
+
+    Parameters
+    ----------
+    reason:
+        Closed rate-limit or quota-exhaustion reason.
+    retry_after_seconds:
+        Provider retry delay when supplied.
+    reset_at:
+        Provider reset timestamp when supplied.
+    response_excerpt:
+        Bounded diagnostic response text.
+    provider:
+        Closed usage-limit provider vocabulary member owning the pause.
+    """
+
+    reason: AuthorPauseReason
+    retry_after_seconds: Optional[int] = None
+    reset_at: Optional[str] = None
+    response_excerpt: str = ""
+    provider: str = "anthropic"
+
+
+@dataclass(frozen=True)
+class AuthorEffortGrant:
+    """Bounded per-session author effort budget (``PLAN.md`` LP-13.2).
+
+    Parameters
+    ----------
+    tool_calls:
+        Maximum agent tool calls in one author session.
+    fetch_targets:
+        Maximum pinned controlled-fetch source targets.
+    wall_seconds:
+        Maximum author session wall time.
+    """
+
+    tool_calls: int = AUTHOR_MAX_TOOL_CALLS
+    fetch_targets: int = AUTHOR_MAX_FETCH_TARGETS
+    wall_seconds: float = float(AUTHOR_SESSION_WALL_SECONDS)
+
+    def __post_init__(self) -> None:
+        """Reject a non-positive grant.
+
+        Raises
+        ------
+        ValueError
+            If any dimension is not strictly positive.
+        """
+
+        if min(self.tool_calls, self.fetch_targets, self.wall_seconds) <= 0:
+            raise AuthorDispatchError("author effort grant dimensions must be positive")
+
+    def to_dict(self) -> JsonObject:
+        """Return the JSON grant published to the operator.
+
+        Returns
+        -------
+        dict[str, Any]
+            Closed grant payload.
+        """
+
+        return {
+            "tool_calls": self.tool_calls,
+            "fetch_targets": self.fetch_targets,
+            "wall_seconds": self.wall_seconds,
+        }
+
+
+def parse_author_reset_at(response_body: str) -> Optional[str]:
+    """Extract a provider-reported reset instant from free-form response text.
+
+    Parameters
+    ----------
+    response_body:
+        Provider response text.
+
+    Returns
+    -------
+    str | None
+        First matched reset phrase, or ``None`` when the provider named none.
+    """
+
+    for pattern in _AUTHOR_RESET_PATTERNS:
+        matched = pattern.search(response_body)
+        if matched is not None:
+            value = matched.group(1).strip()
+            if value:
+                return value
+    return None
+
+
+def classify_author_response(
+    status_code: int,
+    response_body: str,
+    *,
+    retry_after_seconds: Optional[int] = None,
+    reset_at: Optional[str] = None,
+    provider: str = "anthropic",
+) -> Optional[AuthorBackoffSignal]:
+    """Classify author rate/quota responses without treating them as model facts.
+
+    Mirrors :func:`menagerie.crawler.checker_dispatch.classify_checker_response`.
+
+    Parameters
+    ----------
+    status_code:
+        Operator process exit code or provider HTTP status.
+    response_body:
+        Combined operator response text.
+    retry_after_seconds:
+        Parsed retry delay, if supplied.
+    reset_at:
+        Provider reset timestamp, if supplied.
+    provider:
+        Closed usage-limit provider vocabulary member.
+
+    Returns
+    -------
+    AuthorBackoffSignal | None
+        Typed pause signal, or ``None`` for non-rate/quota responses.
+    """
+
+    lowered = response_body.lower()
+    reason: Optional[AuthorPauseReason] = None
+    if any(marker in lowered for marker in _AUTHOR_QUOTA_MARKERS):
+        reason = AuthorPauseReason.QUOTA_EXHAUSTED
+    elif status_code in (AUTHOR_EXIT_BACKOFF, 429) or any(
+        marker in lowered for marker in _AUTHOR_RATE_MARKERS
+    ):
+        reason = AuthorPauseReason.RATE_LIMIT
+    if reason is None:
+        return None
+    return AuthorBackoffSignal(
+        reason=reason,
+        retry_after_seconds=retry_after_seconds,
+        reset_at=reset_at if reset_at is not None else parse_author_reset_at(response_body),
+        response_excerpt=response_body[:1_500],
+        provider=provider,
+    )
 
 
 def build_author_envelope(

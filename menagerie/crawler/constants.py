@@ -63,6 +63,22 @@ DEFAULT_NOTIFY_TIMEOUT_SECONDS = 5
 DEFAULT_REVIEW_CHECKPOINT_MODELS = 1_000
 DEFAULT_PROGRESS_NOTIFICATION_MILESTONES = (2_000, 3_000, 5_000, 10_000, 15_000, 20_000)
 
+# `PLAN.md` LP-13.2 author-session effort ceiling. The pool enforces the tool-call
+# and wall budgets because it is the only boundary that observes Agent-tool events;
+# the lane enforces the fetch-target count, which it observes directly, and audits
+# the pool's declared consumption against the same grant.
+AUTHOR_MAX_TOOL_CALLS = 30
+AUTHOR_MAX_FETCH_TARGETS = 20
+AUTHOR_SESSION_WALL_SECONDS = 30 * 60
+# Outer stall guard. A managing session that dies must look like a stalled queue
+# (retryable infrastructure), never a failed model.
+AUTHOR_QUEUE_STALL_SECONDS = 45 * 60
+AUTHOR_QUEUE_POLL_SECONDS = 2.0
+
+# Closed usage-limit provider vocabulary shared by the pause path and the wakeup
+# layer. The checker lane pauses on `openai`, the author lane on `anthropic`.
+USAGE_LIMIT_PROVIDERS = frozenset({"anthropic", "openai"})
+
 
 class StrEnum(str, Enum):
     """String-valued enum compatible with all supported Python versions."""
@@ -167,6 +183,17 @@ class GateRoute(StrEnum):
 
 class CheckerPauseReason(StrEnum):
     """Closed checker responses that require a scheduler pause."""
+
+    RATE_LIMIT = "rate-limit"
+    QUOTA_EXHAUSTED = "quota-exhausted"
+
+
+class AuthorPauseReason(StrEnum):
+    """Closed author responses that require a scheduler pause.
+
+    The author-side analogue of :class:`CheckerPauseReason`. Anthropic usage
+    exhaustion is a provider pause with a reset time, never a model failure.
+    """
 
     RATE_LIMIT = "rate-limit"
     QUOTA_EXHAUSTED = "quota-exhausted"

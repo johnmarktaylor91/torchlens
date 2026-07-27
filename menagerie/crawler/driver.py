@@ -230,6 +230,7 @@ from menagerie.crawler.driver_contracts import (
     ActivatedHandoffArtifact,
     AuthorArtifact,
     AuthorLane as AuthorLane,
+    AuthorUsagePause,
     BoundaryHook as BoundaryHook,
     CheckerLane as CheckerLane,
     CheckerOutcome,
@@ -248,6 +249,7 @@ from menagerie.crawler.driver_contracts import (
     EnvironmentLane as EnvironmentLane,
     ForwardLane as ForwardLane,
     Notifier as Notifier,
+    UsageBackoffSignal,
     UsagePauseScheduler as UsagePauseScheduler,
     VariantRecipeUnsupported,
     WorkItem,
@@ -350,6 +352,7 @@ from menagerie.crawler.driver_admission import (
     CommandAuthorLane as CommandAuthorLane,
     CommandCheckerLane as CommandCheckerLane,
     CommandEnvironmentBackend as CommandEnvironmentBackend,
+    QueueAuthorLane as QueueAuthorLane,
     _AWARD_CLOSURE_SCHEMAS,
     _AWARD_CLOSURE_SYMBOLS,
     _INJECTED_FORWARD_CLOSURE_IDENTITY,
@@ -961,7 +964,13 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         """
 
         self._check_shutdown("scheduled-work-admission")
-        artifacts = self._ensure_authors(work, reducer, operational, state)
+        try:
+            artifacts = self._ensure_authors(work, reducer, operational, state)
+        except AuthorUsagePause as usage_pause:
+            # The pause is already recorded and its reset wakeup scheduled. Return
+            # it as an ordinary usage pause so the run loop reports
+            # `paused:usage-limit` instead of failing the in-flight model.
+            return usage_pause.reason
         eligible_work = tuple(item for item in work if item.stable_id in artifacts)
         self._ensure_pending_run_anchors(eligible_work, artifacts, reducer, operational, state)
         eligible_work = tuple(item for item in eligible_work if item.stable_id in artifacts)
@@ -1855,13 +1864,18 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             raise DriverIntegrationError("retained-artifact-authority-mismatch")
 
     def _pause_for_usage(
-        self, signal: CheckerBackoffSignal, operational: JsonlLedger, queued: int
+        self, signal: UsageBackoffSignal, operational: JsonlLedger, queued: int
     ) -> str:
-        """Record a visible provider pause and schedule one idempotent reset wakeup."""
+        """Record a visible provider pause and schedule one idempotent reset wakeup.
+
+        The provider is derived from the signal: the checker lane pauses on
+        ``openai`` and the author lane on ``anthropic``. Both members are already
+        accepted by the wakeup layer's closed provider vocabulary.
+        """
 
         reset_observation = "observed" if signal.reset_at is not None else "guessed"
         reset_at = signal.reset_at or _future_reset(self.dependencies.clock(), signal)
-        provider = "openai"
+        provider = signal.provider
         context = self._context(queued, None)
         created_at = self.dependencies.clock()
         scheduler = self.dependencies.usage_pause_scheduler
