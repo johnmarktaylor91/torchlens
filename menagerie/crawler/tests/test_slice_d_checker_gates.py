@@ -236,7 +236,7 @@ def test_checker_result_rejects_partial_or_mismatched_item(tmp_path: Path) -> No
     ("body", "reason"),
     [
         ("429 rate limit exceeded; retry after reset", CheckerPauseReason.RATE_LIMIT),
-        ("insufficient_quota for this billing period", CheckerPauseReason.QUOTA_EXHAUSTED),
+        ("You have hit your usage limit.", CheckerPauseReason.QUOTA_EXHAUSTED),
     ],
 )
 def test_rate_and_quota_responses_classify_to_typed_pause(

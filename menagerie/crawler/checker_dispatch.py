@@ -20,6 +20,7 @@ from menagerie.crawler.constants import (
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.models import JsonObject
+from menagerie.crawler.operator_protocol import build_operator_fields
 from menagerie.crawler.proposal import ProposalValidationError, required_verified_hash_keys
 from menagerie.crawler.schema import (
     PayloadValidationError,
@@ -219,33 +220,62 @@ def validate_checker_result(
         or path.name != "result.json"
     ):
         raise CheckerDispatchError("checker result is not at the exact atomic output path")
-    result = _read_json_object(path)
+    return validate_checker_result_mapping(_read_json_object(path), envelope)
+
+
+def validate_checker_result_mapping(
+    result: Mapping[str, Any], envelope: Mapping[str, Any]
+) -> JsonObject:
+    """Validate one in-memory gate result before atomic publication.
+
+    Parameters
+    ----------
+    result:
+        Candidate complete gate result.
+    envelope:
+        Metadata, fidelity, or terminal request envelope.
+
+    Returns
+    -------
+    dict[str, Any]
+        Schema-valid immutable gate record safe to publish.
+
+    Raises
+    ------
+    CheckerDispatchError
+        If the result is partial, stale, mismatched, or logically inconsistent.
+    """
+
+    _validate_envelope_hash(envelope)
+    normalized = dict(result)
     try:
-        validate_payload(result, GATE_SCHEMA_VERSION_V3)
+        validate_payload(normalized, GATE_SCHEMA_VERSION_V3)
     except PayloadValidationError as exc:
         raise CheckerDispatchError(str(exc)) from exc
-    if result.get("gate_kind") != envelope.get("gate_kind"):
+    if normalized.get("gate_kind") != envelope.get("gate_kind"):
         raise CheckerDispatchError("checker result gate_kind does not match its envelope")
-    if result.get("gate_round") != envelope.get("gate_round"):
+    if normalized.get("gate_round") != envelope.get("gate_round"):
         raise CheckerDispatchError("checker result gate_round does not match its envelope")
-    if result.get("gate_identity") != envelope.get("envelope_sha256"):
+    if normalized.get("gate_identity") != envelope.get("envelope_sha256"):
         raise CheckerDispatchError("checker result gate_identity does not bind its envelope")
-    result_checker = _required_mapping(result.get("checker"), "result checker")
+    result_checker = _required_mapping(normalized.get("checker"), "result checker")
     expected_checker = _required_mapping(envelope.get("checker"), "envelope checker")
     for field in ("provider", "model", "version", "prompt_sha256"):
         if result_checker.get(field) != expected_checker.get(field):
             raise CheckerDispatchError(f"checker result {field} does not match its envelope")
-    result_items = result.get("items")
+    result_items = normalized.get("items")
     expected_items = envelope.get("items")
     if not isinstance(result_items, list) or not isinstance(expected_items, list):
         raise CheckerDispatchError("checker items are incomplete")
     if (
-        result.get("gate_kind") == GateKind.METADATA_BATCH.value
+        normalized.get("gate_kind") == GateKind.METADATA_BATCH.value
         and len(expected_items) < METADATA_BATCH_MIN
         and envelope.get("final_tail") is not True
     ):
         raise CheckerDispatchError("short metadata result is not bound to a final-tail envelope")
-    if result.get("batch_size") != len(expected_items) or len(result_items) != len(expected_items):
+    if normalized.get("batch_size") != len(expected_items) or len(result_items) != len(
+        expected_items
+    ):
         raise CheckerDispatchError("checker result is partial or has extra items")
     expected_by_id = {
         str(item["stable_id"]): item for item in expected_items if isinstance(item, Mapping)
@@ -262,17 +292,17 @@ def validate_checker_result(
             raise CheckerDispatchError(f"unexpected or duplicate checker item: {stable_id}")
         seen.add(stable_id)
         _validate_item_binding(result_item, expected)
-        _validate_item_decision(result_item, GateKind(str(result["gate_kind"])))
+        _validate_item_decision(result_item, GateKind(str(normalized["gate_kind"])))
     expected_hash = stable_hash(
         {
             key: value
-            for key, value in result.items()
+            for key, value in normalized.items()
             if key not in {"result_envelope_sha256", "payload_sha256"}
         }
     )
-    if result.get("result_envelope_sha256") != expected_hash:
+    if normalized.get("result_envelope_sha256") != expected_hash:
         raise CheckerDispatchError("result_envelope_sha256 does not bind the complete gate result")
-    return result
+    return normalized
 
 
 def classify_checker_response(
@@ -302,7 +332,7 @@ def classify_checker_response(
     """
 
     lowered = response_body.lower()
-    quota_markers = ("quota", "billing limit", "usage limit", "insufficient_quota")
+    quota_markers = ("quota", "usage limit")
     rate_markers = ("rate limit", "too many requests", "retry after", "tokens per minute")
     reason: Optional[CheckerPauseReason] = None
     if any(marker in lowered for marker in quota_markers):
@@ -428,8 +458,17 @@ def _build_envelope(
         seen.add(stable_id)
         normalized_items.append(dict(item))
     prompt_sha256 = hash_bytes(_read_prompt())
+    resolved_output_path = Path(output_path).resolve()
+    operator_fields = build_operator_fields(
+        work_generation_identity=request_nonce,
+        model=checker_model,
+        allowed_read_roots=(resolved_output_path.parent, PROMPT_PATH.parent),
+        allowed_write_root=resolved_output_path.parent,
+        required_output_path=resolved_output_path,
+    )
     body: JsonObject = {
         "envelope_version": "menagerie.crawler.checker-envelope.v3",
+        **operator_fields,
         "gate_kind": gate_kind.value,
         "gate_round": gate_round,
         "request_nonce": request_nonce,
@@ -445,8 +484,8 @@ def _build_envelope(
             "sha256": prompt_sha256,
         },
         "items": normalized_items,
-        "required_output_path": str(Path(output_path).resolve()),
-        "allowed_output_root": str(Path(output_path).resolve().parent),
+        "required_output_path": str(resolved_output_path),
+        "allowed_output_root": str(resolved_output_path.parent),
         "required_result_schema": GATE_SCHEMA_VERSION_V3,
         "final_tail": final_tail,
     }

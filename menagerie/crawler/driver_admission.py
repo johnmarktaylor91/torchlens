@@ -705,6 +705,8 @@ class CommandCheckerLane:
     ) -> CheckerOutcome:
         """Execute one strict metadata checker batch."""
 
+        from menagerie.crawler.operator_checker import METADATA_CHECKER_MODEL
+
         items = [_checker_item(artifact) for artifact in artifacts]
         batch_id = stable_hash([item["work_id"] for item in items])[7:23]
         root = work_root / "checker" / f"metadata-{batch_id}"
@@ -713,7 +715,7 @@ class CommandCheckerLane:
                 items,
                 gate_round=1,
                 output_path=root / "result.json",
-                checker_model=config.checker_model,
+                checker_model=METADATA_CHECKER_MODEL,
                 checker_version=config.checker_version,
                 request_nonce=batch_id,
                 final_tail=len(items) < 10,
@@ -726,6 +728,8 @@ class CommandCheckerLane:
     ) -> CheckerOutcome:
         """Execute one strict per-model fidelity checker request."""
 
+        from menagerie.crawler.operator_checker import FIDELITY_CHECKER_MODEL
+
         stable_id = str(artifact.proposal["stable_id"])
         root = work_root / stable_id / "checker-fidelity"
         return self._run(
@@ -733,7 +737,7 @@ class CommandCheckerLane:
                 _checker_item(artifact),
                 gate_round=1,
                 output_path=root / "result.json",
-                checker_model=config.checker_model,
+                checker_model=FIDELITY_CHECKER_MODEL,
                 checker_version=config.checker_version,
                 request_nonce=f"fidelity-{stable_id}",
             ),
@@ -744,6 +748,8 @@ class CommandCheckerLane:
         self, artifact: AuthorArtifact, work_root: Path, config: DriverConfig
     ) -> CheckerOutcome:
         """Execute one strict typed terminal-disposition request."""
+
+        from menagerie.crawler.operator_checker import TERMINAL_CHECKER_MODEL
 
         result = artifact.author_result
         if isinstance(result, ProposedAuthorResult):
@@ -756,7 +762,7 @@ class CommandCheckerLane:
                 item,
                 gate_round=1,
                 output_path=root / "result.json",
-                checker_model=config.checker_model,
+                checker_model=TERMINAL_CHECKER_MODEL,
                 checker_version=config.checker_version,
                 request_nonce=f"terminal-{stable_id}",
             ),
