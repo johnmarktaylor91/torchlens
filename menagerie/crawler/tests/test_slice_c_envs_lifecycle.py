@@ -116,7 +116,6 @@ def _release_lock_provenance_errors(env_root: Path) -> tuple[str, ...]:
     accounted_outputs: set[Path] = set()
     errors: list[str] = []
     for lock_path in sorted(env_root.rglob("*.lock")):
-        lock_target = lock_path.name.removeprefix("round19-").removesuffix(".lock")
         family = {
             "resolved": lock_path.with_suffix(".resolved.json"),
             "resolved_hash": lock_path.with_suffix(".resolved.sha256"),
@@ -130,7 +129,7 @@ def _release_lock_provenance_errors(env_root: Path) -> tuple[str, ...]:
         missing = [
             name
             for name, path in family.items()
-            if not path.is_file() and (name != "probes" or lock_target == "linux-64")
+            if not path.is_file()
         ]
         if missing:
             errors.append(f"{lock_path}:missing-{','.join(sorted(missing))}")
