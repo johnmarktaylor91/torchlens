@@ -32,6 +32,7 @@ from menagerie.crawler.artifact_transactions import (
     ArtifactCheckpointError,
     ArtifactCheckpointProjection,
     ArtifactEventKind,
+    ArtifactEventLedger,
     ArtifactRehydrationError,
     ArtifactTransactionProjection,
     rehydrate_artifact_transaction,
@@ -1518,7 +1519,9 @@ class AdmissionEnvironmentMixin:
     """Admission, environment, and execution workflow methods for the driver."""
 
     _authority_context: Optional[AuthorityContext]
-    _artifact_checkpoint_cache: Optional[tuple[int, ArtifactCheckpointProjection]]
+    _artifact_checkpoint_cache: Optional[
+        tuple[ArtifactEventLedger, int, ArtifactCheckpointProjection]
+    ]
     _ledger_hot_path_samples: list[tuple[int, float]]
 
     if TYPE_CHECKING:
@@ -2480,6 +2483,19 @@ class AdmissionEnvironmentMixin:
     ) -> tuple[ArtifactCheckpointProjection, bool]:
         """Validate artifact authority with an append-invalidated reserve cache.
 
+        The sole entry in the reserve cache is a projection this process already
+        obtained from :func:`validate_artifact_checkpoint`, and it is served only
+        while both of its authority premises still hold: the exact same
+        exclusively locked :class:`ArtifactEventLedger` object, and that ledger's
+        unchanged append generation. Because the reducer holds the artifact
+        shard's exclusive writer lock for the whole run, an unchanged generation
+        pins the exact artifact-authority event bytes that were validated, so a
+        hit can never serve an unvalidated, foreign-ledger, or superseded
+        projection. Every append re-validates in full, as does the first
+        consultation of each run and every one-shot checkpoint projection. The
+        cache is opt-in; with the memoization flag unset this method always
+        performs the full validation and never reads or writes the cache.
+
         Parameters
         ----------
         reducer:
@@ -2496,8 +2512,13 @@ class AdmissionEnvironmentMixin:
         generation = reducer.artifact_ledger.event_count
         enabled = os.environ.get("MENAGERIE_CRAWLER_ARTIFACT_MEMOIZATION") == "1"
         cached = self._artifact_checkpoint_cache
-        if enabled and cached is not None and cached[0] == generation:
-            return cached[1], True
+        if (
+            enabled
+            and cached is not None
+            and cached[0] is reducer.artifact_ledger
+            and cached[1] == generation
+        ):
+            return cached[2], True
         projection = validate_artifact_checkpoint(
             artifact_paths,
             context=reducer.context,
@@ -2506,7 +2527,7 @@ class AdmissionEnvironmentMixin:
             repository_root=repository_root,
         )
         if enabled:
-            self._artifact_checkpoint_cache = (generation, projection)
+            self._artifact_checkpoint_cache = (reducer.artifact_ledger, generation, projection)
         return projection, False
 
     def _record_ledger_hot_path_metric(

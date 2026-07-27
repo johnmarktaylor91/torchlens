@@ -1010,6 +1010,138 @@ def test_synthetic_worker_result_factory_matches_production_protocol_shapes() ->
     assert constructed == [("conftest.py", "make_supervised_worker_result_v3")]
 
 
+def _artifact_cache_writes() -> list[tuple[str, str, ast.expr]]:
+    """Return every production write of the artifact-checkpoint reserve cache.
+
+    Returns
+    -------
+    list[tuple[str, str, ast.expr]]
+        Module name, enclosing definition, and assigned value for each write.
+    """
+
+    writes: list[tuple[str, str, ast.expr]] = []
+    for path in sorted(_CRAWLER_ROOT.glob("*.py")):
+        module_tree, module_parents, module_names = _tree_context(path.read_text(encoding="utf-8"))
+        for node in ast.walk(module_tree):
+            targets: Sequence[ast.expr]
+            if isinstance(node, ast.Assign):
+                targets = node.targets
+            elif isinstance(node, ast.AnnAssign):
+                targets = (node.target,)
+            else:
+                continue
+            if not any(
+                _attribute_name(target) == "self._artifact_checkpoint_cache" for target in targets
+            ):
+                continue
+            assert node.value is not None
+            writes.append(
+                (path.name, _enclosing_definition(node, module_parents, module_names), node.value)
+            )
+    return writes
+
+
+def _assert_artifact_validation_cannot_be_bypassed(
+    admission_source: str,
+    tree: ast.Module,
+    parents: Mapping[ast.AST, ast.AST],
+    names: Mapping[ast.AST, str],
+) -> None:
+    """Assert final artifact authority can only come from a validated projection.
+
+    The projection reserve cache is opt-in memoization of an already validated
+    checkpoint, so the anti-substitution guarantee is structural rather than
+    textual: exactly one function calls the validator, exactly one function calls
+    that function, the cache can only ever be filled from the validator's own
+    return value, and a cache hit is admissible only under the exact locked
+    ledger object and its unchanged append generation. Any bypass -- a second
+    producer of final authority, a projection built without validation, a wider
+    hit guard, or a cached value of unproven origin -- fails here.
+
+    Parameters
+    ----------
+    admission_source:
+        Source of the admission module owning the authority pipeline.
+    tree, parents, names:
+        Parsed admission module, parent links, and qualified definition names.
+    """
+
+    validator_callers = Counter(
+        _enclosing_definition(node, parents, names)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and _attribute_name(node.func).endswith("validate_artifact_checkpoint")
+    )
+    assert validator_callers == Counter(
+        {"AdmissionEnvironmentMixin._validated_artifact_projection": 1}
+    )
+    projection_callers = Counter(
+        _enclosing_definition(node, parents, names)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and _attribute_name(node.func).endswith("_validated_artifact_projection")
+    )
+    assert projection_callers == Counter(
+        {"AdmissionEnvironmentMixin._rehydrate_final_authority": 1}
+    )
+
+    memoized = _function_node(
+        admission_source, "AdmissionEnvironmentMixin._validated_artifact_projection"
+    )
+    validating = [
+        node
+        for node in memoized.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.Call)
+        and _attribute_name(node.value.func).endswith("validate_artifact_checkpoint")
+    ]
+    assert len(validating) == 1
+    validated_target = validating[0].targets[0]
+    assert isinstance(validated_target, ast.Name)
+    validated_name = validated_target.id
+
+    returns_before_validation = [
+        (statement, node)
+        for statement in memoized.body[: memoized.body.index(validating[0])]
+        for node in ast.walk(statement)
+        if isinstance(node, ast.Return)
+    ]
+    assert len(returns_before_validation) == 1
+    guard, cache_hit = returns_before_validation[0]
+    assert isinstance(guard, ast.If)
+    assert isinstance(guard.test, ast.BoolOp) and isinstance(guard.test.op, ast.And)
+    assert [ast.unparse(value) for value in guard.test.values] == [
+        "enabled",
+        "cached is not None",
+        "cached[0] is reducer.artifact_ledger",
+        "cached[1] == generation",
+    ]
+    assert isinstance(cache_hit.value, ast.Tuple)
+    served, served_flag = cache_hit.value.elts
+    assert isinstance(served, ast.Subscript) and _attribute_name(served.value) == "cached"
+    assert isinstance(served_flag, ast.Constant) and served_flag.value is True
+
+    fresh_return = memoized.body[-1]
+    assert isinstance(fresh_return, ast.Return) and isinstance(fresh_return.value, ast.Tuple)
+    fresh, fresh_flag = fresh_return.value.elts
+    assert _attribute_name(fresh) == validated_name
+    assert isinstance(fresh_flag, ast.Constant) and fresh_flag.value is False
+
+    writes = _artifact_cache_writes()
+    assert Counter(owner for _module, owner, _value in writes) == Counter(
+        {
+            "CrawlerDriver.__init__": 1,
+            "AdmissionEnvironmentMixin._validated_artifact_projection": 1,
+        }
+    )
+    for _module, owner, value in writes:
+        if owner == "CrawlerDriver.__init__":
+            assert isinstance(value, ast.Constant) and value.value is None
+            continue
+        assert isinstance(value, ast.Tuple)
+        assert _attribute_name(value.elts[-1]) == validated_name
+
+
 def test_executable_and_artifact_authority_have_one_final_projection() -> None:
     """Exact members and one normalized final transaction must feed all consumers."""
 
@@ -1031,10 +1163,11 @@ def test_executable_and_artifact_authority_have_one_final_projection() -> None:
     assert resolver_callers == Counter({"AdmissionEnvironmentMixin._rehydrate_final_authority": 1})
     reconstruction = inspect.getsource(driver_module.CrawlerDriver._rehydrate_final_authority)
     assert (
-        reconstruction.index("validate_artifact_checkpoint(")
+        reconstruction.index("_validated_artifact_projection(")
         < reconstruction.index("resolve_final_artifact_transaction(")
         < reconstruction.index("rehydrate_artifact_transaction(")
     )
+    _assert_artifact_validation_cannot_be_bypassed(admission_source, tree, parents, names)
     resolver = _function_node(_source(artifact_module), "resolve_final_artifact_transaction")
     assert not any(
         isinstance(node, ast.Subscript)

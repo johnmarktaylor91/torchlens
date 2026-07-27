@@ -37,6 +37,7 @@ from menagerie.crawler.artifact_transactions import (
     ArtifactCheckpointError,
     ArtifactCheckpointProjection,
     ArtifactEventKind,
+    ArtifactEventLedger,
     ArtifactInput,
     ArtifactRehydrationError,
     ArtifactTransactionProjection,
@@ -481,7 +482,9 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         self._intake_snapshot: Optional[IntakeSnapshot] = None
         self._authority_context: Optional[AuthorityContext] = None
         self._shutdown_event = threading.Event()
-        self._artifact_checkpoint_cache: Optional[tuple[int, ArtifactCheckpointProjection]] = None
+        self._artifact_checkpoint_cache: Optional[
+            tuple[ArtifactEventLedger, int, ArtifactCheckpointProjection]
+        ] = None
         self._ledger_hot_path_samples: list[tuple[int, float]] = []
 
     def run(self, *, after_review: bool = False) -> DriverResult:

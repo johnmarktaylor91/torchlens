@@ -3606,6 +3606,76 @@ def test_artifact_validation_reserve_cache_invalidates_on_append_generation(
     assert calls == [4, 5]
 
 
+def test_artifact_validation_reserve_cache_never_crosses_ledgers_or_disabled_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An append generation only excuses revalidation for its own locked ledger."""
+
+    class FakeArtifactLedger:
+        """One exclusively locked artifact shard with an append generation."""
+
+        def __init__(self, event_count: int) -> None:
+            """Bind this shard's append generation."""
+
+            self.event_count = event_count
+
+    class FakeReducer:
+        """Minimal reducer surface consumed by checkpoint validation."""
+
+        def __init__(self, ledger: FakeArtifactLedger) -> None:
+            """Bind one locked artifact ledger and its trust roots."""
+
+            self.artifact_ledger = ledger
+            self.context = object()
+
+    driver = _driver(tmp_path, _snapshot(tmp_path, count=1))
+    calls: list[int] = []
+
+    def fake_validate(*_args: object, **_kwargs: object) -> object:
+        """Record each full checkpoint validation."""
+
+        calls.append(len(calls))
+        return object()
+
+    monkeypatch.setattr(driver_admission_module, "validate_artifact_checkpoint", fake_validate)
+    mirrors = MirrorStore(
+        tmp_path / "mirrors" / "public",
+        tmp_path / "mirrors" / "private",
+        tmp_path / "mirrors" / "local",
+    )
+    kwargs = {
+        "artifact_paths": (driver.paths.ledgers.artifacts,),
+        "mirrors": mirrors,
+        "canonical_root": tmp_path,
+        "repository_root": tmp_path,
+    }
+    first_ledger = FakeArtifactLedger(4)
+    second_ledger = FakeArtifactLedger(4)
+
+    monkeypatch.setenv("MENAGERIE_CRAWLER_ARTIFACT_MEMOIZATION", "1")
+    _projection, cold_hit = driver._validated_artifact_projection(
+        FakeReducer(first_ledger), **kwargs
+    )
+    _projection, same_ledger_hit = driver._validated_artifact_projection(
+        FakeReducer(first_ledger), **kwargs
+    )
+    _projection, foreign_ledger_hit = driver._validated_artifact_projection(
+        FakeReducer(second_ledger), **kwargs
+    )
+    monkeypatch.delenv("MENAGERIE_CRAWLER_ARTIFACT_MEMOIZATION")
+    _projection, disabled_hit = driver._validated_artifact_projection(
+        FakeReducer(second_ledger), **kwargs
+    )
+
+    assert (cold_hit, same_ledger_hit, foreign_ledger_hit, disabled_hit) == (
+        False,
+        True,
+        False,
+        False,
+    )
+    assert calls == [0, 1, 2]
+
+
 def test_ledger_hot_path_metrics_report_positive_terminal_slope(tmp_path: Path) -> None:
     """Per-model authority timing exposes a positive slope against terminal count."""
 
