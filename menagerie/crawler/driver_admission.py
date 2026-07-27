@@ -11,7 +11,7 @@ import sys
 from collections import defaultdict
 from contextlib import nullcontext
 from copy import deepcopy
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -201,6 +201,39 @@ LOGGER = logging.getLogger("menagerie.crawler.driver")
 _T = TypeVar("_T")
 
 
+@dataclass(frozen=True)
+class _DriverAdmissionDependencies:
+    """Late-bound facade collaborators injected after lower modules load."""
+
+    award_closure_identity: Callable[[], str]
+    fetch_targets: Callable[[list[FetchTarget], Path], dict[str, object]]
+
+
+_DRIVER_ADMISSION_DEPENDENCIES: Optional[_DriverAdmissionDependencies] = None
+
+
+def _configure_driver_admission_dependencies(
+    *,
+    award_closure_identity: Callable[[], str],
+    fetch_targets: Callable[[list[FetchTarget], Path], dict[str, object]],
+) -> None:
+    """Inject facade-owned late-bound collaborators without importing the facade."""
+
+    global _DRIVER_ADMISSION_DEPENDENCIES
+    _DRIVER_ADMISSION_DEPENDENCIES = _DriverAdmissionDependencies(
+        award_closure_identity=award_closure_identity,
+        fetch_targets=fetch_targets,
+    )
+
+
+def _driver_admission_dependencies() -> _DriverAdmissionDependencies:
+    """Return the collaborators injected by the import-compatible facade."""
+
+    if _DRIVER_ADMISSION_DEPENDENCIES is None:
+        raise DriverIntegrationError("driver admission dependencies are not configured")
+    return _DRIVER_ADMISSION_DEPENDENCIES
+
+
 def _current_award_closure_identity() -> str:
     """Return the award closure identity exposed by the compatibility facade.
 
@@ -210,9 +243,7 @@ def _current_award_closure_identity() -> str:
         Current award closure identity, including compatibility monkeypatches.
     """
 
-    from menagerie.crawler import driver as driver_facade
-
-    return driver_facade._award_closure_identity()
+    return _driver_admission_dependencies().award_closure_identity()
 
 
 def _current_fetch_targets(
@@ -234,9 +265,7 @@ def _current_fetch_targets(
         Frozen aggregate source manifest.
     """
 
-    from menagerie.crawler import driver as driver_facade
-
-    return driver_facade.fetch_targets(targets, cas_root)
+    return _driver_admission_dependencies().fetch_targets(targets, cas_root)
 
 
 # Reviewed runtime roots. ``_runner_identity`` discovers their transitive local call

@@ -263,6 +263,7 @@ from menagerie.crawler.driver_models import (
     _attempt_has_current_raw_authority,
     _attempt_policy_satisfied,
     _checker_item,
+    _configure_driver_model_dependencies,
     _detected_mode_expansion,
     _driver_failure_attempt,
     _fidelity_gate_history,
@@ -324,6 +325,7 @@ from menagerie.crawler.driver_receipts import (
     _attested_completion_line,
     _collect_worker_executable_closure,
     _compile_worker_read_manifest,
+    _configure_driver_receipt_dependencies,
     _crawler_worker_runtime_paths,
     _diagnostic_relative_path,
     _diagnostics_root_for_work_root,
@@ -362,6 +364,7 @@ from menagerie.crawler.driver_admission import (
     _canonical_crawler_root,
     _canonical_repo_root,
     _checker_prompt_hash,
+    _configure_driver_admission_dependencies,
     _current_run_is_fresh,
     _environment_binding,
     _environment_from_quarantine,
@@ -383,6 +386,32 @@ from menagerie.crawler.driver_admission import (
     _verify_model_code_manifest,
     bind_materialized_environment as bind_materialized_environment,
     build_command_environment_lane as build_command_environment_lane,
+)
+
+_configure_driver_model_dependencies(
+    checker_prompt_hash=lambda: _checker_prompt_hash(),
+    runner_identity=lambda modality: _runner_identity(modality),
+    expected_input_asset_sha256=lambda proposal: _expected_input_asset_sha256(proposal),
+    expected_input_asset_id=lambda proposal: _expected_input_asset_id(proposal),
+    expected_adapter_sha256=lambda proposal: _expected_adapter_sha256(proposal),
+    expected_code_manifest_sha256=lambda proposal: _expected_code_manifest_sha256(proposal),
+    physical_memory_bytes=lambda: _physical_memory_bytes(),
+    redact_attempt_diagnostics=lambda attempt, observation, diagnostics_root: (
+        _redact_attempt_diagnostics(attempt, observation, diagnostics_root)
+    ),
+    framework_from_intake=lambda item: _framework_from_intake(item),
+)
+_configure_driver_receipt_dependencies(
+    execution_identity=lambda artifact, environment, closure_identity: _execution_identity(
+        artifact, environment, closure_identity=closure_identity
+    ),
+    runner_identity=lambda modality: _runner_identity(modality),
+    checker_prompt_hash=lambda: _checker_prompt_hash(),
+    injected_forward_closure_identity=lambda: _INJECTED_FORWARD_CLOSURE_IDENTITY,
+)
+_configure_driver_admission_dependencies(
+    award_closure_identity=lambda: _award_closure_identity(),
+    fetch_targets=lambda targets, cas_root: fetch_targets(targets, cas_root),
 )
 
 LOGGER = logging.getLogger(__name__)

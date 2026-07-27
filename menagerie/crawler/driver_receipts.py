@@ -9,6 +9,7 @@ import secrets
 import threading
 from collections import defaultdict
 from copy import deepcopy
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, Sequence
@@ -83,12 +84,50 @@ from menagerie.crawler.driver_models import (
     _assemble_run_model,
     _attempt_policy_satisfied,
     _detected_mode_expansion,
-    _driver_facade,
     _driver_failure_attempt,
     _matching_attempts,
     _matching_model_attempts,
     _without_ledger_fields,
 )
+
+
+@dataclass(frozen=True)
+class _DriverReceiptDependencies:
+    """Late-bound facade collaborators injected after lower modules load."""
+
+    execution_identity: Callable[[AuthorArtifact, EnvironmentBinding, str], str]
+    runner_identity: Callable[[object], str]
+    checker_prompt_hash: Callable[[], str]
+    injected_forward_closure_identity: Callable[[], str]
+
+
+_DRIVER_RECEIPT_DEPENDENCIES: Optional[_DriverReceiptDependencies] = None
+
+
+def _configure_driver_receipt_dependencies(
+    *,
+    execution_identity: Callable[[AuthorArtifact, EnvironmentBinding, str], str],
+    runner_identity: Callable[[object], str],
+    checker_prompt_hash: Callable[[], str],
+    injected_forward_closure_identity: Callable[[], str],
+) -> None:
+    """Inject facade-owned late-bound collaborators without importing the facade."""
+
+    global _DRIVER_RECEIPT_DEPENDENCIES
+    _DRIVER_RECEIPT_DEPENDENCIES = _DriverReceiptDependencies(
+        execution_identity=execution_identity,
+        runner_identity=runner_identity,
+        checker_prompt_hash=checker_prompt_hash,
+        injected_forward_closure_identity=injected_forward_closure_identity,
+    )
+
+
+def _driver_receipt_dependencies() -> _DriverReceiptDependencies:
+    """Return the collaborators injected by the import-compatible facade."""
+
+    if _DRIVER_RECEIPT_DEPENDENCIES is None:
+        raise DriverIntegrationError("driver receipt dependencies are not configured")
+    return _DRIVER_RECEIPT_DEPENDENCIES
 
 
 _WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V3 "
@@ -225,8 +264,8 @@ class SupervisedForwardLane:
                     environment,
                     verification_token=verification_token,
                 )
-        execution_identity = _driver_facade()._execution_identity(
-            artifact, environment, closure_identity=closure.identity
+        execution_identity = _driver_receipt_dependencies().execution_identity(
+            artifact, environment, closure.identity
         )
         rung = proposal.get("proposed_facts", {}).get("source_resolution", {}).get("rung")
         reducer_policy = cold_forward_policy(stable_id, rung)
@@ -1235,9 +1274,11 @@ def _attempts_from_supervised(
                 "recipe": proposal["recipe_revision"],
                 "environment": environment.env_generation,
                 "execution": execution_identity,
-                "runner": _driver_facade()._runner_identity(facts["external_metadata"]["modality"]),
+                "runner": _driver_receipt_dependencies().runner_identity(
+                    facts["external_metadata"]["modality"]
+                ),
                 "author_prompt": proposal["author"]["prompt_sha256"],
-                "checker_prompt": _driver_facade()._checker_prompt_hash(),
+                "checker_prompt": _driver_receipt_dependencies().checker_prompt_hash(),
             },
             "environment": {
                 "family": environment.family,
@@ -2112,9 +2153,9 @@ class ReceiptDriverMixin:
             closure_identity = collected_closure.identity
         else:
             collected_closure = None
-            closure_identity = _driver_facade()._INJECTED_FORWARD_CLOSURE_IDENTITY
-        execution_identity = _driver_facade()._execution_identity(
-            artifact, environment, closure_identity=closure_identity
+            closure_identity = _driver_receipt_dependencies().injected_forward_closure_identity()
+        execution_identity = _driver_receipt_dependencies().execution_identity(
+            artifact, environment, closure_identity
         )
         self.dependencies.boundary_hook("pre-forward", item.stable_id)
         self._check_shutdown(

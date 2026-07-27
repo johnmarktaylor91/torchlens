@@ -5,9 +5,9 @@ import platform
 import traceback
 from collections import Counter, defaultdict
 from copy import deepcopy
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Callable, Mapping, Optional, Sequence
 from menagerie.crawler.author_dispatch import (
     BlockedRecommendation,
     DeferRecommendation,
@@ -66,18 +66,58 @@ from menagerie.crawler.driver_contracts import (
 )
 
 
-def _driver_facade() -> Any:
-    """Return the import-compatible driver facade for late-bound collaborators.
+@dataclass(frozen=True)
+class _DriverModelDependencies:
+    """Late-bound facade collaborators injected after lower modules load."""
 
-    Returns
-    -------
-    module
-        Imported driver facade.
-    """
+    checker_prompt_hash: Callable[[], str]
+    runner_identity: Callable[[object], str]
+    expected_input_asset_sha256: Callable[[Mapping[str, Any]], Optional[str]]
+    expected_input_asset_id: Callable[[Mapping[str, Any]], Optional[str]]
+    expected_adapter_sha256: Callable[[Mapping[str, Any]], Optional[str]]
+    expected_code_manifest_sha256: Callable[[Mapping[str, Any]], Optional[str]]
+    physical_memory_bytes: Callable[[], int]
+    redact_attempt_diagnostics: Callable[[JsonObject, Any, Optional[Path]], JsonObject]
+    framework_from_intake: Callable[[Any], str]
 
-    from menagerie.crawler import driver as driver_facade
 
-    return driver_facade
+_DRIVER_MODEL_DEPENDENCIES: Optional[_DriverModelDependencies] = None
+
+
+def _configure_driver_model_dependencies(
+    *,
+    checker_prompt_hash: Callable[[], str],
+    runner_identity: Callable[[object], str],
+    expected_input_asset_sha256: Callable[[Mapping[str, Any]], Optional[str]],
+    expected_input_asset_id: Callable[[Mapping[str, Any]], Optional[str]],
+    expected_adapter_sha256: Callable[[Mapping[str, Any]], Optional[str]],
+    expected_code_manifest_sha256: Callable[[Mapping[str, Any]], Optional[str]],
+    physical_memory_bytes: Callable[[], int],
+    redact_attempt_diagnostics: Callable[[JsonObject, Any, Optional[Path]], JsonObject],
+    framework_from_intake: Callable[[Any], str],
+) -> None:
+    """Inject facade-owned late-bound collaborators without importing the facade."""
+
+    global _DRIVER_MODEL_DEPENDENCIES
+    _DRIVER_MODEL_DEPENDENCIES = _DriverModelDependencies(
+        checker_prompt_hash=checker_prompt_hash,
+        runner_identity=runner_identity,
+        expected_input_asset_sha256=expected_input_asset_sha256,
+        expected_input_asset_id=expected_input_asset_id,
+        expected_adapter_sha256=expected_adapter_sha256,
+        expected_code_manifest_sha256=expected_code_manifest_sha256,
+        physical_memory_bytes=physical_memory_bytes,
+        redact_attempt_diagnostics=redact_attempt_diagnostics,
+        framework_from_intake=framework_from_intake,
+    )
+
+
+def _driver_model_dependencies() -> _DriverModelDependencies:
+    """Return the collaborators injected by the import-compatible facade."""
+
+    if _DRIVER_MODEL_DEPENDENCIES is None:
+        raise DriverIntegrationError("driver model dependencies are not configured")
+    return _DRIVER_MODEL_DEPENDENCIES
 
 
 def _current_checker_prompt_hash() -> str:
@@ -89,9 +129,7 @@ def _current_checker_prompt_hash() -> str:
         Current checker prompt hash, including compatibility monkeypatches.
     """
 
-    from menagerie.crawler import driver as driver_facade
-
-    return driver_facade._checker_prompt_hash()
+    return _driver_model_dependencies().checker_prompt_hash()
 
 
 def _usable_family_representative(model: Mapping[str, Any] | None, representative_id: str) -> bool:
@@ -729,7 +767,7 @@ def _matching_attempts(
         and record.get("identities", {}).get("environment") == environment.env_generation
         and record.get("identities", {}).get("execution") == execution_identity
         and record.get("identities", {}).get("runner")
-        == _driver_facade()._runner_identity(modality)
+        == _driver_model_dependencies().runner_identity(modality)
         and record.get("identities", {}).get("author_prompt")
         == proposal.get("author", {}).get("prompt_sha256")
         and record.get("identities", {}).get("checker_prompt") == _current_checker_prompt_hash()
@@ -856,8 +894,8 @@ def _attempt_policy_satisfied(
             receipt.get("input_asset"),
         )
         expected_asset_pair = (
-            _driver_facade()._expected_input_asset_sha256(proposal),
-            _driver_facade()._expected_input_asset_id(proposal),
+            _driver_model_dependencies().expected_input_asset_sha256(proposal),
+            _driver_model_dependencies().expected_input_asset_id(proposal),
         )
         if (
             attempt.get("result") == "succeeded"
@@ -879,9 +917,9 @@ def _attempt_policy_satisfied(
             and mode in {"train", "eval"}
             and receipt.get("observed_recipe_revision") == proposal.get("recipe_revision")
             and receipt.get("observed_adapter_sha256")
-            == _driver_facade()._expected_adapter_sha256(proposal)
+            == _driver_model_dependencies().expected_adapter_sha256(proposal)
             and receipt.get("observed_code_manifest_sha256")
-            == _driver_facade()._expected_code_manifest_sha256(proposal)
+            == _driver_model_dependencies().expected_code_manifest_sha256(proposal)
             and observed_asset_pair in {(None, None), expected_asset_pair}
         ):
             counts[mode] += 1
@@ -1053,7 +1091,7 @@ def _driver_failure_attempt(
             "os_build": platform.version() or "unknown-build",
             "architecture": platform.machine() or "unknown-architecture",
             "cpu": platform.processor() or "unknown-cpu",
-            "ram_bytes": _driver_facade()._physical_memory_bytes(),
+            "ram_bytes": _driver_model_dependencies().physical_memory_bytes(),
             "accelerator": None,
             "accelerator_runtime": None,
         },
@@ -1148,7 +1186,7 @@ def _driver_failure_attempt(
             "diagnostic_sha256": None,
         },
     }
-    return _driver_facade()._redact_attempt_diagnostics(attempt, None, diagnostics_root)
+    return _driver_model_dependencies().redact_attempt_diagnostics(attempt, None, diagnostics_root)
 
 
 def _redact_terminal_detail(
@@ -1187,7 +1225,9 @@ def _redact_terminal_detail(
         }
     )
     payload: JsonObject = {"attempt_id": diagnostic_id, "traceback": detail}
-    redacted = _driver_facade()._redact_attempt_diagnostics(payload, None, diagnostics_root)
+    redacted = _driver_model_dependencies().redact_attempt_diagnostics(
+        payload, None, diagnostics_root
+    )
     reference = redacted.get("traceback")
     if not isinstance(reference, Mapping):
         raise DriverIntegrationError("terminal diagnostic redaction did not produce a reference")
@@ -1296,8 +1336,8 @@ def _placeholder_facts(
             "family_grounding_path": None,
         },
         "implementation": {
-            "original_framework": _driver_facade()._framework_from_intake(item.intake),
-            "run_framework": _driver_facade()._framework_from_intake(item.intake),
+            "original_framework": _driver_model_dependencies().framework_from_intake(item.intake),
+            "run_framework": _driver_model_dependencies().framework_from_intake(item.intake),
             "native_object_type": "unresolved",
             "native_call_method": "forward",
             "transparent_forward_adapter": False,
