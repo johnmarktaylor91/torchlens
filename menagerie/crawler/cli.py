@@ -39,6 +39,7 @@ from menagerie.crawler.driver import (
     DriverLockError,
     DriverPaths,
     DriverResult,
+    QueueAuthorLane,
     SupervisedForwardLane,
     build_command_environment_lane,
     default_driver_paths,
@@ -285,6 +286,14 @@ def _add_driver_config_arguments(parser: argparse.ArgumentParser) -> None:
         help="Claude Code wrapper command; defaults to MENAGERIE_AUTHOR_COMMAND",
     )
     parser.add_argument(
+        "--author-queue",
+        default=os.environ.get("MENAGERIE_AUTHOR_QUEUE"),
+        help=(
+            "author-queue root serviced by the managing Claude session; "
+            "defaults to MENAGERIE_AUTHOR_QUEUE and replaces --author-command"
+        ),
+    )
+    parser.add_argument(
         "--checker-command",
         default=os.environ.get("MENAGERIE_CHECKER_COMMAND"),
         help="Codex wrapper command; defaults to MENAGERIE_CHECKER_COMMAND",
@@ -514,7 +523,10 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
         raise ValueError("--dry-run-environment-prefix requires --dry-run")
     if args.intake is None:
         raise ValueError("run/resume requires --intake unless --dry-run is selected")
-    author_command = _required_command(args.author_command, "author")
+    author_queue_root = _optional_author_queue_root(args)
+    author_command = (
+        None if author_queue_root is not None else _required_command(args.author_command, "author")
+    )
     checker_command = _required_command(args.checker_command, "checker")
     environment_command = _required_command(args.environment_command, "environment")
     paths = default_driver_paths(args.repo_root.resolve(), args.intake.resolve())
@@ -553,7 +565,11 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
         ),
     )
     dependencies = DriverDependencies(
-        author=CommandAuthorLane(author_command),
+        author=(
+            QueueAuthorLane(author_queue_root)
+            if author_queue_root is not None
+            else CommandAuthorLane(author_command or ())
+        ),
         checker=CommandCheckerLane(checker_command),
         forward=SupervisedForwardLane(cwd=args.repo_root.resolve()),
         environments=build_command_environment_lane(environment_command, paths.runtime_root),
@@ -677,6 +693,31 @@ def _persisted_environment_generations(
             raise ValueError(f"dry-run attempts contain conflicting generations for {family}")
         generations[family] = generation
     return generations
+
+
+def _optional_author_queue_root(args: argparse.Namespace) -> Optional[Path]:
+    """Resolve the author-queue root when the in-session pool serves the lane.
+
+    The production author pool is a set of Claude subagents inside one live
+    managing session, not a re-entrant CLI subprocess. Setting
+    ``--author-queue`` (or ``MENAGERIE_AUTHOR_QUEUE``) selects the file-queue RPC
+    bridge and makes ``--author-command`` unnecessary.
+
+    Parameters
+    ----------
+    args:
+        Parsed driver arguments.
+
+    Returns
+    -------
+    Path | None
+        Absolute author-queue root, or ``None`` for the wrapper-command lane.
+    """
+
+    raw = getattr(args, "author_queue", None)
+    if raw is None or not str(raw).strip():
+        return None
+    return Path(str(raw)).expanduser().resolve()
 
 
 def _required_command(value: Optional[str], lane: str) -> tuple[str, ...]:

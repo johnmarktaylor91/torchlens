@@ -49,12 +49,17 @@ class CheckerBackoffSignal:
         Provider reset timestamp when supplied.
     response_excerpt:
         Bounded diagnostic response text.
+    provider:
+        Closed usage-limit provider vocabulary member owning the pause. The
+        checker lane is Codex, so this stays ``"openai"``; it is explicit rather
+        than assumed by the scheduler.
     """
 
     reason: CheckerPauseReason
     retry_after_seconds: Optional[int]
     reset_at: Optional[str]
     response_excerpt: str
+    provider: str = "openai"
 
 
 def build_metadata_vet_envelope(
@@ -316,6 +321,7 @@ def classify_checker_response(
         retry_after_seconds=retry_after_seconds,
         reset_at=reset_at,
         response_excerpt=response_body[:1_500],
+        provider="openai",
     )
 
 

@@ -12,6 +12,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Mapping, Optional
+from menagerie.crawler.author_dispatch import (
+    AuthorBackoffSignal,
+)
 from menagerie.crawler.checker_dispatch import (
     CheckerBackoffSignal,
 )
@@ -268,7 +271,7 @@ def _is_sandbox_unavailable(exc: Exception) -> bool:
     )
 
 
-def _future_reset(now: str, signal: CheckerBackoffSignal) -> str:
+def _future_reset(now: str, signal: CheckerBackoffSignal | AuthorBackoffSignal) -> str:
     """Compute an exact reset timestamp when the provider supplied only a delay."""
 
     instant = datetime.fromisoformat(now.removesuffix("Z") + "+00:00")

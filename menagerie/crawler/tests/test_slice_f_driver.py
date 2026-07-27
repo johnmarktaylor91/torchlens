@@ -69,6 +69,7 @@ from menagerie.crawler.driver import (
     ForwardLane,
     Notifier,
     SupervisedForwardLane,
+    UsageBackoffSignal,
     UsagePauseScheduler,
     WorkItem,
     _execution_identity,
@@ -1312,7 +1313,7 @@ class FakePauseScheduler(UsagePauseScheduler):
 
     def schedule(
         self,
-        signal: CheckerBackoffSignal,
+        signal: UsageBackoffSignal,
         operational: JsonlLedger,
         context: OperationalContext,
         created_at: str,
@@ -1331,7 +1332,7 @@ class FakePauseScheduler(UsagePauseScheduler):
             verifier=lambda _spec: True,
         )
         manager.record_pause_and_schedule(
-            provider="openai",
+            provider=signal.provider,
             observed_response=signal.response_excerpt,
             reset_at=reset_at,
             reset_observation=reset_observation,

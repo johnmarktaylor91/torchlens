@@ -18,6 +18,7 @@ from menagerie.crawler.artifact_transactions import (
     StagedArtifact,
 )
 from menagerie.crawler.author_dispatch import (
+    AuthorBackoffSignal,
     AuthorResult,
     DeferRecommendation,
     ProposedAuthorResult,
@@ -84,8 +85,76 @@ class VariantRecipeUnsupported(DriverIntegrationError):
     """Raised when a family recipe has no closed mechanical sibling selector."""
 
 
+class RetryableOperatorError(DriverIntegrationError):
+    """Raised when an operator lane fails transiently and must be retried.
+
+    Risk R8: an unrecognized operator failure must never become a permanent model
+    failure. This class is the typed, non-string-matched membership test used by
+    ``_is_infrastructure_error``.
+    """
+
+
+class AuthorQueueStalled(RetryableOperatorError):
+    """Raised when the managing author session stops servicing the queue.
+
+    Risk R6: the managing session is a single point of failure. A dead session is
+    stalled infrastructure, not a model that failed to be authored.
+    """
+
+
+class AuthorEffortCapExceeded(DriverIntegrationError):
+    """Raised when an author session exceeds its declared effort grant.
+
+    ``PLAN.md`` LP-13.2 makes cap exhaustion ``failed:<actual-stage>`` with
+    ``reason_code=effort-cap-exhausted``: a permanent, model-local outcome rather
+    than a retryable operator fault.
+    """
+
+
 class DriverPaused(DriverError):
     """Raised internally to unwind one environment after a clean campaign pause."""
+
+
+class AuthorBackoffError(DriverError):
+    """Carries a typed author rate/quota pause out of the author lane.
+
+    Raised instead of returning an artifact so the driver's blanket
+    ``except Exception -> failed:source`` arm cannot convert Claude usage
+    exhaustion into a permanent model failure.
+    """
+
+    def __init__(self, signal: AuthorBackoffSignal) -> None:
+        """Attach the typed pause signal.
+
+        Parameters
+        ----------
+        signal:
+            Provider pause carrying reason, reset evidence, and provider.
+        """
+
+        super().__init__(f"author lane paused: {signal.reason.value}")
+        self.signal = signal
+
+
+class AuthorUsagePause(DriverError):
+    """Unwinds one authoring wave after a recorded author usage pause.
+
+    Distinct from :class:`DriverPaused`, which the run loop maps to the review
+    checkpoint. This carries the already-recorded usage-pause reason back to the
+    scheduler's ``paused:usage-limit`` return path.
+    """
+
+    def __init__(self, reason: str) -> None:
+        """Attach the recorded pause reason.
+
+        Parameters
+        ----------
+        reason:
+            Value of the recorded :class:`AuthorPauseReason`.
+        """
+
+        super().__init__(reason)
+        self.reason = reason
 
 
 class DriverShutdown(BaseException):
@@ -398,6 +467,10 @@ class EnvironmentBinding:
     environment_authority_cache: Optional[EnvironmentAuthorityCache] = None
 
 
+UsageBackoffSignal = CheckerBackoffSignal | AuthorBackoffSignal
+"""Either lane's typed provider pause signal, routed through one pause path."""
+
+
 @dataclass(frozen=True)
 class CheckerOutcome:
     """Either one immutable gate or a typed provider pause signal."""
@@ -514,7 +587,7 @@ class UsagePauseScheduler(Protocol):
 
     def schedule(
         self,
-        signal: CheckerBackoffSignal,
+        signal: UsageBackoffSignal,
         operational: JsonlLedger,
         context: OperationalContext,
         created_at: str,

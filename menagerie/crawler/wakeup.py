@@ -22,6 +22,7 @@ from typing import Callable, Mapping, Optional, Sequence
 from menagerie.crawler.authority import WakeEpisode
 from menagerie.crawler.constants import (
     OPERATIONAL_EVENT_SCHEMA_VERSION,
+    USAGE_LIMIT_PROVIDERS,
     OperationalEventKind,
     OperationalEventStatus,
 )
@@ -1512,7 +1513,7 @@ def _validate_episode(episode: WakeEpisode) -> None:
 def _validate_provider(provider: str) -> None:
     """Validate the closed provider vocabulary."""
 
-    if provider not in {"anthropic", "openai"}:
+    if provider not in USAGE_LIMIT_PROVIDERS:
         raise WakeupConfigurationError(f"unsupported usage-limit provider: {provider!r}")
 
 

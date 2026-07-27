@@ -68,6 +68,7 @@ from menagerie.crawler.worker_supervisor import (
 from menagerie.crawler.driver_contracts import (
     ActivatedHandoffArtifact,
     AuthorArtifact,
+    AuthorBackoffError,
     DriverIntegrationError,
     DriverPaused,
     DriverShutdown,
@@ -2372,6 +2373,12 @@ class ReceiptDriverMixin:
                             expansion,
                             reducer,
                         )
+                    except AuthorBackoffError as backoff:
+                        # Provider usage exhaustion during a mode repair is a
+                        # campaign pause, not a failed run. `_forward_and_reduce`
+                        # already returns a pause reason from run repair, so route
+                        # it through the same channel instead of the blanket arm.
+                        return self._pause_for_usage(backoff.signal, operational, 1)
                     except Exception as exc:  # noqa: BLE001 -- bounded repair is model-local
                         reason = (
                             "protocol-violation"
