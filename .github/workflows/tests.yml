@@ -151,6 +151,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y bubblewrap strace
+          # GitHub's ubuntu-24.04 runners restrict unprivileged user namespaces
+          # (AppArmor), so an installed bwrap still cannot construct its sandbox and
+          # detect_os_sandbox() fails closed at the release gate. Re-enable userns for
+          # the sandbox probe; guarded so it is a harmless no-op on images without the
+          # knob. This does not weaken the gate -- the test still requires a *working*
+          # bwrap sandbox, it just lets the hosted runner provide one.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>/dev/null || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>/dev/null || true
           for artifact in \
             "$MENAGERIE_PLATFORM_LOCK" \
             "${MENAGERIE_PLATFORM_LOCK%.lock}.resolved.json" \
@@ -317,6 +325,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y bubblewrap strace
+          # GitHub's ubuntu-24.04 runners restrict unprivileged user namespaces
+          # (AppArmor), so an installed bwrap still cannot construct its sandbox and
+          # detect_os_sandbox() fails closed at the release gate. Re-enable userns for
+          # the sandbox probe; guarded so it is a harmless no-op on images without the
+          # knob. This does not weaken the gate -- the test still requires a *working*
+          # bwrap sandbox, it just lets the hosted runner provide one.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>/dev/null || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>/dev/null || true
           python -m pip install jsonschema
           PYTHONPATH=. python -m menagerie.crawler.tools.release_lock \
             --lock "$MENAGERIE_PLATFORM_LOCK" \
