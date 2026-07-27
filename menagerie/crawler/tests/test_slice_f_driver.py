@@ -164,7 +164,7 @@ def assert_known_event_kinds(*event_kinds: str) -> None:
 def _refresh_proposal_identities(
     proposal: dict[str, Any],
     *,
-    checker_model: str = "codex",
+    checker_model: str = DriverConfig().checker_model,
     checker_version: str = "current",
 ) -> None:
     """Rebind a mutated synthetic proposal to exact facts and current checker bytes."""

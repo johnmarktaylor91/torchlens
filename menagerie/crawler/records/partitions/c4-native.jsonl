@@ -1,0 +1,1047 @@
+{"aliases":["combined_queue:APINN (Augmented PINN)"],"name":"APINN (Augmented PINN)","source_url":"https://github.com/AmeyaJagtap/Augmented_PINNs_-APINNs-","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Astromer"],"name":"Astromer","source_url":"https://github.com/astromer-science","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:AstroNet"],"name":"AstroNet","source_url":"https://github.com/yuliang419/Astronet-Vetting","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Astronet-Planet"],"name":"Astronet-Planet","source_url":"https://github.com/google-research/exoplanet-ml","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:AstroNN"],"name":"AstroNN","source_url":"https://github.com/henrysky/astroNN","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:ATCNet"],"name":"ATCNet","source_url":"https://github.com/Altaheri/EEG-ATCNet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Bayesian spectral CNN"],"name":"Bayesian spectral CNN","source_url":"https://github.com/henrysky/astroNN","triage_class":"SOURCE_AVAILABLE","variant":"astronn","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:BinaryMuseGAN"],"name":"BinaryMuseGAN","source_url":"https://github.com/salu133445/bmusegan","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:BLEURT"],"name":"BLEURT","source_url":"https://github.com/google-research/bleurt (BLEURT); https://github.com/Unbabel/COMET (COMET)","triage_class":"SOURCE_AVAILABLE","variant":"unbabel-comet","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Cal-QL (Calibrated Conservative Q-Learning)"],"name":"Cal-QL (Calibrated Conservative Q-Learning)","source_url":"https://github.com/nakamotoo/Cal-QL","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:CaloGAN"],"name":"CaloGAN","source_url":"https://github.com/hep-lbdl/CaloGAN","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:CaloScore"],"name":"CaloScore","source_url":"https://github.com/ViniciusMikuni/CaloScore","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:CasCN"],"name":"CasCN","source_url":"https://github.com/ChenNed/CasCN","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:CasFlow"],"name":"CasFlow","source_url":"https://github.com/Xovee/casflow","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:CasRel"],"name":"CasRel","source_url":"https://github.com/weizhepei/CasRel","triage_class":"SOURCE_AVAILABLE","variant":"none (official repo, ACL 2020)","zoo":"discovered-keras"}
+{"aliases":["combined_queue:Causal PINN"],"name":"Causal PINN","source_url":"https://github.com/PredictiveIntelligenceLab/CausalPINNs","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:CEVAE"],"name":"CEVAE","source_url":"https://github.com/AMLab-Amsterdam/CEVAE","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:ClaRAN"],"name":"ClaRAN","source_url":"https://github.com/chenwuperth/rgz_rcnn","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:CLDNN for modulation recognition"],"name":"CLDNN for modulation recognition","source_url":"https://github.com/Richardzhangxx/AMR-Benchmark","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:CLRS baseline processor family"],"name":"CLRS baseline processor family","source_url":"https://github.com/google-deepmind/clrs","triage_class":"SOURCE_AVAILABLE","variant":"clrs","zoo":"discovered-jax"}
+{"aliases":["combined_queue:CMU DeepLens"],"name":"CMU DeepLens","source_url":"https://github.com/McWilliamsCenter/CMUDeepLens","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:CosmoFlow"],"name":"CosmoFlow","source_url":"https://github.com/mlcommons/hpc","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:CosmoGAN"],"name":"CosmoGAN","source_url":"https://github.com/MustafaMustafa/cosmoGAN","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:CosmoPower"],"name":"CosmoPower","source_url":"https://github.com/alessiospuriomancini/cosmopower","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Counterpoint by Convolution"],"name":"Counterpoint by Convolution","source_url":"https://github.com/czhuang/coconet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:cPINN (Conservative PINN)"],"name":"cPINN (Conservative PINN)","source_url":"https://github.com/AmeyaJagtap/Conservative_PINNs","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:CrackSegNet"],"name":"CrackSegNet","source_url":"https://github.com/mhmdvjn/CrackSegNet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:CUTIE"],"name":"CUTIE","source_url":"https://github.com/vsymbol/CUTIE","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:CVXPYLayers"],"name":"CVXPYLayers","source_url":"https://github.com/cvxpy/cvxpylayers","triage_class":"SOURCE_AVAILABLE","variant":"cvxpylayers","zoo":"discovered-jax"}
+{"aliases":["combined_queue:D4RL"],"name":"D4RL","source_url":"https://github.com/aviralkumar2907/CQL","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:DANSER"],"name":"DANSER","source_url":"https://github.com/qitianwu/DANSER-WWW-19","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Deep Active Inference Agent (Fountas et al.)"],"name":"Deep Active Inference Agent (Fountas et al.)","source_url":"https://github.com/zfountas/deep-active-inference-mc","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Deep BSDE network"],"name":"Deep BSDE network","source_url":"https://github.com/frankhan91/DeepBSDE","triage_class":"SOURCE_AVAILABLE","variant":"none (repo code) (pytorch port: YifanJiang233/Deep_BSDE_solver)","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Deep BSDE Solver"],"name":"Deep BSDE Solver","source_url":"https://github.com/frankhan91/DeepBSDE","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Deep BSDE Solver for Option Pricing"],"name":"Deep BSDE Solver for Option Pricing","source_url":"https://github.com/frankhan91/DeepBSDE","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Deep Equilibrium Nets (DEQN)"],"name":"Deep Equilibrium Nets (DEQN)","source_url":"https://github.com/sischei/DeepEquilibriumNets","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Deep Equilibrium Nets for macro"],"name":"Deep Equilibrium Nets for macro","source_url":"https://github.com/sischei/DeepEquilibriumNets","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Deep Hedging"],"name":"Deep Hedging","source_url":"https://github.com/hansbuehler/deephedging","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Deep Hedging Network"],"name":"Deep Hedging Network","source_url":"https://github.com/hansbuehler/deephedging","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Deep Plant Phenomics"],"name":"Deep Plant Phenomics","source_url":"https://github.com/p2irc/deepplantphenomics","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Deep Portfolio (Deep Portfolio Theory)"],"name":"Deep Portfolio (Deep Portfolio Theory)","source_url":"https://github.com/tcloaa/Deep-Portfolio-Theory","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:Deep Potential Attention"],"name":"Deep Potential Attention","source_url":"https://github.com/deepmodeling/deepmd-kit","triage_class":"SOURCE_AVAILABLE","variant":"Y","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Deep Sets for jet physics (JUNIPR / \"jet images\" CNN)"],"name":"Deep Sets for jet physics (JUNIPR / \"jet images\" CNN)","source_url":"https://github.com/makagan/JetImages","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:Deep-IRT"],"name":"Deep-IRT","source_url":"https://github.com/ckyeungac/DeepIRT","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Deep21"],"name":"Deep21","source_url":"https://github.com/tlmakinen/deep21","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepAK8"],"name":"DeepAK8","source_url":"https://github.com/DL4Jets/DeepJet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepBNS"],"name":"DeepBNS","source_url":"https://github.com/hrishi508/Gravitational-Wave-Detection-Using-Deep-Learning","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DeepBSDE (Deep Backward SDE Solver)"],"name":"DeepBSDE (Deep Backward SDE Solver)","source_url":"https://github.com/frankhan91/DeepBSDE","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepCas"],"name":"DeepCas","source_url":"https://github.com/chengli-um/DeepCas","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepCSV"],"name":"DeepCSV","source_url":"https://github.com/DL4Jets/DeepJet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepDrawing"],"name":"DeepDrawing","source_url":"https://github.com/jiayouwyhit/deepdrawing","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DeepErwin"],"name":"DeepErwin","source_url":"https://github.com/mdsunivie/deeperwin","triage_class":"SOURCE_AVAILABLE","variant":"Y","zoo":"discovered-jax"}
+{"aliases":["combined_queue:DeepFaceLab SAEHD"],"name":"DeepFaceLab SAEHD","source_url":"https://github.com/iperov/DeepFaceLab","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepFlavour"],"name":"DeepFlavour","source_url":"https://github.com/mstoye/DeepFlavour","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DeepFont"],"name":"DeepFont","source_url":"https://github.com/robinreni96/Font_Recognition-DeepFont","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DeepFormants"],"name":"DeepFormants","source_url":"https://github.com/MLSpeech/DeepFormants","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DeepGalaxy"],"name":"DeepGalaxy","source_url":"https://github.com/maxwelltsai/DeepGalaxy","triage_class":"SOURCE_AVAILABLE","variant":"none (repo code)","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepHAM"],"name":"DeepHAM","source_url":"https://github.com/frankhan91/DeepHAM","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepHawkes"],"name":"DeepHawkes","source_url":"https://github.com/CaoQi92/DeepHawkes","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepHDR"],"name":"DeepHDR","source_url":"https://github.com/elliottwu/DeepHDR","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepHedging Recurrent (LSTM policy for hedging)"],"name":"DeepHedging Recurrent (LSTM policy for hedging)","source_url":"https://github.com/hansbuehler/deephedging","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepHPM"],"name":"DeepHPM","source_url":"https://github.com/maziarraissi/DeepHPMs","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepImpute"],"name":"DeepImpute","source_url":"https://github.com/lanagarmire/deepimpute","triage_class":"SOURCE_AVAILABLE","variant":"deepimpute","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DeepInterpolation"],"name":"DeepInterpolation","source_url":"https://github.com/AllenInstitute/deepinterpolation","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepIV"],"name":"DeepIV","source_url":"https://github.com/jhartford/DeepIV","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DeepJet"],"name":"DeepJet","source_url":"https://github.com/DL4Jets/DeepJet","triage_class":"SOURCE_AVAILABLE","variant":"DeepJetCore","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DeepLabCut (multi-animal maDLC)"],"name":"DeepLabCut (multi-animal maDLC)","source_url":"https://github.com/DeepLabCut/DeepLabCut","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepMEL"],"name":"DeepMEL","source_url":"https://github.com/aertslab/DeepMEL","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DeepMerge"],"name":"DeepMerge","source_url":"https://github.com/deepskies/deepmerge-public","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DeepMReye"],"name":"DeepMReye","source_url":"https://github.com/DeepMReye/DeepMReye","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepPhasePick"],"name":"DeepPhasePick","source_url":"https://github.com/hsotoparada/DeepPhasePick","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepPlant","source_url":"https://github.com/cs-chan/Deep-Plant","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepPoseKit"],"name":"DeepPoseKit","source_url":"https://github.com/jgraving/DeepPoseKit","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepPot-SE"],"name":"DeepPot-SE","source_url":"https://github.com/deepmodeling/deepmd-kit","triage_class":"SOURCE_AVAILABLE","variant":"deepmd-kit","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepRoadMapper"],"name":"DeepRoadMapper","source_url":"https://github.com/mitroadmaps/roadtracer","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepSD"],"name":"DeepSD","source_url":"https://github.com/tjvandal/deepsd","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepSleepNet"],"name":"DeepSleepNet","source_url":"https://github.com/akaraspt/deepsleepnet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepSpCas9"],"name":"DeepSpCas9","source_url":"https://github.com/MyungjaeSong/Paired-Library","triage_class":"SOURCE_AVAILABLE","variant":"none (repo code)","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepSpeaker"],"name":"DeepSpeaker","source_url":"https://github.com/philipperemy/deep-speaker","triage_class":"SOURCE_AVAILABLE","variant":"deep-speaker","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DeepSpeech 1"],"name":"DeepSpeech 1","source_url":"https://github.com/mozilla/DeepSpeech","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepSTN+"],"name":"DeepSTN+","source_url":"https://github.com/vonfeng/DeepSTN","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepTau"],"name":"DeepTau","source_url":"https://github.com/DL4Jets/DeepJetCore (CMS DeepTau training uses CMSSW + DeepJetCore infra; also see cms-tau-pog)","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepTriangle"],"name":"DeepTriangle","source_url":"https://github.com/kasaai/deeptriangle","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepV2D"],"name":"DeepV2D","source_url":"https://github.com/princeton-vl/DeepV2D","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepWeeds model","source_url":"https://github.com/AlexOlsen/DeepWeeds","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepYield","source_url":"https://github.com/kgavahi/DeepYield","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DELFI (neural density estimator for cosmology)"],"name":"DELFI (neural density estimator for cosmology)","source_url":"https://github.com/justinalsing/pydelfi","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Dendritic Gated Network (DGN)"],"name":"Dendritic Gated Network (DGN)","source_url":"https://github.com/google-deepmind/deepmind-research/tree/master/gated_linear_networks","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:DGN fMRI decoder"],"name":"DGN fMRI decoder","source_url":"https://github.com/sreejank/fMRI_Reconstruction","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Difference Target Propagation"],"name":"Difference Target Propagation","source_url":"https://github.com/jsseely/tensorflow-target-prop","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DiffNet"],"name":"DiffNet","source_url":"https://github.com/PeiJieSun/diffnet","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DIMKT (Difficulty-Matching Knowledge Tracing)"],"name":"DIMKT (Difficulty-Matching Knowledge Tracing)","source_url":"https://github.com/shshen-closer/DIMKT","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DMVST-Net"],"name":"DMVST-Net","source_url":"https://github.com/huaxiuyao/DMVST-Net","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DOTA-based Oriented Detection (RotDet ensemble)"],"name":"DOTA-based Oriented Detection (RotDet ensemble)","source_url":"https://github.com/SJTU-Thinklab-Det/DOTA-DOAI","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DPP"],"name":"DPP","source_url":"https://github.com/hsotoparada/DeepPhasePick","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Dragonnet"],"name":"Dragonnet","source_url":"https://github.com/claudiashi57/dragonnet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"name":"DRSN-CW","source_url":"https://github.com/zhao62/Deep-Residual-Shrinkage-Networks","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DrumRNN"],"name":"DrumRNN","source_url":"https://github.com/magenta/magenta","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DS-CNN keyword spotter"],"name":"DS-CNN keyword spotter","source_url":"https://github.com/ARM-software/ML-KWS-for-MCU","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DSIFN"],"name":"DSIFN","source_url":"https://github.com/GeoZcx/A-deeply-supervised-image-fusion-network-for-change-detection-in-remote-sensing-images","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DSTN (Deep Spatio-Temporal Network for CTR)"],"name":"DSTN (Deep Spatio-Temporal Network for CTR)","source_url":"https://github.com/oywtece/dstn","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DVBPR (Deep Visual Bayesian Personalized Ranking)"],"name":"DVBPR (Deep Visual Bayesian Personalized Ranking)","source_url":"https://github.com/kang205/DVBPR","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DySAT"],"name":"DySAT","source_url":"https://github.com/aravindsankar28/DySAT","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:e-prop"],"name":"e-prop","source_url":"https://github.com/IGITUGraz/eligibility_propagation","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:ECoG Speech Decoder (Makin et al.)"],"name":"ECoG Speech Decoder (Makin et al.)","source_url":"https://github.com/jgmakin/ecog2txt","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:EEG-TCNet"],"name":"EEG-TCNet","source_url":"https://github.com/iis-eth-zurich/eeg-tcnet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:EEGNet"],"name":"EEGNet","source_url":"https://github.com/vlawhern/arl-eegmodels","triage_class":"SOURCE_AVAILABLE","variant":"torcheeg","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:EfficientDet-Lite"],"name":"EfficientDet-Lite","source_url":"https://github.com/namas191297/efficientdetlite","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:ElemNet"],"name":"ElemNet","source_url":"https://github.com/NU-CUCIS/ElemNet","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Energy Flow Network (EFN)"],"name":"Energy Flow Network (EFN)","source_url":"https://github.com/thaler-lab/EnergyFlow","triage_class":"SOURCE_AVAILABLE","variant":"EnergyFlow","zoo":"discovered-keras"}
+{"aliases":["combined_queue:EnergyFlow"],"name":"EnergyFlow","source_url":"https://github.com/thaler-lab/EnergyFlow","triage_class":"SOURCE_AVAILABLE","variant":"energyflow","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:EV-FlowNet"],"name":"EV-FlowNet","source_url":"https://github.com/daniilidis-group/EV-FlowNet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:EXIF-SC"],"name":"EXIF-SC","source_url":"https://github.com/minyoungg/selfconsistency","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:ExoGAN"],"name":"ExoGAN","source_url":"https://github.com/ucl-exoplanets/ExoGAN_public","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:ExoMiner"],"name":"ExoMiner","source_url":"https://github.com/nasa/ExoMiner","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:FAS-TD-SF"],"name":"FAS-TD-SF","source_url":"https://github.com/yaojieliu/CVPR2019-DeepTreeLearningForZeroShotFaceAntispoofing","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:FBSNN"],"name":"FBSNN","source_url":"https://github.com/maziarraissi/FBSNNs","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:FETCH (Fast Extragalactic Transient Candidate Hunter)"],"name":"FETCH (Fast Extragalactic Transient Candidate Hunter)","source_url":"https://github.com/devanshkv/fetch","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:FFN (Flood-Filling Network)"],"name":"FFN (Flood-Filling Network)","source_url":"https://github.com/google/ffn","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:FIRST Classifier"],"name":"FIRST Classifier","source_url":"https://github.com/chenwuperth/rgz_rcnn","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Flood-Filling Network (FFN)"],"name":"Flood-Filling Network (FFN)","source_url":"https://github.com/google/ffn","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:FloorNet"],"name":"FloorNet","source_url":"https://github.com/art-programmer/FloorNet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:FlowPM"],"name":"FlowPM","source_url":"https://github.com/DifferentiableUniverseInitiative/flowpm","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:FolkRNN"],"name":"FolkRNN","source_url":"https://github.com/IraKorshunova/folk-rnn","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:FoodNet"],"name":"FoodNet","source_url":"https://github.com/Cheng-K/FoodNet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:FRNN"],"name":"FRNN","source_url":"https://github.com/PPPLDeepLearning/plasma-python","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Functa"],"name":"Functa","source_url":"https://github.com/google-deepmind/functa","triage_class":"SOURCE_AVAILABLE","variant":"JAX","zoo":"discovered-jax"}
+{"aliases":["combined_queue:Galaxy10 CNN baseline"],"name":"Galaxy10 CNN baseline","source_url":"https://github.com/henrysky/astroNN","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:GalaxyCNN"],"name":"GalaxyCNN","source_url":"https://github.com/mwalmsley/galaxy-zoo-bayesian-cnn","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:GANITE"],"name":"GANITE","source_url":"https://github.com/jsyoon0823/GANITE","triage_class":"SOURCE_AVAILABLE","variant":"ganite (pypi)","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:GANSynth"],"name":"GANSynth","source_url":"https://github.com/magenta/magenta/tree/main/magenta/models/gansynth","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:GCNN Neural Quantum State"],"name":"GCNN Neural Quantum State","source_url":"https://github.com/netket/netket","triage_class":"SOURCE_AVAILABLE","variant":"netket","zoo":"discovered-jax"}
+{"aliases":["combined_queue:GeoMAN"],"name":"GeoMAN","source_url":"https://github.com/yoshall/GeoMAN","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:GIKT"],"name":"GIKT","source_url":"https://github.com/ApexEDM/GIKT","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:GP-VAE for neural trajectories"],"name":"GP-VAE for neural trajectories","source_url":"https://github.com/ratschlab/GP-VAE","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:GPD"],"name":"GPD","source_url":"https://github.com/interseismic/generalized-phase-detection","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:GRAINS"],"name":"GRAINS","source_url":"https://github.com/ManyiLi12345/GRAINS","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Grid-Cell Navigation Agent (DeepMind)"],"name":"Grid-Cell Navigation Agent (DeepMind)","source_url":"https://github.com/google-deepmind/grid-cells","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:GrooVAE"],"name":"GrooVAE","source_url":"https://github.com/magenta/magenta/tree/main/magenta/models/music_vae","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:GShard translation MoE"],"name":"GShard translation MoE","source_url":"https://github.com/facebookresearch/fairseq","triage_class":"SOURCE_AVAILABLE","variant":"fairseq (examples/translation_moe)","zoo":"discovered-jax"}
+{"aliases":["combined_queue:GWSkyNet"],"name":"GWSkyNet","source_url":"https://github.com/GWML/GWSkyNet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:HABNet"],"name":"HABNet","source_url":"https://github.com/csprh/HABNetModelling","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Halo-CNN"],"name":"Halo-CNN","source_url":"https://github.com/lluciesmith/DeepHalos","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:HGCAL Graph Network"],"name":"HGCAL Graph Network","source_url":"https://github.com/jkiesele/caloGraphNN (GravNet/GarNet reference) + torch_geometric.nn.conv.GravNetConv","triage_class":"SOURCE_AVAILABLE","variant":"torch_geometric","zoo":"discovered-keras"}
+{"aliases":["combined_queue:HGCAL MLPF"],"name":"HGCAL MLPF","source_url":"https://github.com/jpata/particleflow","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:Hierarchical Diffusion Attention Network (HiDAN)"],"name":"Hierarchical Diffusion Attention Network (HiDAN)","source_url":"https://github.com/zhitao-wang/Hierarchical-Diffusion-Attention-Network","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:hls4ml (neural net FPGA inference for HEP triggers)"],"name":"hls4ml (neural net FPGA inference for HEP triggers)","source_url":"https://github.com/fastmachinelearning/hls4ml","triage_class":"SOURCE_AVAILABLE","variant":"hls4ml","zoo":"discovered-keras"}
+{"aliases":["combined_queue:HOLISMOKES neural lens model"],"name":"HOLISMOKES neural lens model","source_url":"https://github.com/shsuyu/HOLISMOKES-public","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:HyperTransformer"],"name":"HyperTransformer","source_url":"https://github.com/google-research/google-research/tree/master/hypertransformer","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:IBU-inspired neural unfolding networks"],"name":"IBU-inspired neural unfolding networks","source_url":"https://github.com/ericmetodiev/OmniFold","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:ImprovRNN"],"name":"ImprovRNN","source_url":"https://github.com/magenta/magenta","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Individual Claims Development Network"],"name":"Individual Claims Development Network","source_url":"https://github.com/brandonschwab/advancing_loss_reserving","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Inf-VAE"],"name":"Inf-VAE","source_url":"https://github.com/aravindsankar28/Inf-VAE","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:InvoiceNet"],"name":"InvoiceNet","source_url":"https://github.com/naiveHobo/InvoiceNet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:IRTNet"],"name":"IRTNet","source_url":"https://github.com/ckyeungac/DeepIRT","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Ithaca"],"name":"Ithaca","source_url":"https://github.com/google-deepmind/ithaca","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-jax"}
+{"aliases":["combined_queue:Jazz Transformer"],"name":"Jazz Transformer","source_url":"https://github.com/slSeanWU/jazz_transformer","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:JEDI-net"],"name":"JEDI-net","source_url":"https://github.com/jmduarte/JEDInet-code","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:JSENet"],"name":"JSENet","source_url":"https://github.com/hzykent/JSENet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:JUNIPR"],"name":"JUNIPR","source_url":"https://github.com/andersjohanandreassen/JUNIPR","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Lagrangian Graph Network (LGN)"],"name":"Lagrangian Graph Network (LGN)","source_url":"https://github.com/M3RG-IITD/LGNN","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:Lagrangian Neural Network (LNN)"],"name":"Lagrangian Neural Network (LNN)","source_url":"https://github.com/MilesCranmer/lagrangian_nns","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:LocalGLMnet"],"name":"LocalGLMnet","source_url":"https://github.com/JoeLove100/glmnet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:LPCNet"],"name":"LPCNet","source_url":"https://github.com/xiph/LPCNet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:ManTra-Net"],"name":"ManTra-Net","source_url":"https://github.com/ISICV/ManTraNet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:MEG Adaptive NN Classifier"],"name":"MEG Adaptive NN Classifier","source_url":"https://github.com/zubara/mneflow","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:MHCN"],"name":"MHCN","source_url":"https://github.com/Coder-Yu/QRec","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:MidiNet"],"name":"MidiNet","source_url":"https://github.com/RichardYang40148/MidiNet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:MIN2Net"],"name":"MIN2Net","source_url":"https://github.com/IoBT-VISTEC/MIN2Net","triage_class":"SOURCE_AVAILABLE","variant":"min2net","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Mode-Adaptive Neural Network (MANN)"],"name":"Mode-Adaptive Neural Network (MANN)","source_url":"https://github.com/cghezhang/MANN","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Monodense Price Elasticity NN"],"name":"Monodense Price Elasticity NN","source_url":"https://github.com/airtai/monotonic-nn","triage_class":"SOURCE_AVAILABLE","variant":"mono-dense-keras","zoo":"discovered-keras"}
+{"aliases":["combined_queue:MOO"],"name":"MOO","source_url":"https://github.com/google-research/google-research/tree/master/moo","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:MPNN-max"],"name":"MPNN-max","source_url":"https://github.com/google-deepmind/clrs","triage_class":"SOURCE_AVAILABLE","variant":"clrs","zoo":"discovered-jax"}
+{"aliases":["combined_queue:MT3"],"name":"MT3","source_url":"https://github.com/magenta/mt3","triage_class":"SOURCE_AVAILABLE","variant":"https://github.com/magenta/mt3","zoo":"discovered-jax"}
+{"aliases":["combined_queue:Multi-Object Option policy"],"name":"Multi-Object Option policy","source_url":"https://github.com/google-research/google-research/tree/master/moo","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:Music Contrastive Learning with Tonnetz"],"name":"Music Contrastive Learning with Tonnetz","source_url":"https://github.com/ChinghuaChuan/tonnetzDL","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:NetGAN"],"name":"NetGAN","source_url":"https://github.com/danielzuegner/netgan","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Neural Additive Models (NAM)"],"name":"Neural Additive Models (NAM)","source_url":"https://github.com/google-research/google-research/tree/master/neural_additive_models","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Neural Backflow"],"name":"Neural Backflow","source_url":"https://github.com/deepqmc/deepqmc","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:Neural Execution of Graph Algorithms"],"name":"Neural Execution of Graph Algorithms","source_url":"https://github.com/google-deepmind/clrs","triage_class":"SOURCE_AVAILABLE","variant":"clrs","zoo":"discovered-jax"}
+{"aliases":["combined_queue:NeuralGCM"],"name":"NeuralGCM","source_url":"https://github.com/neuralgcm/neuralgcm","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:NeuralSort"],"name":"NeuralSort","source_url":"https://github.com/ermongroup/neuralsort","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:nnet-survival"],"name":"nnet-survival","source_url":"https://github.com/MGensheimer/nnet-survival","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:Octo + diffusion head variant"],"name":"Octo + diffusion head variant","source_url":"https://github.com/octo-models/octo","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:OMNIZART"],"name":"OMNIZART","source_url":"https://github.com/Music-and-Culture-Technology-Lab/omnizart","triage_class":"SOURCE_AVAILABLE","variant":"omnizart","zoo":"discovered-keras"}
+{"aliases":["combined_queue:OnionNet"],"name":"OnionNet","source_url":"https://github.com/zhenglz/onionnet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:OpenL3 Music Embedding"],"name":"OpenL3 Music Embedding","source_url":"https://github.com/marl/openl3","triage_class":"SOURCE_AVAILABLE","variant":"openl3","zoo":"discovered-keras"}
+{"aliases":["combined_queue:PauliNet"],"name":"PauliNet","source_url":"https://github.com/deepqmc/deepqmc","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:Perceiver IO"],"name":"Perceiver IO","source_url":"https://github.com/google-deepmind/deepmind-research/tree/master/perceiver","triage_class":"SOURCE_AVAILABLE","variant":"pip:perceiver-io-pytorch","zoo":"discovered-jax"}
+{"aliases":["combined_queue:Phonet"],"name":"Phonet","source_url":"https://github.com/jcvasquezc/phonet","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:PhyCNN"],"name":"PhyCNN","source_url":"https://github.com/zhry10/PhyCNN","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:PhyLSTM"],"name":"PhyLSTM","source_url":"https://github.com/zhry10/PhyLSTM","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Physics-Informed DeepONet for power dynamics","source_url":"https://github.com/PredictiveIntelligenceLab/Physics-informed-DeepONets","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:PMWD"],"name":"PMWD","source_url":"https://github.com/eelregit/pmwd","triage_class":"SOURCE_AVAILABLE","variant":"pmwd","zoo":"discovered-jax"}
+{"aliases":["combined_queue:Predominant Melody Extraction (Deep Salience)"],"name":"Predominant Melody Extraction (Deep Salience)","source_url":"https://github.com/rabitt/ismir2017-deepsalience","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:Prefix-to-Prefix Training Framework"],"name":"Prefix-to-Prefix Training Framework","source_url":"https://github.com/SimulTrans-demo/STACL","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Psiformer"],"name":"Psiformer","source_url":"https://github.com/google-deepmind/ferminet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:Pythia epigraphy model"],"name":"Pythia epigraphy model","source_url":"https://github.com/sommerschield/ancient-text-restoration","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:R-MVSNet"],"name":"R-MVSNet","source_url":"https://github.com/YoYo000/MVSNet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:RainNet"],"name":"RainNet","source_url":"https://github.com/hydrogo/rainnet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:Rasa DIETClassifier"],"name":"Rasa DIETClassifier","source_url":"https://github.com/RasaHQ/rasa","triage_class":"SOURCE_AVAILABLE","variant":"rasa","zoo":"discovered-keras"}
+{"aliases":["combined_queue:RBM Neural Quantum State"],"name":"RBM Neural Quantum State","source_url":"https://github.com/netket/netket","triage_class":"SOURCE_AVAILABLE","variant":"netket","zoo":"discovered-jax"}
+{"aliases":["combined_queue:Recurrent Marked Temporal Point Process (RMTPP)"],"name":"Recurrent Marked Temporal Point Process (RMTPP)","source_url":"https://github.com/musically-ut/tf_rmtpp","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Recurrent Relational Network"],"name":"Recurrent Relational Network","source_url":"https://github.com/rasmusbergpalm/recurrent-relational-networks","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:RetinexNet"],"name":"RetinexNet","source_url":"https://github.com/weichen582/RetinexNet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:RGB-N"],"name":"RGB-N","source_url":"https://github.com/pengzhou1108/RGB-N","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Road Damage Detection (RDD-YOLO family)"],"name":"Road Damage Detection (RDD-YOLO family)","source_url":"https://github.com/sekilab/RoadDamageDetector","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:RoadTracer"],"name":"RoadTracer","source_url":"https://github.com/mitroadmaps/roadtracer","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:RSDet"],"name":"RSDet","source_url":"https://github.com/yangxue0827/RotationDetection","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:SafetyNet construction detector"],"name":"SafetyNet construction detector","source_url":"https://github.com/D-Thatcher/SafetyNet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:SAM-VGG"],"name":"SAM-VGG","source_url":"https://github.com/marcellacornia/sam","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:SayCan (SAYCan)"],"name":"SayCan (SAYCan)","source_url":"https://github.com/google-research/google-research/tree/master/saycan","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:ScanComplete"],"name":"ScanComplete","source_url":"https://github.com/angeladai/ScanComplete","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Scattering Convolution Network"],"name":"Scattering Convolution Network","source_url":"https://github.com/kymatio/kymatio","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:SCONE"],"name":"SCONE","source_url":"https://github.com/helenqu/scone","triage_class":"SOURCE_AVAILABLE","variant":"scone","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:SE(2)-Transformer"],"name":"SE(2)-Transformer","source_url":"https://github.com/tueimage/SE2CNN","triage_class":"SOURCE_AVAILABLE","variant":"none (repo code)","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:SegCaps"],"name":"SegCaps","source_url":"https://github.com/lalonderodney/SegCaps","triage_class":"SOURCE_AVAILABLE","variant":"none (repo code)","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:SegmentNT"],"name":"SegmentNT","source_url":"https://github.com/instadeepai/nucleotide-transformer","triage_class":"SOURCE_AVAILABLE","variant":"nucleotide-transformer","zoo":"discovered-jax"}
+{"aliases":["combined_queue:Selectional Autoencoder for OMR"],"name":"Selectional Autoencoder for OMR","source_url":"https://github.com/ajgallego/document-image-binarization","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:Semi-Autoregressive"],"name":"Semi-Autoregressive","source_url":"https://github.com/chqiwang/sa-nmt","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Semi-Autoregressive Transformer (SAT)"],"name":"Semi-Autoregressive Transformer (SAT)","source_url":"https://github.com/chqiwang/sa-nmt","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Seq2Point NILM"],"name":"Seq2Point NILM","source_url":"https://github.com/MingjunZhong/seq2point-nilm","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-keras"}
+{"aliases":["combined_queue:Seq2Seq NILM"],"name":"Seq2Seq NILM","source_url":"https://github.com/nilmtk/nilmtk-contrib","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-keras"}
+{"aliases":["combined_queue:Single-pulse CNN"],"name":"Single-pulse CNN","source_url":"https://github.com/liamconnor/single_pulse_ml","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:Sinkhorn Network"],"name":"Sinkhorn Network","source_url":"https://github.com/gomena/sinkhorn_networks","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:SketchRNN"],"name":"SketchRNN","source_url":"https://github.com/tensorflow/magenta","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Spleeter"],"name":"Spleeter","source_url":"https://github.com/deezer/spleeter","triage_class":"SOURCE_AVAILABLE","variant":"spleeter","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:STDNNet"],"name":"STDNNet","source_url":"https://github.com/tangxianfeng/STDN","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-keras"}
+{"aliases":["combined_queue:STG2Seq"],"name":"STG2Seq","source_url":"https://github.com/LeiBAI/STG2Seq","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:StressNet"],"name":"StressNet","source_url":"https://github.com/zhenguonie/stress_net","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Style2Paints"],"name":"Style2Paints","source_url":"https://github.com/lllyasviel/style2paints","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:SuperRAENN"],"name":"SuperRAENN","source_url":"https://github.com/villrv/SuperRAENN","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:TensorMol"],"name":"TensorMol","source_url":"https://github.com/jparkhill/TensorMol","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:TextCaps"],"name":"TextCaps","source_url":"https://github.com/andyweizhao/capsule_text_classification","triage_class":"SOURCE_AVAILABLE","variant":"none (repo code)","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:TKAN (Temporal Kolmogorov-Arnold Network)"],"name":"TKAN (Temporal Kolmogorov-Arnold Network)","source_url":"https://github.com/remigenet/TKAN","triage_class":"SOURCE_AVAILABLE","variant":"none (repo code)","zoo":"discovered-keras"}
+{"aliases":["combined_queue:TNDM"],"name":"TNDM","source_url":"https://github.com/HennigLab/tndm","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Topo-LSTM"],"name":"Topo-LSTM","source_url":"https://github.com/vwz/topolstm","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:TPA-LSTM"],"name":"TPA-LSTM","source_url":"https://github.com/shunyaoshih/TPA-LSTM","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:U-Time"],"name":"U-Time","source_url":"https://github.com/perslev/U-Time","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:VGGish auditory cortex encoder"],"name":"VGGish auditory cortex encoder","source_url":"https://github.com/tensorflow/models/tree/master/research/audioset/vggish","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:VideoCapsuleNet"],"name":"VideoCapsuleNet","source_url":"https://github.com/KevinDuarte/VideoCapsuleNet","triage_class":"SOURCE_AVAILABLE","variant":"none (repo code)","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:VT-CNN2"],"name":"VT-CNN2","source_url":"https://github.com/radioML/examples","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:Wait-k Policy for Simultaneous NMT"],"name":"Wait-k Policy for Simultaneous NMT","source_url":"https://github.com/SimulTrans-demo/STACL","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:White-Box Cartoonization"],"name":"White-Box Cartoonization","source_url":"https://github.com/SystemErrorWang/White-box-Cartoonization","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:WideDTA"],"name":"WideDTA","source_url":"https://github.com/hkmztrk/DeepDTA","triage_class":"SOURCE_AVAILABLE","variant":"N","zoo":"discovered-keras"}
+{"aliases":["combined_queue:XSleepNet"],"name":"XSleepNet","source_url":"https://github.com/pquochuy/xsleepnet","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:zi2zi"],"name":"zi2zi","source_url":"https://github.com/kaonashi-tyc/zi2zi","triage_class":"SOURCE_AVAILABLE","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:BYOL-Explore"],"name":"BYOL-Explore","source_url":"https://arxiv.org/abs/2206.08332","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:CAFE"],"name":"CAFE","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CVGAE conformation generator","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:Deep Filtering"],"name":"Deep Filtering","source_url":"https://arxiv.org/abs/1701.00008","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepBeeCount","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DeepDeSRT"],"name":"DeepDeSRT","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:DeepFlyBrain"],"name":"DeepFlyBrain","source_url":"https://github.com/aertslab/DeepFlyBrain","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:DeepSC-S"],"name":"DeepSC-S","source_url":"https://github.com/Zhenzi-Weng/DeepSC-S","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:ExoNet"],"name":"ExoNet","source_url":"https://github.com/ebasanez/exonet","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-keras"}
+{"aliases":["combined_queue:iCT-Net"],"name":"iCT-Net","source_url":"https://pubmed.ncbi.nlm.nih.gov/31283473/","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:L3-Net"],"name":"L3-Net","source_url":"https://github.com/marl/l3embedding","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:LithoGAN"],"name":"LithoGAN","source_url":"https://yibolin.com/publications/papers/DFM_DAC2019_Ye.pdf","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Muesli"],"name":"Muesli","source_url":"https://arxiv.org/pdf/2104.06159","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-jax"}
+{"name":"NeuralIL","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-jax"}
+{"aliases":["combined_queue:Ph-CNN"],"name":"Ph-CNN","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-keras"}
+{"name":"PhoZNet","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-keras"}
+{"name":"PPE-Net","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:ProQ3D"],"name":"ProQ3D","source_url":"https://github.com/bjornwallner/ProQ3D","triage_class":"REIMPLEMENT","variant":"proq3d","zoo":"discovered-tensorflow"}
+{"name":"Rapid Seismic Damage CNN","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:REVEAL"],"name":"REVEAL","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/knowledge_visual_language","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-jax"}
+{"name":"Scan2BIM-Net","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:SIM"],"name":"SIM","source_url":"https://github.com/tttwwy/sim","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"name":"StreetView-AVM (CNN hedonic fusion)","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:TopoDNN"],"name":"TopoDNN","source_url":"https://www.ericmetodiev.com/files/pdfs/toptagging.pdf","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Translatotron-2"],"name":"Translatotron-2","source_url":"https://google-research.github.io/lingvo-lab/translatotron2/","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:Translatotron-3"],"name":"Translatotron-3","source_url":"https://google-research.github.io/lingvo-lab/translatotron3/","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"aliases":["combined_queue:WaterNet"],"name":"WaterNet","source_url":"https://github.com/Li-Chongyi/Water-Net_Code","triage_class":"REIMPLEMENT","variant":"","zoo":"discovered-tensorflow"}
+{"name":"6-DoF GraspNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ACDC-NN","source_url":"https://github.com/compbiomed-unito/acdc-nn","variant":"acdc-nn","zoo":"discovered-tensorflow"}
+{"name":"ACME","source_url":"https://github.com/HYsxe/ACME","variant":"","zoo":"discovered-keras"}
+{"name":"ACTINN","source_url":"https://github.com/mafeiyang/ACTINN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Action Schema Network (ASNet)","source_url":"https://github.com/qxcv/asnets","variant":"","zoo":"discovered-tensorflow"}
+{"name":"AdaTape","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/adatape","variant":"","zoo":"discovered-jax"}
+{"name":"ADCNN attention-based dual-scale CNN in-loop filter","source_url":"https://github.com/MorganSalvatore/ADCNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Additive Parameter Decomposition","source_url":"https://github.com/jaehong31/APD","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ADMM MIMO Net","source_url":"https://github.com/Minsik-K/ADMM-Net-for-MIMO-Detection","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Adversarial Topic Model","variant":"","zoo":"discovered-tensorflow"}
+{"name":"AFiLM","source_url":"https://github.com/hlmair/afilm","variant":"","zoo":"discovered-tensorflow"}
+{"name":"AiZynthFinder","source_url":"https://github.com/MolecularAI/aizynthfinder","variant":"aizynthfinder","zoo":"discovered-tensorflow"}
+{"name":"ALIGN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ALOE","source_url":"https://github.com/google-deepmind/deepmind-research/tree/master/object_attention_for_reasoning","variant":"","zoo":"discovered-tensorflow"}
+{"name":"AlphaEvolve","source_url":"https://deepmind.google/discover/blog/alphaevolve-a-gemini-powered-coding-agent-for-designing-advanced-algorithms/","variant":"","zoo":"discovered-jax"}
+{"name":"AltumAge","source_url":"https://github.com/rsinghlab/AltumAge","variant":"","zoo":"discovered-tensorflow"}
+{"name":"AMCD","source_url":"https://github.com/mcdenoising/mcdenoising.github.io","variant":"","zoo":"discovered-tensorflow"}
+{"name":"AminoBERT","source_url":"https://github.com/aqlaboratory/rgn2","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ANNA-PALM","source_url":"https://github.com/imodpasteur/ANNA-PALM","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Anthem","source_url":"https://github.com/lhb0723/Anthem","variant":"","zoo":"discovered-keras"}
+{"name":"ASCAD-CNN","source_url":"https://github.com/ANSSI-FR/ASCAD","variant":"","zoo":"discovered-keras"}
+{"name":"Asm2Vec","source_url":"https://github.com/oalieno/asm2vec","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ASTER","source_url":"https://github.com/bgshih/aster","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Att-BLSTM Relation Classifier","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Attention Neural Matching Model","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Attention OCR","source_url":"https://github.com/tensorflow/models/tree/master/research/attention_ocr","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Attention-over-Attention Reader","variant":"","zoo":"discovered-tensorflow"}
+{"name":"AuTO","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Autoencoder Communication System","source_url":"https://github.com/immortal3/AutoEncoder-Based-Communication-System","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Autoencoding Variational Autoencoder (AVAE)","source_url":"https://github.com/google-deepmind/deepmind-research/tree/master/avae","variant":"","zoo":"discovered-jax"}
+{"name":"AutoRT","source_url":"https://github.com/bzhanglab/AutoRT","variant":"","zoo":"discovered-tensorflow"}
+{"name":"AV-MAE","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/av_mae","variant":"","zoo":"discovered-jax"}
+{"name":"AvastNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"AVATAR","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/avatar","variant":"","zoo":"discovered-jax"}
+{"name":"AVICI","source_url":"https://github.com/larslorch/avici","variant":"","zoo":"discovered-jax"}
+{"name":"AWF","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Axial Transformer","source_url":"https://github.com/google-research/google-research/tree/master/axial","variant":"","zoo":"discovered-tensorflow"}
+{"name":"B-Spline CNN on Lie Groups (gsplinets)","source_url":"https://github.com/ebekkers/gsplinets","variant":"","zoo":"discovered-tensorflow"}
+{"name":"B-Spline CNNs on Lie Groups (gsplinets)","source_url":"https://github.com/ebekkers/gsplinets","variant":"","zoo":"discovered-tensorflow"}
+{"name":"B2T2","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Bayou","source_url":"https://github.com/trishullab/bayou","variant":"","zoo":"discovered-tensorflow"}
+{"name":"BCOP","source_url":"https://arxiv.org/abs/1911.00937","variant":"","zoo":"discovered-tensorflow"}
+{"name":"BERTax","source_url":"https://github.com/f-kretschmer/bertax","variant":"","zoo":"discovered-keras"}
+{"name":"BGCN","source_url":"https://github.com/huawei-noah/BGCN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"BiDAF","source_url":"https://github.com/allenai/bi-att-flow","variant":"","zoo":"discovered-tensorflow"}
+{"name":"BiFPN","source_url":"https://github.com/google/automl","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Big Transfer (BiT)","source_url":"https://github.com/google-research/big_transfer","variant":"big-transfer","zoo":"discovered-tensorflow"}
+{"name":"Bilbo","source_url":"https://github.com/jinxmirror13/bilbo-bagging-hybrid","variant":"","zoo":"discovered-tensorflow"}
+{"name":"BiMPM","variant":"","zoo":"discovered-tensorflow"}
+{"name":"BlackMarks","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Block-Recurrent Transformer","source_url":"https://github.com/google-research/meliad","variant":"","zoo":"discovered-jax"}
+{"name":"Blockwise Parallel Transformer","source_url":"https://arxiv.org/abs/2305.19370","variant":"","zoo":"discovered-jax"}
+{"name":"BootsTAP","source_url":"https://arxiv.org/abs/2402.00847","variant":"","zoo":"discovered-jax"}
+{"name":"Bottom-Up Summarization","source_url":"https://github.com/magic282/Bottom-up-summary","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Boundary Attention","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/boundary_attention","variant":"","zoo":"discovered-jax"}
+{"name":"BPN-Burst","source_url":"https://github.com/likesum/bpn","variant":"","zoo":"discovered-tensorflow"}
+{"name":"BPNet-dilated","source_url":"https://github.com/kundajelab/bpnet","variant":"","zoo":"discovered-keras"}
+{"name":"braai","source_url":"https://github.com/dmitryduev/braai","variant":"","zoo":"discovered-tensorflow"}
+{"name":"BraVe","source_url":"https://github.com/google-deepmind/brave","variant":"","zoo":"discovered-jax"}
+{"name":"C-MemMAP","source_url":"https://github.com/MemMAP/C-MemMAP","variant":"","zoo":"discovered-tensorflow"}
+{"name":"C3","source_url":"https://github.com/google-deepmind/c3_neural_compression","variant":"","zoo":"discovered-jax"}
+{"name":"C3 Neural Compression","source_url":"https://github.com/google-deepmind/c3_neural_compression","variant":"","zoo":"discovered-jax"}
+{"name":"caesar-mrcnn","source_url":"https://github.com/SKA-INAF/caesar-mrcnn","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CAMIL","source_url":"https://github.com/olgarithmics/ICLR_CAMIL","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CAN (Co-Action Network)","source_url":"https://github.com/CAN-Paper/Co-Action-Network","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CapsNet-MHC","source_url":"https://github.com/vitalab/CapsNet-MHC","variant":"","zoo":"discovered-keras"}
+{"name":"CarDEC","source_url":"https://github.com/jlakkis/CarDEC","variant":"cardec","zoo":"discovered-tensorflow"}
+{"name":"CARLCS","source_url":"https://yanmeng.github.io/papers/ICPC20Jianhang.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Cascaded Networks","source_url":"https://github.com/google-research/google-research/tree/master/cascaded_networks","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Cascaded Pyramid Network","source_url":"https://github.com/chenyilun95/tf-cpn","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Causalcall","source_url":"https://github.com/scutbioinformatic/causalcall","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CC2Vec","source_url":"https://dl.acm.org/doi/10.1145/3377811.3380361","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CCLearner","source_url":"https://people.cs.vt.edu/nm8247/publications/icsme-research-118-camera-ready.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CDBTune","source_url":"https://github.com/HustAIsGroup/CDBTune","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CDLH","source_url":"https://www.ijcai.org/proceedings/2017/0423.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Cehr-BERT","source_url":"https://github.com/cumc-dbmi/cehr-bert","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CEILNet-Reflection","source_url":"https://github.com/fqnchina/CEILNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Cellcano","source_url":"https://github.com/marvinquiet/Cellcano","variant":"cellcano","zoo":"discovered-tensorflow"}
+{"name":"ChatNT","source_url":"https://github.com/instadeepai/nucleotide-transformer","variant":"","zoo":"discovered-jax"}
+{"name":"CircDeep","source_url":"https://github.com/UofLBioinformatics/circDeep","variant":"","zoo":"discovered-keras"}
+{"name":"CLAY Object Typing Model","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/layout_denoise","variant":"","zoo":"discovered-jax"}
+{"name":"clDice-net","source_url":"https://github.com/jocpae/clDice","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ClearanceNet","source_url":"https://arxiv.org/abs/1910.05917","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Clifford-Steerable CNN","source_url":"https://arxiv.org/abs/2402.14730","variant":"","zoo":"discovered-jax"}
+{"name":"CliqueNet","source_url":"https://github.com/iboing/CliqueNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CMP (Cognitive Mapper and Planner)","source_url":"https://sites.google.com/view/cognitive-mapping-and-planning/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CNNC","source_url":"https://github.com/xiaoyeye/CNNC","variant":"","zoo":"discovered-keras"}
+{"name":"Co-PACRR","variant":"","zoo":"discovered-keras"}
+{"name":"Coarse-to-Fine Coreference Resolution","source_url":"https://github.com/kentonl/e2e-coref","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Coda","source_url":"https://ai.meta.com/research/publications/coda-an-end-to-end-neural-program-decompiler/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"code2seq","source_url":"https://github.com/tech-srl/code2seq","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CodeMatcher","source_url":"https://dl.acm.org/doi/fullHtml/10.1145/3465403","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CodeNN","source_url":"https://www.sciencedirect.com/science/article/pii/S0164121222000279","variant":"","zoo":"discovered-tensorflow"}
+{"name":"coGN","source_url":"https://github.com/matbench-discovery/coGN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Coherent Nanophotonic Neural Network","source_url":"https://github.com/solgaardlab/neurophox","variant":"N","zoo":"discovered-tensorflow"}
+{"name":"CoLight","source_url":"https://github.com/traffic-signal-control/RL_signals","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ColonSegNet","source_url":"https://github.com/DebeshJha/ColonSegNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ColTran","source_url":"https://github.com/google-research/google-research/tree/master/coltran","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Commit2Vec","source_url":"https://arxiv.org/abs/1911.07605","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CondConv (Conditionally Parameterized Convolution)","source_url":"https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/condconv","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Conditional Neural Process (CNP)","source_url":"https://arxiv.org/abs/1807.01613","variant":"https://github.com/google-deepmind/neural-processes","zoo":"discovered-tensorflow"}
+{"name":"coNGN","source_url":"https://github.com/matbench-discovery/coGN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Context-Aware Matting","source_url":"https://github.com/hqqxyy/Context-Aware-Matting","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Continual Unsupervised Representation Learning (CURL)","source_url":"https://github.com/google-deepmind/deepmind-research/tree/master/curl","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Conv-KNRM","source_url":"https://github.com/thunlp/Kernel-Based-Neural-Ranking-Models","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Convolutional Set Transformer (CST)","source_url":"https://github.com/chinefed/convolutional-set-transformer","variant":"cstmodels","zoo":"discovered-keras"}
+{"name":"CorrRNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CosmicRIM","source_url":"https://arxiv.org/abs/2104.12864","variant":"","zoo":"discovered-jax"}
+{"name":"CoSpred","source_url":"https://github.com/pfizer-opensource/CoSpred","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CoupledNet","source_url":"https://github.com/windindicator/CoupledNet","variant":"","zoo":"discovered-jax"}
+{"name":"CRNN-music-tagging","source_url":"https://github.com/kristijanbartol/Deep-Music-Tagger","variant":"","zoo":"discovered-keras"}
+{"name":"Cross-View Training","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CryoCARE","source_url":"https://github.com/juglab/cryoCARE","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CuBERT","source_url":"https://arxiv.org/abs/2001.00059","variant":"","zoo":"discovered-tensorflow"}
+{"name":"CVRL","source_url":"https://github.com/tensorflow/models/tree/master/official/projects/video_ssl","variant":"","zoo":"discovered-tensorflow"}
+{"name":"D3M (Deep Density Displacement Model)","source_url":"https://arxiv.org/abs/1811.06533","variant":"","zoo":"discovered-tensorflow"}
+{"name":"D3PM","source_url":"https://github.com/google-research/google-research/tree/master/d3pm","variant":"","zoo":"discovered-jax"}
+{"name":"DADS (Dynamics-Aware Discovery of Skills)","source_url":"https://github.com/google-research/dads","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DALL-E","variant":"","zoo":"discovered-jax"}
+{"name":"DANNCE","source_url":"https://github.com/spoonsso/dannce","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Data-driven Discretization","source_url":"https://github.com/google/data-driven-discretization-1d","variant":"data-driven-discretization-1d","zoo":"discovered-tensorflow"}
+{"name":"DATE","source_url":"https://github.com/paidamoyo/adversarial_time_to_event","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DBG","source_url":"https://github.com/Tencent/ActionDetection-DBG","variant":"","zoo":"discovered-tensorflow"}
+{"name":"dbRNN Event Extractor","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DDcGAN","source_url":"https://github.com/hanna-xu/DDcGAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DDN","source_url":"https://github.com/XMU-smartdsp/Removing_Rain","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DDSP","source_url":"https://github.com/magenta/ddsp","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DDSP Harmonic-plus-Noise Synthesizer (base architecture)","source_url":"https://github.com/magenta/ddsp","variant":"ddsp","zoo":"discovered-tensorflow"}
+{"name":"Decomposable Attention Model","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DEDAL","source_url":"https://github.com/google-research/google-research/tree/master/dedal","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Deep Biaffine Parser","source_url":"https://github.com/tdozat/Parser-v1","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Deep Complex Network (Trabelsi et al., foundational complex-valued CNN/RNN framework)","source_url":"https://github.com/ChihebTrabelsi/deep_complex_networks","variant":"","zoo":"discovered-keras"}
+{"name":"Deep Fingerprinting","source_url":"https://github.com/deep-fingerprinting/df","variant":"","zoo":"discovered-keras"}
+{"name":"Deep Illumination","source_url":"https://arxiv.org/pdf/1710.09834","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Deep Pyramid CNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Deep Relightable Textures","source_url":"https://vcai.mpi-inf.mpg.de/projects/DeepRelightableTextures/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Deep SRL","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Deep Steganography","source_url":"https://github.com/harveyslash/Deep-Steganography","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Deep-fUS","source_url":"https://github.com/todiian/deep-fus","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Deep-Lattice-Network","source_url":"https://github.com/tensorflow/lattice","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Deep-SR-Net","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Deep-STORM","source_url":"https://arxiv.org/abs/1801.09631","variant":"https://github.com/EliasNehme/Deep-STORM","zoo":"discovered-tensorflow"}
+{"name":"DeepAID","source_url":"https://github.com/dongtsi/DeepAID","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepAtles","source_url":"https://github.com/jiaweiM/DeepAtles","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepBall","source_url":"https://github.com/RvI101/DeepBall-Keras","variant":"","zoo":"discovered-keras"}
+{"name":"DeepBatch","source_url":"https://www.degruyterbrill.com/document/doi/10.1515/biol-2022-0689/html","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepBinDiff","source_url":"https://github.com/deepbindiff/DeepBinDiff","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepBiome","source_url":"https://github.com/youngleebbs/DeepBiome","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepBugs","source_url":"https://github.com/michaelpradel/DeepBugs","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepChIA-PET","source_url":"https://github.com/lu-group/deepchia-pet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepCirCode","source_url":"https://github.com/BioDataLearning/DeepCirCode","variant":"","zoo":"discovered-keras"}
+{"name":"DeepClone","source_url":"https://dl.acm.org/doi/10.1145/2970276.2970326","variant":"","zoo":"discovered-keras"}
+{"name":"DeepCom","source_url":"https://research.monash.edu/en/publications/deep-code-comment-generation/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepComfort","source_url":"https://ieeexplore.ieee.org/document/9085925/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepConcolic","source_url":"https://github.com/trustai/deepconcolic","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepDataFlow","source_url":"https://zenodo.org/records/4247595","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepDoubleB","source_url":"https://github.com/andrzejnovak/DeepJet_DBB","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepDoubleX","source_url":"https://github.com/andrzejnovak/DeepJet_DBB","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepEC","source_url":"https://bitbucket.org/kaistsystemsbiology/deepec","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepEnergy","source_url":"https://www.mdpi.com/1996-1073/11/1/213","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeeperCut (image-conditioned multi-person pose)","source_url":"https://github.com/eldar/pose-tensorflow","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepFam","source_url":"https://github.com/bhi-kimlab/DeepFam","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepFinder","source_url":"https://github.com/deep-finder/DeepFinder","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepFruits","source_url":"https://www.semanticscholar.org/paper/DeepFruits%3A-A-Fruit-Detection-System-Using-Deep-Sa-Ge/9397e7acd062245d37350f5c05faf56e9cfae0d6","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepGO","source_url":"https://github.com/bio-ontology-research-group/deepgo","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepGSR","source_url":"https://github.com/openbioinformatics/DeepGSR","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeephageTP","source_url":"https://github.com/chuym726/DeephageTP","variant":"","zoo":"discovered-keras"}
+{"name":"DeepHartree","source_url":"https://arxiv.org/abs/2604.22669","variant":"","zoo":"discovered-jax"}
+{"name":"DeepHOL","source_url":"https://proceedings.mlr.press/v97/bansal19a.html","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepHost","source_url":"https://github.com/deepomicslab/DeepHost","variant":"","zoo":"discovered-keras"}
+{"name":"DeepHunter","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepIMAGER","source_url":"https://github.com/+/DeepIMAGER","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepLab-LargeFOV","source_url":"https://github.com/DrSleep/tensorflow-deeplab-lfov","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepM6ASeq","source_url":"https://github.com/rreybeyb/DeepM6ASeq","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepMarks","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepMars","source_url":"https://github.com/utplanets/deepmars","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepMath","source_url":"https://arxiv.org/abs/1606.04442","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepMicrobeFinder","source_url":"https://github.com/chengsly/DeepMicrobeFinder","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepMito","source_url":"http://busca.biocomp.unibo.it/deepmito/","variant":"","zoo":"discovered-keras"}
+{"name":"DeepMod","source_url":"https://github.com/WGLab/DeepMod","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepMutation","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepPHiC","source_url":"https://github.com/AkmalJahan/DeepPHiC","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepPolyA","source_url":"https://github.com/stormlovetao/DeepPolyA","variant":"","zoo":"discovered-keras"}
+{"name":"DeepPotential","source_url":"https://zhanggroup.org/DeepPotential/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepProg","source_url":"https://github.com/lanagarmire/DeepProg","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepRole","source_url":"https://github.com/Detry322/DeepRole","variant":"","zoo":"discovered-keras"}
+{"name":"DeePromoter","source_url":"https://github.com/egochao/DeePromoter","variant":"","zoo":"discovered-keras"}
+{"name":"DeepSC-ST","source_url":"https://github.com/yoonlight/DeepSC-ST","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepSense","source_url":"https://arxiv.org/abs/1611.01942","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepSeqPan","source_url":"https://github.com/pcpLiu/DeepSeqPan","variant":"","zoo":"discovered-keras"}
+{"name":"DeepSim","source_url":"https://dl.acm.org/doi/10.1145/3236024.3236068","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepSimulator","source_url":"https://github.com/liyu95/DeepSimulator","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepSomatic","source_url":"https://github.com/google/deepsomatic","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepSpectra","variant":"","zoo":"discovered-keras"}
+{"name":"DeepStereo","source_url":"https://openaccess.thecvf.com/content_cvpr_2016/papers/Flynn_DeepStereo_Learning_to_CVPR_2016_paper.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepStreaks","source_url":"https://github.com/dmitryduev/DeepStreaks","variant":"","zoo":"discovered-tensorflow"}
+{"name":"deepTAD","variant":"","zoo":"discovered-keras"}
+{"name":"DeepTAM","source_url":"https://github.com/lmb-freiburg/deeptam","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepToF","source_url":"https://www.cs.princeton.edu/~fheide/papers/EndToEndTOF.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepTyper","source_url":"https://vhellendoorn.github.io/fse2018-j2t.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepVel","source_url":"https://github.com/aasensio/deepvel","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepView View Synthesis","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeepXplore","source_url":"https://github.com/peikexin9/deepxplore","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DEER Entity Linker","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeeReCT-PromID","source_url":"https://github.com/lhy-1994/DeeReCT-PromID","variant":"","zoo":"discovered-tensorflow"}
+{"name":"defiNETti","source_url":"https://github.com/carenop/defiNETti","variant":"","zoo":"discovered-keras"}
+{"name":"DELF","source_url":"https://github.com/tensorflow/models/tree/master/research/delf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DELG","source_url":"https://github.com/tensorflow/models/tree/master/research/delf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeLi-GAN","source_url":"https://github.com/val-iisc/deligan","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DeMoN","source_url":"https://github.com/lmb-freiburg/demon","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DenseVOC","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/densevoc","variant":"","zoo":"discovered-jax"}
+{"name":"DeShadowNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DesnowNet","source_url":"https://arxiv.org/abs/1708.04855","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Detect-to-Retrieve","source_url":"https://github.com/tensorflow/models/tree/master/research/delf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DETL (Domain Extension Transfer Learning)","source_url":"https://arxiv.org/abs/2004.10507","variant":"","zoo":"discovered-keras"}
+{"name":"Device Placement Optimization with Reinforcement Learning","source_url":"https://research.google/pubs/device-placement-optimization-with-reinforcement-learning/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DG-DAGRNN","source_url":"https://openreview.net/forum?id=BJxgz2R9t7","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Dhaka","source_url":"https://github.com/MicrosoftGenomics/Dhaka","variant":"","zoo":"discovered-keras"}
+{"name":"DHAN","source_url":"https://github.com/vinthony/ghost-free-shadow-removal","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DiBS (Differentiable Bayesian Structure)","source_url":"https://github.com/larslorch/dibs","variant":"","zoo":"discovered-jax"}
+{"name":"Differentiable ILP (partial ILP / dILP)","source_url":"https://github.com/ai-systems/dilp-core","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Differentiable Wavetable Synthesis (DWTS)","source_url":"https://arxiv.org/abs/2111.10003","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Digraph Transformer","source_url":"https://github.com/google-deepmind/digraph_transformer","variant":"","zoo":"discovered-jax"}
+{"name":"DIH","source_url":"https://github.com/wasidennis/DeepHarmonization","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DIIN","source_url":"https://github.com/YichenGong/Densely-Interactive-Inference-Network","variant":"","zoo":"discovered-tensorflow"}
+{"name":"diploSHIC","source_url":"https://github.com/kr-colab/diploSHIC","variant":"diploshic","zoo":"discovered-tensorflow"}
+{"name":"DIRE-decompiler","source_url":"https://github.com/eth-sri/dire","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DirectionNet","source_url":"https://github.com/google-research/google-research/tree/master/direction_net","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DirectPET","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Dis-PU","source_url":"https://github.com/liruihui/Dis-PU","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DiSAN (Directional Self-Attention Network)","source_url":"https://github.com/taoshen58/DiSAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"disc-pop-gen","source_url":"https://github.com/SchriderLab/disc-pop-gen","variant":"","zoo":"discovered-keras"}
+{"name":"Disentangled RNNs","source_url":"https://github.com/google-deepmind/disentangled_rnns","variant":"","zoo":"discovered-jax"}
+{"name":"Distribution Embedding Networks","source_url":"https://github.com/google-research/google-research/tree/master/distribution_embedding_networks","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DLC","source_url":"https://tufanomichele.com/publications/C5.pdf","variant":"","zoo":"discovered-keras"}
+{"name":"DLFuzz","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DLOmix","source_url":"https://github.com/wilhelm-lab/dlomix","variant":"dlomix","zoo":"discovered-tensorflow"}
+{"name":"DMAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DMT (Deep Multifaceted Transformers)","source_url":"https://github.com/jd-icde-2020/DMT","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DocQA","source_url":"https://github.com/allenai/document-qa","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DR-BiLSTM","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DRSA","source_url":"https://github.com/rk2900/DRSA","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DSelect-k","source_url":"https://github.com/google-research/google-research/tree/master/dselect_k_moe","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DSen2-CR","source_url":"https://github.com/ameraner/dsen2-cr","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DTLN-AEC","source_url":"https://github.com/breizhn/DTLN-aec","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DUET Neural IR","variant":"","zoo":"discovered-tensorflow"}
+{"name":"DuplexViT","source_url":"https://github.com/google-research/scenic/blob/main/scenic/projects/tasseo/duplex_vit.py","variant":"","zoo":"discovered-jax"}
+{"name":"DVF","source_url":"https://github.com/liuziwei7/voxel-flow","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Dynamic Coattention Network","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Dynamic Kanerva Machine","source_url":"https://github.com/google-deepmind/dynamic-kanerva-machines","variant":"","zoo":"discovered-tensorflow"}
+{"name":"e2gmm","source_url":"https://github.com/cryoem/eman2","variant":"","zoo":"discovered-tensorflow"}
+{"name":"EddyNet","source_url":"https://github.com/redouanelg/EddyNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Edge-GNN","source_url":"https://github.com/google-research/circuit_training","variant":"","zoo":"discovered-tensorflow"}
+{"name":"EKLAVYA","variant":"","zoo":"discovered-tensorflow"}
+{"name":"EMCAPSNet","source_url":"https://github.com/google-research/google-research/tree/master/capsule_em","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ENAS","source_url":"https://github.com/melodyguan/enas","variant":"","zoo":"discovered-tensorflow"}
+{"name":"End-to-end Neural Coreference Resolution","source_url":"https://github.com/kentonl/e2e-coref","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Endgame-DGA","source_url":"https://github.com/endgameinc/dga_predict","variant":"","zoo":"discovered-keras"}
+{"name":"EpiDope","source_url":"https://github.com/mcollatz/EpiDope","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Epistemic Neural Networks","source_url":"https://github.com/google-deepmind/enn","variant":"dm-enn","zoo":"discovered-jax"}
+{"name":"Equivariant Continuous Flow for Lattice QFT","source_url":"https://github.com/mathisgerdes/continuous-flow-lft","variant":"","zoo":"discovered-jax"}
+{"name":"ETA (End-to-end Target Attention long-seq)","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ETC","source_url":"https://github.com/google-research/google-research/tree/master/etcmodel","variant":"","zoo":"discovered-tensorflow"}
+{"name":"EURNN","source_url":"https://github.com/iguanaus/urnn-EURNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Expert Choice MoE (Mixture-of-Experts with Expert-Choice Routing)","source_url":"https://arxiv.org/abs/2202.09368","variant":"none (Google; JAX/Pax, no public checkpoint)","zoo":"discovered-jax"}
+{"name":"Expert Choice Routing MoE","source_url":"https://arxiv.org/pdf/2202.09368","variant":"","zoo":"discovered-jax"}
+{"name":"FACT","source_url":"https://google.github.io/aichoreographer/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FastGCN","source_url":"https://github.com/matenure/FastGCN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FastGRNN (Fast Accurate Stable Tiny Gated RNN)","source_url":"https://github.com/microsoft/EdgeML","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FastQA","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FastRNN (Residual-Stabilized Vanilla RNN)","source_url":"https://github.com/microsoft/EdgeML","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FC4","source_url":"https://github.com/yuanming-hu/fc4","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FCCA","source_url":"https://www.researchgate.net/publication/343142619_FCCA_Hybrid_Code_Representation_for_Functional_Clone_Detection_Using_Attention_Networks","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FCN-f0","source_url":"https://github.com/ardaillon/FCN-f0","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Felix","source_url":"https://github.com/google-research/google-research/tree/master/felix","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FILM","source_url":"https://github.com/google-research/frame-interpolation","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FingerNet","source_url":"https://dl.acm.org/doi/10.1109/BTAS.2017.8272688","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FLEN","source_url":"https://github.com/shenweichen/DeepCTR","variant":"deepctr","zoo":"discovered-tensorflow"}
+{"name":"FlowTransformer","source_url":"https://codeocean.com/capsule/1114984/tree/v1","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FMNet (Focal Mechanism Network)","source_url":"https://www.nature.com/articles/s41467-021-21670-x","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FRAP","source_url":"https://traffic-signal-control.github.io/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Free2CAD","source_url":"https://github.com/Enigma-li/Free2CAD","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FTCP","source_url":"https://github.com/PV-Lab/FTCP","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FullFace","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FusionGAN","source_url":"https://github.com/jiayi-ma/FusionGAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"FusionNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GamePad","source_url":"https://arxiv.org/abs/1806.00608","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GAS","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Gated Linear Networks","source_url":"https://github.com/google-deepmind/deepmind-research/tree/master/gated_linear_networks","variant":"","zoo":"discovered-jax"}
+{"name":"Gated-Attention Reader","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Gauge-Equivariant Flow for Lattice Gauge Theory","source_url":"https://arxiv.org/abs/2305.02402","variant":"","zoo":"discovered-jax"}
+{"name":"Gaussian Proposal Network","source_url":"https://github.com/baidu-research/GPN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GaZNets","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GC-Net","source_url":"https://arxiv.org/abs/1703.04309","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GCNs-Net","source_url":"https://github.com/SuperBruceJia/EEG-DL","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GCT","source_url":"https://github.com/Google-Health/records-research","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GEDDnet","source_url":"https://github.com/czk32611/GEDDnet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Gemini Robotics","variant":"","zoo":"discovered-jax"}
+{"name":"GenCast (diffusion + sparse graph-transformer weather ensemble)","source_url":"https://arxiv.org/abs/2312.15796","variant":"none official (github.com/google-deepmind/graphcast ships GenCast checkpoints/code)","zoo":"discovered-jax"}
+{"name":"George","source_url":"https://github.com/lwangbm/george-LRA-scheduler","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GERALD","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/gerald","variant":"","zoo":"discovered-jax"}
+{"name":"GGNN-code","source_url":"https://openreview.net/forum?id=BJOFETxR-","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GHUM","source_url":"https://github.com/google-research/google-research/tree/master/ghum","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GINN","source_url":"https://dl.acm.org/doi/10.1145/3428205","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GLaM (Generalist Language Model)","source_url":"https://arxiv.org/abs/2112.06905","variant":"none (Google internal; JAX/Mesh-TF, no public checkpoint)","zoo":"discovered-jax"}
+{"name":"Globally Normalized Reader","source_url":"https://github.com/baidu-research/GloballyNormalizedReader","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Globally Normalized Transition-Based Neural Network","source_url":"https://github.com/tensorflow/models/tree/master/syntaxnet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GLOnet","source_url":"https://pubs.acs.org/doi/abs/10.1021/acs.nanolett.9b01857","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GMN-binary","source_url":"https://github.com/deepmind/deepmind-research/tree/master/graph_matching_networks","variant":"","zoo":"discovered-tensorflow"}
+{"name":"gMVP","source_url":"https://github.com/ShenLab/gMVP","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GNAQC","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GNoME","source_url":"https://github.com/google-deepmind/materials_discovery","variant":"","zoo":"discovered-jax"}
+{"name":"Gohr-Speck-net","source_url":"https://github.com/agohr/deep_speck","variant":"","zoo":"discovered-keras"}
+{"name":"Grad DFT","source_url":"https://github.com/XanaduAI/GradDFT","variant":"","zoo":"discovered-jax"}
+{"name":"GramBeddings","source_url":"https://github.com/ClickSecurity/GramBeddings","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Graph Matching Networks","source_url":"https://github.com/google-deepmind/deepmind-research/tree/master/graph_matching_networks","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GraphEmb-bin","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GraphPlace","source_url":"https://scalingintelligence.stanford.edu/pubs/gpm/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GraphSCI","source_url":"https://github.com/biomed-AI/GraphSCI","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GREAT","source_url":"https://github.com/VHellendoorn/ICLR20-Great","variant":"","zoo":"discovered-tensorflow"}
+{"name":"GTPN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"H2GCN","source_url":"https://github.com/GemsLab/H2GCN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Hannun-CNN-ECG","source_url":"https://stanfordmlgroup.github.io/projects/ecg/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Harmonic Network","source_url":"https://github.com/danielewworrall/harmonicConvolutions","variant":"","zoo":"discovered-tensorflow"}
+{"name":"HATS","source_url":"https://github.com/dmis-lab/hats","variant":"","zoo":"discovered-tensorflow"}
+{"name":"HAWK-malware","source_url":"https://github.com/RingBDStack/HAWK","variant":"","zoo":"discovered-tensorflow"}
+{"name":"HBMP","variant":"","zoo":"discovered-tensorflow"}
+{"name":"HDR-CNN","source_url":"https://github.com/gabrieleilertsen/hdrcnn","variant":"","zoo":"discovered-tensorflow"}
+{"name":"HetSIREN","source_url":"https://github.com/I2PC/Flexutils-Toolkit","variant":"","zoo":"discovered-tensorflow"}
+{"name":"HiBERT","variant":"","zoo":"discovered-tensorflow"}
+{"name":"hicGAN","source_url":"https://github.com/kimmo1019/hicGAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Hierarchical Device Placement","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Hierarchical Model for Device Placement","source_url":"https://research.google/pubs/hierarchical-planning-for-device-placement/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Hierarchical Perceiver","source_url":"https://github.com/google-deepmind/hierarchical_perceiver","variant":"","zoo":"discovered-jax"}
+{"name":"Hierarchical Probabilistic U-Net","source_url":"https://github.com/google-deepmind/deepmind-research/tree/master/hierarchical_probabilistic_unet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Hierarchical Transformer Memory","source_url":"https://github.com/google-deepmind/deepmind-research/tree/master/hierarchical_transformer_memory","variant":"","zoo":"discovered-jax"}
+{"name":"HiFiC","source_url":"https://github.com/tensorflow/compression","variant":"tensorflow-compression","zoo":"discovered-tensorflow"}
+{"name":"Higher-order Coreference Resolution","variant":"","zoo":"discovered-tensorflow"}
+{"name":"HiT-GAN","source_url":"https://github.com/google-research/hit-gan","variant":"","zoo":"discovered-tensorflow"}
+{"name":"HMD-ARG","source_url":"https://github.com/punkstar25/HMD_ARG_model","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Holophrasm","source_url":"https://arxiv.org/abs/1608.02644","variant":"","zoo":"discovered-tensorflow"}
+{"name":"HolStep","source_url":"https://arxiv.org/abs/1703.00426","variant":"","zoo":"discovered-tensorflow"}
+{"name":"HP-GAN","source_url":"https://github.com/ebarsoum/hpgan","variant":"","zoo":"discovered-tensorflow"}
+{"name":"HPLFlowNet","source_url":"https://github.com/laoreja/HPLFlowNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"HSRnet","source_url":"https://github.com/liangjiandeng/HSRnet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Hybrid Code Networks (HCN)","source_url":"https://github.com/johndpope/hcn","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Hybrid Deep Learner","source_url":"https://disruptions.mit.edu/projects/spangher/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"HYDRA-malware","source_url":"https://github.com/danielgibert/mlw_classification_hydra","variant":"","zoo":"discovered-keras"}
+{"name":"HyperAttention","source_url":"https://github.com/google-research/google-research/tree/master/hyperattention","variant":"","zoo":"discovered-jax"}
+{"name":"i-flow","source_url":"https://arxiv.org/abs/2001.05486","variant":"","zoo":"discovered-tensorflow"}
+{"name":"iCAN","source_url":"https://github.com/vt-vl-lab/iCAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ID-CNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"iDeepE","source_url":"https://github.com/xypan1232/iDeepE","variant":"","zoo":"discovered-keras"}
+{"name":"IDSGAN","source_url":"https://github.com/hiluluk182003/IDSGAN","variant":"","zoo":"discovered-keras"}
+{"name":"IID-MEF","source_url":"https://github.com/HaoZhang1018/IID-MEF","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ILF","source_url":"https://github.com/eth-sri/ilf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"iM6A","source_url":"https://github.com/soskrad/iM6A","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Imagen","source_url":"https://imagen.research.google/","variant":"","zoo":"discovered-jax"}
+{"name":"Imagen Video","source_url":"https://imagen.research.google/video/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ImaGene","source_url":"https://github.com/mfumagalli/ImaGene","variant":"","zoo":"discovered-keras"}
+{"name":"iMatGen","source_url":"https://github.com/kaist-amsg/imatgen","variant":"","zoo":"discovered-tensorflow"}
+{"name":"IMCFN","source_url":"https://www.sciencedirect.com/science/article/abs/pii/S1389128619304736","variant":"","zoo":"discovered-tensorflow"}
+{"name":"iNALU (improved Neural Arithmetic Logic Unit)","source_url":"https://github.com/daschloer/inalu","variant":"","zoo":"discovered-tensorflow"}
+{"name":"InferCode","source_url":"https://github.com/bdqnghi/infercode","variant":"","zoo":"discovered-tensorflow"}
+{"name":"INSCT","source_url":"https://github.com/rpmccordlab/INSCT","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Interactive AoA Reader","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Interactive Attention Network","variant":"","zoo":"discovered-tensorflow"}
+{"name":"IPAGNN","source_url":"https://github.com/google-research/google-research/tree/master/ipagnn","variant":"","zoo":"discovered-tensorflow"}
+{"name":"IrisDenseNet","source_url":"https://www.mdpi.com/1424-8220/18/5/1501","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Jaeger","source_url":"https://github.com/Yasas1994/Jaeger","variant":"","zoo":"discovered-tensorflow"}
+{"name":"JaxSim","source_url":"https://github.com/ami-iit/jaxsim","variant":"","zoo":"discovered-jax"}
+{"name":"JRNN Event Extractor","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Kalantari-HDR","source_url":"https://github.com/TH3CHARLie/deep-high-dynamic-range","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Kalasanty","source_url":"https://gitlab.com/cheminfIBB/kalasanty","variant":"","zoo":"discovered-keras"}
+{"name":"KAMoE","source_url":"https://github.com/remigenet/kamoe","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Kanerva Machine","source_url":"https://github.com/google-deepmind/dynamic-kanerva-machines","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Kernel-based Neural Ranking Model","source_url":"https://github.com/AdeDZY/K-NRM","variant":"","zoo":"discovered-tensorflow"}
+{"name":"KIM","variant":"","zoo":"discovered-tensorflow"}
+{"name":"KinD (Kindling the Darkness)","source_url":"https://github.com/zhangyhuaee/KinD","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Koogu","source_url":"https://github.com/shyamblast/Koogu","variant":"koogu","zoo":"discovered-tensorflow"}
+{"name":"KPCN","source_url":"http://civc.ucsb.edu/graphics/Papers/SIGGRAPH2017_KPCN/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"L2O-Scale","source_url":"https://proceedings.mlr.press/v70/wichrowska17a.html","variant":"","zoo":"discovered-tensorflow"}
+{"name":"L2RRT","source_url":"https://arxiv.org/abs/1807.10366","variant":"","zoo":"discovered-tensorflow"}
+{"name":"LapNet","source_url":"https://github.com/bytedance/LapNet","variant":"","zoo":"discovered-jax"}
+{"name":"Latent Embedding Optimization","source_url":"https://github.com/google-deepmind/leo","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Lattice LSTM","variant":"","zoo":"discovered-tensorflow"}
+{"name":"LEAP Net","source_url":"https://github.com/BDonnot/leap_net","variant":"","zoo":"discovered-keras"}
+{"name":"Learn2Branch","source_url":"https://github.com/ds4dm/learn2branch","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Learned Primal-Dual (LPD) reconstruction network","source_url":"https://github.com/adler-j/learned_primal_dual","variant":"odl","zoo":"discovered-tensorflow"}
+{"name":"Learning Contact Dynamics using Physically Structured Neural Networks","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Learning to Branch (GCNN for MILP)","source_url":"https://github.com/ds4dm/learn2branch","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Leopard","source_url":"https://github.com/GuanLab/Leopard","variant":"","zoo":"discovered-keras"}
+{"name":"LFADS","source_url":"https://github.com/tensorflow/models/tree/master/research/lfads","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Light-SERNet","source_url":"https://github.com/AryaAftab/LIGHT-SERNET","variant":"","zoo":"discovered-tensorflow"}
+{"name":"LightOCT","source_url":"https://arxiv.org/abs/1812.02487","variant":"","zoo":"discovered-tensorflow"}
+{"name":"LipNet-Lipreading","source_url":"https://github.com/rizkiarm/LipNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"LM-LSTM-CRF","variant":"","zoo":"discovered-tensorflow"}
+{"name":"LoadCNN","source_url":"https://arxiv.org/abs/1908.00298","variant":"","zoo":"discovered-tensorflow"}
+{"name":"LOCA","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/loca","variant":"","zoo":"discovered-jax"}
+{"name":"LocoTrack","source_url":"https://arxiv.org/abs/2407.15420","variant":"","zoo":"discovered-jax"}
+{"name":"Logic Tensor Network (LTN)","source_url":"https://github.com/logictensornetworks/logictensornetworks","variant":"logictensornetworks","zoo":"discovered-tensorflow"}
+{"name":"LOGO","source_url":"https://github.com/melobio/LOGO","variant":"","zoo":"discovered-keras"}
+{"name":"Looking-to-Listen","variant":"","zoo":"discovered-tensorflow"}
+{"name":"LR-CNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"LRU","source_url":"https://github.com/NicolasZucchet/minimal-LRU","variant":"","zoo":"discovered-jax"}
+{"name":"LWM (Large World Model)","source_url":"https://arxiv.org/abs/2402.08268","variant":"https://github.com/LargeWorldModel/LWM","zoo":"discovered-jax"}
+{"name":"M-8f-C","variant":"","zoo":"discovered-tensorflow"}
+{"name":"M-LVC","source_url":"https://github.com/JianpingLin/M-LVC_CVPR2020","variant":"","zoo":"discovered-tensorflow"}
+{"name":"M-Net","source_url":"https://github.com/HzFu/MNet_DeepCDR","variant":"","zoo":"discovered-tensorflow"}
+{"name":"M2M","source_url":"https://arxiv.org/abs/2201.06814","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MAC-Network","source_url":"https://github.com/stanfordnlp/mac-network","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Magenta RealTime 2","source_url":"https://github.com/magenta/magenta-realtime","variant":"magenta-rt","zoo":"discovered-jax"}
+{"name":"MagicLens","source_url":"https://github.com/google-deepmind/magiclens","variant":"","zoo":"discovered-jax"}
+{"name":"MagNet","source_url":"https://github.com/Trevillie/MagNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MalGAN","source_url":"https://github.com/yanminglai/Malware-GAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MaMMUT","source_url":"https://github.com/google-deepmind/mammut","variant":"","zoo":"discovered-jax"}
+{"name":"MangoNet","source_url":"https://github.com/avadesh02/MangoNet-Semantic-Dataset","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MatchPyramid","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MatDesINNe","source_url":"https://github.com/jxzhangjhu/MatDesINNe","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MatViT","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/matvit","variant":"","zoo":"discovered-jax"}
+{"name":"maxATAC","source_url":"https://github.com/MiraldiLab/maxATAC","variant":"maxatac","zoo":"discovered-tensorflow"}
+{"name":"MAXIM","source_url":"https://github.com/google-research/maxim","variant":"","zoo":"discovered-jax"}
+{"name":"MaxwellNet","source_url":"https://github.com/limjoowon/maxwellnet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MBT","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/mbt","variant":"","zoo":"discovered-jax"}
+{"name":"MD4","source_url":"https://github.com/google-deepmind/md4","variant":"","zoo":"discovered-jax"}
+{"name":"Medaka","source_url":"https://github.com/nanoporetech/medaka","variant":"medaka","zoo":"discovered-tensorflow"}
+{"name":"MEMENTO","source_url":"https://github.com/instadeepai/memento","variant":"","zoo":"discovered-jax"}
+{"name":"MemNet-ABSA","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MemTrack","source_url":"https://github.com/tyyyang/MemTrack","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MentorNet","source_url":"https://github.com/google/mentornet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MERF","source_url":"https://creiser.github.io/merf/","variant":"","zoo":"discovered-jax"}
+{"name":"MERLOT","source_url":"https://github.com/rowanz/merlot","variant":"","zoo":"discovered-jax"}
+{"name":"MERLOT Reserve","source_url":"https://github.com/rowanz/merlot_reserve","variant":"","zoo":"discovered-jax"}
+{"name":"Meta Pseudo Labels","source_url":"https://github.com/google-research/google-research/tree/master/meta_pseudo_labels","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Meta-Polyp","source_url":"https://github.com/huyquoctrinh/MetaPolyp-CBMS2023","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Metagenome2Vec","source_url":"https://github.com/MaximilienAngue/metagenome2vec","variant":"","zoo":"discovered-keras"}
+{"name":"MetaRNN","source_url":"https://github.com/Chang-Li2019/MetaRNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MeteorNet","source_url":"https://github.com/xingyul/meteornet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Metis","source_url":"https://github.com/lwangbm/Metis","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Metrical Tracker","source_url":"https://github.com/google/mediapipe/tree/master/mediapipe/modules/face_geometry","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MetricX","source_url":"https://github.com/google-research/metricx","variant":"","zoo":"discovered-jax"}
+{"name":"MHCnuggets","source_url":"https://github.com/KarchinLab/mhcnuggets","variant":"mhcnuggets","zoo":"discovered-keras"}
+{"name":"microDL","source_url":"https://github.com/mehta-lab/microDL","variant":"","zoo":"discovered-keras"}
+{"name":"MicroISP","source_url":"https://github.com/aiff22/MicroISP","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MIMN (Multi-channel user Interest Memory Network)","source_url":"https://github.com/UIC-Paper/MIMN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MinutiaeNet","source_url":"https://github.com/luannd/MinutiaeNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MISIM","source_url":"https://ar5iv.labs.arxiv.org/html/2006.05265","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MLGO","source_url":"https://github.com/google/ml-compiler-opt","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MNEflow","source_url":"https://github.com/ElsevierSoftwareX/SOFTX-D-20-00108","variant":"mneflow","zoo":"discovered-tensorflow"}
+{"name":"MODNet","source_url":"https://github.com/ppdebreuck/modnet","variant":"modnet","zoo":"discovered-tensorflow"}
+{"name":"Modular Successor Feature Approximators","source_url":"https://github.com/wcarvalho/msfa_iclr2023","variant":"","zoo":"discovered-jax"}
+{"name":"MoG-DQN","source_url":"https://github.com/rllab-snu/mog_dqn_car_racing","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MOJO (Multi-Omics JOint representation learning)","source_url":"https://github.com/instadeepai/multiomics-open-research","variant":"","zoo":"discovered-jax"}
+{"name":"MolGAN","source_url":"https://github.com/nicola-decao/MolGAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Montage","source_url":"https://github.com/WSP-LAB/Montage","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MoSeq","source_url":"https://github.com/dattalab/keypoint-moseq","variant":"keypoint-moseq","zoo":"discovered-jax"}
+{"name":"MPLight","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MPS (Matrix Product State) Classifier","source_url":"https://github.com/google/TensorNetwork","variant":"tensornetwork","zoo":"discovered-tensorflow"}
+{"name":"MTTS-CAN","source_url":"https://github.com/xliucs/MTTS-CAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MTV","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/mtv","variant":"","zoo":"discovered-jax"}
+{"name":"Multi-Dimensional LSTM (MDLSTM)","source_url":"https://people.idsia.ch/~juergen/icann_2007.pdf","variant":"mdlstm","zoo":"discovered-tensorflow"}
+{"name":"Multilobar Artificial Neural Network","source_url":"https://www.nature.com/articles/s41598-024-84325-z","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Multimodal Versatile Networks (MMV)","source_url":"https://github.com/google-deepmind/deepmind-research/tree/master/mmv","variant":"","zoo":"discovered-jax"}
+{"name":"Muse-t2i","variant":"","zoo":"discovered-jax"}
+{"name":"MUSHyperNet","source_url":"https://dl.acm.org/doi/10.1007/978-3-031-50524-9_13","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Music Spectrogram Diffusion","source_url":"https://github.com/magenta/music-spectrogram-diffusion","variant":"","zoo":"discovered-jax"}
+{"name":"MUSIQ","source_url":"https://github.com/google-research/google-research/tree/master/musiq","variant":"","zoo":"discovered-jax"}
+{"name":"MutFormer","source_url":"https://github.com/WGLab/mutformer","variant":"","zoo":"discovered-tensorflow"}
+{"name":"MwAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"N-Grammer","source_url":"https://github.com/google-research/google-research/tree/master/ngrammer","variant":"","zoo":"discovered-jax"}
+{"name":"NAM","source_url":"https://github.com/google-research/google-research/tree/master/neural_additive_models","variant":"","zoo":"discovered-tensorflow"}
+{"name":"NCEL","source_url":"https://github.com/TaoMiner/NCEL","variant":"","zoo":"discovered-tensorflow"}
+{"name":"NCSNv3","source_url":"https://github.com/google-research/google-research/tree/master/ncsnv3","variant":"","zoo":"discovered-jax"}
+{"name":"NDLE","source_url":"https://github.com/NVlabs/layerdenoise","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Negative-sampling and Quantization Topic Model","source_url":"https://github.com/bobxwu/NQTM","variant":"","zoo":"discovered-tensorflow"}
+{"name":"NEMP","source_url":"https://github.com/zhangylch/NEMP","variant":"","zoo":"discovered-jax"}
+{"name":"Net-DNF","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Neural Assets","source_url":"https://github.com/google-deepmind/neural_assets","variant":"","zoo":"discovered-jax"}
+{"name":"Neural Bloom Filter","source_url":"https://proceedings.mlr.press/v97/rae19a/rae19a.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Neural Branching","source_url":"https://arxiv.org/abs/2012.13349","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Neural Cleanse","source_url":"https://github.com/bolunwang/backdoor","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Neural Contraction Metric (NCM)","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Neural Light Transport","source_url":"https://github.com/google/neural-light-transport","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Neural Mention Ranking","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Neural Normalized Min-Sum Decoder","source_url":"https://github.com/lorenlugosch/neural-min-sum-decoding","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Neural Process (NP)","source_url":"https://arxiv.org/abs/1807.01622","variant":"https://github.com/google-deepmind/neural-processes","zoo":"discovered-tensorflow"}
+{"name":"Neural Program Search","source_url":"https://arxiv.org/abs/1802.04335","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Neural Stack","source_url":"https://github.com/tensorflow/tensor2tensor/blob/master/tensor2tensor/models/research/neural_stack.py","variant":"tensor2tensor","zoo":"discovered-tensorflow"}
+{"name":"Neural-Guided CLP","source_url":"https://papers.neurips.cc/paper/7445-neural-guided-constraint-logic-programming-for-program-synthesis.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Neural-Guided Deductive Search","source_url":"https://arxiv.org/abs/1804.01186","variant":"","zoo":"discovered-tensorflow"}
+{"name":"NeuralMPM","source_url":"https://neuralmpm.isach.be/","variant":"","zoo":"discovered-jax"}
+{"name":"NeuralReverberator","source_url":"https://github.com/csteinmetz1/NeuralReverberator","variant":"","zoo":"discovered-keras"}
+{"name":"Neuro-Symbolic Program Synthesis","source_url":"https://openreview.net/forum?id=rJ0JwFcex","variant":"","zoo":"discovered-tensorflow"}
+{"name":"NEUZZ","source_url":"https://github.com/Dongdongshe/neuzz","variant":"","zoo":"discovered-tensorflow"}
+{"name":"NeXtVLAD","source_url":"https://openaccess.thecvf.com/content_ECCVW_2018/papers/11132/Lin_NeXtVLAD_An_Efficient_Neural_Network_to_Aggregate_Frame-level_Features_for_ECCVW_2018_paper.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"NfgTransformer","source_url":"https://github.com/google-deepmind/nfg_transformer","variant":"","zoo":"discovered-jax"}
+{"name":"NGDS","source_url":"https://arxiv.org/abs/1805.04162","variant":"","zoo":"discovered-tensorflow"}
+{"name":"NIMA","source_url":"https://github.com/idealo/image-quality-assessment","variant":"","zoo":"discovered-tensorflow"}
+{"name":"NL2Type","source_url":"https://github.com/sola-da/NL2Type","variant":"","zoo":"discovered-tensorflow"}
+{"name":"NLDF","source_url":"https://openaccess.thecvf.com/content_cvpr_2017/papers/Luo_Non-Local_Deep_Features_CVPR_2017_paper.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"NucleoNet (Deep Polygenic Neural Network)","source_url":"https://github.com/NicholasDominic/The-NucleoNets","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ObjectViViT","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/objectvivit","variant":"","zoo":"discovered-jax"}
+{"name":"Octo","source_url":"https://github.com/octo-models/octo","variant":"","zoo":"discovered-jax"}
+{"name":"OF-DFT Normalizing Flows","source_url":"https://github.com/ChemAI-Lab/ofdft_nflows","variant":"","zoo":"discovered-jax"}
+{"name":"OFDM-Autoencoder","variant":"","zoo":"discovered-tensorflow"}
+{"name":"OmniNet","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/omninet","variant":"","zoo":"discovered-jax"}
+{"name":"OnAVOS","source_url":"https://github.com/pvoigtlaender/OnAVOS","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Optimus-5-Prime","source_url":"https://github.com/pjsample/human_5utr_modeling","variant":"","zoo":"discovered-tensorflow"}
+{"name":"OptTyper","source_url":"https://arxiv.org/abs/2004.00348","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Ornate","source_url":"https://team.inria.fr/nano-d/software/ornate/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Outrunner","variant":"","zoo":"discovered-keras"}
+{"name":"P-NET","source_url":"https://github.com/marakeby/pnet_prostate_paper","variant":"","zoo":"discovered-keras"}
+{"name":"PACRR","variant":"","zoo":"discovered-keras"}
+{"name":"PAGR","source_url":"https://openaccess.thecvf.com/content_cvpr_2018/papers/Zhang_Progressive_Attention_Guided_CVPR_2018_paper.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PanGAN","source_url":"https://github.com/yuwei998/PanGAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Parapred","source_url":"https://github.com/eliberis/parapred","variant":"","zoo":"discovered-keras"}
+{"name":"Parti","variant":"","zoo":"discovered-jax"}
+{"name":"PathCNN","source_url":"https://github.com/mdozmorov/PathCNN","variant":"","zoo":"discovered-keras"}
+{"name":"PathNet","source_url":"https://arxiv.org/abs/1701.08734","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PCN","source_url":"https://github.com/wentaoyuan/pcn","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PDE-NetGen","source_url":"https://github.com/opannekoucke/pdenetgen","variant":"pdenetgen","zoo":"discovered-keras"}
+{"name":"Perch 2.0","source_url":"https://arxiv.org/html/2512.03219v1","variant":"","zoo":"discovered-jax"}
+{"name":"PersLay","source_url":"https://github.com/MathieuCarriere/perslay","variant":"perslay","zoo":"discovered-tensorflow"}
+{"name":"PFD-CNNs","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PhageScanner","source_url":"https://github.com/Dreycey/PhageScanner","variant":"","zoo":"discovered-keras"}
+{"name":"PhaseLink","source_url":"https://github.com/interseismic/PhaseLink","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PhaseStain","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PHIAF","source_url":"https://github.com/BioMedicalBigDataMiningLab/PHIAF","variant":"","zoo":"discovered-keras"}
+{"name":"PhyloDeep","source_url":"https://github.com/evolbioinfo/phylodeep","variant":"phylodeep","zoo":"discovered-keras"}
+{"name":"pi0","source_url":"https://github.com/Physical-Intelligence/openpi","variant":"","zoo":"discovered-jax"}
+{"name":"pi0.5","source_url":"https://github.com/Physical-Intelligence/openpi","variant":"","zoo":"discovered-jax"}
+{"name":"PIESRGAN","source_url":"https://www.sciencedirect.com/science/article/pii/S1540748920300481","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PIRATEnet","source_url":"https://github.com/PredictiveIntelligenceLab/jaxpi","variant":"","zoo":"discovered-jax"}
+{"name":"Pix2Act","source_url":"https://github.com/google-deepmind/pix2act","variant":"","zoo":"discovered-jax"}
+{"name":"PixelLLM","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/pixel_llm","variant":"","zoo":"discovered-jax"}
+{"name":"pLSTM","source_url":"https://github.com/ml-jku/plstm","variant":"","zoo":"discovered-jax"}
+{"name":"PMGI","source_url":"https://github.com/jiayi-ma/PMGI_AAAI2020","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PNN","source_url":"https://github.com/sergiovitale/pansharpening-cnn-python-version","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PointIso","source_url":"https://github.com/anne04/PointIso","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PolyGen","source_url":"https://github.com/google-deepmind/deepmind-research/tree/master/polygen","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PolySketchFormer","source_url":"https://github.com/google-research/google-research/tree/master/polysketchformer","variant":"","zoo":"discovered-jax"}
+{"name":"PolyViT","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/polyvit","variant":"","zoo":"discovered-jax"}
+{"name":"PONITA (Fast Expressive SE(n) Equivariant Network via Position-Orientation weight-sharing)","source_url":"https://github.com/ebekkers/ponita","variant":"","zoo":"discovered-jax"}
+{"name":"PopPhy-CNN","source_url":"https://github.com/YDaiLab/PopPhy-CNN","variant":"","zoo":"discovered-keras"}
+{"name":"popvae","source_url":"https://github.com/kr-colab/popvae","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PoreOver","source_url":"https://github.com/jordisr/poreover","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PosPool","source_url":"https://github.com/zeliu98/CloserLook3D","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PPGN","source_url":"https://github.com/hadarser/ProvablyPowerfulGraphNetworks","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PPR-Meta","source_url":"https://github.com/zhenchengfang/PPR-Meta","variant":"","zoo":"discovered-keras"}
+{"name":"pQRNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PRADO","source_url":"https://github.com/tensorflow/models/tree/master/research/seq_flow_lite","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PReMVOS","source_url":"https://github.com/JonathonLuiten/PReMVOS","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PressLight","source_url":"https://github.com/traffic-signal-control/RL_signals","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Primer","source_url":"https://arxiv.org/abs/2109.08668","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Property Signatures","source_url":"https://arxiv.org/pdf/2002.09030","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ProtCNN","source_url":"https://github.com/google-research/google-research/tree/master/using_dl_to_annotate_protein_universe","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ProteInfer","source_url":"https://github.com/google-research/proteinfer","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ProtoAttend","source_url":"https://github.com/google-research/google-research/tree/master/protoattend","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PTDNet","source_url":"https://github.com/flyingdoog/PTDNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PU-GAN","source_url":"https://github.com/liruihui/PU-GAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PU-GCN","source_url":"https://github.com/guochengqian/PU-GCN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PUGeo-Net","source_url":"https://github.com/ninaqy/PUGeo","variant":"","zoo":"discovered-tensorflow"}
+{"name":"PUMML","source_url":"https://arxiv.org/abs/1707.08600","variant":"","zoo":"discovered-tensorflow"}
+{"name":"QANet","source_url":"https://github.com/NLPLearn/QANet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"QDeep","source_url":"https://github.com/Bhattacharya-Lab/QDeep","variant":"","zoo":"discovered-tensorflow"}
+{"name":"QEX","source_url":"https://github.com/pasqal-io/qex","variant":"","zoo":"discovered-jax"}
+{"name":"QLKNN","source_url":"https://arxiv.org/abs/1911.05617","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Quality-Diversity / MAP-Elites","source_url":"https://github.com/hejll/qdax","variant":"qdax","zoo":"discovered-jax"}
+{"name":"QuasarNET","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Quick-Thoughts","source_url":"https://github.com/lajanugen/S2V","variant":"","zoo":"discovered-tensorflow"}
+{"name":"R-HyGNN","source_url":"https://arxiv.org/pdf/2206.06986","variant":"","zoo":"discovered-tensorflow"}
+{"name":"R-Net (MRC)","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Re2Com","source_url":"https://github.com/Gompyn/re2com-opensource","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ReadTwice","source_url":"https://github.com/google-research/google-research/tree/master/readtwice","variant":"","zoo":"discovered-tensorflow"}
+{"name":"RealFormer","source_url":"https://github.com/google-research/google-research/tree/master/realformer","variant":"","zoo":"discovered-tensorflow"}
+{"name":"REBAR","source_url":"https://github.com/tensorflow/models/tree/master/research/rebar","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Reconstructive Memory Agent (RMA)","source_url":"https://github.com/google-deepmind/deepmind-research/tree/master/tvt","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Recurrent Attention Memory Network","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Recursive Cascaded Networks","source_url":"https://github.com/microsoft/Recursive-Cascaded-Networks","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ReDMark","source_url":"https://github.com/MahdiShAhmadi/ReDMark","variant":"","zoo":"discovered-tensorflow"}
+{"name":"redner","source_url":"https://github.com/BachiLi/redner","variant":"redner","zoo":"discovered-tensorflow"}
+{"name":"RegressLM","source_url":"https://github.com/google-deepmind/regress-lm","variant":"","zoo":"discovered-jax"}
+{"name":"ReLERNN","source_url":"https://github.com/kr-colab/ReLERNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Rencos","source_url":"https://hongyujohn.github.io/rencos_icse2020.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"RepNet","source_url":"https://github.com/google-research/google-research/tree/master/repnet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ResPRE","source_url":"https://github.com/leeyang/ResPRE","variant":"","zoo":"discovered-tensorflow"}
+{"name":"RevNet (Reversible Residual Network)","source_url":"https://github.com/renmengye/revnet-public","variant":"","zoo":"discovered-tensorflow"}
+{"name":"RGN","source_url":"https://github.com/aqlaboratory/rgn","variant":"","zoo":"discovered-tensorflow"}
+{"name":"RingNet","source_url":"https://github.com/soubhiksanyal/RingNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"RioGNN","source_url":"https://github.com/safe-graph/RioGNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"RL-RRT","source_url":"https://research.google/pubs/rl-rrt-kinodynamic-motion-planning-via-learning-reachability-estimators-from-rl-policies/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"RLVC","source_url":"https://github.com/RenYang-home/RLVC","variant":"","zoo":"discovered-tensorflow"}
+{"name":"RNMT+","variant":"","zoo":"discovered-tensorflow"}
+{"name":"RNN Wave Functions","source_url":"https://github.com/mhibatallah/RNNWavefunctions","variant":"","zoo":"discovered-tensorflow"}
+{"name":"RNN-Capsule Sentiment Classifier","variant":"","zoo":"discovered-tensorflow"}
+{"name":"RNNAudioEffects","source_url":"https://github.com/jatinchowdhury18/RNNAudioEffects","variant":"","zoo":"discovered-tensorflow"}
+{"name":"RPT","source_url":"https://github.com/ohadrubin/rpt","variant":"","zoo":"discovered-jax"}
+{"name":"RV-GAN","source_url":"https://github.com/SharifAmit/RVGAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"S-Net (MRC)","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SA-Siam","source_url":"https://arxiv.org/abs/1802.08817","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SAVi","source_url":"https://github.com/google-research/slot-attention-video","variant":"","zoo":"discovered-jax"}
+{"name":"SCAAML","source_url":"https://github.com/google/scaaml","variant":"","zoo":"discovered-tensorflow"}
+{"name":"scarlet2","source_url":"https://github.com/pmelchior/scarlet2","variant":"","zoo":"discovered-jax"}
+{"name":"SCDetector","source_url":"https://wu-yueming.github.io/Files/ASE2020_SCDetector.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"scDREAMER","source_url":"https://github.com/Zafar-Lab/scDREAMER","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SDNet","source_url":"https://github.com/HaoZhang1018/SDNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SE(2)-CNN (Roto-Translation Group CNN)","source_url":"https://github.com/tueimage/SE2CNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Searchless Chess","source_url":"https://github.com/google-deepmind/searchless_chess","variant":"","zoo":"discovered-jax"}
+{"name":"SEEDS","variant":"","zoo":"discovered-jax"}
+{"name":"SegLink","source_url":"https://github.com/bgshih/seglink","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SeisDeepNET","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SelfOracle","source_url":"https://github.com/testingautomated-usi/selforacle","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Sentence-T5","source_url":"https://github.com/google-research/t5x_retrieval","variant":"","zoo":"discovered-jax"}
+{"name":"Separable-PINN (SPINN)","source_url":"https://github.com/stnamjef/SPINN","variant":"","zoo":"discovered-jax"}
+{"name":"SeqCond Attention (SCA)","source_url":"https://arxiv.org/html/2604.24809","variant":"","zoo":"discovered-keras"}
+{"name":"Sequence-to-Action Parser","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SGCNN","source_url":"https://github.com/myungjoon/SGCNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Shortcut-Stacked Sentence Encoder","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SIA","source_url":"https://github.com/CshlSiepelLab/arg-selection","variant":"","zoo":"discovered-keras"}
+{"name":"SigKAN","source_url":"https://github.com/remigenet/SigKAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SIMA","source_url":"https://deepmind.google/blog/sima-generalist-ai-agent-for-3d-virtual-environments/","variant":"","zoo":"discovered-jax"}
+{"name":"SimGAN","source_url":"https://arxiv.org/abs/1612.07828","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Similarity Transformer","source_url":"https://github.com/tensorflow/tensor2tensor/blob/master/tensor2tensor/models/research/similarity_transformer.py","variant":"tensor2tensor","zoo":"discovered-tensorflow"}
+{"name":"SimVLM","variant":"","zoo":"discovered-jax"}
+{"name":"SingleHDR","source_url":"https://github.com/alex04072000/SingleHDR","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Sketch-DQN","source_url":"https://github.com/google-deepmind/sketch_dqn","variant":"","zoo":"discovered-jax"}
+{"name":"SketchAdapt","source_url":"https://github.com/mtensor/neural_sketch","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SLQA","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SMITH","source_url":"https://github.com/google-research/google-research/tree/master/smith","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SMSNet","source_url":"https://github.com/cmb-chula/SMSNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SMURF","source_url":"https://github.com/google-research/google-research/tree/master/smurf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SNeRG","source_url":"https://github.com/google-research/google-research/tree/master/snerg","variant":"","zoo":"discovered-jax"}
+{"name":"SO3LR","source_url":"https://github.com/general-molecular-simulations/so3lr","variant":"so3lr","zoo":"discovered-jax"}
+{"name":"Soft MoE (Soft Mixture of Experts)","source_url":"https://arxiv.org/abs/2308.00951","variant":"none (Google DeepMind; JAX, no official pip pkg - community torch ports exist e.g. github.com/bwconrad/soft-moe)","zoo":"discovered-jax"}
+{"name":"SOLAR","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SPADnet","source_url":"https://github.com/zhsun0357/SPADNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SPAN-Forgery","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Span-SRL","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Sparse Mixer","source_url":"https://github.com/google-research/google-research/tree/master/sparse_mixers","variant":"","zoo":"discovered-jax"}
+{"name":"SpeciesNet","source_url":"https://github.com/google/cameratrapai","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Spectral State Space Models","source_url":"https://github.com/google-deepmind/spectral_ssm","variant":"","zoo":"discovered-jax"}
+{"name":"SpectralNet","source_url":"https://arxiv.org/abs/1801.01587","variant":"https://github.com/shaham-lab/SpectralNet","zoo":"discovered-tensorflow"}
+{"name":"Speculator","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SPLERGE","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SpliceAI","source_url":"https://github.com/Illumina/SpliceAI","variant":"spliceai","zoo":"discovered-keras"}
+{"name":"SPMC","source_url":"https://github.com/jiangsutx/SPMC_VideoSR","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SPTree Relation Extractor","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SR3","source_url":"https://iterative-refinement.github.io/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SRN-Deblur","source_url":"https://github.com/jiangsutx/SRN-Deblur","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SRNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SRNTT","source_url":"https://github.com/ZZUTK/SRNTT","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ST-MoE (Stable and Transferable Mixture-of-Experts)","source_url":"https://arxiv.org/abs/2202.08906","variant":"none (Google internal; Mesh-TF, no public checkpoint)","zoo":"discovered-jax"}
+{"name":"Stack-Pointer Network","variant":"","zoo":"discovered-tensorflow"}
+{"name":"STAR Optimizer","variant":"","zoo":"discovered-jax"}
+{"name":"Star-Transformer","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Stereo Magnification","source_url":"https://github.com/google/stereo-magnification","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Stern Span Parser","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Stochastic Answer Network","variant":"","zoo":"discovered-tensorflow"}
+{"name":"StockNet","source_url":"https://github.com/yumoxu/stocknet-dataset","variant":"","zoo":"discovered-tensorflow"}
+{"name":"STORIES","source_url":"https://github.com/cantinilab/stories","variant":"stories-jax","zoo":"discovered-jax"}
+{"name":"Streaming Dense Video Captioning","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/streaming_dvc","variant":"","zoo":"discovered-jax"}
+{"name":"Structured Text Representation Network","source_url":"https://github.com/nlpyang/structured","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Subspace Neural Physics","source_url":"https://github.com/sutongkui/SubPhysics","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SubSpectralNet","source_url":"https://github.com/ssrp/SubSpectralNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SUIM-Net","source_url":"https://irvlab.cs.umn.edu/image-segmentation/suim","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SurfPerch","source_url":"https://github.com/google-research/perch","variant":"","zoo":"discovered-tensorflow"}
+{"name":"SVision","source_url":"https://github.com/xjtu-omics/SVision","variant":"svision","zoo":"discovered-tensorflow"}
+{"name":"SVViT","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/svvit","variant":"","zoo":"discovered-jax"}
+{"name":"Swivel","source_url":"https://github.com/tensorflow/models/tree/master/research/swivel","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Symbolic Music Diffusion","source_url":"https://github.com/magenta/symbolic-music-diffusion","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Symphony","source_url":"https://github.com/atomicarchitects/symphony","variant":"","zoo":"discovered-jax"}
+{"name":"Synthetic Returns","source_url":"https://github.com/google-deepmind/deepmind-research/tree/master/synthetic_returns","variant":"","zoo":"discovered-jax"}
+{"name":"SynthSeg","source_url":"https://github.com/BBillot/SynthSeg","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TA-PCLR","source_url":"https://openreview.net/pdf?id=7zJDTnogdG","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TabFM","source_url":"https://github.com/google-research/tabfm","variant":"","zoo":"discovered-jax"}
+{"name":"Tails Framework","source_url":"https://github.com/dmitryduev/tails","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Talking-Heads Attention","source_url":"https://github.com/tensorflow/mesh","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Tandem Neural Network for Photonic Inverse Design","source_url":"https://arxiv.org/pdf/1710.04724","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TAPIR","source_url":"https://github.com/google-deepmind/tapnet","variant":"","zoo":"discovered-jax"}
+{"name":"TAPNext","source_url":"https://github.com/google-deepmind/tapnet","variant":"","zoo":"discovered-jax"}
+{"name":"TBCCD","source_url":"https://taoxie.cs.illinois.edu/publications/icpc19-clone.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TBCNN","source_url":"https://github.com/crestonbunch/tbcnn","variant":"","zoo":"discovered-tensorflow"}
+{"name":"tCNNS","source_url":"https://github.com/Lowpassfilter/tCNNS-Project","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TecoGAN","source_url":"https://github.com/thunil/TecoGAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Temporal Kolmogorov-Arnold Transformer","source_url":"https://github.com/remigenet/TKAT","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TensorFuzz","source_url":"https://github.com/brain-research/tensorfuzz","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TextGCN","source_url":"https://github.com/yao8839836/text_gcn","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TextRCNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TF-Slim PNASNet","source_url":"https://github.com/tensorflow/models/blob/master/research/slim/nets/nasnet/pnasnet.py","variant":"tf-slim","zoo":"discovered-tensorflow"}
+{"name":"TFiLM","source_url":"https://github.com/kuleshov/audio-super-res","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TGAT","source_url":"https://github.com/StatsDLMathsRecomSys/Inductive-representation-learning-on-temporal-graphs","variant":"","zoo":"discovered-tensorflow"}
+{"name":"The Relightables","source_url":"https://augmentedperception.github.io/therelightables/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ThermoNet","source_url":"https://github.com/gersteinlab/ThermoNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Tiberius","source_url":"https://github.com/Gaius-Augustus/Tiberius","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Tik-Tok","source_url":"https://github.com/msrocean/Tik_Tok","variant":"","zoo":"discovered-keras"}
+{"name":"TileGAN","source_url":"https://github.com/afruehstueck/tileGAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TIM-Net","source_url":"https://github.com/Jiaxin-Ye/TIM-Net_SER","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Timeception","source_url":"https://arxiv.org/abs/1812.01289","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TimeNet (Pre-trained Deep RNN for Cross-Domain Time-Series Feature Extraction)","source_url":"https://github.com/nmalhotra/TimeNet","variant":"","zoo":"discovered-keras"}
+{"name":"Tiny Video Networks","source_url":"https://github.com/google-research/google-research/tree/master/tiny_video_nets","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TKAN","source_url":"https://github.com/remigenet/TKAN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TL-CodeSum","source_url":"https://github.com/xing-hu/TL-CodeSum","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Token Turing Machine","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/token_turing","variant":"","zoo":"discovered-jax"}
+{"name":"TokenLearner","source_url":"https://github.com/google-research/scenic","variant":"","zoo":"discovered-jax"}
+{"name":"TopicRNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TopNet","source_url":"https://github.com/lynetcha/completion3d","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TopologyGAN","source_url":"https://github.com/zhenguonie/TopologyGAN (also https://github.com/zhenguonie/2020_TopologyGAN)","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Total Relighting","source_url":"https://augmentedperception.github.io/total_relighting/","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TotalDenoising","source_url":"https://github.com/phermosilla/TotalDenoising","variant":"","zoo":"discovered-tensorflow"}
+{"name":"tPLCnet","source_url":"https://github.com/breizhn/tPLCnet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Tracr","source_url":"https://github.com/google-deepmind/tracr","variant":"tracr","zoo":"discovered-jax"}
+{"name":"TransferNILM","source_url":"https://github.com/MingjunZhong/transferNILM","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Transformer Grammars","source_url":"https://github.com/google-deepmind/transformer_grammars","variant":"","zoo":"discovered-jax"}
+{"name":"TranslationAI","source_url":"https://github.com/gao-lab/Translation_AI","variant":"","zoo":"discovered-keras"}
+{"name":"Transporter","source_url":"https://github.com/google-deepmind/deepmind-research/tree/master/transporter","variant":"","zoo":"discovered-tensorflow"}
+{"name":"trDesign","source_url":"https://github.com/gjoni/trDesign","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TRecViT","source_url":"https://github.com/google-deepmind/trecvit","variant":"","zoo":"discovered-jax"}
+{"name":"TreeCaps","source_url":"https://github.com/bdqnghi/treecaps","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Trimmer","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Triplet Fingerprinting","source_url":"https://github.com/triplet-fingerprinting/tf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TSS-ConvNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"TubeViT","source_url":"https://github.com/google-research/google-research/tree/master/tubevit","variant":"","zoo":"discovered-jax"}
+{"name":"Type4Py","source_url":"https://github.com/saltudelft/type4py","variant":"","zoo":"discovered-tensorflow"}
+{"name":"U2Fusion","source_url":"https://github.com/hanna-xu/U2Fusion","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Ucolor","source_url":"https://github.com/Li-Chongyi/Ucolor","variant":"","zoo":"discovered-tensorflow"}
+{"name":"UIBert","source_url":"https://github.com/google-research-datasets/uibert","variant":"","zoo":"discovered-tensorflow"}
+{"name":"UL2","source_url":"https://github.com/google-research/google-research/tree/master/ul2","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ULCNN","source_url":"https://github.com/BeechburgPieStar/ULCNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Unified-IO","source_url":"https://github.com/allenai/unified-io-inference","variant":"","zoo":"discovered-jax"}
+{"name":"Unified-IO 2","source_url":"https://github.com/allenai/unified-io-2","variant":"","zoo":"discovered-jax"}
+{"name":"UniRep","source_url":"https://github.com/churchlab/UniRep","variant":"","zoo":"discovered-tensorflow"}
+{"name":"UniTVelo","source_url":"https://github.com/StatBiomed/UniTVelo","variant":"unitvelo","zoo":"discovered-tensorflow"}
+{"name":"Universal Sentence Encoder","source_url":"https://tfhub.dev/google/universal-sentence-encoder/4","variant":"","zoo":"discovered-tensorflow"}
+{"name":"UniVRD","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/univrd","variant":"","zoo":"discovered-jax"}
+{"name":"UnLoc","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/unloc","variant":"","zoo":"discovered-jax"}
+{"name":"URLNet","source_url":"https://github.com/Antimalweb/URLNet","variant":"","zoo":"discovered-tensorflow"}
+{"name":"URnano","source_url":"https://github.com/yaozhong/URnano","variant":"","zoo":"discovered-keras"}
+{"name":"uSDN","source_url":"https://openaccess.thecvf.com/content_cvpr_2018/papers/Qu_Unsupervised_Sparse_Dirichlet-Net_CVPR_2018_paper.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Var-CNN","source_url":"https://github.com/sanjit-bhat/Var-CNN","variant":"","zoo":"discovered-keras"}
+{"name":"Variational Context","variant":"","zoo":"discovered-tensorflow"}
+{"name":"VarMisuse-GGNN","source_url":"https://openreview.net/forum?id=BJOFETxR-","variant":"","zoo":"discovered-tensorflow"}
+{"name":"VASC","source_url":"https://github.com/wang-research/VASC","variant":"","zoo":"discovered-keras"}
+{"name":"VATT","source_url":"https://github.com/google-research/google-research/tree/master/vatt","variant":"","zoo":"discovered-tensorflow"}
+{"name":"VBNN (Vector Basis Neural Network)","source_url":"https://pubs.aip.org/aip/pof/article/34/9/095136/2845528/An-invariances-preserving-vector-basis-neural","variant":"","zoo":"discovered-tensorflow"}
+{"name":"VCT","source_url":"https://github.com/google-research/google-research/tree/master/vct","variant":"","zoo":"discovered-tensorflow"}
+{"name":"VeLO","variant":"","zoo":"discovered-jax"}
+{"name":"Veo","source_url":"https://deepmind.google/models/veo/","variant":"","zoo":"discovered-jax"}
+{"name":"Veo 3","source_url":"https://storage.googleapis.com/deepmind-media/veo/Veo-3-Tech-Report.pdf","variant":"","zoo":"discovered-jax"}
+{"name":"Verb-Focused Contrastive Learning","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/verbs_in_action","variant":"","zoo":"discovered-jax"}
+{"name":"vHULK","source_url":"https://github.com/LaboratorioBioinformatica/vHULK","variant":"","zoo":"discovered-keras"}
+{"name":"Vid2Seq","source_url":"https://github.com/google-research/scenic/tree/main/scenic/projects/vid2seq","variant":"","zoo":"discovered-jax"}
+{"name":"VideoPrism","source_url":"https://github.com/google-deepmind/videoprism","variant":"videoprism","zoo":"discovered-jax"}
+{"name":"View-Free Image Stitching Network","source_url":"https://github.com/nie-lang/DeepImageStitching-1.0","variant":"","zoo":"discovered-tensorflow"}
+{"name":"ViLD","source_url":"https://github.com/tensorflow/tpu/tree/master/models/official/detection/projects/vild","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Virtifier","source_url":"https://github.com/crazyinter/Virtifier","variant":"","zoo":"discovered-keras"}
+{"name":"VITAE","source_url":"https://github.com/jaydu1/VITAE","variant":"pyvitae","zoo":"discovered-tensorflow"}
+{"name":"VItamin","source_url":"https://link.aps.org/doi/10.1103/PhysRevD.102.104057","variant":"","zoo":"discovered-tensorflow"}
+{"name":"VoxFlowNet","source_url":"https://github.com/MaxChanger/awesome-point-cloud-scene-flow","variant":"","zoo":"discovered-tensorflow"}
+{"name":"VR-GCN","source_url":"https://github.com/thu-ml/stochastic_gcn","variant":"","zoo":"discovered-tensorflow"}
+{"name":"W.A.L.T","source_url":"https://walt-video-diffusion.github.io/","variant":"","zoo":"discovered-jax"}
+{"name":"Watch Listen Attend and Spell","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Watch-Attend-Spell","variant":"","zoo":"discovered-tensorflow"}
+{"name":"WebGUM","source_url":"https://sites.google.com/view/mm-webnav/","variant":"","zoo":"discovered-jax"}
+{"name":"Willett handwriting BCI RNN","source_url":"https://github.com/fwillett/handwritingBCI","variant":"","zoo":"discovered-tensorflow"}
+{"name":"WIR Net (Wide Inception ResNet)","variant":"","zoo":"discovered-tensorflow"}
+{"name":"WLDN","source_url":"https://github.com/wengong-jin/nips17-rexgen","variant":"","zoo":"discovered-tensorflow"}
+{"name":"WSSDCNN","source_url":"https://openaccess.thecvf.com/content_ICCV_2017/papers/Cho_Weakly-_and_Self-Supervised_ICCV_2017_paper.pdf","variant":"","zoo":"discovered-tensorflow"}
+{"name":"X-CNN","source_url":"https://github.com/PetarV-/X-CNN","variant":"","zoo":"discovered-tensorflow"}
+{"name":"XMC-GAN","source_url":"https://github.com/google-research/xmcgan_image_generation","variant":"","zoo":"discovered-tensorflow"}
+{"name":"XPDNet","source_url":"https://github.com/zaccharieramzi/fastmri-reproducible-benchmark","variant":"","zoo":"discovered-tensorflow"}
+{"name":"XTR","source_url":"https://github.com/google-deepmind/xtr","variant":"","zoo":"discovered-tensorflow"}
+{"name":"YOTO","source_url":"https://github.com/google-research/google-research/tree/master/yoto","variant":"","zoo":"discovered-tensorflow"}
+{"name":"Zoneout LSTM","source_url":"https://github.com/teganmaharaj/zoneout","variant":"","zoo":"discovered-tensorflow"}

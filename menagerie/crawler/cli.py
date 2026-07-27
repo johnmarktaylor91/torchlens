@@ -46,6 +46,12 @@ from menagerie.crawler.driver import (
 )
 from menagerie.crawler.envs import load_environment_registry
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot, load_intake_snapshot
+from menagerie.crawler.partitioner import (
+    DEFAULT_CAMPAIGN_MANIFEST,
+    CampaignBinding,
+    emit_campaign_partitions,
+    find_campaign_binding,
+)
 from menagerie.crawler.recordio import SingleWriterError
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import materialize_current
@@ -98,6 +104,14 @@ def build_parser() -> argparse.ArgumentParser:
     intake.add_argument("--stable-ids", type=Path)
     intake.add_argument("--output-root", type=Path)
     intake.add_argument("--snapshot-date", help="operator label retained by surrounding automation")
+
+    campaigns = subparsers.add_parser(
+        "partition-campaigns",
+        help="emit the four tier-aligned campaign partitions and intake snapshots",
+    )
+    campaigns.add_argument("--roster", type=Path)
+    campaigns.add_argument("--stable-ids", type=Path)
+    campaigns.add_argument("--output-root", type=Path)
 
     plan = subparsers.add_parser("plan", help="print deterministic phase/intent assignments")
     _add_intake_argument(plan)
@@ -191,6 +205,8 @@ def main(
             return _doctor_command(args, doctor_probes)
         if args.command == "intake":
             return _intake_command(args)
+        if args.command == "partition-campaigns":
+            return _partition_campaigns_command(args)
         if args.command == "plan":
             return _plan_command(args)
         if args.command == "status":
@@ -321,6 +337,35 @@ def _intake_command(args: argparse.Namespace) -> int:
                 "items": len(snapshot.items),
                 "created": snapshot.created,
                 "path": str(snapshot.root),
+            },
+            sort_keys=True,
+        )
+    )
+    return EXIT_OK
+
+
+def _partition_campaigns_command(args: argparse.Namespace) -> int:
+    """Emit the four immutable tier-aligned campaign inputs."""
+
+    data_root = args.repo_root / "menagerie" / "data"
+    records_root = args.repo_root / "menagerie" / "crawler" / "records"
+    bindings = emit_campaign_partitions(
+        args.roster or data_root / "crawl_roster.jsonl",
+        args.output_root or records_root,
+        stable_ids_path=args.stable_ids or data_root / "stable_ids.jsonl",
+    )
+    print(
+        json.dumps(
+            {
+                "campaigns": {
+                    binding.spec.campaign_id: {
+                        "author_model": binding.spec.author_model,
+                        "checker_model": binding.spec.checker_model,
+                        "items": binding.row_count,
+                        "intake": binding.intake_path,
+                    }
+                    for binding in bindings
+                }
             },
             sort_keys=True,
         )
@@ -473,6 +518,9 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
     checker_command = _required_command(args.checker_command, "checker")
     environment_command = _required_command(args.environment_command, "environment")
     paths = default_driver_paths(args.repo_root.resolve(), args.intake.resolve())
+    snapshot = load_intake_snapshot(args.intake.resolve())
+    campaign_binding = _optional_campaign_binding(args.repo_root.resolve(), snapshot)
+    default_config = DriverConfig()
     config = DriverConfig(
         target=args.target,
         phase=args.phase,
@@ -480,6 +528,16 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
         review_checkpoint_at=args.review_checkpoint_at,
         progress_milestones=tuple(args.progress_milestones),
         notify_command=args.notify_command,
+        author_model=(
+            campaign_binding.spec.author_model
+            if campaign_binding is not None
+            else default_config.author_model
+        ),
+        checker_model=(
+            campaign_binding.spec.checker_model
+            if campaign_binding is not None
+            else default_config.checker_model
+        ),
         only_status=getattr(args, "only_status", None),
         invocation_origin=(
             InvocationOrigin.WAKE_CALLBACK
@@ -650,6 +708,31 @@ def _snapshot_authority_context(
     )
 
 
+def _optional_campaign_binding(
+    repo_root: Path,
+    snapshot: IntakeSnapshot,
+) -> Optional[CampaignBinding]:
+    """Return a campaign binding when the canonical manifest owns the snapshot."""
+
+    manifest_path = repo_root / DEFAULT_CAMPAIGN_MANIFEST
+    if not manifest_path.is_file():
+        return None
+    return find_campaign_binding(manifest_path, snapshot)
+
+
+def _snapshot_driver_config(repo_root: Path, snapshot: IntakeSnapshot) -> DriverConfig:
+    """Return exact campaign provenance labels for one intake snapshot."""
+
+    binding = _optional_campaign_binding(repo_root, snapshot)
+    if binding is None:
+        return DriverConfig()
+    return DriverConfig(
+        review_checkpoint_at=binding.spec.review_checkpoint_at,
+        author_model=binding.spec.author_model,
+        checker_model=binding.spec.checker_model,
+    )
+
+
 def _status_command(args: argparse.Namespace) -> int:
     """Print current funnel and optional exact partition diagnostics."""
 
@@ -665,7 +748,10 @@ def _status_command(args: argparse.Namespace) -> int:
         )
     current = materialize_current(
         paths,
-        context=_snapshot_authority_context(snapshot, DriverConfig()),
+        context=_snapshot_authority_context(
+            snapshot,
+            _snapshot_driver_config(args.repo_root, snapshot),
+        ),
     )
     operational_path = canonical_operational_ledger_path(paths.models)
     wakeups = wakeup_status(scan_jsonl(operational_path))
@@ -762,7 +848,7 @@ def _checkpoint_command(args: argparse.Namespace) -> int:
     try:
         with DriverLock(args.repo_root / ".crawl-local" / "locks" / "driver.lock", owner):
             snapshot = load_intake_snapshot(args.intake)
-            defaults = DriverConfig()
+            defaults = _snapshot_driver_config(args.repo_root, snapshot)
             context = build_authority_context(
                 active_intake_snapshot_id=snapshot.snapshot_id,
                 active_intake_snapshot_sha256=snapshot.snapshot_sha256,
