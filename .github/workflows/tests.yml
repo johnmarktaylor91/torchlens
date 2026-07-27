@@ -113,7 +113,13 @@ jobs:
         env:
           TORCHLENS_RENDER_BYTE_ORACLE: ${{ matrix.render_byte_oracle }}
         run: |
-          pytest tests/ -m smoke --tb=short -q
+          # tests/crawler/ belongs to the separate menagerie-crawler corpus (its
+          # own dedicated crawler-round21-* jobs run it under a full conda env with
+          # jsonschema/conda-lock). It is excluded from the core matrix like
+          # tests/test_menagerie_*.py -- otherwise pytest imports it during
+          # collection and fails on the crawler-only jsonschema dep. No smoke
+          # coverage is lost (no tests/crawler test is smoke-marked).
+          pytest tests/ -m smoke --ignore=tests/crawler --tb=short -q
           pytest tests/test_torch_compat.py --tb=short -q
 
   crawler-round21-linux-release:
