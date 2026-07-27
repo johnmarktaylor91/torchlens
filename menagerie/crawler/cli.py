@@ -294,7 +294,15 @@ def _intake_command(args: argparse.Namespace) -> int:
     """Create an immutable intake snapshot from explicit or conventional inputs."""
 
     data_root = args.repo_root / "menagerie" / "data"
-    master = args.master or (data_root / "master_catalog.jsonl" if args.all_existing else None)
+    if args.master is not None:
+        master = args.master
+    elif args.all_existing:
+        # Prefer the full crawl roster (every found model: built + classics +
+        # to-build) when it is present; fall back to the built-only catalog.
+        roster = data_root / "crawl_roster.jsonl"
+        master = roster if roster.exists() else data_root / "master_catalog.jsonl"
+    else:
+        master = None
     deferred = args.deferred or (data_root / "deferred.jsonl" if args.all_existing else None)
     if master is None or deferred is None:
         raise ValueError("intake requires --master/--deferred or --all-existing")
