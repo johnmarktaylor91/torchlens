@@ -6,6 +6,8 @@ from dataclasses import replace
 import json
 import os
 from pathlib import Path
+import re
+import signal
 import stat
 import sys
 from typing import Any, Mapping, Optional
@@ -611,6 +613,8 @@ def _run_host_denial_composition(
         assert denial_attempts[0]["stage"] == "policy"
         assert denial_attempts[0]["error"]["reason_code"] == "checkpoint-read"
         assert str(undeclared) in denial_attempts[0]["policy_observation"]["checkpoint_paths"]
+        if expected_sandbox == "sandbox-exec":
+            assert denial_attempts[0]["supervisor_observation"]["signal"] == signal.SIGKILL
 
         for artifact, attempts in ((positive, positive_attempts), (denial, denial_attempts)):
             closure = driver_module._collect_worker_executable_closure(artifact, environment)
@@ -808,10 +812,19 @@ def test_macos_v3_profile_has_one_fresh_literal_prefix_and_exact_outside_members
         assert f"(allow file-read-data (subpath {encoded_directory}))" not in profile
     undeclared_sibling = members["model"].with_name("undeclared-sibling.py")
     assert f"(literal {json.dumps(str(undeclared_sibling))})" not in profile
-    assert [line for line in profile.splitlines() if "(regex " in line] == [
+    bytecode_rules = {
+        (
+            "(allow file-read-data "
+            f'(regex #"^{re.escape(str(source.parent / "__pycache__" / source.stem))}'
+            '\\.[^./]+\\.pyc$"))'
+        )
+        for source in (members["model"], members["crawler"], members["external"])
+    }
+    assert {line for line in profile.splitlines() if "(regex " in line} == {
         "(allow file-read-data (require-all (vnode-type DIRECTORY) "
-        '(regex #"^/private/tmp/__KMP_REGISTERED_LIB_[0-9]+$")))'
-    ]
+        '(regex #"^/private/tmp/__KMP_REGISTERED_LIB_[0-9]+$")))',
+        *bytecode_rules,
+    }
     for forbidden_root in (
         Path.cwd().resolve(),
         Path.home().resolve(),

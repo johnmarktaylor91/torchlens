@@ -13,6 +13,7 @@ from menagerie.crawler import worker_supervisor
 from menagerie.crawler.policy import (
     ExecutionPolicy,
     PolicyViolation,
+    _allowed_exact_or_derived_file,
     _linux_host_transport_library_capability,
     _linux_minimal_read_mounts,
     detect_os_sandbox,
@@ -21,7 +22,11 @@ from menagerie.crawler.policy import (
 from menagerie.crawler.worker_supervisor import run_isolated_subprocess, supervise_worker
 
 import json
+import py_compile
+import re
 import shutil
+import signal
+import subprocess
 import threading
 import time
 from copy import deepcopy
@@ -113,6 +118,134 @@ def test_macos_profile_denies_network_and_writes_except_designated_roots(
         f'(allow file-write* (literal "{scratch.resolve()}"))\n'
         f'(allow file-write* (subpath "{scratch.resolve()}"))\n'
     )
+
+
+def test_macos_profile_projects_only_exact_source_bytecode(tmp_path: Path) -> None:
+    """Seatbelt derives one cache-file pattern without granting sibling bytecode.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated source-package root.
+    """
+
+    package = tmp_path / "package"
+    package.mkdir()
+    authorized_source = package / "authorized.py"
+    unauthorized_source = package / "unauthorized.py"
+    authorized_source.write_text("VALUE = 'authorized'\n", encoding="utf-8")
+    unauthorized_source.write_text("VALUE = 'unauthorized'\n", encoding="utf-8")
+
+    profile = generate_macos_sandbox_profile((), allowed_read_paths=(authorized_source,))
+
+    authorized_cache_stem = authorized_source.parent / "__pycache__" / authorized_source.stem
+    authorized_pattern = (
+        f"^{re.escape(str(authorized_cache_stem.resolve()))}\\.[^./]+\\.pyc$"
+    )
+    unauthorized_cache_stem = (
+        unauthorized_source.parent / "__pycache__" / unauthorized_source.stem
+    )
+    unauthorized_pattern = (
+        f"^{re.escape(str(unauthorized_cache_stem.resolve()))}\\.[^./]+\\.pyc$"
+    )
+    authorized_bytecode = authorized_cache_stem.with_name(
+        f"{authorized_cache_stem.name}.cpython-311.pyc"
+    )
+    unauthorized_bytecode = unauthorized_cache_stem.with_name(
+        f"{unauthorized_cache_stem.name}.cpython-311.pyc"
+    )
+    regex_rules = [line for line in profile.splitlines() if "(regex " in line]
+
+    assert _allowed_exact_or_derived_file(authorized_bytecode, (authorized_source,))
+    assert not _allowed_exact_or_derived_file(unauthorized_bytecode, (authorized_source,))
+    assert f'(allow file-read-data (regex #"{authorized_pattern}"))' in regex_rules
+    assert unauthorized_pattern not in profile
+    assert '(subpath "' + str((package / "__pycache__").resolve()) + '")' not in profile
+    assert f"(literal {json.dumps(str(unauthorized_source.resolve()))})" not in profile
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS Seatbelt bytecode integration test")
+def test_macos_seatbelt_allows_authorized_pyc_and_kills_unauthorized_pyc(
+    tmp_path: Path,
+) -> None:
+    """Real Seatbelt reads derived bytecode and SIGKILLs an undeclared sibling.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated source and bytecode root.
+    """
+
+    sandbox = detect_os_sandbox("Darwin")
+    if sandbox is None:
+        pytest.skip("no working macOS Seatbelt boundary is available")
+    assert sandbox is not None
+    module_root = tmp_path / "modules"
+    module_root.mkdir()
+    authorized_source = module_root / "authorized.py"
+    unauthorized_source = module_root / "unauthorized.py"
+    authorized_source.write_text("VALUE = 'authorized'\n", encoding="utf-8")
+    unauthorized_source.write_text("VALUE = 'unauthorized'\n", encoding="utf-8")
+    py_compile.compile(str(authorized_source), doraise=True)
+    py_compile.compile(str(unauthorized_source), doraise=True)
+
+    venv_configuration = Path(sys.prefix) / "pyvenv.cfg"
+    exact_reads = [Path(sys.executable), authorized_source]
+    if venv_configuration.is_file():
+        exact_reads.append(venv_configuration)
+    profile = generate_macos_sandbox_profile(
+        (),
+        allowed_read_paths=exact_reads,
+        runtime_read_roots=(Path(sys.prefix), Path(sys.base_prefix)),
+    )
+
+    def import_command(module_name: str) -> tuple[str, ...]:
+        """Return an isolated interpreter command importing one fixture module.
+
+        Parameters
+        ----------
+        module_name:
+            Bare fixture module name beneath ``module_root``.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Complete sandbox-exec command.
+        """
+
+        script = (
+            f"import sys; sys.path.insert(0, {str(module_root)!r}); "
+            f"import {module_name}; assert {module_name}.VALUE == {module_name!r}"
+        )
+        return (
+            sandbox.executable,
+            "-p",
+            profile,
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            "-c",
+            script,
+        )
+
+    authorized = subprocess.run(
+        import_command("authorized"),
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    unauthorized = subprocess.run(
+        import_command("unauthorized"),
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert authorized.returncode == 0, authorized.stderr
+    assert unauthorized.returncode == -signal.SIGKILL
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux sandbox integration test")

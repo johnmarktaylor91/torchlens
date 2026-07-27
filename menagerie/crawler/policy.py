@@ -286,6 +286,37 @@ def _exact_read_parent_directories(read_paths: Sequence[Path]) -> tuple[Path, ..
     return tuple(sorted(directories, key=lambda path: str(path)))
 
 
+def _derived_bytecode_read_capabilities(
+    read_paths: Sequence[Path],
+) -> tuple[tuple[Path, str], ...]:
+    """Return narrow Seatbelt capabilities for exact-source CPython bytecode.
+
+    Parameters
+    ----------
+    read_paths:
+        Exact files or directories already authorized for data reads.
+
+    Returns
+    -------
+    tuple[tuple[pathlib.Path, str], ...]
+        Cache directory and anchored bytecode regex for each exact ``.py`` source.
+        Directory authorities deliberately do not produce capabilities.
+    """
+
+    resolved_paths = {path.resolve() for path in read_paths}
+    sources = sorted(
+        (path for path in resolved_paths if path.suffix == ".py" and not path.is_dir()),
+        key=lambda path: str(path),
+    )
+    capabilities: list[tuple[Path, str]] = []
+    for source in sources:
+        cache_directory = source.parent / "__pycache__"
+        cache_stem = cache_directory / source.stem
+        pattern = f"^{re.escape(str(cache_stem))}\\.[^./]+\\.pyc$"
+        capabilities.append((cache_directory, pattern))
+    return tuple(capabilities)
+
+
 def generate_macos_sandbox_profile(
     write_roots: Sequence[Path],
     *,
@@ -398,10 +429,19 @@ def generate_macos_sandbox_profile(
         lines.append(f"(allow file-read-data (literal {encoded}))")
         if path in roots or path.is_dir():
             lines.append(f"(allow file-read-data (subpath {encoded}))")
+    # Match the Linux exact-read classifier: an exact source file also authorizes only
+    # its CPython cache spelling, never sibling bytecode or a blanket __pycache__ subtree.
+    bytecode_capabilities = _derived_bytecode_read_capabilities(candidate_read_paths)
+    for _cache_directory, pattern in bytecode_capabilities:
+        lines.append(f"(allow file-read-data (regex {_sbpl_regex_literal(pattern)}))")
     # Exact file capabilities do not let Python enumerate their package directories.
     # Grant only the directory vnodes on the traversal chain: this permits path-based
     # discovery while leaving every undeclared sibling file under the deny-first rule.
-    for directory in _exact_read_parent_directories(candidate_read_paths):
+    traversal_directories = {
+        *_exact_read_parent_directories(candidate_read_paths),
+        *(cache_directory for cache_directory, _pattern in bytecode_capabilities),
+    }
+    for directory in sorted(traversal_directories, key=lambda path: str(path)):
         encoded_directory = json.dumps(str(directory), ensure_ascii=True)
         lines.append(
             "(allow file-read-data "
