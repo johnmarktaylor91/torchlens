@@ -202,6 +202,14 @@ jobs:
   crawler-round21-macos-release:
     name: Crawler Round 21 macOS committed-lock Seatbelt release proofs
     runs-on: macos-14-xlarge
+    # Opt-in Apple-Silicon release runner. GitHub does not provision
+    # macos-14-xlarge for this repo by default, so the macOS Seatbelt attestation
+    # (and the cross-host conformance gate that consumes its artifact) is gated on
+    # the repository variable MENAGERIE_MACOS_RUNNER. Set it to 'true' once a
+    # macos-14-xlarge runner is available to enable both jobs. Until then this
+    # skips, the conformance job auto-skips via its needs edge, and the Linux
+    # release proof + deliberate reversions still run on every PR.
+    if: ${{ vars.MENAGERIE_MACOS_RUNNER == 'true' }}
     env:
       MENAGERIE_RELEASE_GATE: "1"
       MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-osx-arm64.lock
@@ -281,8 +289,9 @@ jobs:
     name: Crawler Round 21 deliberate reversion gates
     runs-on: ubuntu-latest
     needs:
+      # Linux reversions do not need the (opt-in) macOS release job; depending on
+      # it would make this Linux gate skip whenever the macOS runner is absent.
       - crawler-round21-linux-release
-      - crawler-round21-macos-release
     env:
       MENAGERIE_RELEASE_GATE: "1"
       MENAGERIE_PLATFORM_LOCK: menagerie/crawler/envs/locks/round19-linux-64.lock
