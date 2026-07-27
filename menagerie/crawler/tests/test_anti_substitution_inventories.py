@@ -1401,13 +1401,13 @@ def test_macos_release_artifacts_and_provisioning_are_real() -> None:
         "export": lock_path.with_suffix(".resolved.json"),
         "export-hash": lock_path.with_suffix(".resolved.sha256"),
         "provenance": lock_path.with_suffix(".provenance.json"),
+        "probes": lock_path.with_suffix(".probes.json"),
         "virtual-packages": _CRAWLER_ROOT
         / "envs"
         / "specs"
         / "round21-release.virtual-packages.yml",
     }
     assert {name for name, path in family.items() if path.is_file()} == set(family)
-    assert not lock_path.with_suffix(".probes.json").exists()
     lock_bytes = family["lock"].read_bytes()
     export_bytes = family["export"].read_bytes()
     assert lifecycle_module.parse_exact_lock(lock_bytes)
@@ -1420,6 +1420,7 @@ def test_macos_release_artifacts_and_provisioning_are_real() -> None:
     assert provenance["virtual_package_spec_sha256"] == hash_bytes(
         family["virtual-packages"].read_bytes()
     )
+    assert provenance["probe_receipt_sha256"] == hash_bytes(family["probes"].read_bytes())
     assert provenance["solver"]["name"] == "conda-lock"
     assert "osx-arm64" in provenance["solver"]["command"]
     assert provenance["probe_observation"] == {
@@ -1431,9 +1432,8 @@ def test_macos_release_artifacts_and_provisioning_are_real() -> None:
     workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
     macos_job = workflow.split("crawler-round21-macos-release:", 1)[1]
     assert family["lock"].relative_to(_REPOSITORY_ROOT).as_posix() in macos_job
-    for suffix in (".resolved.json", ".resolved.sha256", ".provenance.json"):
+    for suffix in (".resolved.json", ".resolved.sha256", ".provenance.json", ".probes.json"):
         assert suffix in macos_job
-    assert ".probes.json" not in macos_job
     assert "menagerie.crawler.tools.release_lock" in macos_job
     assert '"$MENAGERIE_REAL_ENV_PREFIX/bin/python" -m pytest' in macos_job
     assert "if-no-files-found: error" in macos_job

@@ -264,7 +264,8 @@ jobs:
             "$MENAGERIE_PLATFORM_LOCK" \
             "${MENAGERIE_PLATFORM_LOCK%.lock}.resolved.json" \
             "${MENAGERIE_PLATFORM_LOCK%.lock}.resolved.sha256" \
-            "${MENAGERIE_PLATFORM_LOCK%.lock}.provenance.json"; do
+            "${MENAGERIE_PLATFORM_LOCK%.lock}.provenance.json" \
+            "${MENAGERIE_PLATFORM_LOCK%.lock}.probes.json"; do
             if [ ! -f "$artifact" ]; then
               echo "unmet-release-gate: missing committed macOS artifact: $artifact"
               exit 1

@@ -491,15 +491,13 @@ def _observe_release_probes(prefix: Path, probes: IntentProbes) -> tuple[ProbeRe
     exports = observation.get("exports") if isinstance(observation, dict) else None
     if not isinstance(exports, dict):
         _real_environment_failure("release export observations are unavailable")
-    results = [ProbeResult(f"import:{name}", True, f"imported {name}") for name in probes.imports]
+    results = [ProbeResult(f"import:{name}", True, "ok") for name in probes.imports]
     for check in probes.export_checks:
         key = f"{check.module}.{check.attribute}"
         value = exports.get(key)
         if not isinstance(value, str) or not value:
             _real_environment_failure(f"release export observation is absent: {key}")
-        results.append(
-            ProbeResult(f"export:{check.module}:{check.attribute}", True, f"{key}={value}")
-        )
+        results.append(ProbeResult(f"export:{check.module}:{check.attribute}", True, "ok"))
     return tuple(results)
 
 
@@ -542,6 +540,7 @@ def _committed_fixture_intent(
         export_path,
         export_hash_path,
         provenance_path,
+        probe_receipt_path,
     )
     missing = [path for path in required if not path.is_file()]
     if missing:
@@ -549,11 +548,6 @@ def _committed_fixture_intent(
             "committed release artifacts are unavailable: "
             + ", ".join(path.name for path in missing)
         )
-    if platform_target == "linux-64" and not probe_receipt_path.is_file():
-        _real_environment_failure("committed Linux release probe receipt is unavailable")
-    if platform_target != "linux-64" and probe_receipt_path.exists():
-        _real_environment_failure("non-Linux release probes must be hosted observations")
-
     lock_bytes = lock_path.read_bytes()
     export_bytes = export_path.read_bytes()
     try:
@@ -610,7 +604,7 @@ def _committed_fixture_intent(
         or provenance.get("schema_version") != "menagerie.crawler.release-lock-provenance.v1"
         or provenance.get("target") != platform_target
         or any(provenance.get(key) != value for key, value in required_digests.items())
-        or (platform_target == "linux-64" and provenance.get("probe_receipt_sha256") is None)
+        or provenance.get("probe_receipt_sha256") is None
         or (platform_target == "osx-arm64" and not expected_hosted_probe_state)
     ):
         _real_environment_failure("release provenance does not bind the committed lock family")

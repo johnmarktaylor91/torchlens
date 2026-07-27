@@ -29,6 +29,8 @@
     "committed_on_linux": false,
     "producer": "hosted macOS release CI attestation"
   },
+  "probe_receipt_path": "menagerie/crawler/envs/locks/round19-osx-arm64.probes.json",
+  "probe_receipt_sha256": "sha256:c988bca5af64f4a4fdae70524565907d39956a3cb8ddcf5eae02d84aacfb193e",
   "repodata_inputs": {
     "channel_priority": "flexible",
     "conda_lock_channels": [

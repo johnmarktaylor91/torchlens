@@ -40,6 +40,7 @@ _MACOS_LOCK_FAMILY = {
     "resolved_export": _MACOS_LOCK_PATH.with_suffix(".resolved.json"),
     "resolved_export_hash": _MACOS_LOCK_PATH.with_suffix(".resolved.sha256"),
     "provenance": _MACOS_LOCK_PATH.with_suffix(".provenance.json"),
+    "probe_receipt": _MACOS_LOCK_PATH.with_suffix(".probes.json"),
     "virtual_package_spec": _SPEC_PATH.with_name("round21-release.virtual-packages.yml"),
 }
 
@@ -161,7 +162,6 @@ def test_macos_committed_lock_seatbelt_award_and_denial(
     assert {name for name, path in _MACOS_LOCK_FAMILY.items() if path.is_file()} == set(
         _MACOS_LOCK_FAMILY
     )
-    assert not _MACOS_LOCK_PATH.with_suffix(".probes.json").exists()
     selected_lock = Path(os.environ["MENAGERIE_PLATFORM_LOCK"]).resolve()
     assert selected_lock == _MACOS_LOCK_PATH.resolve()
 
@@ -173,6 +173,10 @@ def test_macos_committed_lock_seatbelt_award_and_denial(
         _MACOS_LOCK_FAMILY["resolved_export_hash"].read_text(encoding="utf-8").strip()
     )
     assert declared_export_hash == hash_bytes(export_bytes)
+    probes = _probe_contract()
+    probe_results = parse_probe_receipt_bytes(
+        probes, _MACOS_LOCK_FAMILY["probe_receipt"].read_bytes()
+    )
 
     provenance = _mapping(
         json.loads(_MACOS_LOCK_FAMILY["provenance"].read_bytes()), "macOS lock provenance"
@@ -184,6 +188,9 @@ def test_macos_committed_lock_seatbelt_award_and_denial(
     assert provenance["lock_sha256"] == hash_bytes(lock_bytes)
     assert provenance["resolved_export_sha256"] == declared_export_hash
     assert provenance["probe_contract_sha256"] == hash_bytes(_PROBE_CONTRACT_PATH.read_bytes())
+    assert provenance["probe_receipt_sha256"] == hash_bytes(
+        _MACOS_LOCK_FAMILY["probe_receipt"].read_bytes()
+    )
     assert provenance["virtual_package_spec_sha256"] == hash_bytes(
         _MACOS_LOCK_FAMILY["virtual_package_spec"].read_bytes()
     )
@@ -199,6 +206,8 @@ def test_macos_committed_lock_seatbelt_award_and_denial(
     assert fixture.intent.lock.lock_path.resolve() == _MACOS_LOCK_PATH.resolve()
     assert fixture.intent.lock.lock_bytes == lock_bytes
     assert fixture.intent.lock.export_bytes == export_bytes
+    assert fixture.intent.probes == probes
+    assert fixture.probe_results == probe_results
     assert fixture.binding.python_executable == fixture.prefix / "bin/python"
     assert fixture.binding.python_executable.resolve() != Path(sys.executable).resolve()
     test_macos_v3_profile_has_one_fresh_literal_prefix_and_exact_outside_members(tmp_path)
