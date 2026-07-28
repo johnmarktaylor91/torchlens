@@ -1265,13 +1265,15 @@ def _placeholder_facts(
     """
 
     exact_source = deepcopy(dict(source)) if isinstance(source, Mapping) else None
-    cap_exhausted = reason_code == "effort-cap-exhausted"
+    cap_exhausted = reason_code == "effort-cap-exhausted" or bool(
+        reason_code and reason_code.startswith("effort-exhausted:")
+    )
     decision = (
         "the author session exhausted its effort grant before a rung was selected"
         if cap_exhausted
         else "source resolution did not complete"
     )
-    attempt_reason = "effort-cap-exhausted" if cap_exhausted else "author-lane-failed"
+    attempt_reason = reason_code if cap_exhausted else "author-lane-failed"
     conclusion = (
         "The author session ran out of its effort grant. No bounded search concluded "
         "that source is unavailable; this model is unfinished, not unresolvable."

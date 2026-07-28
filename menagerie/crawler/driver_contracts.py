@@ -109,15 +109,15 @@ class AuthorQueueStalled(RetryableOperatorError):
 class AuthorEffortCapExceeded(DriverIntegrationError):
     """Raised when an author session exceeds its declared effort grant.
 
-    ``PLAN.md`` LP-13.2 makes cap exhaustion ``failed:<actual-stage>`` with
-    ``reason_code=effort-cap-exhausted``: a permanent, model-local outcome rather
-    than a retryable operator fault.
+    ``PLAN.md`` LP-13.2 makes cap exhaustion ``failed:<actual-stage>`` with a
+    stage-valid effort reason: a permanent, model-local outcome rather than a
+    retryable operator fault.
 
     The *actual stage* is carried here because only the raise site knows it. Every
     cap exhaustion used to be recorded as ``failed:source``, which asserts that the
     model's source could not be resolved -- routinely false. A session that blew its
     grant after the controlled fetch froze its manifest had its source resolved,
-    fetched, and read; what ran out was budget, at the evidence/authoring stage.
+    fetched, and read; what ran out was budget at the author stage.
     Recording that as a source failure would bury models with perfectly good sources
     under a status that says none exists.
 
@@ -129,17 +129,29 @@ class AuthorEffortCapExceeded(DriverIntegrationError):
         Closed :data:`~menagerie.crawler.constants.FAILURE_REASON_CODES` stage that
         was actually in flight. Defaults to ``"source"``, which is correct for a cap
         hit while the author is still naming sources.
+    dimension:
+        Closed author-effort dimension when ``stage="author"``.
     """
 
-    def __init__(self, *args: object, stage: str = "source") -> None:
+    def __init__(
+        self,
+        *args: object,
+        stage: str = "source",
+        dimension: Optional[str] = None,
+    ) -> None:
         """Attach the closed failure stage the cap exhaustion actually occurred in."""
 
         super().__init__(*args)
-        if stage not in FAILURE_REASON_CODES or "effort-cap-exhausted" not in (
-            FAILURE_REASON_CODES[stage]
-        ):
+        reason_code = (
+            f"effort-exhausted:{dimension}"
+            if stage == "author" and dimension is not None
+            else "effort-cap-exhausted"
+        )
+        if reason_code not in FAILURE_REASON_CODES.get(stage, frozenset()):
             raise ValueError(f"effort-cap exhaustion cannot be attributed to stage {stage!r}")
         self.stage = stage
+        self.dimension = dimension
+        self.reason_code = reason_code
 
 
 class DriverPaused(DriverError):
@@ -150,7 +162,7 @@ class AuthorBackoffError(DriverError):
     """Carries a typed author rate/quota pause out of the author lane.
 
     Raised instead of returning an artifact so the driver's blanket
-    ``except Exception -> failed:source`` arm cannot convert Claude usage
+    blanket model-local failure arm cannot convert Claude usage
     exhaustion into a permanent model failure.
     """
 

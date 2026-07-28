@@ -81,6 +81,7 @@
         "intake",
         "source",
         "fetch",
+        "author",
         "evidence",
         "accuracy-gate",
         "environment",
@@ -163,7 +164,14 @@
         "ledger-corruption",
         "internal-error",
         "sandbox-unavailable-v1",
-        "effort-cap-exhausted"
+        "effort-cap-exhausted",
+        "effort-exhausted:tool-calls",
+        "effort-exhausted:fetch-targets",
+        "effort-exhausted:wall-seconds",
+        "wall-exceeded",
+        "session-crashed",
+        "research-tools-unavailable",
+        "repair-exhausted"
       ]
     },
     "rung": {

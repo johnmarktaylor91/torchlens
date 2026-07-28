@@ -3044,6 +3044,7 @@ class CanonicalReducer:
             "intake",
             "source",
             "fetch",
+            "author",
             "evidence",
             "accuracy-gate",
             "runner",

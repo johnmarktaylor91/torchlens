@@ -52,6 +52,7 @@ from menagerie.crawler.author_dispatch import (
     build_author_envelope,
     classify_author_response,
     parse_author_reset_at,
+    plausible_author_reset_at,
     serialize_author_result_cache,
     validate_author_result,
     validate_author_result_cache,
@@ -328,12 +329,12 @@ def _author_lane_failure(exc: Exception) -> tuple[str, str]:
         Closed ``(stage, reason_code)`` pair from ``FAILURE_REASON_CODES``.
     """
 
-    # PLAN.md LP-13.2: cap exhaustion is `failed:<actual-stage>` with
-    # `effort-cap-exhausted`, distinct from an unresolved identity. The stage travels
+    # PLAN.md LP-13.2: cap exhaustion is `failed:<actual-stage>` with a reason from
+    # that stage's vocabulary, distinct from an unresolved identity. The stage travels
     # on the exception because only the raise site knows whether the source had
     # already been resolved and frozen when the budget ran out.
     if isinstance(exc, AuthorEffortCapExceeded):
-        return exc.stage, "effort-cap-exhausted"
+        return exc.stage, exc.reason_code
     if isinstance(exc, FetchHashMismatchError):
         return "fetch", "hash-mismatch"
     if isinstance(exc, FetchRetrievalError):
@@ -342,7 +343,7 @@ def _author_lane_failure(exc: Exception) -> tuple[str, str]:
         # The author named a target the controlled fetch contract cannot accept.
         # That is a declaration defect, not an unresolvable identity.
         return "source", "source-target-invalid"
-    return "source", "identity-unresolved"
+    return "author", "session-crashed"
 
 
 # Reviewed runtime roots. ``_runner_identity`` discovers their transitive local call
@@ -698,7 +699,11 @@ class _AuthorLaneBase:
                 item, config, context, root, model_dir, result_path, source_manifest
             )
         except AuthorEffortCapExceeded as exc:
-            raise AuthorEffortCapExceeded(*exc.args, stage="evidence") from exc
+            raise AuthorEffortCapExceeded(
+                *exc.args,
+                stage="author",
+                dimension=exc.dimension,
+            ) from exc
 
     def _author_from_frozen_sources(
         self,
@@ -883,7 +888,9 @@ def classify_author_exit(
     combined = f"{stderr}\n{stdout}".strip()
     label = "author command failed" if kind == "author" else "author source request failed"
     tail = combined[-STDIO_TAIL_MAX_CHARS:]
-    signal = classify_author_response(returncode, combined)
+    signal = classify_author_response(returncode, stdout)
+    if signal is None:
+        signal = classify_author_response(returncode, stderr)
     if signal is not None:
         raise AuthorBackoffError(signal)
     if returncode in (AUTHOR_EXIT_RETRYABLE, AUTHOR_EXIT_UNAVAILABLE):
@@ -1330,7 +1337,8 @@ class QueueAuthorLane(_AuthorLaneBase):
             if float(raw) > limit:
                 raise AuthorEffortCapExceeded(
                     f"author session for {job.stable_id} consumed {metric} "
-                    f"{float(raw):g}, exceeding its {limit:g} grant"
+                    f"{float(raw):g}, exceeding its {limit:g} grant",
+                    dimension=metric.replace("_", "-"),
                 )
 
     def _discard_job_files(self, paths: Mapping[str, Path]) -> None:
@@ -1384,7 +1392,11 @@ def _author_backoff_from_signal(payload: Mapping[str, Any]) -> AuthorBackoffSign
             f"author backoff names an unsupported pause reason: {raw_reason!r}"
         ) from exc
     raw_reset = payload.get("reset_at")
-    reset_at = str(raw_reset) if isinstance(raw_reset, str) and raw_reset.strip() else None
+    reset_at = (
+        plausible_author_reset_at(raw_reset)
+        if isinstance(raw_reset, str) and raw_reset.strip()
+        else None
+    )
     if reset_at is None:
         reset_at = parse_author_reset_at(excerpt)
     raw_retry = payload.get("retry_after_seconds")

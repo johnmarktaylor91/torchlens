@@ -2181,13 +2181,13 @@ def test_author_source_handshake_accepts_an_undigested_target(
     [
         (AuthorEffortCapExceeded("cap"), ("source", "effort-cap-exhausted")),
         (
-            AuthorEffortCapExceeded("cap", stage="evidence"),
-            ("evidence", "effort-cap-exhausted"),
+            AuthorEffortCapExceeded("cap", stage="author", dimension="tool-calls"),
+            ("author", "effort-exhausted:tool-calls"),
         ),
         (FetchHashMismatchError("mismatch"), ("fetch", "hash-mismatch")),
         (FetchRetrievalError("unreachable"), ("fetch", "unreachable")),
         (UnpinnedTargetError("bad pin"), ("source", "source-target-invalid")),
-        (RuntimeError("no implementation anywhere"), ("source", "identity-unresolved")),
+        (RuntimeError("provider session crashed"), ("author", "session-crashed")),
     ],
 )
 def test_author_lane_failure_names_the_real_cause(

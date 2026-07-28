@@ -163,6 +163,7 @@ class FailureStage(StrEnum):
     INTAKE = "intake"
     SOURCE = "source"
     FETCH = "fetch"
+    AUTHOR = "author"
     EVIDENCE = "evidence"
     ACCURACY_GATE = "accuracy-gate"
     ENVIRONMENT = "environment"
@@ -321,6 +322,17 @@ FAILURE_REASON_CODES: dict[str, frozenset[str]] = {
             "access-denied",
             "artifact-missing",
             "effort-cap-exhausted",
+        }
+    ),
+    "author": frozenset(
+        {
+            "effort-exhausted:tool-calls",
+            "effort-exhausted:fetch-targets",
+            "effort-exhausted:wall-seconds",
+            "wall-exceeded",
+            "session-crashed",
+            "research-tools-unavailable",
+            "repair-exhausted",
         }
     ),
     "evidence": frozenset(
